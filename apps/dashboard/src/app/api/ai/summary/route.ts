@@ -2,17 +2,17 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import OpenAI from 'openai';
 import { openai } from '@/lib/openai';
+import { getOrCreateOrg } from '@/lib/org';
 
 export async function POST(request: Request) {
   try {
+    const org = await getOrCreateOrg();
     const { threadId } = await request.json();
 
-    // Notice: We only check for threadId here!
     if (!threadId) {
       return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
     }
 
-    // 1. Fetch the thread and all its messages
     const thread = await db.thread.findUnique({
       where: { id: threadId },
       include: {
@@ -20,13 +20,14 @@ export async function POST(request: Request) {
       }
     });
 
-    if (!thread) return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    if (!thread || thread.organizationId !== org.id) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
 
-    // 2. Format history for OpenAI
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       {
         role: 'system',
-        content: `You are an AI assistant summarizing a customer support thread for Clerk. 
+        content: `You are an AI assistant summarizing a customer support thread for Clerk.
         Provide a concise, 1-2 sentence summary of the customer's core issue and the current status of the resolution.`
       },
       ...thread.messages.map((msg) => ({
@@ -35,11 +36,10 @@ export async function POST(request: Request) {
       }))
     ];
 
-    // 3. Generate the new summary
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini', 
+      model: 'gpt-4o-mini',
       messages: messages,
-      temperature: 0.5, 
+      temperature: 0.5,
     });
 
     const newSummary = response.choices[0]?.message?.content;
@@ -48,7 +48,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });
     }
 
-    // 4. Save the new summary to the database
     const updatedThread = await db.thread.update({
       where: { id: threadId },
       data: { aiSummary: newSummary }
@@ -57,6 +56,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ summary: updatedThread.aiSummary });
 
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('[AI Summary] Failed to generate:', error);
     return NextResponse.json({ error: 'Failed to generate summary' }, { status: 500 });
   }

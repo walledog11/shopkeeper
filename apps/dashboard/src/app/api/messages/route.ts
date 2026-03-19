@@ -1,18 +1,29 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { getOrCreateOrg } from '@/lib/org';
 
 export async function POST(request: Request) {
   try {
+    const org = await getOrCreateOrg();
     const { threadId, text } = await request.json();
 
     if (!threadId || !text) {
       return NextResponse.json({ error: 'Missing threadId or text' }, { status: 400 });
     }
 
-    // 1. COMBINED: Update thread, create message, and fetch customer in one query!
+    // Verify the thread belongs to this org before touching it
+    const thread = await db.thread.findUnique({
+      where: { id: threadId },
+      select: { organizationId: true },
+    });
+
+    if (!thread || thread.organizationId !== org.id) {
+      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
+    }
+
     const updatedThread = await db.thread.update({
       where: { id: threadId },
-      data: { 
+      data: {
         status: 'open',
         messages: {
           create: {
@@ -21,13 +32,13 @@ export async function POST(request: Request) {
           }
         }
       },
-      include: { 
+      include: {
         customer: true,
         messages: {
           orderBy: { sentAt: 'desc' },
           take: 1
         }
-      } 
+      }
     });
 
     const newMessage = updatedThread.messages[0];
@@ -57,36 +68,21 @@ export async function POST(request: Request) {
       } else {
         console.warn('[Dispatch] WARNING: No META_ACCESS_TOKEN found in .env!');
       }
-    } 
+    }
     // -------------------------------------------------------------
     // DISPATCH BRANCH: EMAIL
     // -------------------------------------------------------------
     else if (updatedThread.channelType === 'email') {
       console.log(`[Dispatch] Preparing to send email reply to: ${recipientId}`);
-      
-      // TODO: Add your Email Provider API call here!
-      // Example using Resend or SendGrid:
-      /*
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: 'support@yourclothingbrand.com',
-          to: recipientId,
-          subject: `Re: ${updatedThread.tag}`, // Replying to their original subject
-          text: text
-        })
-      });
-      */
       console.log('[Dispatch] Email sending logic goes here!');
     }
 
     return NextResponse.json(newMessage);
-    
+
   } catch (error) {
+    if (error instanceof Error && error.message === 'Unauthenticated') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     console.error('[Next.js API] Failed to process outbound message:', error);
     return NextResponse.json({ error: 'Failed to process message' }, { status: 500 });
   }
