@@ -4,8 +4,25 @@ export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai";
 
 // Database models
+export interface Organization {
+  id: string;
+  clerkOrgId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface Integration {
+  id: string;
+  organizationId: string;
+  platform: ChannelType;
+  externalAccountId: string;
+  accessToken: string | null;
+  createdAt: string;
+}
+
 export interface Customer {
   id: string;
+  organizationId: string;
   name: string | null;
   platformId: string;
   createdAt: string;
@@ -22,6 +39,7 @@ export interface Message {
 
 export interface Thread {
   id: string;
+  organizationId: string;
   customerId: string;
   channelType: ChannelType;
   status: ThreadStatus;

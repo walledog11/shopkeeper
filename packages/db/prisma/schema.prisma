@@ -30,34 +30,74 @@ enum SenderType {
 }
 
 // --- MODELS ---
+
+// One Organization = one Shopify business using the app.
+// clerkOrgId maps to the organization ID from Clerk.com (e.g. org_xxxx).
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  clerkOrgId  String   @unique @map("clerk_org_id")
+  name        String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  customers    Customer[]
+  threads      Thread[]
+  integrations Integration[]
+
+  @@index([clerkOrgId])
+  @@map("organizations")
+}
+
+// Stores a connected platform account for an organization.
+// e.g. Instagram page, support email address, Shopify store.
+model Integration {
+  id                String      @id @default(uuid()) @db.Uuid
+  organizationId    String      @map("organization_id") @db.Uuid
+  platform          ChannelType
+  externalAccountId String      @map("external_account_id") @db.VarChar(255)
+  accessToken       String?     @map("access_token") @db.Text
+  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, platform, externalAccountId])
+  @@index([organizationId])
+  @@map("integrations")
+}
+
 model Customer {
-  id         String   @id @default(uuid()) @db.Uuid
-  name       String?  @db.VarChar(255)
-  platformId String   @unique @map("platform_id") @db.VarChar(255)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String?      @db.VarChar(255)
+  platformId     String       @map("platform_id") @db.VarChar(255)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  threads    Thread[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  threads        Thread[]
 
-  @@index([platformId])
-  @@map("customers") 
+  // platformId is unique per org, not globally — two orgs can share the same customer email
+  @@unique([organizationId, platformId])
+  @@index([organizationId])
+  @@map("customers")
 }
 
 model Thread {
-  id          String       @id @default(uuid()) @db.Uuid
-  customerId  String       @map("customer_id") @db.Uuid
-  channelType ChannelType  @map("channel_type")
-  status      ThreadStatus @default(open)
-  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  aiSummary   String?
-  tag         String?   @default("Support")
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  customerId     String       @map("customer_id") @db.Uuid
+  channelType    ChannelType  @map("channel_type")
+  status         ThreadStatus @default(open)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  aiSummary      String?      @map("ai_summary")
+  tag            String?      @default("Support")
 
-  customer    Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  messages    Message[]
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messages       Message[]
 
-  @@index([status])
+  @@index([organizationId, status])
+  @@index([organizationId, updatedAt])
   @@index([customerId])
-  @@index([updatedAt])
   @@map("threads")
 }
 
