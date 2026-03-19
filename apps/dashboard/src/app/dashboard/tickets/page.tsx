@@ -7,15 +7,10 @@ import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { Bot, ArrowLeft, Sparkles, Send, Clock, CheckCircle2, RefreshCw } from "lucide-react"
 import useSWR from 'swr'
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json())
+import { fetcher } from '@/lib/fetcher'
+import { formatTime } from '@/lib/utils'
 
 const FILTERS = ["All", "Shopify", "Instagram", "TikTok", "Gmail"]
-
-const formatTime = (dateString: string) => {
-  if (!dateString) return "Just now";
-  return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 export default function InteractiveTicketsPage() {
   const [activeFilter, setActiveFilter] = useState("All")

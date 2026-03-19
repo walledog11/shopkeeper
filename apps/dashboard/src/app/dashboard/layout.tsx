@@ -5,8 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Home, Inbox, Blocks, Settings, LogOut, Menu, X } from "lucide-react";
 import useSWR from "swr";
-
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+import { fetcher } from "@/lib/fetcher";
 
 const navItems = [
   { name: "Home", href: "/dashboard", icon: Home },
