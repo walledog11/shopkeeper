@@ -44,6 +44,37 @@ async function isCustomerSupportMessage(subject, body) {
   }
 }
 
+// Shared handler: upsert customer → find/create thread → save message → summarize
+async function processInboundMessage(platformId, channelType, messageText, { customerName = null, initialTag = null } = {}) {
+  const customer = await db.customer.upsert({
+    where: { platformId },
+    update: {},
+    create: { platformId, ...(customerName && { name: customerName }) }
+  });
+
+  let thread = await db.thread.findFirst({
+    where: { customerId: customer.id, status: 'open', channelType }
+  });
+
+  if (!thread) {
+    thread = await db.thread.create({
+      data: {
+        customerId: customer.id,
+        channelType,
+        status: 'open',
+        ...(initialTag && { tag: initialTag })
+      }
+    });
+  }
+
+  await db.message.create({
+    data: { threadId: thread.id, senderType: 'customer', contentText: messageText }
+  });
+
+  await generateThreadIntelligence(thread.id);
+  return thread;
+}
+
 // Helper to run summarization to keep code DRY
 async function generateThreadIntelligence(threadId) {
   try {
@@ -102,32 +133,11 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
     const messageText = messagingEvent.message.text;
 
     try {
-      const customer = await db.customer.upsert({
-        where: { platformId: senderId },
-        update: {}, 
-        create: { platformId: senderId }
-      });
-
-      let thread = await db.thread.findFirst({
-        where: { customerId: customer.id, status: 'open', channelType: 'ig_dm' }
-      });
-
-      if (!thread) {
-        thread = await db.thread.create({
-          data: { customerId: customer.id, channelType: 'ig_dm', status: 'open' }
-        });
-      }
-
-      await db.message.create({
-        data: { threadId: thread.id, senderType: 'customer', contentText: messageText }
-      });
-
-      await generateThreadIntelligence(thread.id);
+      await processInboundMessage(senderId, 'ig_dm', messageText);
       console.log(`[Worker] Successfully saved IG DM from ${senderId}`);
-
     } catch (error) {
       console.error(`[Worker] DB operation failed for IG DM:`, error);
-      throw error; 
+      throw error;
     }
   }
 
@@ -147,32 +157,10 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
       }
 
       // 2. Database Operations
-      const customer = await db.customer.upsert({
-        where: { platformId: senderEmail },
-        update: {},
-        create: { platformId: senderEmail, name: senderEmail.split('@')[0] } // Default name to email prefix
+      await processInboundMessage(senderEmail, 'email', body, {
+        customerName: senderEmail.split('@')[0],
+        initialTag: subject.substring(0, 50)
       });
-
-      let thread = await db.thread.findFirst({
-        where: { customerId: customer.id, status: 'open', channelType: 'email' }
-      });
-
-      if (!thread) {
-        thread = await db.thread.create({
-          data: { 
-            customerId: customer.id, 
-            channelType: 'email', 
-            status: 'open',
-            tag: subject.substring(0, 50) // Store the subject temporarily
-          }
-        });
-      }
-
-      await db.message.create({
-        data: { threadId: thread.id, senderType: 'customer', contentText: body }
-      });
-
-      await generateThreadIntelligence(thread.id);
       console.log(`[Worker] Successfully saved Email from ${senderEmail}`);
 
     } catch (error) {

@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Home, Inbox, Blocks, Settings, LogOut, Menu, X } from "lucide-react";
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
+import { useOpenThreads } from "@/hooks/useOpenThreads";
 
 const navItems = [
   { name: "Home", href: "/dashboard", icon: Home },
@@ -16,8 +15,7 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { data: openThreads } = useSWR<{ id: string }[]>("/api/threads", fetcher, { refreshInterval: 5000 });
-  const openCount = openThreads?.length ?? 0;
+  const { openCount } = useOpenThreads();
 
   const closeMenu = () => setIsMobileMenuOpen(false);
 

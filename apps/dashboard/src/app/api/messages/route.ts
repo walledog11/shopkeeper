@@ -41,9 +41,12 @@ export async function POST(request: Request) {
       console.log(`[Dispatch] Preparing to send message to IG User: ${recipientId}`);
 
       if (PAGE_ACCESS_TOKEN) {
-        const metaResponse = await fetch(`https://graph.facebook.com/v19.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+        const metaResponse = await fetch(`https://graph.facebook.com/v19.0/me/messages`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${PAGE_ACCESS_TOKEN}`,
+          },
           body: JSON.stringify({
             recipient: { id: recipientId },
             message: { text: text }
@@ -52,7 +55,7 @@ export async function POST(request: Request) {
         const metaResult = await metaResponse.json();
         console.log('[Dispatch] Meta API Response:', metaResult);
       } else {
-         console.warn('[Dispatch] WARNING: No META_ACCESS_TOKEN found in .env!');
+        console.warn('[Dispatch] WARNING: No META_ACCESS_TOKEN found in .env!');
       }
     } 
     // -------------------------------------------------------------

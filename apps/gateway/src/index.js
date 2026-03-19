@@ -9,8 +9,12 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware to parse incoming JSON payloads from Meta/TikTok
-app.use(express.json());
+// Middleware to parse incoming JSON payloads and capture raw body for signature verification
+app.use(express.json({
+  verify: (req, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // A simple health-check route to prove the server is alive
 app.get('/', async (req, res) => {

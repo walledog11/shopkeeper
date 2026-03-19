@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
 import { Bot, ArrowLeft, Sparkles, Send, Clock, CheckCircle2, RefreshCw } from "lucide-react"
-import useSWR from 'swr'
-import { fetcher } from '@/lib/fetcher'
+import { useOpenThreads } from '@/hooks/useOpenThreads'
 import { formatTime } from '@/lib/utils'
+import type { Thread, Message, Ticket } from '@/types'
 
 const FILTERS = ["All", "Shopify", "Instagram", "TikTok", "Gmail"]
 
@@ -21,12 +21,9 @@ export default function InteractiveTicketsPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // 1. Added `mutate` from SWR to control the cache manually
-  const { data: dbThreads, error, isLoading, mutate } = useSWR('/api/threads', fetcher, { 
-    refreshInterval: 3000
-  })
+  const { threads: dbThreads, error, isLoading, mutate } = useOpenThreads()
 
-  const liveTickets = dbThreads ? dbThreads.map((thread: any) => {
+  const liveTickets: Ticket[] = dbThreads.map((thread: Thread) => {
     let platformName = "Unknown";
     let logoPath = "/logos/default.png";
     if (thread.channelType === 'ig_dm') {
@@ -40,26 +37,26 @@ export default function InteractiveTicketsPage() {
       id: thread.id,
       platform: platformName,
       logo: logoPath,
-      customer: thread.customer?.name || `Shopper_${thread.customer?.platformId.substring(0,5)}`,
+      customer: thread.customer?.name || `Shopper_${thread.customer?.platformId.substring(0, 5)}`,
       time: lastMessage ? formatTime(lastMessage.sentAt) : 'New',
       subject: thread.tag || "New Inquiry",
       preview: lastMessage?.contentText || "No messages yet.",
-      tag: thread.tag || "Support", 
-      tagColor: "text-blue-700 bg-blue-100 border-blue-200", 
-      aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...", 
-      messages: thread.messages.map((msg: any) => ({
-        sender: msg.senderType, 
+      tag: thread.tag || "Support",
+      tagColor: "text-blue-700 bg-blue-100 border-blue-200",
+      aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...",
+      messages: thread.messages.map((msg) => ({
+        sender: msg.senderType,
         text: msg.contentText,
         time: formatTime(msg.sentAt)
       }))
     }
-  }) : [] 
+  })
 
-  const filteredTickets = liveTickets.filter((ticket: any) => 
+  const filteredTickets = liveTickets.filter((ticket: Ticket) =>
     activeFilter === "All" ? true : ticket.platform === activeFilter
   )
 
-  const activeTicket = liveTickets.find((t: any) => t.id === activeTicketId)
+  const activeTicket = liveTickets.find((t: Ticket) => t.id === activeTicketId)
 
   useEffect(() => {
     // This runs every time a new message is added OR when you click a different ticket
@@ -74,28 +71,28 @@ export default function InteractiveTicketsPage() {
     setReplyText(""); 
 
     // 1. Create a fake message bubble mimicking the database structure
-    const optimisticMessage = {
+    const optimisticMessage: Message = {
       id: `temp-${Date.now()}`,
+      threadId: activeTicketId,
       senderType: 'agent',
       contentText: textToSend,
+      mediaUrl: null,
       sentAt: new Date().toISOString()
     };
 
     // 2. Instantly update the SWR cache so the UI re-renders immediately
-    if (dbThreads) {
-      const optimisticData = dbThreads.map((thread: any) => {
-        if (thread.id === activeTicketId) {
-          return { ...thread, messages: [...thread.messages, optimisticMessage] };
-        }
-        return thread;
-      });
-      // `false` tells SWR not to re-fetch from the server immediately, holding our fake data
-      await mutate(optimisticData, false); 
-    }
+    const optimisticData = dbThreads.map((thread: Thread) => {
+      if (thread.id === activeTicketId) {
+        return { ...thread, messages: [...thread.messages, optimisticMessage] };
+      }
+      return thread;
+    });
+    // `false` tells SWR not to re-fetch from the server immediately, holding our fake data
+    await mutate(optimisticData, false);
 
     try {
       // 3. Fire the real request to the server in the background
-      await fetch('/api/messages', {
+      const res = await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -103,13 +100,16 @@ export default function InteractiveTicketsPage() {
           text: textToSend
         })
       });
-      
+
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
       // 4. Force SWR to fetch the real data once the server is done to get the real DB IDs
       mutate();
     } catch (error) {
       console.error("Failed to send message", error);
-      // Revert back to the real database state if the send failed
-      mutate(); 
+      // Restore the failed message text so the user can retry
+      setReplyText(textToSend);
+      mutate();
     }
   };
 
@@ -135,7 +135,7 @@ export default function InteractiveTicketsPage() {
       }
     } catch (error) {
       console.error("AI Draft Error:", error);
-      setReplyText("");
+      setReplyText("Failed to generate draft. Please try typing manually.");
     } finally {
       setIsDrafting(false);
     }
@@ -164,17 +164,17 @@ export default function InteractiveTicketsPage() {
     
     // --- OPTIMISTIC UI UPDATE ---
     // Instantly inject the new summary into the UI without waiting for a database re-fetch
-    if (data.summary && dbThreads) {
-      const optimisticData = dbThreads.map((thread: any) => {
+    if (data.summary) {
+      const optimisticData = dbThreads.map((thread: Thread) => {
         if (thread.id === activeTicketId) {
           return { ...thread, aiSummary: data.summary };
         }
         return thread;
       });
-      await mutate(optimisticData, false); 
+      await mutate(optimisticData, false);
     } else {
       // Fallback: force SWR to fetch fresh data
-      mutate(); 
+      mutate();
     }
 
   } catch (error) {

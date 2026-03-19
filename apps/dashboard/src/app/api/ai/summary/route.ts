@@ -42,7 +42,11 @@ export async function POST(request: Request) {
       temperature: 0.5, 
     });
 
-    const newSummary = response.choices[0].message.content;
+    const newSummary = response.choices[0]?.message?.content;
+
+    if (!newSummary) {
+      return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });
+    }
 
     // 4. Save the new summary to the database
     const updatedThread = await db.thread.update({

@@ -1,6 +1,7 @@
 import express from 'express';
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 const router = express.Router();
 
@@ -36,6 +37,28 @@ router.get('/meta', (req, res) => {
 // POST: Catching Live Instagram DMs
 // -----------------------------------------------------------------------------
 router.post('/meta', async (req, res) => {
+  const APP_SECRET = process.env.META_APP_SECRET;
+  const signature = req.headers['x-hub-signature-256'];
+
+  if (!APP_SECRET) {
+    console.error('[Webhook] META_APP_SECRET is not set — cannot verify signature.');
+    return res.sendStatus(500);
+  }
+
+  if (!signature || !req.rawBody) {
+    console.error('[Webhook] Missing signature or raw body.');
+    return res.sendStatus(401);
+  }
+
+  const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
+  const trusted = Buffer.from(expected, 'utf8');
+  const received = Buffer.from(signature, 'utf8');
+
+  if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
+    console.error('[Webhook] Signature verification failed.');
+    return res.sendStatus(401);
+  }
+
   const payload = req.body;
 
   if (payload.object === 'page' || payload.object === 'instagram') {

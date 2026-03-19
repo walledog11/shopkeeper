@@ -42,7 +42,11 @@ export async function POST(request: Request) {
       temperature: 0.7, 
     });
 
-    const draftText = response.choices[0].message.content;
+    const draftText = response.choices[0]?.message?.content;
+
+    if (!draftText) {
+      return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });
+    }
 
     return NextResponse.json({ draft: draftText });
 
