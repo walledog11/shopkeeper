@@ -4,16 +4,21 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Home, Inbox, Blocks, Settings, LogOut, Menu, X } from "lucide-react";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 const navItems = [
   { name: "Home", href: "/dashboard", icon: Home },
-  { name: "Support Tickets", href: "/dashboard/tickets", icon: Inbox, badge: "3" },
+  { name: "Support Tickets", href: "/dashboard/tickets", icon: Inbox, badge: true },
   { name: "Integrations", href: "/dashboard/integrations", icon: Blocks },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { data: openThreads } = useSWR<{ id: string }[]>("/api/threads", fetcher, { refreshInterval: 5000 });
+  const openCount = openThreads?.length ?? 0;
 
   const closeMenu = () => setIsMobileMenuOpen(false);
 
@@ -93,11 +98,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <item.icon className={`w-5 h-5 transition-transform duration-200 group-hover:scale-110 group-active:scale-95 ${isActive ? "text-yellow-600" : "text-slate-400"}`} />
                   {item.name}
                 </div>
-                {item.badge && (
+                {item.badge && openCount > 0 && (
                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shadow-sm ${
                     isActive ? "bg-yellow-200 text-yellow-800" : "bg-white border border-slate-200 text-slate-500"
                   }`}>
-                    {item.badge}
+                    {openCount}
                   </span>
                 )}
               </Link>
