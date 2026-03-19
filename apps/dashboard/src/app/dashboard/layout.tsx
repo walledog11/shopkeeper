@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Home, Inbox, Blocks, Settings, LogOut, Menu, X } from "lucide-react";
 import { useOpenThreads } from "@/hooks/useOpenThreads";
+import { useUser, useClerk } from "@clerk/nextjs";
 
 const navItems = [
   { name: "Home", href: "/dashboard", icon: Home },
@@ -16,8 +17,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { openCount } = useOpenThreads();
+  const { user } = useUser();
+  const { signOut } = useClerk();
 
   const closeMenu = () => setIsMobileMenuOpen(false);
+
+  const fullName = user?.fullName ?? user?.firstName ?? "User";
+  const email = user?.primaryEmailAddress?.emailAddress ?? "";
+  const initials = fullName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
     // 1. CHANGED: Softer background (bg-slate-100) to contrast with the white floating sidebar
@@ -120,13 +127,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
 
-          <button className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all text-left group">
-            <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-md">
-              JD
+          <button
+            onClick={() => signOut({ redirectUrl: '/login' })}
+            className="w-full flex items-center gap-3 p-2 rounded-xl hover:bg-white hover:shadow-sm transition-all text-left group"
+          >
+            <div className="w-9 h-9 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-sm shadow-md overflow-hidden">
+              {user?.imageUrl ? (
+                <img src={user.imageUrl} alt={fullName} className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-900 truncate">Jane Doe</p>
-              <p className="text-[11px] font-medium text-slate-500 truncate">jane@company.com</p>
+              <p className="text-sm font-bold text-slate-900 truncate">{fullName}</p>
+              <p className="text-[11px] font-medium text-slate-500 truncate">{email}</p>
             </div>
             <LogOut className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>

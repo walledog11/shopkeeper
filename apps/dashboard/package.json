@@ -8,10 +8,11 @@
     "start": "next start"
   },
   "dependencies": {
+    "@clerk/db": "*",
+    "@clerk/nextjs": "^7.0.5",
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "swr": "latest",
-    "@clerk/db": "*"
+    "swr": "latest"
   }
 }
