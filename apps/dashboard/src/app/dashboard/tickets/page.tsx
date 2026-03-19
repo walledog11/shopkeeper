@@ -1,19 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Image from "next/image"
-import { Bot, ArrowLeft, Sparkles, Send, Clock, CheckCircle2 } from "lucide-react"
+import { Bot, ArrowLeft, Sparkles, Send, Clock, CheckCircle2, RefreshCw } from "lucide-react"
 import useSWR from 'swr'
 
-// 1. Define the SWR Fetcher
 const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 const FILTERS = ["All", "Shopify", "Instagram", "TikTok", "Gmail"]
 
-// Helper function to format timestamps cleanly
 const formatTime = (dateString: string) => {
   if (!dateString) return "Just now";
   return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -24,16 +22,16 @@ export default function InteractiveTicketsPage() {
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null) 
   const [replyText, setReplyText] = useState("")
   const [isDrafting, setIsDrafting] = useState(false)
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false)
 
-  // 2. Fetch the live data from PostgreSQL via Next.js API
-  const { data: dbThreads, error, isLoading } = useSWR('/api/threads', fetcher, { 
-    refreshInterval: 3000 // Silently poll for new messages every 3 seconds
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 1. Added `mutate` from SWR to control the cache manually
+  const { data: dbThreads, error, isLoading, mutate } = useSWR('/api/threads', fetcher, { 
+    refreshInterval: 3000
   })
 
-  // 3. Transform the raw database data into the shape your UI expects
   const liveTickets = dbThreads ? dbThreads.map((thread: any) => {
-    
-    // Map 'ig_dm' to 'Instagram' so your UI logic and logos work perfectly
     let platformName = "Unknown";
     let logoPath = "/logos/default.png";
     if (thread.channelType === 'ig_dm') {
@@ -47,36 +45,61 @@ export default function InteractiveTicketsPage() {
       id: thread.id,
       platform: platformName,
       logo: logoPath,
-      // If we don't have a name yet, use a shortened version of their ID
       customer: thread.customer?.name || `Shopper_${thread.customer?.platformId.substring(0,5)}`,
       time: lastMessage ? formatTime(lastMessage.sentAt) : 'New',
       subject: thread.tag || "New Inquiry",
       preview: lastMessage?.contentText || "No messages yet.",
-      tag: thread.tag || "Support", // <-- Read the real tag!
-      tagColor: "text-blue-700 bg-blue-100 border-blue-200", // You can write a dynamic color map for this later
-      aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...", // <-- Read the real summary!
+      tag: thread.tag || "Support", 
+      tagColor: "text-blue-700 bg-blue-100 border-blue-200", 
+      aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...", 
       messages: thread.messages.map((msg: any) => ({
-        sender: msg.senderType, // 'customer' or 'agent'
+        sender: msg.senderType, 
         text: msg.contentText,
         time: formatTime(msg.sentAt)
       }))
     }
-  }) : [] // Default to empty array while loading
+  }) : [] 
 
-  // 4. Update the filter logic to use liveTickets instead of MOCK_TICKETS
   const filteredTickets = liveTickets.filter((ticket: any) => 
     activeFilter === "All" ? true : ticket.platform === activeFilter
   )
 
   const activeTicket = liveTickets.find((t: any) => t.id === activeTicketId)
 
+  useEffect(() => {
+    // This runs every time a new message is added OR when you click a different ticket
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [activeTicket?.messages?.length, activeTicketId])
+
+  // --- NEW FEATURE: Optimistic Sending ---
   const handleSendMessage = async () => {
     if (!replyText.trim() || !activeTicketId) return;
 
     const textToSend = replyText;
-    setReplyText(""); // Instantly clear the text box so it feels fast
+    setReplyText(""); 
+
+    // 1. Create a fake message bubble mimicking the database structure
+    const optimisticMessage = {
+      id: `temp-${Date.now()}`,
+      senderType: 'agent',
+      contentText: textToSend,
+      sentAt: new Date().toISOString()
+    };
+
+    // 2. Instantly update the SWR cache so the UI re-renders immediately
+    if (dbThreads) {
+      const optimisticData = dbThreads.map((thread: any) => {
+        if (thread.id === activeTicketId) {
+          return { ...thread, messages: [...thread.messages, optimisticMessage] };
+        }
+        return thread;
+      });
+      // `false` tells SWR not to re-fetch from the server immediately, holding our fake data
+      await mutate(optimisticData, false); 
+    }
 
     try {
+      // 3. Fire the real request to the server in the background
       await fetch('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,11 +109,12 @@ export default function InteractiveTicketsPage() {
         })
       });
       
-      // Because SWR is polling every 3 seconds, the UI will automatically 
-      // fetch this new message and pop it onto the screen almost immediately!
-      
+      // 4. Force SWR to fetch the real data once the server is done to get the real DB IDs
+      mutate();
     } catch (error) {
       console.error("Failed to send message", error);
+      // Revert back to the real database state if the send failed
+      mutate(); 
     }
   };
 
@@ -98,7 +122,7 @@ export default function InteractiveTicketsPage() {
     if (!activeTicketId) return;
 
     setIsDrafting(true);
-    setReplyText("Clerk is thinking..."); // Instant visual feedback
+    setReplyText("Clerk is thinking..."); 
 
     try {
       const res = await fetch('/api/ai/draft', {
@@ -122,7 +146,50 @@ export default function InteractiveTicketsPage() {
     }
   }
 
-  // Handle Initial Loading State
+  // --- NEW FEATURE: Refresh AI Summary ---
+  const handleRefreshSummary = async () => {
+  if (!activeTicketId) return;
+  setIsRefreshingSummary(true);
+
+  try {
+    const response = await fetch('/api/ai/summary', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: activeTicketId }),
+    });
+    
+    // Parse the response so we can read the error message if it failed
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("Backend Error:", data.error);
+      alert(`Clerk Error: ${data.error || 'Check the console'}`);
+      return;
+    }
+    
+    // --- OPTIMISTIC UI UPDATE ---
+    // Instantly inject the new summary into the UI without waiting for a database re-fetch
+    if (data.summary && dbThreads) {
+      const optimisticData = dbThreads.map((thread: any) => {
+        if (thread.id === activeTicketId) {
+          return { ...thread, aiSummary: data.summary };
+        }
+        return thread;
+      });
+      await mutate(optimisticData, false); 
+    } else {
+      // Fallback: force SWR to fetch fresh data
+      mutate(); 
+    }
+
+  } catch (error) {
+    console.error("Network error:", error);
+    alert("Network error: Failed to reach the AI endpoint.");
+  } finally {
+    setIsRefreshingSummary(false);
+  }
+};
+
   if (isLoading) {
     return (
       <div className="flex h-full min-h-[600px] w-full items-center justify-center bg-white rounded-[2rem] border border-slate-200">
@@ -131,7 +198,6 @@ export default function InteractiveTicketsPage() {
     )
   }
 
-  // Handle Error State
   if (error) {
     return (
       <div className="flex h-full min-h-[600px] w-full items-center justify-center bg-white rounded-[2rem] border border-red-200">
@@ -141,7 +207,6 @@ export default function InteractiveTicketsPage() {
   }
 
   return (
-    // Your UI remains exactly the same from here down!
     <div className="flex h-full min-h-[600px] w-full overflow-hidden bg-white rounded-[2rem] border border-slate-200">
       
       {/* LEFT COLUMN: Ticket List */}
@@ -170,8 +235,7 @@ export default function InteractiveTicketsPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {/* We swapped MOCK_TICKETS to filteredTickets here */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
           {filteredTickets.map((ticket: any) => (
             <Card 
               key={ticket.id}
@@ -252,15 +316,27 @@ export default function InteractiveTicketsPage() {
             </div>
 
             {/* Chat Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-8 bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8 bg-slate-50/50">
               
-              {/* Utilitarian AI Summary */}
-              <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-6 h-6 rounded-md bg-yellow-200 flex items-center justify-center">
-                    <Bot className="w-4 h-4 text-yellow-700" />
+              {/* --- UPDATED: Interactive AI Summary Box --- */}
+              <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-5 relative group">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-md bg-yellow-200 flex items-center justify-center">
+                      <Bot className="w-4 h-4 text-yellow-700" />
+                    </div>
+                    <h4 className="text-sm font-extrabold text-yellow-900">Clerk Context</h4>
                   </div>
-                  <h4 className="text-sm font-extrabold text-yellow-900">Clerk Context</h4>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 text-yellow-700 hover:bg-yellow-200 hover:text-yellow-900 rounded-full"
+                    onClick={handleRefreshSummary}
+                    disabled={isRefreshingSummary}
+                    title="Refresh AI Summary"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
+                  </Button>
                 </div>
                 <p className="text-sm font-medium text-yellow-800 leading-relaxed">
                   {activeTicket.aiSummary}
@@ -282,6 +358,7 @@ export default function InteractiveTicketsPage() {
                   </div>
                 ))}
               </div>
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Flat, structured Composer */}

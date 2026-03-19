@@ -8,7 +8,6 @@ const router = express.Router();
 const redisConnection = new IORedis(process.env.REDIS_URL);
 
 // 2. Initialize the BullMQ Queue
-// This is the conveyor belt that will hold incoming messages
 const messageQueue = new Queue('inbound-messages', { connection: redisConnection });
 
 // -----------------------------------------------------------------------------
@@ -39,19 +38,14 @@ router.get('/meta', (req, res) => {
 router.post('/meta', async (req, res) => {
   const payload = req.body;
 
-  // Verify the payload is formatted exactly how Meta sends it
   if (payload.object === 'page' || payload.object === 'instagram') {
-    
     try {
-      // Throw the raw JSON directly onto the Redis conveyor belt
       await messageQueue.add('process-ig-dm', {
         platform: 'ig_dm',
         rawPayload: payload
       });
 
       console.log(`[Webhook] Payload received and queued! Job added to Redis.`);
-      
-      // Immediately return 200 OK so Meta's servers don't time out
       return res.status(200).send('EVENT_RECEIVED');
     } catch (error) {
       console.error('[Webhook] Failed to add job to Redis queue:', error);
@@ -59,6 +53,34 @@ router.post('/meta', async (req, res) => {
     }
   } else {
     return res.sendStatus(404);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST: Catching Inbound Emails (SendGrid/Postmark/Mailgun)
+// -----------------------------------------------------------------------------
+router.post('/email/inbound', async (req, res) => {
+  try {
+    // Providers usually send the sender, subject, and text body in the payload
+    // Note: Adjust these field names based on which email provider you choose!
+    const { from, subject, text } = req.body;
+
+    if (!from || !text) {
+      return res.sendStatus(400); 
+    }
+
+    await messageQueue.add('process-email', {
+      platform: 'email',
+      senderEmail: from,
+      subject: subject || 'No Subject',
+      body: text
+    });
+
+    console.log(`[Webhook] Inbound email from ${from} queued!`);
+    return res.status(200).send('OK');
+  } catch (error) {
+    console.error('[Webhook] Failed to queue email:', error);
+    return res.sendStatus(500);
   }
 });
 

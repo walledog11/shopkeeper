@@ -31,7 +31,7 @@ enum SenderType {
 
 // --- MODELS ---
 model Customer {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id         String   @id @default(uuid()) @db.Uuid
   name       String?  @db.VarChar(255)
   platformId String   @unique @map("platform_id") @db.VarChar(255)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -43,7 +43,7 @@ model Customer {
 }
 
 model Thread {
-  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String       @id @default(uuid()) @db.Uuid
   customerId  String       @map("customer_id") @db.Uuid
   channelType ChannelType  @map("channel_type")
   status      ThreadStatus @default(open)
@@ -60,7 +60,7 @@ model Thread {
 }
 
 model Message {
-  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
   threadId    String     @map("thread_id") @db.Uuid
   senderType  SenderType @map("sender_type")
   contentText String?    @map("content_text") @db.Text
