@@ -4,14 +4,16 @@ import { getOrCreateOrg } from '@/lib/org';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const org = await getOrCreateOrg();
+    const { searchParams } = new URL(request.url);
+    const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
 
     const threads = await db.thread.findMany({
       where: {
         organizationId: org.id,
-        status: 'open',
+        status,
       },
       include: {
         customer: true,

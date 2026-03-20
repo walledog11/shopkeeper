@@ -16,7 +16,8 @@ const navItems = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { openCount } = useOpenThreads();
+  const { threads: openThreads } = useOpenThreads();
+  const openCount = openThreads.length;
   const { user } = useUser();
   const { signOut } = useClerk();
 
@@ -91,10 +92,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href={item.href}
                 onClick={closeMenu}
                 // 3. CHANGED: Added 'group' to the link and softened hover states
-                className={`group flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+                className={`group flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-medium transition-all duration-200 ${
                   isActive
                     ? "bg-yellow-50 text-yellow-900 shadow-sm ring-1 ring-yellow-100"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 }`}
               >
                 <div className="flex items-center gap-3">

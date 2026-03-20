@@ -16,6 +16,7 @@ export interface Integration {
   organizationId: string;
   platform: ChannelType;
   externalAccountId: string;
+  fromEmail: string | null;
   accessToken: string | null;
   createdAt: string;
 }

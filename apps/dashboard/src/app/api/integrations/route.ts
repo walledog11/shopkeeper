@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
-    const { platform, externalAccountId } = await request.json();
+    const { platform, externalAccountId, fromEmail } = await request.json();
 
     if (!platform || !externalAccountId) {
       return NextResponse.json({ error: 'Missing platform or externalAccountId' }, { status: 400 });
@@ -38,11 +38,14 @@ export async function POST(request: Request) {
           externalAccountId,
         },
       },
-      update: {},
+      update: {
+        ...(fromEmail !== undefined && { fromEmail }),
+      },
       create: {
         organizationId: org.id,
         platform,
         externalAccountId,
+        ...(fromEmail && { fromEmail }),
       },
     });
 
