@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
 
 export async function GET() {
   try {
@@ -13,11 +14,7 @@ export async function GET() {
 
     return NextResponse.json(integrations);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[Integrations] GET failed:', error);
-    return NextResponse.json({ error: 'Failed to fetch integrations' }, { status: 500 });
+    return handleApiError(error, 'Integrations GET', 'Failed to fetch integrations');
   }
 }
 
@@ -51,10 +48,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(integration, { status: 201 });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[Integrations] POST failed:', error);
-    return NextResponse.json({ error: 'Failed to create integration' }, { status: 500 });
+    return handleApiError(error, 'Integrations POST', 'Failed to create integration');
   }
 }

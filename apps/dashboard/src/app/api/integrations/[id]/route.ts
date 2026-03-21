@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
 
 export async function DELETE(
   _request: Request,
@@ -23,10 +24,6 @@ export async function DELETE(
 
     return new NextResponse(null, { status: 204 });
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[Integrations] DELETE failed:', error);
-    return NextResponse.json({ error: 'Failed to delete integration' }, { status: 500 });
+    return handleApiError(error, 'Integrations DELETE', 'Failed to delete integration');
   }
 }

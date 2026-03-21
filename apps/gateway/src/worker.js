@@ -14,6 +14,27 @@ const redisConnection = new IORedis(process.env.REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
+// --- Strip quoted reply chains from email bodies ---
+// Handles the most common email client formats:
+//   "On [date], [name] wrote:" (Gmail, Apple Mail, Outlook)
+//   Lines prefixed with ">"
+//   "-----Original Message-----"
+function stripQuotedReply(text) {
+  if (!text) return text;
+
+  return text
+    .replace(/\r\n/g, '\n')
+    // "On [date], [name] <email> wrote:" and everything after (with optional leading >)
+    .replace(/^>?\s*On\s.{5,200}wrote:\s*[\s\S]*/im, '')
+    // "-----Original Message-----" and everything after
+    .replace(/^-{3,}\s*Original Message\s*-{3,}[\s\S]*/im, '')
+    // Remaining lines that start with ">" (quoted lines)
+    .replace(/^>.*$/gm, '')
+    // Collapse multiple blank lines left behind
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // --- AI Filter for Emails ---
 async function isCustomerSupportMessage(subject, body) {
   try {
@@ -141,9 +162,13 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
   // -------------------------------------------------------------
   if (job.data.platform === 'ig_dm') {
     const { rawPayload } = job.data;
-    const messagingEvent = rawPayload.entry[0]?.messaging[0];
+    const entry = rawPayload.entry?.[0];
+    // Instagram webhooks use either entry.messaging[] or entry.changes[].value
+    const messagingEvent = entry?.messaging?.[0] ?? entry?.changes?.[0]?.value;
 
     if (!messagingEvent || !messagingEvent.message || !messagingEvent.message.text) return;
+    // Skip echo messages — Meta reflects back any message the page itself sends
+    if (messagingEvent.message.is_echo) return;
 
     const senderId = messagingEvent.sender.id;
     const messageText = messagingEvent.message.text;
@@ -161,18 +186,35 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
   // BRANCH 2: EMAILS
   // -------------------------------------------------------------
   else if (job.data.platform === 'email') {
-    const { senderEmail, subject, body } = job.data;
+    const { senderEmail, senderName, subject, body } = job.data;
 
     try {
-      const isCustomer = await isCustomerSupportMessage(subject, body);
+      // Skip the AI filter if this sender already has an open thread —
+      // they're an existing customer continuing a conversation.
+      const existingCustomer = await db.customer.findUnique({
+        where: { organizationId_platformId: { organizationId, platformId: senderEmail } },
+        select: { id: true },
+      });
 
-      if (!isCustomer) {
-        console.log(`[Worker] AI dropped non-customer email from ${senderEmail}`);
-        return;
+      const hasOpenThread = existingCustomer
+        ? await db.thread.findFirst({
+            where: { organizationId, customerId: existingCustomer.id, status: 'open', channelType: 'email' },
+            select: { id: true },
+          })
+        : null;
+
+      if (!hasOpenThread) {
+        const isCustomer = await isCustomerSupportMessage(subject, body);
+        if (!isCustomer) {
+          console.log(`[Worker] AI dropped non-customer email from ${senderEmail}`);
+          return;
+        }
       }
 
-      await processInboundMessage(organizationId, senderEmail, 'email', body, {
-        customerName: senderEmail.split('@')[0],
+      const cleanBody = stripQuotedReply(body);
+
+      await processInboundMessage(organizationId, senderEmail, 'email', cleanBody, {
+        customerName: senderName || senderEmail.split('@')[0],
         initialTag: subject.substring(0, 50),
       });
       console.log(`[Worker] Successfully saved Email from ${senderEmail} for org ${organizationId}`);

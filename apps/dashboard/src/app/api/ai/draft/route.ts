@@ -3,6 +3,7 @@ import { db } from '@clerk/db';
 import OpenAI from 'openai';
 import { openai } from '@/lib/openai';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
 
 export async function POST(request: Request) {
   try {
@@ -53,10 +54,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ draft: draftText });
 
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[AI Draft] Failed to generate:', error);
-    return NextResponse.json({ error: 'Failed to generate draft' }, { status: 500 });
+    return handleApiError(error, 'AI Draft', 'Failed to generate draft');
   }
 }

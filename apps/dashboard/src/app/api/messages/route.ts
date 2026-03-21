@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
+import { ServerClient } from 'postmark';
 
 export async function POST(request: Request) {
   try {
@@ -48,8 +50,12 @@ export async function POST(request: Request) {
     // DISPATCH BRANCH: INSTAGRAM
     // -------------------------------------------------------------
     if (updatedThread.channelType === 'ig_dm') {
-      const PAGE_ACCESS_TOKEN = process.env.META_ACCESS_TOKEN;
       console.log(`[Dispatch] Preparing to send message to IG User: ${recipientId}`);
+
+      const igIntegration = await db.integration.findFirst({
+        where: { organizationId: org.id, platform: 'ig_dm' },
+      });
+      const PAGE_ACCESS_TOKEN = igIntegration?.accessToken;
 
       if (PAGE_ACCESS_TOKEN) {
         const metaResponse = await fetch(`https://graph.facebook.com/v19.0/me/messages`, {
@@ -66,7 +72,7 @@ export async function POST(request: Request) {
         const metaResult = await metaResponse.json();
         console.log('[Dispatch] Meta API Response:', metaResult);
       } else {
-        console.warn('[Dispatch] WARNING: No META_ACCESS_TOKEN found in .env!');
+        console.warn('[Dispatch] WARNING: No ig_dm integration found for this org — message saved but not sent.');
       }
     }
     // -------------------------------------------------------------
@@ -74,16 +80,46 @@ export async function POST(request: Request) {
     // -------------------------------------------------------------
     else if (updatedThread.channelType === 'email') {
       console.log(`[Dispatch] Preparing to send email reply to: ${recipientId}`);
-      console.log('[Dispatch] Email sending logic goes here!');
+
+      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
+      if (!POSTMARK_API_KEY) {
+        console.warn('[Dispatch] WARNING: No POSTMARK_API_KEY found in .env — message saved but not sent.');
+      } else {
+        const integration = await db.integration.findFirst({
+          where: { organizationId: org.id, platform: 'email' },
+        });
+
+        if (!integration) {
+          console.warn('[Dispatch] WARNING: No email integration found for this org — message saved but not sent.');
+        } else {
+          try {
+            const client = new ServerClient(POSTMARK_API_KEY);
+            const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
+            const threadMessageId = `<thread-${threadId}@${INBOUND_DOMAIN}>`;
+
+            const result = await client.sendEmail({
+              From: integration.fromEmail || integration.externalAccountId,
+              ReplyTo: integration.externalAccountId,
+              To: recipientId,
+              Subject: `Re: ${updatedThread.tag || 'Your inquiry'}`,
+              TextBody: text,
+              Headers: [
+                { Name: 'Message-ID', Value: threadMessageId },
+                { Name: 'In-Reply-To', Value: threadMessageId },
+                { Name: 'References', Value: threadMessageId },
+              ],
+            });
+            console.log(`[Dispatch] Postmark message sent. MessageID: ${result.MessageID}`);
+          } catch (sendError) {
+            console.error('[Dispatch] Postmark send failed — message saved to DB but email not delivered:', sendError);
+          }
+        }
+      }
     }
 
     return NextResponse.json(newMessage);
 
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[Next.js API] Failed to process outbound message:', error);
-    return NextResponse.json({ error: 'Failed to process message' }, { status: 500 });
+    return handleApiError(error, 'Messages POST', 'Failed to process message');
   }
 }

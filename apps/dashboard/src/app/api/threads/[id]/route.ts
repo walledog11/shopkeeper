@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
 
 export async function PATCH(
   request: Request,
@@ -31,10 +32,6 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (error) {
-    if (error instanceof Error && error.message === 'Unauthenticated') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    console.error('[Threads] PATCH failed:', error);
-    return NextResponse.json({ error: 'Failed to update thread' }, { status: 500 });
+    return handleApiError(error, 'Threads PATCH', 'Failed to update thread');
   }
 }

@@ -54,6 +54,7 @@ model Integration {
   organizationId    String      @map("organization_id") @db.Uuid
   platform          ChannelType
   externalAccountId String      @map("external_account_id") @db.VarChar(255)
+  fromEmail         String?     @map("from_email") @db.VarChar(255)
   accessToken       String?     @map("access_token") @db.Text
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bot, Home, Inbox, Blocks, Settings, LogOut, Menu, X } from "lucide-react";
-import { useOpenThreads } from "@/hooks/useOpenThreads";
+import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk } from "@clerk/nextjs";
 
 const navItems = [

@@ -17,5 +17,4 @@ export function useThreads(status: 'open' | 'closed' = 'open') {
   };
 }
 
-// Keep old export for any other consumers
 export const useOpenThreads = () => useThreads('open');
