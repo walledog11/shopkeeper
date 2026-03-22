@@ -37,6 +37,7 @@ model Organization {
   id          String   @id @default(uuid()) @db.Uuid
   clerkOrgId  String   @unique @map("clerk_org_id")
   name        String   @db.VarChar(255)
+  settings    Json?    @default("{}") @map("settings") @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   customers    Customer[]
@@ -70,6 +71,7 @@ model Customer {
   organizationId String       @map("organization_id") @db.Uuid
   name           String?      @db.VarChar(255)
   platformId     String       @map("platform_id") @db.VarChar(255)
+  profilePicUrl  String?      @map("profile_pic_url") @db.Text
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

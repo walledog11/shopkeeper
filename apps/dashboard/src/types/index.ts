@@ -3,11 +3,18 @@ export type ChannelType = "ig_dm" | "email" | "tiktok";
 export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai";
 
+// Settings stored as JSON on the Organization
+export interface OrgSettings {
+  aiContext: string;   // brand name / context fed into AI drafts
+  brandVoice: string;  // tone brief appended to AI system prompt
+}
+
 // Database models
 export interface Organization {
   id: string;
   clerkOrgId: string;
   name: string;
+  settings: OrgSettings | null;
   createdAt: string;
 }
 
@@ -26,6 +33,7 @@ export interface Customer {
   organizationId: string;
   name: string | null;
   platformId: string;
+  profilePicUrl: string | null;
   createdAt: string;
 }
 

@@ -162,7 +162,7 @@ router.post('/email/inbound', async (req, res) => {
     } else {
       // Dev fallback: look up by the full To address stored as externalAccountId
       const integration = await db.integration.findFirst({
-        where: { platform: 'email', externalAccountId: toAddress },
+        where: { platform: 'email', externalAccountId: { equals: toAddress, mode: 'insensitive' } },
         select: { organizationId: true },
       });
       if (!integration) {

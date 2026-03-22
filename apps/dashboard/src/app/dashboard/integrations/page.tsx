@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
-import { Check, Copy, Lock, ChevronRight } from "lucide-react"
+import { Check, Copy, Lock, ChevronRight, AlertCircle, CheckCircle2 } from "lucide-react"
 import { fetcher } from "@/lib/fetcher"
 import { Integration } from "@/types"
 
@@ -55,7 +56,6 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
   },
 ]
 
-const INBOUND_DOMAIN = process.env.NEXT_PUBLIC_INBOUND_EMAIL_DOMAIN || 'inbound.yourapp.com'
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
@@ -75,13 +75,32 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+const ERROR_MESSAGES: Record<string, string> = {
+  access_denied: 'You cancelled the Instagram connection.',
+  no_ig_account: 'No Instagram Business account was found on your Facebook account. Make sure you have classic Page admin access (not just Business Portfolio access) and that your Instagram Business account is linked to the Page.',
+  token_exchange_failed: 'Authentication failed. Please try again.',
+  state_mismatch: 'Security check failed. Please try again.',
+  server_error: 'Something went wrong on our end. Please try again.',
+}
+
 export default function IntegrationsPage() {
   const { data: integrations = [], mutate } = useSWR<Integration[]>('/api/integrations', fetcher)
   const { data: org } = useSWR<{ id: string; name: string }>('/api/org', fetcher)
+  const searchParams = useSearchParams()
+  const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  useEffect(() => {
+    const connected = searchParams.get('connected')
+    const error = searchParams.get('error')
+    if (connected === 'instagram') {
+      setBanner({ type: 'success', message: 'Instagram connected successfully.' })
+    } else if (error) {
+      setBanner({ type: 'error', message: ERROR_MESSAGES[error] ?? 'An unexpected error occurred.' })
+    }
+  }, [searchParams])
 
   const [showEmailForm, setShowEmailForm] = useState<Record<string, boolean>>({})
   const [emailInputs, setEmailInputs] = useState<Record<string, string>>({})
-  const [fromEmailInputs, setFromEmailInputs] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState<Record<string, boolean>>({})
 
   const getConnected = (platform: string) =>
@@ -94,17 +113,15 @@ export default function IntegrationsPage() {
   const handleConnect = async (configId: string, platform: string, emailAddress: string) => {
     setLoading((s) => ({ ...s, [configId]: true }))
     try {
-      const fromEmail = fromEmailInputs[configId] || undefined
       const res = await fetch('/api/integrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ platform, externalAccountId: emailAddress, fromEmail }),
+        body: JSON.stringify({ platform, externalAccountId: emailAddress }),
       })
       if (!res.ok) throw new Error('Failed to connect')
       await mutate()
       setShowEmailForm((s) => ({ ...s, [configId]: false }))
       setEmailInputs((s) => ({ ...s, [configId]: '' }))
-      setFromEmailInputs((s) => ({ ...s, [configId]: '' }))
     } catch {
       alert('Failed to connect. Please try again.')
     } finally {
@@ -123,7 +140,8 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="w-full space-y-8">
+    <div className="h-full overflow-y-auto px-8 py-8">
+    <div className="max-w-4xl mx-auto w-full space-y-8">
 
       {/* Page header */}
       <div className="flex items-start justify-between gap-4">
@@ -142,6 +160,22 @@ export default function IntegrationsPage() {
           </div>
         )}
       </div>
+
+      {/* Success / error banner */}
+      {banner && (
+        <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${
+          banner.type === 'success'
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {banner.type === 'success'
+            ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+            : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+          }
+          <span>{banner.message}</span>
+          <button onClick={() => setBanner(null)} className="ml-auto text-current opacity-50 hover:opacity-100 shrink-0">✕</button>
+        </div>
+      )}
 
       {/* Integration cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -214,20 +248,12 @@ export default function IntegrationsPage() {
                             {integration.fromEmail || integration.externalAccountId}
                           </p>
                         ) : (
-                          <>
-                            <div className="flex items-center">
-                              <p className="text-xs font-mono font-medium text-slate-700 truncate">
-                                {integration.externalAccountId}
-                              </p>
-                              <CopyButton text={integration.externalAccountId} />
-                            </div>
-                            {integration.fromEmail && (
-                              <p className="text-[11px] text-slate-400 mt-0.5 truncate">
-                                Replies from{" "}
-                                <span className="font-semibold text-slate-600">{integration.fromEmail}</span>
-                              </p>
-                            )}
-                          </>
+                          <div className="flex items-center">
+                            <p className="text-xs font-mono font-medium text-slate-700 truncate">
+                              {integration.externalAccountId}
+                            </p>
+                            <CopyButton text={integration.externalAccountId} />
+                          </div>
                         )}
                       </div>
                       <button
@@ -243,34 +269,20 @@ export default function IntegrationsPage() {
 
               {/* Email setup form */}
               {config.emailConnect && showEmailForm[config.id] && (
-                <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-4">
+                <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
                   <div className="space-y-1.5">
                     <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                      Inbound address
-                    </label>
-                    <Input
-                      type="email"
-                      placeholder="abc123@inbound.postmarkapp.com"
-                      value={emailInputs[config.id] ?? ''}
-                      onChange={(e) => setEmailInputs((s) => ({ ...s, [config.id]: e.target.value }))}
-                      className="text-sm bg-white h-9"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                      Reply-from address
+                      Support email address
                     </label>
                     <p className="text-xs text-slate-400">
-                      Must be a verified{" "}
-                      <span className="font-semibold text-slate-600">Postmark Sender Signature</span>.
-                      Customers will see this on your replies.
+                      The email address your customers send support requests to. Emails to this address will appear as tickets.
                     </p>
                     <div className="flex gap-2">
                       <Input
                         type="email"
                         placeholder="support@yourstore.com"
-                        value={fromEmailInputs[config.id] ?? ''}
-                        onChange={(e) => setFromEmailInputs((s) => ({ ...s, [config.id]: e.target.value }))}
+                        value={emailInputs[config.id] ?? ''}
+                        onChange={(e) => setEmailInputs((s) => ({ ...s, [config.id]: e.target.value }))}
                         className="text-sm bg-white h-9"
                       />
                       <Button
@@ -307,7 +319,7 @@ export default function IntegrationsPage() {
                 {!isComingSoon && config.igConnect && (
                   <Button
                     size="sm"
-                    onClick={() => { window.location.href = '/api/integrations/instagram/connect' }}
+                    onClick={() => { window.location.href = '/api/integrations/instagram/auth' }}
                     className="font-semibold h-8 text-xs bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 border-0 gap-1"
                   >
                     {isConnected
@@ -333,6 +345,7 @@ export default function IntegrationsPage() {
         })}
       </div>
 
+    </div>
     </div>
   )
 }

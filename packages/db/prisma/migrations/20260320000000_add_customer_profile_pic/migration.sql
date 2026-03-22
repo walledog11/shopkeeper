@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "customers" ADD COLUMN "profile_pic_url" TEXT;

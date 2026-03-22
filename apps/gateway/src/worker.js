@@ -43,10 +43,10 @@ async function isCustomerSupportMessage(subject, body) {
       messages: [
         {
           role: 'system',
-          content: `You are a strict email filter for a clothing brand's customer support helpdesk.
+          content: `You are a strict email filter for a customer support helpdesk.
           Analyze the email subject and body.
-          Return ONLY "true" if it is a real customer asking a question, making a complaint, inquiring about an order, or needing help.
-          Return ONLY "false" if it is spam, a newsletter, a promotional email, an internal company memo, or an automated system alert.`
+          Return ONLY "true" if it is a real person reaching out for help, asking a question, making a complaint, or needing support.
+          Return ONLY "false" if it is spam, a newsletter, a promotional email, an automated system alert, or a delivery status notification.`
         },
         {
           role: 'user',
@@ -60,24 +60,28 @@ async function isCustomerSupportMessage(subject, body) {
     return decision === 'true';
 
   } catch (error) {
-    console.error("[Worker] AI Filter failed", error);
-    return false;
+    console.error("[Worker] AI Filter failed — failing open to avoid dropping emails", error);
+    return true;
   }
 }
 
 // Shared handler: upsert customer → find/create thread → save message → summarize
 // organizationId scopes all writes so data never crosses tenant boundaries
-async function processInboundMessage(organizationId, platformId, channelType, messageText, { customerName = null, initialTag = null } = {}) {
+async function processInboundMessage(organizationId, platformId, channelType, messageText, { customerName = null, profilePicUrl = null, initialTag = null } = {}) {
   // Upsert by the compound unique key (organizationId + platformId)
   const customer = await db.customer.upsert({
     where: {
       organizationId_platformId: { organizationId, platformId },
     },
-    update: {},
+    update: {
+      ...(customerName && { name: customerName }),
+      ...(profilePicUrl && { profilePicUrl }),
+    },
     create: {
       organizationId,
       platformId,
       ...(customerName && { name: customerName }),
+      ...(profilePicUrl && { profilePicUrl }),
     },
   });
 
@@ -123,10 +127,10 @@ async function generateThreadIntelligence(threadId) {
       messages: [
         {
           role: 'system',
-          content: `You are an AI assistant for a clothing brand.
+          content: `You are an AI assistant for a customer support team.
           Read the following customer service transcript.
           Provide a 1-sentence summary of the customer's core issue.
-          Also provide a 1-to-2 word category tag (e.g., 'Returns', 'Sizing', 'Shipping Delay', 'Product Inquiry').
+          Also provide a 1-to-2 word category tag (e.g., 'Returns', 'Billing', 'Shipping Delay', 'Product Inquiry', 'Technical Issue').
           You must respond ONLY in strict JSON format like this: {"summary": "...", "tag": "..."}`
         },
         { role: 'user', content: conversationText },
@@ -174,7 +178,32 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
     const messageText = messagingEvent.message.text;
 
     try {
-      await processInboundMessage(organizationId, senderId, 'ig_dm', messageText);
+      // Fetch the Instagram user's display name and profile picture via the Meta Graph API
+      let igName = null;
+      let igProfilePic = null;
+      try {
+        const integration = await db.integration.findFirst({
+          where: { organizationId, platform: 'ig_dm' },
+          select: { accessToken: true },
+        });
+        if (integration?.accessToken) {
+          const profileRes = await fetch(
+            `https://graph.facebook.com/v19.0/${senderId}?fields=name,profile_pic&access_token=${integration.accessToken}`
+          );
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            igName = profileData.name || null;
+            igProfilePic = profileData.profile_pic || null;
+          }
+        }
+      } catch (profileErr) {
+        console.warn(`[Worker] Failed to fetch IG profile for ${senderId}:`, profileErr.message);
+      }
+
+      await processInboundMessage(organizationId, senderId, 'ig_dm', messageText, {
+        customerName: igName,
+        profilePicUrl: igProfilePic,
+      });
       console.log(`[Worker] Successfully saved IG DM from ${senderId} for org ${organizationId}`);
     } catch (error) {
       console.error(`[Worker] DB operation failed for IG DM:`, error);

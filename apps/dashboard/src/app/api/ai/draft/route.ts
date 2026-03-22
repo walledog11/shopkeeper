@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { openai } from '@/lib/openai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import type { OrgSettings } from '@/types';
 
 export async function POST(request: Request) {
   try {
@@ -26,13 +27,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
+    const settings = org.settings as OrgSettings | null;
+    const brandName = settings?.aiContext?.trim() || 'our business';
+    const brandVoice = settings?.brandVoice?.trim();
+
+    const systemPrompt = [
+      `You are an expert customer support agent for ${brandName}.`,
+      brandVoice ? `Tone and voice: ${brandVoice}` : null,
+      `Your goal is to read the conversation history and draft a helpful, concise reply to the customer.`,
+      `Do not include placeholders like [Your Name] or [Agent Name]. Write only the exact text the agent should send.`,
+    ].filter(Boolean).join(' ');
+
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `You are an expert customer support agent for modern clothing brands like Consonant and Palette Garments.
-        Your goal is to read the conversation history and draft a helpful, friendly, and concise reply to the customer.
-        Do not include placeholders like [Your Name] or [Agent Name]. Just write the exact text the agent should send.`
-      },
+      { role: 'system', content: systemPrompt },
       ...thread.messages.map((msg) => ({
         role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
         content: msg.contentText || "",
@@ -41,7 +48,7 @@ export async function POST(request: Request) {
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: messages,
+      messages,
       temperature: 0.7,
     });
 

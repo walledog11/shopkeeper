@@ -55,14 +55,17 @@ export async function POST(request: Request) {
       const igIntegration = await db.integration.findFirst({
         where: { organizationId: org.id, platform: 'ig_dm' },
       });
-      const PAGE_ACCESS_TOKEN = igIntegration?.accessToken;
+      const igToken = igIntegration?.accessToken;
+      const igAccountId = igIntegration?.externalAccountId;
 
-      if (PAGE_ACCESS_TOKEN) {
-        const metaResponse = await fetch(`https://graph.facebook.com/v19.0/me/messages`, {
+      if (igToken && igAccountId) {
+        // Use the IG account ID explicitly so this works with both page tokens
+        // (Path A) and user tokens from FLfB (Path B).
+        const metaResponse = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/messages`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${PAGE_ACCESS_TOKEN}`,
+            'Authorization': `Bearer ${igToken}`,
           },
           body: JSON.stringify({
             recipient: { id: recipientId },
@@ -72,7 +75,7 @@ export async function POST(request: Request) {
         const metaResult = await metaResponse.json();
         console.log('[Dispatch] Meta API Response:', metaResult);
       } else {
-        console.warn('[Dispatch] WARNING: No ig_dm integration found for this org — message saved but not sent.');
+        console.warn('[Dispatch] WARNING: No ig_dm integration or account ID found — message saved but not sent.');
       }
     }
     // -------------------------------------------------------------
@@ -96,9 +99,12 @@ export async function POST(request: Request) {
             const client = new ServerClient(POSTMARK_API_KEY);
             const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
             const threadMessageId = `<thread-${threadId}@${INBOUND_DOMAIN}>`;
+            const slug = org.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const fromDomain = process.env.POSTMARK_FROM_DOMAIN;
+            const fromEmail = fromDomain ? `${slug}@${fromDomain}` : integration.externalAccountId;
 
             const result = await client.sendEmail({
-              From: integration.fromEmail || integration.externalAccountId,
+              From: `${org.name} <${fromEmail}>`,
               ReplyTo: integration.externalAccountId,
               To: recipientId,
               Subject: `Re: ${updatedThread.tag || 'Your inquiry'}`,

@@ -26,5 +26,13 @@ export function timeAgo(iso: string): string {
 }
 
 export function getCustomerName(customer: { name?: string | null; platformId?: string | null } | null | undefined): string {
-  return customer?.name || `Shopper_${customer?.platformId?.substring(0, 5)}`
+  if (customer?.name) return customer.name
+  const id = customer?.platformId
+  if (!id) return 'Unknown Customer'
+  // Email address — show as-is
+  if (id.includes('@')) return id
+  // Purely numeric — show short customer ID
+  if (/^\d+$/.test(id)) return `Customer ${id.slice(-6)}`
+  // Underscore-joined string — clean up and title-case
+  return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 40)
 }
