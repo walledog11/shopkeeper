@@ -528,33 +528,30 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
 
               {/* Composer */}
               {activeTab === 'open' && (
-                <div className="px-4 pb-4 pt-3 bg-white border-t border-slate-100 shrink-0">
-                  <div className="border border-slate-200 rounded-2xl bg-white focus-within:ring-2 focus-within:ring-yellow-500/20 focus-within:border-yellow-400 overflow-hidden transition-all">
+                <div className="px-5 pb-5 pt-4 bg-white border-t border-slate-100 shrink-0">
+                  <div className="border border-slate-200 rounded-xl bg-white focus-within:border-slate-400 overflow-hidden transition-colors">
                     <textarea
                       value={replyText}
                       onChange={e => setReplyText(e.target.value)}
-                      className="w-full min-h-[80px] p-4 bg-transparent resize-none outline-none text-sm text-slate-900 placeholder:text-slate-400"
-                      placeholder={`Reply to ${activeTicket.customer}...`}
+                      className="w-full min-h-[88px] px-4 pt-3.5 pb-2 bg-transparent resize-none outline-none text-sm text-slate-900 placeholder:text-slate-400"
+                      placeholder={`Reply to ${activeTicket.customer}…`}
                     />
-                    <div className="flex justify-between items-center px-3 py-2 bg-slate-50/80 border-t border-slate-100">
-                      <Button
+                    <div className="flex justify-between items-center px-3 pb-2.5">
+                      <button
                         onClick={handleAiDraft}
                         disabled={isDrafting}
-                        variant="ghost"
-                        size="sm"
-                        className="text-yellow-700 hover:text-yellow-800 hover:bg-yellow-100 font-semibold text-xs h-8 disabled:opacity-50"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-40"
                       >
-                        <Bot className={`w-3.5 h-3.5 mr-1.5 ${isDrafting ? 'animate-pulse' : ''}`} />
-                        {isDrafting ? 'Drafting...' : 'Draft with Clerk'}
-                      </Button>
-                      <Button
-                        size="sm"
+                        <Bot className={`w-3.5 h-3.5 ${isDrafting ? 'animate-pulse' : ''}`} />
+                        {isDrafting ? 'Drafting…' : 'Draft with Clerk'}
+                      </button>
+                      <button
                         disabled={!replyText.trim()}
                         onClick={handleSendMessage}
-                        className="text-xs font-semibold bg-slate-900 text-white hover:bg-slate-700 disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4"
+                        className="flex items-center gap-1.5 text-xs font-semibold bg-[#1c3b38] text-white hover:bg-[#163230] disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-lg transition-colors"
                       >
-                        <Send className="w-3.5 h-3.5 mr-1.5" /> Send
-                      </Button>
+                        <Send className="w-3.5 h-3.5" /> Send
+                      </button>
                     </div>
                   </div>
                 </div>
