@@ -4,10 +4,15 @@ import OpenAI from 'openai';
 import { openai } from '@/lib/openai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
+
+    if (!rateLimit(`ai-summary:${org.id}`, 10, 60_000)) {
+      return NextResponse.json({ error: 'Too many requests. Please wait a moment.' }, { status: 429 });
+    }
     const { threadId } = await request.json();
 
     if (!threadId) {

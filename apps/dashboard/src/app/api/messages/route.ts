@@ -7,7 +7,7 @@ import { ServerClient } from 'postmark';
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
-    const { threadId, text } = await request.json();
+    const { threadId, text, isNote } = await request.json();
 
     if (!threadId || !text) {
       return NextResponse.json({ error: 'Missing threadId or text' }, { status: 400 });
@@ -26,10 +26,11 @@ export async function POST(request: Request) {
     const updatedThread = await db.thread.update({
       where: { id: threadId },
       data: {
-        status: 'open',
+        // Notes don't change thread status
+        ...(isNote ? {} : { status: 'open' }),
         messages: {
           create: {
-            senderType: 'agent',
+            senderType: isNote ? 'note' : 'agent',
             contentText: text,
           }
         }
@@ -44,6 +45,12 @@ export async function POST(request: Request) {
     });
 
     const newMessage = updatedThread.messages[0];
+
+    // Notes are internal only — skip all channel dispatch
+    if (isNote) {
+      return NextResponse.json(newMessage);
+    }
+
     const recipientId = updatedThread.customer.platformId;
 
     // -------------------------------------------------------------

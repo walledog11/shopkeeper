@@ -1,0 +1,109 @@
+import type { Category } from "./index"
+
+export const integrations: Category = {
+  id: "integrations",
+  title: "Channels & Integrations",
+  description: "Connecting Gmail, Instagram, and other channels",
+  icon: "🔗",
+  articles: [
+    {
+      id: "connect-gmail",
+      title: "Connecting Gmail / Email",
+      body: [
+        {
+          text: "Email is the most common support channel. Connecting it routes messages sent to your support address directly into Clerk as tickets.",
+        },
+        {
+          heading: "How to connect",
+          steps: [
+            "Go to the Integrations page.",
+            "Click Connect on the Gmail / Email card.",
+            "Enter your support email address (e.g. support@yourstore.com).",
+            "Click Save.",
+            "Set up email forwarding from that address to the inbound address shown in Clerk.",
+          ],
+        },
+        {
+          heading: "Setting up forwarding in Gmail",
+          steps: [
+            "In Gmail, go to Settings → See all settings → Forwarding and POP/IMAP.",
+            "Click Add a forwarding address and paste your Clerk inbound address.",
+            "Confirm the verification email that Gmail sends.",
+            "Set 'Forward a copy of incoming mail' to your Clerk address.",
+          ],
+        },
+        {
+          tips: [
+            "Only new emails received after forwarding is set up will appear as tickets.",
+            "You can connect multiple email addresses — each appears as a separate integration.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "connect-instagram",
+      title: "Connecting Instagram DMs",
+      body: [
+        {
+          text: "Connect your Instagram Business account to receive Direct Messages as tickets in Clerk.",
+        },
+        {
+          heading: "Requirements",
+          steps: [
+            "An Instagram Business account (not a personal account).",
+            "The Instagram account must be linked to a Facebook Page.",
+            "You must be an admin of that Facebook Page.",
+          ],
+        },
+        {
+          heading: "How to connect",
+          steps: [
+            "Go to the Integrations page.",
+            "Click Connect on the Instagram card.",
+            "You'll be redirected to Facebook to authorise Clerk.",
+            "Select the Facebook Page linked to your Instagram account.",
+            "Grant the requested permissions and confirm.",
+            "You'll be redirected back to Clerk — a green Connected badge will appear.",
+          ],
+        },
+        {
+          tips: [
+            "If you see a 'No Instagram Business account found' error, make sure your Instagram account is set to Business (not Creator or Personal) and is linked to your Facebook Page.",
+            "Classic Page admin access is required — Business Portfolio access alone is not sufficient.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "channel-disconnected",
+      title: "What to do if a channel disconnects",
+      body: [
+        {
+          text: "Channels can occasionally disconnect due to expired tokens or permission changes. Here's how to fix it.",
+        },
+        {
+          heading: "Signs a channel has disconnected",
+          steps: [
+            "No new tickets are arriving from a channel you expect messages from.",
+            "The integration card on the Integrations page may show a warning.",
+          ],
+        },
+        {
+          heading: "How to reconnect",
+          steps: [
+            "Go to the Integrations page.",
+            "Find the affected channel and click Reconnect.",
+            "Complete the authorisation flow again.",
+            "New messages will resume appearing as tickets.",
+          ],
+        },
+        {
+          tips: [
+            "Instagram tokens can expire if you change your Facebook password or revoke app permissions. Reconnecting always fixes this.",
+            "For email, check that your forwarding rule is still active in Gmail settings.",
+          ],
+        },
+      ],
+    },
+  ],
+}

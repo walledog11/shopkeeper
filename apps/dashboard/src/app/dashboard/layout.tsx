@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Inbox, Blocks, Settings, LogOut, Bell, Menu, X, ChevronLeft, ChevronRight, Building2 } from "lucide-react";
+import { Home, Inbox, Blocks, Settings, LogOut, Bell, Menu, X, ChevronLeft, ChevronRight, Building2, HelpCircle, BarChart2 } from "lucide-react";
+import HelpPanel from "./_components/help/HelpPanel";
 import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk } from "@clerk/nextjs";
 import useSWR from "swr";
@@ -12,6 +13,7 @@ import { fetcher } from "@/lib/fetcher";
 const navItems = [
   { name: "Home", href: "/dashboard", icon: Home },
   { name: "Support Tickets", href: "/dashboard/tickets", icon: Inbox, badge: true },
+  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
   { name: "Integrations", href: "/dashboard/integrations", icon: Blocks },
 ];
 
@@ -19,6 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
   const { threads: openThreads } = useOpenThreads();
   const openCount = openThreads.length;
   const { user } = useUser();
@@ -39,11 +42,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Mobile top bar */}
       <div className="md:hidden flex items-center justify-between bg-[#1c3b38] px-4 py-3 shrink-0 z-30 fixed top-0 left-0 right-0">
-        <Link href="/" className="flex items-center gap-1">
+        <Link href="/dashboard" className="flex items-center gap-1">
           <span className="text-2xl font-black text-white tracking-tight">clerk</span>
           <span className="w-2 h-2 rounded-full bg-yellow-400 self-start mt-1 shrink-0" />
         </Link>
-        <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 -mr-2 text-white/70 hover:text-white rounded-lg">
+        <div className="flex items-center gap-1 ml-auto mr-1">
+          <button
+            onClick={() => setIsHelpOpen(o => !o)}
+            aria-label="Help"
+            className={`p-2 rounded-lg transition-colors ${isHelpOpen ? "text-white bg-white/15" : "text-white/60 hover:text-white"}`}
+          >
+            <HelpCircle className="w-5 h-5" />
+          </button>
+          <div className="relative group">
+            <button aria-label="Notifications" className="p-2 text-white/60 hover:text-white rounded-lg transition-colors">
+              <Bell className="w-5 h-5" />
+            </button>
+            <div className="pointer-events-none group-hover:pointer-events-auto absolute right-0 top-full mt-2 w-72 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-150 z-50">
+              <div className="bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                  <p className="text-xs font-bold text-slate-900 uppercase tracking-wide">Alerts</p>
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <Bell className="w-6 h-6 text-slate-200" />
+                  <p className="text-sm text-slate-400">No alerts right now</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button onClick={() => setIsMobileMenuOpen(true)} aria-label="Open navigation" className="p-2 -mr-2 text-white/70 hover:text-white rounded-lg">
           <Menu className="w-6 h-6" />
         </button>
       </div>
@@ -73,14 +102,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Brand */}
         <div className={`h-16 flex items-center shrink-0 px-4 ${isCollapsed ? "md:justify-center md:px-0" : "md:px-4"}`}>
           {/* Mobile: full brand */}
-          <Link href="/" className="flex items-center gap-1 md:hidden" onClick={closeMenu}>
+          <Link href="/dashboard" className="flex items-center gap-1 md:hidden" onClick={closeMenu}>
             <span className="text-2xl font-black text-white tracking-tight">clerk</span>
             <span className="w-2 h-2 rounded-full bg-yellow-400 self-start mt-1 shrink-0" />
           </Link>
 
           {/* Desktop collapsed: logo mark */}
           {isCollapsed && (
-            <Link href="/" className="hidden md:flex items-center gap-0.5">
+            <Link href="/dashboard" className="hidden md:flex items-center gap-0.5">
               <span className="text-xl font-black text-white tracking-tight">c</span>
               <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 self-start shrink-0" />
             </Link>
@@ -88,13 +117,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Desktop expanded: full brand */}
           {!isCollapsed && (
-            <Link href="/" className="hidden md:flex items-center gap-1">
+            <Link href="/dashboard" className="hidden md:flex items-center gap-1">
               <span className="text-2xl font-black text-white tracking-tight">clerk</span>
               <span className="w-2 h-2 rounded-full bg-yellow-400 self-start mt-1 shrink-0" />
             </Link>
           )}
 
-          <button className="md:hidden p-1 text-white/50 hover:text-white ml-auto" onClick={closeMenu}>
+          <button className="md:hidden p-1 text-white/50 hover:text-white ml-auto" onClick={closeMenu} aria-label="Close navigation">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -218,10 +247,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </div>
 
-          {/* Right: bell */}
-          <div className="flex items-center gap-2">
+          {/* Right: help + bell */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setIsHelpOpen(o => !o)}
+              className={`p-2 rounded-lg transition-colors ${isHelpOpen ? "text-slate-700 bg-slate-100" : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"}`}
+              title="Help"
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
             <div className="relative group">
-              <button className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
+              <button aria-label="Notifications" title="Notifications" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors">
                 <Bell className="w-5 h-5" />
               </button>
               <div className="pointer-events-none group-hover:pointer-events-auto absolute right-0 top-full mt-2 w-72 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-150 z-50">
@@ -240,9 +276,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </div>
 
-        {/* Page content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {children}
+        {/* Page content + help panel */}
+        <div className="flex-1 overflow-hidden flex min-h-0">
+          <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+            {children}
+          </div>
+
+          {/* Help panel */}
+          <HelpPanel isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
         </div>
       </main>
 

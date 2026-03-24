@@ -1,4 +1,4 @@
-import { Worker } from 'bullmq';
+import { Worker, Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { db } from '@clerk/db';
 import dotenv from 'dotenv';
@@ -257,6 +257,68 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
 
 messageWorker.on('failed', (job, err) => {
   console.error(`[Worker] Job ${job?.id} failed permanently:`, err.message);
+});
+
+// ─── Daily Instagram Token Health Check ────────────────────────────────────────
+
+const tokenHealthQueue = new Queue('token-health', { connection: redisConnection });
+
+// Register the repeatable job once on startup (BullMQ deduplicates by jobId)
+await tokenHealthQueue.add(
+  'check-ig-tokens',
+  {},
+  {
+    repeat: { every: 24 * 60 * 60 * 1000 }, // every 24 hours
+    jobId: 'ig-token-health-daily',
+  }
+);
+
+const FB_GRAPH = 'https://graph.facebook.com/v19.0';
+
+const tokenHealthWorker = new Worker('token-health', async () => {
+  console.log('[TokenHealth] Running daily Instagram token check...');
+
+  const igIntegrations = await db.integration.findMany({
+    where: { platform: 'ig_dm', accessToken: { not: null } },
+    select: { id: true, organizationId: true, externalAccountId: true, accessToken: true, tokenExpiresAt: true },
+  });
+
+  console.log(`[TokenHealth] Checking ${igIntegrations.length} ig_dm integration(s)...`);
+
+  for (const integration of igIntegrations) {
+    try {
+      // Verify the token is still valid with a lightweight API call
+      const res = await fetch(
+        `${FB_GRAPH}/${integration.externalAccountId}?fields=id&access_token=${integration.accessToken}`
+      );
+      const data = await res.json();
+
+      if (data.error) {
+        console.error(`[TokenHealth] ⚠️  Token invalid for org ${integration.organizationId} (${integration.externalAccountId}):`, data.error.message);
+        continue;
+      }
+
+      // Token is healthy — extend the tracked expiry another 60 days
+      await db.integration.update({
+        where: { id: integration.id },
+        data: { tokenExpiresAt: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000) },
+      });
+
+      const daysLeft = integration.tokenExpiresAt
+        ? Math.round((new Date(integration.tokenExpiresAt).getTime() - Date.now()) / 86_400_000)
+        : 'unknown';
+
+      console.log(`[TokenHealth] ✓ org ${integration.organizationId} — token healthy (was ${daysLeft}d remaining, reset to 60d)`);
+    } catch (err) {
+      console.error(`[TokenHealth] Failed to check token for org ${integration.organizationId}:`, err.message);
+    }
+  }
+
+  console.log('[TokenHealth] Daily check complete.');
+}, { connection: redisConnection });
+
+tokenHealthWorker.on('failed', (job, err) => {
+  console.error('[TokenHealth] Job failed:', err.message);
 });
 
 console.log('[Worker] Engine started. Listening for incoming messages...');

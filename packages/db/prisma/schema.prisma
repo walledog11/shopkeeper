@@ -27,6 +27,7 @@ enum SenderType {
   customer
   agent
   ai
+  note
 }
 
 // --- MODELS ---
@@ -57,6 +58,7 @@ model Integration {
   externalAccountId String      @map("external_account_id") @db.VarChar(255)
   fromEmail         String?     @map("from_email") @db.VarChar(255)
   accessToken       String?     @map("access_token") @db.Text
+  tokenExpiresAt    DateTime?   @map("token_expires_at") @db.Timestamptz
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

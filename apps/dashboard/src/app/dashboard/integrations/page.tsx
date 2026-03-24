@@ -3,23 +3,10 @@
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import Image from "next/image"
-import { Check, Copy, Lock, ChevronRight, AlertCircle, CheckCircle2 } from "lucide-react"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { fetcher } from "@/lib/fetcher"
-import { Integration } from "@/types"
-
-type PlatformConfig = {
-  id: string;
-  platform: string | null;
-  name: string;
-  logo: string;
-  description: string;
-  comingSoon?: boolean;
-  emailConnect?: boolean;
-  igConnect?: boolean;
-};
+import IntegrationCard, { type PlatformConfig } from "./_components/IntegrationCard"
+import type { Integration } from "@/types"
 
 const PLATFORM_CONFIG: PlatformConfig[] = [
   {
@@ -28,7 +15,7 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
     name: "Gmail / Email",
     logo: "/logos/gmail.png",
     description: "Route your support inbox directly into Clerk and reply from a verified sender address.",
-    emailConnect: true,
+    connectType: 'email',
   },
   {
     id: "instagram",
@@ -36,7 +23,7 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
     name: "Instagram",
     logo: "/logos/instagram-logo.png",
     description: "Manage Direct Messages from your Instagram business account alongside every other channel.",
-    igConnect: true,
+    connectType: 'ig',
   },
   {
     id: "tiktok",
@@ -44,7 +31,7 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
     name: "TikTok",
     logo: "/logos/tiktok-logo.png",
     description: "Manage TikTok Shop messages and video comments in one unified inbox.",
-    comingSoon: true,
+    connectType: 'coming-soon',
   },
   {
     id: "shopify",
@@ -52,28 +39,9 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
     name: "Shopify",
     logo: "/logos/shopify.svg",
     description: "Sync customer orders, returns, and Shopify Inbox messages directly into Clerk.",
-    comingSoon: true,
+    connectType: 'coming-soon',
   },
 ]
-
-
-function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  const handleCopy = () => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-  return (
-    <button
-      onClick={handleCopy}
-      className="ml-1.5 text-slate-400 hover:text-slate-600 transition-colors"
-      title="Copy"
-    >
-      {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-    </button>
-  )
-}
 
 const ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'You cancelled the Instagram connection.',
@@ -85,7 +53,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 export default function IntegrationsPage() {
   const { data: integrations = [], mutate } = useSWR<Integration[]>('/api/integrations', fetcher)
-  const { data: org } = useSWR<{ id: string; name: string }>('/api/org', fetcher)
   const searchParams = useSearchParams()
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
@@ -99,253 +66,96 @@ export default function IntegrationsPage() {
     }
   }, [searchParams])
 
-  const [showEmailForm, setShowEmailForm] = useState<Record<string, boolean>>({})
-  const [emailInputs, setEmailInputs] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState<Record<string, boolean>>({})
-
-  const getConnected = (platform: string) =>
-    integrations.filter((i) => i.platform === platform)
+  const getConnected = (platform: string) => integrations.filter((i) => i.platform === platform)
 
   const connectedCount = PLATFORM_CONFIG.filter(
     (c) => c.platform && getConnected(c.platform).length > 0
   ).length
 
-  const handleConnect = async (configId: string, platform: string, emailAddress: string) => {
-    setLoading((s) => ({ ...s, [configId]: true }))
+  const handleConnect = async (platform: string, emailAddress: string): Promise<boolean> => {
     try {
       const res = await fetch('/api/integrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform, externalAccountId: emailAddress }),
       })
-      if (!res.ok) throw new Error('Failed to connect')
+      if (!res.ok) throw new Error()
       await mutate()
-      setShowEmailForm((s) => ({ ...s, [configId]: false }))
-      setEmailInputs((s) => ({ ...s, [configId]: '' }))
+      return true
     } catch {
-      alert('Failed to connect. Please try again.')
-    } finally {
-      setLoading((s) => ({ ...s, [configId]: false }))
+      setBanner({ type: 'error', message: 'Failed to connect. Please try again.' })
+      return false
     }
   }
 
   const handleDisconnect = async (integrationId: string) => {
     try {
       const res = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed to disconnect')
+      if (!res.ok) throw new Error()
       await mutate()
     } catch {
-      alert('Failed to disconnect. Please try again.')
+      setBanner({ type: 'error', message: 'Failed to disconnect. Please try again.' })
     }
   }
 
   return (
     <div className="h-full overflow-y-auto px-8 py-8">
-    <div className="max-w-4xl mx-auto w-full space-y-8">
+      <div className="max-w-4xl mx-auto w-full space-y-8">
 
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Integrations</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Connect your channels to route all customer messages into Clerk.
-          </p>
+        {/* Page header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Integrations</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Connect your channels to route all customer messages into Clerk.
+            </p>
+          </div>
+          {connectedCount > 0 && (
+            <div className="flex items-center gap-1.5 shrink-0 bg-green-50 border border-green-200 rounded-full px-3 py-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              <span className="text-xs font-semibold text-green-700">
+                {connectedCount} of {PLATFORM_CONFIG.filter(c => c.connectType !== 'coming-soon').length} connected
+              </span>
+            </div>
+          )}
         </div>
-        {connectedCount > 0 && (
-          <div className="flex items-center gap-1.5 shrink-0 bg-green-50 border border-green-200 rounded-full px-3 py-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-            <span className="text-xs font-semibold text-green-700">
-              {connectedCount} of {PLATFORM_CONFIG.filter(c => !c.comingSoon).length} connected
-            </span>
+
+        {/* Success / error banner */}
+        {banner && (
+          <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${
+            banner.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}>
+            {banner.type === 'success'
+              ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
+              : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
+            }
+            <span>{banner.message}</span>
+            <button
+              onClick={() => setBanner(null)}
+              aria-label="Dismiss"
+              className="ml-auto text-current opacity-50 hover:opacity-100 shrink-0"
+            >
+              ✕
+            </button>
           </div>
         )}
-      </div>
 
-      {/* Success / error banner */}
-      {banner && (
-        <div className={`flex items-start gap-3 rounded-xl px-4 py-3 text-sm border ${
-          banner.type === 'success'
-            ? 'bg-green-50 border-green-200 text-green-800'
-            : 'bg-red-50 border-red-200 text-red-800'
-        }`}>
-          {banner.type === 'success'
-            ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-green-600" />
-            : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0 text-red-500" />
-          }
-          <span>{banner.message}</span>
-          <button onClick={() => setBanner(null)} className="ml-auto text-current opacity-50 hover:opacity-100 shrink-0">✕</button>
-        </div>
-      )}
-
-      {/* Integration cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {PLATFORM_CONFIG.map((config) => {
-          const connected = config.platform ? getConnected(config.platform) : []
-          const isConnected = connected.length > 0
-          const isComingSoon = !!config.comingSoon
-
-          return (
-            <div
+        {/* Integration cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {PLATFORM_CONFIG.map((config) => (
+            <IntegrationCard
               key={config.id}
-              className={[
-                "flex flex-col rounded-2xl border bg-white transition-all duration-200",
-                isComingSoon
-                  ? "border-slate-200 opacity-55"
-                  : isConnected
-                    ? "border-green-200 shadow-sm ring-1 ring-green-100/80"
-                    : "border-slate-200 hover:border-slate-300 hover:shadow-sm",
-              ].join(" ")}
-            >
+              config={config}
+              connected={config.platform ? getConnected(config.platform) : []}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+            />
+          ))}
+        </div>
 
-              {/* Card header */}
-              <div className="flex items-center gap-4 p-5 pb-4">
-                <div className={[
-                  "h-11 w-11 rounded-xl flex items-center justify-center p-2 shrink-0 border transition-colors",
-                  isConnected
-                    ? "bg-green-50 border-green-200"
-                    : "bg-slate-50 border-slate-200",
-                ].join(" ")}>
-                  <Image
-                    src={config.logo}
-                    alt={`${config.name} logo`}
-                    width={28}
-                    height={28}
-                    className="object-contain"
-                  />
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-900 leading-none mb-1.5">{config.name}</p>
-                  {isComingSoon ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
-                      <Lock className="w-3 h-3" />
-                      Coming soon
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${isConnected ? "bg-green-500" : "bg-slate-300"}`} />
-                      <span className={`text-[11px] font-semibold ${isConnected ? "text-green-700" : "text-slate-400"}`}>
-                        {isConnected ? "Connected" : "Not connected"}
-                      </span>
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Description */}
-              <p className="px-5 pb-4 text-sm text-slate-500 leading-relaxed">
-                {config.description}
-              </p>
-
-              {/* Connected accounts */}
-              {isConnected && (
-                <div className="mx-5 mb-4 rounded-xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
-                  {connected.map((integration) => (
-                    <div key={integration.id} className="flex items-center gap-3 px-4 py-3 bg-slate-50/70">
-                      <div className="flex-1 min-w-0">
-                        {config.igConnect ? (
-                          <p className="text-xs font-semibold text-slate-700 truncate">
-                            {integration.fromEmail || integration.externalAccountId}
-                          </p>
-                        ) : (
-                          <div className="flex items-center">
-                            <p className="text-xs font-mono font-medium text-slate-700 truncate">
-                              {integration.externalAccountId}
-                            </p>
-                            <CopyButton text={integration.externalAccountId} />
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        onClick={() => handleDisconnect(integration.id)}
-                        className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors whitespace-nowrap shrink-0"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Email setup form */}
-              {config.emailConnect && showEmailForm[config.id] && (
-                <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                      Support email address
-                    </label>
-                    <p className="text-xs text-slate-400">
-                      The email address your customers send support requests to. Emails to this address will appear as tickets.
-                    </p>
-                    <div className="flex gap-2">
-                      <Input
-                        type="email"
-                        placeholder="support@yourstore.com"
-                        value={emailInputs[config.id] ?? ''}
-                        onChange={(e) => setEmailInputs((s) => ({ ...s, [config.id]: e.target.value }))}
-                        className="text-sm bg-white h-9"
-                      />
-                      <Button
-                        size="sm"
-                        disabled={!emailInputs[config.id] || loading[config.id]}
-                        onClick={() => handleConnect(config.id, 'email', emailInputs[config.id] ?? '')}
-                        className="shrink-0 h-9 bg-slate-900 text-white hover:bg-slate-700 font-semibold"
-                      >
-                        {loading[config.id] ? 'Saving…' : 'Save'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="mt-auto px-5 py-4 border-t border-slate-100 flex justify-end">
-                {!isComingSoon && config.emailConnect && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={loading[config.id]}
-                    onClick={() => setShowEmailForm((s) => ({ ...s, [config.id]: !s[config.id] }))}
-                    className="font-semibold text-slate-700 border-slate-200 hover:bg-slate-50 h-8 text-xs gap-1"
-                  >
-                    {showEmailForm[config.id]
-                      ? 'Cancel'
-                      : isConnected
-                        ? 'Manage'
-                        : <>Connect <ChevronRight className="w-3.5 h-3.5" /></>
-                    }
-                  </Button>
-                )}
-                {!isComingSoon && config.igConnect && (
-                  <Button
-                    size="sm"
-                    onClick={() => { window.location.href = '/api/integrations/instagram/auth' }}
-                    className="font-semibold h-8 text-xs bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 border-0 gap-1"
-                  >
-                    {isConnected
-                      ? 'Reconnect'
-                      : <>Connect <ChevronRight className="w-3.5 h-3.5" /></>
-                    }
-                  </Button>
-                )}
-                {isComingSoon && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled
-                    className="font-semibold h-8 text-xs text-slate-400 border-slate-200 cursor-not-allowed"
-                  >
-                    Notify me
-                  </Button>
-                )}
-              </div>
-
-            </div>
-          )
-        })}
       </div>
-
-    </div>
     </div>
   )
 }

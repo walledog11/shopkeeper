@@ -1,5 +1,11 @@
-export function getChannelInfo(channelType: string): { name: string; logo: string } {
-  if (channelType === 'ig_dm') return { name: 'Instagram', logo: '/logos/instagram-logo.png' }
-  if (channelType === 'email') return { name: 'Gmail', logo: '/logos/gmail.png' }
-  return { name: channelType, logo: '/logos/default.png' }
+import type { ChannelType } from '@/types'
+
+const CHANNEL_INFO: Record<ChannelType, { name: string; logo: string }> = {
+  ig_dm: { name: 'Instagram', logo: '/logos/instagram-logo.png' },
+  email: { name: 'Gmail',     logo: '/logos/gmail.png' },
+  tiktok: { name: 'TikTok',  logo: '/logos/tiktok-logo.png' },
+}
+
+export function getChannelInfo(channelType: ChannelType): { name: string; logo: string } {
+  return CHANNEL_INFO[channelType] ?? { name: channelType, logo: '/logos/default.png' }
 }

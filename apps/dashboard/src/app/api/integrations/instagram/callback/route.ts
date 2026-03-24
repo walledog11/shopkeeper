@@ -111,6 +111,7 @@ export async function GET(request: Request) {
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
     const org = await getOrCreateOrg();
+    const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
     await db.integration.upsert({
       where: {
         organizationId_platform_externalAccountId: {
@@ -122,6 +123,7 @@ export async function GET(request: Request) {
       update: {
         accessToken: pageToken,
         fromEmail: igUsername,
+        tokenExpiresAt,
       },
       create: {
         organizationId: org.id,
@@ -129,6 +131,7 @@ export async function GET(request: Request) {
         externalAccountId: igAccountId,
         accessToken: pageToken,
         fromEmail: igUsername,
+        tokenExpiresAt,
       },
     });
 

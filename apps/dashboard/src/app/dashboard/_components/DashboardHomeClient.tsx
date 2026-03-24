@@ -1,11 +1,10 @@
 "use client"
 
-import useSWR from "swr"
 import Image from "next/image"
 import Link from "next/link"
 import { useState } from "react"
 import { Inbox, CheckCircle2, MessageSquare, ArrowRight, X, Zap } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { useThreads } from "@/hooks/useThreads"
 import { timeAgo, getCustomerName } from "@/lib/utils"
 import { getChannelInfo } from "@/lib/channels"
 import type { Thread } from "@/types"
@@ -27,16 +26,8 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   const greeting = getGreeting()
   const [bannerDismissed, setBannerDismissed] = useState(false)
 
-  const { data: openThreads = [], isLoading: loadingOpen } = useSWR<Thread[]>(
-    "/api/threads?status=open",
-    fetcher,
-    { refreshInterval: 15000, fallbackData: initialOpenThreads }
-  )
-  const { data: closedThreads = [], isLoading: loadingClosed } = useSWR<Thread[]>(
-    "/api/threads?status=closed",
-    fetcher,
-    { fallbackData: initialClosedThreads }
-  )
+  const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads)
+  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', initialClosedThreads)
 
   const isLoading = loadingOpen || loadingClosed
 
@@ -58,42 +49,44 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
 
   return (
     <div className="h-full overflow-y-auto bg-white">
-    <div className="max-w-5xl mx-auto px-8 py-7 space-y-6 pb-10">
+    <div className="max-w-5xl mx-auto px-4 md:px-8 py-5 md:py-7 space-y-5 md:space-y-6 pb-10">
 
       {/* Onboarding banner */}
       {showBanner && (
-        <div className="relative flex items-center gap-6 bg-white border border-slate-200 rounded-2xl px-6 py-5 shadow-sm overflow-hidden">
-          {/* Decorative gradient strip */}
+        <div className="relative bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm overflow-hidden">
           <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-yellow-400 to-yellow-300 rounded-l-2xl" />
-          <div className="w-12 h-12 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center justify-center shrink-0">
-            <Zap className="w-6 h-6 text-yellow-500" />
+          <button
+            onClick={() => setBannerDismissed(true)}
+            aria-label="Dismiss"
+            className="absolute top-3 right-3 text-slate-300 hover:text-slate-500 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          <div className="flex items-start gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-yellow-50 border border-yellow-200 flex items-center justify-center shrink-0">
+              <Zap className="w-4 h-4 text-yellow-500" />
+            </div>
+            <div className="flex-1 min-w-0 pr-4">
+              <p className="text-sm font-bold text-slate-900">Connect your first channel</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Route support messages from Gmail, Instagram, or other channels into Clerk.
+              </p>
+            </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-slate-900">Connect your first channel</p>
-            <p className="text-sm text-slate-500 mt-0.5">
-              Route support messages from Gmail, Instagram, or other channels into Clerk.
-            </p>
-          </div>
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-3 pl-12">
+            <Link
+              href="/dashboard/integrations"
+              className="flex items-center gap-1.5 bg-[#1c3b38] hover:bg-[#163230] text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-colors"
+            >
+              Set up <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
             <button
               onClick={() => setBannerDismissed(true)}
               className="text-xs font-medium text-slate-400 hover:text-slate-600 transition-colors"
             >
               Maybe later
             </button>
-            <Link
-              href="/dashboard/integrations"
-              className="flex items-center gap-1.5 bg-[#1c3b38] hover:bg-[#163230] text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-            >
-              Set up <ArrowRight className="w-4 h-4" />
-            </Link>
           </div>
-          <button
-            onClick={() => setBannerDismissed(true)}
-            className="absolute top-3 right-3 text-slate-300 hover:text-slate-500 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 
@@ -119,43 +112,43 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
         <Link
           href="/dashboard/tickets"
-          className="group bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-5 flex items-center justify-between hover:shadow-sm transition-all"
+          className="group bg-white border border-slate-200 hover:border-slate-300 rounded-xl p-3 md:p-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between hover:shadow-sm transition-all"
         >
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Open Tickets</p>
-            <p className="text-3xl font-bold text-slate-900 leading-none">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Open</p>
+            <p className="text-2xl md:text-3xl font-bold text-slate-900 leading-none">
               {isLoading ? <span className="text-slate-200">—</span> : openCount}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
-            <Inbox className="w-5 h-5 text-orange-500" />
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-orange-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
+            <Inbox className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
           </div>
         </Link>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 md:p-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Resolved</p>
-            <p className="text-3xl font-bold text-slate-900 leading-none">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Resolved</p>
+            <p className="text-2xl md:text-3xl font-bold text-slate-900 leading-none">
               {isLoading ? <span className="text-slate-200">—</span> : resolvedCount}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center">
-            <CheckCircle2 className="w-5 h-5 text-green-500" />
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-green-50 flex items-center justify-center">
+            <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-green-500" />
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-xl p-5 flex items-center justify-between">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 md:p-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Messages</p>
-            <p className="text-3xl font-bold text-slate-900 leading-none">
+            <p className="text-[10px] md:text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Messages</p>
+            <p className="text-2xl md:text-3xl font-bold text-slate-900 leading-none">
               {isLoading ? <span className="text-slate-200">—</span> : totalMessages.toLocaleString()}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
-            <MessageSquare className="w-5 h-5 text-blue-500" />
+          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+            <MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-blue-500" />
           </div>
         </div>
       </div>

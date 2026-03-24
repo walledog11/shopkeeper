@@ -6,7 +6,7 @@ export function useThreads(status: 'open' | 'closed' = 'open', fallbackData?: Th
   const { data, error, isLoading, mutate } = useSWR<Thread[]>(
     `/api/threads?status=${status}`,
     fetcher,
-    { refreshInterval: status === 'open' ? 8000 : 20000, fallbackData }
+    { refreshInterval: status === 'open' ? 4000 : 20000, fallbackData }
   );
 
   return {

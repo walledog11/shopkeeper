@@ -1,0 +1,74 @@
+import type { Category } from "./index"
+
+export const gettingStarted: Category = {
+  id: "getting-started",
+  title: "Getting Started",
+  description: "Connect your first channel and receive your first ticket",
+  icon: "🚀",
+  articles: [
+    {
+      id: "quick-start",
+      title: "Quick start guide",
+      body: [
+        {
+          text: "Get Clerk up and running in three steps. You'll be receiving and replying to customer messages in minutes.",
+        },
+        {
+          heading: "Step 1 — Connect a channel",
+          steps: [
+            "Go to the Integrations page from the sidebar.",
+            "Choose a channel — Gmail or Instagram are the best starting points.",
+            "Follow the on-screen connection flow.",
+            "Once connected, a green indicator will appear on the integration card.",
+          ],
+        },
+        {
+          heading: "Step 2 — Receive your first ticket",
+          steps: [
+            "Ask someone to send a message to your connected email or Instagram account.",
+            "Within seconds, a new ticket will appear in the Support Tickets page.",
+            "A badge on the sidebar icon shows the number of open tickets.",
+          ],
+        },
+        {
+          heading: "Step 3 — Reply and resolve",
+          steps: [
+            "Click a ticket to open the conversation.",
+            "Type a reply in the composer at the bottom, or use Draft with Clerk to generate an AI reply.",
+            "Hit Send to deliver your message back to the customer.",
+            "When the issue is resolved, click the Resolve button in the top-right of the conversation.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "platform-overview",
+      title: "Platform overview",
+      body: [
+        {
+          text: "Clerk is a unified helpdesk that pulls customer messages from multiple channels into one inbox. Here's a quick map of the interface.",
+        },
+        {
+          heading: "Sidebar",
+          text: "The dark sidebar on the left holds your main navigation. Use the collapse toggle on its edge to save space. Hover any icon for a tooltip label.",
+        },
+        {
+          heading: "Home",
+          text: "Your home page shows open ticket count, total resolved, and messages handled at a glance. Recent Activity shows the latest threads across all channels. Needs Attention surfaces the most active open tickets.",
+        },
+        {
+          heading: "Support Tickets",
+          text: "The tickets page is your main workspace. The left panel lists all threads — filter by Open or Closed, and by channel using the icon chips. Click any ticket to open the conversation. The right panel shows customer info and the AI-generated context summary.",
+        },
+        {
+          heading: "Integrations",
+          text: "Connect and manage your channels here. Each card shows connection status and lets you add or remove accounts.",
+        },
+        {
+          heading: "Settings",
+          text: "Configure your business name, AI context, and brand voice here. These settings directly affect how Clerk drafts replies.",
+        },
+      ],
+    },
+  ],
+}

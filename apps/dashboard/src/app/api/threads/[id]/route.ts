@@ -10,10 +10,11 @@ export async function PATCH(
   try {
     const org = await getOrCreateOrg();
     const { id } = await params;
-    const { status } = await request.json();
+    const body = await request.json();
+    const { status, tag } = body;
 
-    if (!status) {
-      return NextResponse.json({ error: 'Missing status' }, { status: 400 });
+    if (!status && tag === undefined) {
+      return NextResponse.json({ error: 'Missing status or tag' }, { status: 400 });
     }
 
     const thread = await db.thread.findUnique({
@@ -27,7 +28,10 @@ export async function PATCH(
 
     const updated = await db.thread.update({
       where: { id },
-      data: { status },
+      data: {
+        ...(status && { status }),
+        ...(tag !== undefined && { tag: tag || null }),
+      },
     });
 
     return NextResponse.json(updated);
