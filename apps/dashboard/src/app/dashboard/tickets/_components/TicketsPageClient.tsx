@@ -1,11 +1,14 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
+import useSWR from "swr"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, Inbox } from "lucide-react"
 import { useThreads } from '@/hooks/useThreads'
 import { formatTime, getCustomerName } from '@/lib/utils'
 import { getChannelInfo } from '@/lib/channels'
+import { fetcher } from '@/lib/fetcher'
+import type { Integration } from '@/types'
 import ThreadList from './ThreadList'
 import ConversationView from './ConversationView'
 import ContextPanel from './ContextPanel'
@@ -59,6 +62,8 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
 
   const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen } = useThreads('open', initialOpenThreads)
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed } = useThreads('closed')
+  const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
+  const hasShopify = integrations.some(i => i.platform === 'shopify')
 
   const isSearchMode = searchQuery.length >= 2
 
@@ -87,7 +92,8 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
     : dbThreads.map(threadToTicket)
 
   const activeTicket = liveTickets.find(t => t.id === activeTicketId)
-  const activeThread = dbThreads.find(t => t.id === activeTicketId)
+  const allThreads = isSearchMode ? [...openThreads, ...closedThreads] : dbThreads
+  const activeThread = allThreads.find(t => t.id === activeTicketId)
 
   // Pre-select thread from ?thread= query param
   useEffect(() => {
@@ -186,6 +192,26 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
     }
   }
 
+  const handleReopen = async () => {
+    if (!activeTicketId) return
+    const reopenId = activeTicketId
+    setActiveTicketId(null)
+    try {
+      await fetch(`/api/threads/${reopenId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'open' }),
+      })
+      mutateOpen()
+      mutateClosed()
+      setActiveTab('open')
+      setBulkToast('Ticket reopened')
+      setTimeout(() => setBulkToast(null), 2500)
+    } catch (err) {
+      console.error('Failed to reopen ticket', err)
+    }
+  }
+
   const handleAiDraft = async () => {
     if (!activeTicketId) return
     setIsDrafting(true)
@@ -203,6 +229,24 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
       setReplyText("Failed to generate draft. Please try typing manually.")
     } finally {
       setIsDrafting(false)
+    }
+  }
+
+  const handleLinkShopifyCustomer = async (customerId: string | null) => {
+    if (!activeTicketId) return
+    const mutateFn = activeTab === 'open' ? mutateOpen : mutateClosed
+    await mutateFn(dbThreads.map(t =>
+      t.id === activeTicketId ? { ...t, shopifyCustomerId: customerId } : t
+    ), false)
+    try {
+      await fetch(`/api/threads/${activeTicketId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ shopifyCustomerId: customerId }),
+      })
+    } catch (err) {
+      console.error('Failed to link Shopify customer', err)
+      mutateFn()
     }
   }
 
@@ -235,7 +279,8 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
       })
       const data = await response.json()
       if (!response.ok) {
-        alert(`Clerk Error: ${data.error || 'Check the console'}`)
+        console.error('Clerk Error:', data.error)
+        setSendError(`AI Error: ${data.error || 'Check the console'}`)
         return
       }
       const mutateFn = activeTab === 'open' ? mutateOpen : mutateClosed
@@ -248,7 +293,7 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
       }
     } catch (err) {
       console.error("Network error:", err)
-      alert("Network error: Failed to reach the AI endpoint.")
+      setSendError("Network error: Failed to reach the AI endpoint.")
     } finally {
       setIsRefreshingSummary(false)
     }
@@ -341,6 +386,7 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
               messagesEndRef={messagesEndRef}
               onBack={() => { setActiveTicketId(null); setSendError(null) }}
               onResolve={handleResolve}
+              onReopen={handleReopen}
               onReplyChange={text => { setReplyText(text); if (sendError) setSendError(null) }}
               onSend={handleSendMessage}
               onDraft={handleAiDraft}
@@ -350,9 +396,12 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
               <ContextPanel
                 thread={activeThread}
                 ticket={activeTicket}
+                hasShopify={hasShopify}
                 isRefreshingSummary={isRefreshingSummary}
                 onRefreshSummary={handleRefreshSummary}
                 onTagUpdate={handleTagUpdate}
+                onLinkShopifyCustomer={handleLinkShopifyCustomer}
+                onAgentActionsComplete={() => { mutateOpen(); mutateClosed() }}
               />
             </div>
           </>

@@ -70,6 +70,12 @@ export default function Composer({
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault()
+              if (value.trim() && !isSending) onSend(isNote)
+            }
+          }}
           disabled={isSending}
           className={`w-full min-h-[88px] px-4 pt-3.5 pb-2 bg-transparent resize-none outline-none text-sm text-slate-900 placeholder:text-slate-400 disabled:opacity-60`}
           placeholder={isNote ? 'Add a private note for your team…' : `Reply to ${customerName}…`}
@@ -87,23 +93,26 @@ export default function Composer({
           ) : (
             <span />
           )}
-          <button
-            disabled={!value.trim() || isSending}
-            onClick={() => onSend(isNote)}
-            className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-lg transition-colors ${
-              isNote
-                ? 'bg-amber-600 text-white hover:bg-amber-700'
-                : 'bg-[#1c3b38] text-white hover:bg-[#163230]'
-            }`}
-          >
-            {isSending ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
-            ) : isNote ? (
-              <><Lock className="w-3.5 h-3.5" /> Add Note</>
-            ) : (
-              <><Send className="w-3.5 h-3.5" /> Send</>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-300 hidden sm:block">⌘↵ to send</span>
+            <button
+              disabled={!value.trim() || isSending}
+              onClick={() => onSend(isNote)}
+              className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-lg transition-colors ${
+                isNote
+                  ? 'bg-amber-600 text-white hover:bg-amber-700'
+                  : 'bg-[#1c3b38] text-white hover:bg-[#163230]'
+              }`}
+            >
+              {isSending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+              ) : isNote ? (
+                <><Lock className="w-3.5 h-3.5" /> Add Note</>
+              ) : (
+                <><Send className="w-3.5 h-3.5" /> Send</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
       {error && (

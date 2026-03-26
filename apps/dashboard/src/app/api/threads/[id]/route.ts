@@ -11,10 +11,10 @@ export async function PATCH(
     const org = await getOrCreateOrg();
     const { id } = await params;
     const body = await request.json();
-    const { status, tag } = body;
+    const { status, tag, shopifyCustomerId } = body;
 
-    if (!status && tag === undefined) {
-      return NextResponse.json({ error: 'Missing status or tag' }, { status: 400 });
+    if (!status && tag === undefined && shopifyCustomerId === undefined) {
+      return NextResponse.json({ error: 'Missing status, tag, or shopifyCustomerId' }, { status: 400 });
     }
 
     const thread = await db.thread.findUnique({
@@ -31,6 +31,7 @@ export async function PATCH(
       data: {
         ...(status && { status }),
         ...(tag !== undefined && { tag: tag || null }),
+        ...(shopifyCustomerId !== undefined && { shopifyCustomerId: shopifyCustomerId || null }),
       },
     });
 

@@ -1,5 +1,5 @@
 // Enums matching the Prisma schema
-export type ChannelType = "ig_dm" | "email" | "tiktok";
+export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify";
 export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai" | "note";
 
@@ -57,6 +57,7 @@ export interface Thread {
   updatedAt: string;
   aiSummary: string | null;
   tag: string | null;
+  shopifyCustomerId: string | null;
   customer: Customer;
   messages: Message[];
 }

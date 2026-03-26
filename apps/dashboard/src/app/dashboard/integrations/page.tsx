@@ -35,11 +35,11 @@ const PLATFORM_CONFIG: PlatformConfig[] = [
   },
   {
     id: "shopify",
-    platform: null,
+    platform: "shopify",
     name: "Shopify",
     logo: "/logos/shopify.svg",
     description: "Sync customer orders, returns, and Shopify Inbox messages directly into Clerk.",
-    connectType: 'coming-soon',
+    connectType: 'shopify',
   },
 ]
 
@@ -49,6 +49,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   token_exchange_failed: 'Authentication failed. Please try again.',
   state_mismatch: 'Security check failed. Please try again.',
   server_error: 'Something went wrong on our end. Please try again.',
+  shopify_state_mismatch: 'Security check failed. Please try again.',
+  shopify_hmac_invalid: 'Authentication failed — the response from Shopify could not be verified.',
+  shopify_token_failed: 'Could not obtain a Shopify access token. Please try again.',
+  shopify_server_error: 'Something went wrong connecting your Shopify store. Please try again.',
+  shopify_invalid_callback: 'Invalid callback from Shopify. Please try again.',
 }
 
 export default function IntegrationsPage() {
@@ -61,6 +66,8 @@ export default function IntegrationsPage() {
     const error = searchParams.get('error')
     if (connected === 'instagram') {
       setBanner({ type: 'success', message: 'Instagram connected successfully.' })
+    } else if (connected === 'shopify') {
+      setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
     } else if (error) {
       setBanner({ type: 'error', message: ERROR_MESSAGES[error] ?? 'An unexpected error occurred.' })
     }

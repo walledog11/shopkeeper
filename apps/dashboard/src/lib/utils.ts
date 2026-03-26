@@ -7,7 +7,16 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatTime(dateString: string): string {
   if (!dateString) return "Just now";
-  return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const date = new Date(dateString);
+  const now = new Date();
+  const isToday =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return time;
+  const dateLabel = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${dateLabel} · ${time}`;
 }
 
 export function formatDate(iso: string): string {

@@ -8,7 +8,6 @@ import type { ChannelType, Ticket } from "@/types"
 const CHANNEL_FILTERS: { id: ChannelType; logo: string; label: string }[] = [
   { id: 'email',  logo: '/logos/gmail.png',          label: 'Gmail' },
   { id: 'ig_dm',  logo: '/logos/instagram-logo.png', label: 'Instagram' },
-  { id: 'tiktok', logo: '/logos/tiktok-logo.png',    label: 'TikTok' },
 ]
 
 interface Props {
@@ -178,6 +177,8 @@ export default function ThreadList({
       <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-50">
         {tickets.map((ticket, idx) => {
           const isSelected = selectedIds.includes(ticket.id)
+          const lastRealMsg = [...ticket.messages].reverse().find(m => m.sender !== 'note')
+          const awaitingReply = ticket.status === 'open' && lastRealMsg?.sender === 'customer'
           return (
             <div
               key={ticket.id}
@@ -188,7 +189,8 @@ export default function ThreadList({
               {/* Active indicator */}
               <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
                 activeTab === 'closed' ? 'bg-green-400' :
-                activeTicketId === ticket.id ? 'bg-amber-400' : 'bg-transparent'
+                activeTicketId === ticket.id ? 'bg-amber-400' :
+                awaitingReply ? 'bg-amber-300' : 'bg-transparent'
               }`} />
 
               {/* Checkbox — appears on hover or when selection is active */}
@@ -216,6 +218,9 @@ export default function ThreadList({
                       <Image src={ticket.logo} fill alt={ticket.platform} className="object-contain" />
                     </div>
                     <span className="text-xs font-semibold text-slate-900 truncate">{ticket.customer}</span>
+                    {awaitingReply && (
+                      <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" title="Awaiting your reply" />
+                    )}
                   </div>
                   <span className="text-[10px] text-slate-400 shrink-0">{ticket.time}</span>
                 </div>
@@ -236,12 +241,11 @@ export default function ThreadList({
                     <span className={`w-1.5 h-1.5 rounded-full ${ticket.status === 'closed' || activeTab === 'closed' ? 'bg-green-500' : 'bg-amber-500'}`} />
                     {ticket.status === 'closed' || activeTab === 'closed' ? 'Closed' : 'Open'}
                   </span>
-                  {isSearchMode && ticket.status && (
+                  {awaitingReply ? (
+                    <span className="text-[10px] font-semibold text-amber-600">Awaiting reply</span>
+                  ) : isSearchMode && ticket.status ? (
                     <span className="text-[10px] text-slate-300 font-medium capitalize">{ticket.status}</span>
-                  )}
-                  {!isSearchMode && (
-                    <span className="text-[10px] text-slate-300 font-mono">#{idx + 1}</span>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>

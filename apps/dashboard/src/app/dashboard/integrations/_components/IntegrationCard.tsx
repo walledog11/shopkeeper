@@ -8,7 +8,7 @@ import { Check, Copy, Lock, ChevronRight, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Integration } from "@/types"
 
-export type ConnectType = 'email' | 'ig' | 'coming-soon'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'coming-soon'
 
 export interface PlatformConfig {
   id: string
@@ -98,6 +98,50 @@ function EmailConnectForm({
   )
 }
 
+function ShopifyConnectForm({ onClose }: { onClose: () => void }) {
+  const [shop, setShop] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const handleSubmit = () => {
+    const domain = shop.trim()
+    if (!domain) return
+    setLoading(true)
+    // Redirect to OAuth — page will navigate away
+    window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(domain)}`
+  }
+
+  return (
+    <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+      <div className="space-y-1.5">
+        <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+          Shopify store domain
+        </label>
+        <p className="text-xs text-slate-400">
+          Enter your myshopify.com domain, e.g. <span className="font-mono">mystore.myshopify.com</span>
+        </p>
+        <div className="flex gap-2">
+          <Input
+            type="text"
+            placeholder="mystore.myshopify.com"
+            value={shop}
+            onChange={(e) => setShop(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
+            className="text-sm bg-white h-9"
+          />
+          <Button
+            size="sm"
+            disabled={!shop.trim() || loading}
+            onClick={handleSubmit}
+            className="shrink-0 h-9 bg-[#96BF48] hover:bg-[#7da33a] text-white font-semibold border-0"
+          >
+            {loading ? 'Redirecting…' : 'Connect'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Card ───────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -109,6 +153,7 @@ interface Props {
 
 export default function IntegrationCard({ config, connected, onConnect, onDisconnect }: Props) {
   const [showEmailForm, setShowEmailForm] = useState(false)
+  const [showShopifyForm, setShowShopifyForm] = useState(false)
 
   const isConnected = connected.length > 0
   const isComingSoon = config.connectType === 'coming-soon'
@@ -205,6 +250,11 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         />
       )}
 
+      {/* Shopify shop domain form */}
+      {config.connectType === 'shopify' && showShopifyForm && (
+        <ShopifyConnectForm onClose={() => setShowShopifyForm(false)} />
+      )}
+
       {/* Footer */}
       <div className="mt-auto px-5 py-4 border-t border-slate-100 flex justify-end">
         {config.connectType === 'email' && (
@@ -229,6 +279,18 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               {isConnected ? 'Reconnect' : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>}
             </Button>
           </a>
+        )}
+        {config.connectType === 'shopify' && (
+          <Button
+            size="sm"
+            onClick={() => setShowShopifyForm((s) => !s)}
+            className="font-semibold h-8 text-xs bg-[#96BF48] hover:bg-[#7da33a] text-white border-0 gap-1"
+          >
+            {showShopifyForm ? 'Cancel' : isConnected
+              ? 'Reconnect'
+              : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>
+            }
+          </Button>
         )}
         {config.connectType === 'coming-soon' && (
           <Button

@@ -78,22 +78,27 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
   const [workspaceName, setWorkspaceName] = useState(orgName)
   const [savingWorkspace, setSavingWorkspace] = useState(false)
   const [savedWorkspace, setSavedWorkspace] = useState(false)
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null)
 
   // AI Behavior
   const [aiContext, setAiContext] = useState(settings.aiContext ?? "")
   const [brandVoice, setBrandVoice] = useState(settings.brandVoice ?? "")
   const [savingAi, setSavingAi] = useState(false)
   const [savedAi, setSavedAi] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   // Danger zone
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
+  const [clearSuccess, setClearSuccess] = useState(false)
 
   const initials = userName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
 
   async function saveWorkspace() {
     setSavingWorkspace(true)
     setSavedWorkspace(false)
+    setWorkspaceError(null)
     try {
       const res = await fetch('/api/org', {
         method: 'PATCH',
@@ -104,7 +109,7 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
       setSavedWorkspace(true)
       setTimeout(() => setSavedWorkspace(false), 2500)
     } catch {
-      alert('Failed to save. Please try again.')
+      setWorkspaceError('Failed to save. Please try again.')
     } finally {
       setSavingWorkspace(false)
     }
@@ -113,6 +118,7 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
   async function saveAi() {
     setSavingAi(true)
     setSavedAi(false)
+    setAiError(null)
     try {
       const res = await fetch('/api/org', {
         method: 'PATCH',
@@ -123,7 +129,7 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
       setSavedAi(true)
       setTimeout(() => setSavedAi(false), 2500)
     } catch {
-      alert('Failed to save. Please try again.')
+      setAiError('Failed to save. Please try again.')
     } finally {
       setSavingAi(false)
     }
@@ -131,13 +137,15 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
 
   async function clearTickets() {
     setClearing(true)
+    setClearError(null)
     try {
       const res = await fetch('/api/org/data?action=clear_tickets', { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
       setConfirmClear(false)
-      alert('All ticket history has been cleared.')
+      setClearSuccess(true)
+      setTimeout(() => setClearSuccess(false), 3000)
     } catch {
-      alert('Failed to clear tickets. Please try again.')
+      setClearError('Failed to clear tickets. Please try again.')
     } finally {
       setClearing(false)
     }
@@ -169,7 +177,8 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
               className="h-9 text-sm bg-slate-50 focus:bg-white"
             />
           </Field>
-          <div className="flex justify-end pt-1">
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {workspaceError && <p className="text-xs text-red-500">{workspaceError}</p>}
             <SaveButton
               saving={savingWorkspace}
               saved={savedWorkspace}
@@ -213,7 +222,8 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
             />
             <p className="text-[11px] text-slate-400 text-right">{brandVoice.length}/200</p>
           </Field>
-          <div className="flex justify-end pt-1">
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {aiError && <p className="text-xs text-red-500">{aiError}</p>}
             <SaveButton
               saving={savingAi}
               saved={savedAi}
@@ -265,6 +275,8 @@ export default function SettingsPageClient({ orgName, settings, userName, userEm
             <div>
               <p className="text-sm font-semibold text-slate-900">Clear all ticket history</p>
               <p className="text-xs text-slate-500 mt-0.5">Permanently deletes all threads and messages for this workspace.</p>
+              {clearError && <p className="text-xs text-red-500 mt-1">{clearError}</p>}
+              {clearSuccess && <p className="text-xs text-green-600 mt-1">All ticket history has been cleared.</p>}
             </div>
             {confirmClear ? (
               <div className="flex items-center gap-2 shrink-0">

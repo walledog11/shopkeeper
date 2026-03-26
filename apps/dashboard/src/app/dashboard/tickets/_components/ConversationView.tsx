@@ -1,7 +1,7 @@
 "use client"
 
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Lock } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Lock, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Composer from "./Composer"
@@ -18,6 +18,7 @@ interface Props {
   messagesEndRef: RefObject<HTMLDivElement | null>
   onBack: () => void
   onResolve: () => void
+  onReopen: () => void
   onReplyChange: (text: string) => void
   onSend: (isNote: boolean) => void
   onDraft: () => void
@@ -35,6 +36,7 @@ export default function ConversationView({
   messagesEndRef,
   onBack,
   onResolve,
+  onReopen,
   onReplyChange,
   onSend,
   onDraft,
@@ -75,9 +77,19 @@ export default function ConversationView({
             </Button>
           )}
           {activeTab === 'closed' && (
-            <Badge variant="outline" className="font-semibold bg-green-50 text-green-700 border-green-200 px-2.5 py-1 text-xs">
-              <CheckCircle2 className="w-3 h-3 mr-1" /> Closed
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="font-semibold bg-green-50 text-green-700 border-green-200 px-2.5 py-1 text-xs">
+                <CheckCircle2 className="w-3 h-3 mr-1" /> Closed
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onReopen}
+                className="text-slate-600 border-slate-200 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 h-8"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> Reopen
+              </Button>
+            </div>
           )}
         </div>
       </div>
