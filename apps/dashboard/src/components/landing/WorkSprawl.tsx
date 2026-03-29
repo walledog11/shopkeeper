@@ -54,7 +54,7 @@ export function WorkSprawl() {
                   <motion.div 
                     animate={{ y: [-5, 5, -5], rotate: [-2, 2, -2] }} 
                     transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-                    className="absolute -top-2 left-6 bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg border border-slate-200/60 flex items-center gap-3 z-20"
+                    className="absolute top-4 left-6 bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg border border-slate-200/60 flex items-center gap-3 z-20"
                   >
                     <Image src="/logos/instagram-logo.png" alt="IG" width={20} height={20} className="object-contain" />
                     <div className="flex flex-col gap-1">

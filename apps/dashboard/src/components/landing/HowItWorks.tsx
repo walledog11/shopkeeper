@@ -15,7 +15,7 @@ function ConnectCard() {
   ];
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden group">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden group">
       {/* Icon grid area */}
       <div className="flex-1 flex items-center justify-center p-8 bg-slate-50/50">
         <div className="grid grid-cols-2 gap-4 relative">
@@ -79,7 +79,7 @@ function AICard() {
   const isInView = useInView(cardRef, { margin: "100px" });
 
   return (
-    <div ref={cardRef} className="rounded-3xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden">
+    <div ref={cardRef} className="rounded-xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center p-6 bg-slate-50/50 relative overflow-hidden">
         
         {/* Mock Incoming Message */}
@@ -149,7 +149,7 @@ function RunCard() {
   ];
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm h-full flex flex-col overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-50/50 relative">
         <div className="w-full max-w-[240px] relative">
           
