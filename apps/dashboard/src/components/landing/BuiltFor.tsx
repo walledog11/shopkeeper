@@ -229,7 +229,7 @@ function VPCGraphic() {
 const bottomFeatures = [
   {
     title: "All Channels Connected",
-    description: "Instagram, TikTok, Shopify, and email — all managed from one dashboard",
+    description: "Instagram, SMS, Shopify, and email — all managed from one dashboard",
     graphic: ProxyGraphic,
   },
   {
@@ -262,7 +262,7 @@ function ProxyGraphic() {
         <circle cx="12" cy="46" r="3.5" fill="#34d399" />
         {/* Labels */}
         <text x="22" y="17" fontSize="7" fill="#64748b">Instagram</text>
-        <text x="22" y="33" fontSize="7" fill="#64748b">TikTok</text>
+        <text x="22" y="33" fontSize="7" fill="#64748b">SMS</text>
         <text x="22" y="49" fontSize="7" fill="#64748b">Shopify</text>
         {/* Arrow lines to center */}
         <line x1="55" y1="14" x2="75" y2="28" stroke="#e2e8f0" strokeWidth="1.5" />

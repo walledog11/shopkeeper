@@ -4,51 +4,54 @@ import Image from "next/image";
 import { motion } from "motion/react";
 
 export function LogoScrollBar() {
-  const brands = [
-    { name: "Skims", logo: "/logos/skims.svg" },
-    { name: "Glossier", logo: "/logos/glossier.svg" },
-    { name: "Cettire", logo: "/logos/cettire.svg" },
-    { name: "Warby Parker", logo: "/logos/warby-parker.svg" },
-    { name: "Shopify", logo: "/logos/shopify.svg" },
+  const integrations = [
+    { name: "Instagram", logo: "/logos/instagram-logo.png" },
+    { name: "Shopify", logo: "/logos/shopify-inbox.png" },
+    { name: "Gmail", logo: "/logos/gmail.png" },
+    { name: "SMS", logo: "/logos/sms.svg" },
+    { name: "Instagram", logo: "/logos/instagram-logo.png" },
+    { name: "Shopify", logo: "/logos/shopify-inbox.png" },
+    { name: "Gmail", logo: "/logos/gmail.png" },
+    { name: "SMS", logo: "/logos/sms.svg" },
   ];
 
-  const duplicatedBrands = [...brands, ...brands, ...brands, ...brands];
+  const duplicated = [...integrations, ...integrations];
 
   return (
     <section className="relative w-full py-12 md:py-16 bg-white border-y border-slate-100 overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
-        
-        {/* Sleek, understated header */}
+
         <div className="flex flex-col items-center justify-center text-center mb-8 md:mb-10">
           <p className="text-[11px] font-extrabold tracking-widest uppercase text-slate-400">
-            Powering the next generation of brands
+            Works with the channels your customers already use
           </p>
         </div>
 
-        {/* Marquee Container with fade-out edges */}
-        <div className="relative w-full max-w-5xl mx-auto overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
+        {/* Marquee with fade edges */}
+        <div className="relative w-full max-w-3xl mx-auto overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_15%,black_85%,transparent)]">
           <motion.div
-            className="flex items-center gap-16 sm:gap-24 w-max"
+            className="flex items-center gap-12 sm:gap-20 w-max"
             animate={{ x: ["0%", "-50%"] }}
-            transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
+            transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
           >
-            {duplicatedBrands.map((brand, i) => (
-              <div 
-                key={i} 
-                className="flex items-center justify-center shrink-0 opacity-40 hover:opacity-60 transition-opacity grayscale"
+            {duplicated.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 shrink-0 opacity-50 hover:opacity-80 transition-opacity"
               >
                 <Image
-                  src={brand.logo}
-                  alt={brand.name}
-                  width={120}
-                  height={40}
-                  className="object-contain h-6 sm:h-8 w-auto"
+                  src={item.logo}
+                  alt={item.name}
+                  width={28}
+                  height={28}
+                  className="object-contain"
                 />
+                <span className="text-sm font-semibold text-slate-500">{item.name}</span>
               </div>
             ))}
           </motion.div>
         </div>
-        
+
       </div>
     </section>
   );

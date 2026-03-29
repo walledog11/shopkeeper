@@ -32,8 +32,8 @@ export default function HeroGraphic() {
           
           {[
             { icon: "/logos/instagram-logo.png", name: "Instagram", badge: 1, active: true },
-            { icon: "/logos/shopify-inbox.png", name: "Shopify", badge: 0 },
-            { icon: "/logos/tiktok-logo.png", name: "TikTok", badge: 4 },
+            { icon: "/logos/shopify-inbox.png", name: "Shopify", badge: 2 },
+            { icon: "/logos/sms.svg", name: "SMS", badge: 4 },
             { icon: "/logos/gmail.png", name: "Email", badge: 0 },
           ].map((ch) => (
             <div key={ch.name} className={`relative flex items-center justify-center p-1.5 sm:p-2 rounded-xl transition-all w-full max-w-[48px] sm:max-w-[56px] ${ch.active ? 'bg-white shadow-sm border border-slate-200' : 'opacity-60 grayscale-[50%]'}`}>
@@ -143,7 +143,7 @@ export default function HeroGraphic() {
       >
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-2 bg-yellow-400/30 -mt-1 shadow-sm mix-blend-multiply" />
         <span className="text-yellow-950 text-[10px] sm:text-sm lg:text-lg leading-tight text-center rotate-[-2deg] font-bold">
-          Check TikTok for unread messages
+          Check SMS inbox for unread messages
         </span>
       </motion.div>
 

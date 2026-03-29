@@ -24,7 +24,7 @@ export function CTA() {
             </h2>
             
             <p className="text-muted-foreground max-w-xl mx-auto mb-10 text-lg sm:text-xl">
-              Join NexusDesk today. Consolidate your support channels and let agentic AI handle the repetitive tasks.
+              Join Clerk today. Consolidate your support channels and let agentic AI handle the repetitive tasks.
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">

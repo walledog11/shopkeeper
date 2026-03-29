@@ -15,7 +15,7 @@ const features = [
     category: "INBOX",
     title: "All your messages,\none clean dashboard",
     description:
-      "Customer messages from TikTok, Instagram, Shopify Inbox, and Email — routed to one place. No more switching tabs.",
+      "Customer messages from Instagram, SMS, Shopify, and Email — routed to one place. No more switching tabs.",
     preview: "inbox",
     bgClass: "bg-blue-100/60",
     categoryColor: "text-blue-600",
@@ -63,7 +63,7 @@ const features = [
     category: "CONNECT",
     title: "Connect all your\nchannels in minutes",
     description:
-      "Plug in TikTok, Instagram, Shopify Chat, and your business email. New channels added regularly. Setup takes under 5 minutes.",
+      "Plug in Instagram, SMS, Shopify, and your business email. New channels added regularly. Setup takes under 5 minutes.",
     preview: "integrations",
     bgClass: "bg-purple-100/60",
     categoryColor: "text-purple-600",
@@ -90,7 +90,7 @@ function InboxPreview() {
         <div className="divide-y flex-1">
           {[
             { platform: "IG", color: "bg-pink-100 text-pink-600", name: "Sarah M.", msg: "Hi, I need help with my order #2849..." },
-            { platform: "TK", color: "bg-slate-900 text-white", name: "James L.", msg: "Can I change my shipping address?" },
+            { platform: "SM", color: "bg-blue-100 text-blue-700", name: "James L.", msg: "Can I change my shipping address?" },
             { platform: "SP", color: "bg-green-100 text-green-700", name: "Emma R.", msg: "When will my item be back in stock?" },
             { platform: "EM", color: "bg-red-100 text-red-500", name: "David K.", msg: "Requesting a refund for order #3012" },
           ].map((item) => (
@@ -224,7 +224,7 @@ function SummaryPreview() {
 
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100/80 p-4 opacity-90">
             <div className="flex justify-between items-start mb-3">
-              <span className="text-[11px] font-medium text-slate-400">Color Couture • TikTok</span>
+              <span className="text-[11px] font-medium text-slate-400">Color Couture • Instagram</span>
               <span className="text-[10px] font-semibold tracking-wide bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">
                 Restock Info
               </span>
@@ -418,8 +418,8 @@ function RespondPreview() {
 function IntegrationsPreview() {
   const channels = [
     { name: "Instagram DM", icon: "/logos/instagram-logo.png", status: "Connected & Syncing", toggle: true },
-    { name: "TikTok Shop", icon: "/logos/tiktok-logo.png", status: "Connected & Syncing", toggle: true },
-    { name: "Shopify Inbox", icon: "/logos/shopify-inbox.png", status: "Connected & Syncing", toggle: true },
+    { name: "SMS (Twilio)", icon: "/logos/sms.svg", status: "Connected & Syncing", toggle: true },
+    { name: "Shopify", icon: "/logos/shopify-inbox.png", status: "Connected & Syncing", toggle: true },
     { name: "Gmail Support", icon: "/logos/gmail.png", status: "Connected & Syncing", toggle: true },
   ];
 
@@ -586,9 +586,9 @@ export function Features() {
 
                   {/* CTA */}
                   <div className="mt-10">
-                    <button className="px-6 py-3 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity shadow-sm">
-                      Learn more
-                    </button>
+                    <a href="/signup" className="inline-block px-6 py-3 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity shadow-sm">
+                      Get started free
+                    </a>
                   </div>
                 </motion.div>
               );

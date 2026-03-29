@@ -66,13 +66,13 @@ export function WorkSprawl() {
                     </div>
                   </motion.div>
 
-                  {/* TikTok Notification */}
-                  <motion.div 
-                    animate={{ y: [5, -5, 5], rotate: [1, -1, 1] }} 
+                  {/* SMS Notification */}
+                  <motion.div
+                    animate={{ y: [5, -5, 5], rotate: [1, -1, 1] }}
                     transition={{ repeat: Infinity, duration: 5, ease: "easeInOut", delay: 1 }}
                     className="absolute bottom-6 right-4 bg-white/90 backdrop-blur-md px-3 py-2 rounded-2xl shadow-lg border border-slate-200/60 flex items-center gap-3 z-10"
                   >
-                    <Image src="/logos/tiktok-logo.png" alt="TikTok" width={20} height={20} className="object-contain" />
+                    <Image src="/logos/sms.svg" alt="SMS" width={20} height={20} className="object-contain" />
                     <div className="flex flex-col gap-1">
                       <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
                       <div className="w-14 h-1.5 bg-slate-100 rounded-full" />
@@ -99,7 +99,7 @@ export function WorkSprawl() {
               <div className="p-8">
                 <h3 className="text-xl font-bold text-slate-900 mb-3">Scattered Channels</h3>
                 <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                  Messages are slipping through the cracks. Bouncing between Instagram DMs, TikTok comments, and emails means missed requests and angry customers.
+                  Messages are slipping through the cracks. Bouncing between Instagram DMs, SMS, Shopify, and email means missed requests and angry customers.
                 </p>
               </div>
             </motion.div>

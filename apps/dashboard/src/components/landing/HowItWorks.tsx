@@ -9,8 +9,8 @@ import { Bot, BrainCircuit, Inbox, Send, Tag, Sparkles } from "lucide-react";
 function ConnectCard() {
   const platforms = [
     { src: "/logos/instagram-logo.png", alt: "Instagram", label: "Instagram" },
-    { src: "/logos/tiktok-logo.png", alt: "TikTok", label: "TikTok" },
-    { src: "/logos/shopify-inbox.png", alt: "Shopify Inbox", label: "Shopify Inbox" },
+    { src: "/logos/sms.svg", alt: "SMS", label: "SMS" },
+    { src: "/logos/shopify-inbox.png", alt: "Shopify", label: "Shopify" },
     { src: "/logos/gmail.png", alt: "Gmail", label: "Gmail" },
   ];
 
@@ -211,7 +211,7 @@ export function HowItWorks() {
                 <h3 className="text-lg font-bold text-foreground">Connect Channels</h3>
               </div>
               <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
-                Link your Instagram, TikTok, Shopify Inbox, and email in seconds. All messages route to one hub.
+                Link your Instagram, SMS, Shopify, and email in seconds. All messages route to one hub.
               </p>
             </div>
           </div>
