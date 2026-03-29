@@ -16,7 +16,7 @@ export default function HelpHome({ categories, onSelectCategory }: Props) {
           <button
             key={cat.id}
             onClick={() => onSelectCategory(cat)}
-            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left group"
+            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-md border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left group"
           >
             <span className="text-lg shrink-0">{cat.icon}</span>
             <div className="flex-1 min-w-0">

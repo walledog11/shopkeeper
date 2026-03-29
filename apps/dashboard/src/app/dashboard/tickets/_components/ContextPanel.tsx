@@ -215,7 +215,7 @@ function CustomerInfo({
         )}
       </div>
 
-      <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+      <div className="space-y-2 rounded-md border border-slate-100 bg-slate-50/60 p-2.5">
         <div className="grid grid-cols-2 gap-2">
           {field('First name', 'first_name')}
           {field('Last name',  'last_name')}
@@ -254,7 +254,7 @@ function OrderList({ orders, shop }: { orders: ShopifyOrder[]; shop?: string }) 
         const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         const adminUrl = shop ? `https://${shop}/admin/orders/${order.id}` : null
         return (
-          <div key={order.id} className="rounded-lg border border-slate-100 bg-slate-50/80 p-2.5 space-y-1.5">
+          <div key={order.id} className="rounded-md border border-slate-100 bg-slate-50/80 p-2.5 space-y-1.5">
             <div className="flex items-center justify-between gap-1">
               <span className="text-xs font-bold text-slate-800">{order.name}</span>
               <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${color}`}>{label}</span>
@@ -284,14 +284,14 @@ function OrderList({ orders, shop }: { orders: ShopifyOrder[]; shop?: string }) 
 function Skeleton() {
   return (
     <div className="space-y-3 animate-pulse">
-      <div className="rounded-lg border border-slate-100 bg-slate-50 p-2.5 space-y-2">
+      <div className="rounded-md border border-slate-100 bg-slate-50 p-2.5 space-y-2">
         <div className="h-2 w-16 bg-slate-200 rounded" />
         <div className="h-2.5 w-28 bg-slate-200 rounded" />
         <div className="h-2 w-32 bg-slate-100 rounded" />
         <div className="h-2 w-20 bg-slate-100 rounded" />
       </div>
       {[1, 2].map(i => (
-        <div key={i} className="rounded-lg border border-slate-100 bg-slate-50 p-2.5 space-y-1.5">
+        <div key={i} className="rounded-md border border-slate-100 bg-slate-50 p-2.5 space-y-1.5">
           <div className="h-2.5 w-20 bg-slate-200 rounded" />
           <div className="h-2 w-32 bg-slate-100 rounded" />
           <div className="h-2 w-16 bg-slate-100 rounded" />
@@ -403,7 +403,7 @@ function ShopifySection({
           placeholder="Name or email…"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className="w-full pl-6 pr-7 py-1.5 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:border-slate-400 placeholder:text-slate-300"
+          className="w-full pl-6 pr-7 py-1.5 text-xs rounded-md border border-slate-200 bg-white focus:outline-none focus:border-slate-400 placeholder:text-slate-300"
         />
         {query && (
           <button onClick={() => { setQuery(''); setDebouncedQuery('') }}
@@ -415,7 +415,7 @@ function ShopifySection({
 
       {isSearching && (
         <div className="space-y-1.5 animate-pulse">
-          {[1, 2].map(i => <div key={i} className="h-8 rounded-lg bg-slate-100" />)}
+          {[1, 2].map(i => <div key={i} className="h-8 rounded-md bg-slate-100" />)}
         </div>
       )}
 
@@ -429,7 +429,7 @@ function ShopifySection({
             const fullName = [c.first_name, c.last_name].filter(Boolean).join(' ') || '—'
             return (
               <button key={c.id} onClick={() => handleLink(c)} disabled={isLinking === c.id}
-                className="w-full flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/80 hover:bg-slate-100 hover:border-slate-200 px-2.5 py-2 transition-colors text-left group">
+                className="w-full flex items-center justify-between gap-2 rounded-md border border-slate-100 bg-slate-50/80 hover:bg-slate-100 hover:border-slate-200 px-2.5 py-2 transition-colors text-left group">
                 <div className="min-w-0">
                   <p className="text-xs font-semibold text-slate-800 truncate">{fullName}</p>
                   <p className="text-xs text-slate-400 truncate">{c.email || 'No email'}</p>

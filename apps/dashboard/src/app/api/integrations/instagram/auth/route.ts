@@ -4,8 +4,8 @@ import { auth } from '@clerk/nextjs/server';
 import crypto from 'crypto';
 
 export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
+  const { userId, orgId } = await auth();
+  if (!userId || !orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -24,6 +24,14 @@ export async function GET() {
   const state = crypto.randomBytes(16).toString('hex');
   const cookieStore = await cookies();
   cookieStore.set('ig_oauth_state', state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 600,
+    path: '/',
+  });
+  // Store orgId so the callback can identify the org without a Clerk session
+  cookieStore.set('ig_oauth_org', orgId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

@@ -1,0 +1,39 @@
+import { NextResponse } from 'next/server'
+import { db } from '@clerk/db'
+import { getOrCreateOrg } from '@/lib/org'
+import { handleApiError } from '@/lib/api-errors'
+import stripe from '@/lib/stripe'
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
+
+export async function POST() {
+  try {
+    const org = await getOrCreateOrg()
+
+    // 5 portal sessions per hour per org — each call creates a Stripe session
+    const rl = await rateLimit(`billing:portal:${org.id}`, 5, 3600)
+    if (!rl.success) return tooManyRequests(rl.reset)
+
+    // Ensure customer exists
+    let customerId = org.stripeCustomerId
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        name: org.name,
+        metadata: { clerkOrgId: org.clerkOrgId },
+      })
+      customerId = customer.id
+      await db.organization.update({
+        where: { id: org.id },
+        data: { stripeCustomerId: customerId },
+      })
+    }
+
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/dashboard/settings?tab=billing`,
+    })
+
+    return NextResponse.json({ url: session.url })
+  } catch (error) {
+    return handleApiError(error, 'Billing Portal POST', 'Failed to create portal session')
+  }
+}

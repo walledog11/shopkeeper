@@ -469,7 +469,7 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
           </>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-slate-50/60 p-6 text-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+            <div className="w-14 h-14 rounded-md bg-white border border-slate-200 shadow-sm flex items-center justify-center">
               {activeTab === 'open' && openThreads.length === 0
                 ? <CheckCircle2 className="w-6 h-6 text-green-400" />
                 : <Inbox className="w-6 h-6 text-slate-300" />
@@ -491,7 +491,7 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
 
       {/* Resolve toast */}
       {resolveToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
           <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
           Ticket resolved
         </div>
@@ -499,7 +499,7 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
 
       {/* Bulk action toast */}
       {bulkToast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
           <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
           {bulkToast}
         </div>

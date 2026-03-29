@@ -1,28 +1,36 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { X, ChevronLeft } from "lucide-react"
 import { ALL_CATEGORIES, type Category, type Article } from "./content/index"
 import HelpHome from "./HelpHome"
 import HelpCategory from "./HelpCategory"
 import HelpArticle from "./HelpArticle"
+import { useHelp } from "./HelpContext"
 
 type View =
   | { type: "home" }
   | { type: "category"; category: Category }
   | { type: "article"; category: Category; article: Article }
 
-interface Props {
-  isOpen: boolean
-  onClose: () => void
-}
-
-export default function HelpPanel({ isOpen, onClose }: Props) {
+export default function HelpPanel() {
+  const { isOpen, closeHelp } = useHelp()
   const [view, setView] = useState<View>({ type: "home" })
+  const router = useRouter()
+
+  function handleSelectArticle(category: Category, article: Article) {
+    if (category.id === "tips") {
+      closeHelp()
+      router.push(`/dashboard/learn/${article.id}`)
+    } else {
+      setView({ type: "article", category, article })
+    }
+  }
 
   const handleClose = () => {
     setView({ type: "home" })
-    onClose()
+    closeHelp()
   }
 
   const goBack = () => {
@@ -78,7 +86,7 @@ export default function HelpPanel({ isOpen, onClose }: Props) {
             {view.type === "category" && (
               <HelpCategory
                 category={view.category}
-                onSelectArticle={article => setView({ type: "article", category: view.category, article })}
+                onSelectArticle={article => handleSelectArticle(view.category, article)}
               />
             )}
             {view.type === "article" && (

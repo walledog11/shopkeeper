@@ -174,7 +174,7 @@ export default function ConversationView({
       <div className="flex items-center gap-1 px-4 py-2 border-b border-slate-100 bg-white shrink-0">
         <button
           onClick={handleSwitchToChat}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors ${
             viewTab === 'chat'
               ? 'bg-slate-900 text-white'
               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
@@ -185,7 +185,7 @@ export default function ConversationView({
         </button>
         <button
           onClick={() => setViewTab('notes')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors ${
             viewTab === 'notes'
               ? 'bg-violet-100 text-violet-800'
               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
@@ -211,7 +211,7 @@ export default function ConversationView({
           <div className="flex flex-col items-center justify-center h-full text-center gap-3">
             {viewTab === 'notes' ? (
               <>
-                <div className="w-10 h-10 rounded-xl bg-violet-50 border border-violet-200 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-md bg-violet-50 border border-violet-200 flex items-center justify-center">
                   <Lock className="w-4 h-4 text-violet-400" />
                 </div>
                 <div>
@@ -223,7 +223,7 @@ export default function ConversationView({
               </>
             ) : (
               <>
-                <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center">
                   <MessageSquare className="w-4 h-4 text-slate-300" />
                 </div>
                 <p className="text-sm text-slate-400">No messages yet</p>
@@ -235,7 +235,7 @@ export default function ConversationView({
             {/* DB notes */}
             {displayMessages.map((msg: { sender: SenderType; text: string | null; time: string; author?: string }, i: number) => (
               <div key={i} className="flex flex-col gap-1 items-end">
-                <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-white border border-violet-200 text-slate-800 rounded-2xl rounded-tr-sm shadow-sm">
+                <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-white border border-violet-200 text-slate-800 rounded-md rounded-tr-sm shadow-sm">
                   {msg.text}
                 </div>
                 <span className="text-[10px] text-slate-400 mx-1">
@@ -250,7 +250,7 @@ export default function ConversationView({
               <div key={`agent-${i}`} className="space-y-2">
                 {/* User instruction — right aligned */}
                 <div className="flex flex-col gap-1 items-end">
-                  <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-2xl rounded-tr-sm">
+                  <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-md rounded-tr-sm">
                     <span className="text-violet-600 font-semibold">@clerk</span>{' '}
                     {turn.instruction}
                   </div>
@@ -261,7 +261,7 @@ export default function ConversationView({
                     <Bot className="w-3 h-3 text-violet-500" />
                     <span className="text-[11px] font-semibold text-violet-600">Clerk Agent</span>
                   </div>
-                  <div className="px-4 py-3 max-w-[80%] bg-violet-50 border border-violet-200 rounded-2xl rounded-tl-sm shadow-sm space-y-2">
+                  <div className="px-4 py-3 max-w-[80%] bg-violet-50 border border-violet-200 rounded-md rounded-tl-sm shadow-sm space-y-2">
                     {turn.error ? (
                       <p className="text-xs text-red-500">{turn.error}</p>
                     ) : (
@@ -299,7 +299,7 @@ export default function ConversationView({
               <div className="space-y-2">
                 {pendingInstruction && (
                   <div className="flex flex-col gap-1 items-end">
-                    <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-2xl rounded-tr-sm">
+                    <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-md rounded-tr-sm">
                       <span className="text-violet-600 font-semibold">@clerk</span>{' '}
                       {pendingInstruction}
                     </div>
@@ -310,7 +310,7 @@ export default function ConversationView({
                     <Bot className="w-3 h-3 text-violet-500" />
                     <span className="text-[11px] font-semibold text-violet-600">Clerk Agent</span>
                   </div>
-                  <div className="px-4 py-3 bg-violet-50 border border-violet-200 rounded-2xl rounded-tl-sm shadow-sm">
+                  <div className="px-4 py-3 bg-violet-50 border border-violet-200 rounded-md rounded-tl-sm shadow-sm">
                     <div className="flex items-center gap-1.5 text-xs text-violet-500">
                       <RefreshCw className="w-3 h-3 animate-spin" />
                       Working on it…
@@ -325,8 +325,8 @@ export default function ConversationView({
             <div key={i} className={`flex flex-col gap-1 ${msg.sender === 'agent' || msg.sender === 'ai' ? 'items-end' : 'items-start'}`}>
               <div className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
                 msg.sender === 'agent' || msg.sender === 'ai'
-                  ? 'bg-slate-900 text-white rounded-2xl rounded-tr-sm shadow-sm'
-                  : 'bg-white border border-slate-200 text-slate-800 rounded-2xl rounded-tl-sm shadow-sm'
+                  ? 'bg-slate-900 text-white rounded-md rounded-tr-sm shadow-sm'
+                  : 'bg-white border border-slate-200 text-slate-800 rounded-md rounded-tl-sm shadow-sm'
               }`}>
                 {msg.text}
               </div>

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
 
 const FB_GRAPH = 'https://graph.facebook.com/v19.0';
 
@@ -18,21 +17,23 @@ export async function GET(request: Request) {
 
   if (error) {
     console.warn('[IG OAuth] User denied access:', error);
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=access_denied`);
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=access_denied`);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=invalid_callback`);
   }
 
   // Verify CSRF state
   const cookieStore = await cookies();
   const savedState = cookieStore.get('ig_oauth_state')?.value;
+  const clerkOrgId = cookieStore.get('ig_oauth_org')?.value;
   cookieStore.delete('ig_oauth_state');
+  cookieStore.delete('ig_oauth_org');
 
   if (!savedState || savedState !== state) {
     console.error('[IG OAuth] State mismatch — possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=state_mismatch`);
   }
 
   try {
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
 
     if (!tokenData.access_token) {
       console.error('[IG OAuth] Token exchange failed:', tokenData);
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
+      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=token_exchange_failed`);
     }
     const shortLivedToken: string = tokenData.access_token;
 
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
 
     if (!igPage?.instagram_business_account) {
       console.error('[IG OAuth] No Instagram Business account found — user likely has Business Portfolio access only, not classic Page admin access.');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=no_ig_account`);
+      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=no_ig_account`);
     }
 
     const pageToken = igPage.access_token;
@@ -110,7 +111,15 @@ export async function GET(request: Request) {
     // accessToken = Page Access Token (used for sending messages)
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
-    const org = await getOrCreateOrg();
+    if (!clerkOrgId) {
+      console.error('[IG OAuth] Missing org cookie — session likely interrupted');
+      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
+    }
+    const org = await db.organization.findUnique({ where: { clerkOrgId } });
+    if (!org) {
+      console.error('[IG OAuth] Org not found for clerkOrgId:', clerkOrgId);
+      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
+    }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
     await db.integration.upsert({
       where: {
@@ -136,10 +145,10 @@ export async function GET(request: Request) {
     });
 
     console.log(`[IG OAuth] Integration saved: @${igUsername} (${igAccountId}) for org ${org.id}`);
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?connected=instagram`);
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&connected=instagram`);
 
   } catch (err) {
     console.error('[IG OAuth] Unexpected error:', err);
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
+    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
   }
 }

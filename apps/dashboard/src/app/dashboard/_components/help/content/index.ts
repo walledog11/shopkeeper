@@ -1,6 +1,9 @@
 export type Article = {
   id: string
   title: string
+  summary?: string
+  tag?: string
+  readingTime?: number // minutes
   body: Section[]
 }
 
@@ -9,6 +12,8 @@ export type Section = {
   text?: string
   steps?: string[]
   tips?: string[]
+  callout?: string   // highlighted tip box (blue)
+  warning?: string   // warning box (amber)
 }
 
 export type Category = {
@@ -26,6 +31,7 @@ export { integrations } from "./integrations"
 export { settings } from "./settings"
 export { troubleshooting } from "./troubleshooting"
 export { reference } from "./reference"
+export { tips } from "./tips"
 
 import { gettingStarted } from "./getting-started"
 import { tickets } from "./tickets"
@@ -34,6 +40,7 @@ import { integrations } from "./integrations"
 import { settings } from "./settings"
 import { troubleshooting } from "./troubleshooting"
 import { reference } from "./reference"
+import { tips } from "./tips"
 
 export const ALL_CATEGORIES: Category[] = [
   gettingStarted,
@@ -43,4 +50,5 @@ export const ALL_CATEGORIES: Category[] = [
   settings,
   troubleshooting,
   reference,
+  tips,
 ]

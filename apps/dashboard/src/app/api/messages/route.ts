@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import { ServerClient } from 'postmark';
 
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
+
+    // 60 outbound messages per minute per org — prevents accidental or malicious message floods
+    const rl = await rateLimit(`messages:send:${org.id}`, 60, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
+
     const { threadId, text, isNote } = await request.json();
 
     if (!threadId || !text) {

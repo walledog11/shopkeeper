@@ -15,6 +15,9 @@
     "postmark": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "swr": "latest"
+    "stripe": "^21.0.1",
+    "swr": "latest",
+    "ioredis": "latest",
+    "twilio": "^5.13.1"
   }
 }

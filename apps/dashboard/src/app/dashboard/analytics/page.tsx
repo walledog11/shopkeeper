@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Analytics</h1>
             <p className="text-sm text-slate-400 mt-0.5">Support performance overview</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center">
             <BarChart2 className="w-5 h-5 text-slate-400" />
           </div>
         </div>
@@ -78,10 +78,10 @@ export default function AnalyticsPage() {
             { label: 'Resolved', value: closedThreads.length, icon: <CheckCircle2 className="w-4 h-4 text-green-500" />, bg: 'bg-green-50', accent: 'border-t-2 border-t-green-400' },
             { label: 'Total Messages', value: totalMessages, icon: <MessageSquare className="w-4 h-4 text-purple-500" />, bg: 'bg-purple-50', accent: 'border-t-2 border-t-purple-400' },
           ].map(stat => (
-            <div key={stat.label} className={`bg-white border border-slate-200 rounded-xl p-4 md:p-5 ${stat.accent}`}>
+            <div key={stat.label} className={`bg-white border border-slate-200 rounded-md p-4 md:p-5 ${stat.accent}`}>
               <div className="flex items-center justify-between mb-3">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{stat.label}</p>
-                <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center`}>
+                <div className={`w-8 h-8 rounded-md ${stat.bg} flex items-center justify-center`}>
                   {stat.icon}
                 </div>
               </div>
@@ -98,7 +98,7 @@ export default function AnalyticsPage() {
 
         {/* Resolution rate */}
         {!isLoading && (
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="bg-white border border-slate-200 rounded-md p-5">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-4 h-4 text-green-500" />
@@ -121,7 +121,7 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
           {/* Last 7 days */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="bg-white border border-slate-200 rounded-md p-5">
             <p className="text-sm font-semibold text-slate-900 mb-4">Tickets Last 7 Days</p>
             {isLoading ? (
               <div className="space-y-3">
@@ -137,11 +137,11 @@ export default function AnalyticsPage() {
                 {last7Days.map(day => (
                   <div key={day.date} className="flex items-center gap-3">
                     <span className="text-[11px] text-slate-400 w-14 shrink-0 text-right">{shortDate(day.date)}</span>
-                    <div className="flex-1 flex items-center h-8 bg-slate-50 rounded-md overflow-hidden relative">
+                    <div className="flex-1 flex items-center h-8 bg-slate-50 rounded overflow-hidden relative">
                       {day.opened > 0 ? (
                         <div
                           title={`${day.opened} ticket${day.opened !== 1 ? 's' : ''}`}
-                          className="h-full bg-amber-400 hover:bg-amber-500 transition-all duration-500 flex items-center justify-end pr-2 rounded-md cursor-default"
+                          className="h-full bg-amber-400 hover:bg-amber-500 transition-all duration-500 flex items-center justify-end pr-2 rounded cursor-default"
                           style={{ width: `${Math.max((day.opened / maxDay) * 100, 6)}%` }}
                         >
                           <span className="text-[10px] font-bold text-amber-900">{day.opened}</span>
@@ -157,7 +157,7 @@ export default function AnalyticsPage() {
           </div>
 
           {/* Top tags */}
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="bg-white border border-slate-200 rounded-md p-5">
             <p className="text-sm font-semibold text-slate-900 mb-4">Top Topics</p>
             {isLoading ? (
               <div className="space-y-3">
@@ -198,7 +198,7 @@ export default function AnalyticsPage() {
 
         {/* By channel */}
         {!isLoading && byChannel.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-5">
+          <div className="bg-white border border-slate-200 rounded-md p-5">
             <p className="text-sm font-semibold text-slate-900 mb-4">Tickets by Channel</p>
             <div className="flex items-end gap-6">
               {byChannel.map(item => {
@@ -206,10 +206,10 @@ export default function AnalyticsPage() {
                 return (
                   <div key={item.channel} className="flex flex-col items-center gap-2 flex-1 max-w-[120px]">
                     <span className="text-sm font-bold text-slate-900">{item.count}</span>
-                    <div className="w-full bg-slate-100 rounded-lg overflow-hidden" style={{ height: 120 }}>
+                    <div className="w-full bg-slate-100 rounded-md overflow-hidden" style={{ height: 120 }}>
                       <div
                         title={`${item.count} ticket${item.count !== 1 ? 's' : ''}`}
-                        className="w-full bg-[#1c3b38] hover:bg-[#2a5450] rounded-lg transition-all duration-700 cursor-default"
+                        className="w-full bg-[#1c3b38] hover:bg-[#2a5450] rounded-md transition-all duration-700 cursor-default"
                         style={{ height: `${(item.count / maxChannel) * 120}px`, marginTop: `${120 - (item.count / maxChannel) * 120}px` }}
                       />
                     </div>

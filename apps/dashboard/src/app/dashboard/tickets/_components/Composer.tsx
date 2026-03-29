@@ -36,7 +36,7 @@ export default function Composer({
   return (
     <div className="px-5 pb-5 pt-4 bg-white border-t border-slate-100 shrink-0">
 
-      <div className={`border rounded-xl overflow-hidden transition-colors ${
+      <div className={`border rounded-md overflow-hidden transition-colors ${
         error
           ? 'border-red-200'
           : isClerkMode
@@ -88,7 +88,7 @@ export default function Composer({
             <button
               disabled={!value.trim() || isSending}
               onClick={() => onSend(isNote)}
-              className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-lg transition-colors ${
+              className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-md transition-colors ${
                 isClerkMode
                   ? 'bg-violet-600 text-white hover:bg-violet-700'
                   : 'bg-slate-900 text-white hover:bg-slate-700'

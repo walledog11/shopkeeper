@@ -1,31 +1,64 @@
-// Simple in-memory rate limiter.
-// Keys are arbitrary strings (e.g. "ai-draft:<orgId>").
-// Not suitable for multi-instance deployments — use Redis for that.
+import Redis from 'ioredis';
+import { NextResponse } from 'next/server';
 
-interface Bucket {
-  count: number
-  resetAt: number
+// Singleton Redis client — reused across warm invocations in the same process
+let redis: Redis | null = null;
+
+function getRedis(): Redis {
+  if (!redis) {
+    redis = new Redis(process.env.REDIS_URL!, {
+      lazyConnect: true,
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2000,
+    });
+  }
+  return redis;
 }
 
-const buckets = new Map<string, Bucket>()
-
 /**
- * Returns true if the request is allowed, false if it should be rate-limited.
- * @param key       Unique identifier for the caller (e.g. "ai-draft:<orgId>")
- * @param limit     Max requests per window (default: 10)
- * @param windowMs  Window length in milliseconds (default: 60s)
+ * Fixed-window rate limiter backed by Redis INCR.
+ *
+ * Fails **open** if Redis is unavailable — a Redis outage will never block the app.
+ *
+ * @param key        Unique key scoped to the caller and action, e.g. `ai-draft:${orgId}`
+ * @param limit      Max requests allowed per window (default: 10)
+ * @param windowSecs Window duration in seconds (default: 60)
  */
-export function rateLimit(key: string, limit = 10, windowMs = 60_000): boolean {
-  const now = Date.now()
-  const bucket = buckets.get(key)
+export async function rateLimit(
+  key: string,
+  limit = 10,
+  windowSecs = 60,
+): Promise<{ success: boolean; remaining: number; reset: number }> {
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = Math.floor(now / windowSecs);
+  const windowKey = `rl:${key}:${windowStart}`;
+  const reset = (windowStart + 1) * windowSecs;
 
-  if (!bucket || bucket.resetAt < now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs })
-    return true
+  try {
+    const client = getRedis();
+    const count = await client.incr(windowKey);
+    if (count === 1) {
+      // Set expiry only on first increment so the key is cleaned up automatically
+      await client.expire(windowKey, windowSecs);
+    }
+    return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
+  } catch {
+    // Redis unavailable — fail open so a Redis outage doesn't take down the app
+    return { success: true, remaining: limit, reset };
   }
+}
 
-  if (bucket.count >= limit) return false
-
-  bucket.count++
-  return true
+/** Returns a 429 response with standard rate-limit headers */
+export function tooManyRequests(reset: number): NextResponse {
+  const retryAfter = Math.max(0, reset - Math.floor(Date.now() / 1000));
+  return NextResponse.json(
+    { error: 'Too many requests. Please try again later.' },
+    {
+      status: 429,
+      headers: {
+        'Retry-After': String(retryAfter),
+        'X-RateLimit-Reset': String(reset),
+      },
+    }
+  );
 }
