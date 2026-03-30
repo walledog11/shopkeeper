@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     const org = await getOrCreateOrg();
     const { searchParams } = new URL(request.url);
     const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
+    const preview = searchParams.get('preview') === 'true';
 
     const threads = await db.thread.findMany({
       where: {
@@ -18,9 +19,15 @@ export async function GET(request: Request) {
       },
       include: {
         customer: true,
-        messages: {
-          orderBy: { sentAt: 'asc' }
-        }
+        messages: preview
+          ? {
+              where: {
+                NOT: { AND: [{ senderType: 'note' }, { contentText: { startsWith: '__clerk_agent__' } }] },
+              },
+              orderBy: { sentAt: 'desc' },
+              take: 1,
+            }
+          : { orderBy: { sentAt: 'asc' } },
       },
       orderBy: { updatedAt: 'desc' }
     });

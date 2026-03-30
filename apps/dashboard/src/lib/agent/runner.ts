@@ -1,5 +1,7 @@
 import { db } from "@clerk/db";
-import { openai } from "@/lib/openai";
+import { anthropic } from "@/lib/anthropic";
+import { AI_MODEL } from "@/lib/ai";
+import type Anthropic from "@anthropic-ai/sdk";
 import { AGENT_TOOLS } from "./tools";
 import {
   getShopifyCustomer,
@@ -31,7 +33,6 @@ import type {
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
 } from "./tools";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 const MAX_ITERATIONS = 10;
 
@@ -248,17 +249,11 @@ function buildSystemPrompt(ctx: AgentContext): string {
     ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} — pass this directly when calling Shopify tools.`
     : "No Shopify customer ID is available for this thread. Do not attempt Shopify customer operations.";
 
-  const messageHistory = ctx.recentMessages
-    .map((m) => `  [${m.senderType}]: ${m.contentText ?? "(media)"}`)
-    .join("\n");
-
   const otherOpenThreads = Math.max(0, ctx.openThreadCount - 1);
 
-  const ordersSection = ctx.recentOrders.length > 0
-    ? ctx.recentOrders.map((o) =>
-        `  - ${o.name} (ID: ${o.id}) | financial: ${o.financial_status} | fulfillment: ${o.fulfillment_status ?? "unfulfilled"} | $${parseFloat(o.total_price).toFixed(2)} | items: ${o.items.join(", ")} | placed: ${o.created_at.slice(0, 10)}`
-      ).join("\n")
-    : "  (no orders found)";
+  const ordersJson = ctx.recentOrders.length > 0
+    ? JSON.stringify(ctx.recentOrders)
+    : "[]";
 
   return `You are an AI support agent for ${ctx.orgName}. You help support staff take actions on their behalf.
 
@@ -271,11 +266,8 @@ function buildSystemPrompt(ctx: AgentContext): string {
 - Customer: ${ctx.customer.name ?? ctx.customer.platformId}
 - Customer's other open threads: ${otherOpenThreads}
 
-## Recent conversation
-${messageHistory || "  (no messages yet)"}
-
-## Customer's recent orders
-${ordersSection}
+## Customer's recent orders (use these IDs directly — do not call get_shopify_orders unless you need to refresh)
+${ordersJson}
 
 ## Integrations
 ${shopifyNote}
@@ -283,12 +275,13 @@ ${shopifyCustomerNote}
 
 ## Instructions
 - Use the available tools to complete the requested task.
-- After completing an action, always call add_internal_note to document what you did.
-- When the support agent refers to "this order" or "the order", infer they mean the most recent order listed above unless context makes another order clear.
+- After successfully completing an action, call add_internal_note in a separate step to document what you did. Do not call it in the same batch as the action.
+- When the support agent refers to "this order" or "the order", infer they mean the most recent order in the list above unless context makes another order clear.
 - Be precise and only make changes explicitly requested.
 - Respond like a knowledgeable coworker giving a quick status update — direct, factual, no fluff.
 - Keep summaries to 1–2 sentences. No bullet lists, no markdown formatting.
-- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.`;
+- Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.`;
 }
 
 // ── Main agent runner ─────────────────────────────────────────────────────────
@@ -298,68 +291,109 @@ export interface AgentResult {
   actionsPerformed: ActionEntry[];
 }
 
+// Convert OpenAI-format tool definitions to Anthropic format
+function toAnthropicTools(): Anthropic.Tool[] {
+  return AGENT_TOOLS.flatMap((t) => {
+    if (t.type !== "function") return [];
+    const fn = t.function as { name: string; description?: string; parameters?: unknown };
+    return [{
+      name: fn.name,
+      description: fn.description ?? "",
+      input_schema: fn.parameters as Anthropic.Tool["input_schema"],
+    }];
+  });
+}
+
 export async function runAgent(
   ctx: AgentContext,
   instruction: string
 ): Promise<AgentResult> {
   const actionsPerformed: ActionEntry[] = [];
 
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: buildSystemPrompt(ctx) },
-    { role: "user",   content: instruction },
+  // Build conversation history as alternating user/assistant turns.
+  // Consecutive same-role messages are merged so Anthropic's strict
+  // alternation requirement is satisfied.
+  const rawHistory = ctx.recentMessages.map((m) => ({
+    role: (m.senderType === "agent" || m.senderType === "note")
+      ? "assistant" as const
+      : "user" as const,
+    content: m.contentText ?? "(media)",
+  }));
+
+  const mergedHistory: Anthropic.MessageParam[] = [];
+  for (const msg of rawHistory) {
+    const last = mergedHistory[mergedHistory.length - 1];
+    if (last && last.role === msg.role && typeof last.content === "string") {
+      last.content += "\n" + msg.content;
+    } else {
+      mergedHistory.push({ role: msg.role, content: msg.content });
+    }
+  }
+
+  // Anthropic requires the first message to be from the user
+  while (mergedHistory.length > 0 && mergedHistory[0].role === "assistant") {
+    mergedHistory.shift();
+  }
+
+  const messages: Anthropic.MessageParam[] = [
+    ...mergedHistory,
+    { role: "user", content: instruction },
   ];
+
+  const tools = toAnthropicTools();
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     console.log(`[agent] iteration ${i} — sending ${messages.length} messages`);
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+
+    const response = await anthropic.messages.create({
+      model: AI_MODEL,
+      max_tokens: 1024,
+      system: buildSystemPrompt(ctx),
       messages,
-      tools: AGENT_TOOLS,
-      tool_choice: "auto",
+      tools,
     });
 
-    const choice = response.choices[0];
-    messages.push(choice.message);
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    );
+    console.log(`[agent] iteration ${i} — stop_reason: ${response.stop_reason}, tools: ${toolUseBlocks.map((b) => b.name).join(", ") || "none"}`);
 
-    const toolCalls = choice.message.tool_calls;
-    console.log(`[agent] iteration ${i} — finish_reason: ${choice.finish_reason}, tool_calls: ${toolCalls?.map(t => t.type === "function" ? t.function.name : t.type).join(", ") ?? "none"}`);
+    // Add the assistant turn before deciding what to do next
+    messages.push({ role: "assistant", content: response.content });
 
     // No tool calls → final answer
-    if (!toolCalls || toolCalls.length === 0) {
-      const summary = choice.message.content ?? "Done.";
-      return { summary, actionsPerformed };
+    if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
+      const textBlock = response.content.find(
+        (b): b is Anthropic.TextBlock => b.type === "text"
+      );
+      return { summary: textBlock?.text ?? "Done.", actionsPerformed };
     }
 
-    // Execute each tool call in parallel (narrow to function-type calls only)
-    const functionCalls = toolCalls.filter(
-      (tc): tc is typeof tc & { type: "function"; function: { name: string; arguments: string } } =>
-        tc.type === "function"
-    );
+    // Execute tool calls in parallel
     const toolResults = await Promise.all(
-      functionCalls.map(async (tc) => {
-        const args = JSON.parse(tc.function.arguments) as unknown;
-        console.log(`[agent] calling tool: ${tc.function.name} args: ${tc.function.arguments}`);
+      toolUseBlocks.map(async (block) => {
+        console.log(`[agent] calling tool: ${block.name} args: ${JSON.stringify(block.input)}`);
         let result: string;
         try {
-          result = await executeTool(tc.function.name, args, ctx);
+          result = await executeTool(block.name, block.input, ctx);
         } catch (err) {
-          result = `Error: tool "${tc.function.name}" threw an exception — ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`[agent] tool "${tc.function.name}" threw:`, err);
+          result = `Error: tool "${block.name}" threw — ${err instanceof Error ? err.message : String(err)}`;
+          console.error(`[agent] tool "${block.name}" threw:`, err);
         }
         console.log(`[agent] tool result: ${result}`);
-        actionsPerformed.push({ tool: tc.function.name, result });
+        actionsPerformed.push({ tool: block.name, result });
         return {
-          role: "tool" as const,
-          tool_call_id: tc.id,
+          type: "tool_result" as const,
+          tool_use_id: block.id,
           content: result,
         };
       })
     );
 
-    messages.push(...toolResults);
+    // Tool results go back as a user message in the Anthropic protocol
+    messages.push({ role: "user", content: toolResults });
   }
 
-  // Exceeded max iterations
   return {
     summary: "Reached maximum steps without completing the task.",
     actionsPerformed,

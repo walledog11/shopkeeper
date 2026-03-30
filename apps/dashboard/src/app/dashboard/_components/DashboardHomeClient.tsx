@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { Inbox, CheckCircle2, MessageSquare, ArrowRight, Clock } from "lucide-react"
 import ResourcesCard from "./ResourcesCard"
 import { useThreads } from "@/hooks/useThreads"
@@ -17,15 +17,21 @@ function getGreeting(): string {
   return "Good evening"
 }
 
+// Stable module-level helper — not a hook dep concern
+function sortByDate(threads: Thread[]): Thread[] {
+  return [...threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+}
+
 interface Props {
   userName: string
   initialOpenThreads: Thread[]
-  initialClosedThreads: Thread[]
+  initialClosedCount: number
+  totalMessageCount: number
 }
 
 type ViewId = 'all' | 'open' | 'resolved' | 'recent'
 
-export default function DashboardHomeClient({ userName, initialOpenThreads, initialClosedThreads }: Props) {
+export default function DashboardHomeClient({ userName, initialOpenThreads, initialClosedCount, totalMessageCount }: Props) {
   const greeting = getGreeting()
   const [agentBannerDismissed, setAgentBannerDismissed] = useState(false)
   const [activeView, setActiveView] = useState<ViewId>('all')
@@ -39,57 +45,57 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
     setAgentBannerDismissed(true)
   }
 
-  const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads)
-  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', initialClosedThreads)
+  const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
+  // Only fetch closed threads when the user navigates to the Resolved view
+  const fetchClosed = activeView === 'resolved'
+  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, fetchClosed, true)
 
-  const isLoading = loadingOpen || loadingClosed
+  const isLoading = loadingOpen || (fetchClosed && loadingClosed)
 
   const openCount = openThreads.length
-  const resolvedCount = closedThreads.length
-  const allThreads = [...openThreads, ...closedThreads]
-  const totalMessages = allThreads.reduce((sum, t) => sum + t.messages.length, 0)
+  // Use server-side count for the stat card; switch to live count once we've fetched
+  const resolvedCount = fetchClosed && closedThreads.length > 0 ? closedThreads.length : initialClosedCount
 
-  const now = Date.now()
-  const recentThreads = allThreads.filter(t => now - new Date(t.updatedAt).getTime() < 24 * 60 * 60 * 1000)
+  const allThreads = useMemo(() => [...openThreads, ...closedThreads], [openThreads, closedThreads])
 
-  const sortByDate = (threads: Thread[]) =>
-    [...threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  const recentThreads = useMemo(() => {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    return allThreads.filter(t => new Date(t.updatedAt).getTime() > cutoff)
+  }, [allThreads])
 
-  const viewThreads: Record<ViewId, Thread[]> = {
+  const viewThreads = useMemo<Record<ViewId, Thread[]>>(() => ({
     all: sortByDate(allThreads),
     open: sortByDate(openThreads),
     resolved: sortByDate(closedThreads),
     recent: sortByDate(recentThreads),
-  }
+  }), [allThreads, openThreads, closedThreads, recentThreads])
 
   const displayedThreads = viewThreads[activeView]
 
-  const needsAttention = sortByDate(openThreads)
-    .sort((a, b) => b.messages.length - a.messages.length)
-    .slice(0, 4)
+  const needsAttention = useMemo(() => sortByDate(openThreads).slice(0, 4), [openThreads])
 
   const channelConnected = openCount > 0 || resolvedCount > 0
-  const workflowSteps = [
+  const workflowSteps = useMemo(() => [
     { label: "Connect a channel", href: "/dashboard/integrations", status: channelConnected ? "done" : "pending" as const },
     { label: "Invite team members", href: "/dashboard/team", status: "pending" as const },
     { label: "Configure AI agent", href: "/dashboard/settings", status: "pending" as const },
     { label: "Add more channels", href: "/dashboard/integrations", status: "pending" as const },
-  ]
+  ], [channelConnected])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
-  const navViews: { id: ViewId; label: string; count: number }[] = [
-    { id: 'all', label: 'All tickets', count: allThreads.length },
+  const navViews = useMemo<{ id: ViewId; label: string; count: number }[]>(() => [
+    { id: 'all', label: 'All tickets', count: openCount + resolvedCount },
     { id: 'open', label: 'Open', count: openCount },
     { id: 'resolved', label: 'Resolved', count: resolvedCount },
     { id: 'recent', label: 'Recent (24h)', count: recentThreads.length },
-  ]
+  ], [openCount, resolvedCount, recentThreads.length])
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-slate-50">
 
       {/* Scrollable content — flex-col so 3-col grid can fill remaining height */}
-      <div className="flex-1 overflow-y-auto">
-      <div className="flex flex-col min-h-full max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-5 gap-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex flex-col min-h-full px-5 md:px-6 py-4 gap-3">
 
         {/* AI agent banner card */}
         {!agentBannerDismissed && (
@@ -158,7 +164,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
               <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center sm:gap-6">
                 <div className="flex-1 min-w-0">
                   <div className="mb-2">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-indigo-600 px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-teal-700 px-2.5 py-1 rounded-full">
                       <Clock className="w-3 h-3" /> 3-min setup
                     </span>
                   </div>
@@ -172,7 +178,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-4 sm:mt-0 shrink-0">
                   <Link
                     href="/dashboard/settings"
-                    className="w-full sm:w-auto text-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-5 py-2.5 rounded-md transition-colors"
+                    className="w-full sm:w-auto text-center bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2.5 rounded-md transition-colors"
                   >
                     Start
                   </Link>
@@ -189,7 +195,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">{greeting}, {userName}.</h1>
             <p className="text-sm text-slate-400 mt-0.5">
@@ -209,50 +215,50 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           </Link>
         </div>
 
-        {/* Compact stat cards */}
-        <div className="grid grid-cols-3 gap-2 shrink-0">
+        {/* Stat cards */}
+        <div className="grid grid-cols-3 gap-3 shrink-0">
           <Link
             href="/dashboard/tickets"
-            className="group block bg-white border border-slate-200 hover:border-orange-200 rounded-md px-4 py-3 flex items-center justify-between shadow-sm hover:shadow-md transition-all"
+            className="group block bg-white border border-slate-200 hover:border-orange-200 rounded-md px-4 py-4 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-px transition-all"
           >
             <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Open</p>
-              <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Open</p>
+              <p className="text-3xl font-bold text-slate-900 leading-none">
                 {isLoading ? <span className="text-slate-200">—</span> : openCount}
               </p>
             </div>
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center group-hover:from-orange-100 group-hover:to-amber-200 transition-all">
-              <Inbox className="w-4 h-4 text-orange-500" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-50 to-amber-100 flex items-center justify-center group-hover:from-orange-100 group-hover:to-amber-200 transition-all">
+              <Inbox className="w-5 h-5 text-orange-500" />
             </div>
           </Link>
 
-          <div className="bg-white border border-slate-200 rounded-md px-4 py-3 flex items-center justify-between shadow-sm">
+          <div className="bg-white border border-slate-200 hover:border-green-200 rounded-md px-4 py-4 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-px transition-all">
             <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Resolved</p>
-              <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">
-                {isLoading ? <span className="text-slate-200">—</span> : resolvedCount}
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Resolved</p>
+              <p className="text-3xl font-bold text-slate-900 leading-none">
+                {resolvedCount}
               </p>
             </div>
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
-              <CheckCircle2 className="w-4 h-4 text-green-500" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-md px-4 py-3 flex items-center justify-between shadow-sm">
+          <div className="bg-white border border-slate-200 hover:border-blue-200 rounded-md px-4 py-4 flex items-center justify-between shadow-sm hover:shadow-md hover:-translate-y-px transition-all">
             <div>
-              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Messages</p>
-              <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">
-                {isLoading ? <span className="text-slate-200">—</span> : totalMessages.toLocaleString()}
+              <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">Messages</p>
+              <p className="text-3xl font-bold text-slate-900 leading-none">
+                {totalMessageCount.toLocaleString()}
               </p>
             </div>
-            <div className="w-8 h-8 rounded-md bg-gradient-to-br from-blue-50 to-sky-100 flex items-center justify-center">
-              <MessageSquare className="w-4 h-4 text-blue-500" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-50 to-sky-100 flex items-center justify-center">
+              <MessageSquare className="w-5 h-5 text-blue-500" />
             </div>
           </div>
         </div>
 
         {/* Main 3-column layout — flex-1 fills remaining page height */}
-        <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr_260px] gap-4 flex-1 min-h-0">
+        <div className="grid grid-cols-1 lg:grid-cols-[180px_1fr_260px] gap-3 flex-1 min-h-0">
 
           {/* Left nav panel */}
           <div className="bg-white rounded-md border border-slate-200 shadow-sm">
@@ -266,7 +272,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                   onClick={() => setActiveView(view.id)}
                   className={`w-full flex items-center justify-between px-2.5 py-2 rounded-md text-left transition-colors ${
                     activeView === view.id
-                      ? 'bg-slate-900 text-white'
+                      ? 'bg-teal-800 text-white'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   }`}
                 >
@@ -274,7 +280,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                   {view.count > 0 && (
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-2 shrink-0 ${
                       activeView === view.id
-                        ? 'bg-white/20 text-white'
+                        ? 'bg-teal-700/30 text-white'
                         : 'bg-slate-100 text-slate-500'
                     }`}>
                       {view.count}
@@ -294,7 +300,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           </div>
 
           {/* Center: ticket list — flex-col so it fills grid cell height */}
-          <div className="bg-white rounded-md border border-slate-200 shadow-sm flex flex-col min-h-0">
+          <div className="bg-white rounded-md border border-slate-200 shadow-sm flex flex-col min-h-0 overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
               <h2 className="text-sm font-semibold text-slate-900">
                 {navViews.find(v => v.id === activeView)?.label ?? 'Tickets'}
@@ -329,7 +335,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 {displayedThreads.map(thread => {
                   const channel = getChannelInfo(thread.channelType)
                   const customer = getCustomerName(thread.customer)
-                  const lastMsg = thread.messages[thread.messages.length - 1]
+                  const lastMsg = thread.messages[0]
                   const preview = lastMsg?.contentText || "No messages yet"
                   const isAgent = lastMsg?.senderType === "agent" || lastMsg?.senderType === "ai"
 
@@ -380,11 +386,11 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           <div className="space-y-4">
 
             {/* Workflow Basics */}
-            <div className="bg-gradient-to-br from-indigo-50 to-slate-50 rounded-md border border-slate-200 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-br from-teal-50 to-slate-50 rounded-md border border-slate-200 shadow-sm overflow-hidden">
               <div className="relative px-4 pt-4 pb-3 border-b border-slate-200/70">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest mb-0.5">Setup guide</p>
+                    <p className="text-[10px] font-semibold text-teal-600 uppercase tracking-widest mb-0.5">Setup guide</p>
                     <h2 className="text-base font-bold text-slate-900 leading-tight">Workflow<br />basics</h2>
                   </div>
                   <div className="shrink-0 w-20 h-14 overflow-hidden rounded-md">
@@ -401,7 +407,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                   <span className="text-[10px] text-slate-500">{workflowDoneCount} of {workflowSteps.length} complete</span>
                   <div className="h-1 bg-slate-200 rounded-full overflow-hidden mt-1">
                     <div
-                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                      className="h-full bg-teal-600 rounded-full transition-all duration-500"
                       style={{ width: `${(workflowDoneCount / workflowSteps.length) * 100}%` }}
                     />
                   </div>
@@ -426,7 +432,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                       className={`text-xs font-semibold shrink-0 transition-colors ${
                         step.status === "done"
                           ? "text-slate-400 hover:text-slate-600"
-                          : "text-indigo-600 hover:text-indigo-800"
+                          : "text-teal-700 hover:text-teal-900"
                       }`}
                     >
                       {step.status === "done" ? "View" : "Start"}
@@ -461,8 +467,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                   {needsAttention.map(thread => {
                     const channel = getChannelInfo(thread.channelType)
                     const customer = getCustomerName(thread.customer)
-                    const msgCount = thread.messages.length
-                    const lastMsg = thread.messages[thread.messages.length - 1]
+                    const lastMsg = thread.messages[0]
 
                     return (
                       <Link
@@ -482,8 +487,6 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                           <div className="flex items-center gap-1.5 mt-1">
                             <Image src={channel.logo} alt={channel.name} width={10} height={10} className="object-contain opacity-60" />
                             <span className="text-[10px] text-slate-400">{channel.name}</span>
-                            <span className="text-slate-200">·</span>
-                            <span className="text-[10px] text-slate-400">{msgCount} msg{msgCount !== 1 ? "s" : ""}</span>
                           </div>
                         </div>
                       </Link>

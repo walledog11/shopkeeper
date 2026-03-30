@@ -7,20 +7,25 @@ import type { Thread } from "@/types"
 export default async function DashboardPage() {
   const [org, user] = await Promise.all([getOrCreateOrg(), currentUser()])
 
-  const [openThreadsRaw, closedThreadsRaw] = await Promise.all([
+  const [openThreadsRaw, closedCount, totalMessageCount] = await Promise.all([
     db.thread.findMany({
       where: { organizationId: org.id, status: "open" },
-      include: { customer: true, messages: { orderBy: { sentAt: "asc" } } },
+      include: {
+        customer: true,
+        messages: {
+          where: {
+            NOT: { AND: [{ senderType: "note" }, { contentText: { startsWith: "__clerk_agent__" } }] },
+          },
+          orderBy: { sentAt: "desc" },
+          take: 1,
+        },
+      },
       orderBy: { updatedAt: "desc" },
     }),
-    db.thread.findMany({
-      where: { organizationId: org.id, status: "closed" },
-      include: { customer: true, messages: { orderBy: { sentAt: "asc" } } },
-      orderBy: { updatedAt: "desc" },
-    }),
+    db.thread.count({ where: { organizationId: org.id, status: "closed" } }),
+    db.message.count({ where: { thread: { organizationId: org.id } } }),
   ])
 
-  // Serialize Dates to ISO strings to match the Thread type
   const serialize = (threads: typeof openThreadsRaw): Thread[] =>
     JSON.parse(JSON.stringify(threads))
 
@@ -30,7 +35,8 @@ export default async function DashboardPage() {
     <DashboardHomeClient
       userName={userName}
       initialOpenThreads={serialize(openThreadsRaw)}
-      initialClosedThreads={serialize(closedThreadsRaw)}
+      initialClosedCount={closedCount}
+      totalMessageCount={totalMessageCount}
     />
   )
 }

@@ -77,11 +77,7 @@ export async function sendReply(
       if (emailIntegration) {
         const org = await db.organization.findUnique({ where: { id: ctx.orgId } });
         const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
-        const slug = (org?.name ?? "support").toLowerCase().replace(/[^a-z0-9]/g, "");
-        const fromDomain = process.env.POSTMARK_FROM_DOMAIN;
-        const fromEmail = fromDomain
-          ? `${slug}@${fromDomain}`
-          : emailIntegration.externalAccountId;
+        const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
 
         const client = new ServerClient(POSTMARK_API_KEY);
         try {

@@ -25,63 +25,49 @@ export async function POST(request: Request) {
     const { orgId, instruction, orderNumber, senderPhone, clerkUserId } =
       await request.json();
 
-    if (!orgId || !instruction?.trim() || !orderNumber) {
+    if (!orgId || !instruction?.trim()) {
       return NextResponse.json(
-        { error: "Missing orgId, instruction, or orderNumber" },
+        { error: "Missing orgId or instruction" },
         { status: 400 }
       );
     }
 
-    // Get the Shopify integration for this org
+    // Get the Shopify integration for this org (best-effort — not required)
     const shopifyIntegration = await db.integration.findFirst({
       where: { organizationId: orgId, platform: "shopify" },
     });
 
-    if (!shopifyIntegration?.accessToken) {
-      return NextResponse.json(
-        { error: "No Shopify integration connected for this org" },
-        { status: 422 }
+    let customerEmail: string = senderPhone ?? "unknown";
+    let shopifyCustomerId: string | null = null;
+    let customerName: string | null = null;
+    let threadTag: string | null = null;
+
+    // If an order number was provided, resolve it through Shopify to get the customer
+    if (orderNumber && shopifyIntegration?.accessToken) {
+      const shop = shopifyIntegration.externalAccountId;
+      const token = shopifyIntegration.accessToken;
+      const orderName = orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`;
+
+      const orderRes = await fetch(
+        `https://${shop}/admin/api/2024-01/orders.json?name=${encodeURIComponent(orderName)}&status=any&fields=id,name,email,customer&limit=1`,
+        { headers: { "X-Shopify-Access-Token": token } }
       );
+
+      if (orderRes.ok) {
+        const orderData = await orderRes.json();
+        const order = orderData.orders?.[0];
+        if (order) {
+          customerEmail = order.email || order.customer?.email || customerEmail;
+          shopifyCustomerId = order.customer?.id ? String(order.customer.id) : null;
+          customerName = order.customer
+            ? `${order.customer.first_name ?? ""} ${order.customer.last_name ?? ""}`.trim() || null
+            : null;
+          threadTag = `Order ${orderName}`;
+        }
+      } else {
+        console.warn(`[agent/internal] Shopify order lookup failed for ${orderNumber}`);
+      }
     }
-
-    const shop = shopifyIntegration.externalAccountId;
-    const token = shopifyIntegration.accessToken;
-
-    // Look up the Shopify order to get the customer's email + Shopify customer ID
-    const orderName = orderNumber.startsWith("#") ? orderNumber : `#${orderNumber}`;
-    const orderRes = await fetch(
-      `https://${shop}/admin/api/2024-01/orders.json?name=${encodeURIComponent(orderName)}&status=any&fields=id,name,email,customer&limit=1`,
-      { headers: { "X-Shopify-Access-Token": token } }
-    );
-
-    if (!orderRes.ok) {
-      const err = await orderRes.text();
-      console.error(`[agent/internal] Shopify order lookup failed: ${err}`);
-      return NextResponse.json(
-        { error: `Could not look up order ${orderName} on Shopify` },
-        { status: 422 }
-      );
-    }
-
-    const orderData = await orderRes.json();
-    const order = orderData.orders?.[0];
-
-    if (!order) {
-      return NextResponse.json(
-        { error: `Order ${orderName} not found in Shopify` },
-        { status: 404 }
-      );
-    }
-
-    const customerEmail: string =
-      order.email || order.customer?.email || `unknown-${order.id}@shopify`;
-    const shopifyCustomerId: string | null = order.customer?.id
-      ? String(order.customer.id)
-      : null;
-    const customerName: string | null =
-      order.customer
-        ? `${order.customer.first_name ?? ""} ${order.customer.last_name ?? ""}`.trim() || null
-        : null;
 
     // Upsert the customer record
     const customer = await db.customer.upsert({
@@ -96,19 +82,18 @@ export async function POST(request: Request) {
       },
     });
 
-    // Find or create an sms_agent thread for this customer + order
-    // We match on shopifyCustomerId so the same order always maps to the same thread
-    let thread = shopifyCustomerId
-      ? await db.thread.findFirst({
-          where: {
-            organizationId: orgId,
-            customerId: customer.id,
-            channelType: "sms_agent",
-            shopifyCustomerId,
-            status: "open",
-          },
-        })
-      : null;
+    // Find or create an open sms_agent thread.
+    // When a Shopify customer is known, match on shopifyCustomerId.
+    // Otherwise fall back to any open sms_agent thread for this customer.
+    let thread = await db.thread.findFirst({
+      where: {
+        organizationId: orgId,
+        customerId: customer.id,
+        channelType: "sms_agent",
+        status: "open",
+        ...(shopifyCustomerId ? { shopifyCustomerId } : {}),
+      },
+    });
 
     if (!thread) {
       thread = await db.thread.create({
@@ -117,7 +102,7 @@ export async function POST(request: Request) {
           customerId: customer.id,
           channelType: "sms_agent",
           status: "open",
-          tag: `Order ${orderName}`,
+          ...(threadTag && { tag: threadTag }),
           ...(shopifyCustomerId && { shopifyCustomerId }),
         },
       });

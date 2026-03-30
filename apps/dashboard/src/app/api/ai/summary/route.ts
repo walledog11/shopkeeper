@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import OpenAI from 'openai';
-import { openai } from '@/lib/openai';
+import { generateText } from '@/lib/ai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
@@ -29,25 +28,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: `You are an AI assistant summarizing a customer support thread for Clerk.
-        Provide a concise, 1-2 sentence summary of the customer's core issue and the current status of the resolution.`
-      },
-      ...thread.messages.map((msg) => ({
-        role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
-        content: msg.contentText || "",
-      }))
-    ];
+    const systemPrompt = `You are an AI assistant summarizing a customer support thread. Provide a concise, 1-2 sentence summary of the customer's core issue and the current status of the resolution.`;
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: messages,
-      temperature: 0.5,
-    });
+    const messages = thread.messages.map((msg) => ({
+      role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
+      content: msg.contentText || "",
+    }));
 
-    const newSummary = response.choices[0]?.message?.content;
+    const newSummary = await generateText(systemPrompt, messages, { temperature: 0.5 });
 
     if (!newSummary) {
       return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });

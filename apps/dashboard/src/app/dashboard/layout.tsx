@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Inbox, Settings, LogOut, Bell, Menu, X, ChevronDown, HelpCircle, BarChart2, Users } from "lucide-react";
+import { Home, Inbox, Settings, LogOut, Bell, Menu, X, ChevronDown, HelpCircle, BarChart2, Users, Search } from "lucide-react";
 import HelpPanel from "./_components/help/HelpPanel";
 import { HelpProvider, useHelp } from "./_components/help/HelpContext";
 import NotificationBar, { type Notification } from "@/components/NotificationBar";
+import CommandPalette from "@/components/CommandPalette";
 import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk, useOrganization, useOrganizationList } from "@clerk/nextjs";
+import type { OrganizationMembershipResource } from "@clerk/shared/types";
 import { OrgAvatar } from "@/components/OrgAvatar";
 
 const NOTIFICATIONS: Notification[] = [
@@ -63,15 +65,62 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [orgDropdownOpen, setOrgDropdownOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const { isOpen: isHelpOpen, openHelp, closeHelp } = useHelp();
   const { threads: openThreads } = useOpenThreads();
   const openCount = openThreads.length;
   const { user } = useUser();
   const { signOut } = useClerk();
-  const { organization } = useOrganization();
+  const { organization, memberships } = useOrganization({ memberships: { infinite: false, pageSize: 5 } });
   const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });
 
   const closeMenu = () => setIsMobileMenuOpen(false);
+
+  // Navigation progress bar
+  const isNavigating = useRef(false);
+  const navTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [navBar, setNavBar] = useState<{ width: number; opacity: number; transition: string } | null>(null);
+
+  const startNavProgress = useCallback((href: string) => {
+    if (href === pathname) return; // same page, no navigation
+    isNavigating.current = true;
+    if (navTimerRef.current) clearTimeout(navTimerRef.current);
+    setNavBar({ width: 0, opacity: 1, transition: "none" });
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setNavBar({ width: 85, opacity: 1, transition: "width 3s cubic-bezier(0.05, 0.8, 0.1, 1)" });
+      });
+    });
+  }, [pathname]);
+
+  // Complete the bar when pathname changes
+  useEffect(() => {
+    if (!isNavigating.current) return;
+    isNavigating.current = false;
+    if (navTimerRef.current) clearTimeout(navTimerRef.current);
+    setNavBar({ width: 100, opacity: 1, transition: "width 0.2s ease-out" });
+    navTimerRef.current = setTimeout(() => {
+      setNavBar(prev => prev ? { ...prev, opacity: 0, transition: "opacity 0.3s ease-out" } : null);
+      navTimerRef.current = setTimeout(() => setNavBar(null), 300);
+    }, 250);
+  }, [pathname]);
+
+  // ⌘K / Ctrl+K global shortcut
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdOpen(o => !o);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  // Other team members (exclude current user), show up to 3
+  const otherMembers = (memberships?.data ?? [] as OrganizationMembershipResource[])
+    .filter((m: OrganizationMembershipResource) => m.publicUserData?.userId !== user?.id)
+    .slice(0, 3);
 
   const fullName = user?.fullName ?? user?.firstName ?? "User";
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
@@ -79,8 +128,20 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex flex-col h-screen bg-white font-sans overflow-hidden">
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+
       {/* Notification bar — full width, above everything */}
       <NotificationBar notifications={NOTIFICATIONS} />
+
+      {/* Navigation progress bar — sits directly below the notification bar */}
+      <div className="relative h-[2px] shrink-0 bg-transparent">
+        {navBar && (
+          <div
+            className="absolute inset-y-0 left-0 bg-indigo-500 pointer-events-none"
+            style={{ width: `${navBar.width}%`, opacity: navBar.opacity, transition: navBar.transition }}
+          />
+        )}
+      </div>
 
       {/* Mobile top bar — in normal flow, so it sits below the notification bar */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 shrink-0" style={{ background: 'linear-gradient(135deg, #1e3f3b 0%, #132b28 100%)' }}>
@@ -159,12 +220,18 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                   <Tooltip label={item.name} />
                   <Link
                     href={item.href}
-                    onClick={closeMenu}
+                    onClick={() => { closeMenu(); startNavProgress(item.href); }}
                     className={`relative flex items-center gap-3 py-2.5 px-3 rounded-md text-sm font-medium transition-all
                       md:gap-0 md:justify-center md:px-0 md:w-11 md:h-11
-                      ${isActive ? "bg-white/15 text-white" : "text-white/50 hover:bg-white/10 hover:text-white"}
+                      ${isActive ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10 hover:text-white"}
                     `}
                   >
+                    {isActive && (
+                      <>
+                        <span className="hidden md:block absolute bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-yellow-400 rounded-full" />
+                        <span className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-yellow-400 rounded-full" />
+                      </>
+                    )}
                     <item.icon className="w-6 h-6 shrink-0" />
                     <span className="md:hidden">{item.name}</span>
                     {item.badge && openCount > 0 && (
@@ -190,7 +257,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
               <Tooltip label="Settings" />
               <Link
                 href="/dashboard/settings"
-                onClick={closeMenu}
+                onClick={() => { closeMenu(); startNavProgress("/dashboard/settings"); }}
                 className="flex items-center gap-3 py-2.5 px-3 rounded-md text-white/50 hover:bg-white/10 hover:text-white transition-all text-sm font-medium w-full md:gap-0 md:justify-center md:px-0 md:w-11 md:h-11"
               >
                 <Settings className="w-6 h-6 shrink-0" />
@@ -237,14 +304,51 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
 
           {/* Top header bar — desktop only */}
-          <div className="hidden md:flex items-center justify-between border-b border-slate-100 px-4 h-[52px] shrink-0 bg-white">
-            <div className="flex items-center gap-2">
+          <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-slate-200 px-4 h-[52px] shrink-0 bg-slate-50/80 backdrop-blur-sm">
+            <div className="flex items-center">
               <span className="text-sm font-semibold text-slate-800">
-                {navItems.find(item => pathname === item.href || pathname.startsWith(item.href + "/"))?.name ?? (pathname.includes("settings") ? "Settings" : "Dashboard")}
+                {[...navItems].sort((a, b) => b.href.length - a.href.length).find(item => pathname === item.href || pathname.startsWith(item.href + "/"))?.name ?? (pathname.includes("settings") ? "Settings" : "Dashboard")}
               </span>
             </div>
 
-            <div className="flex items-center gap-1">
+            {/* ⌘K search trigger — centered */}
+            <button
+              onClick={() => setCmdOpen(true)}
+              className="flex items-center gap-2 w-96 px-4 py-1.5 rounded-full border border-slate-200 bg-slate-100/70 hover:bg-white hover:border-slate-300 transition-all text-slate-400 hover:text-slate-600"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0" />
+              <span className="flex-1 text-xs text-left">Search…</span>
+              <kbd className="text-[10px] font-semibold bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-400 shrink-0">⌘K</kbd>
+            </button>
+
+            <div className="flex items-center gap-1 justify-end">
+              {/* Team member avatars */}
+              {otherMembers.length > 0 && (
+                <div className="flex items-center mr-2">
+                  <div className="flex -space-x-2">
+                    {otherMembers.map((m: OrganizationMembershipResource) => {
+                      const pd = m.publicUserData;
+                      const name = [pd?.firstName, pd?.lastName].filter(Boolean).join(" ") || pd?.identifier || "Team";
+                      const initials = name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
+                      return (
+                        <div
+                          key={m.id}
+                          title={name}
+                          className="relative w-7 h-7 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center text-[10px] font-bold text-slate-600 overflow-hidden"
+                        >
+                          {pd?.imageUrl
+                            ? <img src={pd.imageUrl} alt={name} className="w-full h-full object-cover" />
+                            : initials
+                          }
+                          <span className="absolute bottom-0 right-0 w-2 h-2 bg-green-400 rounded-full border border-white" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <span className="ml-2 text-[11px] text-slate-400">{otherMembers.length} online</span>
+                </div>
+              )}
+
               <button
                 onClick={() => isHelpOpen ? closeHelp() : openHelp()}
                 className={`p-2 rounded-md transition-colors ${isHelpOpen ? "text-slate-700 bg-slate-100" : "text-slate-400 hover:text-slate-700 hover:bg-slate-50"}`}
@@ -253,19 +357,34 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                 <HelpCircle className="w-5 h-5" />
               </button>
               <div className="relative group">
-                <button aria-label="Notifications" title="Notifications" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
+                <button aria-label="Notifications" title="Notifications" className="relative p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-md transition-colors">
                   <Bell className="w-5 h-5" />
+                  {openCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white" />
+                  )}
                 </button>
                 <div className="pointer-events-none group-hover:pointer-events-auto absolute right-0 top-full mt-2 w-72 opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 transition-all duration-150 z-50">
                   <div className="bg-white border border-slate-200 rounded-md shadow-lg overflow-hidden">
                     <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-                      <p className="text-xs font-bold text-slate-900 uppercase tracking-wide">Alerts</p>
-                      <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">0</span>
+                      <p className="text-xs font-bold text-slate-900 uppercase tracking-wide">Open Tickets</p>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${openCount > 0 ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-400"}`}>
+                        {openCount}
+                      </span>
                     </div>
-                    <div className="flex flex-col items-center justify-center py-8 gap-2">
-                      <Bell className="w-6 h-6 text-slate-200" />
-                      <p className="text-sm text-slate-400">No alerts right now</p>
-                    </div>
+                    {openCount === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-8 gap-2">
+                        <Bell className="w-6 h-6 text-slate-200" />
+                        <p className="text-sm text-slate-400">No open tickets</p>
+                      </div>
+                    ) : (
+                      <Link
+                        href="/dashboard/tickets"
+                        className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+                      >
+                        <p className="text-sm text-slate-700">{openCount} ticket{openCount !== 1 ? "s" : ""} need attention</p>
+                        <span className="text-xs font-semibold text-teal-700">View →</span>
+                      </Link>
+                    )}
                   </div>
                 </div>
               </div>

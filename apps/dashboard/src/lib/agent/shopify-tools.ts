@@ -131,13 +131,14 @@ export async function updateShopifyOrderAddress(
   input: UpdateShopifyOrderAddressInput,
   ctx: ShopifyContext
 ): Promise<string> {
-  const addressPayload = {
+  const addressPayload: Record<string, string> = {
     address1: input.address1,
     city: input.city,
     province: input.province,
     zip: input.zip,
     country: input.country,
   };
+  if (input.address2) addressPayload.address2 = input.address2;
 
   // Update the order's shipping address
   const orderRes = await fetch(

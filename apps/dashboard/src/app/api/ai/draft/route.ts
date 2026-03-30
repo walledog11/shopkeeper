@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import type OpenAI from 'openai';
-import { openai } from '@/lib/openai';
+import { generateText } from '@/lib/ai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
@@ -42,21 +41,12 @@ export async function POST(request: Request) {
       `Do not include placeholders like [Your Name] or [Agent Name]. Write only the exact text the agent should send.`,
     ].filter(Boolean).join(' ');
 
-    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-      ...thread.messages.map((msg) => ({
-        role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
-        content: msg.contentText || "",
-      }))
-    ];
+    const messages = thread.messages.map((msg) => ({
+      role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
+      content: msg.contentText || "",
+    }));
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages,
-      temperature: 0.7,
-    });
-
-    const draftText = response.choices[0]?.message?.content;
+    const draftText = await generateText(systemPrompt, messages, { temperature: 0.7 });
 
     if (!draftText) {
       return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });
