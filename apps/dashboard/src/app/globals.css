@@ -7,7 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Satoshi", sans-serif;
+  --color-dashboard-bg: oklch(0.972 0.008 177);
   --font-mono: var(--font-geist-mono);
   --font-handwriting: var(--font-caveat);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -65,8 +66,8 @@
   --accent: oklch(0.95 0.03 177);
   --accent-foreground: oklch(0.25 0.05 177);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.922 0.005 177);
+  --input: oklch(0.922 0.005 177);
   --ring: oklch(0.55 0.10 177);
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
@@ -79,7 +80,7 @@
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-border: oklch(0.922 0.005 177);
   --sidebar-ring: oklch(0.708 0 0);
 }
 
@@ -123,6 +124,9 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
   }
 }
 

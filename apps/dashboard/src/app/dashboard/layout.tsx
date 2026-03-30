@@ -223,14 +223,11 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
                     onClick={() => { closeMenu(); startNavProgress(item.href); }}
                     className={`relative flex items-center gap-3 py-2.5 px-3 rounded-md text-sm font-medium transition-all
                       md:gap-0 md:justify-center md:px-0 md:w-11 md:h-11
-                      ${isActive ? "bg-white/20 text-white" : "text-white/50 hover:bg-white/10 hover:text-white"}
+                      ${isActive ? "bg-white/15 text-white ring-1 ring-white/20" : "text-white/50 hover:bg-white/10 hover:text-white"}
                     `}
                   >
                     {isActive && (
-                      <>
-                        <span className="hidden md:block absolute bottom-1 left-1/2 -translate-x-1/2 w-4 h-0.5 bg-yellow-400 rounded-full" />
-                        <span className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-yellow-400 rounded-full" />
-                      </>
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-0.5 bg-yellow-400 rounded-r-full md:h-4 md:w-0.5" />
                     )}
                     <item.icon className="w-6 h-6 shrink-0" />
                     <span className="md:hidden">{item.name}</span>
@@ -301,10 +298,10 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-white">
+        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-dashboard-bg">
 
           {/* Top header bar — desktop only */}
-          <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-slate-200 px-4 h-[52px] shrink-0 bg-slate-50/80 backdrop-blur-sm">
+          <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-slate-200 px-4 h-[52px] shrink-0 bg-white/80 backdrop-blur-sm sticky top-0 z-10">
             <div className="flex items-center">
               <span className="text-sm font-semibold text-slate-800">
                 {[...navItems].sort((a, b) => b.href.length - a.href.length).find(item => pathname === item.href || pathname.startsWith(item.href + "/"))?.name ?? (pathname.includes("settings") ? "Settings" : "Dashboard")}

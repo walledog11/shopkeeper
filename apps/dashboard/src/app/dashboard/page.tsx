@@ -1,7 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { db } from "@clerk/db"
 import { getOrCreateOrg } from "@/lib/org"
-import DashboardHomeClient from "./_components/DashboardHomeClient"
+import DashboardHomeClient from "./_components/home/DashboardHomeClient"
 import type { Thread } from "@/types"
 
 export default async function DashboardPage() {

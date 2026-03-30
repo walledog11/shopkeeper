@@ -2,19 +2,19 @@
 
 import Link from "next/link"
 import { ArrowRight } from "lucide-react"
-import { tips } from "./help/content/tips"
+import { tips } from "../help/content/tips"
 import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
 
 const PREVIEW_ARTICLES = tips.articles.slice(0, 3)
 
 export default function ResourcesCard() {
   return (
-    <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-center px-4 py-2 border-b border-slate-100">
+    <div className="h-full bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+      <div className="flex items-center justify-center px-4 py-2 border-b border-slate-100 shrink-0">
         <h2 className="text-sm font-semibold text-slate-900">Articles</h2>
       </div>
 
-      <div className="divide-y divide-slate-50">
+      <div className="flex-1 divide-y divide-slate-50 overflow-y-auto">
         {PREVIEW_ARTICLES.map(article => {
           const tag = article.tag ?? "Tips"
           const tagColor = TAG_COLORS[tag] ?? DEFAULT_TAG_COLOR
@@ -38,7 +38,7 @@ export default function ResourcesCard() {
         })}
       </div>
 
-      <div className="px-4 py-2.5 border-t border-slate-100">
+      <div className="px-4 py-2.5 border-t border-slate-100 shrink-0">
         <Link
           href="/dashboard/learn"
           className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-slate-900 transition-colors"
