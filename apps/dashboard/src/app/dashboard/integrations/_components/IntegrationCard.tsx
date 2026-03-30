@@ -8,7 +8,7 @@ import { Check, Copy, Lock, ChevronRight, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Integration } from "@/types"
 
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'coming-soon'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'twilio' | 'coming-soon'
 
 export interface PlatformConfig {
   id: string
@@ -67,7 +67,7 @@ function EmailConnectForm({
   }
 
   return (
-    <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+    <div className="mx-5 mb-4 rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3">
       <div className="space-y-1.5">
         <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
           Support email address
@@ -111,7 +111,7 @@ function ShopifyConnectForm({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="mx-5 mb-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4 space-y-3">
+    <div className="mx-5 mb-4 rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3">
       <div className="space-y-1.5">
         <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
           Shopify store domain
@@ -148,12 +148,15 @@ interface Props {
   config: PlatformConfig
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
+  onConnectTwilio?: () => Promise<void>
   onDisconnect: (integrationId: string) => void
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect }: Props) {
+export default function IntegrationCard({ config, connected, onConnect, onConnectTwilio, onDisconnect }: Props) {
   const [showEmailForm, setShowEmailForm] = useState(false)
   const [showShopifyForm, setShowShopifyForm] = useState(false)
+  const [twilioProvisioning, setTwilioProvisioning] = useState(false)
+  const [notified, setNotified] = useState(false)
 
   const isConnected = connected.length > 0
   const isComingSoon = config.connectType === 'coming-soon'
@@ -165,46 +168,48 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
 
   return (
     <div className={cn(
-      "flex flex-col rounded-2xl border bg-white transition-all duration-200",
+      "flex flex-col rounded-md border bg-white transition-all duration-200 min-h-[220px]",
       isComingSoon
-        ? "border-slate-200 opacity-55"
+        ? "border-slate-200 opacity-60"
         : isConnected
           ? "border-green-200 shadow-sm ring-1 ring-green-100/80"
           : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
     )}>
 
       {/* Header */}
-      <div className="flex items-center gap-4 p-5 pb-4">
+      <div className="flex items-center gap-3 p-4 pb-3">
         <div className={cn(
-          "h-11 w-11 rounded-xl flex items-center justify-center p-2 shrink-0 border transition-colors",
+          "h-10 w-10 rounded-md flex items-center justify-center p-2 shrink-0 border transition-colors",
           isConnected ? "bg-green-50 border-green-200" : "bg-slate-50 border-slate-200"
         )}>
-          <Image src={config.logo} alt={`${config.name} logo`} width={28} height={28} className="object-contain" />
+          <Image src={config.logo} alt={`${config.name} logo`} width={26} height={26} className="object-contain" />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-slate-900 leading-none mb-1.5">{config.name}</p>
+        <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+          <p className="text-sm font-semibold text-slate-900 truncate">{config.name}</p>
           {isComingSoon ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600">
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 shrink-0">
               <Lock className="w-3 h-3" /> Coming soon
             </span>
+          ) : isConnected ? (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 shrink-0">
+              <Check className="w-3 h-3" /> Connected
+            </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5">
-              <span className={cn("w-2 h-2 rounded-full shrink-0", isConnected ? "bg-green-500" : "bg-slate-300")} />
-              <span className={cn("text-[11px] font-semibold", isConnected ? "text-green-700" : "text-slate-400")}>
-                {isConnected ? "Connected" : "Not connected"}
-              </span>
+            <span className="inline-flex items-center gap-1.5 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+              <span className="text-[11px] font-medium text-slate-400">Not connected</span>
             </span>
           )}
         </div>
       </div>
 
       {/* Description */}
-      <p className="px-5 pb-4 text-sm text-slate-500 leading-relaxed">{config.description}</p>
+      <p className="px-4 pb-3 text-sm text-slate-500 leading-relaxed">{config.description}</p>
 
       {/* Connected accounts */}
       {isConnected && (
-        <div className="mx-5 mb-4 rounded-xl border border-slate-100 overflow-hidden divide-y divide-slate-100">
+        <div className="mx-4 mb-3 rounded-md border border-slate-100 overflow-hidden divide-y divide-slate-100">
           {connected.map((integration) => (
             <div key={integration.id} className="flex items-center gap-3 px-4 py-3 bg-slate-50/70">
               <div className="flex-1 min-w-0">
@@ -255,8 +260,9 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         <ShopifyConnectForm onClose={() => setShowShopifyForm(false)} />
       )}
 
+
       {/* Footer */}
-      <div className="mt-auto px-5 py-4 border-t border-slate-100 flex justify-end">
+      <div className="mt-auto px-4 py-3 border-t border-slate-100 flex justify-end">
         {config.connectType === 'email' && (
           <Button
             variant="outline"
@@ -274,7 +280,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           <a href="/api/integrations/instagram/auth">
             <Button
               size="sm"
-              className="font-semibold h-8 text-xs bg-gradient-to-r from-purple-600 to-pink-500 text-white hover:from-purple-700 hover:to-pink-600 border-0 gap-1"
+              className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1"
             >
               {isConnected ? 'Reconnect' : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>}
             </Button>
@@ -292,14 +298,43 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
             }
           </Button>
         )}
+        {config.connectType === 'twilio' && !isConnected && (
+          <Button
+            size="sm"
+            disabled={twilioProvisioning}
+            onClick={async () => {
+              if (!onConnectTwilio) return
+              setTwilioProvisioning(true)
+              try { await onConnectTwilio() } finally { setTwilioProvisioning(false) }
+            }}
+            className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1.5"
+          >
+            {twilioProvisioning
+              ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Provisioning…</>
+              : <><span>Enable SMS</span><ChevronRight className="w-3.5 h-3.5" /></>
+            }
+          </Button>
+        )}
         {config.connectType === 'coming-soon' && (
           <Button
             variant="outline"
             size="sm"
-            disabled
-            className="font-semibold h-8 text-xs text-slate-400 border-slate-200 cursor-not-allowed"
+            disabled={notified}
+            onClick={() => {
+              setNotified(true)
+              setTimeout(() => setNotified(false), 3000)
+            }}
+            className={cn(
+              "font-semibold h-8 text-xs border transition-colors",
+              notified
+                ? "text-green-600 border-green-200 bg-green-50"
+                : "text-slate-500 border-slate-200 hover:bg-slate-50"
+            )}
           >
-            Notify me
+            {notified
+              ? <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5" />Notified!</span>
+              : "Notify me"
+            }
           </Button>
         )}
       </div>

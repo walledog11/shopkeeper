@@ -1,37 +1,30 @@
 import { db } from '@clerk/db';
-import { auth, currentUser } from '@clerk/nextjs/server';
+import { auth, clerkClient } from '@clerk/nextjs/server';
 
 /**
- * Looks up the Organization for the currently authenticated Clerk user.
- * Creates one on first login if it doesn't exist yet.
- *
- * Uses the Clerk userId as the clerkOrgId for now. When Clerk Organizations
- * are added to the onboarding flow, swap `userId` for `orgId` here.
+ * Looks up the Organization for the currently active Clerk organization.
+ * Creates one on first use if it doesn't exist yet.
  */
 export async function getOrCreateOrg() {
-  const { userId } = await auth();
+  const { userId, orgId } = await auth();
 
-  if (!userId) {
-    throw new Error('Unauthenticated');
-  }
+  if (!userId) throw new Error('Unauthenticated');
+  if (!orgId) throw new Error('No active organization');
 
   const existing = await db.organization.findUnique({
-    where: { clerkOrgId: userId },
+    where: { clerkOrgId: orgId },
   });
 
   if (existing) return existing;
 
-  // First login — provision an organization for this user
-  const user = await currentUser();
-  const name =
-    user?.fullName ??
-    user?.primaryEmailAddress?.emailAddress ??
-    'My Organization';
+  // First time this Clerk org is seen — provision it in our DB
+  const client = await clerkClient();
+  const clerkOrg = await client.organizations.getOrganization({ organizationId: orgId });
 
   return db.organization.create({
     data: {
-      clerkOrgId: userId,
-      name,
+      clerkOrgId: orgId,
+      name: clerkOrg.name,
     },
   });
 }

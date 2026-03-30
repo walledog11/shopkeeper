@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import type { OrgSettings } from '@/types';
@@ -33,6 +34,15 @@ export async function PATCH(request: Request) {
         }),
       },
     });
+
+    // Keep Clerk org name in sync so the sidebar switcher shows the same name
+    if (name !== undefined) {
+      const { orgId } = await auth();
+      if (orgId) {
+        const client = await clerkClient();
+        await client.organizations.updateOrganization(orgId, { name });
+      }
+    }
 
     return NextResponse.json({ id: updated.id, name: updated.name, settings: updated.settings ?? {} });
   } catch (error) {

@@ -19,12 +19,12 @@ export function Hero() {
 
             {/* Main Headline - SCALED for exact breakpoints */}
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-extrabold tracking-tighter text-foreground leading-[1.05] max-w-2xl">
-              The only customer support employee you&apos;ll need.
+              The AI support agent for e-commerce brands.
             </h1>
 
             {/* Subtitle */}
             <p className="max-w-[540px] text-base sm:text-lg md:text-xl lg:text-lg xl:text-xl text-muted-foreground leading-relaxed">
-              Never miss a support ticket again. Consolidate every channel, automate repetitive tasks, and resolve issues in seconds with agentic AI.
+              Every Instagram DM, SMS, Shopify order, and email — in one inbox. Clerk reads the ticket, drafts the reply, and resolves it. You just approve.
             </p>
 
             {/* CTA Group */}

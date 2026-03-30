@@ -1,5 +1,5 @@
 // Enums matching the Prisma schema
-export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify";
+export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify" | "sms" | "sms_agent";
 export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai" | "note";
 
@@ -62,6 +62,14 @@ export interface Thread {
   messages: Message[];
 }
 
+// Agent turn in the notes tab
+export interface AgentTurn {
+  instruction: string
+  actions: { tool: string; result: string }[]
+  summary: string | null
+  error: string | null
+}
+
 // UI-mapped ticket shape used in the tickets page
 export interface Ticket {
   id: string;
@@ -80,5 +88,6 @@ export interface Ticket {
     sender: SenderType;
     text: string | null;
     time: string;
+    author?: string;
   }[];
 }

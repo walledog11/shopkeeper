@@ -16,6 +16,8 @@ enum ChannelType {
   email
   tiktok
   shopify
+  sms
+  sms_agent
 }
 
 enum ThreadStatus {
@@ -42,9 +44,16 @@ model Organization {
   settings    Json?    @default("{}") @map("settings") @db.JsonB
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
+  stripeCustomerId     String?  @unique @map("stripe_customer_id") @db.VarChar(255)
+  stripeSubscriptionId String?  @unique @map("stripe_subscription_id") @db.VarChar(255)
+  stripePriceId        String?  @map("stripe_price_id") @db.VarChar(255)
+  stripeStatus         String?  @map("stripe_status") @db.VarChar(50)
+  trialEndsAt          DateTime? @map("trial_ends_at") @db.Timestamptz
+
   customers    Customer[]
   threads      Thread[]
   integrations Integration[]
+  members      OrgMember[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -60,6 +69,7 @@ model Integration {
   fromEmail         String?     @map("from_email") @db.VarChar(255)
   accessToken       String?     @map("access_token") @db.Text
   tokenExpiresAt    DateTime?   @map("token_expires_at") @db.Timestamptz
+  metadata          Json?       @default("{}") @db.JsonB
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
   organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -121,4 +131,24 @@ model Message {
   @@index([threadId])
   @@index([sentAt])
   @@map("messages")
+}
+
+// Extends Clerk.com org membership with a verified phone number so
+// team members can interact with the AI agent via SMS / WhatsApp.
+model OrgMember {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @map("organization_id") @db.Uuid
+  clerkUserId    String      @map("clerk_user_id") @db.VarChar(255)
+  phoneNumber    String?     @map("phone_number") @db.VarChar(20)
+  phoneVerified  Boolean     @default(false) @map("phone_verified")
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, clerkUserId])
+  @@unique([organizationId, phoneNumber])
+  @@index([organizationId])
+  @@index([phoneNumber])
+  @@map("org_members")
 }

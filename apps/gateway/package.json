@@ -1,7 +1,7 @@
 {
   "name": "clerk-gateway",
   "version": "1.0.0",
-  "type": "module", 
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "node --watch src/index.js & node --watch src/worker.js",
@@ -12,7 +12,8 @@
     "bullmq": "latest",
     "dotenv": "^16.4.5",
     "express": "latest",
-    "ioredis": "latest"
+    "ioredis": "latest",
+    "twilio": "^5.13.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.0"

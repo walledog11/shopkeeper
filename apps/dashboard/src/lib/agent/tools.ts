@@ -60,13 +60,14 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
     function: {
       name: "update_shopify_order_address",
       description:
-        "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). Call get_shopify_orders first to find the order ID, then call this with the full address. Pass ALL address components in a single call.",
+        "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context — use it directly. Pass ALL address components in a single call.",
       parameters: {
         type: "object",
         properties: {
-          order_id:    { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234')." },
+          order_id:    { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context." },
           customer_id: { type: "string", description: "Shopify customer ID." },
           address1:    { type: "string", description: "Street line (e.g. '123 Main St')." },
+          address2:    { type: "string", description: "Apartment, suite, unit, etc. (e.g. 'Apt 4B'). Omit if not provided." },
           city:        { type: "string", description: "City." },
           province:    { type: "string", description: "State or province abbreviation (e.g. 'NY', 'CA')." },
           zip:         { type: "string", description: "ZIP or postal code." },
@@ -236,6 +237,7 @@ export interface UpdateShopifyOrderAddressInput {
   order_id: string;
   customer_id: string;
   address1: string;
+  address2?: string;
   city: string;
   province: string;
   zip: string;

@@ -3,11 +3,16 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { db } from '@clerk/db';
+import twilio from 'twilio';
+import { getContext, updateContext, extractOrderNumber } from '../sms-context.js';
 
 const router = express.Router();
 
 const redisConnection = new IORedis(process.env.REDIS_URL);
 const messageQueue = new Queue('inbound-messages', { connection: redisConnection });
+
+// Shared Redis client for SMS context (read/write only, no BullMQ requirements)
+const contextRedis = new IORedis(process.env.REDIS_URL);
 
 // -----------------------------------------------------------------------------
 // Helper: look up which organization owns a connected platform account
@@ -187,6 +192,138 @@ router.post('/email/inbound', async (req, res) => {
   } catch (error) {
     console.error('[Webhook] Failed to queue email:', error);
     return res.sendStatus(500);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// POST: Inbound SMS / WhatsApp via Twilio
+//
+// Twilio sends both SMS and WhatsApp to the same webhook endpoint.
+// WhatsApp numbers are prefixed with "whatsapp:" in To/From fields.
+//
+// Auth flow:
+//   1. Verify Twilio request signature (prevents spoofing).
+//   2. Identify the org from the "To" number (stored as the integration's
+//      externalAccountId for the "sms" platform).
+//   3. Identify the team member from the "From" number via OrgMember table.
+//   4. Load/save conversation context from Redis.
+//   5. POST to the dashboard's internal agent endpoint.
+//   6. Reply to the sender via Twilio TwiML.
+// -----------------------------------------------------------------------------
+router.post('/twilio', async (req, res) => {
+  const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+
+  // Verify Twilio signature
+  if (twilioAuthToken) {
+    const twilioSignature = req.headers['x-twilio-signature'];
+    const webhookUrl = process.env.TWILIO_WEBHOOK_URL; // full public URL of this endpoint
+    if (twilioSignature && webhookUrl) {
+      const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body);
+      if (!isValid) {
+        console.warn('[Twilio] Signature validation failed — rejecting request.');
+        return res.status(403).send('Forbidden');
+      }
+    }
+  }
+
+  const toRaw = req.body.To || '';
+  const fromRaw = req.body.From || '';
+  const body = (req.body.Body || '').trim();
+
+  // Normalise: strip whatsapp: prefix for DB lookups
+  const toNumber = toRaw.replace(/^whatsapp:/, '');
+  const fromNumber = fromRaw.replace(/^whatsapp:/, '');
+
+  if (!toNumber || !fromNumber || !body) {
+    return res.status(400).send('Bad Request');
+  }
+
+  // Helper: reply via TwiML (works for both SMS and WhatsApp)
+  const twimlReply = (text) => {
+    res.type('text/xml');
+    return res.send(`<Response><Message>${text}</Message></Response>`);
+  };
+
+  try {
+    // 1. Identify the org from the Twilio number this was sent TO
+    const integration = await db.integration.findFirst({
+      where: { platform: 'sms', externalAccountId: toNumber },
+      select: { organizationId: true, metadata: true },
+    });
+
+    if (!integration) {
+      console.warn(`[Twilio] No sms integration found for number ${toNumber} — dropping.`);
+      return res.status(200).send('OK');
+    }
+
+    const { organizationId } = integration;
+
+    // 2. Identify the team member from the FROM number
+    const member = await db.orgMember.findFirst({
+      where: { organizationId, phoneNumber: fromNumber, phoneVerified: true },
+    });
+
+    if (!member) {
+      console.warn(`[Twilio] Unregistered sender ${fromNumber} for org ${organizationId}`);
+      return twimlReply("Your number isn't registered. Add it in your Clerk dashboard under Settings > Phone.");
+    }
+
+    // 3. Load conversation context
+    const ctx = await getContext(contextRedis, fromNumber);
+
+    // 4. Resolve order number from message or prior context
+    const mentionedOrder = extractOrderNumber(body);
+    const orderNumber = mentionedOrder || ctx.lastOrderNumber;
+
+    if (!orderNumber) {
+      return twimlReply("Please include an order number (e.g. #1234) in your message so I know which order to work on.");
+    }
+
+    console.log(`[Twilio] ${fromNumber} → org ${organizationId} | order ${orderNumber} | "${body}"`);
+
+    // 5. Call the dashboard internal agent API
+    const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL || 'http://localhost:3000';
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+
+    const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': internalSecret || '',
+      },
+      body: JSON.stringify({
+        orgId: organizationId,
+        instruction: body,
+        orderNumber,
+        senderPhone: fromNumber,
+        clerkUserId: member.clerkUserId,
+      }),
+    });
+
+    if (!agentRes.ok) {
+      const err = await agentRes.text();
+      console.error(`[Twilio] Internal agent API error ${agentRes.status}: ${err}`);
+      return twimlReply("Something went wrong running the agent. Please try again.");
+    }
+
+    const { summary, threadId } = await agentRes.json();
+
+    // 6. Update conversation context for follow-up messages
+    await updateContext(contextRedis, fromNumber, {
+      lastOrderNumber: orderNumber,
+      lastThreadId: threadId,
+      history: [
+        ...ctx.history,
+        { role: 'user', content: body },
+        { role: 'assistant', content: summary },
+      ],
+    });
+
+    return twimlReply(summary || "Done.");
+
+  } catch (error) {
+    console.error('[Twilio] Webhook error:', error);
+    return twimlReply("An unexpected error occurred. Please try again.");
   }
 });
 

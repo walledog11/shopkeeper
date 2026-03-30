@@ -19,7 +19,6 @@ export function Navbar() {
             <Link href="#features" className="text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900">Features</Link>
             <Link href="#how-it-works" className="text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900">How it Works</Link>
             <Link href="#pricing" className="text-sm font-semibold text-slate-500 transition-colors hover:text-slate-900">Pricing</Link>
-            <Link href="/dashboard" className="text-sm font-bold text-slate-500 transition-colors hover:text-slate-900">Dashboard</Link>
           </div>
         </div>
 

@@ -17,7 +17,7 @@ export default function HelpCategory({ category, onSelectArticle }: Props) {
       </div>
       <p className="text-sm text-slate-500 -mt-2">{category.description}</p>
 
-      <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+      <div className="divide-y divide-slate-100 border border-slate-200 rounded-md overflow-hidden">
         {category.articles.map(article => (
           <button
             key={article.id}

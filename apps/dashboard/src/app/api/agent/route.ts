@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
 import { buildContext, runAgent } from "@/lib/agent/runner";
+
+export const AGENT_TURN_PREFIX = "__clerk_agent__";
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +24,20 @@ export async function POST(request: Request) {
 
     const result = await runAgent(ctx, instruction.trim());
     console.log("[agent] result:", JSON.stringify(result));
+
+    // Persist the agent turn so it survives page refreshes
+    await db.message.create({
+      data: {
+        threadId,
+        senderType: "note",
+        contentText: `${AGENT_TURN_PREFIX}${JSON.stringify({
+          instruction: instruction.trim(),
+          actions: result.actionsPerformed,
+          summary: result.summary,
+          error: null,
+        })}`,
+      },
+    });
 
     return NextResponse.json(result);
   } catch (error) {
