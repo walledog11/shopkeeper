@@ -188,7 +188,7 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
         });
         if (integration?.accessToken) {
           const profileRes = await fetch(
-            `https://graph.facebook.com/v19.0/${senderId}?fields=name,profile_pic&access_token=${integration.accessToken}`
+            `https://graph.facebook.com/v22.0/${senderId}?fields=name,profile_pic&access_token=${integration.accessToken}`
           );
           if (profileRes.ok) {
             const profileData = await profileRes.json();
@@ -273,7 +273,7 @@ await tokenHealthQueue.add(
   }
 );
 
-const FB_GRAPH = 'https://graph.facebook.com/v19.0';
+const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 const tokenHealthWorker = new Worker('token-health', async () => {
   console.log('[TokenHealth] Running daily Instagram token check...');

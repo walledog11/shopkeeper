@@ -1,8 +1,11 @@
 import { useState, useMemo } from "react"
+import useSWR from "swr"
+import { useOrganization } from "@clerk/nextjs"
 import { useThreads } from "@/hooks/useThreads"
 import { getCustomerName } from "@/lib/utils"
 import { getChannelInfo } from "@/lib/channels"
-import type { Thread } from "@/types"
+import { fetcher } from "@/lib/fetcher"
+import type { Thread, Integration } from "@/types"
 import type { ViewId, NavView } from "./types"
 import type { ActivityEvent } from "./ActivityFeed"
 
@@ -17,6 +20,9 @@ interface Options {
 
 export function useHomeData({ initialOpenThreads, initialClosedCount }: Options) {
   const [activeView, setActiveView] = useState<ViewId>('all')
+
+  const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
+  const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
   const fetchClosed = activeView === 'resolved'
@@ -81,13 +87,21 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
     return events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 12)
   }, [openThreads, closedThreads])
 
-  const channelConnected = openCount > 0 || resolvedCount > 0
+  const channelConnected = integrations.length > 0
+  const memberCount = memberships?.data?.length ?? 1
+  const hasInvitedTeam = memberCount > 1
+  const hasSentReply = useMemo(() => (
+    openThreads.some(t => t.messages[0]?.senderType === 'agent' || t.messages[0]?.senderType === 'ai') ||
+    closedThreads.length > 0
+  ), [openThreads, closedThreads])
+  const hasMultipleChannels = integrations.length > 1
+
   const workflowSteps = useMemo(() => [
-    { label: "Connect a channel", href: "/dashboard/integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
-    { label: "Invite team members", href: "/dashboard/team", status: "pending" as const },
-    { label: "Configure AI agent", href: "/dashboard/settings", status: "pending" as const },
-    { label: "Add more channels", href: "/dashboard/integrations", status: "pending" as const },
-  ], [channelConnected])
+    { label: "Connect a channel", href: "/dashboard/settings?tab=integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
+    { label: "Send your first reply", href: "/dashboard/tickets", status: (hasSentReply ? "done" : "pending") as "done" | "pending" },
+    { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
+    { label: "Add more channels", href: "/dashboard/settings?tab=integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
+  ], [channelConnected, hasSentReply, hasInvitedTeam, hasMultipleChannels])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
   const navViews = useMemo<NavView[]>(() => [
@@ -110,5 +124,6 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
     workflowSteps,
     workflowDoneCount,
     navViews,
+    channelConnected,
   }
 }

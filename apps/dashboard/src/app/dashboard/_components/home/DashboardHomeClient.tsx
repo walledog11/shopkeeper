@@ -37,7 +37,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
     displayedThreads, needsAttention,
     channelBreakdown, activityEvents,
     workflowSteps, workflowDoneCount,
-    navViews,
+    navViews, channelConnected,
   } = useHomeData({ initialOpenThreads, initialClosedCount })
 
   return (
@@ -97,6 +97,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
               openCount={openCount}
               resolvedCount={resolvedCount}
               setActiveView={setActiveView}
+              hasChannel={channelConnected}
             />
 
             {/* Right column */}

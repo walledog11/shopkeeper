@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
         metadata: { clerkOrgId: org.clerkOrgId },
       },
       success_url: `${appUrl}/dashboard?onboarding=complete`,
-      cancel_url: `${appUrl}/onboarding/plan`,
+      cancel_url: `${appUrl}/plan`,
       allow_promotion_codes: true,
     })
 

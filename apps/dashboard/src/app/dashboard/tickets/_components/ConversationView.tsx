@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Lock, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Lock, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Composer from "./Composer"
@@ -33,6 +33,7 @@ interface Props {
   messagesEndRef: RefObject<HTMLDivElement | null>
   agentTurns: AgentTurn[]
   isAgentRunning: boolean
+  isRefreshingSummary: boolean
   onAgentTurnAdd: (turn: AgentTurn) => void
   onAgentRunningChange: (running: boolean) => void
   onBack: () => void
@@ -42,6 +43,7 @@ interface Props {
   onSend: (isNote: boolean) => void
   onDraft: () => void
   onAgentComplete: (turn: AgentTurn) => void
+  onRefreshSummary: () => void
 }
 
 export default function ConversationView({
@@ -54,6 +56,7 @@ export default function ConversationView({
   messagesEndRef,
   agentTurns,
   isAgentRunning,
+  isRefreshingSummary,
   onAgentTurnAdd,
   onAgentRunningChange,
   onBack,
@@ -63,6 +66,7 @@ export default function ConversationView({
   onSend,
   onDraft,
   onAgentComplete,
+  onRefreshSummary,
 }: Props) {
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
@@ -200,6 +204,22 @@ export default function ConversationView({
               {noteCount}
             </span>
           )}
+        </button>
+      </div>
+
+      {/* AI summary banner */}
+      <div className="px-5 py-2.5 border-b border-amber-100 bg-amber-50/60 flex items-start gap-2.5 shrink-0">
+        <Sparkles className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+        <p className="flex-1 text-xs text-slate-600 leading-relaxed">
+          {ticket.aiSummary ?? <span className="text-slate-400">No summary yet.</span>}
+        </p>
+        <button
+          onClick={onRefreshSummary}
+          disabled={isRefreshingSummary}
+          className="shrink-0 text-slate-300 hover:text-amber-500 transition-colors disabled:opacity-40 mt-0.5"
+          title="Refresh summary"
+        >
+          <RefreshCw className={`w-3 h-3 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
         </button>
       </div>
 

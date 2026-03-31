@@ -1,5 +1,7 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { getChannelInfo } from '@/lib/channels'
+import type { Thread, Ticket } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -44,4 +46,31 @@ export function getCustomerName(customer: { name?: string | null; platformId?: s
   if (/^\d+$/.test(id)) return `Customer ${id.slice(-6)}`
   // Underscore-joined string — clean up and title-case
   return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 40)
+}
+
+export function threadToTicket(thread: Thread, agentName?: string): Ticket {
+  const channel = getChannelInfo(thread.channelType)
+  const lastMsg = thread.messages.filter(m => m.senderType !== 'note').at(-1)
+  return {
+    id: thread.id,
+    channelType: thread.channelType,
+    platform: channel.name,
+    logo: channel.logo,
+    customer: getCustomerName(thread.customer),
+    time: lastMsg ? formatTime(lastMsg.sentAt) : 'New',
+    subject: thread.tag || "New Inquiry",
+    preview: lastMsg?.contentText || "No messages yet.",
+    tag: thread.tag || "Support",
+    tagColor: "text-slate-500 bg-slate-100 border-slate-200",
+    aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...",
+    status: thread.status,
+    messages: thread.messages
+      .filter(msg => !(msg.senderType === 'note' && msg.contentText?.startsWith('__clerk_agent__')))
+      .map((msg) => ({
+        sender: msg.senderType,
+        text: msg.contentText,
+        time: formatTime(msg.sentAt),
+        author: msg.senderType === 'note' ? (agentName || 'You') : undefined,
+      }))
+  }
 }

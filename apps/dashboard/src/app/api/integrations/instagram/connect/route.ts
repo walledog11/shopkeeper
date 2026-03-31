@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 
-const FB_GRAPH = 'https://graph.facebook.com/v19.0';
+const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function GET() {
   const appUrl = process.env.APP_URL;

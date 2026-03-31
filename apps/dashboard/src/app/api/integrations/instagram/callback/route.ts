@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
 
-const FB_GRAPH = 'https://graph.facebook.com/v19.0';
+const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function GET(request: Request) {
   const appUrl = process.env.APP_URL!;
@@ -28,8 +28,10 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const savedState = cookieStore.get('ig_oauth_state')?.value;
   const clerkOrgId = cookieStore.get('ig_oauth_org')?.value;
+  const returnTo = cookieStore.get('ig_oauth_return')?.value;
   cookieStore.delete('ig_oauth_state');
   cookieStore.delete('ig_oauth_org');
+  cookieStore.delete('ig_oauth_return');
 
   if (!savedState || savedState !== state) {
     console.error('[IG OAuth] State mismatch — possible CSRF attempt');
@@ -86,14 +88,16 @@ export async function GET(request: Request) {
     }
 
     const pageToken = igPage.access_token;
+    const pageId = igPage.id;
     const igAccountId = igPage.instagram_business_account.id;
     const igUsername = igPage.instagram_business_account.username || igAccountId;
-    console.log('[IG OAuth] Found Instagram account:', igUsername, igAccountId);
+    console.log('[IG OAuth] Found Instagram account:', igUsername, igAccountId, '(page:', pageId, ')');
 
     // ---------------------------------------------------------------
     // Step 4: Subscribe to Instagram messaging webhooks
+    // Must use the Facebook Page ID (not the IG account ID) per Meta docs.
     // ---------------------------------------------------------------
-    const subscribeRes = await fetch(`${FB_GRAPH}/${igAccountId}/subscribed_apps`, {
+    const subscribeRes = await fetch(`${FB_GRAPH}/${pageId}/subscribed_apps`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -145,7 +149,10 @@ export async function GET(request: Request) {
     });
 
     console.log(`[IG OAuth] Integration saved: @${igUsername} (${igAccountId}) for org ${org.id}`);
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&connected=instagram`);
+    const successUrl = returnTo
+      ? `${appUrl}${returnTo}`
+      : `${appUrl}/dashboard/settings?tab=integrations&connected=instagram`;
+    return NextResponse.redirect(successUrl);
 
   } catch (err) {
     console.error('[IG OAuth] Unexpected error:', err);

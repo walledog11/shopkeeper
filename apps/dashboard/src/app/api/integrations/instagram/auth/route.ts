@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import { auth } from '@clerk/nextjs/server';
 import crypto from 'crypto';
 
-export async function GET() {
+export async function GET(request: Request) {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -19,6 +19,9 @@ export async function GET() {
       { status: 500 }
     );
   }
+
+  const { searchParams } = new URL(request.url);
+  const returnTo = searchParams.get('returnTo');
 
   // CSRF state token
   const state = crypto.randomBytes(16).toString('hex');
@@ -38,6 +41,15 @@ export async function GET() {
     maxAge: 600,
     path: '/',
   });
+  if (returnTo) {
+    cookieStore.set('ig_oauth_return', returnTo, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600,
+      path: '/',
+    });
+  }
 
   const redirectUri = `${appUrl}/api/integrations/instagram/callback`;
 

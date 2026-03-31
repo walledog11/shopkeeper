@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Check, Zap, Bot, Shield, ArrowRight } from "lucide-react";
-import { Button } from "../ui/button";
+import { Button } from "@/components/ui/button";
 import { motion } from "motion/react";
+import Link from "next/link";
 
 const tiers = [
   {
@@ -20,6 +21,7 @@ const tiers = [
       { text: "Analytics dashboard", ai: false },
     ],
     cta: "Start Free Trial",
+    href: "/signup",
     popular: false,
   },
   {
@@ -37,6 +39,7 @@ const tiers = [
       { text: "Activity history & audit log", ai: false },
     ],
     cta: "Deploy Agent",
+    href: "/signup",
     popular: true,
   },
   {
@@ -54,6 +57,7 @@ const tiers = [
       { text: "Dedicated success manager", ai: false },
     ],
     cta: "Contact Sales",
+    href: "mailto:hello@useclerk.co",
     popular: false,
   },
 ];
@@ -166,10 +170,10 @@ export function Pricing() {
                   }`}
                   asChild
                 >
-                  <a href="#" className="flex items-center justify-center gap-2">
-                    {tier.cta} 
+                  <Link href={tier.href} className="flex items-center justify-center gap-2">
+                    {tier.cta}
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
-                  </a>
+                  </Link>
                 </Button>
 
                 <div className="h-px w-full mb-6 bg-slate-100 relative z-10" />

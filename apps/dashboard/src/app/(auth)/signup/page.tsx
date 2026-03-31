@@ -206,7 +206,7 @@ export default function SignUpPage() {
           <SignUp
             routing="hash"
             signInUrl="/login"
-            fallbackRedirectUrl="/create-org"
+            fallbackRedirectUrl="/welcome"
             appearance={{
               elements: {
                 rootBox: "w-full",

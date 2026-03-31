@@ -1,21 +1,21 @@
-import { Navbar } from "@/components/landing/Navbar";
-import { Hero } from "@/components/landing/Hero";
-import { Features } from "@/components/landing/Features";
-import { HowItWorks } from "@/components/landing/HowItWorks";
-import { BuiltFor } from "@/components/landing/BuiltFor";
-import { Pricing } from "@/components/landing/Pricing";
-import { FAQ } from "@/components/landing/FAQ";
-import { CTA } from "@/components/landing/CTA";
-import { Footer } from "@/components/landing/Footer";
-import { LogoScrollBar } from "@/components/landing/LogoScrollBar";
-import { StatsBar } from "@/components/landing/StatsBar";
-import { WorkSprawl } from "@/components/landing/WorkSprawl";
+import { Navbar } from "./_components/Navbar";
+import { Hero } from "./_components/Hero";
+import { Features } from "./_components/Features";
+import { HowItWorks } from "./_components/HowItWorks";
+import { BuiltFor } from "./_components/BuiltFor";
+import { Pricing } from "./_components/Pricing";
+import { FAQ } from "./_components/FAQ";
+import { CTA } from "./_components/CTA";
+import { Footer } from "./_components/Footer";
+import { LogoScrollBar } from "./_components/LogoScrollBar";
+import { StatsBar } from "./_components/StatsBar";
+import { WorkSprawl } from "./_components/WorkSprawl";
 import { DotPattern } from "@/components/ui/dot-pattern";
 
 export default function Home() {
   return (
     <main className="relative flex min-h-screen flex-col bg-white">
-      
+
       {/* Container specifically for Hero + Dots so it doesn't bleed down the whole page */}
       <div className="relative w-full flex flex-col items-center overflow-hidden">
         {/* The DotPattern is now confined to the top portion of the page and fades out via a linear gradient at the bottom */}
@@ -25,7 +25,7 @@ export default function Home() {
           cr={1}
           className="absolute inset-0 z-0 opacity-80 [mask-image:linear-gradient(to_bottom,white_40%,transparent_100%)]"
         />
-        
+
         {/* Navbar and Hero sit safely on top of the dots */}
         <div className="relative z-30 w-full">
           <Navbar />
@@ -48,7 +48,7 @@ export default function Home() {
         <CTA />
         <Footer />
       </div>
-      
+
     </main>
   );
 }

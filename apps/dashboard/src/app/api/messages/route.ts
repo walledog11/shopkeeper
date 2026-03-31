@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       if (igToken && igAccountId) {
         // Use the IG account ID explicitly so this works with both page tokens
         // (Path A) and user tokens from FLfB (Path B).
-        const metaResponse = await fetch(`https://graph.facebook.com/v19.0/${igAccountId}/messages`, {
+        const metaResponse = await fetch(`https://graph.facebook.com/v22.0/${igAccountId}/messages`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

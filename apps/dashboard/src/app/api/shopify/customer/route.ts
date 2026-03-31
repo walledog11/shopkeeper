@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 
-const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,default_address';
+const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,default_address';
 
 export async function GET(request: Request) {
   try {
@@ -90,6 +90,7 @@ export async function PATCH(request: Request) {
       ...(updates.last_name  !== undefined && { last_name:  updates.last_name  }),
       ...(updates.email      !== undefined && { email:      updates.email      }),
       ...(updates.phone      !== undefined && { phone:      updates.phone      }),
+      ...(updates.note       !== undefined && { note:       updates.note       }),
     };
 
     // Address is updated via the default_address sub-object
@@ -136,6 +137,7 @@ interface ShopifyCustomer {
   last_name: string;
   email: string;
   phone: string | null;
+  note: string | null;
   orders_count: number;
   total_spent: string;
   default_address: ShopifyAddress | null;

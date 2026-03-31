@@ -14,6 +14,7 @@ interface Props {
   openCount: number
   resolvedCount: number
   setActiveView: (view: ViewId) => void
+  hasChannel: boolean
 }
 
 function LoadingSkeleton() {
@@ -32,7 +33,30 @@ function LoadingSkeleton() {
   )
 }
 
-function EmptyState({ activeView, openCount, resolvedCount, setActiveView }: Pick<Props, 'activeView' | 'openCount' | 'resolvedCount' | 'setActiveView'>) {
+function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasChannel }: Pick<Props, 'activeView' | 'openCount' | 'resolvedCount' | 'setActiveView'> & { hasChannel: boolean }) {
+  // No channel connected at all — show a focused setup CTA
+  if (!hasChannel && openCount === 0 && resolvedCount === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4">
+        <div className="w-12 h-12 rounded-full bg-yellow-50 border border-yellow-200 flex items-center justify-center">
+          <Zap className="w-6 h-6 text-yellow-500" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-800">No channel connected yet</p>
+          <p className="text-xs text-slate-400 mt-1 max-w-[220px] mx-auto leading-relaxed">
+            Connect your support inbox to start receiving customer messages as tickets.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/settings?tab=integrations"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold hover:bg-slate-700 transition-colors shadow-sm"
+        >
+          Connect a channel <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+    )
+  }
+
   return (
     <div className="flex-1 flex flex-col p-6 gap-5">
       <div className="flex flex-col items-center text-center pt-4">
@@ -80,7 +104,7 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView }: Pic
       <div className="space-y-1.5">
         <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Suggested next steps</p>
         {[
-          { icon: Zap, label: "Connect a channel to start receiving messages", href: "/dashboard/integrations" },
+          { icon: Zap, label: "Connect a channel to start receiving messages", href: "/dashboard/settings?tab=integrations" },
           { icon: Settings, label: "Configure your AI agent", href: "/dashboard/settings" },
           { icon: BarChart2, label: "View your analytics dashboard", href: "/dashboard/analytics" },
         ].map(({ icon: Icon, label, href }) => (
@@ -145,7 +169,7 @@ function TicketRow({ thread }: { thread: Thread }) {
   )
 }
 
-export default function TicketList({ isLoading, displayedThreads, activeView, navViews, openCount, resolvedCount, setActiveView }: Props) {
+export default function TicketList({ isLoading, displayedThreads, activeView, navViews, openCount, resolvedCount, setActiveView, hasChannel }: Props) {
   return (
     <div className="bg-white rounded-md shadow-md flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -165,6 +189,7 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
           openCount={openCount}
           resolvedCount={resolvedCount}
           setActiveView={setActiveView}
+          hasChannel={hasChannel}
         />
       ) : (
         <div className="divide-y divide-slate-50">

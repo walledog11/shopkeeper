@@ -21,6 +21,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const shop = searchParams.get('shop')?.trim().toLowerCase();
+  const returnTo = searchParams.get('returnTo');
 
   if (!shop) {
     return NextResponse.json({ error: 'Missing shop parameter' }, { status: 400 });
@@ -54,6 +55,15 @@ export async function GET(request: Request) {
     maxAge: 600,
     path: '/',
   });
+  if (returnTo) {
+    cookieStore.set('shopify_oauth_return', returnTo, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600,
+      path: '/',
+    });
+  }
 
   const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
   const scopes = 'read_customers,write_customers,read_orders,write_orders';

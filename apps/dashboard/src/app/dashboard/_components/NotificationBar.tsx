@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { X, Info, AlertTriangle, Sparkles } from "lucide-react";
 
@@ -47,16 +47,45 @@ function saveDismissed(ids: Set<string>) {
 export default function NotificationBar({ notifications }: NotificationBarProps) {
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
   const [current, setCurrent] = useState(0);
+  // `displayed` is the index actually rendered — trails `current` during the transition
+  const [displayed, setDisplayed] = useState(0);
+  const [visible, setVisible] = useState(true);
+  const animatingRef = useRef(false);
 
   useEffect(() => {
     setDismissedIds(loadDismissed());
   }, []);
 
-  const visible = notifications.filter(n => !dismissedIds.has(n.id));
-  const count = visible.length;
+  const visibleNotifications = notifications.filter(n => !dismissedIds.has(n.id));
+  const count = visibleNotifications.length;
 
   const safeIndex = Math.min(current, Math.max(0, count - 1));
   if (safeIndex !== current) setCurrent(safeIndex);
+
+  // Auto-rotate every 5 seconds when there are multiple notifications
+  useEffect(() => {
+    if (count <= 1) return;
+    const id = setInterval(() => {
+      setCurrent(c => (c + 1) % count);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [count]);
+
+  // Animate out → swap content → animate in whenever `current` changes
+  useEffect(() => {
+    if (current === displayed) return;
+    if (animatingRef.current) return;
+    animatingRef.current = true;
+
+    setVisible(false);
+    const swap = setTimeout(() => {
+      setDisplayed(current);
+      setVisible(true);
+      animatingRef.current = false;
+    }, 200); // matches transition duration below
+
+    return () => clearTimeout(swap);
+  }, [current, displayed]);
 
   function dismiss(id: string) {
     setDismissedIds(prev => {
@@ -69,14 +98,21 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
 
   if (count === 0) return null;
 
-  const n = visible[safeIndex];
+  const safeDisplayed = Math.min(displayed, count - 1);
+  const n = visibleNotifications[safeDisplayed];
   const type = n.type ?? "info";
   const styles = TYPE_STYLES[type];
   const Icon = TYPE_ICONS[type];
 
   return (
-    <div className={`relative flex items-center justify-center px-10 py-3 text-sm shrink-0 border-b border-slate-200 ${styles.bar}`}>
-      <div className="flex items-center gap-2.5">
+    <div className={`relative flex items-center justify-center px-10 py-3 text-sm shrink-0 border-b border-slate-200 overflow-hidden ${styles.bar}`}>
+      <div
+        className="flex items-center gap-2.5 transition-all duration-200 ease-in-out"
+        style={{
+          opacity: visible ? 1 : 0,
+          transform: visible ? "translateY(0)" : "translateY(-6px)",
+        }}
+      >
         <Icon className={`w-4 h-4 shrink-0 ${styles.icon}`} />
         <p className="text-center">
           <span className={`font-bold ${styles.title}`}>{n.title}</span>

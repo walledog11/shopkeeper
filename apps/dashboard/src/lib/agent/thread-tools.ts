@@ -50,7 +50,7 @@ export async function sendReply(
     });
     if (igIntegration?.accessToken && igIntegration.externalAccountId) {
       await fetch(
-        `https://graph.facebook.com/v19.0/${igIntegration.externalAccountId}/messages`,
+        `https://graph.facebook.com/v22.0/${igIntegration.externalAccountId}/messages`,
         {
           method: "POST",
           headers: {

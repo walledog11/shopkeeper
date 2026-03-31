@@ -55,12 +55,17 @@ router.post('/meta', async (req, res) => {
   const APP_SECRET = process.env.META_APP_SECRET;
   const signature = req.headers['x-hub-signature-256'];
 
-  if (APP_SECRET && signature && req.rawBody) {
+  if (APP_SECRET) {
+    if (!signature || !req.rawBody) {
+      console.warn('[Webhook] Missing signature or raw body — rejecting.');
+      return res.sendStatus(401);
+    }
     const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
     const trusted = Buffer.from(expected, 'utf8');
     const received = Buffer.from(signature, 'utf8');
     if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
-      console.warn('[Webhook] Signature mismatch — check META_APP_SECRET. Continuing in dev mode.');
+      console.error('[Webhook] Signature mismatch — rejecting request.');
+      return res.sendStatus(401);
     }
   }
 

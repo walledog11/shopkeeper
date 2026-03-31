@@ -25,7 +25,7 @@ export default function CreateOrgPage() {
         </div>
 
         <CreateOrganization
-          afterCreateOrganizationUrl="/onboarding/plan"
+          afterCreateOrganizationUrl="/connect"
           appearance={{
             elements: {
               rootBox: "w-full",

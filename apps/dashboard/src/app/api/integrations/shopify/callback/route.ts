@@ -21,8 +21,10 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const savedState = cookieStore.get('shopify_oauth_state')?.value;
   const clerkOrgId = cookieStore.get('shopify_oauth_org')?.value;
+  const returnTo = cookieStore.get('shopify_oauth_return')?.value;
   cookieStore.delete('shopify_oauth_state');
   cookieStore.delete('shopify_oauth_org');
+  cookieStore.delete('shopify_oauth_return');
 
   if (!savedState || savedState !== state) {
     console.error('[Shopify OAuth] State mismatch — possible CSRF attempt');
@@ -115,7 +117,10 @@ export async function GET(request: Request) {
     });
 
     console.log(`[Shopify OAuth] Integration saved: ${shopName} (${shop}) for org ${org.id}`);
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&connected=shopify`);
+    const successUrl = returnTo
+      ? `${appUrl}${returnTo}`
+      : `${appUrl}/dashboard/settings?tab=integrations&connected=shopify`;
+    return NextResponse.redirect(successUrl);
 
   } catch (err) {
     console.error('[Shopify OAuth] Unexpected error:', err);

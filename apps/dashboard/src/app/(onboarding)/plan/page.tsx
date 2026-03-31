@@ -4,8 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, Check, Zap, Shield, ArrowRight, Loader2 } from "lucide-react";
-import { DotPattern } from "@/components/ui/dot-pattern";
 import { Button } from "@/components/ui/button";
+import OnboardingShell from "../_components/OnboardingShell";
 
 const tiers = [
   {
@@ -68,7 +68,7 @@ const tiers = [
 
 export default function PlanPage() {
   const router = useRouter();
-  const [annual, setAnnual] = useState(true);
+  const [annual,  setAnnual]  = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
 
   async function selectTier(tier: typeof tiers[number]) {
@@ -76,7 +76,6 @@ export default function PlanPage() {
       window.location.href = "mailto:sales@useclerk.com?subject=Enterprise%20Plan%20Inquiry";
       return;
     }
-
     setLoading(tier.slug);
     try {
       const res = await fetch("/api/billing/checkout", {
@@ -84,196 +83,147 @@ export default function PlanPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier: tier.slug }),
       });
-
-      if (!res.ok) throw new Error("Failed to create checkout session");
-
+      if (!res.ok) throw new Error();
       const { url } = await res.json();
       router.push(url);
-    } catch (err) {
-      console.error(err);
+    } catch {
       setLoading(null);
     }
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-white">
-      {/* Background — same as landing hero */}
-      <DotPattern
-        width={26}
-        height={26}
-        cr={1}
-        className="absolute inset-0 z-0 opacity-70 [mask-image:linear-gradient(to_bottom,white_40%,transparent_100%)]"
-      />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] opacity-[0.12] pointer-events-none blur-[120px] bg-gradient-to-b from-yellow-400 to-transparent z-0" />
+    <OnboardingShell
+      step={3}
+      title="Choose your plan."
+      subtitle="All plans include a 14-day free trial. No credit card charged until your trial ends."
+      headerWidth="max-w-xl"
+    >
+      {/* Billing toggle */}
+      <div className="flex items-center gap-4 bg-white border border-slate-200 p-1.5 rounded-full shadow-sm mb-10">
+        <button
+          onClick={() => setAnnual(false)}
+          className={`text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
+            !annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Monthly
+        </button>
+        <button
+          onClick={() => setAnnual(true)}
+          className={`flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
+            annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
+          }`}
+        >
+          Annually
+          <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide">
+            Save 20%
+          </span>
+        </button>
+      </div>
 
-      <div className="relative z-10 flex flex-col items-center px-4 py-14 sm:py-20">
+      {/* Pricing cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl items-center">
+        {tiers.map((tier) => {
+          const price      = annual ? tier.priceAnnually : tier.priceMonthly;
+          const isLoading  = loading === tier.slug;
+          const isDisabled = loading !== null && !isLoading;
+          const TierIcon   = tier.icon;
 
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group mb-12">
-          <Bot className="w-5 h-5 text-slate-800 group-hover:text-yellow-500 transition-colors" />
-          <span className="text-xl font-extrabold text-slate-900 tracking-tight">clerk</span>
-        </Link>
+          return (
+            <div
+              key={tier.slug}
+              className={`relative flex flex-col rounded-[2rem] p-8 bg-white transition-all duration-300 ${
+                tier.popular
+                  ? "border-2 border-yellow-400 shadow-[0_20px_60px_-15px_rgba(250,204,21,0.25)] md:-translate-y-3 z-10"
+                  : "border border-slate-200 shadow-sm hover:shadow-md"
+              }`}
+            >
+              {tier.popular && (
+                <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 to-transparent rounded-[2rem] pointer-events-none" />
+              )}
+              {tier.popular && (
+                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                  <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
+                    <Zap className="w-3 h-3" /> Most Popular
+                  </span>
+                </div>
+              )}
 
-        {/* Header */}
-        <div className="text-center max-w-xl mb-10">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 shadow-sm">
-            <Zap className="w-3 h-3 text-yellow-500" />
-            Step 2 of 2
-          </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tighter text-slate-900 leading-[1.1] mb-3">
-            Choose your plan.
-          </h1>
-          <p className="text-slate-500 text-base">
-            All plans include a 14-day free trial. No credit card charged until your trial ends.
-          </p>
-        </div>
+              <div className="mb-5 relative z-10">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 border ${
+                  tier.popular ? "bg-white border-yellow-200 shadow-sm" : "bg-slate-50 border-slate-200"
+                }`}>
+                  <TierIcon className={`w-5 h-5 ${tier.popular ? "text-yellow-500" : "text-slate-600"}`} />
+                </div>
+                <h3 className="text-xl font-extrabold tracking-tight text-slate-900 mb-1.5">{tier.name}</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">{tier.description}</p>
+              </div>
 
-        {/* Billing toggle */}
-        <div className="flex items-center gap-4 bg-white border border-slate-200 p-1.5 rounded-full shadow-sm mb-10">
-          <button
-            onClick={() => setAnnual(false)}
-            className={`text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
-              !annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => setAnnual(true)}
-            className={`flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
-              annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
-            }`}
-          >
-            Annually
-            <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide">
-              Save 20%
-            </span>
-          </button>
-        </div>
+              <div className="mb-6 relative z-10">
+                {tier.enterprise ? (
+                  <p className="text-4xl font-extrabold tracking-tighter text-slate-900">Custom</p>
+                ) : (
+                  <div className="flex items-end gap-1.5">
+                    <span className="text-4xl font-extrabold tracking-tighter text-slate-900">${price}</span>
+                    <span className="text-sm font-semibold text-slate-500 mb-1">/mo</span>
+                  </div>
+                )}
+                {annual && !tier.enterprise && (
+                  <p className="text-xs text-slate-400 mt-1">Billed annually · ${price * 12}/yr</p>
+                )}
+              </div>
 
-        {/* Pricing cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 w-full max-w-5xl items-center">
-          {tiers.map((tier) => {
-            const price = annual ? tier.priceAnnually : tier.priceMonthly;
-            const isLoading = loading === tier.slug;
-            const isDisabled = loading !== null && !isLoading;
-            const TierIcon = tier.icon;
-
-            return (
-              <div
-                key={tier.slug}
-                className={`relative flex flex-col rounded-[2rem] p-8 bg-white transition-all duration-300 ${
+              <Button
+                onClick={() => selectTier(tier)}
+                disabled={isDisabled || isLoading}
+                className={`w-full rounded-full h-11 text-sm font-bold mb-6 group relative z-10 transition-all ${
                   tier.popular
-                    ? "border-2 border-yellow-400 shadow-[0_20px_60px_-15px_rgba(250,204,21,0.25)] md:-translate-y-3 z-10"
-                    : "border border-slate-200 shadow-sm hover:shadow-md"
+                    ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md disabled:opacity-60"
+                    : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
                 }`}
               >
-                {/* Popular glow */}
-                {tier.popular && (
-                  <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 to-transparent rounded-[2rem] pointer-events-none" />
+                {isLoading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Redirecting…
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center gap-2">
+                    {tier.cta} <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+                  </span>
                 )}
+              </Button>
 
-                {/* Popular badge */}
-                {tier.popular && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
-                      <Zap className="w-3 h-3" /> Most Popular
-                    </span>
-                  </div>
-                )}
+              <div className="h-px w-full mb-5 bg-slate-100 relative z-10" />
 
-                {/* Tier header */}
-                <div className="mb-5 relative z-10">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 border ${
-                    tier.popular ? "bg-white border-yellow-200 shadow-sm" : "bg-slate-50 border-slate-200"
-                  }`}>
-                    <TierIcon className={`w-5 h-5 ${tier.popular ? "text-yellow-500" : "text-slate-600"}`} />
-                  </div>
-                  <h3 className="text-xl font-extrabold tracking-tight text-slate-900 mb-1.5">
-                    {tier.name}
-                  </h3>
-                  <p className="text-sm text-slate-500 leading-relaxed">{tier.description}</p>
-                </div>
-
-                {/* Price */}
-                <div className="mb-6 relative z-10">
-                  {tier.enterprise ? (
-                    <div className="text-4xl font-extrabold tracking-tighter text-slate-900">
-                      Custom
-                    </div>
-                  ) : (
-                    <div className="flex items-end gap-1.5">
-                      <span className="text-4xl font-extrabold tracking-tighter text-slate-900">
-                        ${price}
-                      </span>
-                      <span className="text-sm font-semibold text-slate-500 mb-1">/mo</span>
-                    </div>
-                  )}
-                  {annual && !tier.enterprise && (
-                    <p className="text-xs text-slate-400 mt-1">
-                      Billed annually · ${price * 12}/yr
-                    </p>
-                  )}
-                </div>
-
-                {/* CTA */}
-                <Button
-                  onClick={() => selectTier(tier)}
-                  disabled={isDisabled || isLoading}
-                  className={`w-full rounded-full h-11 text-sm font-bold mb-6 group relative z-10 transition-all ${
-                    tier.popular
-                      ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md disabled:opacity-60"
-                      : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
-                  }`}
-                >
-                  {isLoading ? (
-                    <span className="flex items-center justify-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Redirecting…
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center gap-2">
-                      {tier.cta}
-                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                    </span>
-                  )}
-                </Button>
-
-                <div className="h-px w-full mb-5 bg-slate-100 relative z-10" />
-
-                {/* Features */}
-                <div className="relative z-10">
-                  <p className="text-[10px] font-extrabold tracking-widest uppercase mb-3.5 text-slate-400">
-                    {tier.featuresLabel}
-                  </p>
-                  <ul className="space-y-3">
-                    {tier.features.map((f, i) => (
-                      <li key={i} className="flex items-start gap-3 text-sm">
-                        <div className={`mt-0.5 shrink-0 ${f.ai ? "text-yellow-500" : "text-slate-400"}`}>
-                          {f.ai
-                            ? <Zap className="w-3.5 h-3.5 fill-yellow-500/20" />
-                            : <Check className="w-3.5 h-3.5" />
-                          }
-                        </div>
-                        <span className="font-medium text-slate-700">{f.text}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <div className="relative z-10">
+                <p className="text-[10px] font-extrabold tracking-widest uppercase mb-3.5 text-slate-400">
+                  {tier.featuresLabel}
+                </p>
+                <ul className="space-y-3">
+                  {tier.features.map((f, i) => (
+                    <li key={i} className="flex items-start gap-3 text-sm">
+                      <div className={`mt-0.5 shrink-0 ${f.ai ? "text-yellow-500" : "text-slate-400"}`}>
+                        {f.ai
+                          ? <Zap className="w-3.5 h-3.5 fill-yellow-500/20" />
+                          : <Check className="w-3.5 h-3.5" />
+                        }
+                      </div>
+                      <span className="font-medium text-slate-700">{f.text}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-            );
-          })}
-        </div>
-
-        {/* Skip link */}
-        <Link
-          href="/dashboard"
-          className="mt-10 text-sm text-slate-400 hover:text-slate-600 transition-colors underline underline-offset-4"
-        >
-          Skip for now — explore the dashboard
-        </Link>
-
+            </div>
+          );
+        })}
       </div>
-    </div>
+
+      <Link
+        href="/dashboard"
+        className="mt-10 text-sm text-slate-400 hover:text-slate-600 transition-colors underline underline-offset-4"
+      >
+        Skip for now — explore the dashboard
+      </Link>
+    </OnboardingShell>
   );
 }
