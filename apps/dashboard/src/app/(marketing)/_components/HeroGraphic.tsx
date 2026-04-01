@@ -49,10 +49,10 @@ export default function HeroGraphic() {
   return (
     <div
       ref={containerRef}
-      className="relative w-full max-w-2xl mx-auto aspect-[3/4] sm:aspect-square md:aspect-[4/3] lg:aspect-[5/4] xl:aspect-square flex items-center justify-center p-2 sm:p-4"
+      className="relative w-full h-full flex items-start justify-center"
     >
       {/* Background glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[70%] h-[70%] bg-gradient-to-tr from-yellow-300/20 via-yellow-400/8 to-transparent blur-[80px] rounded-full z-0" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[60%] h-[60%] bg-gradient-to-tr from-amber-300/20 via-amber-400/10 to-transparent blur-[80px] rounded-full z-0" />
 
       {/* Dashboard frame */}
       <motion.div
@@ -60,7 +60,7 @@ export default function HeroGraphic() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.7, ease: "easeOut" }}
-        className="relative z-10 w-full h-[92%] rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex"
+        className="relative z-10 w-full h-full rounded-t-xl border border-slate-200/80 bg-white shadow-2xl overflow-hidden flex"
       >
         {/* ── Sidebar ── */}
         <div className="w-12 sm:w-16 bg-[#1e3f3b] flex flex-col items-center py-3 gap-3 shrink-0">
@@ -227,28 +227,6 @@ export default function HeroGraphic() {
         </div>
       </motion.div>
 
-      {/* Floating badge — new tickets */}
-      <motion.div
-        animate={isInView ? { y: [-4, 4, -4] } : { y: 0 }}
-        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute -top-3 right-2 sm:-top-4 sm:right-0 bg-white border border-slate-200 shadow-lg rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2 z-20"
-      >
-        <div className="relative">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-60" />
-          <span className="relative inline-flex w-2 h-2 rounded-full bg-amber-400" />
-        </div>
-        <span className="text-[10px] sm:text-xs font-semibold text-slate-700">4 new tickets</span>
-      </motion.div>
-
-      {/* Floating badge — reply sent */}
-      <motion.div
-        animate={isInView ? { y: [4, -4, 4] } : { y: 0 }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 0.8 }}
-        className="absolute -bottom-3 left-2 sm:-bottom-4 sm:left-0 bg-white border border-green-200 shadow-lg rounded-lg px-2.5 sm:px-3 py-1.5 sm:py-2 flex items-center gap-2 z-20"
-      >
-        <CheckCircle2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-green-500 shrink-0" />
-        <span className="text-[10px] sm:text-xs font-semibold text-slate-700">Reply sent via Instagram</span>
-      </motion.div>
     </div>
   );
 }

@@ -365,19 +365,22 @@ export function BuiltFor() {
 
   const topCards = [
     {
-      title: "Team Roles & Permissions",
-      description: "Control who on your team can view messages, send replies, or change settings — keep things organized as you grow",
-      graphic: AccessControlsGraphic,
-    },
-    {
       title: "Activity History",
       description: "See a complete timeline of every reply sent, team member added, and customer interaction — all in one place",
       graphic: AuditLoggingGraphic,
+      hero: true,
+    },
+    {
+      title: "Team Roles & Permissions",
+      description: "Control who on your team can view messages, send replies, or change settings — keep things organized as you grow",
+      graphic: AccessControlsGraphic,
+      hero: false,
     },
     {
       title: "Your Data, Always Secure",
       description: "Customer conversations and data are encrypted and protected around the clock, so you never have to worry",
       graphic: VPCGraphic,
+      hero: false,
     },
   ];
 
@@ -391,12 +394,12 @@ export function BuiltFor() {
             </h2>
         </div>
 
-        {/* ---- Top 3 feature cards ---- */}
+        {/* ---- Top feature cards (bento: hero spans 2 cols) ---- */}
         <div className="grid md:grid-cols-3 gap-5 mb-5 max-w-6xl mx-auto">
           {topCards.map((card, i) => (
             <motion.div
               key={card.title}
-              className="group rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden"
+              className={`group rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${card.hero ? "md:col-span-2" : ""}`}
               initial={{ opacity: 0, y: 40 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.2 + i * 0.12 }}
@@ -420,7 +423,7 @@ export function BuiltFor() {
           {bottomFeatures.map((feat, i) => (
             <motion.div
               key={feat.title}
-              className="group rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-3"
+              className="group rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               initial={{ opacity: 0, y: 30 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.45, delay: 0.55 + i * 0.1 }}

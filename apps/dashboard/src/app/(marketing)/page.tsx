@@ -10,23 +10,20 @@ import { Footer } from "./_components/Footer";
 import { LogoScrollBar } from "./_components/LogoScrollBar";
 import { StatsBar } from "./_components/StatsBar";
 import { WorkSprawl } from "./_components/WorkSprawl";
-import { DotPattern } from "@/components/ui/dot-pattern";
 
 export default function Home() {
   return (
     <main className="relative flex min-h-screen flex-col bg-white">
 
-      {/* Container specifically for Hero + Dots so it doesn't bleed down the whole page */}
-      <div className="relative w-full flex flex-col items-center overflow-hidden">
-        {/* The DotPattern is now confined to the top portion of the page and fades out via a linear gradient at the bottom */}
-        <DotPattern
-          width={26}
-          height={26}
-          cr={1}
-          className="absolute inset-0 z-0 opacity-80 [mask-image:linear-gradient(to_bottom,white_40%,transparent_100%)]"
-        />
-
-        {/* Navbar and Hero sit safely on top of the dots */}
+      {/* Hero section with warm peach gradient — white at top, soft peach at bottom */}
+      <div
+        className="relative w-full flex flex-col items-center overflow-hidden"
+        style={{
+          background:
+            "radial-gradient(ellipse 160% 90% at 50% 110%, #f8c09a 0%, #fddcc9 22%, #fef0e6 50%, #fff8f4 75%, #ffffff 100%)",
+        }}
+      >
+        {/* Navbar and Hero sit on top */}
         <div className="relative z-30 w-full">
           <Navbar />
           <Hero />

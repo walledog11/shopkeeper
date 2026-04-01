@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import {
   MessageCircle, Filter, Bell, Zap, Bot, Link2,
   RefreshCw, Plus, CheckCircle2, MessageSquare,
@@ -521,91 +521,129 @@ const previewComponents: Record<string, React.FC> = {
 
 /* ─── Main Section ─────────────────────────────────────────────────────────── */
 export function Features() {
-  const [activeIndex, setActiveIndex] = useState(0);
-
   return (
     <section id="features" className="relative z-10 w-full py-14 bg-background">
       <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-        <h2 className="text-center text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-16 md:mb-24">
+        <h2 className="text-center text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-16">
           Everything you need in one place
         </h2>
 
-        <div className="flex flex-col md:flex-row gap-12 lg:gap-20 items-start">
+        {/* Bento grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-          {/* Desktop sticky visual pane */}
-          <div className="hidden md:flex w-full md:w-1/2 sticky top-24 h-[600px] items-center justify-center rounded-xl overflow-hidden transition-colors duration-500">
-            <AnimatePresence mode="wait">
-              {features.map((feature, index) => {
-                if (index !== activeIndex) return null;
-                const PreviewComponent = previewComponents[feature.preview];
-                return (
-                  <motion.div
-                    key={feature.id}
-                    initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 1.02 }}
-                    transition={{ duration: 0.35, ease: "easeInOut" }}
-                    className={`absolute inset-0 flex items-center justify-center p-6 sm:p-8 ${feature.bgClass}`}
-                  >
-                    <PreviewComponent />
-                  </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-
-          {/* Right side: text + mobile graphics */}
-          <div className="w-full md:w-1/2 pb-12 md:pb-[50vh]">
-            {features.map((feature, index) => {
-              const isActive = index === activeIndex;
-              const MobilePreviewComponent = previewComponents[feature.preview];
-
-              return (
-                <motion.div
-                  key={feature.id}
-                  onViewportEnter={() => setActiveIndex(index)}
-                  viewport={{ margin: "-45% 0px -45% 0px" }}
-                  className={`
-                    flex flex-col justify-center transition-all duration-500
-                    mb-24 md:mb-0 md:min-h-[80vh]
-                    ${isActive ? "md:opacity-100 md:translate-x-0" : "md:opacity-30 md:-translate-x-4"}
-                  `}
-                >
-                  {/* Mobile preview */}
-                  <div className={`md:hidden w-full h-[500px] sm:h-[550px] mb-8 rounded-xl flex items-center justify-center p-4 relative overflow-hidden ${feature.bgClass}`}>
-                    <MobilePreviewComponent />
+          {/* ── HERO: AI Summarization — 2 cols × 2 rows ── */}
+          <motion.div
+            className="group md:col-span-2 md:row-span-2 rounded-2xl border border-slate-200 bg-amber-50/70 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <div className="h-[340px] overflow-hidden flex justify-center pt-6">
+              <div className="transform scale-[0.72] origin-top">
+                <SummaryPreview />
+              </div>
+            </div>
+            <div className="p-7 border-t border-amber-100 flex-1 flex flex-col justify-center">
+              <span className="text-xs font-semibold tracking-widest uppercase text-amber-600 mb-3 block">
+                SUMMARIZE
+              </span>
+              <h3 className="text-2xl md:text-3xl font-bold text-foreground leading-tight mb-3">
+                From ticket<br />to insight, instantly
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
+                Every incoming ticket is summarized with vital details — order numbers, tracking info, customer intent — so you respond in seconds.
+              </p>
+              <div className="grid grid-cols-2 gap-3 mt-5 max-w-xs">
+                {features[1].subFeatures.map((sf) => (
+                  <div key={sf.label} className="flex items-center gap-2">
+                    <sf.icon className="w-4 h-4 text-foreground/60 shrink-0" />
+                    <span className="text-xs font-medium text-foreground">{sf.label}</span>
                   </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
 
-                  <span className={`text-xs font-semibold tracking-widest uppercase ${feature.categoryColor} mb-4`}>
-                    {feature.category}
-                  </span>
+          {/* ── INBOX ── */}
+          <motion.div
+            className="group rounded-2xl border border-slate-200 bg-blue-50/70 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            <div className="h-[200px] overflow-hidden flex justify-center pt-4">
+              <div className="transform scale-[0.55] origin-top">
+                <InboxPreview />
+              </div>
+            </div>
+            <div className="p-5 border-t border-blue-100 flex-1">
+              <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 mb-2 block">INBOX</span>
+              <h3 className="text-lg font-bold text-foreground leading-tight mb-2">
+                All your messages,<br />one clean dashboard
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Customer messages from Instagram, SMS, Shopify, and Email — routed to one place. No more switching tabs.
+              </p>
+            </div>
+          </motion.div>
 
-                  <h3 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-foreground leading-tight whitespace-pre-line">
-                    {feature.title}
-                  </h3>
+          {/* ── CONNECT ── */}
+          <motion.div
+            className="group rounded-2xl border border-slate-200 bg-slate-100/80 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            <div className="h-[200px] overflow-hidden flex justify-center pt-4">
+              <div className="transform scale-[0.55] origin-top">
+                <IntegrationsPreview />
+              </div>
+            </div>
+            <div className="p-5 border-t border-slate-200 flex-1">
+              <span className="text-xs font-semibold tracking-widest uppercase text-slate-600 mb-2 block">CONNECT</span>
+              <h3 className="text-lg font-bold text-foreground leading-tight mb-2">
+                Connect all your<br />channels in minutes
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Plug in Instagram, SMS, Shopify, and your business email. Setup takes under 5 minutes.
+              </p>
+            </div>
+          </motion.div>
 
-                  <p className="mt-5 text-base sm:text-lg text-muted-foreground leading-relaxed max-w-md">
-                    {feature.description}
-                  </p>
-
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-4 mt-8 max-w-md">
-                    {feature.subFeatures.map((sf) => (
-                      <div key={sf.label} className="flex items-center gap-2.5">
-                        <sf.icon className="w-5 h-5 text-foreground/70 shrink-0" />
-                        <span className="text-sm font-medium text-foreground">{sf.label}</span>
-                      </div>
-                    ))}
+          {/* ── RESPOND — spans full width ── */}
+          <motion.div
+            className="group md:col-span-3 rounded-2xl border border-slate-200 bg-violet-50/60 overflow-hidden flex flex-col md:flex-row transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.1 }}
+            transition={{ duration: 0.5, delay: 0.15 }}
+          >
+            <div className="md:w-64 h-[220px] md:h-auto overflow-hidden flex justify-center pt-4 md:pt-6">
+              <div className="transform scale-[0.52] origin-top">
+                <RespondPreview />
+              </div>
+            </div>
+            <div className="p-6 md:p-8 border-t md:border-t-0 md:border-l border-violet-100 flex-1 flex flex-col justify-center">
+              <span className="text-xs font-semibold tracking-widest uppercase text-violet-600 mb-3 block">RESPOND</span>
+              <h3 className="text-xl md:text-2xl font-bold text-foreground leading-tight mb-3">
+                Delegate tasks,<br />like a real employee
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
+                Type @clerk in your notes tab to instruct the AI agent. It runs the action, updates Shopify, and replies — you just review.
+              </p>
+              <div className="flex flex-wrap gap-x-6 gap-y-3 mt-5">
+                {features[2].subFeatures.map((sf) => (
+                  <div key={sf.label} className="flex items-center gap-2">
+                    <sf.icon className="w-4 h-4 text-foreground/60 shrink-0" />
+                    <span className="text-xs font-medium text-foreground">{sf.label}</span>
                   </div>
-
-                  <div className="mt-10">
-                    <a href="/signup" className="inline-block px-6 py-3 bg-foreground text-background rounded-full text-sm font-medium hover:opacity-90 transition-opacity shadow-sm">
-                      Get started free
-                    </a>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
         </div>
       </div>
     </section>
