@@ -149,7 +149,7 @@ function InboxPreview() {
             <div className="flex-1 h-8 rounded-md border border-slate-900 bg-slate-900 text-[11px] font-semibold text-white flex items-center justify-center">All</div>
             {["/logos/instagram-logo.png", "/logos/gmail.png", "/logos/sms.svg"].map((logo, i) => (
               <div key={i} className="flex-1 h-8 rounded-md border border-slate-200 bg-white flex items-center justify-center">
-                <Image src={logo} alt="" width={13} height={13} className="object-contain" />
+                <Image src={logo} alt="logo" width={13} height={13} className="object-contain" />
               </div>
             ))}
           </div>

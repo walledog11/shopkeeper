@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useRef, useEffect, useMemo } from "react"
-import useSWR from "swr"
 import { useSearchParams } from "next/navigation"
 import { useUser } from "@clerk/nextjs"
 import { CheckCircle2, Inbox } from "lucide-react"
@@ -10,8 +9,6 @@ import { useAgentTurns } from '@/hooks/useAgentTurns'
 import { useTicketActions } from '@/hooks/useTicketActions'
 import { useTicketSelection } from '@/hooks/useTicketSelection'
 import { threadToTicket, getCustomerName } from '@/lib/utils'
-import { fetcher } from '@/lib/fetcher'
-import type { Integration } from '@/types'
 import ThreadList from './ThreadList'
 import ConversationView from './ConversationView'
 import ContextPanel from './ContextPanel'
@@ -19,9 +16,10 @@ import type { Thread, Ticket, ChannelType } from '@/types'
 
 interface Props {
   initialOpenThreads: Thread[]
+  hasShopify: boolean
 }
 
-export default function TicketsPageClient({ initialOpenThreads }: Props) {
+export default function TicketsPageClient({ initialOpenThreads, hasShopify }: Props) {
   const { user } = useUser()
   const agentName = user?.firstName || user?.fullName || 'You'
   const searchParams = useSearchParams()
@@ -35,9 +33,6 @@ export default function TicketsPageClient({ initialOpenThreads }: Props) {
 
   const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen } = useThreads('open', initialOpenThreads)
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed } = useThreads('closed')
-  const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
-  const hasShopify = integrations.some(i => i.platform === 'shopify')
-
   const isSearchMode = searchQuery.length >= 2
   const dbThreads = isSearchMode ? [] : (activeTab === 'open' ? openThreads : closedThreads)
   const isLoading = activeTab === 'open' ? openLoading : closedLoading

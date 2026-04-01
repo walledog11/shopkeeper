@@ -15,7 +15,7 @@ interface Props {
   onClearClerk?: () => void
   onSend: (isNote: boolean) => void
   onDraft: () => void
-  onToggleNote: (isNote: boolean) => void
+  onToggleNote?: (isNote: boolean) => void
 }
 
 export default function Composer({
@@ -56,9 +56,21 @@ export default function Composer({
             value={value}
             onChange={e => onChange(e.target.value)}
             onKeyDown={e => {
-              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 e.preventDefault()
                 if (value.trim() && !isSending) onSend(isNote)
+              }
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault()
+                const target = e.target as HTMLTextAreaElement
+                const start = target.selectionStart
+                const end = target.selectionEnd
+                const newValue = value.substring(0, start) + '\n' + value.substring(end)
+                onChange(newValue)
+                setTimeout(() => {
+                  target.selectionStart = start + 1
+                  target.selectionEnd = start + 1
+                }, 0)
               }
               if (e.key === 'Backspace' && value === '' && isClerkMode && onClearClerk) {
                 e.preventDefault()
@@ -84,7 +96,7 @@ export default function Composer({
             <span />
           )}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-300 hidden sm:block">⌘↵ to send</span>
+            <span className="text-[10px] text-slate-300 hidden sm:block">↵ to send</span>
             <button
               disabled={!value.trim() || isSending}
               onClick={() => onSend(isNote)}
