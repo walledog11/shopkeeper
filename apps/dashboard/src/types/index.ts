@@ -70,6 +70,30 @@ export interface AgentTurn {
   error: string | null
 }
 
+// Agent plan — proposed steps before execution
+export type ToolCategory = 'action' | 'communication' | 'internal' | 'read'
+
+export interface RawToolCall {
+  id: string
+  name: string
+  input: unknown
+}
+
+export interface PlanStep {
+  id: string          // matches RawToolCall.id
+  tool: string
+  label: string
+  description: string
+  category: ToolCategory
+  enabled: boolean
+}
+
+export interface AgentPlan {
+  instruction: string
+  steps: PlanStep[]          // visible steps (reads excluded)
+  rawToolCalls: RawToolCall[] // all tool calls including reads
+}
+
 // UI-mapped ticket shape used in the tickets page
 export interface Ticket {
   id: string;

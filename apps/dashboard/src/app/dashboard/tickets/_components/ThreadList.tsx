@@ -4,12 +4,18 @@ import Image from "next/image"
 import Link from "next/link"
 import { Search, Inbox, X, CheckSquare, Square } from "lucide-react"
 import type { ChannelType, Ticket } from "@/types"
+import { getChannelInfo } from "@/lib/channels"
 
-const CHANNEL_FILTERS: { id: ChannelType; logo: string; label: string }[] = [
-  { id: 'email',     logo: '/logos/gmail.png',          label: 'Gmail' },
-  { id: 'ig_dm',     logo: '/logos/instagram-logo.png', label: 'Instagram' },
-  { id: 'sms_agent', logo: '/logos/sms.svg',            label: 'Agent Actions' },
-]
+const FILTER_IDS: ChannelType[] = ['email', 'ig_dm', 'sms_agent']
+
+const CHANNEL_FILTERS = FILTER_IDS.map(id => {
+  const info = getChannelInfo(id)
+  return { 
+    id, 
+    logo: info.logo, 
+    label: info.name 
+  }
+})
 
 interface Props {
   tickets: Ticket[]

@@ -9,8 +9,8 @@ export const AGENT_TURN_PREFIX = "__clerk_agent__";
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
-    const { threadId, instruction } = await request.json();
-    console.log("[agent] POST threadId:", threadId, "instruction:", instruction);
+    const { threadId, instruction, approvedToolCalls } = await request.json();
+    console.log("[agent] POST threadId:", threadId, "instruction:", instruction, "approvedToolCalls:", approvedToolCalls?.length ?? 0);
 
     if (!threadId || !instruction?.trim()) {
       return NextResponse.json(
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const ctx = await buildContext(threadId, org.id);
     console.log("[agent] context — shopify:", ctx.shopify ? ctx.shopify.shop : "NONE", "shopifyCustomerId:", ctx.thread.shopifyCustomerId);
 
-    const result = await runAgent(ctx, instruction.trim());
+    const result = await runAgent(ctx, instruction.trim(), approvedToolCalls ?? undefined);
     console.log("[agent] result:", JSON.stringify(result));
 
     // Persist the agent turn so it survives page refreshes

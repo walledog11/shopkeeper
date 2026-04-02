@@ -1,4 +1,37 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ToolCategory } from "@/types";
+
+// ── Tool category map — used for plan filtering and UI display ────────────────
+export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
+  get_shopify_customer:         'read',
+  update_shopify_customer_info: 'action',
+  get_shopify_orders:           'read',
+  update_shopify_order_address: 'action',
+  add_shopify_customer_note:    'action',
+  get_order_by_name:            'read',
+  create_refund:                'action',
+  cancel_order:                 'action',
+  add_internal_note:            'internal',
+  send_reply:                   'communication',
+  update_thread_status:         'internal',
+  update_thread_tag:            'internal',
+}
+
+// ── Human-readable labels for plan steps ─────────────────────────────────────
+export const PLAN_STEP_LABELS: Record<string, string> = {
+  get_shopify_customer:         'Fetch customer profile',
+  update_shopify_customer_info: 'Update customer info on Shopify',
+  get_shopify_orders:           'Fetch recent orders',
+  update_shopify_order_address: 'Update shipping address on Shopify',
+  add_shopify_customer_note:    'Add note to Shopify customer',
+  get_order_by_name:            'Look up order',
+  create_refund:                'Issue refund',
+  cancel_order:                 'Cancel order',
+  add_internal_note:            'Add internal note',
+  send_reply:                   'Notify customer',
+  update_thread_status:         'Update ticket status',
+  update_thread_tag:            'Update ticket tag',
+}
 
 // ── Tool definitions (OpenAI function-calling format) ─────────────────────────
 

@@ -45,7 +45,7 @@ export default function Composer({
               ? 'border-violet-200 focus-within:border-violet-400 bg-white'
               : 'border-slate-200 focus-within:border-slate-400 bg-white'
       }`}>
-        <div className="flex items-baseline gap-2 px-4 pt-3.5 pb-2 min-h-[88px]">
+        <div className="flex items-baseline gap-2 px-4 pt-3.5 pb-2 min-h-[48px]">
           {isClerkMode && (
             <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 text-[11px] font-semibold px-2.5 py-[5px] rounded-full shrink-0">
               <Bot className="w-3 h-3" />
@@ -83,18 +83,7 @@ export default function Composer({
           />
         </div>
         <div className="flex justify-between items-center px-3 pb-2.5">
-          {!isNote ? (
-            <button
-              onClick={onDraft}
-              disabled={isDrafting || isSending}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-40"
-            >
-              <Bot className={`w-3.5 h-3.5 ${isDrafting ? 'animate-pulse' : ''}`} />
-              {isDrafting ? 'Drafting…' : 'Draft with Clerk'}
-            </button>
-          ) : (
-            <span />
-          )}
+          <span />
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-slate-300 hidden sm:block">↵ to send</span>
             <button

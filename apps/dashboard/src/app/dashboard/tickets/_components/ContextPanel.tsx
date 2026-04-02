@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
-import { RefreshCw, Pencil, ExternalLink, ShoppingBag, X, Search, UserPlus, Check, Copy } from "lucide-react"
+import { RefreshCw, Pencil, ExternalLink, ShoppingBag, X, Search, UserPlus, Check, Copy, Sparkles } from "lucide-react"
 import useSWR from "swr"
 import { getChannelInfo } from "@/lib/channels"
 import { getCustomerName } from "@/lib/utils"
@@ -13,8 +13,11 @@ import type { Thread } from "@/types"
 interface Props {
   thread: Thread
   hasShopify: boolean
+  aiSummary?: string | null
+  isRefreshingSummary?: boolean
   onTagUpdate: (tag: string) => void
   onLinkShopifyCustomer: (customerId: string | null) => void
+  onRefreshSummary?: () => void
   previousTicketsCount: number
 }
 
@@ -600,6 +603,7 @@ function ShopifySection({
 
 export default function ContextPanel({
   thread, hasShopify,
+  aiSummary, isRefreshingSummary, onRefreshSummary,
   onTagUpdate, onLinkShopifyCustomer,
   previousTicketsCount,
 }: Props) {
@@ -681,6 +685,29 @@ export default function ContextPanel({
       <div className="px-4 py-4">
         <SectionHeader title="Conversation" />
         <div className="rounded-md border border-slate-100 bg-slate-50/60 p-2.5 space-y-2.5">
+          {aiSummary !== undefined && (
+            <div>
+              <div className="flex items-center justify-between mb-0.5">
+                <div className="flex items-center gap-1">
+                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                  <p className="text-[10px] text-slate-400">AI Summary</p>
+                </div>
+                {onRefreshSummary && (
+                  <button
+                    onClick={onRefreshSummary}
+                    disabled={isRefreshingSummary}
+                    className="text-slate-300 hover:text-amber-500 transition-colors disabled:opacity-40"
+                    title="Refresh summary"
+                  >
+                    <RefreshCw className={`w-2.5 h-2.5 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {aiSummary || <span className="text-slate-400 italic">No summary yet.</span>}
+              </p>
+            </div>
+          )}
           <div>
             <p className="text-[10px] text-slate-400 mb-0.5">Topic</p>
             {isEditingTag ? (

@@ -12,7 +12,10 @@ import { threadToTicket, getCustomerName } from '@/lib/utils'
 import ThreadList from './ThreadList'
 import ConversationView from './ConversationView'
 import ContextPanel from './ContextPanel'
-import type { Thread, Ticket, ChannelType } from '@/types'
+import type { Thread, Ticket, ChannelType, AgentPlan } from '@/types'
+
+// Module-level cache — persists across navigation for the browser session
+const planCache = new Map<string, AgentPlan | null>()
 
 interface Props {
   initialOpenThreads: Thread[]
@@ -61,6 +64,16 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify }: Pr
   const activeTicket = liveTickets.find(t => t.id === activeTicketId)
   const allThreads = isSearchMode ? [...openThreads, ...closedThreads] : dbThreads
   const activeThread = allThreads.find(t => t.id === activeTicketId)
+
+  const lastCustomerMessageId = activeThread?.messages
+    .filter(m => m.senderType === 'customer')
+    .at(-1)?.id ?? null
+  const planCacheKey = activeTicketId && lastCustomerMessageId
+    ? `${activeTicketId}:${lastCustomerMessageId}`
+    : null
+  const cachedPlan = planCacheKey !== null
+    ? planCache.get(planCacheKey)
+    : undefined
 
   const previousTicketsCount = useMemo(() => {
     if (!activeThread) return 0
@@ -190,12 +203,12 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify }: Pr
               ticket={activeTicket}
               agentTurns={activeAgentTurns}
               isAgentRunning={isAgentRunning}
-              isRefreshingSummary={isRefreshingSummary}
               onAgentTurnAdd={handleAgentTurnAdd}
               onAgentRunningChange={handleAgentRunningChange}
               onAgentComplete={handleAgentComplete}
-              onRefreshSummary={handleRefreshSummary}
               activeTab={isSearchMode ? (activeThread.status === 'closed' ? 'closed' : 'open') : activeTab}
+              initialPlan={cachedPlan}
+              onPlanCached={(plan) => { if (planCacheKey) planCache.set(planCacheKey, plan) }}
               replyText={replyText}
               isDrafting={isDrafting}
               isSending={isSending}
@@ -212,6 +225,9 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify }: Pr
               <ContextPanel
                 thread={activeThread}
                 hasShopify={hasShopify}
+                aiSummary={activeTicket.aiSummary}
+                isRefreshingSummary={isRefreshingSummary}
+                onRefreshSummary={handleRefreshSummary}
                 onTagUpdate={handleTagUpdate}
                 onLinkShopifyCustomer={handleLinkShopifyCustomer}
                 previousTicketsCount={previousTicketsCount}

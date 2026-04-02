@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Lock, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, Sparkles } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Lock, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Composer from "./Composer"
-import type { Ticket, SenderType, AgentTurn } from "@/types"
+import ActionPlanCard from "./ActionPlanCard"
+import type { Ticket, SenderType, AgentTurn, AgentPlan, RawToolCall } from "@/types"
 
 const TOOL_LABELS: Record<string, string> = {
   get_shopify_customer:         "Fetched Shopify customer",
@@ -33,7 +34,6 @@ interface Props {
   messagesEndRef: RefObject<HTMLDivElement | null>
   agentTurns: AgentTurn[]
   isAgentRunning: boolean
-  isRefreshingSummary: boolean
   onAgentTurnAdd: (turn: AgentTurn) => void
   onAgentRunningChange: (running: boolean) => void
   onBack: () => void
@@ -43,7 +43,8 @@ interface Props {
   onSend: (isNote: boolean) => void
   onDraft: () => void
   onAgentComplete: (turn: AgentTurn) => void
-  onRefreshSummary: () => void
+  initialPlan?: AgentPlan | null
+  onPlanCached: (plan: AgentPlan | null) => void
 }
 
 export default function ConversationView({
@@ -56,7 +57,6 @@ export default function ConversationView({
   messagesEndRef,
   agentTurns,
   isAgentRunning,
-  isRefreshingSummary,
   onAgentTurnAdd,
   onAgentRunningChange,
   onBack,
@@ -66,10 +66,45 @@ export default function ConversationView({
   onSend,
   onDraft,
   onAgentComplete,
-  onRefreshSummary,
+  initialPlan,
+  onPlanCached,
 }: Props) {
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
+  const [pendingPlan, setPendingPlan] = useState<AgentPlan | null>(
+    initialPlan === undefined ? null : initialPlan
+  )
+  const [isPlanLoading, setIsPlanLoading] = useState(false)     // manual @clerk trigger
+  const [isAutoPlanLoading, setIsAutoPlanLoading] = useState(false) // auto trigger
+  const [isPlanExecuting, setIsPlanExecuting] = useState(false)
+
+  // Auto-plan: fire when a ticket is opened and the last chat message is from the customer
+  useEffect(() => {
+    if (activeTab !== 'open') return
+    if (initialPlan !== undefined) return  // cache hit or confirmed miss — skip fetch
+
+    const chatMessages = ticket.messages.filter(m => m.sender !== 'note')
+    const lastMsg = chatMessages[chatMessages.length - 1]
+    if (lastMsg?.sender !== 'customer') return
+
+    setIsAutoPlanLoading(true)
+
+    const instruction = ticket.aiSummary || "Handle this customer's latest request"
+
+    fetch('/api/agent/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: ticket.id, instruction }),
+    })
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then((plan: AgentPlan) => {
+        const resolved = plan.steps.length > 0 ? { ...plan, instruction } : null
+        if (resolved) setPendingPlan(resolved)
+        onPlanCached(resolved)
+      })
+      .catch(() => {}) // silently fail — agent can still work manually
+      .finally(() => setIsAutoPlanLoading(false))
+  }, [ticket.id, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const chatMessages = ticket.messages.filter((m: { sender: SenderType }) => m.sender !== 'note')
   const noteMessages = ticket.messages.filter((m: { sender: SenderType }) => m.sender === 'note')
@@ -87,39 +122,80 @@ export default function ConversationView({
     setViewTab('chat')
   }
 
+  const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
+    setPendingPlan(null)
+    setPendingInstruction(instruction)
+    setIsPlanExecuting(false)
+    onAgentRunningChange(true)
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: ticket.id, instruction, approvedToolCalls }),
+      })
+      const data = await res.json()
+      const turn: AgentTurn = {
+        instruction,
+        actions: data.actionsPerformed ?? [],
+        summary: data.summary ?? null,
+        error: res.ok ? null : (data.error ?? 'Agent failed.'),
+      }
+      if (res.ok) {
+        onAgentComplete(turn)
+      } else {
+        onAgentTurnAdd(turn)
+      }
+    } catch {
+      onAgentTurnAdd({ instruction, actions: [], summary: null, error: 'Network error — please try again.' })
+    } finally {
+      onAgentRunningChange(false)
+      setPendingInstruction(null)
+    }
+  }
+
   const handleSend = async (noteArg: boolean) => {
     if (isClerkMode && clerkInstruction) {
       const instruction = clerkInstruction
       onReplyChange('')
       setPendingInstruction(instruction)
-      onAgentRunningChange(true)
+      setIsPlanLoading(true)
       try {
-        const res = await fetch('/api/agent', {
+        const res = await fetch('/api/agent/plan', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ threadId: ticket.id, instruction }),
         })
-        const data = await res.json()
-        const turn: AgentTurn = {
-          instruction,
-          actions: data.actionsPerformed ?? [],
-          summary: data.summary ?? null,
-          error: res.ok ? null : (data.error ?? 'Agent failed.'),
-        }
-        if (res.ok) {
-          onAgentComplete(turn)
+        if (!res.ok) throw new Error('Plan request failed')
+        const plan: AgentPlan = await res.json()
+
+        // Auto-skip plan screen if no external write steps
+        const hasActionStep = plan.steps.some(s => s.category === 'action')
+        if (!hasActionStep) {
+          setIsPlanLoading(false)
+          await executeApprovedPlan(instruction, plan.rawToolCalls)
         } else {
-          onAgentTurnAdd(turn)
+          setIsPlanLoading(false)
+          setPendingInstruction(null)
+          setPendingPlan({ ...plan, instruction })
         }
       } catch {
-        onAgentTurnAdd({ instruction, actions: [], summary: null, error: 'Network error — please try again.' })
-      } finally {
-        onAgentRunningChange(false)
+        setIsPlanLoading(false)
         setPendingInstruction(null)
+        onAgentTurnAdd({ instruction, actions: [], summary: null, error: 'Failed to generate plan — please try again.' })
       }
     } else {
       onSend(noteArg)
     }
+  }
+
+  const handlePlanApprove = async (approvedToolCalls: RawToolCall[]) => {
+    if (!pendingPlan) return
+    setIsPlanExecuting(true)
+    await executeApprovedPlan(pendingPlan.instruction, approvedToolCalls)
+  }
+
+  const handlePlanDismiss = () => {
+    setPendingPlan(null)
   }
 
   return (
@@ -207,21 +283,6 @@ export default function ConversationView({
         </button>
       </div>
 
-      {/* AI summary banner */}
-      <div className="px-5 py-2.5 border-b border-amber-100 bg-amber-50/60 flex items-start gap-2.5 shrink-0">
-        <Sparkles className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-        <p className="flex-1 text-xs text-slate-600 leading-relaxed">
-          {ticket.aiSummary ?? <span className="text-slate-400">No summary yet.</span>}
-        </p>
-        <button
-          onClick={onRefreshSummary}
-          disabled={isRefreshingSummary}
-          className="shrink-0 text-slate-300 hover:text-amber-500 transition-colors disabled:opacity-40 mt-0.5"
-          title="Refresh summary"
-        >
-          <RefreshCw className={`w-3 h-3 ${isRefreshingSummary ? 'animate-spin' : ''}`} />
-        </button>
-      </div>
 
       {/* Messages */}
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
@@ -314,6 +375,32 @@ export default function ConversationView({
               </div>
             ))}
 
+            {/* Plan loading indicator */}
+            {isPlanLoading && (
+              <div className="space-y-2">
+                {pendingInstruction && (
+                  <div className="flex flex-col gap-1 items-end">
+                    <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-md rounded-tr-sm">
+                      <span className="text-violet-600 font-semibold">@clerk</span>{' '}
+                      {pendingInstruction}
+                    </div>
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 items-start">
+                  <div className="flex items-center gap-1.5 mb-0.5 ml-1">
+                    <Bot className="w-3 h-3 text-violet-500" />
+                    <span className="text-[11px] font-semibold text-violet-600">Clerk Agent</span>
+                  </div>
+                  <div className="px-4 py-3 bg-violet-50 border border-violet-200 rounded-md rounded-tl-sm shadow-sm">
+                    <div className="flex items-center gap-1.5 text-xs text-violet-500">
+                      <RefreshCw className="w-3 h-3 animate-spin" />
+                      Thinking…
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Running indicator */}
             {isAgentRunning && (
               <div className="space-y-2">
@@ -357,6 +444,26 @@ export default function ConversationView({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Auto-plan loading banner */}
+      {activeTab === 'open' && isAutoPlanLoading && (
+        <div className="px-5 py-3 border-t border-violet-100 bg-violet-50/50 flex items-center gap-2 shrink-0">
+          <Bot className="w-3.5 h-3.5 text-violet-400 animate-pulse shrink-0" />
+          <span className="text-xs text-violet-600 font-medium">Clerk is analyzing this ticket…</span>
+        </div>
+      )}
+
+      {/* Plan card — shown above composer, visible on any tab */}
+      {activeTab === 'open' && pendingPlan && !isAutoPlanLoading && (
+        <div className="px-5 py-3 border-t border-violet-100 shrink-0">
+          <ActionPlanCard
+            plan={pendingPlan}
+            isExecuting={isPlanExecuting}
+            onApprove={handlePlanApprove}
+            onDismiss={handlePlanDismiss}
+          />
+        </div>
+      )}
+
       {/* Composer */}
       {activeTab === 'open' && (
         <Composer
@@ -366,7 +473,7 @@ export default function ConversationView({
           isClerkMode={isClerkMode}
           hideToggle={true}
           isDrafting={isDrafting}
-          isSending={isSending || isAgentRunning}
+          isSending={isSending || isAgentRunning || isPlanLoading || isAutoPlanLoading}
           error={sendError}
           onChange={text => onReplyChange(isClerkMode ? '@clerk ' + text : text)}
           onClearClerk={() => onReplyChange('')}

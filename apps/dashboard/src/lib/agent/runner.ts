@@ -2,7 +2,8 @@ import { db } from "@clerk/db";
 import { anthropic } from "@/lib/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import type Anthropic from "@anthropic-ai/sdk";
-import { AGENT_TOOLS } from "./tools";
+import { AGENT_TOOLS, TOOL_CATEGORIES, PLAN_STEP_LABELS } from "./tools";
+import type { PlanStep, RawToolCall, AgentPlan } from "@/types";
 import {
   getShopifyCustomer,
   updateShopifyCustomerInfo,
@@ -90,18 +91,42 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     where: { customerId: thread.customerId, status: "open" },
   });
 
-  // Auto-resolve Shopify customer ID for email threads when not yet linked
+  // thread.customer.name can be an email address used as a fallback display name — treat that as "no real name"
+  const dbName = thread.customer.name?.includes('@') ? null : (thread.customer.name ?? null);
+
+  // Auto-resolve Shopify customer ID (and name) for email threads when not yet linked
   let shopifyCustomerId = thread.shopifyCustomerId;
+  let shopifyCustomerName: string | null = null;
   if (!shopifyCustomerId && thread.channelType === "email" && shopifyIntegration?.accessToken) {
     try {
       const email = thread.customer.platformId;
       const res = await fetch(
-        `https://${shopifyIntegration.externalAccountId}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(email)}&fields=id&limit=1`,
+        `https://${shopifyIntegration.externalAccountId}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(email)}&fields=id,first_name,last_name&limit=1`,
         { headers: { "X-Shopify-Access-Token": shopifyIntegration.accessToken } }
       );
       const data = await res.json();
       const found = data.customers?.[0];
-      if (found?.id) shopifyCustomerId = String(found.id);
+      if (found?.id) {
+        shopifyCustomerId = String(found.id);
+        const parts = [found.first_name, found.last_name].filter(Boolean);
+        if (parts.length > 0) shopifyCustomerName = parts.join(' ');
+      }
+    } catch {
+      // best-effort; leave null
+    }
+  }
+
+  // If the thread is already linked to a Shopify customer but we still have no real name,
+  // fetch it directly from Shopify.
+  if (shopifyCustomerId && !dbName && !shopifyCustomerName && shopifyIntegration?.accessToken) {
+    try {
+      const res = await fetch(
+        `https://${shopifyIntegration.externalAccountId}/admin/api/2024-01/customers/${shopifyCustomerId}.json?fields=first_name,last_name`,
+        { headers: { "X-Shopify-Access-Token": shopifyIntegration.accessToken } }
+      );
+      const data = await res.json();
+      const parts = [data.customer?.first_name, data.customer?.last_name].filter(Boolean);
+      if (parts.length > 0) shopifyCustomerName = parts.join(' ');
     } catch {
       // best-effort; leave null
     }
@@ -152,7 +177,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       shopifyCustomerId,
     },
     customer: {
-      name: thread.customer.name,
+      name: dbName ?? shopifyCustomerName,
       platformId: thread.customer.platformId,
     },
     recentMessages: thread.messages.map((m) => ({
@@ -263,7 +288,8 @@ function buildSystemPrompt(ctx: AgentContext): string {
 - Channel: ${ctx.thread.channelType}
 - Tag: ${ctx.thread.tag ?? "none"}
 - AI Summary: ${ctx.thread.aiSummary ?? "none"}
-- Customer: ${ctx.customer.name ?? ctx.customer.platformId}
+- Customer name: ${ctx.customer.name ?? "(not available)"}
+- Customer email: ${ctx.customer.platformId}
 - Customer's other open threads: ${otherOpenThreads}
 
 ## Customer's recent orders (use these IDs directly — do not call get_shopify_orders unless you need to refresh)
@@ -275,6 +301,8 @@ ${shopifyCustomerNote}
 
 ## Instructions
 - Use the available tools to complete the requested task.
+- After taking any action (Shopify update, refund, cancellation, etc.), you MUST call send_reply to notify the customer what was done. Do not leave the customer without a response.
+- When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," — never use the email address as a greeting.
 - After successfully completing an action, call add_internal_note in a separate step to document what you did. Do not call it in the same batch as the action.
 - When the support agent refers to "this order" or "the order", infer they mean the most recent order in the list above unless context makes another order clear.
 - Be precise and only make changes explicitly requested.
@@ -304,9 +332,143 @@ function toAnthropicTools(): Anthropic.Tool[] {
   });
 }
 
-export async function runAgent(
+// ── Plan generation (one LLM call, no side effects) ──────────────────────────
+
+function describeTool(name: string, input: unknown): string {
+  const a = input as Record<string, unknown>
+  switch (name) {
+    case 'update_shopify_order_address': {
+      const parts = [a.address1, a.city, a.province, a.zip].filter(Boolean)
+      return `Change shipping address to ${parts.join(', ')}`
+    }
+    case 'update_shopify_customer_info': {
+      const changes: string[] = []
+      if (a.email) changes.push(`email → ${a.email}`)
+      if (a.phone) changes.push(`phone → ${a.phone}`)
+      if (a.first_name || a.last_name) changes.push(`name → ${[a.first_name, a.last_name].filter(Boolean).join(' ')}`)
+      return changes.length ? `Update: ${changes.join(', ')}` : 'Update customer info'
+    }
+    case 'create_refund':
+      return a.amount ? `Issue $${a.amount} refund` : 'Issue full refund'
+    case 'cancel_order':
+      return `Cancel order${a.reason ? ` (${a.reason})` : ''}`
+    case 'add_shopify_customer_note':
+      return `Add note to Shopify customer`
+    case 'send_reply': {
+      const text = String(a.text ?? '')
+      return text.length > 80 ? `"${text.slice(0, 80)}…"` : `"${text}"`
+    }
+    case 'add_internal_note':
+      return `Add internal note`
+    case 'update_thread_status':
+      return `Set status to ${a.status}`
+    case 'update_thread_tag':
+      return `Tag as "${a.tag}"`
+    case 'get_order_by_name':
+      return `Look up order ${a.order_name}`
+    default:
+      return name.replace(/_/g, ' ')
+  }
+}
+
+export async function planAgent(
   ctx: AgentContext,
   instruction: string
+): Promise<AgentPlan> {
+  const rawHistory = ctx.recentMessages.map((m) => ({
+    role: (m.senderType === "agent" || m.senderType === "note")
+      ? "assistant" as const
+      : "user" as const,
+    content: m.contentText ?? "(media)",
+  }))
+
+  const mergedHistory: Anthropic.MessageParam[] = []
+  for (const msg of rawHistory) {
+    const last = mergedHistory[mergedHistory.length - 1]
+    if (last && last.role === msg.role && typeof last.content === "string") {
+      last.content += "\n" + msg.content
+    } else {
+      mergedHistory.push({ role: msg.role, content: msg.content })
+    }
+  }
+  while (mergedHistory.length > 0 && mergedHistory[0].role === "assistant") {
+    mergedHistory.shift()
+  }
+
+  const messages: Anthropic.MessageParam[] = [
+    ...mergedHistory,
+    { role: "user", content: instruction },
+  ]
+
+  const response = await anthropic.messages.create({
+    model: AI_MODEL,
+    max_tokens: 1024,
+    system: buildSystemPrompt(ctx),
+    messages,
+    tools: toAnthropicTools(),
+  })
+
+  const toolUseBlocks = response.content.filter(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  )
+
+  const rawToolCalls: RawToolCall[] = toolUseBlocks.map((b) => ({
+    id: b.id,
+    name: b.name,
+    input: b.input,
+  }))
+
+  // Phase 2: if actions were planned but no send_reply yet, simulate success
+  // and ask the LLM what it would send to the customer so we can show a preview.
+  const hasActions = rawToolCalls.some((tc) => TOOL_CATEGORIES[tc.name] === 'action')
+  const hasSendReply = rawToolCalls.some((tc) => tc.name === 'send_reply')
+
+  if (hasActions && !hasSendReply && toolUseBlocks.length > 0) {
+    const phase2Messages: Anthropic.MessageParam[] = [
+      ...messages,
+      { role: "assistant", content: response.content },
+      {
+        role: "user",
+        content: toolUseBlocks.map((b) => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id,
+          content: "Success",
+        })),
+      },
+    ]
+
+    const response2 = await anthropic.messages.create({
+      model: AI_MODEL,
+      max_tokens: 512,
+      system: buildSystemPrompt(ctx),
+      messages: phase2Messages,
+      tools: toAnthropicTools(),
+    })
+
+    const phase2ToolUse = response2.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply"
+    )
+    rawToolCalls.push(...phase2ToolUse.map((b) => ({ id: b.id, name: b.name, input: b.input })))
+  }
+
+  const steps: PlanStep[] = rawToolCalls
+    .filter((tc) => TOOL_CATEGORIES[tc.name] !== 'read')
+    .map((tc) => ({
+      id: tc.id,
+      tool: tc.name,
+      label: PLAN_STEP_LABELS[tc.name] ?? tc.name.replace(/_/g, ' '),
+      description: describeTool(tc.name, tc.input),
+      category: TOOL_CATEGORIES[tc.name] ?? 'internal',
+      enabled: true,
+    }))
+
+  return { instruction, steps, rawToolCalls }
+}
+
+export async function runAgent(
+  ctx: AgentContext,
+  instruction: string,
+  approvedToolCalls?: RawToolCall[]
 ): Promise<AgentResult> {
   const actionsPerformed: ActionEntry[] = [];
 
@@ -341,6 +503,35 @@ export async function runAgent(
   ];
 
   const tools = toAnthropicTools();
+
+  // If the caller pre-approved a plan, inject those tool calls and execute them
+  // before starting the regular loop so Claude can follow up.
+  if (approvedToolCalls && approvedToolCalls.length > 0) {
+    messages.push({
+      role: "assistant",
+      content: approvedToolCalls.map((tc) => ({
+        type: "tool_use" as const,
+        id: tc.id,
+        name: tc.name,
+        input: tc.input as Record<string, unknown>,
+      })),
+    });
+
+    const toolResults = await Promise.all(
+      approvedToolCalls.map(async (tc) => {
+        let result: string;
+        try {
+          result = await executeTool(tc.name, tc.input, ctx);
+        } catch (err) {
+          result = `Error: tool "${tc.name}" threw — ${err instanceof Error ? err.message : String(err)}`;
+        }
+        actionsPerformed.push({ tool: tc.name, result });
+        return { type: "tool_result" as const, tool_use_id: tc.id, content: result };
+      })
+    );
+
+    messages.push({ role: "user", content: toolResults });
+  }
 
   for (let i = 0; i < MAX_ITERATIONS; i++) {
     console.log(`[agent] iteration ${i} — sending ${messages.length} messages`);
