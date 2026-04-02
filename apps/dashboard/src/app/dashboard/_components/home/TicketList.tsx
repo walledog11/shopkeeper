@@ -1,6 +1,9 @@
+"use client"
+
 import Image from "next/image"
 import Link from "next/link"
 import { CheckCircle2, Zap, Settings, BarChart2, ArrowRight } from "lucide-react"
+import { motion, AnimatePresence } from "motion/react"
 import { timeAgo, getCustomerName } from "@/lib/utils"
 import { getChannelInfo } from "@/lib/channels"
 import type { Thread } from "@/types"
@@ -181,23 +184,48 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
         </Link>
       </div>
 
-      {isLoading ? (
-        <LoadingSkeleton />
-      ) : displayedThreads.length === 0 ? (
-        <EmptyState
-          activeView={activeView}
-          openCount={openCount}
-          resolvedCount={resolvedCount}
-          setActiveView={setActiveView}
-          hasChannel={hasChannel}
-        />
-      ) : (
-        <div className="divide-y divide-slate-50">
-          {displayedThreads.map(thread => (
-            <TicketRow key={thread.id} thread={thread} />
-          ))}
-        </div>
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        {isLoading ? (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <LoadingSkeleton />
+          </motion.div>
+        ) : displayedThreads.length === 0 ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <EmptyState
+              activeView={activeView}
+              openCount={openCount}
+              resolvedCount={resolvedCount}
+              setActiveView={setActiveView}
+              hasChannel={hasChannel}
+            />
+          </motion.div>
+        ) : (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="divide-y divide-slate-50"
+          >
+            {displayedThreads.map(thread => (
+              <TicketRow key={thread.id} thread={thread} />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

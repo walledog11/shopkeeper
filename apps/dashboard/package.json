@@ -11,6 +11,8 @@
     "@anthropic-ai/sdk": "latest",
     "@clerk/db": "*",
     "@clerk/nextjs": "^7.0.5",
+    "ioredis": "latest",
+    "motion": "^12.38.0",
     "next": "latest",
     "openai": "latest",
     "postmark": "latest",
@@ -18,7 +20,6 @@
     "react-dom": "latest",
     "stripe": "^21.0.1",
     "swr": "latest",
-    "ioredis": "latest",
     "twilio": "^5.13.1"
   }
 }

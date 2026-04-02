@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { Clock } from "lucide-react"
+import { motion, AnimatePresence } from "motion/react"
 
 export default function AgentBanner() {
   const [dismissed, setDismissed] = useState(false)
@@ -16,10 +17,16 @@ export default function AgentBanner() {
     setDismissed(true)
   }
 
-  if (dismissed) return null
-
   return (
-    <div className="shrink-0 bg-white rounded-md shadow-md overflow-hidden">
+    <AnimatePresence initial={false}>
+      {!dismissed && (
+        <motion.div
+          key="agent-banner"
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 1, 1] }}
+          className="overflow-hidden shrink-0"
+        >
+    <div className="bg-white rounded-md shadow-md overflow-hidden">
       <div className="flex items-center gap-6 px-6 py-5">
         {/* Illustration — hidden on mobile */}
         <div className="hidden sm:block relative shrink-0" style={{ width: '180px', height: '112px' }}>
@@ -97,7 +104,7 @@ export default function AgentBanner() {
           {/* Actions */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mt-4 sm:mt-0 shrink-0">
             <Link
-              href="/dashboard/settings"
+              href="/dashboard/settings?tab=agent"
               className="w-full sm:w-auto text-center bg-teal-700 hover:bg-teal-800 text-white text-sm font-semibold px-5 py-2.5 rounded-md transition-colors"
             >
               Start
@@ -112,5 +119,8 @@ export default function AgentBanner() {
         </div>
       </div>
     </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }
