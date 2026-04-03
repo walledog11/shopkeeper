@@ -1,7 +1,7 @@
 /**
  * POST /api/phone/send-code
  * Sends a 6-digit verification code to the given phone number via Twilio SMS.
- * Stores the code in the OrgMember row (hashed) and expires it after 10 minutes via Redis.
+ * Stores the code in the org settings JSON and expires it after 10 minutes.
  *
  * Body: { phoneNumber }  — E.164 format, e.g. +15551234567
  */
@@ -24,9 +24,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 3 SMS sends per 10 minutes per user — protects against SMS pumping costs
-    const rl = await rateLimit(`phone:send:${userId}`, 3, 600);
-    if (!rl.success) return tooManyRequests(rl.reset);
+    // DEV ONLY: rate limiting disabled in development
+    // TODO: remove this condition before deploying to production
+    if (process.env.NODE_ENV !== "development") {
+      const rl = await rateLimit(`phone:send:${userId}`, 3, 600);
+      if (!rl.success) return tooManyRequests(rl.reset);
+    }
 
     const org = await getOrCreateOrg();
     const { phoneNumber } = await request.json();
@@ -38,7 +41,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Check the phone number isn't already verified by someone else in this org
     const existingMember = await db.orgMember.findFirst({
       where: {
         organizationId: org.id,
@@ -54,54 +56,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const code = generateCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    // DEV ONLY: use a fixed code so real SMS is never needed locally
+    // TODO: remove this branch before deploying to production
+    const isDev = process.env.NODE_ENV === "development";
+    const code = isDev ? "000000" : generateCode();
 
-    // Upsert the OrgMember row with the new pending code
+    if (isDev) {
+      console.log(`[phone/send-code] DEV bypass — code is 000000 for ${phoneNumber}`);
+    }
+
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
     await db.orgMember.upsert({
       where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
-      update: {
-        phoneNumber,
-        phoneVerified: false,
-        // Store code in metadata field on Integration — here we store it on OrgMember
-        // We embed the code + expiry directly into the record for simplicity
-      },
-      create: {
-        organizationId: org.id,
-        clerkUserId: userId,
-        phoneNumber,
-        phoneVerified: false,
-      },
+      update: { phoneNumber, phoneVerified: false },
+      create: { organizationId: org.id, clerkUserId: userId, phoneNumber, phoneVerified: false },
     });
 
-    // Store the verification code in the DB settings JSON (temporary, expires in 10m)
-    // We attach it to the org settings to avoid a dedicated column
-    await db.$executeRaw`
-      UPDATE org_members
-      SET updated_at = NOW(),
-          phone_number = ${phoneNumber},
-          phone_verified = false
-      WHERE organization_id = ${org.id}::uuid
-        AND clerk_user_id = ${userId}
-    `;
-
-    // Cache the code server-side (we use a simple in-memory approach via the DB)
-    // Store code + expiry in the org member row via a raw update to a temp column
-    // Since we don't have a dedicated column, store in the org settings JSON keyed
-    // by userId — this avoids adding a new column for a short-lived value.
+    // Store the code in org settings keyed by userId — avoids a dedicated column
     const settings = (org.settings as Record<string, unknown>) ?? {};
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const nextSettings: Record<string, any> = {
-      ...settings,
-      [`_phoneCode_${userId}`]: { code, expiresAt: expiresAt.toISOString(), phoneNumber },
-    };
     await db.organization.update({
       where: { id: org.id },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      data: { settings: nextSettings as any },
+      data: { settings: { ...settings, [`_phoneCode_${userId}`]: { code, expiresAt: expiresAt.toISOString(), phoneNumber } } as any },
     });
 
-    // Send the code via Twilio
+    if (isDev) {
+      return NextResponse.json({ sent: true });
+    }
+
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const fromNumber = process.env.TWILIO_FROM_NUMBER;
@@ -123,7 +106,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ sent: true });
   } catch (error) {
-    console.error("[phone/send-code] error:", error);
     return handleApiError(error, "Phone send-code POST", "Failed to send verification code");
   }
 }

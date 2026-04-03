@@ -16,6 +16,9 @@ app.use(express.json({
   }
 }));
 
+// Twilio sends webhooks as application/x-www-form-urlencoded
+app.use(express.urlencoded({ extended: false }));
+
 // A simple health-check route to prove the server is alive
 app.get('/', async (req, res) => {
   try {

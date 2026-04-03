@@ -218,10 +218,12 @@ router.post('/email/inbound', async (req, res) => {
 router.post('/twilio', async (req, res) => {
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 
-  // Verify Twilio signature
-  if (twilioAuthToken) {
+  // Skip signature validation for requests forwarded from the dashboard proxy
+  const isInternalProxy = req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET;
+
+  if (twilioAuthToken && !isInternalProxy) {
     const twilioSignature = req.headers['x-twilio-signature'];
-    const webhookUrl = process.env.TWILIO_WEBHOOK_URL; // full public URL of this endpoint
+    const webhookUrl = process.env.TWILIO_WEBHOOK_URL;
     if (twilioSignature && webhookUrl) {
       const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body);
       if (!isValid) {
@@ -250,18 +252,32 @@ router.post('/twilio', async (req, res) => {
   };
 
   try {
-    // 1. Identify the org from the Twilio number this was sent TO
+    // 1. Identify the org from the Twilio number this was sent TO.
+    //    For WhatsApp sandbox the To number is Twilio's shared sandbox number, not the
+    //    org's own number — so if the direct lookup misses, fall back to identifying
+    //    the org via the sender's verified OrgMember record.
+    let organizationId;
+
     const integration = await db.integration.findFirst({
       where: { platform: 'sms', externalAccountId: toNumber },
-      select: { organizationId: true, metadata: true },
+      select: { organizationId: true },
     });
 
-    if (!integration) {
-      console.warn(`[Twilio] No sms integration found for number ${toNumber} — dropping.`);
-      return res.status(200).send('OK');
+    if (integration) {
+      organizationId = integration.organizationId;
+    } else {
+      // Sandbox / WhatsApp fallback: find org by the sender's verified phone number
+      const memberByPhone = await db.orgMember.findFirst({
+        where: { phoneNumber: fromNumber, phoneVerified: true },
+        select: { organizationId: true },
+      });
+      if (!memberByPhone) {
+        console.warn(`[Twilio] No integration for ${toNumber} and no verified member for ${fromNumber} — dropping.`);
+        return res.status(200).send('OK');
+      }
+      organizationId = memberByPhone.organizationId;
+      console.log(`[Twilio] Sandbox fallback — resolved org ${organizationId} via sender phone ${fromNumber}`);
     }
-
-    const { organizationId } = integration;
 
     // 2. Identify the team member from the FROM number
     const member = await db.orgMember.findFirst({
@@ -276,7 +292,78 @@ router.post('/twilio', async (req, res) => {
     // 3. Load conversation context
     const ctx = await getContext(contextRedis, fromNumber);
 
-    // 4. Resolve order number from message or prior context
+    const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL || 'http://localhost:3000';
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+
+    // 4. Check for plan approval commands: "run", "dismiss", "skip N"
+    const normalised = body.toLowerCase().trim();
+    const isRun = normalised === 'run';
+    const isDismiss = normalised === 'dismiss';
+    const skipMatch = normalised.match(/^skip\s+(\d+)$/);
+
+    if ((isRun || isDismiss || skipMatch) && ctx.pendingPlan) {
+      const { threadId, instruction, rawToolCalls } = ctx.pendingPlan;
+
+      if (isDismiss) {
+        await updateContext(contextRedis, fromNumber, { pendingPlan: null });
+        return twimlReply("Plan dismissed.");
+      }
+
+      // Build the approved tool calls, optionally removing a skipped step.
+      // Read-only tools (get_*) are never shown as numbered steps, so skip N
+      // is 1-based over the actionable (non-read) calls only.
+      const READ_TOOLS = ['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name'];
+      let approvedToolCalls = rawToolCalls;
+      if (skipMatch) {
+        const skipIndex = parseInt(skipMatch[1], 10) - 1;
+        const actionableCalls = rawToolCalls.filter(tc => !READ_TOOLS.includes(tc.name));
+        const toSkip = actionableCalls[skipIndex];
+        approvedToolCalls = toSkip
+          ? rawToolCalls.filter(tc => tc.id !== toSkip.id)
+          : rawToolCalls;
+      }
+
+      console.log(`[Twilio] ${fromNumber} approving plan for thread ${threadId} (${approvedToolCalls.length} tool calls)`);
+
+      const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': internalSecret || '',
+        },
+        body: JSON.stringify({
+          orgId: organizationId,
+          threadId,
+          instruction,
+          approvedToolCalls,
+          senderPhone: fromNumber,
+          clerkUserId: member.clerkUserId,
+        }),
+      });
+
+      if (!agentRes.ok) {
+        const err = await agentRes.text();
+        console.error(`[Twilio] Internal agent API error ${agentRes.status}: ${err}`);
+        return twimlReply("Something went wrong running the plan. Please try again.");
+      }
+
+      const { summary } = await agentRes.json();
+
+      // Clear the pending plan now that it's been actioned
+      await updateContext(contextRedis, fromNumber, {
+        pendingPlan: null,
+        lastThreadId: threadId,
+        history: [
+          ...ctx.history,
+          { role: 'user', content: body },
+          { role: 'assistant', content: summary },
+        ],
+      });
+
+      return twimlReply(summary || "Done.");
+    }
+
+    // 5. Free-form agent instruction path — resolve order and run agent
     const mentionedOrder = extractOrderNumber(body);
     const orderNumber = mentionedOrder || ctx.lastOrderNumber;
 
@@ -285,10 +372,6 @@ router.post('/twilio', async (req, res) => {
     }
 
     console.log(`[Twilio] ${fromNumber} → org ${organizationId} | order ${orderNumber} | "${body}"`);
-
-    // 5. Call the dashboard internal agent API
-    const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL || 'http://localhost:3000';
-    const internalSecret = process.env.INTERNAL_API_SECRET;
 
     const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
       method: 'POST',

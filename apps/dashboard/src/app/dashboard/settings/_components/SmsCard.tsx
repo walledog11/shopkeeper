@@ -26,6 +26,7 @@ export default function SmsCard() {
   const [provisioning, setProvisioning] = useState(false)
   const [disabling, setDisabling] = useState(false)
   const [orgError, setOrgError] = useState<string | null>(null)
+  const [twilioNumber, setTwilioNumber] = useState('')
 
   const [phoneInput, setPhoneInput] = useState('')
   const [codeSent, setCodeSent] = useState(false)
@@ -41,7 +42,11 @@ export default function SmsCard() {
     setProvisioning(true)
     setOrgError(null)
     try {
-      const res = await fetch('/api/integrations/twilio', { method: 'POST' })
+      const res = await fetch('/api/integrations/twilio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(twilioNumber.trim() ? { phoneNumber: twilioNumber.trim() } : {}),
+      })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to enable SMS')
       await mutateTwilio()
@@ -242,18 +247,27 @@ export default function SmsCard() {
 
       {/* Footer: Enable button when not connected */}
       {!isConnected && (
-        <div className="mt-auto px-4 py-3 border-t border-slate-100 flex justify-end">
-          <Button
-            size="sm"
-            disabled={provisioning}
-            onClick={enableSms}
-            className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1.5"
-          >
-            {provisioning
-              ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />Provisioning…</>
-              : <><span>Enable SMS</span><ChevronRight className="w-3.5 h-3.5" /></>
-            }
-          </Button>
+        <div className="mt-auto px-4 py-3 border-t border-slate-100 space-y-2">
+          <Input
+            type="tel"
+            placeholder="+15551234567 (existing Twilio number, optional)"
+            value={twilioNumber}
+            onChange={e => setTwilioNumber(e.target.value)}
+            className="h-8 text-sm bg-white"
+          />
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              disabled={provisioning}
+              onClick={enableSms}
+              className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1.5"
+            >
+              {provisioning
+                ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin shrink-0" />Provisioning…</>
+                : <><span>Enable SMS</span><ChevronRight className="w-3.5 h-3.5" /></>
+              }
+            </Button>
+          </div>
         </div>
       )}
     </div>

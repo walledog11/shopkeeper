@@ -104,9 +104,11 @@ model Thread {
   status         ThreadStatus @default(open)
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  aiSummary         String?  @map("ai_summary")
-  tag               String?  @default("Support")
-  shopifyCustomerId String?  @map("shopify_customer_id") @db.VarChar(255)
+  aiSummary            String?  @map("ai_summary")
+  tag                  String?  @default("Support")
+  shopifyCustomerId    String?  @map("shopify_customer_id") @db.VarChar(255)
+  cachedPlanMessageId  String?  @map("cached_plan_message_id") @db.Uuid
+  cachedPlan           Json?    @map("cached_plan") @db.JsonB
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)

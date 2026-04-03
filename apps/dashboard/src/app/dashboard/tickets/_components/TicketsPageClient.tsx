@@ -86,7 +86,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     replyText, setReplyText,
     isDrafting, isSending, sendError, setSendError,
     isRefreshingSummary, toast,
-    handleSendMessage, handleResolve, handleReopen,
+    handleSendMessage, handleSendNote, handleResolve, handleReopen,
     handleAiDraft, handleLinkShopifyCustomer, handleTagUpdate,
     handleRefreshSummary, handleBulkClose,
   } = useTicketActions({
@@ -218,6 +218,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onReopen={handleReopen}
               onReplyChange={text => { setReplyText(text); if (sendError) setSendError(null) }}
               onSend={handleSendMessage}
+              onSendNote={handleSendNote}
               onDraft={handleAiDraft}
             />
             <div className="hidden lg:flex">

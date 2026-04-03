@@ -12,6 +12,8 @@ const isPublicRoute = createRouteMatcher([
   // OAuth callbacks are self-verified via state + HMAC — no Clerk session needed
   '/api/integrations/shopify/callback(.*)',
   '/api/integrations/instagram/callback(.*)',
+  '/api/agent/plan-internal(.*)',
+  '/api/agent/internal(.*)',
 ])
 
 export default clerkMiddleware(async (auth, req) => {

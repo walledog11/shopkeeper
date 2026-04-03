@@ -18,9 +18,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 5 attempts per 10 minutes per user — brute force protection
-    const rl = await rateLimit(`phone:verify:${userId}`, 5, 600);
-    if (!rl.success) return tooManyRequests(rl.reset);
+    // DEV ONLY: rate limiting disabled in development
+    // TODO: remove this condition before deploying to production
+    if (process.env.NODE_ENV !== "development") {
+      const rl = await rateLimit(`phone:verify:${userId}`, 5, 600);
+      if (!rl.success) return tooManyRequests(rl.reset);
+    }
 
     const org = await getOrCreateOrg();
     const { code } = await request.json();

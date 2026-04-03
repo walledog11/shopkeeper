@@ -3,6 +3,8 @@ import IORedis from 'ioredis';
 import { db } from '@clerk/db';
 import dotenv from 'dotenv';
 import OpenAI from 'openai';
+import twilio from 'twilio';
+import { updateContext } from './sms-context.js';
 
 dotenv.config();
 
@@ -101,11 +103,23 @@ async function processInboundMessage(organizationId, platformId, channelType, me
     });
   }
 
-  await db.message.create({
-    data: { threadId: thread.id, senderType: 'customer', contentText: messageText },
-  });
+  // Save the new message and invalidate the cached plan atomically
+  await db.$transaction([
+    db.message.create({
+      data: { threadId: thread.id, senderType: 'customer', contentText: messageText },
+    }),
+    db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlanMessageId: null, cachedPlan: null },
+    }),
+  ]);
 
-  await generateThreadIntelligence(thread.id);
+  const updatedThread = await generateThreadIntelligence(thread.id);
+  const aiSummary = updatedThread?.aiSummary ?? null;
+
+  // Non-blocking: send WhatsApp plan notification to verified org members
+  sendWhatsAppPlanNotification(organizationId, thread.id, customer.name ?? null, channelType, aiSummary);
+
   return thread;
 }
 
@@ -130,7 +144,7 @@ async function generateThreadIntelligence(threadId) {
           content: `You are an AI assistant for a customer support team.
           Read the following customer service transcript.
           Provide a 1-sentence summary of the customer's core issue.
-          Also provide a 1-to-2 word category tag (e.g., 'Returns', 'Billing', 'Shipping Delay', 'Product Inquiry', 'Technical Issue').
+          Also choose exactly one tag from this list: Shipping, Returns, Order Status, Product Inquiry, General.
           You must respond ONLY in strict JSON format like this: {"summary": "...", "tag": "..."}`
         },
         { role: 'user', content: conversationText },
@@ -140,14 +154,141 @@ async function generateThreadIntelligence(threadId) {
 
     const aiData = JSON.parse(aiResponse.choices[0].message.content);
 
-    await db.thread.update({
+    const updated = await db.thread.update({
       where: { id: threadId },
       data: { aiSummary: aiData.summary, tag: aiData.tag },
     });
 
     console.log(`[Worker] AI Summary saved: [${aiData.tag}] ${aiData.summary}`);
+    return updated;
   } catch (aiError) {
     console.error('[Worker] Failed to generate AI summary:', aiError);
+    return null;
+  }
+}
+
+// ── WhatsApp plan notification ────────────────────────────────────────────────
+
+const PLAN_REDIS = new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null });
+
+/**
+ * Format an AgentPlan as a readable WhatsApp message.
+ * @param {string} customerName
+ * @param {string} channelType
+ * @param {string} summary
+ * @param {Array<{label: string, description: string, category: string, enabled: boolean}>} steps
+ * @returns {string}
+ */
+function formatPlanMessage(customerName, channelType, summary, steps) {
+  const channel = channelType === 'ig_dm' ? 'Instagram DM' : channelType.charAt(0).toUpperCase() + channelType.slice(1);
+  const actionableSteps = steps.filter(s => s.category !== 'read');
+
+  const stepLines = actionableSteps.map((s, i) => {
+    const tag = s.category === 'action' ? 'Shopify' : s.category === 'communication' ? 'Reply' : 'Internal';
+    const desc = s.description ? ` — ${s.description}` : '';
+    return `${i + 1}. [${tag}] ${s.label}${desc}`;
+  });
+
+  const lines = [
+    `New ticket — ${channel}`,
+    customerName ? `From: ${customerName}` : null,
+    `"${summary}"`,
+    '',
+    `Proposed plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
+    ...stepLines,
+    '',
+    'Reply *run* to execute · *dismiss* to ignore',
+  ];
+
+  return lines.filter(l => l !== null).join('\n');
+}
+
+/**
+ * Generate a plan and send a WhatsApp notification to all verified org members.
+ * Failures are swallowed so a Twilio/network error never drops an inbound message.
+ * @param {string} organizationId
+ * @param {string} threadId
+ * @param {string} customerName
+ * @param {string} channelType
+ * @param {string|null} aiSummary
+ */
+async function sendWhatsAppPlanNotification(organizationId, threadId, customerName, channelType, aiSummary) {
+  try {
+    const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL || 'http://localhost:3000';
+    const internalSecret = process.env.INTERNAL_API_SECRET;
+
+    // Fetch the plan from the dashboard
+    const planRes = await fetch(`${dashboardUrl}/api/agent/plan-internal`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': internalSecret || '',
+      },
+      body: JSON.stringify({ orgId: organizationId, threadId }),
+    });
+
+    if (!planRes.ok) {
+      console.warn(`[Worker] plan-internal failed (${planRes.status}) for thread ${threadId} — skipping WhatsApp notification.`);
+      return;
+    }
+
+    const { plan, instruction } = await planRes.json();
+
+    if (!plan || !plan.steps || plan.steps.length === 0) {
+      console.log(`[Worker] No plan steps for thread ${threadId} — skipping notification.`);
+      return;
+    }
+
+    // Find all org members with a verified phone number
+    const members = await db.orgMember.findMany({
+      where: { organizationId, phoneVerified: true, phoneNumber: { not: null } },
+      select: { phoneNumber: true },
+    });
+
+    if (members.length === 0) {
+      console.log(`[Worker] No verified members for org ${organizationId} — skipping WhatsApp notification.`);
+      return;
+    }
+
+    const summary = aiSummary || instruction;
+    const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
+
+    const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
+    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+    const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER; // e.g. whatsapp:+14155238886
+
+    if (!twilioAccountSid || !twilioAuthToken || !twilioWhatsAppNumber) {
+      console.warn('[Worker] Twilio env vars not set — skipping WhatsApp notification.');
+      return;
+    }
+
+    const twilioClient = twilio(twilioAccountSid, twilioAuthToken);
+
+    for (const member of members) {
+      const toNumber = `whatsapp:${member.phoneNumber}`;
+      try {
+        await twilioClient.messages.create({
+          from: twilioWhatsAppNumber,
+          to: toNumber,
+          body: message,
+        });
+
+        // Store the pending plan in Redis so the member can approve via "run"
+        await updateContext(PLAN_REDIS, member.phoneNumber, {
+          pendingPlan: {
+            threadId,
+            instruction,
+            rawToolCalls: plan.rawToolCalls,
+          },
+        });
+
+        console.log(`[Worker] WhatsApp notification sent to ${member.phoneNumber} for thread ${threadId}`);
+      } catch (sendErr) {
+        console.error(`[Worker] Failed to send WhatsApp to ${member.phoneNumber}:`, sendErr.message);
+      }
+    }
+  } catch (err) {
+    console.error(`[Worker] sendWhatsAppPlanNotification error for thread ${threadId}:`, err.message);
   }
 }
 

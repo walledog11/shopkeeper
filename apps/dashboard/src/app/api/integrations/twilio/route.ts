@@ -43,7 +43,7 @@ export async function GET() {
   }
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
 
@@ -58,37 +58,59 @@ export async function POST() {
     const client = getTwilioClient();
     const webhookUrl = `${process.env.GATEWAY_PUBLIC_URL}/webhooks/twilio`;
 
-    // Find an available US local number with SMS capability
-    const available = await client.availablePhoneNumbers("US").local.list({
-      smsEnabled: true,
-      limit: 1,
-    });
+    const body = await request.json().catch(() => ({}));
+    const providedNumber: string | undefined = body.phoneNumber;
 
-    if (!available.length) {
-      return NextResponse.json(
-        { error: "No phone numbers available. Please try again shortly." },
-        { status: 503 }
-      );
+    let twilioSid: string;
+    let e164Number: string;
+
+    if (providedNumber) {
+      // Use an existing Twilio number from the account (e.g. trial accounts can't buy new ones).
+      // Look it up by number to get the SID, then configure its webhook.
+      const matches = await client.incomingPhoneNumbers.list({ phoneNumber: providedNumber, limit: 1 });
+      if (!matches.length) {
+        return NextResponse.json(
+          { error: "That number wasn't found in your Twilio account. Make sure it's in E.164 format (e.g. +15551234567)." },
+          { status: 400 }
+        );
+      }
+      await client.incomingPhoneNumbers(matches[0].sid).update({
+        smsUrl: webhookUrl,
+        smsMethod: "POST",
+      });
+      twilioSid = matches[0].sid;
+      e164Number = matches[0].phoneNumber;
+    } else {
+      // Purchase a new number (requires a paid Twilio account).
+      const available = await client.availablePhoneNumbers("US").local.list({
+        smsEnabled: true,
+        limit: 1,
+      });
+      if (!available.length) {
+        return NextResponse.json(
+          { error: "No phone numbers available. Please try again shortly." },
+          { status: 503 }
+        );
+      }
+      const purchased = await client.incomingPhoneNumbers.create({
+        phoneNumber: available[0].phoneNumber,
+        smsUrl: webhookUrl,
+        smsMethod: "POST",
+      });
+      twilioSid = purchased.sid;
+      e164Number = purchased.phoneNumber;
     }
 
-    // Purchase the number and configure the webhook immediately
-    const purchased = await client.incomingPhoneNumbers.create({
-      phoneNumber: available[0].phoneNumber,
-      smsUrl: webhookUrl,
-      smsMethod: "POST",
-    });
-
-    // Persist: externalAccountId = E.164 phone number, metadata = Twilio SID for releasing later
     await db.integration.create({
       data: {
         organizationId: org.id,
         platform: "sms",
-        externalAccountId: purchased.phoneNumber,
-        metadata: { twilioSid: purchased.sid },
+        externalAccountId: e164Number,
+        metadata: { twilioSid },
       },
     });
 
-    return NextResponse.json({ connected: true, phoneNumber: purchased.phoneNumber });
+    return NextResponse.json({ connected: true, phoneNumber: e164Number });
   } catch (error) {
     return handleApiError(error, "Twilio POST", "Failed to provision phone number");
   }

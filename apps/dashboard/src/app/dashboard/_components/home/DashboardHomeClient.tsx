@@ -81,7 +81,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3 flex-1 min-h-0">
 
             {/* Left column */}
-            <div className="flex flex-col gap-3 overflow-y-auto min-h-0">
+            <div className="flex flex-col gap-3 self-start">
               <ViewsNav navViews={navViews} activeView={activeView} setActiveView={setActiveView} />
               <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
               <ActivityFeed activityEvents={activityEvents} />
@@ -101,11 +101,9 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
             />
 
             {/* Right column */}
-            <div className="flex flex-col gap-3 min-h-0 overflow-y-auto">
+            <div className="flex flex-col gap-3 self-start">
               <WorkflowBasics workflowSteps={workflowSteps} workflowDoneCount={workflowDoneCount} />
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <ResourcesCard />
-              </div>
+              <ResourcesCard />
             </div>
 
           </div>

@@ -1,4 +1,4 @@
-export type ViewId = 'all' | 'open' | 'resolved' | 'recent'
+export type ViewId = 'open' | 'resolved' | 'recent'
 
 export interface NavView {
   id: ViewId

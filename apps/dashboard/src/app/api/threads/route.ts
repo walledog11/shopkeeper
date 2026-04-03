@@ -22,7 +22,7 @@ export async function GET(request: Request) {
         messages: preview
           ? {
               where: {
-                NOT: { AND: [{ senderType: 'note' }, { contentText: { startsWith: '__clerk_agent__' } }] },
+                NOT: { senderType: 'note' },
               },
               orderBy: { sentAt: 'desc' },
               take: 1,

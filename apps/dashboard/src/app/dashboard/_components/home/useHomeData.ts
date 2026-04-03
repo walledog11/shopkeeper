@@ -19,18 +19,17 @@ interface Options {
 }
 
 export function useHomeData({ initialOpenThreads, initialClosedCount }: Options) {
-  const [activeView, setActiveView] = useState<ViewId>('all')
+  const [activeView, setActiveView] = useState<ViewId>('open')
 
   const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
-  const fetchClosed = activeView === 'resolved'
-  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, fetchClosed, true)
+  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, true, true)
 
-  const isLoading = loadingOpen || (fetchClosed && loadingClosed)
+  const isLoading = loadingOpen || (activeView === 'resolved' && loadingClosed)
   const openCount = openThreads.length
-  const resolvedCount = fetchClosed && closedThreads.length > 0 ? closedThreads.length : initialClosedCount
+  const resolvedCount = closedThreads.length > 0 ? closedThreads.length : initialClosedCount
 
   const allThreads = useMemo(() => [...openThreads, ...closedThreads], [openThreads, closedThreads])
 
@@ -40,11 +39,10 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   }, [allThreads])
 
   const viewThreads = useMemo<Record<ViewId, Thread[]>>(() => ({
-    all: sortByDate(allThreads),
     open: sortByDate(openThreads),
     resolved: sortByDate(closedThreads),
     recent: sortByDate(recentThreads),
-  }), [allThreads, openThreads, closedThreads, recentThreads])
+  }), [openThreads, closedThreads, recentThreads])
 
   const displayedThreads = viewThreads[activeView]
 
@@ -92,7 +90,7 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const hasInvitedTeam = memberCount > 1
   const hasSentReply = useMemo(() => (
     openThreads.some(t => t.messages[0]?.senderType === 'agent' || t.messages[0]?.senderType === 'ai') ||
-    closedThreads.length > 0
+    closedThreads.some(t => t.messages[0]?.senderType === 'agent' || t.messages[0]?.senderType === 'ai')
   ), [openThreads, closedThreads])
   const hasMultipleChannels = integrations.length > 1
 
@@ -105,7 +103,6 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
   const navViews = useMemo<NavView[]>(() => [
-    { id: 'all', label: 'All tickets', count: openCount + resolvedCount },
     { id: 'open', label: 'Open', count: openCount },
     { id: 'resolved', label: 'Resolved', count: resolvedCount },
     { id: 'recent', label: 'Recent (24h)', count: recentThreads.length },

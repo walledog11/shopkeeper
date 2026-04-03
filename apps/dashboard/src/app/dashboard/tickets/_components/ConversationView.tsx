@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useRef } from "react"
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Lock, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Users, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, StickyNote } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { AnimatePresence, motion } from "motion/react"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
 import type { Ticket, SenderType, AgentTurn, AgentPlan, RawToolCall } from "@/types"
@@ -43,6 +44,7 @@ interface Props {
   onReplyChange: (text: string) => void
   onSend: (isNote: boolean) => void
   onDraft: () => void
+  onSendNote: (text: string) => void
   onAgentComplete: (turn: AgentTurn) => void
   initialPlan?: AgentPlan | null
   onPlanCached: (plan: AgentPlan | null) => void
@@ -66,12 +68,14 @@ export default function ConversationView({
   onReopen,
   onReplyChange,
   onSend,
+  onSendNote,
   onDraft,
   onAgentComplete,
   initialPlan,
   onPlanCached,
 }: Props) {
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
+  const [isNoteMode, setIsNoteMode] = useState(false)
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
   const [pendingPlan, setPendingPlan] = useState<AgentPlan | null>(
     initialPlan === undefined ? null : initialPlan
@@ -120,10 +124,6 @@ export default function ConversationView({
   const trimmed = replyText.trimStart()
   const isClerkMode = viewTab === 'notes' && trimmed.toLowerCase().startsWith(triggerPrefix)
   const clerkInstruction = isClerkMode ? trimmed.slice(triggerPrefix.length).replace(/^ /, '') : ''
-
-  const handleSwitchToChat = () => {
-    setViewTab('chat')
-  }
 
   const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
     setPendingPlan(null)
@@ -187,7 +187,9 @@ export default function ConversationView({
         onAgentTurnAdd({ instruction, actions: [], summary: null, error: 'Failed to generate plan — please try again.' })
       }
     } else {
-      onSend(noteArg)
+      // Internal tab always sends as note regardless of Composer's isNote value
+      onSend(viewTab === 'notes' ? true : noteArg)
+      if (viewTab === 'notes') setIsNoteMode(false)
     }
   }
 
@@ -232,7 +234,7 @@ export default function ConversationView({
               onClick={onResolve}
               className="bg-slate-900 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 h-8"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Resolve
+              <CheckCircle2 className="w-3.5 h-3.5" /> Close Ticket
             </Button>
           )}
           {activeTab === 'closed' && (
@@ -256,7 +258,7 @@ export default function ConversationView({
       {/* View tab bar */}
       <div className="flex items-center gap-1 px-4 py-2 border-b border-slate-100 bg-white shrink-0">
         <button
-          onClick={handleSwitchToChat}
+          onClick={() => setViewTab('chat')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded transition-colors ${
             viewTab === 'chat'
               ? 'bg-slate-900 text-white'
@@ -274,8 +276,8 @@ export default function ConversationView({
               : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
           }`}
         >
-          <Lock className="w-3 h-3" />
-          Notes
+          <Users className="w-3 h-3" />
+          Internal
           {noteCount > 0 && (
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
               viewTab === 'notes' ? 'bg-violet-200 text-violet-800' : 'bg-slate-100 text-slate-500'
@@ -296,12 +298,12 @@ export default function ConversationView({
             {viewTab === 'notes' ? (
               <>
                 <div className="w-10 h-10 rounded-md bg-violet-50 border border-violet-200 flex items-center justify-center">
-                  <Lock className="w-4 h-4 text-violet-400" />
+                  <Users className="w-4 h-4 text-violet-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-slate-600">No internal notes yet</p>
+                  <p className="text-sm font-semibold text-slate-600">No internal activity yet</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Add a note, or type <span className="font-mono font-semibold text-violet-600">@{agentName.toLowerCase()}</span> to ask the AI agent.
+                    Type <span className="font-mono font-semibold text-violet-600">@{agentName.toLowerCase()}</span> to ask the AI agent, or add a note for your team.
                   </p>
                 </div>
               </>
@@ -316,16 +318,24 @@ export default function ConversationView({
           </div>
         ) : viewTab === 'notes' ? (
           <>
-            {/* DB notes */}
+            {/* DB notes — inline comment style */}
             {displayMessages.map((msg: { sender: SenderType; text: string | null; time: string; author?: string }, i: number) => (
-              <div key={i} className="flex flex-col gap-1 items-end">
-                <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-white border border-violet-200 text-slate-800 rounded-md rounded-tr-sm shadow-sm">
-                  {msg.text}
+              <div key={i} className="w-full">
+                <div className="flex gap-3">
+                  <div className="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-amber-700">
+                    {(msg.author ?? 'Y')[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-1.5 mb-1.5">
+                      <span className="text-[12px] font-semibold text-slate-700">{msg.author ?? 'You'}</span>
+                      <span className="text-[11px] text-slate-400">left a note</span>
+                      <span className="text-[11px] text-slate-400 ml-auto">{msg.time}</span>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg rounded-tl-sm px-3.5 py-2.5">
+                      <p className="text-[13px] text-slate-700 leading-relaxed">{msg.text}</p>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[10px] text-slate-400 mx-1">
-                  {msg.author && <span className="font-semibold text-slate-500">{msg.author} · </span>}
-                  {msg.time}
-                </span>
               </div>
             ))}
 
@@ -455,35 +465,51 @@ export default function ConversationView({
         </div>
       )}
 
-      {/* Plan card — shown above composer, visible on any tab */}
-      {activeTab === 'open' && pendingPlan && !isAutoPlanLoading && (
-        <div className="px-5 py-3 border-t border-violet-100 shrink-0">
-          <ActionPlanCard
-            plan={pendingPlan}
-            isExecuting={isPlanExecuting}
-            onApprove={handlePlanApprove}
-            onDismiss={handlePlanDismiss}
+      {/* Composer + floating plan card */}
+      {activeTab === 'open' && (
+        <div className="relative shrink-0">
+          {/* Floating plan card */}
+          <AnimatePresence>
+            {pendingPlan && !isAutoPlanLoading && viewTab === 'chat' && (
+              <motion.div
+                className="absolute bottom-full left-0 right-0 px-5 pb-2 pointer-events-none"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6, transition: { duration: 0.18 } }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+              >
+                <div className="pointer-events-auto">
+                  <ActionPlanCard
+                    plan={pendingPlan}
+                    isExecuting={isPlanExecuting}
+                    onApprove={handlePlanApprove}
+                    onDismiss={handlePlanDismiss}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <Composer
+            customerName={ticket.customer}
+            agentName={agentName}
+            value={isClerkMode ? clerkInstruction : replyText}
+            isNote={viewTab === 'notes' ? false : effectiveIsNote}
+            isClerkMode={isClerkMode}
+            isNoteMode={isNoteMode}
+            hideToggle={true}
+            placeholder={viewTab === 'notes' && !isClerkMode ? `Message team… or @${agentName.toLowerCase()} for AI` : undefined}
+            isDrafting={isDrafting}
+            isSending={isSending || isAgentRunning || isPlanLoading || isAutoPlanLoading}
+            error={sendError}
+            onChange={text => onReplyChange(isClerkMode ? `@${agentName.toLowerCase()} ` + text : text)}
+            onClearClerk={() => onReplyChange('')}
+            onSend={handleSend}
+            onDraft={onDraft}
+            onAddNote={viewTab === 'notes' ? () => setIsNoteMode(true) : undefined}
+            onCancelNote={viewTab === 'notes' ? () => setIsNoteMode(false) : undefined}
           />
         </div>
-      )}
-
-      {/* Composer */}
-      {activeTab === 'open' && (
-        <Composer
-          customerName={ticket.customer}
-          agentName={agentName}
-          value={isClerkMode ? clerkInstruction : replyText}
-          isNote={effectiveIsNote}
-          isClerkMode={isClerkMode}
-          hideToggle={true}
-          isDrafting={isDrafting}
-          isSending={isSending || isAgentRunning || isPlanLoading || isAutoPlanLoading}
-          error={sendError}
-          onChange={text => onReplyChange(isClerkMode ? `@${agentName.toLowerCase()} ` + text : text)}
-          onClearClerk={() => onReplyChange('')}
-          onSend={handleSend}
-          onDraft={onDraft}
-        />
       )}
     </div>
   )

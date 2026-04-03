@@ -70,7 +70,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
         sender: msg.senderType,
         text: msg.contentText,
         time: formatTime(msg.sentAt),
-        author: msg.senderType === 'note' ? (agentName || 'You') : undefined,
+        author: msg.senderType === 'note' ? 'You' : undefined,
       }))
   }
 }

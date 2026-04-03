@@ -5,16 +5,16 @@ import { ArrowRight } from "lucide-react"
 import { tips } from "../help/content/tips"
 import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
 
-const PREVIEW_ARTICLES = tips.articles.slice(0, 3)
+const PREVIEW_ARTICLES = tips.articles.slice(0, 4)
 
 export default function ResourcesCard() {
   return (
-    <div className="h-full bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+    <div className="bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center justify-center px-4 py-2 border-b border-slate-100 shrink-0">
         <h2 className="text-sm font-semibold text-slate-900">Articles</h2>
       </div>
 
-      <div className="flex-1 divide-y divide-slate-50 overflow-y-auto">
+      <div className="divide-y divide-slate-50">
         {PREVIEW_ARTICLES.map(article => {
           const tag = article.tag ?? "Tips"
           const tagColor = TAG_COLORS[tag] ?? DEFAULT_TAG_COLOR
