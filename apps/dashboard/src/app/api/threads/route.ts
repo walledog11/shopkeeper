@@ -16,6 +16,7 @@ export async function GET(request: Request) {
       where: {
         organizationId: org.id,
         status,
+        channelType: { notIn: ["sms_agent", "dashboard_agent"] },
       },
       include: {
         customer: true,

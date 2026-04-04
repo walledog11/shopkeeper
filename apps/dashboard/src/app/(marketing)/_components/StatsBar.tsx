@@ -1,13 +1,13 @@
 "use client";
 
 import { motion } from "motion/react";
-import { MessageCircle, Clock, Zap, Store } from "lucide-react";
+import { MessageCircle, Clock, Zap, BarChart2 } from "lucide-react";
 
 const stats = [
   {
     icon: MessageCircle,
     value: "10,000+",
-    label: "Support tickets handled",
+    label: "Support conversations tracked",
   },
   {
     icon: Clock,
@@ -17,12 +17,12 @@ const stats = [
   {
     icon: Zap,
     value: "80%",
-    label: "Tickets resolved automatically",
+    label: "AI-assisted resolution rate",
   },
   {
-    icon: Store,
-    value: "4 channels",
-    label: "All in one inbox",
+    icon: BarChart2,
+    value: "4 KPIs",
+    label: "Volume, AI rate, team performance, SLA",
   },
 ];
 

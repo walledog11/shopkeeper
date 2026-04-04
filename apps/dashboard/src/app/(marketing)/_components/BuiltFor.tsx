@@ -226,136 +226,6 @@ function VPCGraphic() {
 /* ------------------------------------------------------------------ */
 /*  Bottom row feature cards                                           */
 /* ------------------------------------------------------------------ */
-const bottomFeatures = [
-  {
-    title: "All Channels Connected",
-    description: "Instagram, SMS, Shopify, and email — all managed from one dashboard",
-    graphic: ProxyGraphic,
-  },
-  {
-    title: "AI That Knows Your Brand",
-    description: "Clerk learns your products, tone, and policies to reply like you would",
-    graphic: BrandTraitsGraphic,
-  },
-  {
-    title: "Instant Responses",
-    description: "Customers hear back in seconds, not hours — even when you're offline",
-    graphic: ComputeGraphic,
-  },
-  {
-    title: "Help When You Need It",
-    description: "Our team is here to help you set up and get the most out of Clerk",
-    graphic: SupportGraphic,
-  },
-];
-
-function ProxyGraphic() {
-  return (
-    <div className="flex items-center justify-center py-2">
-      <svg viewBox="0 0 120 60" className="w-28" fill="none">
-        {/* Channel sources */}
-        <circle cx="12" cy="14" r="6" fill="#f472b6" opacity="0.2" />
-        <circle cx="12" cy="14" r="3.5" fill="#f472b6" />
-        <circle cx="12" cy="30" r="6" fill="#818cf8" opacity="0.2" />
-        <circle cx="12" cy="30" r="3.5" fill="#818cf8" />
-        <circle cx="12" cy="46" r="6" fill="#34d399" opacity="0.2" />
-        <circle cx="12" cy="46" r="3.5" fill="#34d399" />
-        {/* Labels */}
-        <text x="22" y="17" fontSize="7" fill="#64748b">Instagram</text>
-        <text x="22" y="33" fontSize="7" fill="#64748b">SMS</text>
-        <text x="22" y="49" fontSize="7" fill="#64748b">Shopify</text>
-        {/* Arrow lines to center */}
-        <line x1="55" y1="14" x2="75" y2="28" stroke="#e2e8f0" strokeWidth="1.5" />
-        <line x1="55" y1="30" x2="75" y2="30" stroke="#e2e8f0" strokeWidth="1.5" />
-        <line x1="55" y1="46" x2="75" y2="32" stroke="#e2e8f0" strokeWidth="1.5" />
-        {/* Central dashboard node */}
-        <rect x="76" y="20" width="32" height="20" rx="5" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1.5" />
-        <text x="82" y="33" fontSize="6" fill="#64748b">Inbox</text>
-        {/* Animated dot */}
-        <circle r="2.5" fill="#818cf8" opacity="0.8">
-          <animateMotion dur="2s" repeatCount="indefinite" path="M55 30 L75 30 L92 30" />
-        </circle>
-      </svg>
-    </div>
-  );
-}
-
-const brandTraits = [
-  "Matches your brand voice",
-  "Knows your return policy",
-  "Learns your product catalog",
-  "Improves over time",
-];
-
-function BrandTraitsGraphic() {
-  return (
-    <div className="space-y-1.5 py-1">
-      {brandTraits.map((trait) => (
-        <div key={trait} className="flex items-center gap-2 text-[11px]">
-          <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
-          <span className="text-foreground">{trait}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ComputeGraphic() {
-  return (
-    <div className="flex items-center justify-center py-2">
-      <svg viewBox="0 0 120 50" className="w-28" fill="none">
-        {/* Message bubble */}
-        <rect x="8" y="12" width="30" height="18" rx="5" fill="#f1f5f9" stroke="#e2e8f0" strokeWidth="1.5" />
-        <text x="14" y="24" fontSize="7" fill="#64748b">msg</text>
-        {/* Speed lines */}
-        <line x1="44" y1="21" x2="68" y2="21" stroke="#e2e8f0" strokeWidth="2" strokeLinecap="round" />
-        <line x1="50" y1="28" x2="68" y2="28" stroke="#e2e8f0" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="3 3" />
-        {/* Reply bubble */}
-        <rect x="72" y="12" width="38" height="26" rx="5" fill="#f0fdf4" stroke="#bbf7d0" strokeWidth="1.5" />
-        <text x="78" y="22" fontSize="6" fill="#16a34a">Reply</text>
-        <text x="78" y="32" fontSize="6" fill="#16a34a">sent ✓</text>
-        {/* Animated speed dot */}
-        <circle r="3" fill="#34d399">
-          <animateMotion
-            dur="1.2s"
-            repeatCount="indefinite"
-            path="M44 21 L68 21"
-          />
-        </circle>
-      </svg>
-    </div>
-  );
-}
-
-const supportTeam = [
-  { color: "bg-blue-400", initial: "S" },
-  { color: "bg-pink-400", initial: "R" },
-  { color: "bg-amber-400", initial: "A" },
-];
-
-function SupportGraphic() {
-  return (
-    <div className="flex items-center justify-center py-2">
-      <div className="flex items-center gap-3">
-        <div className="flex -space-x-2">
-          {supportTeam.map((m, i) => (
-            <div
-              key={i}
-              className={`w-7 h-7 rounded-full ${m.color} border-2 border-white flex items-center justify-center`}
-            >
-              <span className="text-[8px] font-bold text-white">{m.initial}</span>
-            </div>
-          ))}
-        </div>
-        <div className="text-[10px] text-muted-foreground leading-tight">
-          <div className="font-medium text-foreground text-[11px]">Real people</div>
-          Here when you need us
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------------------------------------------------ */
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
@@ -363,77 +233,48 @@ export function BuiltFor() {
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { once: true, amount: 0.15 });
 
-  const topCards = [
+  const cards = [
     {
       title: "Activity History",
-      description: "See a complete timeline of every reply sent, team member added, and customer interaction — all in one place",
+      description: "A complete timeline of every reply, team action, and customer interaction — fully searchable",
       graphic: AuditLoggingGraphic,
-      hero: true,
     },
     {
       title: "Team Roles & Permissions",
-      description: "Control who on your team can view messages, send replies, or change settings — keep things organized as you grow",
+      description: "Control who can view messages, send replies, or change settings as your team grows",
       graphic: AccessControlsGraphic,
-      hero: false,
     },
     {
       title: "Your Data, Always Secure",
-      description: "Customer conversations and data are encrypted and protected around the clock, so you never have to worry",
+      description: "Encrypted in transit and at rest, with strict tenant isolation and no cross-org access",
       graphic: VPCGraphic,
-      hero: false,
     },
   ];
 
   return (
-    <section ref={sectionRef} className="relative z-10 w-full py-24 overflow-hidde bg-white">
+    <section ref={sectionRef} className="relative z-10 w-full py-24 overflow-hidden bg-white">
       <div className="container mx-auto px-4 md:px-6">
-        {/* ---- Header row ---- */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-center mb-16 gap-4">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground">
-              Built to grow with you
-            </h2>
+        <div className="text-center mb-16">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+            Built to grow with you
+          </h2>
         </div>
 
-        {/* ---- Top feature cards (bento: hero spans 2 cols) ---- */}
-        <div className="grid md:grid-cols-3 gap-5 mb-5 max-w-6xl mx-auto">
-          {topCards.map((card, i) => (
+        <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
+          {cards.map((card, i) => (
             <motion.div
               key={card.title}
-              className={`group rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${card.hero ? "md:col-span-2" : ""}`}
+              className="group rounded-2xl border border-slate-200 bg-white flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
               initial={{ opacity: 0, y: 40 }}
               animate={isInView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.5, delay: 0.2 + i * 0.12 }}
             >
-              {/* Card illustrative graphic */}
               <div className="border-b border-slate-100 bg-slate-50/50 min-h-[240px] flex flex-col justify-center">
                 <card.graphic />
               </div>
-
-              {/* Card text */}
               <div className="p-5">
                 <h3 className="text-base font-semibold text-foreground mb-1.5">{card.title}</h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">{card.description}</p>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* ---- Bottom 4 feature cards ---- */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 max-w-6xl mx-auto">
-          {bottomFeatures.map((feat, i) => (
-            <motion.div
-              key={feat.title}
-              className="group rounded-2xl border border-slate-200 bg-white p-5 flex flex-col gap-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-              initial={{ opacity: 0, y: 30 }}
-              animate={isInView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.45, delay: 0.55 + i * 0.1 }}
-            >
-              {/* Mini graphic */}
-              <feat.graphic />
-
-              <div>
-                <h4 className="text-sm font-semibold text-foreground mb-1">{feat.title}</h4>
-                <p className="text-xs text-muted-foreground leading-relaxed">{feat.description}</p>
               </div>
             </motion.div>
           ))}

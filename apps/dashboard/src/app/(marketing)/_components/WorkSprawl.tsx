@@ -10,7 +10,7 @@ export function WorkSprawl() {
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
-    <section ref={ref} className="relative z-10 w-full py-24 md:py-32 bg-white overflow-hidden">
+    <section ref={ref} className="relative z-10 w-full py-24 md:py-32 bg-[#fffaf5] overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
         
         {/* ── Headline ── */}
@@ -45,7 +45,7 @@ export function WorkSprawl() {
               {/* Eye-catching Graphic Area */}
               <div className="h-56 relative bg-slate-50/50 overflow-hidden border-b border-slate-100/80">
                 {/* Glowing background blob */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-rose-400/20 rounded-full blur-3xl" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-amber-400/20 rounded-full blur-3xl" />
                 
                 {/* Floating Notification Pills */}
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -61,7 +61,7 @@ export function WorkSprawl() {
                       <div className="w-16 h-1.5 bg-slate-200 rounded-full" />
                       <div className="w-10 h-1.5 bg-slate-100 rounded-full" />
                     </div>
-                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white shadow-sm">
                       3
                     </div>
                   </motion.div>
@@ -77,7 +77,7 @@ export function WorkSprawl() {
                       <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
                       <div className="w-14 h-1.5 bg-slate-100 rounded-full" />
                     </div>
-                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                    <div className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full border-2 border-white shadow-sm">
                       7
                     </div>
                   </motion.div>
@@ -89,7 +89,7 @@ export function WorkSprawl() {
                     className="absolute top-14 right-8 w-12 h-12 bg-white/90 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200/60 flex items-center justify-center z-0"
                   >
                     <Image src="/logos/gmail.png" alt="Email" width={24} height={24} className="object-contain" />
-                    <div className="absolute top-0 -right-1 w-3 h-3 bg-rose-500 rounded-full border-2 border-white" />
+                    <div className="absolute top-0 -right-1 w-3 h-3 bg-amber-500 rounded-full border-2 border-white" />
                   </motion.div>
 
                 </div>
@@ -114,7 +114,7 @@ export function WorkSprawl() {
               {/* Eye-catching Graphic Area */}
               <div className="h-56 relative bg-slate-50/50 overflow-hidden border-b border-slate-100/80 flex items-center justify-center">
                 {/* Glowing background blob */}
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-blue-400/20 rounded-full blur-3xl" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-amber-300/20 rounded-full blur-3xl" />
                 
                 {/* Mini Dashboard Mockup */}
                 <div className="relative w-48 h-32 bg-white rounded-xl shadow-lg border border-slate-200/60 p-3 flex flex-col gap-2 z-10">

@@ -1,5 +1,5 @@
 // Enums matching the Prisma schema
-export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify" | "sms" | "sms_agent";
+export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify" | "sms" | "sms_agent" | "dashboard_agent";
 export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai" | "note";
 
@@ -33,6 +33,7 @@ export interface OrgSettings {
   // Guardrails
   maxRefundAmount: number | null;  // null = unlimited
   blockCancellations: boolean;
+  blockCustomLineItems: boolean;
   maxIterations: number;
 
   // Response
@@ -77,6 +78,18 @@ export interface Message {
   sentAt: string;
 }
 
+export interface ActionLogEntry {
+  id: string;
+  sentAt: string;
+  threadId: string;
+  channelType: string;
+  threadTag: string | null;
+  customerHandle: string;
+  instruction: string | null;
+  summary: string;
+  actions: Array<{ tool: string; result: string }>;
+}
+
 export interface Thread {
   id: string;
   organizationId: string;
@@ -98,6 +111,7 @@ export interface AgentTurn {
   actions: { tool: string; result: string }[]
   summary: string | null
   error: string | null
+  senderPhone?: string | null
 }
 
 // Agent plan — proposed steps before execution
@@ -143,5 +157,6 @@ export interface Ticket {
     text: string | null;
     time: string;
     author?: string;
+    isAgentNote?: boolean;
   }[];
 }

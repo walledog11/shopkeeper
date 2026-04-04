@@ -4,7 +4,7 @@ import { UserPlus, Cable, Bot, CreditCard } from "lucide-react"
 const actions = [
   { href: "/dashboard/team", icon: UserPlus, label: "Invite teammate" },
   { href: "/dashboard/integrations", icon: Cable, label: "Connect channel" },
-  { href: "/dashboard/settings", icon: Bot, label: "Update AI persona" },
+  { href: "/dashboard/settings?tab=agent", icon: Bot, label: "Update AI persona" },
   { href: "/dashboard/settings?tab=billing", icon: CreditCard, label: "Manage billing" },
 ]
 

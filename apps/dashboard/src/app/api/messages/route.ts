@@ -112,9 +112,7 @@ export async function POST(request: Request) {
             const client = new ServerClient(POSTMARK_API_KEY);
             const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
             const threadMessageId = `<thread-${threadId}@${INBOUND_DOMAIN}>`;
-            const slug = org.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const fromDomain = process.env.POSTMARK_FROM_DOMAIN;
-            const fromEmail = fromDomain ? `${slug}@${fromDomain}` : integration.externalAccountId;
+            const fromEmail = integration.fromEmail || integration.externalAccountId;
 
             const result = await client.sendEmail({
               From: `${org.name} <${fromEmail}>`,

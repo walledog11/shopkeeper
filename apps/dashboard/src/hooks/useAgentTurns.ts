@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo } from 'react'
 import type { Thread, Message, AgentTurn } from '@/types'
+import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
 
 interface UseAgentTurnsProps {
   activeTicketId: string | null
@@ -26,9 +27,9 @@ export function useAgentTurns({
   // Derive persisted agent turns from the thread messages (survive page refresh)
   const activeAgentTurns = useMemo((): AgentTurn[] => {
     const dbTurns = (activeThread?.messages ?? [])
-      .filter(m => m.senderType === 'note' && m.contentText?.startsWith('__clerk_agent__'))
+      .filter(m => m.senderType === 'note' && m.contentText?.startsWith(AGENT_TURN_PREFIX))
       .map(m => {
-        try { return JSON.parse(m.contentText!.slice('__clerk_agent__'.length)) as AgentTurn }
+        try { return JSON.parse(m.contentText!.slice(AGENT_TURN_PREFIX.length)) as AgentTurn }
         catch { return null }
       })
       .filter((t): t is AgentTurn => t !== null)
@@ -61,7 +62,7 @@ export function useAgentTurns({
       id: `agent-turn-${Date.now()}`,
       threadId: activeTicketId,
       senderType: 'note',
-      contentText: `__clerk_agent__${JSON.stringify(turn)}`,
+      contentText: `${AGENT_TURN_PREFIX}${JSON.stringify(turn)}`,
       mediaUrl: null,
       sentAt: new Date().toISOString(),
     }

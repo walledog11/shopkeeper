@@ -18,6 +18,7 @@ enum ChannelType {
   shopify
   sms
   sms_agent
+  dashboard_agent
 }
 
 enum ThreadStatus {

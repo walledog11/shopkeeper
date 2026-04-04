@@ -4,9 +4,8 @@ import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
+import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
 import type { OrgSettings } from "@/types";
-
-export const AGENT_TURN_PREFIX = "__clerk_agent__";
 
 export async function POST(request: Request) {
   try {

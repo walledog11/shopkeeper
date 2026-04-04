@@ -3,77 +3,10 @@ import Image from "next/image";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import {
-  MessageCircle, Filter, Bell, Zap, Bot, Link2,
-  RefreshCw, Plus, CheckCircle2, MessageSquare,
-  Lock, Check, Search, Settings2, Send, FileText, Clock,
+  MessageCircle, Bot,
+  RefreshCw, CheckCircle2, MessageSquare,
+  Lock, Check, Search, Send, Tag,
 } from "lucide-react";
-
-const features = [
-  {
-    id: "inbox",
-    category: "INBOX",
-    title: "All your messages,\none clean dashboard",
-    description:
-      "Customer messages from Instagram, SMS, Shopify, and Email — routed to one place. No more switching tabs.",
-    preview: "inbox",
-    bgClass: "bg-blue-50/70",
-    categoryColor: "text-blue-600",
-    subFeatures: [
-      { icon: MessageCircle, label: "Multi-channel" },
-      { icon: RefreshCw, label: "Real-time sync" },
-      { icon: Filter, label: "Smart filters" },
-      { icon: Bell, label: "Notifications" },
-    ],
-  },
-  {
-    id: "summarize",
-    category: "SUMMARIZE",
-    title: "From ticket\nto insight, instantly",
-    description:
-      "Every incoming ticket is summarized with vital details — order numbers, tracking info, customer intent — so you respond in seconds.",
-    preview: "summary",
-    bgClass: "bg-amber-50/70",
-    categoryColor: "text-amber-600",
-    subFeatures: [
-      { icon: Zap, label: "Instant analysis" },
-      { icon: FileText, label: "Key details" },
-      { icon: Clock, label: "Time saved" },
-      { icon: CheckCircle2, label: "Auto-resolved" },
-    ],
-  },
-  {
-    id: "respond",
-    category: "RESPOND",
-    title: "Delegate tasks,\nlike a real employee",
-    description:
-      "Type @clerk in your notes tab to instruct the AI agent. It runs the action, updates Shopify, and replies — you just review.",
-    preview: "respond",
-    bgClass: "bg-violet-50/60",
-    categoryColor: "text-violet-600",
-    subFeatures: [
-      { icon: Bot, label: "AI agent" },
-      { icon: Send, label: "Auto-reply" },
-      { icon: Check, label: "Action log" },
-      { icon: RefreshCw, label: "Shopify sync" },
-    ],
-  },
-  {
-    id: "integrations",
-    category: "CONNECT",
-    title: "Connect all your\nchannels in minutes",
-    description:
-      "Plug in Instagram, SMS, Shopify, and your business email. New channels added regularly. Setup takes under 5 minutes.",
-    preview: "integrations",
-    bgClass: "bg-slate-100/80",
-    categoryColor: "text-slate-600",
-    subFeatures: [
-      { icon: Link2, label: "Easy setup" },
-      { icon: Settings2, label: "Configure" },
-      { icon: RefreshCw, label: "Auto-sync" },
-      { icon: Plus, label: "Extensible" },
-    ],
-  },
-];
 
 /* ─── InboxPreview ─────────────────────────────────────────────────────────── */
 function InboxPreview() {
@@ -84,6 +17,7 @@ function InboxPreview() {
       customer: "sarah_styles",
       subject: "Order size change request",
       preview: "Hi! I ordered the wrong size, can I switch to Medium?",
+      tag: "Returns",
       time: "Just now",
       active: true,
       awaiting: true,
@@ -94,6 +28,7 @@ function InboxPreview() {
       customer: "david@example.com",
       subject: "Refund request for #3012",
       preview: "I'd like to request a refund for my recent order.",
+      tag: "Refund",
       time: "2m",
       active: false,
       awaiting: true,
@@ -104,6 +39,7 @@ function InboxPreview() {
       customer: "+1 (555) 234-5678",
       subject: "Address change for order",
       preview: "Can I update my shipping address before it ships?",
+      tag: "Address",
       time: "5m",
       active: false,
       awaiting: false,
@@ -180,10 +116,15 @@ function InboxPreview() {
               <p className="text-[11px] text-slate-400 line-clamp-1 mb-2">{t.preview}</p>
 
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  Open
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    Open
+                  </span>
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                    {t.tag}
+                  </span>
+                </div>
                 {t.awaiting && (
                   <span className="text-[10px] font-semibold text-amber-600">Awaiting reply</span>
                 )}
@@ -438,213 +379,119 @@ function RespondPreview() {
   );
 }
 
-/* ─── IntegrationsPreview ──────────────────────────────────────────────────── */
-function IntegrationsPreview() {
-  const channels = [
-    { name: "Instagram DM", icon: "/logos/instagram-logo.png" },
-    { name: "SMS (Twilio)", icon: "/logos/sms.svg" },
-    { name: "Shopify", icon: "/logos/shopify-inbox.png" },
-    { name: "Gmail", icon: "/logos/gmail.png" },
-  ];
-
-  return (
-    <div className="flex justify-center w-full h-[460px]">
-      <div className="w-[340px] h-full rounded-xl border border-slate-200 bg-white shadow-xl overflow-hidden flex flex-col font-sans">
-
-        {/* Header */}
-        <div className="h-12 bg-white border-b border-slate-200 flex items-center px-4 shrink-0 justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-slate-900 flex items-center justify-center">
-              <Settings2 className="w-3.5 h-3.5 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-slate-800">Integrations</span>
-          </div>
-          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-            4 Active
-          </span>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Channels</p>
-            <p className="text-sm font-semibold text-slate-800">Manage your linked platforms</p>
-          </div>
-
-          <div className="space-y-2">
-            {channels.map((ch, i) => (
-              <motion.div
-                key={ch.name}
-                initial={{ opacity: 0, x: -8 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.07, duration: 0.3 }}
-                className="flex items-center justify-between border border-slate-200 rounded-md p-3 bg-white"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-md bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
-                    <Image src={ch.icon} alt={ch.name} width={16} height={16} className="object-contain" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold text-slate-800">{ch.name}</span>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.4)]" />
-                      <span className="text-[10px] text-slate-400">Connected</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Toggle */}
-                <div className="w-8 h-4 rounded-full bg-amber-400 relative cursor-pointer shadow-inner shrink-0">
-                  <div className="absolute top-[2px] right-[2px] w-3 h-3 rounded-full bg-white shadow-sm" />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <button className="w-full py-2.5 border border-dashed border-slate-200 bg-slate-50 rounded-md text-xs font-semibold text-slate-500 flex items-center justify-center gap-1.5">
-            <Plus className="w-3.5 h-3.5" /> Connect New Channel
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── Registry ─────────────────────────────────────────────────────────────── */
-const previewComponents: Record<string, React.FC> = {
-  inbox: InboxPreview,
-  summary: SummaryPreview,
-  respond: RespondPreview,
-  integrations: IntegrationsPreview,
-};
-
-/* ─── Main Section ─────────────────────────────────────────────────────────── */
+/* ─── Main Section — 3-step solution flow ──────────────────────────────────── */
 export function Features() {
   return (
-    <section id="features" className="relative z-10 w-full py-14 bg-background">
+    <section id="features" className="relative z-10 w-full py-24 bg-[#fffaf5]">
       <div className="container mx-auto px-4 md:px-6 max-w-6xl">
-        <h2 className="text-center text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground mb-16">
-          Everything you need in one place
-        </h2>
+        {/* Section header */}
+        <div className="text-center mb-20">
+          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground">
+            How Clerk works
+          </h2>
+          <p className="mt-4 text-lg text-muted-foreground max-w-xl mx-auto">
+            From message to resolution in three steps.
+          </p>
+        </div>
 
-        {/* Bento grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-          {/* ── HERO: AI Summarization — 2 cols × 2 rows ── */}
-          <motion.div
-            className="group md:col-span-2 md:row-span-2 rounded-2xl border border-slate-200 bg-amber-50/70 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <div className="h-[340px] overflow-hidden flex justify-center pt-6">
-              <div className="transform scale-[0.72] origin-top">
-                <SummaryPreview />
-              </div>
+        {/* Step 1 — text left, preview right */}
+        <motion.div
+          className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center mb-28"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-8 h-8 rounded-full bg-amber-400 text-white text-sm font-bold flex items-center justify-center shrink-0">1</span>
+              <span className="text-xs font-bold tracking-widest uppercase text-amber-600">Connect</span>
             </div>
-            <div className="p-7 border-t border-amber-100 flex-1 flex flex-col justify-center">
-              <span className="text-xs font-semibold tracking-widest uppercase text-amber-600 mb-3 block">
-                SUMMARIZE
-              </span>
-              <h3 className="text-2xl md:text-3xl font-bold text-foreground leading-tight mb-3">
-                From ticket<br />to insight, instantly
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed max-w-sm">
-                Every incoming ticket is summarized with vital details — order numbers, tracking info, customer intent — so you respond in seconds.
-              </p>
-              <div className="grid grid-cols-2 gap-3 mt-5 max-w-xs">
-                {features[1].subFeatures.map((sf) => (
-                  <div key={sf.label} className="flex items-center gap-2">
-                    <sf.icon className="w-4 h-4 text-foreground/60 shrink-0" />
-                    <span className="text-xs font-medium text-foreground">{sf.label}</span>
-                  </div>
-                ))}
-              </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-foreground leading-tight mb-4">
+              Every message,<br />one inbox
+            </h3>
+            <p className="text-base text-muted-foreground leading-relaxed max-w-md">
+              Instagram DMs, emails, SMS, and Shopify messages all land in a single queue. Each ticket is auto-tagged so triage takes seconds, not minutes.
+            </p>
+            <div className="flex flex-wrap gap-3 mt-6">
+              {[
+                { icon: MessageCircle, label: "Multi-channel" },
+                { icon: Tag, label: "Auto-tagging" },
+                { icon: RefreshCw, label: "Real-time sync" },
+              ].map((sf) => (
+                <div key={sf.label} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <sf.icon className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span className="font-medium">{sf.label}</span>
+                </div>
+              ))}
             </div>
-          </motion.div>
-
-          {/* ── INBOX ── */}
-          <motion.div
-            className="group rounded-2xl border border-slate-200 bg-blue-50/70 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-          >
-            <div className="h-[200px] overflow-hidden flex justify-center pt-4">
-              <div className="transform scale-[0.55] origin-top">
+          </div>
+          <div className="flex justify-center">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+              <div className="transform scale-[0.85] origin-top">
                 <InboxPreview />
               </div>
             </div>
-            <div className="p-5 border-t border-blue-100 flex-1">
-              <span className="text-xs font-semibold tracking-widest uppercase text-blue-600 mb-2 block">INBOX</span>
-              <h3 className="text-lg font-bold text-foreground leading-tight mb-2">
-                All your messages,<br />one clean dashboard
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Customer messages from Instagram, SMS, Shopify, and Email — routed to one place. No more switching tabs.
-              </p>
-            </div>
-          </motion.div>
+          </div>
+        </motion.div>
 
-          {/* ── CONNECT ── */}
-          <motion.div
-            className="group rounded-2xl border border-slate-200 bg-slate-100/80 overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <div className="h-[200px] overflow-hidden flex justify-center pt-4">
-              <div className="transform scale-[0.55] origin-top">
-                <IntegrationsPreview />
+        {/* Step 2 — preview left, text right */}
+        <motion.div
+          className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center mb-28"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="flex justify-center order-2 md:order-1">
+            <div className="rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+              <div className="transform scale-[0.85] origin-top">
+                <SummaryPreview />
               </div>
             </div>
-            <div className="p-5 border-t border-slate-200 flex-1">
-              <span className="text-xs font-semibold tracking-widest uppercase text-slate-600 mb-2 block">CONNECT</span>
-              <h3 className="text-lg font-bold text-foreground leading-tight mb-2">
-                Connect all your<br />channels in minutes
-              </h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Plug in Instagram, SMS, Shopify, and your business email. Setup takes under 5 minutes.
-              </p>
+          </div>
+          <div className="order-1 md:order-2">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="w-8 h-8 rounded-full bg-amber-400 text-white text-sm font-bold flex items-center justify-center shrink-0">2</span>
+              <span className="text-xs font-bold tracking-widest uppercase text-amber-600">Triage</span>
             </div>
-          </motion.div>
+            <h3 className="text-3xl md:text-4xl font-bold text-foreground leading-tight mb-4">
+              AI reads, summarizes,<br />and drafts a plan
+            </h3>
+            <p className="text-base text-muted-foreground leading-relaxed max-w-md">
+              Clerk extracts order context, identifies customer intent, and generates a step-by-step action plan — before your team even opens the ticket.
+            </p>
+          </div>
+        </motion.div>
 
-          {/* ── RESPOND — spans full width ── */}
-          <motion.div
-            className="group md:col-span-3 rounded-2xl border border-slate-200 bg-violet-50/60 overflow-hidden flex flex-col md:flex-row transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, amount: 0.1 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-          >
-            <div className="md:w-64 h-[220px] md:h-auto overflow-hidden flex justify-center pt-4 md:pt-6">
-              <div className="transform scale-[0.52] origin-top">
+        {/* Step 3 — HERO: Human approves (centered, full width, emphasized) */}
+        <motion.div
+          className="relative"
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.15 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="text-center mb-10">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <span className="w-8 h-8 rounded-full bg-amber-400 text-white text-sm font-bold flex items-center justify-center shrink-0">3</span>
+              <span className="text-xs font-bold tracking-widest uppercase text-amber-600">Approve</span>
+            </div>
+            <h3 className="text-3xl md:text-4xl font-bold text-foreground leading-tight mb-4">
+              You approve. Clerk executes.
+            </h3>
+            <p className="text-base text-muted-foreground leading-relaxed max-w-lg mx-auto">
+              Type @clerk in internal notes, review the proposed steps, toggle what should run, and approve. Nothing reaches the customer without your sign-off.
+            </p>
+          </div>
+          <div className="flex justify-center">
+            <div className="rounded-2xl border-2 border-amber-200 bg-white shadow-xl overflow-hidden ring-1 ring-amber-100">
+              <div className="transform scale-[0.9] origin-top">
                 <RespondPreview />
               </div>
             </div>
-            <div className="p-6 md:p-8 border-t md:border-t-0 md:border-l border-violet-100 flex-1 flex flex-col justify-center">
-              <span className="text-xs font-semibold tracking-widest uppercase text-violet-600 mb-3 block">RESPOND</span>
-              <h3 className="text-xl md:text-2xl font-bold text-foreground leading-tight mb-3">
-                Delegate tasks,<br />like a real employee
-              </h3>
-              <p className="text-sm text-muted-foreground leading-relaxed max-w-md">
-                Type @clerk in your notes tab to instruct the AI agent. It runs the action, updates Shopify, and replies — you just review.
-              </p>
-              <div className="flex flex-wrap gap-x-6 gap-y-3 mt-5">
-                {features[2].subFeatures.map((sf) => (
-                  <div key={sf.label} className="flex items-center gap-2">
-                    <sf.icon className="w-4 h-4 text-foreground/60 shrink-0" />
-                    <span className="text-xs font-medium text-foreground">{sf.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        </div>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

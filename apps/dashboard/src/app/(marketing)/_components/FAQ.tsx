@@ -7,15 +7,19 @@ import { Plus } from "lucide-react";
 const faqs = [
   {
     q: "Which channels does Clerk support?",
-    a: "Clerk currently supports Instagram DM, Email, SMS (via Twilio), and Shopify. Each channel connects in minutes — no code required. More channels are on the roadmap.",
+    a: "Clerk supports Instagram DM, Email, SMS (via Twilio), and Shopify today. TikTok is already in the channel roadmap and marked as coming soon. Most channels connect in minutes.",
   },
   {
     q: "Does it connect to my Shopify store?",
-    a: "Yes. Clerk connects to your Shopify store via OAuth and pulls order context directly into each support ticket — so you and the AI both see order numbers, tracking info, and customer details without switching tabs.",
+    a: "Yes. Clerk connects via Shopify OAuth and pulls order context directly into tickets, so your team and the AI can respond without switching tabs.",
   },
   {
     q: "What if the AI gives a wrong answer?",
-    a: "Clerk's AI always drafts a reply for your review before sending. You can approve, edit, or discard it. Nothing goes out without your say unless you've explicitly enabled auto-send for a specific workflow.",
+    a: "Clerk runs human-in-the-loop by default. The agent proposes a plan, you can disable steps, and nothing customer-facing is sent without approval unless you explicitly enable automation.",
+  },
+  {
+    q: "Can I manage tickets from my phone?",
+    a: "Yes. Team members can use SMS or WhatsApp to instruct the AI agent, approve plans, and handle urgent support without opening the dashboard.",
   },
   {
     q: "Can I use my own email domain?",
@@ -27,7 +31,11 @@ const faqs = [
   },
   {
     q: "Can multiple team members use Clerk?",
-    a: "Yes. The Professional plan includes team members with role-based permissions. You control who can view messages, send replies, or change account settings.",
+    a: "Yes. Professional includes multi-member access, role-based permissions, and internal notes so teams can align privately before replying.",
+  },
+  {
+    q: "Does Clerk auto-organize tickets?",
+    a: "Yes. Clerk auto-triages with tags and thread statuses (Open, Pending, Closed) so the inbox stays organized instead of purely chronological.",
   },
 ];
 

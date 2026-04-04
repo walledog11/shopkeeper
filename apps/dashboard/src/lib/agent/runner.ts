@@ -6,6 +6,8 @@ import { AGENT_TOOLS, TOOL_CATEGORIES, PLAN_STEP_LABELS } from "./tools";
 import type { PlanStep, RawToolCall, AgentPlan, OrgSettings } from "@/types";
 import { resolveAgentSettings } from "./settings";
 import {
+  searchShopifyProducts,
+  searchShopifyCustomers,
   getShopifyCustomer,
   updateShopifyCustomerInfo,
   getShopifyOrders,
@@ -14,14 +16,18 @@ import {
   getOrderByName,
   createRefund,
   cancelOrder,
+  createShopifyOrder,
 } from "./shopify-tools";
 import {
   addInternalNote,
   sendReply,
+  sendEmail,
   updateThreadStatus,
   updateThreadTag,
 } from "./thread-tools";
 import type {
+  SearchShopifyProductsInput,
+  SearchShopifyCustomersInput,
   GetShopifyCustomerInput,
   UpdateShopifyCustomerInfoInput,
   GetShopifyOrdersInput,
@@ -30,8 +36,10 @@ import type {
   GetOrderByNameInput,
   CreateRefundInput,
   CancelOrderInput,
+  CreateShopifyOrderInput,
   AddInternalNoteInput,
   SendReplyInput,
+  SendEmailInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
 } from "./tools";
@@ -88,7 +96,8 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     throw new Error("Thread not found");
   }
 
-  const openThreadCount = await db.thread.count({
+  // Fire in parallel with the Shopify resolution below
+  const openThreadCountPromise = db.thread.count({
     where: { customerId: thread.customerId, status: "open" },
   });
 
@@ -111,6 +120,10 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         shopifyCustomerId = String(found.id);
         const parts = [found.first_name, found.last_name].filter(Boolean);
         if (parts.length > 0) shopifyCustomerName = parts.join(' ');
+        await db.thread.update({
+          where: { id: thread.id },
+          data: { shopifyCustomerId },
+        }).catch(() => {});
       }
     } catch {
       // best-effort; leave null
@@ -166,6 +179,8 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
+  const openThreadCount = await openThreadCountPromise;
+
   return {
     orgId,
     orgName: org?.name ?? "Support",
@@ -211,47 +226,52 @@ async function executeTool(
   args: unknown,
   ctx: AgentContext
 ): Promise<string> {
+  const noShopify = "Error: no Shopify integration connected.";
   const shopifyCtx = ctx.shopify ?? { shop: "", accessToken: "" };
-  const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId };
+  const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
 
   switch (name) {
+    case "search_shopify_products":
+      return ctx.shopify ? searchShopifyProducts(cast<SearchShopifyProductsInput>(args), shopifyCtx) : noShopify;
+
+    case "search_shopify_customers":
+      return ctx.shopify ? searchShopifyCustomers(cast<SearchShopifyCustomersInput>(args), shopifyCtx) : noShopify;
+
     case "get_shopify_customer":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return getShopifyCustomer(cast<GetShopifyCustomerInput>(args), shopifyCtx);
+      return ctx.shopify ? getShopifyCustomer(cast<GetShopifyCustomerInput>(args), shopifyCtx) : noShopify;
 
     case "update_shopify_customer_info":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return updateShopifyCustomerInfo(cast<UpdateShopifyCustomerInfoInput>(args), shopifyCtx);
+      return ctx.shopify ? updateShopifyCustomerInfo(cast<UpdateShopifyCustomerInfoInput>(args), shopifyCtx) : noShopify;
 
     case "get_shopify_orders":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return getShopifyOrders(cast<GetShopifyOrdersInput>(args), shopifyCtx);
+      return ctx.shopify ? getShopifyOrders(cast<GetShopifyOrdersInput>(args), shopifyCtx) : noShopify;
 
     case "update_shopify_order_address":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return updateShopifyOrderAddress(cast<UpdateShopifyOrderAddressInput>(args), shopifyCtx);
+      return ctx.shopify ? updateShopifyOrderAddress(cast<UpdateShopifyOrderAddressInput>(args), shopifyCtx) : noShopify;
 
     case "add_shopify_customer_note":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return addShopifyCustomerNote(cast<AddShopifyCustomerNoteInput>(args), shopifyCtx);
+      return ctx.shopify ? addShopifyCustomerNote(cast<AddShopifyCustomerNoteInput>(args), shopifyCtx) : noShopify;
 
     case "get_order_by_name":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return getOrderByName(cast<GetOrderByNameInput>(args), shopifyCtx);
+      return ctx.shopify ? getOrderByName(cast<GetOrderByNameInput>(args), shopifyCtx) : noShopify;
 
     case "create_refund":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return createRefund(cast<CreateRefundInput>(args), shopifyCtx);
+      return ctx.shopify ? createRefund(cast<CreateRefundInput>(args), shopifyCtx) : noShopify;
 
     case "cancel_order":
-      if (!ctx.shopify) return "Error: no Shopify integration connected.";
-      return cancelOrder(cast<CancelOrderInput>(args), shopifyCtx);
+      return ctx.shopify ? cancelOrder(cast<CancelOrderInput>(args), shopifyCtx) : noShopify;
+
+    case "create_shopify_order":
+      return ctx.shopify ? createShopifyOrder(cast<CreateShopifyOrderInput>(args), shopifyCtx) : noShopify;
 
     case "add_internal_note":
       return addInternalNote(cast<AddInternalNoteInput>(args), threadCtx);
 
     case "send_reply":
       return sendReply(cast<SendReplyInput>(args), threadCtx);
+
+    case "send_email":
+      return sendEmail(cast<SendEmailInput>(args), threadCtx);
 
     case "update_thread_status":
       return updateThreadStatus(cast<UpdateThreadStatusInput>(args), threadCtx);
@@ -266,30 +286,63 @@ async function executeTool(
 
 // ── System prompt ─────────────────────────────────────────────────────────────
 
+function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): string[] {
+  const clauses: string[] = [];
+  if (s.blockCancellations) {
+    clauses.push("- Order cancellations are disabled by the workspace owner. Do NOT call cancel_order under any circumstances. Inform the operator that cancellations must be handled manually.");
+  }
+  if (s.blockCustomLineItems) {
+    clauses.push("- Custom line items are disabled by the workspace owner. Every line item in create_shopify_order MUST include a variant_id from the Shopify product catalog. Do NOT create line items with only a title and price.");
+  }
+  if (s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
+    clauses.push(`- The maximum refund you are authorised to issue is $${s.maxRefundAmount}. If the requested refund exceeds this amount, do NOT proceed — inform the operator that manual approval is required.`);
+  }
+  return clauses;
+}
+
 function buildSystemPrompt(ctx: AgentContext, settings?: OrgSettings): string {
   const s = resolveAgentSettings(settings);
+  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+
   const shopifyNote = ctx.shopify
     ? `A Shopify integration is connected (shop: ${ctx.shopify.shop}).`
     : "No Shopify integration is connected — Shopify tools will not work.";
 
   const shopifyCustomerNote = ctx.thread.shopifyCustomerId
     ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} — pass this directly when calling Shopify tools.`
-    : "No Shopify customer ID is available for this thread. Do not attempt Shopify customer operations.";
+    : isOperatorMode
+      ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call search_shopify_customers first."
+      : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
+
+  const guardrailClauses = buildGuardrailClauses(s);
+
+  if (isOperatorMode) {
+    const channel = ctx.thread.channelType === "sms_agent" ? "WhatsApp/SMS" : "the dashboard";
+    const ordersSection = ctx.recentOrders.length > 0
+      ? `\n## Recent orders\n${JSON.stringify(ctx.recentOrders)}`
+      : "";
+    const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
+      ? `- Always respond in ${s.replyLanguage}.`
+      : "";
+
+    return `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.
+
+## Integrations
+${shopifyNote}
+${shopifyCustomerNote}
+- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
+- When given a customer name or email but no customer ID, call search_shopify_customers first.
+${ordersSection}
+## Instructions
+- Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response — your text response is only a summary of what the tools did.
+- Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions. If you have not called send_email, you have not sent anything.
+- Do NOT call send_reply or add_internal_note.
+- After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) — never just say "Done".
+- Be direct and factual. No bullet lists, no markdown. 1–2 sentences.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
+  }
 
   const otherOpenThreads = Math.max(0, ctx.openThreadCount - 1);
-
-  const ordersJson = ctx.recentOrders.length > 0
-    ? JSON.stringify(ctx.recentOrders)
-    : "[]";
-
-  // Guardrail clauses injected into the instructions section
-  const guardrailClauses: string[] = [];
-  if (s.blockCancellations) {
-    guardrailClauses.push("- Order cancellations are disabled by the workspace owner. Do NOT call cancel_order under any circumstances. Inform the support agent that cancellations must be handled manually.");
-  }
-  if (s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
-    guardrailClauses.push(`- The maximum refund you are authorised to issue is $${s.maxRefundAmount}. If the requested refund exceeds this amount, do NOT proceed — inform the support agent that manual approval is required.`);
-  }
+  const ordersJson = ctx.recentOrders.length > 0 ? JSON.stringify(ctx.recentOrders) : "[]";
   const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
     ? `- Always write customer-facing replies in ${s.replyLanguage}, regardless of the language the customer used.`
     : "";
@@ -349,6 +402,35 @@ function toAnthropicTools(settings?: OrgSettings): Anthropic.Tool[] {
   });
 }
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+function buildMessageHistory(
+  recentMessages: AgentContext["recentMessages"],
+  instruction: string
+): Anthropic.MessageParam[] {
+  const rawHistory = recentMessages.map((m) => ({
+    role: (m.senderType === "agent" || m.senderType === "note")
+      ? "assistant" as const
+      : "user" as const,
+    content: m.contentText ?? "(media)",
+  }));
+
+  const merged: Anthropic.MessageParam[] = [];
+  for (const msg of rawHistory) {
+    const last = merged[merged.length - 1];
+    if (last && last.role === msg.role && typeof last.content === "string") {
+      last.content += "\n" + msg.content;
+    } else {
+      merged.push({ role: msg.role, content: msg.content });
+    }
+  }
+  while (merged.length > 0 && merged[0].role === "assistant") {
+    merged.shift();
+  }
+
+  return [...merged, { role: "user", content: instruction }];
+}
+
 // ── Plan generation (one LLM call, no side effects) ──────────────────────────
 
 function describeTool(name: string, input: unknown): string {
@@ -369,11 +451,22 @@ function describeTool(name: string, input: unknown): string {
       return a.amount ? `Issue $${a.amount} refund` : 'Issue full refund'
     case 'cancel_order':
       return `Cancel order${a.reason ? ` (${a.reason})` : ''}`
+    case 'create_shopify_order': {
+      const items = (a.line_items as { title?: string; variant_id?: string; quantity: number }[] ?? [])
+        .map(li => `${li.quantity}x ${li.title ?? `variant ${li.variant_id}`}`)
+        .join(', ')
+      return `Create order for ${a.first_name} ${a.last_name}${items ? ` — ${items}` : ''}`
+    }
     case 'add_shopify_customer_note':
       return `Add note to Shopify customer`
     case 'send_reply': {
       const text = String(a.text ?? '')
       return text.length > 80 ? `"${text.slice(0, 80)}…"` : `"${text}"`
+    }
+    case 'send_email': {
+      const body = String(a.body ?? '')
+      const preview = body.length > 60 ? `${body.slice(0, 60)}…` : body
+      return `Email to ${a.to}: "${preview}"`
     }
     case 'add_internal_note':
       return `Add internal note`
@@ -393,30 +486,7 @@ export async function planAgent(
   instruction: string,
   settings?: OrgSettings
 ): Promise<AgentPlan> {
-  const rawHistory = ctx.recentMessages.map((m) => ({
-    role: (m.senderType === "agent" || m.senderType === "note")
-      ? "assistant" as const
-      : "user" as const,
-    content: m.contentText ?? "(media)",
-  }))
-
-  const mergedHistory: Anthropic.MessageParam[] = []
-  for (const msg of rawHistory) {
-    const last = mergedHistory[mergedHistory.length - 1]
-    if (last && last.role === msg.role && typeof last.content === "string") {
-      last.content += "\n" + msg.content
-    } else {
-      mergedHistory.push({ role: msg.role, content: msg.content })
-    }
-  }
-  while (mergedHistory.length > 0 && mergedHistory[0].role === "assistant") {
-    mergedHistory.shift()
-  }
-
-  const messages: Anthropic.MessageParam[] = [
-    ...mergedHistory,
-    { role: "user", content: instruction },
-  ]
+  const messages = buildMessageHistory(ctx.recentMessages, instruction)
 
   const response = await anthropic.messages.create({
     model: AI_MODEL,
@@ -441,7 +511,7 @@ export async function planAgent(
   const hasActions = rawToolCalls.some((tc) => TOOL_CATEGORIES[tc.name] === 'action')
   const hasSendReply = rawToolCalls.some((tc) => tc.name === 'send_reply')
 
-  if (hasActions && !hasSendReply && toolUseBlocks.length > 0) {
+  if (hasActions && !hasSendReply) {
     const phase2Messages: Anthropic.MessageParam[] = [
       ...messages,
       { role: "assistant", content: response.content },
@@ -492,36 +562,7 @@ export async function runAgent(
   const s = resolveAgentSettings(settings);
   const maxIterations = s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS;
   const actionsPerformed: ActionEntry[] = [];
-
-  // Build conversation history as alternating user/assistant turns.
-  // Consecutive same-role messages are merged so Anthropic's strict
-  // alternation requirement is satisfied.
-  const rawHistory = ctx.recentMessages.map((m) => ({
-    role: (m.senderType === "agent" || m.senderType === "note")
-      ? "assistant" as const
-      : "user" as const,
-    content: m.contentText ?? "(media)",
-  }));
-
-  const mergedHistory: Anthropic.MessageParam[] = [];
-  for (const msg of rawHistory) {
-    const last = mergedHistory[mergedHistory.length - 1];
-    if (last && last.role === msg.role && typeof last.content === "string") {
-      last.content += "\n" + msg.content;
-    } else {
-      mergedHistory.push({ role: msg.role, content: msg.content });
-    }
-  }
-
-  // Anthropic requires the first message to be from the user
-  while (mergedHistory.length > 0 && mergedHistory[0].role === "assistant") {
-    mergedHistory.shift();
-  }
-
-  const messages: Anthropic.MessageParam[] = [
-    ...mergedHistory,
-    { role: "user", content: instruction },
-  ];
+  const messages = buildMessageHistory(ctx.recentMessages, instruction);
 
   const tools = toAnthropicTools(settings);
 
@@ -554,6 +595,8 @@ export async function runAgent(
     messages.push({ role: "user", content: toolResults });
   }
 
+  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+
   for (let i = 0; i < maxIterations; i++) {
     console.log(`[agent] iteration ${i} — sending ${messages.length} messages`);
 
@@ -563,6 +606,9 @@ export async function runAgent(
       system: buildSystemPrompt(ctx, settings),
       messages,
       tools,
+      // Force operator-mode to call a tool on the first iteration so it can't
+      // hallucinate a "sent email" response without actually calling send_email.
+      ...(isOperatorMode && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {}),
     });
 
     const toolUseBlocks = response.content.filter(

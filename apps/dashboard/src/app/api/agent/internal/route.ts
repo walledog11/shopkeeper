@@ -15,9 +15,8 @@ import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { handleApiError } from "@/lib/api-errors";
+import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
 import type { RawToolCall } from "@/types";
-
-export const AGENT_TURN_PREFIX = "__clerk_agent__";
 
 export async function POST(request: Request) {
   try {

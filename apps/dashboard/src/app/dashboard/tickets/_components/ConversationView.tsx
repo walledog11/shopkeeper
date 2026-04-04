@@ -2,28 +2,14 @@
 
 import { useState, useEffect, useRef } from "react"
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Users, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, StickyNote } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Users, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, StickyNote, Smartphone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { AnimatePresence, motion } from "motion/react"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
 import type { Ticket, SenderType, AgentTurn, AgentPlan, RawToolCall } from "@/types"
-
-const TOOL_LABELS: Record<string, string> = {
-  get_shopify_customer:         "Fetched Shopify customer",
-  update_shopify_customer_info: "Updated customer info",
-  get_shopify_orders:           "Fetched orders",
-  get_order_by_name:            "Looked up order",
-  update_shopify_order_address: "Updated shipping address",
-  create_refund:                "Issued refund",
-  cancel_order:                 "Cancelled order",
-  add_shopify_customer_note:    "Added Shopify note",
-  add_internal_note:            "Added internal note",
-  send_reply:                   "Sent reply to customer",
-  update_thread_status:         "Updated thread status",
-  update_thread_tag:            "Updated thread tag",
-}
+import { TOOL_LABELS } from "@/lib/agent/tools"
 
 interface Props {
   ticket: Ticket
@@ -319,19 +305,30 @@ export default function ConversationView({
         ) : viewTab === 'notes' ? (
           <>
             {/* DB notes — inline comment style */}
-            {displayMessages.map((msg: { sender: SenderType; text: string | null; time: string; author?: string }, i: number) => (
+            {displayMessages.map((msg: { sender: SenderType; text: string | null; time: string; author?: string; isAgentNote?: boolean }, i: number) => (
               <div key={i} className="w-full">
                 <div className="flex gap-3">
-                  <div className="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-amber-700">
-                    {(msg.author ?? 'Y')[0].toUpperCase()}
-                  </div>
+                  {msg.isAgentNote ? (
+                    <div className="w-7 h-7 rounded-full bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
+                      <Bot className="w-3.5 h-3.5 text-violet-500" />
+                    </div>
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-bold text-amber-700">
+                      {(msg.author ?? 'Y')[0].toUpperCase()}
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-1.5 mb-1.5">
-                      <span className="text-[12px] font-semibold text-slate-700">{msg.author ?? 'You'}</span>
-                      <span className="text-[11px] text-slate-400">left a note</span>
+                      <span className={`text-[12px] font-semibold ${msg.isAgentNote ? 'text-violet-600' : 'text-slate-700'}`}>
+                        {msg.author ?? 'You'}
+                      </span>
+                      <span className="text-[11px] text-slate-400">added a note</span>
                       <span className="text-[11px] text-slate-400 ml-auto">{msg.time}</span>
                     </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-lg rounded-tl-sm px-3.5 py-2.5">
+                    <div className={msg.isAgentNote
+                      ? 'bg-violet-50 border border-violet-200 rounded-lg rounded-tl-sm px-3.5 py-2.5'
+                      : 'bg-amber-50 border border-amber-200 rounded-lg rounded-tl-sm px-3.5 py-2.5'
+                    }>
                       <p className="text-[13px] text-slate-700 leading-relaxed">{msg.text}</p>
                     </div>
                   </div>
@@ -344,6 +341,12 @@ export default function ConversationView({
               <div key={`agent-${i}`} className="space-y-2">
                 {/* User instruction — right aligned */}
                 <div className="flex flex-col gap-1 items-end">
+                  {turn.senderPhone && (
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 mr-1">
+                      <Smartphone className="w-3 h-3" />
+                      Via SMS · {turn.senderPhone}
+                    </div>
+                  )}
                   <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-slate-100 text-slate-700 rounded-md rounded-tr-sm">
                     <span className="text-violet-600 font-semibold">@{agentName.toLowerCase()}</span>{' '}
                     {turn.instruction}

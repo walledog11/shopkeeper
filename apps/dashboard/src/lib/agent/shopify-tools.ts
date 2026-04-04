@@ -1,4 +1,6 @@
 import type {
+  SearchShopifyProductsInput,
+  SearchShopifyCustomersInput,
   GetShopifyCustomerInput,
   UpdateShopifyCustomerInfoInput,
   GetShopifyOrdersInput,
@@ -7,6 +9,7 @@ import type {
   GetOrderByNameInput,
   CreateRefundInput,
   CancelOrderInput,
+  CreateShopifyOrderInput,
 } from "./tools";
 
 interface ShopifyContext {
@@ -22,6 +25,70 @@ function shopifyHeaders(token: string) {
 }
 
 const API_VERSION = "2024-01";
+
+// ── search_shopify_products ───────────────────────────────────────────────────
+
+export async function searchShopifyProducts(
+  input: SearchShopifyProductsInput,
+  ctx: ShopifyContext
+): Promise<string> {
+  const limit = Math.min(input.limit ?? 5, 10);
+  const res = await fetch(
+    `https://${ctx.shop}/admin/api/${API_VERSION}/products.json?title=${encodeURIComponent(input.query)}&limit=${limit}&fields=id,title,variants`,
+    { headers: shopifyHeaders(ctx.accessToken) }
+  );
+  const data = await res.json();
+
+  if (!res.ok) {
+    return `Error: could not search products — ${JSON.stringify(data.errors ?? data)}`;
+  }
+
+  const products = data.products ?? [];
+  if (products.length === 0) return `No products found matching "${input.query}".`;
+
+  return JSON.stringify(
+    products.map((p: { id: number; title: string; variants: { id: number; title: string; price: string; inventory_quantity: number }[] }) => ({
+      product_id: String(p.id),
+      title: p.title,
+      variants: p.variants.map(v => ({
+        variant_id: String(v.id),
+        title: v.title,
+        price: v.price,
+        inventory_quantity: v.inventory_quantity,
+      })),
+    }))
+  );
+}
+
+// ── search_shopify_customers ──────────────────────────────────────────────────
+
+export async function searchShopifyCustomers(
+  input: SearchShopifyCustomersInput,
+  ctx: ShopifyContext
+): Promise<string> {
+  const limit = Math.min(input.limit ?? 5, 10);
+  const res = await fetch(
+    `https://${ctx.shop}/admin/api/${API_VERSION}/customers/search.json?query=${encodeURIComponent(input.query)}&limit=${limit}&fields=id,first_name,last_name,email,phone`,
+    { headers: shopifyHeaders(ctx.accessToken) }
+  );
+  const data = await res.json();
+
+  if (!res.ok) {
+    return `Error: could not search customers — ${JSON.stringify(data.errors ?? data)}`;
+  }
+
+  const customers = data.customers ?? [];
+  if (customers.length === 0) return `No customers found matching "${input.query}".`;
+
+  return JSON.stringify(
+    customers.map((c: { id: number; first_name: string; last_name: string; email: string; phone: string | null }) => ({
+      customer_id: String(c.id),
+      name: `${c.first_name} ${c.last_name}`.trim(),
+      email: c.email,
+      phone: c.phone ?? null,
+    }))
+  );
+}
 
 // ── get_shopify_customer ──────────────────────────────────────────────────────
 
@@ -344,4 +411,62 @@ export async function cancelOrder(
   return `Order ${data.order.name} (${input.order_id}) cancelled successfully. Reason: ${input.reason ?? "other"}. Items ${input.restock !== false ? "restocked" : "not restocked"}.`;
 }
 
-export type { ShopifyContext };
+// ── create_shopify_order ──────────────────────────────────────────────────────
+
+export async function createShopifyOrder(
+  input: CreateShopifyOrderInput,
+  ctx: ShopifyContext
+): Promise<string> {
+  const shippingAddress = {
+    first_name: input.first_name,
+    last_name: input.last_name,
+    address1: input.address1,
+    ...(input.address2 ? { address2: input.address2 } : {}),
+    city: input.city,
+    province: input.province,
+    zip: input.zip,
+    country: input.country,
+  };
+
+  const lineItems = input.line_items.map((item) => {
+    if (item.variant_id) {
+      return { variant_id: Number(item.variant_id), quantity: item.quantity };
+    }
+    return {
+      title: item.title,
+      price: item.price,
+      quantity: item.quantity,
+      requires_shipping: true,
+    };
+  });
+
+  const res = await fetch(
+    `https://${ctx.shop}/admin/api/${API_VERSION}/orders.json`,
+    {
+      method: "POST",
+      headers: shopifyHeaders(ctx.accessToken),
+      body: JSON.stringify({
+        order: {
+          email: input.email,
+          financial_status: "pending",
+          send_receipt: false,
+          send_fulfillment_receipt: false,
+          line_items: lineItems,
+          shipping_address: shippingAddress,
+          billing_address: shippingAddress,
+          ...(input.note ? { note: input.note } : {}),
+        },
+      }),
+    }
+  );
+  const data = await res.json();
+
+  if (!res.ok || !data.order) {
+    return `Error: failed to create order — ${JSON.stringify(data.errors ?? data)}`;
+  }
+
+  const o = data.order;
+  return `Order ${o.name} created successfully for ${input.email}. Total: $${o.total_price}. Order ID: ${o.id}.`;
+}
+
+

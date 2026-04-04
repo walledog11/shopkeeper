@@ -16,6 +16,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   },
   maxRefundAmount: null,
   blockCancellations: false,
+  blockCustomLineItems: false,
   maxIterations: 10,
   replyLanguage: "auto",
 };

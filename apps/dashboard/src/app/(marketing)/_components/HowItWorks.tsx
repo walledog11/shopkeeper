@@ -143,9 +143,9 @@ function AICard() {
 /* ── Card 3: Respond & Resolve ── */
 function RunCard() {
   const workflowSteps = [
-    { icon: Inbox, label: "Ticket Created", sub: "Aggregated in Inbox", iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-    { icon: BrainCircuit, label: "AI Decision Engine", sub: "Drafts response & updates CRM", iconBg: "bg-yellow-400", iconColor: "text-white", active: true },
-    { icon: Send, label: "Resolution Sent", sub: "Dispatched to Instagram", iconBg: "bg-green-100", iconColor: "text-green-600" },
+    { icon: Inbox, label: "Ticket Created", sub: "Aggregated and triaged", iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+    { icon: BrainCircuit, label: "Proposed Action Plan", sub: "Drafted for human approval", iconBg: "bg-yellow-400", iconColor: "text-white", active: true },
+    { icon: Send, label: "Approved & Sent", sub: "Only approved steps run", iconBg: "bg-green-100", iconColor: "text-green-600" },
   ];
 
   return (
@@ -193,7 +193,7 @@ export function HowItWorks() {
             How it works
           </h2>
           <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-            From incoming message to automated resolution in seconds.
+            From incoming message to approved resolution, fast.
           </p>
         </div>
 
@@ -211,7 +211,7 @@ export function HowItWorks() {
                 <h3 className="text-lg font-bold text-foreground">Connect Channels</h3>
               </div>
               <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
-                Link your Instagram, SMS, Shopify, and email in seconds. All messages route to one hub.
+                Connect Instagram, Email, SMS, Shopify, and SMS/WhatsApp agent workflows. TikTok is visible as coming soon.
               </p>
             </div>
           </div>
@@ -227,7 +227,7 @@ export function HowItWorks() {
                 <h3 className="text-lg font-bold text-foreground">AI Extracts Context</h3>
               </div>
               <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
-                Incoming messages are instantly parsed. The AI extracts intent, urgency, and specific order details automatically.
+                Clerk extracts order context, suggests tags, and keeps statuses organized so triage stays clean.
               </p>
             </div>
           </div>
@@ -240,10 +240,10 @@ export function HowItWorks() {
             <div className="mt-6 px-2">
               <div className="flex items-center gap-3 mb-2">
                 <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                <h3 className="text-lg font-bold text-foreground">Respond &amp; Resolve</h3>
+                <h3 className="text-lg font-bold text-foreground">Approve Plan &amp; Resolve</h3>
               </div>
               <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
-                The AI agent drafts the perfect reply and pushes it back out through the original channel to resolve the ticket.
+                The AI proposes a step-by-step plan in internal notes. Your team approves, edits, or skips steps before customer replies go out.
               </p>
             </div>
           </div>

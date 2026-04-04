@@ -15,7 +15,7 @@ const tiers = [
     description: "Everything you need to centralize support across your channels.",
     featuresLabel: "WHAT YOU GET",
     features: [
-      { text: "Unified inbox (Instagram, Email)", ai: false },
+      { text: "Unified inbox (Instagram, Email, SMS)", ai: false },
       { text: "AI ticket summaries", ai: true },
       { text: "AI draft replies", ai: true },
       { text: "Analytics dashboard", ai: false },
@@ -32,8 +32,9 @@ const tiers = [
     description: "Full agentic capabilities to automate omnichannel support end-to-end.",
     featuresLabel: "EVERYTHING IN STARTER, PLUS",
     features: [
-      { text: "All channels (+ SMS, Shopify)", ai: false },
+      { text: "All channels (+ Shopify, TikTok coming soon)", ai: false },
       { text: "AI agent — delegate tasks by instruction", ai: true },
+      { text: "SMS / WhatsApp agent workflows", ai: true },
       { text: "Shopify order context in every ticket", ai: true },
       { text: "Team members & role permissions", ai: false },
       { text: "Activity history & audit log", ai: false },
@@ -66,7 +67,7 @@ export function Pricing() {
   const [annual, setAnnual] = useState(true);
 
   return (
-    <section id="pricing" className="relative w-full py-24 bg-slate-50/50 overflow-hidden">
+    <section id="pricing" className="relative w-full py-24 bg-[#fffaf5] overflow-hidden">
       <div className="container relative z-10 mx-auto px-4 md:px-6">
         
         {/* Header Section */}

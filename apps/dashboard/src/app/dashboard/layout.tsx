@@ -4,6 +4,10 @@ import NavProgressBar from "./_components/NavProgressBar";
 import DashboardSidebar from "./_components/DashboardSidebar";
 import DashboardHeader from "./_components/DashboardHeader";
 import HelpPanel from "./_components/help/HelpPanel";
+import AgentPanelRoot from "./_components/agent/AgentPanelRoot";
+import { getOrCreateOrg } from "@/lib/org";
+import { resolveAgentSettings } from "@/lib/agent/settings";
+import type { OrgSettings } from "@/types";
 
 const NOTIFICATIONS: Notification[] = [
   {
@@ -29,7 +33,10 @@ const NOTIFICATIONS: Notification[] = [
   },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const org = await getOrCreateOrg();
+  const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
+
   return (
     <HelpProvider>
       <div className="flex flex-col h-screen bg-white font-sans overflow-hidden">
@@ -47,6 +54,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </DashboardSidebar>
       </div>
+      <AgentPanelRoot agentName={settings.agentName} />
     </HelpProvider>
   );
 }

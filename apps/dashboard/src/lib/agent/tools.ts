@@ -1,8 +1,13 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import type { ToolCategory } from "@/types";
 
+// ── Shared prefix used to tag agent turn notes in the DB ─────────────────────
+export const AGENT_TURN_PREFIX = "__clerk_agent__";
+
 // ── Tool category map — used for plan filtering and UI display ────────────────
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
+  search_shopify_products:      'read',
+  search_shopify_customers:     'read',
   get_shopify_customer:         'read',
   update_shopify_customer_info: 'action',
   get_shopify_orders:           'read',
@@ -11,14 +16,38 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   get_order_by_name:            'read',
   create_refund:                'action',
   cancel_order:                 'action',
+  create_shopify_order:         'action',
   add_internal_note:            'internal',
   send_reply:                   'communication',
+  send_email:                   'communication',
   update_thread_status:         'internal',
   update_thread_tag:            'internal',
 }
 
+// ── Human-readable labels for executed tool calls (past tense) ───────────────
+export const TOOL_LABELS: Record<string, string> = {
+  search_shopify_products:      'Searched products',
+  search_shopify_customers:     'Searched customers',
+  get_shopify_customer:         'Fetched customer',
+  update_shopify_customer_info: 'Updated customer info',
+  get_shopify_orders:           'Fetched orders',
+  update_shopify_order_address: 'Updated shipping address',
+  add_shopify_customer_note:    'Added Shopify note',
+  get_order_by_name:            'Looked up order',
+  create_refund:                'Issued refund',
+  cancel_order:                 'Cancelled order',
+  create_shopify_order:         'Created order',
+  add_internal_note:            'Added internal note',
+  send_reply:                   'Sent reply',
+  send_email:                   'Sent email',
+  update_thread_status:         'Updated thread status',
+  update_thread_tag:            'Updated thread tag',
+}
+
 // ── Human-readable labels for plan steps ─────────────────────────────────────
 export const PLAN_STEP_LABELS: Record<string, string> = {
+  search_shopify_products:      'Search Shopify products',
+  search_shopify_customers:     'Search Shopify customers',
   get_shopify_customer:         'Fetch customer profile',
   update_shopify_customer_info: 'Update customer info on Shopify',
   get_shopify_orders:           'Fetch recent orders',
@@ -27,8 +56,10 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
   get_order_by_name:            'Look up order',
   create_refund:                'Issue refund',
   cancel_order:                 'Cancel order',
+  create_shopify_order:         'Create Shopify order',
   add_internal_note:            'Add internal note',
   send_reply:                   'Notify customer',
+  send_email:                   'Send email to customer',
   update_thread_status:         'Update ticket status',
   update_thread_tag:            'Update ticket tag',
 }
@@ -37,6 +68,50 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
 
 export const AGENT_TOOLS: ChatCompletionTool[] = [
   // ── Shopify ──────────────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_shopify_products",
+      description:
+        "Search the Shopify product catalog by title or keyword. Returns matching products with their variants and variant IDs. Use this when the operator describes a product by name (e.g. 'pencil half zip, size L') so you can resolve the correct variant_id before creating an order.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Product title or keyword to search for (e.g. 'pencil half zip').",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of products to return (default 5, max 10).",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_shopify_customers",
+      description:
+        "Search for Shopify customers by name or email. Use this when given a customer's name or email address to resolve their Shopify customer ID before calling other customer tools.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Name or email to search for (e.g. 'Jane Smith' or 'jane@example.com').",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of results to return (default 5, max 10).",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
   {
     type: "function",
     function: {
@@ -183,6 +258,45 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
     },
   },
 
+  {
+    type: "function",
+    function: {
+      name: "create_shopify_order",
+      description:
+        "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending — do not charge the customer.",
+      parameters: {
+        type: "object",
+        properties: {
+          email:      { type: "string",  description: "Customer email address." },
+          first_name: { type: "string",  description: "Customer first name." },
+          last_name:  { type: "string",  description: "Customer last name." },
+          address1:   { type: "string",  description: "Shipping street address." },
+          address2:   { type: "string",  description: "Apartment or suite (optional)." },
+          city:       { type: "string",  description: "City." },
+          province:   { type: "string",  description: "State or province abbreviation (e.g. 'NY')." },
+          zip:        { type: "string",  description: "ZIP or postal code." },
+          country:    { type: "string",  description: "Country name (e.g. 'United States')." },
+          line_items: {
+            type: "array",
+            description: "Items to include in the order.",
+            items: {
+              type: "object",
+              properties: {
+                variant_id: { type: "string", description: "Shopify product variant ID. Use this for real catalog products." },
+                title:      { type: "string", description: "Custom item title. Only provide when variant_id is omitted." },
+                price:      { type: "string", description: "Unit price as a decimal string (e.g. '29.99'). Only for custom items." },
+                quantity:   { type: "number", description: "Quantity." },
+              },
+              required: ["quantity"],
+            },
+          },
+          note: { type: "string", description: "Optional note to attach to the order." },
+        },
+        required: ["email", "first_name", "last_name", "address1", "city", "province", "zip", "country", "line_items"],
+      },
+    },
+  },
+
   // ── Thread / DB ───────────────────────────────────────────────────────────
   {
     type: "function",
@@ -196,6 +310,23 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
           text: { type: "string", description: "Note content." },
         },
         required: ["text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_email",
+      description:
+        "Send an outbound email to any email address. Use this to proactively contact a customer (e.g. shipping delay notice) even when the current thread is not an email thread.",
+      parameters: {
+        type: "object",
+        properties: {
+          to:      { type: "string", description: "Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number." },
+          subject: { type: "string", description: "Email subject line." },
+          body:    { type: "string", description: "Email body text." },
+        },
+        required: ["to", "subject", "body"],
       },
     },
   },
@@ -250,6 +381,16 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
 
 // ── Input types (mirrors the parameter schemas above) ─────────────────────────
 
+export interface SearchShopifyProductsInput {
+  query: string;
+  limit?: number;
+}
+
+export interface SearchShopifyCustomersInput {
+  query: string;
+  limit?: number;
+}
+
 export interface GetShopifyCustomerInput {
   customer_id: string;
 }
@@ -298,12 +439,39 @@ export interface CancelOrderInput {
   restock?: boolean;
 }
 
+export interface CreateShopifyOrderLineItem {
+  variant_id?: string;
+  title?: string;
+  price?: string;
+  quantity: number;
+}
+
+export interface CreateShopifyOrderInput {
+  email: string;
+  first_name: string;
+  last_name: string;
+  address1: string;
+  address2?: string;
+  city: string;
+  province: string;
+  zip: string;
+  country: string;
+  line_items: CreateShopifyOrderLineItem[];
+  note?: string;
+}
+
 export interface AddInternalNoteInput {
   text: string;
 }
 
 export interface SendReplyInput {
   text: string;
+}
+
+export interface SendEmailInput {
+  to: string;
+  subject: string;
+  body: string;
 }
 
 export interface UpdateThreadStatusInput {

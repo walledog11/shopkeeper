@@ -363,15 +363,11 @@ router.post('/twilio', async (req, res) => {
       return twimlReply(summary || "Done.");
     }
 
-    // 5. Free-form agent instruction path — resolve order and run agent
+    // 5. Free-form agent instruction path
     const mentionedOrder = extractOrderNumber(body);
     const orderNumber = mentionedOrder || ctx.lastOrderNumber;
 
-    if (!orderNumber) {
-      return twimlReply("Please include an order number (e.g. #1234) in your message so I know which order to work on.");
-    }
-
-    console.log(`[Twilio] ${fromNumber} → org ${organizationId} | order ${orderNumber} | "${body}"`);
+    console.log(`[Twilio] ${fromNumber} → org ${organizationId} | order ${orderNumber || 'none'} | "${body}"`);
 
     const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
       method: 'POST',
@@ -382,7 +378,8 @@ router.post('/twilio', async (req, res) => {
       body: JSON.stringify({
         orgId: organizationId,
         instruction: body,
-        orderNumber,
+        ...(orderNumber ? { orderNumber } : {}),
+        ...(ctx.lastThreadId ? { threadId: ctx.lastThreadId } : {}),
         senderPhone: fromNumber,
         clerkUserId: member.clerkUserId,
       }),
@@ -398,7 +395,7 @@ router.post('/twilio', async (req, res) => {
 
     // 6. Update conversation context for follow-up messages
     await updateContext(contextRedis, fromNumber, {
-      lastOrderNumber: orderNumber,
+      ...(orderNumber ? { lastOrderNumber: orderNumber } : {}),
       lastThreadId: threadId,
       history: [
         ...ctx.history,
