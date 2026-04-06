@@ -23,7 +23,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 35 }}
-            className="fixed top-0 right-0 h-full z-40 w-[420px] bg-white border-l border-slate-200 shadow-xl flex flex-col"
+            className="fixed top-0 right-0 h-full z-40 w-[420px] bg-background border-l border-border shadow-xl flex flex-col"
           >
             <AgentChatClient agentName={agentName} compact onClose={() => setIsOpen(false)} />
           </motion.div>

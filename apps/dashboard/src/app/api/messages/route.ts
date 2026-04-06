@@ -111,8 +111,15 @@ export async function POST(request: Request) {
           try {
             const client = new ServerClient(POSTMARK_API_KEY);
             const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
-            const threadMessageId = `<thread-${threadId}@${INBOUND_DOMAIN}>`;
+            const syntheticMessageId = `<thread-${threadId}@${INBOUND_DOMAIN}>`;
             const fromEmail = integration.fromEmail || integration.externalAccountId;
+
+            const lastCustomerMsg = await db.message.findFirst({
+              where: { threadId, senderType: 'customer', externalMessageId: { not: null } },
+              orderBy: { sentAt: 'desc' },
+              select: { externalMessageId: true },
+            });
+            const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
 
             const result = await client.sendEmail({
               From: `${org.name} <${fromEmail}>`,
@@ -121,9 +128,9 @@ export async function POST(request: Request) {
               Subject: `Re: ${updatedThread.tag || 'Your inquiry'}`,
               TextBody: text,
               Headers: [
-                { Name: 'Message-ID', Value: threadMessageId },
-                { Name: 'In-Reply-To', Value: threadMessageId },
-                { Name: 'References', Value: threadMessageId },
+                { Name: 'Message-ID', Value: syntheticMessageId },
+                { Name: 'In-Reply-To', Value: inReplyTo },
+                { Name: 'References', Value: inReplyTo },
               ],
             });
             console.log(`[Dispatch] Postmark message sent. MessageID: ${result.MessageID}`);

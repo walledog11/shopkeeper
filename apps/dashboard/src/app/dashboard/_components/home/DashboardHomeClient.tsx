@@ -41,7 +41,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   } = useHomeData({ initialOpenThreads, initialClosedCount })
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-dashboard-bg">
+    <div className="h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col min-h-full px-5 md:px-6 py-4 gap-3">
 
@@ -50,8 +50,8 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           {/* Header */}
           <div className="flex items-start justify-between shrink-0 gap-4">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900">{greeting}, <span className="text-teal-700">{userName}</span>.</h1>
-              <p className="text-sm text-slate-400 mt-0.5">
+              <h1 className="text-xl font-bold tracking-tight text-white/80">{greeting}, <span className="text-yellow-400">{userName}</span>.</h1>
+              <p className="text-sm text-white/35 mt-0.5">
                 {isLoading
                   ? "Loading your queue…"
                   : openCount === 0
@@ -62,7 +62,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
             </div>
             <Link
               href="/dashboard/tickets"
-              className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-slate-800 bg-yellow-400 hover:bg-yellow-300 rounded-md px-3.5 py-2 transition-all shadow-sm shrink-0"
+              className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-black bg-yellow-400 hover:bg-yellow-300 rounded-md px-3.5 py-2 transition-all shrink-0"
             >
               View all tickets <ArrowRight className="w-4 h-4" />
             </Link>

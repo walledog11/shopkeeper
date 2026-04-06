@@ -44,22 +44,21 @@ export default function Composer({
   onCancelNote,
 }: Props) {
   return (
-    <div className="px-5 pb-5 pt-4 bg-white border-t border-slate-100 shrink-0">
-
+    <div className="px-5 pb-5 pt-4 bg-background border-t border-border shrink-0">
       <div className={`border rounded-md overflow-hidden transition-colors ${
         error
-          ? 'border-red-200'
+          ? 'border-red-500/40'
           : isClerkMode
-            ? 'border-violet-500 focus-within:border-violet-600 bg-white'
+            ? 'border-violet-500 focus-within:border-violet-400'
             : isNoteMode
-              ? 'border-amber-400 focus-within:border-amber-500 bg-gradient-to-b from-amber-50/70 to-amber-50/30'
+              ? 'border-amber-400/50 focus-within:border-amber-400/80'
               : isNote
-                ? 'border-violet-200 focus-within:border-violet-400 bg-white'
-                : 'border-slate-200 focus-within:border-slate-400 bg-white'
+                ? 'border-violet-400/30 focus-within:border-violet-400/60'
+                : 'border-white/[0.12] focus-within:border-white/[0.25]'
       }`}>
         <div className="flex items-baseline gap-2 px-4 pt-3.5 pb-2 min-h-[48px]">
           {isClerkMode && (
-            <span className="inline-flex items-center gap-1 bg-violet-100 text-violet-700 text-[11px] font-semibold px-2.5 py-[5px] rounded-full shrink-0">
+            <span className="inline-flex items-center gap-1 bg-violet-500/15 text-violet-400 text-[11px] font-semibold px-2.5 py-[5px] rounded-full shrink-0">
               <Bot className="w-3 h-3" />
               @{agentName.toLowerCase()}
             </span>
@@ -90,7 +89,7 @@ export default function Composer({
               }
             }}
             disabled={isSending}
-            className="flex-1 w-0 bg-transparent resize-none outline-none text-sm text-slate-900 placeholder:text-slate-400 disabled:opacity-60"
+            className="flex-1 w-0 bg-transparent resize-none outline-none text-base md:text-sm text-white/80 placeholder:text-white/25 disabled:opacity-50"
             placeholder={isNoteMode ? 'Add a note for your team…' : placeholder ?? (isClerkMode ? `What should ${agentName} do?` : isNote ? 'Add a private note for your team…' : `Reply to ${customerName}…`)}
           />
         </div>
@@ -98,30 +97,31 @@ export default function Composer({
           {isNoteMode && onCancelNote ? (
             <button
               onClick={onCancelNote}
-              className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 hover:text-slate-600 transition-colors"
+              className="flex items-center gap-1 text-[11px] font-semibold text-white/30 hover:text-white/60 transition-colors"
             >
               Cancel note
             </button>
           ) : onAddNote ? (
             <button
               onClick={onAddNote}
-              className="flex items-center gap-1 text-[11px] font-semibold text-amber-600 hover:text-amber-700 transition-colors"
+              className="flex items-center gap-1 text-[11px] font-semibold text-amber-400/70 hover:text-amber-400 transition-colors"
             >
               <StickyNote className="w-3 h-3" />
               Add note
             </button>
           ) : <span />}
+
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-300 hidden sm:block">↵ to send</span>
+            <span className="text-[10px] text-white/20 hidden sm:block">↵ to send</span>
             <button
               disabled={!value.trim() || isSending}
               onClick={() => onSend(isNote)}
-              className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-slate-100 disabled:text-slate-400 h-8 px-4 rounded-md transition-colors ${
+              className={`flex items-center gap-1.5 text-xs font-semibold disabled:bg-white/[0.06] disabled:text-white/25 h-8 px-4 rounded-md transition-colors ${
                 isClerkMode
-                  ? 'bg-violet-600 text-white hover:bg-violet-700'
+                  ? 'bg-violet-600 text-white hover:bg-violet-500'
                   : isNoteMode
-                    ? 'bg-amber-500 text-white hover:bg-amber-600'
-                    : 'bg-slate-900 text-white hover:bg-slate-700'
+                    ? 'bg-amber-500 text-white hover:bg-amber-400'
+                    : 'bg-white text-black hover:bg-white/90'
               }`}
             >
               {isSending ? (
@@ -140,7 +140,7 @@ export default function Composer({
         </div>
       </div>
       {error && (
-        <p className="mt-1.5 text-[11px] text-red-500 font-medium px-1">{error}</p>
+        <p className="mt-1.5 text-[11px] text-red-400 font-medium px-1">{error}</p>
       )}
     </div>
   )

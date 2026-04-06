@@ -128,7 +128,11 @@ router.post('/email/inbound', async (req, res) => {
     const to = req.body.To || req.body.to;
     const subject = req.body.Subject || req.body.subject || 'No Subject';
     const text = req.body.TextBody || req.body.text;
-    const inboundMessageId = req.body.MessageID || null;
+    // Extract the original email Message-ID from the parsed headers array.
+    // req.body.MessageID is Postmark's tracking ID, not the sender's Message-ID.
+    const emailHeaders = req.body.Headers || [];
+    const msgIdHeader = emailHeaders.find(h => h.Name === 'Message-ID');
+    const inboundMessageId = msgIdHeader?.Value || null;
 
     if (!rawFrom || !text) {
       return res.sendStatus(400);

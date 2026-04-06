@@ -18,9 +18,9 @@ interface NotificationBarProps {
 }
 
 const TYPE_STYLES: Record<NonNullable<Notification["type"]>, { bar: string; icon: string; title: string; action: string }> = {
-  info:    { bar: "bg-white text-slate-600", icon: "text-indigo-500", title: "text-slate-900", action: "text-indigo-600" },
-  warning: { bar: "bg-white text-slate-600", icon: "text-amber-500",  title: "text-amber-700", action: "text-amber-700" },
-  success: { bar: "bg-white text-slate-600", icon: "text-emerald-500", title: "text-emerald-700", action: "text-emerald-700" },
+  info:    { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-indigo-400", title: "text-white/80", action: "text-indigo-400" },
+  warning: { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-amber-400",  title: "text-amber-400", action: "text-amber-400" },
+  success: { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-emerald-400", title: "text-emerald-400", action: "text-emerald-400" },
 };
 
 const TYPE_ICONS = {
@@ -49,6 +49,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
   const [current, setCurrent] = useState(0);
   const directionRef = useRef(1);
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDismissedIds(loadDismissed());
@@ -83,16 +84,30 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
   const styles = TYPE_STYLES[type];
   const Icon = TYPE_ICONS[type];
 
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el) {
+      document.documentElement.style.setProperty("--notification-bar-height", "2px");
+      return;
+    }
+    const ro = new ResizeObserver(([entry]) => {
+      document.documentElement.style.setProperty("--notification-bar-height", `${entry.contentRect.height + 2}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [n]);
+
   return (
     <AnimatePresence initial={false}>
       {n && (
         <motion.div
+          ref={barRef}
           key="bar"
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.25, ease: "easeInOut" }}
-          className={`relative flex items-center justify-center px-10 text-sm shrink-0 border-b border-slate-200 overflow-hidden ${styles.bar}`}
+          className={`relative z-20 flex items-center justify-center px-10 text-sm shrink-0 border-b overflow-hidden ${styles.bar}`}
         >
           <div className="py-3 flex items-center gap-2.5">
             <AnimatePresence mode="wait" custom={directionRef.current}>
@@ -113,7 +128,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 <Icon className={`w-4 h-4 shrink-0 ${styles.icon}`} />
                 <p className="text-center">
                   <span className={`font-bold ${styles.title}`}>{n.title}</span>
-                  {n.message && <span className="font-normal text-slate-500"> {n.message}</span>}
+                  {n.message && <span className="font-normal text-white/40"> {n.message}</span>}
                   {n.action && (
                     <>
                       {" "}

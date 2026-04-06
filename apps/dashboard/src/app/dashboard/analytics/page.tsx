@@ -1,10 +1,14 @@
 "use client"
 
 import { useState } from 'react'
-import Image from "next/image"
-import { TrendingUp, Inbox, CheckCircle2, MessageSquare, BarChart2, AlertTriangle, CheckCircle, Bot, Clock, Calendar } from "lucide-react"
+import { Bot, Clock, CheckCircle2, MessageSquare } from "lucide-react"
 import { useThreads } from "@/hooks/useThreads"
-import { getChannelInfo } from "@/lib/channels"
+import { DateRangeSelector } from "./_components/DateRangeSelector"
+import { AuditSection } from "./_components/AuditSection"
+import { OverviewStats } from "./_components/OverviewStats"
+import { TicketChart } from "./_components/TicketChart"
+import { TopTopicsCard } from "./_components/TopTopicsCard"
+import { ChannelBreakdown } from "./_components/ChannelBreakdown"
 
 type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
 
@@ -154,12 +158,6 @@ export default function AnalyticsPage() {
   }
 
   const STATUS_LABEL = { excellent: 'Excellent', good: 'On Track', needs_work: 'Needs Work', no_data: 'No Data' }
-  const STATUS_COLORS = {
-    excellent: { bg: 'bg-emerald-50', border: 'border-emerald-100', badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-400', icon: 'bg-emerald-100 text-emerald-600' },
-    good:      { bg: 'bg-blue-50',    border: 'border-blue-100',    badge: 'bg-blue-100 text-blue-700',       bar: 'bg-blue-400',    icon: 'bg-blue-100 text-blue-600'    },
-    needs_work:{ bg: 'bg-amber-50',   border: 'border-amber-100',   badge: 'bg-amber-100 text-amber-700',     bar: 'bg-amber-400',   icon: 'bg-amber-100 text-amber-600'  },
-    no_data:   { bg: 'bg-slate-50',   border: 'border-slate-100',   badge: 'bg-slate-100 text-slate-500',     bar: 'bg-slate-300',   icon: 'bg-slate-100 text-slate-400'  },
-  }
 
   const kpiCards = [
     {
@@ -272,333 +270,64 @@ export default function AnalyticsPage() {
   const today      = new Date().toISOString().split('T')[0]
 
   return (
-    <div className="h-full overflow-y-auto bg-dashboard-bg">
+    <div className="h-full overflow-y-auto bg-background">
       <div className="px-5 md:px-6 py-4 space-y-3 pb-10">
 
-        {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Analytics</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Support performance overview</p>
-          </div>
-          <div className="w-10 h-10 rounded-md bg-teal-50 border border-teal-100 flex items-center justify-center">
-            <BarChart2 className="w-5 h-5 text-teal-600" />
-          </div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Analytics</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Support performance overview</p>
         </div>
 
-        {/* ── Date range selector ── */}
-        <div className="bg-white rounded-md shadow-md px-3.5 py-2.5 flex flex-wrap items-center gap-2">
-          <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-          <div className="flex items-center gap-1 flex-wrap">
-            {([
-              { value: '7d',     label: 'Last 7 days'  },
-              { value: '30d',    label: 'Last 30 days' },
-              { value: '90d',    label: 'Last 90 days' },
-              { value: 'all',    label: 'All time'     },
-              { value: 'custom', label: 'Custom'       },
-            ] as { value: Preset; label: string }[]).map(({ value, label }) => (
-              <button
-                key={value}
-                onClick={() => setPreset(value)}
-                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  preset === value
-                    ? 'bg-teal-700 text-white'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800 border border-transparent hover:border-slate-200'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {preset === 'custom' && (
-            <div className="flex items-center gap-2 pl-1 border-l border-slate-100 ml-1">
-              <input
-                type="date"
-                value={customFrom}
-                max={customTo}
-                onChange={e => setCustomFrom(e.target.value)}
-                className="text-xs border border-slate-200 rounded-md px-2 py-1 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 focus:border-teal-400"
-              />
-              <span className="text-[10px] text-slate-400 font-medium">to</span>
-              <input
-                type="date"
-                value={customTo}
-                min={customFrom}
-                max={today}
-                onChange={e => setCustomTo(e.target.value)}
-                className="text-xs border border-slate-200 rounded-md px-2 py-1 text-slate-700 bg-white focus:outline-none focus:ring-1 focus:ring-teal-400 focus:border-teal-400"
-              />
-            </div>
-          )}
-        </div>
+        <DateRangeSelector
+          preset={preset}
+          setPreset={setPreset}
+          customFrom={customFrom}
+          setCustomFrom={setCustomFrom}
+          customTo={customTo}
+          setCustomTo={setCustomTo}
+          today={today}
+        />
 
-        {/* ── Performance Audit ── */}
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <AuditSection
+          auditLabel={auditLabel}
+          badgeLabel={badgeLabel}
+          isLoading={isLoading}
+          auditScore={auditScore}
+          auditGrade={auditGrade}
+          auditIssues={auditIssues}
+          totalThreads={totalThreads}
+          kpiCards={kpiCards}
+          visibleTips={visibleTips}
+        />
 
-          <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center">
-                <BarChart2 className="w-4 h-4 text-teal-600" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-slate-900">{auditLabel} Performance Audit</p>
-                <p className="text-xs text-slate-500 mt-0.5">KPI health check for your support operation</p>
-              </div>
-            </div>
-            <span className="text-[10px] font-semibold text-teal-700 bg-teal-50 border border-teal-100 px-2.5 py-1 rounded-full uppercase tracking-wide">
-              {badgeLabel}
-            </span>
-          </div>
-
-          {isLoading ? (
-            <div className="p-5 animate-pulse space-y-3">
-              <div className="flex gap-3">
-                <div className="w-24 h-32 rounded-xl bg-slate-100 shrink-0" />
-                <div className="flex-1 grid grid-cols-2 gap-2.5">
-                  {[...Array(4)].map((_, i) => <div key={i} className="h-[68px] bg-slate-100 rounded-xl" />)}
-                </div>
-              </div>
-              <div className="h-16 bg-slate-100 rounded-xl" />
-            </div>
-          ) : (
-            <div className="p-5 space-y-3">
-
-              <div className="flex gap-3 items-start">
-                {/* Grade card */}
-                <div className={`shrink-0 self-start w-24 rounded-xl border px-3 py-3.5 flex flex-col items-center gap-1 text-center ${
-                  auditScore === null ? 'bg-slate-50 border-slate-200' :
-                  auditScore >= 75    ? 'bg-emerald-50 border-emerald-100' :
-                  auditScore >= 55    ? 'bg-blue-50 border-blue-100' :
-                  auditScore >= 40    ? 'bg-amber-50 border-amber-100' :
-                  'bg-red-50 border-red-100'
-                }`}>
-                  <span className={`text-5xl font-black leading-none ${
-                    auditScore === null ? 'text-slate-300' :
-                    auditScore >= 75    ? 'text-emerald-500' :
-                    auditScore >= 55    ? 'text-blue-500' :
-                    auditScore >= 40    ? 'text-amber-500' :
-                    'text-red-500'
-                  }`}>{auditGrade}</span>
-                  <span className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Overall</span>
-                  {auditScore !== null && (
-                    <span className={`text-[11px] font-bold ${
-                      auditScore >= 75 ? 'text-emerald-500' :
-                      auditScore >= 55 ? 'text-blue-500' :
-                      auditScore >= 40 ? 'text-amber-500' :
-                      'text-red-500'
-                    }`}>{auditScore}/100</span>
-                  )}
-                  <div className="pt-1.5 border-t border-slate-200/60 w-full text-center space-y-0.5 mt-0.5">
-                    <p className="text-[9px] text-slate-400">{totalThreads} ticket{totalThreads !== 1 ? 's' : ''}</p>
-                    {auditIssues > 0 && (
-                      <p className="text-[9px] font-semibold text-amber-500">{auditIssues} issue{auditIssues !== 1 ? 's' : ''}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* KPI 2×2 */}
-                <div className="flex-1 grid grid-cols-2 gap-2.5">
-                  {kpiCards.map(kpi => {
-                    const colors = STATUS_COLORS[kpi.status]
-                    return (
-                      <div key={kpi.label} className={`rounded-xl border px-3 py-2.5 ${colors.bg} ${colors.border}`}>
-                        <div className="flex items-center justify-between mb-1.5 gap-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${colors.icon}`}>
-                              {kpi.icon}
-                            </div>
-                            <span className="text-[10px] font-semibold text-slate-500 truncate">{kpi.label}</span>
-                          </div>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide shrink-0 ${colors.badge}`}>
-                            {kpi.statusLabel}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-xl font-black text-slate-900 leading-none shrink-0 min-w-[2rem]">{kpi.value}</span>
-                          <div className="flex-1 h-2 rounded-full bg-black/[0.07] overflow-hidden">
-                            <div className={`h-full rounded-full transition-all duration-700 ${colors.bar}`} style={{ width: `${kpi.barPct}%` }} />
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-[9px] text-slate-400 truncate pr-2">{kpi.sub}</span>
-                          <span className="text-[9px] text-slate-400 shrink-0">{kpi.benchmarkLabel}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Recommendations */}
-              {visibleTips.length > 0 && (
-                <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3.5">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-2.5">
-                    {visibleTips.every(t => t.ok) ? 'All systems healthy' : `${auditIssues} recommendation${auditIssues !== 1 ? 's' : ''}`}
-                  </p>
-                  <div className="space-y-1.5">
-                    {visibleTips.map((tip, i) => (
-                      <div key={i} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs ${
-                        tip.ok ? 'bg-emerald-50 border border-emerald-100 text-emerald-700' : 'bg-white border border-slate-200 text-slate-700'
-                      }`}>
-                        {tip.ok
-                          ? <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-500 mt-0.5" />
-                          : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400 mt-0.5" />
-                        }
-                        <span className="leading-relaxed">{tip.text}</span>
-                        {tip.benchmark && (
-                          <span className="ml-auto shrink-0 text-[9px] text-slate-400 font-medium pl-3 mt-0.5 text-right leading-tight">{tip.benchmark}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Overview stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { label: 'Total Tickets',  value: totalThreads,       icon: <Inbox className="w-5 h-5 text-teal-600" />,      bg: 'bg-teal-50',   accent: 'border-t-2 border-t-teal-500',   numColor: 'text-teal-700' },
-            { label: 'Open',           value: rangeOpen.length,   icon: <Inbox className="w-5 h-5 text-amber-500" />,     bg: 'bg-amber-50',  accent: 'border-t-2 border-t-amber-400',  numColor: 'text-slate-800' },
-            { label: 'Resolved',       value: rangeClosed.length, icon: <CheckCircle2 className="w-5 h-5 text-green-500" />, bg: 'bg-green-50', accent: 'border-t-2 border-t-green-400', numColor: 'text-slate-800' },
-            { label: 'Total Messages', value: totalMessages,      icon: <MessageSquare className="w-5 h-5 text-purple-500" />, bg: 'bg-purple-50', accent: 'border-t-2 border-t-purple-400', numColor: 'text-slate-800' },
-          ].map(stat => (
-            <div key={stat.label} className={`bg-white rounded-md px-4 py-4 flex items-center justify-between shadow-md hover:shadow-lg hover:-translate-y-px transition-all ${stat.accent}`}>
-              <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mb-1">{stat.label}</p>
-                {isLoading ? (
-                  <div className="h-8 w-16 bg-slate-100 rounded animate-pulse" />
-                ) : (
-                  <p className={`text-3xl font-extrabold leading-none ${stat.numColor}`}>{stat.value.toLocaleString()}</p>
-                )}
-              </div>
-              <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>{stat.icon}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Resolution rate bar */}
-        {!isLoading && (
-          <div className="bg-white rounded-md p-5 shadow-md">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-teal-600" />
-                <p className="text-sm font-bold text-slate-900">Resolution Rate</p>
-              </div>
-              <span className="text-sm font-extrabold text-teal-700">{resolutionRate}%</span>
-            </div>
-            <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
-              <div className="h-full bg-teal-600 rounded-full transition-all duration-700" style={{ width: `${resolutionRate}%` }} />
-            </div>
-            <p className="text-xs text-slate-500 mt-2">{rangeClosed.length} of {totalThreads} tickets resolved</p>
-          </div>
-        )}
+        <OverviewStats
+          totalThreads={totalThreads}
+          openCount={rangeOpen.length}
+          closedCount={rangeClosed.length}
+          totalMessages={totalMessages}
+          resolutionRate={resolutionRate}
+          isLoading={isLoading}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-
-          {/* Adaptive chart */}
-          <div className="bg-white rounded-md p-5 shadow-md">
-            <p className="text-sm font-bold text-slate-900 mb-4">{chartTitle}</p>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(7)].map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 animate-pulse">
-                    <div className="w-12 h-3 bg-slate-100 rounded" />
-                    <div className="flex-1 h-5 bg-slate-100 rounded" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                {chartData.map((bucket, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <span className="text-[11px] text-slate-400 w-14 shrink-0 text-right">{bucket.label}</span>
-                    <div className="flex-1 flex items-center h-7 bg-slate-50 rounded overflow-hidden">
-                      {bucket.count > 0 ? (
-                        <div
-                          title={`${bucket.count} ticket${bucket.count !== 1 ? 's' : ''}`}
-                          className="h-full bg-amber-400 hover:bg-amber-500 transition-all duration-500 flex items-center justify-end pr-2 rounded cursor-default"
-                          style={{ width: `${Math.max((bucket.count / maxCount) * 100, 6)}%` }}
-                        >
-                          <span className="text-[10px] font-bold text-amber-900">{bucket.count}</span>
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-slate-300 pl-2">—</span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Top tags */}
-          <div className="bg-white rounded-md p-5 shadow-md">
-            <p className="text-sm font-bold text-slate-900 mb-4">Top Topics</p>
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="animate-pulse space-y-1">
-                    <div className="flex justify-between">
-                      <div className="h-3 w-20 bg-slate-100 rounded" />
-                      <div className="h-3 w-6 bg-slate-100 rounded" />
-                    </div>
-                    <div className="h-1.5 bg-slate-100 rounded-full" />
-                  </div>
-                ))}
-              </div>
-            ) : byTag.length === 0 ? (
-              <p className="text-sm text-slate-400 text-center py-6">No tagged tickets yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {byTag.map(item => (
-                  <div key={item.tag}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-medium text-slate-700">{item.tag}</span>
-                      <span className="text-xs font-semibold text-slate-500">{item.count}</span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        title={`${item.count} ticket${item.count !== 1 ? 's' : ''}`}
-                        className="h-full bg-teal-700 rounded-full transition-all duration-500 hover:bg-teal-800 cursor-default"
-                        style={{ width: `${(item.count / maxTag) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <TicketChart
+            chartTitle={chartTitle}
+            chartData={chartData}
+            maxCount={maxCount}
+            isLoading={isLoading}
+          />
+          <TopTopicsCard
+            byTag={byTag}
+            maxTag={maxTag}
+            isLoading={isLoading}
+          />
         </div>
 
-        {/* By channel */}
-        {!isLoading && byChannel.length > 0 && (
-          <div className="bg-white rounded-md p-5 shadow-md">
-            <p className="text-sm font-bold text-slate-900 mb-4">Tickets by Channel</p>
-            <div className="flex items-end gap-6">
-              {byChannel.map(item => {
-                const info = getChannelInfo(item.channel as 'email' | 'ig_dm' | 'tiktok')
-                return (
-                  <div key={item.channel} className="flex flex-col items-center gap-2 flex-1 max-w-[120px]">
-                    <span className="text-sm font-bold text-slate-900">{item.count}</span>
-                    <div className="w-full bg-slate-100 rounded-md overflow-hidden" style={{ height: 120 }}>
-                      <div
-                        title={`${item.count} ticket${item.count !== 1 ? 's' : ''}`}
-                        className="w-full bg-teal-700 hover:bg-teal-800 rounded-md transition-all duration-700 cursor-default"
-                        style={{ height: `${(item.count / maxChannel) * 120}px`, marginTop: `${120 - (item.count / maxChannel) * 120}px` }}
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Image src={info.logo} alt={info.name} width={14} height={14} className="object-contain" />
-                      <span className="text-xs text-slate-500 font-medium">{info.name}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+        {!isLoading && (
+          <ChannelBreakdown
+            byChannel={byChannel}
+            maxChannel={maxChannel}
+          />
         )}
 
       </div>

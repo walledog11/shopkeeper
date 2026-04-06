@@ -87,6 +87,13 @@ export async function sendReply(
         const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
         const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
         const client = new ServerClient(POSTMARK_API_KEY);
+        const syntheticMessageId = `<thread-${ctx.threadId}@${INBOUND_DOMAIN}>`;
+        const lastCustomerMsg = await db.message.findFirst({
+          where: { threadId: ctx.threadId, senderType: "customer", externalMessageId: { not: null } },
+          orderBy: { sentAt: "desc" },
+          select: { externalMessageId: true },
+        });
+        const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
         try {
           await client.sendEmail({
             From: `${ctx.orgName} <${fromEmail}>`,
@@ -95,9 +102,9 @@ export async function sendReply(
             Subject: `Re: ${thread.tag || "Your inquiry"}`,
             TextBody: input.text,
             Headers: [
-              { Name: "Message-ID",  Value: `<thread-${ctx.threadId}@${INBOUND_DOMAIN}>` },
-              { Name: "In-Reply-To", Value: `<thread-${ctx.threadId}@${INBOUND_DOMAIN}>` },
-              { Name: "References",  Value: `<thread-${ctx.threadId}@${INBOUND_DOMAIN}>` },
+              { Name: "Message-ID",  Value: syntheticMessageId },
+              { Name: "In-Reply-To", Value: inReplyTo },
+              { Name: "References",  Value: inReplyTo },
             ],
           });
         } catch (err) {

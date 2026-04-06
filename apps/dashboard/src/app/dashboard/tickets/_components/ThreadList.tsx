@@ -5,16 +5,13 @@ import Link from "next/link"
 import { Search, Inbox, X, CheckSquare, Square } from "lucide-react"
 import type { ChannelType, Ticket } from "@/types"
 import { getChannelInfo } from "@/lib/channels"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const FILTER_IDS: ChannelType[] = ['email', 'ig_dm', 'sms_agent']
 
 const CHANNEL_FILTERS = FILTER_IDS.map(id => {
   const info = getChannelInfo(id)
-  return { 
-    id, 
-    logo: info.logo, 
-    label: info.name 
-  }
+  return { id, logo: info.logo, label: info.name }
 })
 
 interface Props {
@@ -37,97 +34,82 @@ interface Props {
 }
 
 export default function ThreadList({
-  tickets,
-  totalCount,
-  activeTab,
-  activeFilter,
-  activeTicketId,
-  openCount,
-  searchQuery,
-  isSearchMode,
-  selectedIds,
-  onSearchChange,
-  onTabChange,
-  onFilterChange,
-  onSelectTicket,
-  onToggleSelect,
-  onBulkClose,
-  onClearSelection,
+  tickets, totalCount, activeTab, activeFilter, activeTicketId, openCount,
+  searchQuery, isSearchMode, selectedIds,
+  onSearchChange, onTabChange, onFilterChange, onSelectTicket,
+  onToggleSelect, onBulkClose, onClearSelection,
 }: Props) {
   const hasSelection = selectedIds.length > 0
 
   return (
     <>
       {/* Filter bar */}
-      <div className="px-3 pt-5 md:pt-3 pb-2 border-b border-slate-100 bg-white space-y-2">
+      <div className="px-3 pt-5 md:pt-3 pb-2 border-b border-border bg-background space-y-2">
+
         {/* Search */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-md px-3 h-9">
-          <Search className="w-3.5 h-3.5 text-slate-300 shrink-0" />
+        <div className="flex items-center gap-2 bg-white/[0.05] border border-border rounded-md px-3 h-9">
+          <Search className="w-3.5 h-3.5 text-white/20 shrink-0" />
           <input
             value={searchQuery}
             onChange={e => onSearchChange(e.target.value)}
             placeholder="Search all tickets…"
-            className="flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 outline-none"
+            className="flex-1 bg-transparent text-sm text-white/70 placeholder:text-white/25 outline-none"
           />
           {searchQuery && (
-            <button onClick={() => onSearchChange('')} className="text-slate-300 hover:text-slate-500 transition-colors">
+            <button onClick={() => onSearchChange('')} className="text-white/20 hover:text-white/50 transition-colors">
               <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
 
-        {/* Open / Closed tabs — hidden in search mode */}
+        {/* Open / Closed tabs */}
         {!isSearchMode && (
-          <div className="flex bg-slate-100 rounded-md p-0.5 gap-0.5">
-            <button
-              onClick={() => onTabChange('open')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-semibold transition-colors ${
-                activeTab === 'open'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'open' ? 'bg-amber-500' : 'bg-slate-300'}`} />
-              Open
-              {openCount > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === 'open' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                  {openCount}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => onTabChange('closed')}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-semibold transition-colors ${
-                activeTab === 'closed'
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'closed' ? 'bg-green-500' : 'bg-slate-300'}`} />
-              Closed
-            </button>
-          </div>
+          <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as 'open' | 'closed')}>
+            <TabsList className="w-full bg-white/[0.06] h-auto p-0.5 gap-0.5">
+              <TabsTrigger
+                value="open"
+                className="flex-1 gap-1.5 py-1.5 h-auto text-xs font-semibold data-[state=active]:bg-white/[0.12] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'open' ? 'bg-amber-400' : 'bg-white/20'}`} />
+                Open
+                {openCount > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                    activeTab === 'open' ? 'bg-white/[0.15] text-white' : 'bg-white/[0.08] text-white/35'
+                  }`}>
+                    {openCount}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger
+                value="closed"
+                className="flex-1 gap-1.5 py-1.5 h-auto text-xs font-semibold data-[state=active]:bg-white/[0.12] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'closed' ? 'bg-green-400' : 'bg-white/20'}`} />
+                Closed
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         )}
 
         {/* Search mode label */}
         {isSearchMode && (
           <div className="flex items-center justify-between px-0.5">
-            <span className="text-[11px] font-semibold text-slate-500">Search results</span>
-            <button onClick={() => onSearchChange('')} className="text-[11px] text-slate-400 hover:text-slate-700 font-medium">
+            <span className="text-[11px] font-semibold text-white/40">Search results</span>
+            <button onClick={() => onSearchChange('')} className="text-[11px] text-white/30 hover:text-white/60 font-medium">
               Clear
             </button>
           </div>
         )}
 
-        {/* Channel filter — hidden in search mode */}
+        {/* Channel filter */}
         {!isSearchMode && (
           <div className="flex items-center gap-1.5">
             <button
               onClick={() => onFilterChange(null)}
               className={`flex-1 h-9 rounded-md border text-[11px] font-semibold transition-all ${
                 activeFilter === null
-                  ? 'bg-slate-900 border-slate-900 text-white'
-                  : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                  ? 'bg-white text-black border-white'
+                  : 'bg-transparent border-border text-white/40 hover:border-white/[0.18] hover:text-white/60'
               }`}
             >
               All
@@ -139,11 +121,11 @@ export default function ThreadList({
                 title={ch.label}
                 className={`flex-1 h-9 rounded-md border flex items-center justify-center transition-all ${
                   activeFilter === ch.id
-                    ? 'border-slate-900 ring-2 ring-slate-900/10 bg-slate-50'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                    ? 'border-white/[0.30] bg-white/[0.10]'
+                    : 'border-border bg-transparent hover:border-white/[0.18] hover:bg-white/[0.05]'
                 }`}
               >
-                <Image src={ch.logo} alt={ch.label} width={16} height={16} className="object-contain" />
+                <Image src={ch.logo} alt={ch.label} width={16} height={16} className="object-contain opacity-60" />
               </button>
             ))}
           </div>
@@ -151,28 +133,24 @@ export default function ThreadList({
 
         {/* Bulk action bar */}
         {hasSelection ? (
-          <div className="flex items-center justify-between bg-slate-900 rounded-md px-3 py-2">
-            <span className="text-[11px] font-semibold text-white">
+          <div className="flex items-center justify-between bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-2">
+            <span className="text-[11px] font-semibold text-white/80">
               {selectedIds.length} selected
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={onBulkClose}
-                className="text-[11px] font-semibold text-white bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors"
+                className="text-[11px] font-semibold text-white bg-white/[0.15] hover:bg-white/[0.22] px-2.5 py-1 rounded transition-colors"
               >
                 Close all
               </button>
-              <button
-                onClick={onClearSelection}
-                className="text-white/60 hover:text-white transition-colors"
-              >
+              <button onClick={onClearSelection} className="text-white/40 hover:text-white transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         ) : (
-          /* Ticket count */
-          <p className="text-[11px] text-slate-400 font-medium px-0.5">
+          <p className="text-[11px] text-white/25 font-medium px-0.5">
             {tickets.length} ticket{tickets.length !== 1 ? 's' : ''}
             {!isSearchMode && activeFilter ? ` · ${CHANNEL_FILTERS.find(c => c.id === activeFilter)?.label ?? activeFilter}` : ''}
             {searchQuery ? ` · "${searchQuery}"` : ''}
@@ -181,8 +159,8 @@ export default function ThreadList({
       </div>
 
       {/* Ticket list */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-slate-50">
-        {tickets.map((ticket, idx) => {
+      <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/[0.05]">
+        {tickets.map((ticket) => {
           const isSelected = selectedIds.includes(ticket.id)
           const lastRealMsg = [...ticket.messages].reverse().find(m => m.sender !== 'note')
           const awaitingReply = ticket.status === 'open' && lastRealMsg?.sender === 'customer'
@@ -190,17 +168,16 @@ export default function ThreadList({
             <div
               key={ticket.id}
               className={`cursor-pointer relative px-4 py-3.5 transition-colors group ${
-                activeTicketId === ticket.id ? 'bg-slate-50' : 'hover:bg-slate-50/70'
+                activeTicketId === ticket.id ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'
               }`}
             >
               {/* Active indicator */}
               <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
-                activeTab === 'closed' ? 'bg-green-400' :
-                activeTicketId === ticket.id ? 'bg-amber-400' :
-                awaitingReply ? 'bg-amber-300' : 'bg-transparent'
+                activeTab === 'closed' && activeTicketId === ticket.id ? 'bg-green-400' :
+                activeTicketId === ticket.id ? 'bg-amber-400' : 'bg-transparent'
               }`} />
 
-              {/* Checkbox — appears on hover or when selection is active */}
+              {/* Checkbox */}
               <button
                 onClick={e => { e.stopPropagation(); onToggleSelect(ticket.id) }}
                 className={`absolute left-3 top-1/2 -translate-y-1/2 transition-opacity z-10 ${
@@ -208,50 +185,47 @@ export default function ThreadList({
                 }`}
               >
                 {isSelected
-                  ? <CheckSquare className="w-3.5 h-3.5 text-slate-900" />
-                  : <Square className="w-3.5 h-3.5 text-slate-300" />
+                  ? <CheckSquare className="w-3.5 h-3.5 text-white/70" />
+                  : <Square className="w-3.5 h-3.5 text-white/20" />
                 }
               </button>
 
-              {/* Main content — shift right when selection is active */}
+              {/* Content */}
               <div
                 onClick={() => onSelectTicket(ticket.id)}
                 className={`transition-all ${hasSelection ? 'pl-5' : 'group-hover:pl-5'}`}
               >
-                {/* Row top: channel icon + customer + time */}
                 <div className="flex items-center justify-between mb-1 gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-4 h-4 relative shrink-0">
+                    <div className="w-4 h-4 relative shrink-0 opacity-70">
                       <Image src={ticket.logo} fill alt={ticket.platform} className="object-contain" />
                     </div>
-                    <span className="text-xs font-semibold text-slate-900 truncate">{ticket.customer}</span>
+                    <span className="text-xs font-semibold text-white/80 truncate">{ticket.customer}</span>
                     {awaitingReply && (
                       <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" title="Awaiting your reply" />
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400 shrink-0">{ticket.time}</span>
+                  <span className="text-[10px] text-white/25 shrink-0">{ticket.time}</span>
                 </div>
 
-                {/* Subject */}
-                <p className="text-[11px] font-medium text-slate-700 truncate mb-1">{ticket.subject}</p>
+                <p className="text-[11px] font-medium text-white/55 truncate mb-1">{ticket.subject}</p>
+                <p className="text-[11px] text-white/30 line-clamp-1 mb-2">{ticket.preview}</p>
 
-                {/* Preview */}
-                <p className="text-[11px] text-slate-400 line-clamp-1 mb-2">{ticket.preview}</p>
-
-                {/* Footer */}
                 <div className="flex items-center justify-between">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                     ticket.status === 'closed' || activeTab === 'closed'
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-amber-50 text-amber-700'
+                      ? 'bg-green-400/10 text-green-400'
+                      : 'bg-amber-400/10 text-amber-400'
                   }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${ticket.status === 'closed' || activeTab === 'closed' ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      ticket.status === 'closed' || activeTab === 'closed' ? 'bg-green-400' : 'bg-amber-400'
+                    }`} />
                     {ticket.status === 'closed' || activeTab === 'closed' ? 'Closed' : 'Open'}
                   </span>
                   {awaitingReply ? (
-                    <span className="text-[10px] font-semibold text-amber-600">Awaiting reply</span>
+                    <span className="text-[10px] font-semibold text-amber-400/70">Awaiting reply</span>
                   ) : isSearchMode && ticket.status ? (
-                    <span className="text-[10px] text-slate-300 font-medium capitalize">{ticket.status}</span>
+                    <span className="text-[10px] text-white/20 font-medium capitalize">{ticket.status}</span>
                   ) : null}
                 </div>
               </div>
@@ -261,27 +235,24 @@ export default function ThreadList({
 
         {tickets.length === 0 && (
           isSearchMode ? (
-            <div className="text-center p-8 text-slate-400 text-sm">
+            <div className="text-center p-8 text-white/30 text-sm">
               No results for &ldquo;{searchQuery}&rdquo;
             </div>
           ) : totalCount === 0 && !searchQuery && !activeFilter ? (
             <div className="flex flex-col items-center text-center p-8 gap-3">
-              <div className="w-12 h-12 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-center">
-                <Inbox className="w-5 h-5 text-slate-300" />
+              <div className="w-12 h-12 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+                <Inbox className="w-5 h-5 text-white/20" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-700 mb-1">No tickets yet</p>
-                <p className="text-xs text-slate-400 mb-3">Connect a channel to start receiving customer messages.</p>
-                <Link
-                  href="/dashboard/integrations"
-                  className="text-xs font-semibold text-[#1c3b38] hover:underline"
-                >
+                <p className="text-sm font-semibold text-white/50 mb-1">No tickets yet</p>
+                <p className="text-xs text-white/30 mb-3">Connect a channel to start receiving customer messages.</p>
+                <Link href="/dashboard/integrations" className="text-xs font-semibold text-white/50 hover:text-white/80 transition-colors">
                   Set up integrations →
                 </Link>
               </div>
             </div>
           ) : (
-            <div className="text-center p-8 text-slate-400 text-sm">
+            <div className="text-center p-8 text-white/25 text-sm">
               {searchQuery
                 ? `No results for "${searchQuery}"`
                 : `No ${activeTab} tickets${activeFilter ? ` from ${CHANNEL_FILTERS.find(c => c.id === activeFilter)?.label ?? activeFilter}` : ''}.`

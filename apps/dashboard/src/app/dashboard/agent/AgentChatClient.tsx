@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { Bot, Send, Loader2, Plus, Check, AlertCircle, Trash2, X } from "lucide-react"
 import type { ActionEntry } from "@/lib/agent/runner"
 import { TOOL_LABELS } from "@/lib/agent/tools"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 const SESSION_KEY = "dashboard_agent_session"
 
@@ -49,33 +51,6 @@ function formatSessionDate(iso: string) {
   return d.toLocaleDateString([], { month: "short", day: "numeric" })
 }
 
-function ClearHistoryModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div className="bg-white rounded-2xl shadow-xl px-6 py-5 w-80">
-        <h3 className="text-sm font-semibold text-slate-800 mb-1">Clear all history?</h3>
-        <p className="text-xs text-slate-500 mb-5">
-          All past sessions will be permanently deleted and cannot be recovered.
-        </p>
-        <div className="flex gap-2 justify-end">
-          <button
-            onClick={onCancel}
-            className="px-3 py-1.5 text-sm text-slate-600 hover:text-slate-800 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="px-3 py-1.5 text-sm bg-red-500 hover:bg-red-600 text-white rounded-lg transition-colors"
-          >
-            Delete all
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 interface SessionSidebarProps {
   sessions: SessionEntry[]
   sessionId: string | null
@@ -87,14 +62,14 @@ interface SessionSidebarProps {
 
 function SessionSidebar({ sessions, sessionId, isClearing, onNewSession, onLoadSession, onClearRequest }: SessionSidebarProps) {
   return (
-    <div className="shrink-0 bg-white border-t border-slate-100 sm:border-t-0 sm:border-l flex flex-col sm:w-60 h-48 sm:h-auto">
-      <div className="h-16 flex items-center justify-between px-4 border-b border-slate-100">
-        <span className="text-sm font-semibold text-slate-700">History</span>
+    <div className="shrink-0 bg-card border-t border-border sm:border-t-0 sm:border-l flex flex-col sm:w-60 h-48 sm:h-auto">
+      <div className="h-16 flex items-center justify-between px-4 border-b border-border">
+        <span className="text-sm font-semibold text-foreground">History</span>
         <div className="flex items-center gap-1">
           <button
             onClick={onNewSession}
             title="New session"
-            className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
+            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -103,7 +78,7 @@ function SessionSidebar({ sessions, sessionId, isClearing, onNewSession, onLoadS
               onClick={onClearRequest}
               disabled={isClearing}
               title="Clear all history"
-              className="p-1 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
+              className="p-1 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-40"
             >
               {isClearing
                 ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -115,18 +90,18 @@ function SessionSidebar({ sessions, sessionId, isClearing, onNewSession, onLoadS
       </div>
       <div className="flex-1 overflow-y-auto py-2">
         {sessions.length === 0 ? (
-          <p className="text-xs text-slate-400 text-center mt-6 px-4">No past sessions</p>
+          <p className="text-xs text-muted-foreground text-center mt-6 px-4">No past sessions</p>
         ) : (
           sessions.map((s) => (
             <button
               key={s.id}
               onClick={() => onLoadSession(s)}
-              className={`w-full text-left px-4 py-2.5 hover:bg-slate-50 transition-colors border-r-2 ${
-                sessionId === s.id ? "border-violet-500 bg-violet-50/50" : "border-transparent"
+              className={`w-full text-left px-4 py-2.5 hover:bg-muted transition-colors border-r-2 ${
+                sessionId === s.id ? "border-violet-500 bg-violet-500/10" : "border-transparent"
               }`}
             >
-              <div className="text-xs text-slate-400 mb-0.5">{formatSessionDate(s.createdAt)}</div>
-              <div className="text-xs text-slate-600 truncate">{s.preview}</div>
+              <div className="text-xs text-muted-foreground mb-0.5">{formatSessionDate(s.createdAt)}</div>
+              <div className="text-xs text-foreground/70 truncate">{s.preview}</div>
             </button>
           ))
         )}
@@ -272,30 +247,30 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
   return (
     <div className="flex flex-col sm:flex-row h-full">
       {/* Main chat area */}
-      <div className="flex flex-col flex-1 bg-slate-50 min-w-0">
+      <div className="flex flex-col flex-1 bg-background min-w-0">
         {/* Header */}
         {embedded ? (
-          <div className="h-11 flex items-center justify-end px-5 bg-white border-b border-slate-100 shrink-0">
+          <div className="h-11 flex items-center justify-end px-5 bg-card border-b border-border shrink-0">
             <button
               onClick={handleNewSession}
-              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               New session
             </button>
           </div>
         ) : !hideHeader ? (
-        <div className="h-16 flex items-center justify-between px-6 bg-white border-b border-slate-100 shrink-0">
+        <div className="h-16 flex items-center justify-between px-6 bg-card border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
-            <span className="font-semibold text-slate-800">{agentName}</span>
+            <span className="font-semibold text-foreground">{agentName}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleNewSession}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors"
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <Plus className="w-4 h-4" />
               New session
@@ -303,7 +278,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
             {compact && onClose && (
               <button
                 onClick={onClose}
-                className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-colors"
+                className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -319,7 +294,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
               <div className="w-12 h-12 rounded-full bg-violet-100 flex items-center justify-center">
                 <Bot className="w-6 h-6 text-violet-600" />
               </div>
-              <p className="text-slate-500 text-sm max-w-xs">
+              <p className="text-muted-foreground text-sm max-w-xs">
                 Ask {agentName} to take actions — create orders, issue refunds, look up customers, and more.
               </p>
             </div>
@@ -339,7 +314,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
             if (msg.role === "thinking") {
               return (
                 <div key={i} className="flex justify-start">
-                  <div className="flex items-center gap-2 bg-white border border-violet-100 text-slate-500 text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">
+                  <div className="flex items-center gap-2 bg-card border border-violet-400/20 text-muted-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">
                     <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
                     Working…
                   </div>
@@ -351,14 +326,14 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
             const visibleActions = msg.actions.filter(a => a.tool !== "send_reply" && a.tool !== "add_internal_note")
             return (
               <div key={i} className="flex justify-start">
-                <div className="max-w-[75%] bg-white border border-violet-100 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm space-y-2.5">
-                  <p className="text-sm text-slate-800">{msg.summary}</p>
+                <div className="max-w-[75%] bg-card border border-violet-400/20 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm space-y-2.5">
+                  <p className="text-sm text-foreground">{msg.summary}</p>
                   {visibleActions.length > 0 && (
-                    <div className="space-y-1 pt-1 border-t border-slate-100">
+                    <div className="space-y-1 pt-1 border-t border-border">
                       {visibleActions.map((action, j) => {
                         const isError = action.result.startsWith("Error")
                         return (
-                          <div key={j} className="flex items-start gap-1.5 text-xs text-slate-500">
+                          <div key={j} className="flex items-start gap-1.5 text-xs text-muted-foreground">
                             {isError
                               ? <AlertCircle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />
                               : <Check className="w-3.5 h-3.5 text-emerald-500 mt-0.5 shrink-0" />
@@ -381,7 +356,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
 
         {/* Quick action chips — full page only, not in embedded (sidebar handles prompts) */}
         {!compact && !embedded && (
-          <div className="shrink-0 px-6 pt-3 pb-0">
+          <div className="shrink-0 px-6 pt-3 pb-4">
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
               {QUICK_CHIPS.map((chip) => (
                 <button
@@ -390,7 +365,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
                     setInput(chip)
                     textareaRef.current?.focus()
                   }}
-                  className="shrink-0 text-xs bg-white border border-slate-200 hover:border-violet-300 hover:text-violet-700 text-slate-600 rounded-full px-3 py-1.5 transition-colors whitespace-nowrap"
+                  className="shrink-0 text-xs bg-card border border-border hover:border-violet-300 hover:text-violet-400 text-muted-foreground rounded-full px-3 py-1.5 transition-colors whitespace-nowrap"
                 >
                   {chip}
                 </button>
@@ -400,8 +375,8 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
         )}
 
         {/* Input */}
-        <div className="shrink-0 bg-white border-t border-slate-100 px-6 py-4">
-          <div className="flex items-end gap-3 bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus-within:border-violet-300 focus-within:ring-1 focus-within:ring-violet-200 transition-all">
+        <div className="shrink-0 bg-card border-t border-border px-6 py-4">
+          <div className="flex items-end gap-3 bg-muted border border-border rounded-xl px-4 py-2 focus-within:border-violet-400/50 focus-within:ring-1 focus-within:ring-violet-400/20 transition-all">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -410,7 +385,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
               onKeyDown={handleKeyDown}
               disabled={isRunning}
               placeholder={`Message ${agentName}…`}
-              className="flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 resize-none outline-none min-h-[24px] max-h-40"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[24px] max-h-40"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
             <button
@@ -424,7 +399,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
               }
             </button>
           </div>
-          <p className="text-xs text-slate-400 mt-2 text-center">
+          <p className="text-xs text-muted-foreground mt-2 text-center">
             Enter to send · Shift+Enter for new line
           </p>
         </div>
@@ -441,13 +416,20 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
           onClearRequest={() => setShowClearConfirm(true)}
         />
       )}
-      {/* Confirm clear modal */}
-      {showClearConfirm && (
-        <ClearHistoryModal
-          onConfirm={handleClearHistory}
-          onCancel={() => setShowClearConfirm(false)}
-        />
-      )}
+      <Dialog open={showClearConfirm} onOpenChange={(open) => !open && setShowClearConfirm(false)}>
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Clear all history?</DialogTitle>
+            <DialogDescription>
+              All past sessions will be permanently deleted and cannot be recovered.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={handleClearHistory}>Delete all</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

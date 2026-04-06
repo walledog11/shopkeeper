@@ -13,21 +13,21 @@ export default function HelpCategory({ category, onSelectArticle }: Props) {
     <div className="px-5 py-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-xl">{category.icon}</span>
-        <h2 className="text-base font-bold text-slate-900">{category.title}</h2>
+        <h2 className="text-base font-bold text-foreground">{category.title}</h2>
       </div>
-      <p className="text-sm text-slate-500 -mt-2">{category.description}</p>
+      <p className="text-sm text-muted-foreground -mt-2">{category.description}</p>
 
-      <div className="divide-y divide-slate-100 border border-slate-200 rounded-md overflow-hidden">
+      <div className="divide-y divide-border border border-border rounded-md overflow-hidden">
         {category.articles.map(article => (
           <button
             key={article.id}
             onClick={() => onSelectArticle(article)}
-            className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-slate-50 transition-colors text-left group"
+            className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted transition-colors text-left group"
           >
-            <span className="text-sm font-medium text-slate-700 group-hover:text-slate-900 transition-colors leading-snug">
+            <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
               {article.title}
             </span>
-            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 shrink-0 ml-3 transition-colors" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 ml-3 transition-colors" />
           </button>
         ))}
       </div>

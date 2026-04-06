@@ -4,12 +4,13 @@ import { useState } from "react"
 import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2 } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
+import { Badge } from "@/components/ui/badge"
 
 const CATEGORY_STYLES = {
-  action:        { badge: 'bg-amber-100 text-amber-700' },
-  communication: { badge: 'bg-blue-100 text-blue-700'  },
-  internal:      { badge: 'bg-slate-100 text-slate-600' },
-  read:          { badge: 'bg-slate-100 text-slate-600' },
+  action:        { badge: 'bg-amber-400/15 text-amber-400' },
+  communication: { badge: 'bg-blue-400/15 text-blue-400'  },
+  internal:      { badge: 'bg-white/[0.08] text-white/50' },
+  read:          { badge: 'bg-white/[0.08] text-white/50' },
 }
 
 const CATEGORY_ICONS = {
@@ -26,13 +27,11 @@ const CATEGORY_LABELS = {
   read:          'Read',
 }
 
-// Shape morphs with a spring; opacity snaps in fast so we see the morph, not the flash
 const TRANSITION = {
   layout:  { type: "spring" as const, stiffness: 420, damping: 32 },
   opacity: { duration: 0.08, ease: "linear" as const },
 }
 
-// Content inside fades in after the shape has mostly settled
 const CONTENT_IN  = { duration: 0.13, delay: 0.1 }
 const CONTENT_OUT = { duration: 0.07 }
 
@@ -66,7 +65,6 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
     <div className="w-full">
       <AnimatePresence initial={false}>
         {collapsed ? (
-          /* ── Collapsed: pill bubble ── */
           <motion.button
             key="bubble"
             layoutId="plan-card"
@@ -75,7 +73,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
             exit={{ opacity: 0 }}
             transition={TRANSITION}
             onClick={() => setCollapsed(false)}
-            className="w-full flex items-center gap-2 pl-3 pr-4 py-2 bg-white border border-teal-200 rounded-full shadow-md hover:shadow-lg hover:border-teal-300 transition-shadow overflow-hidden"
+            className="w-full flex items-center gap-2 pl-3 pr-4 py-2 bg-card border border-white/[0.12] rounded-full shadow-lg hover:border-white/[0.20] transition-colors overflow-hidden"
           >
             <motion.div
               initial={{ opacity: 0 }}
@@ -83,29 +81,29 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
               exit={{ opacity: 0, transition: CONTENT_OUT }}
               className="flex items-center gap-2 w-full"
             >
-              <div className="w-5 h-5 rounded-full bg-teal-700 flex items-center justify-center shrink-0">
-                <ChevronUp className="w-3 h-3 text-white" />
+              <div className="w-5 h-5 rounded-full bg-white/[0.12] flex items-center justify-center shrink-0">
+                <ChevronUp className="w-3 h-3 text-white/60" />
               </div>
-              <span className="text-[12px] font-semibold text-teal-800">Proposed plan</span>
+              <span className="text-[12px] font-semibold text-white/60">Proposed plan</span>
               <div className="flex items-center gap-1 ml-auto">
                 {steps.map(step => {
                   const Icon = CATEGORY_ICONS[step.category]
                   const styles = CATEGORY_STYLES[step.category]
                   return (
-                    <span
+                    <Badge
+                      variant="ghost"
                       key={step.id}
-                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5 ${styles.badge} ${!step.enabled ? 'opacity-40' : ''}`}
+                      className={`text-[10px] font-semibold gap-0.5 ${styles.badge} ${!step.enabled ? 'opacity-40' : ''}`}
                     >
                       <Icon className="w-2.5 h-2.5" />
                       {CATEGORY_LABELS[step.category]}
-                    </span>
+                    </Badge>
                   )
                 })}
               </div>
             </motion.div>
           </motion.button>
         ) : (
-          /* ── Expanded: full card ── */
           <motion.div
             key="card"
             layoutId="plan-card"
@@ -113,7 +111,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={TRANSITION}
-            className="w-full bg-white border border-teal-200 rounded-xl shadow-lg overflow-hidden"
+            className="w-full bg-card border border-white/[0.12] rounded-xl shadow-xl overflow-hidden"
           >
             <motion.div
               initial={{ opacity: 0 }}
@@ -123,17 +121,17 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
               {/* Header */}
               <button
                 onClick={() => setCollapsed(true)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-teal-100 bg-teal-50/60 hover:bg-teal-50 transition-colors"
+                className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] transition-colors"
               >
-                <span className="text-[13px] font-semibold text-teal-800">Proposed plan</span>
-                <span className="ml-auto text-[11px] text-teal-500 font-medium">
+                <span className="text-[13px] font-semibold text-white/70">Proposed plan</span>
+                <span className="ml-auto text-[11px] text-white/35 font-medium">
                   {enabledCount} of {steps.length} step{steps.length !== 1 ? 's' : ''}
                 </span>
-                <ChevronUp className="w-3.5 h-3.5 text-teal-500" />
+                <ChevronUp className="w-3.5 h-3.5 text-white/35" />
               </button>
 
               {/* Steps */}
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-white/[0.06]">
                 {steps.map((step) => {
                   const styles = CATEGORY_STYLES[step.category]
                   const Icon = CATEGORY_ICONS[step.category]
@@ -142,23 +140,23 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                       key={step.id}
                       onClick={() => toggleStep(step.id)}
                       disabled={isExecuting}
-                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-slate-50 transition-colors disabled:opacity-60"
+                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-60"
                     >
                       <div className={`mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
-                        step.enabled ? 'bg-teal-700 border-teal-700' : 'bg-white border-slate-300'
+                        step.enabled ? 'bg-white border-white' : 'bg-transparent border-white/[0.20]'
                       }`}>
                         {isExecuting && step.enabled
-                          ? <Loader2 className="w-2.5 h-2.5 text-white animate-spin" />
-                          : step.enabled && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />
+                          ? <Loader2 className="w-2.5 h-2.5 text-black animate-spin" />
+                          : step.enabled && <Check className="w-2.5 h-2.5 text-black" strokeWidth={3} />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full inline-flex items-center gap-1 ${styles.badge}`}>
+                          <Badge variant="ghost" className={`text-[11px] font-semibold gap-1 ${styles.badge}`}>
                             <Icon className="w-2.5 h-2.5" />
                             {CATEGORY_LABELS[step.category]}
-                          </span>
-                          <span className={`text-[13px] font-medium ${step.enabled ? 'text-slate-800' : 'text-slate-400 line-through'}`}>
+                          </Badge>
+                          <span className={`text-[13px] font-medium ${step.enabled ? 'text-white/80' : 'text-white/25 line-through'}`}>
                             {step.label}
                           </span>
                         </div>
@@ -166,9 +164,9 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                           <p className={`text-xs mt-0.5 ${
                             step.category === 'communication'
                               ? step.enabled
-                                ? 'text-slate-600 italic border-l-2 border-blue-200 pl-2 mt-1'
-                                : 'text-slate-300 italic border-l-2 border-slate-200 pl-2 mt-1'
-                              : step.enabled ? 'text-slate-500' : 'text-slate-300'
+                                ? 'text-white/50 italic border-l-2 border-blue-400/30 pl-2 mt-1'
+                                : 'text-white/20 italic border-l-2 border-white/[0.08] pl-2 mt-1'
+                              : step.enabled ? 'text-white/40' : 'text-white/20'
                           }`}>
                             {step.description}
                           </p>
@@ -180,11 +178,11 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
               </div>
 
               {/* Actions */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-100 bg-slate-50/40">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-t border-white/[0.06] bg-white/[0.02]">
                 <button
                   onClick={handleRun}
                   disabled={isExecuting || enabledCount === 0}
-                  className="flex items-center gap-1.5 h-8 px-4 bg-teal-700 hover:bg-teal-800 disabled:bg-slate-100 disabled:text-slate-400 text-white text-xs font-semibold rounded-md transition-colors"
+                  className="flex items-center gap-1.5 h-8 px-4 bg-yellow-400 hover:bg-yellow-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black text-xs font-semibold rounded-md transition-colors"
                 >
                   {isExecuting
                     ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>
@@ -194,7 +192,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                 <button
                   onClick={onDismiss}
                   disabled={isExecuting}
-                  className="h-8 px-3 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors disabled:opacity-40"
+                  className="h-8 px-3 text-xs font-semibold text-white/35 hover:text-white/60 transition-colors disabled:opacity-40"
                 >
                   Dismiss
                 </button>

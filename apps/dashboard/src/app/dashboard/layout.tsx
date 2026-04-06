@@ -39,19 +39,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <HelpProvider>
-      <div className="flex flex-col h-screen bg-white font-sans overflow-hidden">
+      <div className="flex flex-col h-screen bg-background font-sans overflow-hidden">
         <NotificationBar notifications={NOTIFICATIONS} />
         <NavProgressBar />
         <DashboardSidebar>
-          <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-dashboard-bg">
-            <DashboardHeader />
-            <div className="flex-1 overflow-hidden flex min-h-0">
-              <div className="flex-1 overflow-hidden flex flex-col min-w-0">
-                {children}
-              </div>
-              <HelpPanel />
+          <DashboardHeader />
+          <div className="flex-1 overflow-hidden flex min-h-0">
+            <div className="flex-1 overflow-hidden flex flex-col min-w-0">
+              {children}
             </div>
-          </main>
+            <HelpPanel />
+          </div>
         </DashboardSidebar>
       </div>
       <AgentPanelRoot agentName={settings.agentName} />

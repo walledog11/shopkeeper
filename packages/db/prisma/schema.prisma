@@ -122,12 +122,13 @@ model Thread {
 }
 
 model Message {
-  id          String     @id @default(uuid()) @db.Uuid
-  threadId    String     @map("thread_id") @db.Uuid
-  senderType  SenderType @map("sender_type")
-  contentText String?    @map("content_text") @db.Text
-  mediaUrl    String?    @map("media_url") @db.Text
-  sentAt      DateTime   @default(now()) @map("sent_at") @db.Timestamptz
+  id                String     @id @default(uuid()) @db.Uuid
+  threadId          String     @map("thread_id") @db.Uuid
+  senderType        SenderType @map("sender_type")
+  contentText       String?    @map("content_text") @db.Text
+  mediaUrl          String?    @map("media_url") @db.Text
+  externalMessageId String?    @map("external_message_id") @db.Text
+  sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
 
   thread      Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
 

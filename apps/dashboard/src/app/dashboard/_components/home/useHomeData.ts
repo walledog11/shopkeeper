@@ -46,7 +46,7 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
 
   const displayedThreads = viewThreads[activeView]
 
-  const needsAttention = useMemo(() => sortByDate(openThreads).slice(0, 4), [openThreads])
+  const needsAttention = useMemo(() => viewThreads.open.slice(0, 4), [viewThreads.open])
 
   const channelBreakdown = useMemo(() => {
     const counts: Record<string, { name: string; logo: string; count: number }> = {}

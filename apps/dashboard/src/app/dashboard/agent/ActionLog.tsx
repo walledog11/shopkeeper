@@ -16,13 +16,13 @@ const CHANNEL_LABELS: Record<string, string> = {
 }
 
 const CHANNEL_COLORS: Record<string, string> = {
-  email:           "bg-blue-50 text-blue-700",
-  ig_dm:           "bg-pink-50 text-pink-700",
-  dashboard_agent: "bg-violet-50 text-violet-700",
-  sms:             "bg-emerald-50 text-emerald-700",
-  sms_agent:       "bg-emerald-50 text-emerald-700",
-  tiktok:          "bg-slate-100 text-slate-700",
-  shopify:         "bg-green-50 text-green-700",
+  email:           "bg-blue-500/15 text-blue-400",
+  ig_dm:           "bg-pink-500/15 text-pink-400",
+  dashboard_agent: "bg-violet-500/15 text-violet-400",
+  sms:             "bg-emerald-500/15 text-emerald-400",
+  sms_agent:       "bg-emerald-500/15 text-emerald-400",
+  tiktok:          "bg-slate-500/15 text-slate-400",
+  shopify:         "bg-green-500/15 text-green-400",
 }
 
 function formatTimestamp(iso: string) {
@@ -110,21 +110,21 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
     return (
       <div>
         {visibleEntries.map((entry) => (
-          <div key={entry.id} className="px-4 py-3 border-b border-slate-100 last:border-0">
+          <div key={entry.id} className="px-4 py-3 border-b border-border last:border-0">
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span
                   className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                    CHANNEL_COLORS[entry.channelType] ?? "bg-slate-100 text-slate-600"
+                    CHANNEL_COLORS[entry.channelType] ?? "bg-muted text-muted-foreground"
                   }`}
                 >
                   {CHANNEL_LABELS[entry.channelType] ?? entry.channelType}
                 </span>
-                <span className="text-xs text-slate-600 truncate">{entry.customerHandle}</span>
+                <span className="text-xs text-muted-foreground truncate">{entry.customerHandle}</span>
               </div>
-              <span className="text-[10px] text-slate-400 shrink-0">{formatTimestamp(entry.sentAt)}</span>
+              <span className="text-[10px] text-muted-foreground/70 shrink-0">{formatTimestamp(entry.sentAt)}</span>
             </div>
-            <p className="text-xs text-slate-500 truncate">{entry.summary}</p>
+            <p className="text-xs text-muted-foreground truncate">{entry.summary}</p>
             <div className="flex flex-wrap gap-1 mt-1.5">
               {entry.actions.slice(0, 3).map((action: { tool: string; result: string }, i: number) => {
                 const isError = action.result.startsWith("Error")
@@ -132,7 +132,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                   <span
                     key={i}
                     className={`inline-flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 ${
-                      isError ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-700"
+                      isError ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"
                     }`}
                   >
                     {isError
@@ -152,7 +152,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
         {hiddenCount > 0 && (
           <button
             onClick={() => setShowAll(true)}
-            className="w-full text-xs text-slate-500 hover:text-violet-700 py-2.5 transition-colors"
+            className="w-full text-xs text-muted-foreground hover:text-violet-400 py-2.5 transition-colors"
           >
             Show {hiddenCount} more
           </button>
@@ -162,27 +162,27 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-6 py-6 space-y-3">
+    <div className="max-w-3xl mx-auto px-5 py-4 space-y-2">
       {visibleEntries.map((entry) => (
-        <div key={entry.id} className="bg-white border border-slate-200 rounded-xl p-4 space-y-2.5">
+        <div key={entry.id} className="bg-card border border-border rounded-lg p-3 space-y-2">
           {/* Row 1: timestamp + channel + customer + thread link */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-slate-400">{formatTimestamp(entry.sentAt)}</span>
+            <span className="text-xs text-muted-foreground">{formatTimestamp(entry.sentAt)}</span>
             <span
               className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                CHANNEL_COLORS[entry.channelType] ?? "bg-slate-100 text-slate-600"
+                CHANNEL_COLORS[entry.channelType] ?? "bg-muted text-muted-foreground"
               }`}
             >
               {CHANNEL_LABELS[entry.channelType] ?? entry.channelType}
             </span>
-            <span className="text-xs text-slate-600 font-medium">{entry.customerHandle}</span>
+            <span className="text-xs text-foreground font-medium">{entry.customerHandle}</span>
             {entry.threadTag && (
-              <span className="text-xs text-slate-400">· {entry.threadTag}</span>
+              <span className="text-xs text-muted-foreground">· {entry.threadTag}</span>
             )}
             {entry.channelType !== "dashboard_agent" && (
               <a
                 href={`/dashboard/tickets?thread=${entry.threadId}`}
-                className="ml-auto flex items-center gap-1 text-xs text-violet-600 hover:underline"
+                className="ml-auto flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
               >
                 View thread
                 <ExternalLink className="w-3 h-3" />
@@ -192,11 +192,11 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
 
           {/* Row 2: instruction (if present) */}
           {entry.instruction && (
-            <p className="text-xs text-slate-500 italic truncate">&ldquo;{entry.instruction}&rdquo;</p>
+            <p className="text-xs text-muted-foreground italic truncate">&ldquo;{entry.instruction}&rdquo;</p>
           )}
 
           {/* Row 3: summary */}
-          <p className="text-sm text-slate-800">{entry.summary}</p>
+          <p className="text-sm text-foreground">{entry.summary}</p>
 
           {/* Row 4: action chips */}
           <div className="flex flex-wrap gap-1.5 pt-0.5">
@@ -207,8 +207,8 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                   key={i}
                   className={`inline-flex items-center gap-1 text-xs rounded-full px-2.5 py-1 ${
                     isError
-                      ? "bg-red-50 text-red-600"
-                      : "bg-emerald-50 text-emerald-700"
+                      ? "bg-red-500/15 text-red-400"
+                      : "bg-emerald-500/15 text-emerald-400"
                   }`}
                 >
                   {isError
@@ -228,7 +228,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
           <button
             onClick={loadMore}
             disabled={isLoadingMore}
-            className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
           >
             {isLoadingMore ? (
               <Loader2 className="w-4 h-4 animate-spin" />

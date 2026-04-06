@@ -45,31 +45,31 @@ export default function HelpPanel() {
 
   return (
     <div
-      className={`shrink-0 border-l border-slate-200 bg-white flex flex-col overflow-hidden transition-all duration-300 ease-in-out
+      className={`shrink-0 border-l border-border bg-background flex flex-col overflow-hidden transition-all duration-300 ease-in-out
         ${isOpen ? "fixed inset-0 z-50 w-full md:static md:w-72" : "w-0"}
       `}
     >
       {isOpen && (
         <>
           {/* Header */}
-          <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-slate-100 shrink-0">
+          <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
             <div className="flex items-start gap-2 min-w-0">
               {view.type !== "home" && (
                 <button
                   onClick={goBack}
-                  className="mt-0.5 text-slate-400 hover:text-slate-700 transition-colors shrink-0"
+                  className="mt-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
               )}
               <div className="min-w-0">
-                <p className="text-base font-bold text-slate-900 leading-none">Help</p>
-                <p className="text-xs text-slate-400 mt-1 truncate">{subtitle}</p>
+                <p className="text-base font-bold text-foreground leading-none">Help</p>
+                <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>
               </div>
             </div>
             <button
               onClick={handleClose}
-              className="w-7 h-7 rounded-full border border-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:border-slate-300 transition-colors shrink-0 mt-0.5"
+              className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-border/70 transition-colors shrink-0 mt-0.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>

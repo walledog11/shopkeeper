@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Check, Copy, Lock, ChevronRight, AlertTriangle } from "lucide-react"
+import { Check, Copy, ChevronDown, AlertTriangle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Integration } from "@/types"
 
@@ -32,113 +32,13 @@ function CopyButton({ text }: { text: string }) {
       }}
       aria-label="Copy"
       title="Copy"
-      className="ml-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+      className="ml-1 text-white/20 hover:text-white/50 transition-colors"
     >
       {copied
-        ? <Check className="w-3.5 h-3.5 text-green-500" />
-        : <Copy className="w-3.5 h-3.5" />
+        ? <Check className="w-3 h-3 text-emerald-400" />
+        : <Copy className="w-3 h-3" />
       }
     </button>
-  )
-}
-
-function EmailConnectForm({
-  onConnect,
-  onClose,
-}: {
-  onConnect: (email: string) => Promise<boolean>
-  onClose: () => void
-}) {
-  const [email, setEmail] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = async () => {
-    if (!email) return
-    setLoading(true)
-    try {
-      const ok = await onConnect(email)
-      if (ok) {
-        setEmail('')
-        onClose()
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="mx-5 mb-4 rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-      <div className="space-y-1.5">
-        <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-          Support email address
-        </label>
-        <p className="text-xs text-slate-400">
-          The email address your customers send support requests to. Emails to this address will appear as tickets.
-        </p>
-        <div className="flex gap-2">
-          <Input
-            type="email"
-            placeholder="support@yourstore.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
-            className="text-sm bg-white h-9"
-          />
-          <Button
-            size="sm"
-            disabled={!email || loading}
-            onClick={handleSubmit}
-            className="shrink-0 h-9 bg-slate-900 text-white hover:bg-slate-700 font-semibold"
-          >
-            {loading ? 'Saving…' : 'Save'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ShopifyConnectForm({ onClose }: { onClose: () => void }) {
-  const [shop, setShop] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const handleSubmit = () => {
-    const domain = shop.trim()
-    if (!domain) return
-    setLoading(true)
-    // Redirect to OAuth — page will navigate away
-    window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(domain)}`
-  }
-
-  return (
-    <div className="mx-5 mb-4 rounded-md border border-slate-200 bg-slate-50/60 p-4 space-y-3">
-      <div className="space-y-1.5">
-        <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-          Shopify store domain
-        </label>
-        <p className="text-xs text-slate-400">
-          Enter your myshopify.com domain, e.g. <span className="font-mono">mystore.myshopify.com</span>
-        </p>
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="mystore.myshopify.com"
-            value={shop}
-            onChange={(e) => setShop(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSubmit() }}
-            className="text-sm bg-white h-9"
-          />
-          <Button
-            size="sm"
-            disabled={!shop.trim() || loading}
-            onClick={handleSubmit}
-            className="shrink-0 h-9 bg-[#96BF48] hover:bg-[#7da33a] text-white font-semibold border-0"
-          >
-            {loading ? 'Redirecting…' : 'Connect'}
-          </Button>
-        </div>
-      </div>
-    </div>
   )
 }
 
@@ -148,14 +48,14 @@ interface Props {
   config: PlatformConfig
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
-  onConnectTwilio?: () => Promise<void>
   onDisconnect: (integrationId: string) => void
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onConnectTwilio, onDisconnect }: Props) {
-  const [showEmailForm, setShowEmailForm] = useState(false)
-  const [showShopifyForm, setShowShopifyForm] = useState(false)
-  const [twilioProvisioning, setTwilioProvisioning] = useState(false)
+export default function IntegrationCard({ config, connected, onConnect, onDisconnect }: Props) {
+  const [open, setOpen] = useState(false)
+  const [email, setEmail] = useState('')
+  const [shop, setShop] = useState('')
+  const [loading, setLoading] = useState(false)
   const [notified, setNotified] = useState(false)
 
   const isConnected = connected.length > 0
@@ -166,178 +66,219 @@ export default function IntegrationCard({ config, connected, onConnect, onConnec
     return (new Date(integration.tokenExpiresAt).getTime() - Date.now()) / 86_400_000 < 10
   }
 
+  async function handleEmailConnect() {
+    if (!email) return
+    setLoading(true)
+    try {
+      const ok = await onConnect(config.platform!, email)
+      if (ok) setEmail('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleShopifyConnect() {
+    const domain = shop.trim()
+    if (!domain) return
+    setLoading(true)
+    window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(domain)}`
+  }
+
   return (
     <div className={cn(
-      "flex flex-col rounded-md border bg-white transition-all duration-200 min-h-[220px]",
+      "rounded-lg border bg-card overflow-hidden transition-colors",
       isComingSoon
-        ? "border-slate-200 opacity-60"
-        : isConnected
-          ? "border-green-200 shadow-sm ring-1 ring-green-100/80"
-          : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
+        ? "border-white/[0.04] opacity-40 pointer-events-none select-none"
+        : "border-white/[0.08]"
     )}>
 
-      {/* Header */}
-      <div className="flex items-center gap-3 p-4 pb-3">
-        <div className={cn(
-          "h-10 w-10 rounded-md flex items-center justify-center p-2 shrink-0 border transition-colors",
-          isConnected ? "bg-green-50 border-green-200" : "bg-slate-50 border-slate-200"
-        )}>
-          <Image src={config.logo} alt={`${config.name} logo`} width={26} height={26} className="object-contain" />
+      {/* ── Row header ── */}
+      <button
+        disabled={isComingSoon}
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.06] border border-white/[0.08]">
+          <Image src={config.logo} alt={`${config.name} logo`} width={20} height={20} className="object-contain" />
         </div>
 
-        <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold text-slate-900 truncate">{config.name}</p>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-white/85">{config.name}</p>
+          <p className="text-xs text-white/35 mt-0.5 truncate">{config.description}</p>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
           {isComingSoon ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 shrink-0">
-              <Lock className="w-3 h-3" /> Coming soon
-            </span>
+            <span className="text-[11px] font-medium text-white/25">Coming soon</span>
           ) : isConnected ? (
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5 shrink-0">
-              <Check className="w-3 h-3" /> Connected
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              Connected
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-              <span className="text-[11px] font-medium text-slate-400">Not connected</span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/25">
+              <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+              Not connected
             </span>
           )}
+          <ChevronDown className={cn("w-4 h-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
         </div>
-      </div>
+      </button>
 
-      {/* Description */}
-      <p className="px-4 pb-3 text-sm text-slate-500 leading-relaxed">{config.description}</p>
+      {/* ── Expanded body ── */}
+      {open && (
+        <div className="border-t border-white/[0.06] px-5 py-4 space-y-4">
 
-      {/* Connected accounts */}
-      {isConnected && (
-        <div className="mx-4 mb-3 rounded-md border border-slate-100 overflow-hidden divide-y divide-slate-100">
-          {connected.map((integration) => (
-            <div key={integration.id} className="flex items-center gap-3 px-4 py-3 bg-slate-50/70">
-              <div className="flex-1 min-w-0">
-                {config.connectType === 'ig' ? (
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-xs font-semibold text-slate-700 truncate">
-                      {integration.fromEmail || integration.externalAccountId}
-                    </p>
-                    {isTokenExpiringSoon(integration) && (
-                      <span
-                        title="Token expiring soon — reconnect to keep receiving messages"
-                        className="flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5 shrink-0"
-                      >
-                        <AlertTriangle className="w-2.5 h-2.5" /> Expiring
-                      </span>
+          {/* Connected accounts */}
+          {isConnected && (
+            <div className="rounded-md overflow-hidden border border-white/[0.07] divide-y divide-white/[0.05]">
+              {connected.map((integration) => (
+                <div key={integration.id} className="flex items-center gap-2.5 px-3.5 py-2.5 bg-white/[0.02]">
+                  <div className="flex-1 min-w-0">
+                    {config.connectType === 'ig' ? (
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs font-medium text-white/55 truncate">
+                          {integration.fromEmail || integration.externalAccountId}
+                        </p>
+                        {isTokenExpiringSoon(integration) && (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Expiring
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <p className="text-xs font-mono text-white/50 truncate">{integration.externalAccountId}</p>
+                        <CopyButton text={integration.externalAccountId} />
+                      </div>
                     )}
                   </div>
-                ) : (
-                  <div className="flex items-center">
-                    <p className="text-xs font-mono font-medium text-slate-700 truncate">
-                      {integration.externalAccountId}
-                    </p>
-                    <CopyButton text={integration.externalAccountId} />
-                  </div>
-                )}
-              </div>
-              <button
-                onClick={() => onDisconnect(integration.id)}
-                className="text-[11px] font-semibold text-slate-400 hover:text-red-500 transition-colors whitespace-nowrap shrink-0"
-              >
-                Remove
-              </button>
+                  <button
+                    onClick={() => onDisconnect(integration.id)}
+                    className="text-[11px] font-medium text-white/25 hover:text-red-400 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
+
+          {/* Email */}
+          {config.connectType === 'email' && (
+            <div className="space-y-3">
+              {!isConnected && (
+                <div className="space-y-2">
+                  <p className="text-xs text-white/40 leading-relaxed">
+                    Enter the email address your customers write to. Clerk will receive those emails and convert them into support tickets.
+                  </p>
+                  <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
+                    <li>Set your inbound email routing to forward to Clerk's inbound address</li>
+                    <li>Enter your support address below and save</li>
+                  </ol>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  placeholder="support@yourstore.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleEmailConnect() }}
+                  className="h-9 text-sm"
+                />
+                <Button
+                  size="sm"
+                  disabled={!email || loading}
+                  onClick={handleEmailConnect}
+                  className="shrink-0 h-9 px-4 font-medium"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Add another' : 'Save'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Instagram */}
+          {config.connectType === 'ig' && (
+            <div className="space-y-3">
+              {!isConnected && (
+                <div className="space-y-2">
+                  <p className="text-xs text-white/40 leading-relaxed">
+                    Connect your Instagram Business account to manage DMs alongside every other channel.
+                  </p>
+                  <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
+                    <li>Make sure your Instagram is linked to a Facebook Business Page</li>
+                    <li>Click Connect below and authorize Clerk via Meta OAuth</li>
+                    <li>DMs will start appearing as tickets immediately</li>
+                  </ol>
+                </div>
+              )}
+              <a href="/api/integrations/instagram/auth">
+                <Button size="sm" className="h-9 px-4 font-medium">
+                  {isConnected ? 'Reconnect' : 'Connect with Instagram'}
+                </Button>
+              </a>
+            </div>
+          )}
+
+          {/* Shopify */}
+          {config.connectType === 'shopify' && (
+            <div className="space-y-3">
+              {!isConnected && (
+                <div className="space-y-2">
+                  <p className="text-xs text-white/40 leading-relaxed">
+                    Sync customer orders, returns, and Shopify Inbox messages directly into Clerk.
+                  </p>
+                  <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
+                    <li>Enter your <span className="font-mono text-white/45">.myshopify.com</span> store domain below</li>
+                    <li>You'll be redirected to Shopify to authorize Clerk</li>
+                    <li>Order data and messages will sync automatically</li>
+                  </ol>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  type="text"
+                  placeholder="mystore.myshopify.com"
+                  value={shop}
+                  onChange={(e) => setShop(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleShopifyConnect() }}
+                  className="h-9 text-sm"
+                />
+                <Button
+                  size="sm"
+                  disabled={!shop.trim() || loading}
+                  onClick={handleShopifyConnect}
+                  className="shrink-0 h-9 px-4 font-medium"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Reconnect' : 'Connect'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Coming soon */}
+          {config.connectType === 'coming-soon' && (
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-white/30">This integration isn't available yet.</p>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={notified}
+                onClick={() => { setNotified(true); setTimeout(() => setNotified(false), 3000) }}
+                className={cn(
+                  "h-8 px-3 text-xs font-medium",
+                  notified ? "text-emerald-400 pointer-events-none" : "text-white/30 hover:text-white/55"
+                )}
+              >
+                {notified ? <><Check className="w-3 h-3 mr-1" />Notified</> : "Notify me"}
+              </Button>
+            </div>
+          )}
+
         </div>
       )}
-
-      {/* Email setup form */}
-      {config.connectType === 'email' && showEmailForm && (
-        <EmailConnectForm
-          onConnect={(email) => onConnect(config.platform!, email)}
-          onClose={() => setShowEmailForm(false)}
-        />
-      )}
-
-      {/* Shopify shop domain form */}
-      {config.connectType === 'shopify' && showShopifyForm && (
-        <ShopifyConnectForm onClose={() => setShowShopifyForm(false)} />
-      )}
-
-
-      {/* Footer */}
-      <div className="mt-auto px-4 py-3 border-t border-slate-100 flex justify-end">
-        {config.connectType === 'email' && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowEmailForm((s) => !s)}
-            className="font-semibold text-slate-700 border-slate-200 hover:bg-slate-50 h-8 text-xs gap-1"
-          >
-            {showEmailForm ? 'Cancel' : isConnected
-              ? 'Manage'
-              : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>
-            }
-          </Button>
-        )}
-        {config.connectType === 'ig' && (
-          <a href="/api/integrations/instagram/auth">
-            <Button
-              size="sm"
-              className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1"
-            >
-              {isConnected ? 'Reconnect' : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>}
-            </Button>
-          </a>
-        )}
-        {config.connectType === 'shopify' && (
-          <Button
-            size="sm"
-            onClick={() => setShowShopifyForm((s) => !s)}
-            className="font-semibold h-8 text-xs bg-[#96BF48] hover:bg-[#7da33a] text-white border-0 gap-1"
-          >
-            {showShopifyForm ? 'Cancel' : isConnected
-              ? 'Reconnect'
-              : <><span>Connect</span><ChevronRight className="w-3.5 h-3.5" /></>
-            }
-          </Button>
-        )}
-        {config.connectType === 'twilio' && !isConnected && (
-          <Button
-            size="sm"
-            disabled={twilioProvisioning}
-            onClick={async () => {
-              if (!onConnectTwilio) return
-              setTwilioProvisioning(true)
-              try { await onConnectTwilio() } finally { setTwilioProvisioning(false) }
-            }}
-            className="font-semibold h-8 text-xs bg-slate-900 hover:bg-slate-700 text-white border-0 gap-1.5"
-          >
-            {twilioProvisioning
-              ? <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />Provisioning…</>
-              : <><span>Enable SMS</span><ChevronRight className="w-3.5 h-3.5" /></>
-            }
-          </Button>
-        )}
-        {config.connectType === 'coming-soon' && (
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={notified}
-            onClick={() => {
-              setNotified(true)
-              setTimeout(() => setNotified(false), 3000)
-            }}
-            className={cn(
-              "font-semibold h-8 text-xs border transition-colors",
-              notified
-                ? "text-green-600 border-green-200 bg-green-50"
-                : "text-slate-500 border-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {notified
-              ? <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5" />Notified!</span>
-              : "Notify me"
-            }
-          </Button>
-        )}
-      </div>
 
     </div>
   )

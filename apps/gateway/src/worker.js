@@ -69,7 +69,7 @@ async function isCustomerSupportMessage(subject, body) {
 
 // Shared handler: upsert customer → find/create thread → save message → summarize
 // organizationId scopes all writes so data never crosses tenant boundaries
-async function processInboundMessage(organizationId, platformId, channelType, messageText, { customerName = null, profilePicUrl = null, initialTag = null } = {}) {
+async function processInboundMessage(organizationId, platformId, channelType, messageText, { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null } = {}) {
   // Upsert by the compound unique key (organizationId + platformId)
   const customer = await db.customer.upsert({
     where: {
@@ -106,7 +106,7 @@ async function processInboundMessage(organizationId, platformId, channelType, me
   // Save the new message and invalidate the cached plan atomically
   await db.$transaction([
     db.message.create({
-      data: { threadId: thread.id, senderType: 'customer', contentText: messageText },
+      data: { threadId: thread.id, senderType: 'customer', contentText: messageText, externalMessageId },
     }),
     db.thread.update({
       where: { id: thread.id },
@@ -386,6 +386,7 @@ const messageWorker = new Worker('inbound-messages', async (job) => {
       await processInboundMessage(organizationId, senderEmail, 'email', cleanBody, {
         customerName: senderName || senderEmail.split('@')[0],
         initialTag: subject.substring(0, 50),
+        externalMessageId: job.data.inboundMessageId,
       });
       console.log(`[Worker] Successfully saved Email from ${senderEmail} for org ${organizationId}`);
 

@@ -16,14 +16,14 @@ export default function LearnPage() {
     : tips.articles.filter(a => a.tag === activeTag)
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-50">
+    <div className="h-full overflow-y-auto bg-background">
       <div className="max-w-4xl mx-auto px-4 md:px-8 py-8">
 
         {/* Header */}
         <div className="mb-8">
           <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">Resources</p>
-          <h1 className="text-2xl font-bold text-slate-900">Tips & Strategies</h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Tips & Strategies</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Best practices for social commerce and customer support — written for teams like yours.
           </p>
         </div>
@@ -36,8 +36,8 @@ export default function LearnPage() {
               onClick={() => setActiveTag(tag)}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
                 activeTag === tag
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-500 border-slate-200 hover:border-slate-400 hover:text-slate-800"
+                  ? "bg-foreground text-background border-foreground"
+                  : "bg-card text-muted-foreground border-border hover:border-border/70 hover:text-foreground"
               }`}
             >
               {tag}
@@ -55,14 +55,14 @@ export default function LearnPage() {
               <Link
                 key={article.id}
                 href={`/dashboard/learn/${article.id}`}
-                className="group bg-white rounded-xl border border-slate-200 hover:border-slate-300 hover:shadow-md p-5 flex flex-col gap-3 transition-all"
+                className="group bg-card rounded-xl border border-border hover:border-border/70 hover:shadow-md p-5 flex flex-col gap-3 transition-all"
               >
                 <div className="flex items-center justify-between">
                   <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${tagColor}`}>
                     {tag}
                   </span>
                   {article.readingTime && (
-                    <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
                       <Clock className="w-3 h-3" />
                       {article.readingTime} min read
                     </span>
@@ -70,11 +70,11 @@ export default function LearnPage() {
                 </div>
 
                 <div className="flex-1">
-                  <h2 className="text-sm font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors">
+                  <h2 className="text-sm font-bold text-foreground leading-snug group-hover:text-violet-400 transition-colors">
                     {article.title}
                   </h2>
                   {article.summary && (
-                    <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">
+                    <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-2">
                       {article.summary}
                     </p>
                   )}
