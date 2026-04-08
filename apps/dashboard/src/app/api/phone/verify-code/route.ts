@@ -8,6 +8,7 @@ import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
 import { auth } from "@clerk/nextjs/server";
 import { handleApiError } from "@/lib/api-errors";
+import logger from "@/lib/logger";
 import { getOrCreateOrg } from "@/lib/org";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 
@@ -76,7 +77,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ verified: true, phoneNumber: stored.phoneNumber });
   } catch (error) {
-    console.error("[phone/verify-code] error:", error);
+    logger.error({ err: error }, '[phone/verify-code] error');
     return handleApiError(error, "Phone verify-code POST", "Failed to verify code");
   }
 }

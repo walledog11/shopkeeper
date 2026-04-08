@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, Inbox } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useThreads } from '@/hooks/useThreads'
+import { useThreads, usePaginatedThreads } from '@/hooks/useThreads'
 import { useAgentTurns } from '@/hooks/useAgentTurns'
 import { useTicketActions } from '@/hooks/useTicketActions'
 import { useTicketSelection } from '@/hooks/useTicketSelection'
@@ -34,8 +34,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen } = useThreads('open', initialOpenThreads)
-  const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed } = useThreads('closed')
+  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads)
+  const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed')
   const isSearchMode = searchQuery.length >= 2
   const dbThreads = isSearchMode ? [] : (activeTab === 'open' ? openThreads : closedThreads)
   const isLoading = activeTab === 'open' ? openLoading : closedLoading
@@ -57,9 +57,10 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
       .map(t => threadToTicket(t, agentName))
   }, [isSearchMode, searchQuery, openThreads, closedThreads, dbThreads, activeFilter, agentName])
 
-  const liveTickets: Ticket[] = isSearchMode
-    ? filteredTickets
-    : dbThreads.map(t => threadToTicket(t, agentName))
+  const liveTickets: Ticket[] = useMemo(
+    () => isSearchMode ? filteredTickets : dbThreads.map(t => threadToTicket(t, agentName)),
+    [isSearchMode, filteredTickets, dbThreads, agentName]
+  )
 
   const activeTicket = liveTickets.find(t => t.id === activeTicketId)
   const allThreads = isSearchMode ? [...openThreads, ...closedThreads] : dbThreads
@@ -88,6 +89,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     replyText, setReplyText,
     isDrafting, isSending, sendError, setSendError,
     isRefreshingSummary, toast,
+    failedMessages, handleRetry,
     handleSendMessage, handleSendNote, handleResolve, handleReopen,
     handleAiDraft, handleLinkShopifyCustomer, handleTagUpdate,
     handleRefreshSummary, handleBulkClose,
@@ -191,6 +193,9 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           onToggleSelect={handleToggleSelect}
           onBulkClose={() => handleBulkClose(selectedIds)}
           onClearSelection={handleClearSelection}
+          hasMore={activeTab === 'open' ? hasMoreOpen : hasMoreClosed}
+          isLoadingMore={activeTab === 'open' ? isLoadingMoreOpen : isLoadingMoreClosed}
+          onLoadMore={activeTab === 'open' ? loadMoreOpen : loadMoreClosed}
         />
       </div>
 
@@ -215,6 +220,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               isSending={isSending}
               sendError={sendError}
               messagesEndRef={messagesEndRef}
+              failedMessages={failedMessages.filter(m => m.threadId === activeTicketId)}
+              onRetry={handleRetry}
               onOpenContext={() => setShowContextDrawer(true)}
               onBack={() => { setActiveTicketId(null); setSendError(null); setShowContextDrawer(false) }}
               onResolve={handleResolve}

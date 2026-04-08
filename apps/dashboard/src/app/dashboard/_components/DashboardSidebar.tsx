@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, ChevronsUpDown } from "lucide-react";
-import { motion } from "motion/react";
+import { createContext, useContext } from "react";
+import { Bot, LogOut, ChevronsUpDown } from "lucide-react";
 import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk } from "@clerk/nextjs";
+
 import { navItems, footerNavItems } from "./nav-items";
+import { useAgentPanel } from "./agent/AgentPanelContext";
 import {
   Sidebar,
   SidebarContent,
@@ -29,6 +31,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OrgAvatar } from "@/components/OrgAvatar";
+
+const OpenThreadCountContext = createContext(0);
+export const useOpenThreadCount = () => useContext(OpenThreadCountContext);
 
 function Logo() {
   return (
@@ -67,11 +72,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
             return (
               <SidebarMenuItem key={item.name} className="relative">
                 {isActive && (
-                  <motion.span
-                    layoutId="active-nav-indicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none"
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
                 )}
                 <SidebarMenuButton
                   asChild
@@ -85,15 +86,12 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
                 </SidebarMenuButton>
                 {item.badge && openCount > 0 && (
                   <SidebarMenuBadge className="pointer-events-none">
-                    <motion.span
+                    <span
                       key={openCount}
-                      initial={{ scale: 0.6, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ type: "spring", stiffness: 520, damping: 22 }}
-                      className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-yellow-400 text-black tabular-nums"
+                      className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-yellow-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
                     >
                       {openCount > 9 ? "9+" : openCount}
-                    </motion.span>
+                    </span>
                   </SidebarMenuBadge>
                 )}
               </SidebarMenuItem>
@@ -110,11 +108,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
             return (
               <SidebarMenuItem key={item.name} className="relative">
                 {isActive && (
-                  <motion.span
-                    layoutId="active-nav-indicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none"
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
                 )}
                 <SidebarMenuButton
                   asChild
@@ -171,8 +165,10 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
 export default function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const { threads: openThreads } = useOpenThreads();
   const openCount = openThreads.length;
+  const { isOpen: isAgentOpen, toggle: toggleAgent } = useAgentPanel();
 
   return (
+    <OpenThreadCountContext.Provider value={openCount}>
     <SidebarProvider className="flex-1 min-h-0">
       <Sidebar className="border-r-0 bg-sidebar" collapsible="offcanvas">
         <SidebarHeader className="h-16 flex-row items-center px-5 border-b border-sidebar-border shrink-0">
@@ -187,11 +183,25 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
         {/* Mobile-only top bar */}
         <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar">
           <Logo />
-          <SidebarTrigger className="text-white/60 hover:text-white hover:bg-white/[0.08]" />
+          <div className="flex items-center gap-1">
+            <button
+              onClick={toggleAgent}
+              className={`p-2 rounded-md transition-colors ${
+                isAgentOpen
+                  ? 'text-amber-400 bg-amber-400/15'
+                  : 'text-amber-400/70 hover:text-amber-400 hover:bg-amber-400/10'
+              }`}
+              title="AI Agent"
+            >
+              <Bot className="w-5 h-5" />
+            </button>
+            <SidebarTrigger className="text-white/60 hover:text-white hover:bg-white/[0.08]" />
+          </div>
         </div>
         {children}
       </SidebarInset>
     </SidebarProvider>
+    </OpenThreadCountContext.Provider>
   );
 }
 

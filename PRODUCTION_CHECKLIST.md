@@ -46,3 +46,17 @@ Things that must be done before deploying to production.
 - [ ] Rotate `INTERNAL_API_SECRET` to a new value not used during development
 - [ ] Ensure Redis is production-grade (persistent, backed up) — conversation context and pending plans are stored there
 - [ ] Confirm `DATABASE_URL` points to the production Neon PostgreSQL instance
+
+---
+
+## Bugs & Correctness
+
+
+---
+
+## Technical Debt
+
+- [ ] Write integration tests for webhook handlers (`apps/gateway/src/routes/webhooks.ts`) covering Meta, Postmark, and Twilio paths
+- [ ] Write integration tests for the BullMQ worker (`apps/gateway/src/worker.ts`) covering email and Instagram job branches
+- [ ] Write API route tests for critical dashboard endpoints (`/api/messages`, `/api/threads`, `/api/agent/plan`)
+- [ ] Add E2E tests (Playwright or Cypress) for core agent flows: receive message → view thread → send reply

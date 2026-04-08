@@ -23,7 +23,7 @@ export async function GET() {
     if (!customer) return NextResponse.json([]);
 
     const threads = await db.thread.findMany({
-      where: { organizationId: org.id, customerId: customer.id, channelType: "dashboard_agent" },
+      where: { organizationId: org.id, customerId: customer.id, channelType: "dashboard_agent", archivedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
         messages: {
@@ -64,12 +64,13 @@ export async function DELETE() {
 
     if (!customer) return NextResponse.json({ ok: true });
 
-    await db.thread.deleteMany({
+    await db.thread.updateMany({
       where: {
         organizationId: org.id,
         customerId: customer.id,
         channelType: "dashboard_agent",
       },
+      data: { archivedAt: new Date() },
     });
 
     return NextResponse.json({ ok: true });

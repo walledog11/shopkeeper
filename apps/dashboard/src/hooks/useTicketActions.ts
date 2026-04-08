@@ -1,5 +1,7 @@
 import { useState, useCallback } from 'react'
-import type { Thread, Message } from '@/types'
+import type { Thread, Message, FailedMessage } from '@/types'
+import { SENDER_TYPE } from '@/lib/constants'
+
 
 interface UseTicketActionsProps {
   activeTicketId: string | null
@@ -31,6 +33,8 @@ export function useTicketActions({
   const [isSending, setIsSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [failedMessages, setFailedMessages] = useState<FailedMessage[]>([])
+  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -57,7 +61,7 @@ export function useTicketActions({
     const optimisticMessage: Message = {
       id: `temp-${Date.now()}`,
       threadId: activeTicketId,
-      senderType: noteMode ? 'note' : 'agent',
+      senderType: noteMode ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
       contentText: textToSend,
       mediaUrl: null,
       sentAt: new Date().toISOString(),
@@ -83,9 +87,8 @@ export function useTicketActions({
       mutateFn()
     } catch (err) {
       console.error('Failed to send message', err)
-      setReplyText(textToSend)
-      setSendError('Failed to send. Check your connection and try again.')
-      getMutate()()
+      setFailedMessages(prev => [...prev, { id: optimisticMessage.id, threadId: activeTicketId, text: textToSend, isNote: noteMode }])
+      mutateFn()
     } finally {
       setIsSending(false)
     }
@@ -99,7 +102,7 @@ export function useTicketActions({
     const optimisticMessage: Message = {
       id: `temp-${Date.now()}`,
       threadId: activeTicketId,
-      senderType: 'note',
+      senderType: SENDER_TYPE.NOTE,
       contentText: text,
       mediaUrl: null,
       sentAt: new Date().toISOString(),
@@ -125,8 +128,8 @@ export function useTicketActions({
       mutateFn()
     } catch (err) {
       console.error('Failed to send note', err)
-      setSendError('Failed to send note. Please try again.')
-      getMutate()()
+      setFailedMessages(prev => [...prev, { id: optimisticMessage.id, threadId: activeTicketId, text, isNote: true }])
+      mutateFn()
     } finally {
       setIsSending(false)
     }
@@ -226,7 +229,44 @@ export function useTicketActions({
     }
   }, [activeTicketId, dbThreads, getMutate])
 
-  const [isRefreshingSummary, setIsRefreshingSummary] = useState(false)
+  const handleRetry = useCallback(async (id: string) => {
+    const failed = failedMessages.find(m => m.id === id)
+    if (!failed) return
+    setFailedMessages(prev => prev.filter(m => m.id !== id))
+
+    const mutateFn = getMutate()
+    const currentThreads = getCurrentThreads()
+
+    const optimisticMessage: Message = {
+      id,
+      threadId: failed.threadId,
+      senderType: failed.isNote ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
+      contentText: failed.text,
+      mediaUrl: null,
+      sentAt: new Date().toISOString(),
+    }
+
+    await mutateFn(
+      currentThreads.map(t => t.id === failed.threadId
+        ? { ...t, messages: [...t.messages, optimisticMessage] }
+        : t),
+      false
+    )
+
+    try {
+      const res = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: failed.threadId, text: failed.text, isNote: failed.isNote }),
+      })
+      if (!res.ok) throw new Error(`Server error: ${res.status}`)
+      mutateFn()
+    } catch (err) {
+      console.error('Failed to retry message', err)
+      setFailedMessages(prev => [...prev, failed])
+      mutateFn()
+    }
+  }, [failedMessages, getMutate, getCurrentThreads])
 
   const handleRefreshSummary = useCallback(async () => {
     if (!activeTicketId) return
@@ -287,8 +327,10 @@ export function useTicketActions({
     setSendError,
     isRefreshingSummary,
     toast,
+    failedMessages,
     handleSendMessage,
     handleSendNote,
+    handleRetry,
     handleResolve,
     handleReopen,
     handleAiDraft,

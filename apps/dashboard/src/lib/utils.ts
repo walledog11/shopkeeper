@@ -1,8 +1,9 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { getChannelInfo } from '@/lib/channels'
-import { AGENT_NOTE_PREFIX } from '@/lib/agent/thread-tools'
+import { AGENT_NOTE_PREFIX } from '@/lib/constants'
 import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
+import { SENDER_TYPE } from '@/lib/constants'
 import type { Thread, Ticket } from '@/types'
 
 export function cn(...inputs: ClassValue[]) {
@@ -52,7 +53,7 @@ export function getCustomerName(customer: { name?: string | null; platformId?: s
 
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {
   const channel = getChannelInfo(thread.channelType)
-  const lastMsg = thread.messages.filter(m => m.senderType !== 'note').at(-1)
+  const lastMsg = thread.messages.filter(m => m.senderType !== SENDER_TYPE.NOTE).at(-1)
   return {
     id: thread.id,
     channelType: thread.channelType,
@@ -67,14 +68,14 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...",
     status: thread.status,
     messages: thread.messages
-      .filter(msg => !(msg.senderType === 'note' && msg.contentText?.startsWith(AGENT_TURN_PREFIX)))
+      .filter(msg => !(msg.senderType === SENDER_TYPE.NOTE && msg.contentText?.startsWith(AGENT_TURN_PREFIX)))
       .map((msg) => {
-        const isAgentNote = msg.senderType === 'note' && msg.contentText?.startsWith(AGENT_NOTE_PREFIX)
+        const isAgentNote = msg.senderType === SENDER_TYPE.NOTE && msg.contentText?.startsWith(AGENT_NOTE_PREFIX)
         return {
           sender: msg.senderType,
           text: isAgentNote ? msg.contentText!.slice(AGENT_NOTE_PREFIX.length) : msg.contentText,
           time: formatTime(msg.sentAt),
-          author: msg.senderType === 'note' ? (isAgentNote ? (agentName ?? 'Agent') : 'You') : undefined,
+          author: msg.senderType === SENDER_TYPE.NOTE ? (isAgentNote ? (agentName ?? 'Agent') : 'You') : undefined,
           isAgentNote,
         }
       })

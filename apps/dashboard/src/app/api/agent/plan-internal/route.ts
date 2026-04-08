@@ -13,7 +13,8 @@ import { db, type Prisma } from "@clerk/db";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { handleApiError } from "@/lib/api-errors";
-import type { OrgSettings } from "@/types";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import type { AgentPlan, OrgSettings } from "@/types";
 
 export async function POST(request: Request) {
   try {
@@ -29,6 +30,11 @@ export async function POST(request: Request) {
         { error: "Missing orgId or threadId" },
         { status: 400 }
       );
+    }
+
+    const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
+    if (!rl.success) {
+      return tooManyRequests(rl.reset);
     }
 
     const thread = await db.thread.findUnique({
@@ -56,13 +62,17 @@ export async function POST(request: Request) {
 
     const lastCustomerMessage = thread.messages[0] ?? null;
 
-    // Return cached plan if still valid
+    const cached = thread.cachedPlan as unknown as AgentPlan | null;
+    const isValidCachedPlan =
+      cached !== null &&
+      Array.isArray(cached.steps) &&
+      Array.isArray(cached.rawToolCalls);
     if (
       lastCustomerMessage &&
       thread.cachedPlanMessageId === lastCustomerMessage.id &&
-      thread.cachedPlan
+      isValidCachedPlan
     ) {
-      return NextResponse.json({ plan: thread.cachedPlan, instruction });
+      return NextResponse.json({ plan: cached, instruction });
     }
 
     const org = await db.organization.findUnique({
@@ -81,7 +91,7 @@ export async function POST(request: Request) {
         where: { id: threadId },
         data: {
           cachedPlanMessageId: lastCustomerMessage.id,
-          cachedPlan: plan as Prisma.InputJsonValue,
+          cachedPlan: plan as unknown as Prisma.InputJsonValue,
         },
       });
     }

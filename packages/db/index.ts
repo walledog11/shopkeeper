@@ -15,5 +15,5 @@ export const db =
 
 if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db;
 
-// 2. Export all generated types so the rest of the monorepo can use them
-export * from '@prisma/client';
+// 2. Export the Prisma types used across the monorepo
+export { Prisma, SenderType, ChannelType } from '@prisma/client';

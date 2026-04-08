@@ -109,7 +109,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
           transition={{ duration: 0.25, ease: "easeInOut" }}
           className={`relative z-20 flex items-center justify-center px-10 text-sm shrink-0 border-b overflow-hidden ${styles.bar}`}
         >
-          <div className="py-3 flex items-center gap-2.5">
+          <div className="py-3 md:py-3 flex items-center gap-2.5">
             <AnimatePresence mode="wait" custom={directionRef.current}>
               <motion.div
                 key={n.id}
@@ -126,30 +126,30 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 className="flex items-center gap-2.5"
               >
                 <Icon className={`w-4 h-4 shrink-0 ${styles.icon}`} />
-                <p className="text-center">
-                  <span className={`font-bold ${styles.title}`}>{n.title}</span>
-                  {n.message && <span className="font-normal text-white/40"> {n.message}</span>}
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
+                  {n.message && <span className="font-normal text-white/40 hidden sm:inline whitespace-nowrap">{n.message}</span>}
                   {n.action && (
                     <>
                       {" "}
                       {n.action.href ? (
                         <Link
                           href={n.action.href}
-                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity ${styles.action}`}
+                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
                         >
                           {n.action.label}
                         </Link>
                       ) : (
                         <button
                           onClick={n.action.onClick}
-                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity ${styles.action}`}
+                          className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
                         >
                           {n.action.label}
                         </button>
                       )}
                     </>
                   )}
-                </p>
+                </div>
               </motion.div>
             </AnimatePresence>
           </div>

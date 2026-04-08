@@ -1,6 +1,7 @@
 import { db } from "@clerk/db";
 import { anthropic } from "@/lib/anthropic";
 import { AI_MODEL } from "@/lib/ai";
+import logger from "@/lib/logger";
 import type Anthropic from "@anthropic-ai/sdk";
 import { AGENT_TOOLS, TOOL_CATEGORIES, PLAN_STEP_LABELS } from "./tools";
 import type { PlanStep, RawToolCall, AgentPlan, OrgSettings } from "@/types";
@@ -130,52 +131,47 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
-  // If the thread is already linked to a Shopify customer but we still have no real name,
-  // fetch it directly from Shopify.
-  if (shopifyCustomerId && !dbName && !shopifyCustomerName && shopifyIntegration?.accessToken) {
-    try {
-      const res = await fetch(
-        `https://${shopifyIntegration.externalAccountId}/admin/api/2024-01/customers/${shopifyCustomerId}.json?fields=first_name,last_name`,
-        { headers: { "X-Shopify-Access-Token": shopifyIntegration.accessToken } }
-      );
-      const data = await res.json();
-      const parts = [data.customer?.first_name, data.customer?.last_name].filter(Boolean);
-      if (parts.length > 0) shopifyCustomerName = parts.join(' ');
-    } catch {
-      // best-effort; leave null
-    }
-  }
-
-  // Pre-fetch recent Shopify orders so the agent has order context upfront
+  // Fetch customer name and recent orders in parallel
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
-    try {
-      const ordersRes = await fetch(
-        `https://${shopifyIntegration.externalAccountId}/admin/api/2024-01/orders.json?customer_id=${shopifyCustomerId}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,total_price,line_items`,
-        { headers: { "X-Shopify-Access-Token": shopifyIntegration.accessToken } }
-      );
-      const ordersData = await ordersRes.json();
-      if (ordersRes.ok && ordersData.orders) {
-        recentOrders = ordersData.orders.map((o: {
-          id: number;
-          name: string;
-          created_at: string;
-          financial_status: string;
-          fulfillment_status: string | null;
-          total_price: string;
-          line_items: { title: string; quantity: number }[];
-        }) => ({
-          id: String(o.id),
-          name: o.name,
-          created_at: o.created_at,
-          financial_status: o.financial_status,
-          fulfillment_status: o.fulfillment_status,
-          total_price: o.total_price,
-          items: o.line_items.map((li) => `${li.quantity}x ${li.title}`),
-        }));
-      }
-    } catch {
-      // best-effort; leave empty
+    const { externalAccountId, accessToken } = shopifyIntegration;
+    const headers = { "X-Shopify-Access-Token": accessToken };
+
+    const nameFetch = (!dbName && !shopifyCustomerName)
+      ? fetch(`https://${externalAccountId}/admin/api/2024-01/customers/${shopifyCustomerId}.json?fields=first_name,last_name`, { headers })
+          .then(r => r.json()).catch(() => null)
+      : Promise.resolve(null);
+
+    const ordersFetch = fetch(
+      `https://${externalAccountId}/admin/api/2024-01/orders.json?customer_id=${shopifyCustomerId}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,total_price,line_items`,
+      { headers }
+    ).then(async r => ({ ok: r.ok, data: await r.json() })).catch(() => null);
+
+    const [nameData, ordersResult] = await Promise.all([nameFetch, ordersFetch]);
+
+    if (nameData) {
+      const parts = [nameData.customer?.first_name, nameData.customer?.last_name].filter(Boolean);
+      if (parts.length > 0) shopifyCustomerName = parts.join(' ');
+    }
+
+    if (ordersResult?.ok && ordersResult.data?.orders) {
+      recentOrders = ordersResult.data.orders.map((o: {
+        id: number;
+        name: string;
+        created_at: string;
+        financial_status: string;
+        fulfillment_status: string | null;
+        total_price: string;
+        line_items: { title: string; quantity: number }[];
+      }) => ({
+        id: String(o.id),
+        name: o.name,
+        created_at: o.created_at,
+        financial_status: o.financial_status,
+        fulfillment_status: o.fulfillment_status,
+        total_price: o.total_price,
+        items: o.line_items.map((li) => `${li.quantity}x ${li.title}`),
+      }));
     }
   }
 
@@ -218,7 +214,6 @@ export interface ActionEntry {
 
 // ── Tool dispatch ─────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function cast<T>(v: unknown): T { return v as T; }
 
 async function executeTool(
@@ -227,42 +222,41 @@ async function executeTool(
   ctx: AgentContext
 ): Promise<string> {
   const noShopify = "Error: no Shopify integration connected.";
-  const shopifyCtx = ctx.shopify ?? { shop: "", accessToken: "" };
   const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
 
   switch (name) {
     case "search_shopify_products":
-      return ctx.shopify ? searchShopifyProducts(cast<SearchShopifyProductsInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? searchShopifyProducts(cast<SearchShopifyProductsInput>(args), ctx.shopify) : noShopify;
 
     case "search_shopify_customers":
-      return ctx.shopify ? searchShopifyCustomers(cast<SearchShopifyCustomersInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? searchShopifyCustomers(cast<SearchShopifyCustomersInput>(args), ctx.shopify) : noShopify;
 
     case "get_shopify_customer":
-      return ctx.shopify ? getShopifyCustomer(cast<GetShopifyCustomerInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? getShopifyCustomer(cast<GetShopifyCustomerInput>(args), ctx.shopify) : noShopify;
 
     case "update_shopify_customer_info":
-      return ctx.shopify ? updateShopifyCustomerInfo(cast<UpdateShopifyCustomerInfoInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? updateShopifyCustomerInfo(cast<UpdateShopifyCustomerInfoInput>(args), ctx.shopify) : noShopify;
 
     case "get_shopify_orders":
-      return ctx.shopify ? getShopifyOrders(cast<GetShopifyOrdersInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? getShopifyOrders(cast<GetShopifyOrdersInput>(args), ctx.shopify) : noShopify;
 
     case "update_shopify_order_address":
-      return ctx.shopify ? updateShopifyOrderAddress(cast<UpdateShopifyOrderAddressInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? updateShopifyOrderAddress(cast<UpdateShopifyOrderAddressInput>(args), ctx.shopify) : noShopify;
 
     case "add_shopify_customer_note":
-      return ctx.shopify ? addShopifyCustomerNote(cast<AddShopifyCustomerNoteInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? addShopifyCustomerNote(cast<AddShopifyCustomerNoteInput>(args), ctx.shopify) : noShopify;
 
     case "get_order_by_name":
-      return ctx.shopify ? getOrderByName(cast<GetOrderByNameInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? getOrderByName(cast<GetOrderByNameInput>(args), ctx.shopify) : noShopify;
 
     case "create_refund":
-      return ctx.shopify ? createRefund(cast<CreateRefundInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? createRefund(cast<CreateRefundInput>(args), ctx.shopify) : noShopify;
 
     case "cancel_order":
-      return ctx.shopify ? cancelOrder(cast<CancelOrderInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? cancelOrder(cast<CancelOrderInput>(args), ctx.shopify) : noShopify;
 
     case "create_shopify_order":
-      return ctx.shopify ? createShopifyOrder(cast<CreateShopifyOrderInput>(args), shopifyCtx) : noShopify;
+      return ctx.shopify ? createShopifyOrder(cast<CreateShopifyOrderInput>(args), ctx.shopify) : noShopify;
 
     case "add_internal_note":
       return addInternalNote(cast<AddInternalNoteInput>(args), threadCtx);
@@ -408,12 +402,12 @@ function buildMessageHistory(
   recentMessages: AgentContext["recentMessages"],
   instruction: string
 ): Anthropic.MessageParam[] {
-  const rawHistory = recentMessages.map((m) => ({
-    role: (m.senderType === "agent" || m.senderType === "note")
-      ? "assistant" as const
-      : "user" as const,
-    content: m.contentText ?? "(media)",
-  }));
+  const rawHistory = recentMessages
+    .filter((m) => m.senderType !== "note")
+    .map((m) => ({
+      role: m.senderType === "agent" ? "assistant" as const : "user" as const,
+      content: m.contentText ?? "(media)",
+    }));
 
   const merged: Anthropic.MessageParam[] = [];
   for (const msg of rawHistory) {
@@ -438,7 +432,7 @@ function describeTool(name: string, input: unknown): string {
   switch (name) {
     case 'update_shopify_order_address': {
       const parts = [a.address1, a.city, a.province, a.zip].filter(Boolean)
-      return `Change shipping address to ${parts.join(', ')}`
+      return `Update their shipping address on Shopify to ${parts.join(', ')}`
     }
     case 'update_shopify_customer_info': {
       const changes: string[] = []
@@ -487,13 +481,15 @@ export async function planAgent(
   settings?: OrgSettings
 ): Promise<AgentPlan> {
   const messages = buildMessageHistory(ctx.recentMessages, instruction)
+  const systemPrompt = buildSystemPrompt(ctx, settings);
+  const tools = toAnthropicTools(settings);
 
   const response = await anthropic.messages.create({
     model: AI_MODEL,
     max_tokens: 1024,
-    system: buildSystemPrompt(ctx, settings),
+    system: systemPrompt,
     messages,
-    tools: toAnthropicTools(settings),
+    tools,
   })
 
   const toolUseBlocks = response.content.filter(
@@ -528,9 +524,9 @@ export async function planAgent(
     const response2 = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 512,
-      system: buildSystemPrompt(ctx, settings),
+      system: systemPrompt,
       messages: phase2Messages,
-      tools: toAnthropicTools(settings),
+      tools,
     })
 
     const phase2ToolUse = response2.content.filter(
@@ -596,14 +592,15 @@ export async function runAgent(
   }
 
   const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+  const systemPrompt = buildSystemPrompt(ctx, settings);
 
   for (let i = 0; i < maxIterations; i++) {
-    console.log(`[agent] iteration ${i} — sending ${messages.length} messages`);
+    logger.info({ iteration: i, messageCount: messages.length }, '[agent] iteration start');
 
     const response = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 1024,
-      system: buildSystemPrompt(ctx, settings),
+      system: systemPrompt,
       messages,
       tools,
       // Force operator-mode to call a tool on the first iteration so it can't
@@ -614,7 +611,7 @@ export async function runAgent(
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
-    console.log(`[agent] iteration ${i} — stop_reason: ${response.stop_reason}, tools: ${toolUseBlocks.map((b) => b.name).join(", ") || "none"}`);
+    logger.info({ iteration: i, stopReason: response.stop_reason, tools: toolUseBlocks.map(b => b.name) }, '[agent] iteration end');
 
     // Add the assistant turn before deciding what to do next
     messages.push({ role: "assistant", content: response.content });
@@ -630,15 +627,15 @@ export async function runAgent(
     // Execute tool calls in parallel
     const toolResults = await Promise.all(
       toolUseBlocks.map(async (block) => {
-        console.log(`[agent] calling tool: ${block.name} args: ${JSON.stringify(block.input)}`);
+        logger.info({ tool: block.name, args: block.input }, '[agent] tool call');
         let result: string;
         try {
           result = await executeTool(block.name, block.input, ctx);
         } catch (err) {
           result = `Error: tool "${block.name}" threw — ${err instanceof Error ? err.message : String(err)}`;
-          console.error(`[agent] tool "${block.name}" threw:`, err);
+          logger.error({ err, tool: block.name }, '[agent] tool error');
         }
-        console.log(`[agent] tool result: ${result}`);
+        logger.info({ tool: block.name, result }, '[agent] tool result');
         actionsPerformed.push({ tool: block.name, result });
         return {
           type: "tool_result" as const,

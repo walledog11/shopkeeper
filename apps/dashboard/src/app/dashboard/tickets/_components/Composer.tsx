@@ -44,7 +44,7 @@ export default function Composer({
   onCancelNote,
 }: Props) {
   return (
-    <div className="px-5 pb-5 pt-4 bg-background border-t border-border shrink-0">
+    <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-background border-t border-border shrink-0">
       <div className={`border rounded-md overflow-hidden transition-colors ${
         error
           ? 'border-red-500/40'

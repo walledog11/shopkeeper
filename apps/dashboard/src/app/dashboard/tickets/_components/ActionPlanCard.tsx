@@ -166,7 +166,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                               ? step.enabled
                                 ? 'text-white/50 italic border-l-2 border-blue-400/30 pl-2 mt-1'
                                 : 'text-white/20 italic border-l-2 border-white/[0.08] pl-2 mt-1'
-                              : step.enabled ? 'text-white/40' : 'text-white/20'
+                              : step.enabled ? 'text-white/60' : 'text-white/20'
                           }`}>
                             {step.description}
                           </p>
@@ -192,7 +192,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                 <button
                   onClick={onDismiss}
                   disabled={isExecuting}
-                  className="h-8 px-3 text-xs font-semibold text-white/35 hover:text-white/60 transition-colors disabled:opacity-40"
+                  className="h-8 px-3 text-xs font-semibold text-white/50 border border-white/[0.12] rounded-md hover:text-white/70 hover:border-white/[0.20] transition-colors disabled:opacity-40"
                 >
                   Dismiss
                 </button>

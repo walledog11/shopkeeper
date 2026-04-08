@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  transpilePackages: ['@clerk/db'],
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',

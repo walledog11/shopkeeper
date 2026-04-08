@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db, SenderType } from '@clerk/db';
 import { generateText } from '@/lib/ai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import { AGENT_TURN_PREFIX } from '@/lib/agent/tools';
 import type { OrgSettings } from '@/types';
 
 export async function POST(request: Request) {
@@ -41,10 +42,12 @@ export async function POST(request: Request) {
       `Do not include placeholders like [Your Name] or [Agent Name]. Write only the exact text the agent should send.`,
     ].filter(Boolean).join(' ');
 
-    const messages = thread.messages.map((msg) => ({
-      role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
-      content: msg.contentText || "",
-    }));
+    const messages = thread.messages
+      .filter((msg) => !(msg.senderType === SenderType.note && (msg.contentText || '').startsWith(AGENT_TURN_PREFIX)))
+      .map((msg) => ({
+        role: msg.senderType === SenderType.customer ? 'user' as const : 'assistant' as const,
+        content: msg.contentText || "",
+      }));
 
     const draftText = await generateText(systemPrompt, messages, { temperature: 0.7 });
 

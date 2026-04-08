@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
+import logger from '@/lib/logger';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   const error = searchParams.get('error');
 
   if (error) {
-    console.warn('[IG OAuth] User denied access:', error);
+    logger.warn({ error }, '[IG OAuth] User denied access');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=access_denied`);
   }
 
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
   cookieStore.delete('ig_oauth_return');
 
   if (!savedState || savedState !== state) {
-    console.error('[IG OAuth] State mismatch — possible CSRF attempt');
+    logger.error('[IG OAuth] State mismatch — possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=state_mismatch`);
   }
 
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      console.error('[IG OAuth] Token exchange failed:', tokenData);
+      logger.error({ tokenData }, '[IG OAuth] Token exchange failed');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=token_exchange_failed`);
     }
     const shortLivedToken: string = tokenData.access_token;
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
       `${FB_GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${userToken}`
     );
     const pagesData = await pagesRes.json();
-    console.log('[IG OAuth] /me/accounts response:', JSON.stringify(pagesData));
+    logger.info({ pagesData }, '[IG OAuth] /me/accounts response');
 
     const pages: Array<{
       id: string;
@@ -83,7 +84,7 @@ export async function GET(request: Request) {
     const igPage = pages.find((p) => p.instagram_business_account?.id);
 
     if (!igPage?.instagram_business_account) {
-      console.error('[IG OAuth] No Instagram Business account found — user likely has Business Portfolio access only, not classic Page admin access.');
+      logger.error('[IG OAuth] No Instagram Business account found');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=no_ig_account`);
     }
 
@@ -91,7 +92,7 @@ export async function GET(request: Request) {
     const pageId = igPage.id;
     const igAccountId = igPage.instagram_business_account.id;
     const igUsername = igPage.instagram_business_account.username || igAccountId;
-    console.log('[IG OAuth] Found Instagram account:', igUsername, igAccountId, '(page:', pageId, ')');
+    logger.info({ igUsername, igAccountId, pageId }, '[IG OAuth] Found Instagram account');
 
     // ---------------------------------------------------------------
     // Step 4: Subscribe to Instagram messaging webhooks
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
       }),
     });
     const subscribeData = await subscribeRes.json();
-    console.log('[IG OAuth] Webhook subscription:', JSON.stringify(subscribeData));
+    logger.info({ subscribeData }, '[IG OAuth] Webhook subscription');
 
     // ---------------------------------------------------------------
     // Step 5: Save integration to database
@@ -116,12 +117,12 @@ export async function GET(request: Request) {
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
     if (!clerkOrgId) {
-      console.error('[IG OAuth] Missing org cookie — session likely interrupted');
+      logger.error('[IG OAuth] Missing org cookie — session likely interrupted');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });
     if (!org) {
-      console.error('[IG OAuth] Org not found for clerkOrgId:', clerkOrgId);
+      logger.error({ clerkOrgId }, '[IG OAuth] Org not found');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
     }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
@@ -148,14 +149,14 @@ export async function GET(request: Request) {
       },
     });
 
-    console.log(`[IG OAuth] Integration saved: @${igUsername} (${igAccountId}) for org ${org.id}`);
+    logger.info({ igUsername, igAccountId, orgId: org.id }, '[IG OAuth] Integration saved');
     const successUrl = returnTo
       ? `${appUrl}${returnTo}`
       : `${appUrl}/dashboard/settings?tab=integrations&connected=instagram`;
     return NextResponse.redirect(successUrl);
 
   } catch (err) {
-    console.error('[IG OAuth] Unexpected error:', err);
+    logger.error({ err }, '[IG OAuth] Unexpected error');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
   }
 }

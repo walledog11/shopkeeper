@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
 import crypto from 'crypto';
+import logger from '@/lib/logger';
 
 export async function GET(request: Request) {
   const appUrl = process.env.APP_URL!;
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
   cookieStore.delete('shopify_oauth_return');
 
   if (!savedState || savedState !== state) {
-    console.error('[Shopify OAuth] State mismatch — possible CSRF attempt');
+    logger.error('[Shopify OAuth] State mismatch — possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_state_mismatch`);
   }
 
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   const digest = crypto.createHmac('sha256', clientSecret).update(message).digest('hex');
 
   if (!crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(hmac))) {
-    console.error('[Shopify OAuth] HMAC verification failed');
+    logger.error('[Shopify OAuth] HMAC verification failed');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_hmac_invalid`);
   }
 
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      console.error('[Shopify OAuth] Token exchange failed:', tokenData);
+      logger.error({ tokenData }, '[Shopify OAuth] Token exchange failed');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_token_failed`);
     }
     const accessToken: string = tokenData.access_token;
@@ -87,12 +88,12 @@ export async function GET(request: Request) {
     // accessToken       = Shopify Admin API token (permanent)
     // ---------------------------------------------------------------
     if (!clerkOrgId) {
-      console.error('[Shopify OAuth] Missing org cookie — session likely interrupted');
+      logger.error('[Shopify OAuth] Missing org cookie — session likely interrupted');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });
     if (!org) {
-      console.error('[Shopify OAuth] Org not found for clerkOrgId:', clerkOrgId);
+      logger.error({ clerkOrgId }, '[Shopify OAuth] Org not found');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_server_error`);
     }
     await db.integration.upsert({
@@ -116,14 +117,14 @@ export async function GET(request: Request) {
       },
     });
 
-    console.log(`[Shopify OAuth] Integration saved: ${shopName} (${shop}) for org ${org.id}`);
+    logger.info({ shopName, shop, orgId: org.id }, '[Shopify OAuth] Integration saved');
     const successUrl = returnTo
       ? `${appUrl}${returnTo}`
       : `${appUrl}/dashboard/settings?tab=integrations&connected=shopify`;
     return NextResponse.redirect(successUrl);
 
   } catch (err) {
-    console.error('[Shopify OAuth] Unexpected error:', err);
+    logger.error({ err }, '[Shopify OAuth] Unexpected error');
     return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_server_error`);
   }
 }

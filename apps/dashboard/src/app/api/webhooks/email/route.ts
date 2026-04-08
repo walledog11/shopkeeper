@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import logger from '@/lib/logger';
 
 const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8080';
 
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     const text = await response.text();
     return new NextResponse(text, { status: response.status });
   } catch (error) {
-    console.error('[Email Webhook Proxy] Failed to forward to gateway:', error);
+    logger.error({ err: error }, '[Email Webhook Proxy] Failed to forward to gateway');
     return new NextResponse('Gateway unreachable', { status: 502 });
   }
 }

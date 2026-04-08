@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import logger from '@/lib/logger';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -26,7 +27,7 @@ export async function GET() {
       const igData = await igRes.json();
       if (igData.username) accountName = igData.username;
     } catch (e) {
-      console.warn('[IG Setup] Failed to fetch Instagram username:', e);
+      logger.warn({ err: e }, '[IG Setup] Failed to fetch Instagram username');
     }
 
     const org = await getOrCreateOrg();
@@ -48,10 +49,10 @@ export async function GET() {
       },
     });
 
-    console.log(`[IG Setup] Connected "@${accountName}" (${igAccountId}) for org ${org.id}`);
+    logger.info({ accountName, igAccountId, orgId: org.id }, '[IG Setup] Connected');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?connected=instagram`);
   } catch (err) {
-    console.error('[IG Setup] Failed:', err);
+    logger.error({ err }, '[IG Setup] Failed');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
   }
 }

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { Bell, ChevronDown, HelpCircle, Search } from "lucide-react";
 import CommandPalette from "./CommandPalette";
 import { useHelp } from "./help/HelpContext";
-import { useOpenThreads } from "@/hooks/useThreads";
+import { useOpenThreadCount } from "./DashboardSidebar";
 import { useUser, useOrganization, useOrganizationList } from "@clerk/nextjs";
 import type { OrganizationMembershipResource } from "@clerk/shared/types";
 import { OrgAvatar } from "@/components/OrgAvatar";
@@ -24,8 +24,7 @@ export default function DashboardHeader() {
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
   const { isOpen: isHelpOpen, openHelp, closeHelp } = useHelp();
-  const { threads: openThreads } = useOpenThreads();
-  const openCount = openThreads.length;
+  const openCount = useOpenThreadCount();
   const { user } = useUser();
   const { organization, memberships } = useOrganization({ memberships: { infinite: false, pageSize: 5 } });
   const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });

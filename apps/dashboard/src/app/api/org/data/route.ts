@@ -11,8 +11,7 @@ export async function DELETE(request: Request) {
     const action = searchParams.get('action');
 
     if (action === 'clear_tickets') {
-      // Cascade deletes messages via the Thread → Message relation
-      await db.thread.deleteMany({ where: { organizationId: org.id } });
+      await db.thread.updateMany({ where: { organizationId: org.id }, data: { archivedAt: new Date() } });
       return NextResponse.json({ ok: true });
     }
 

@@ -18,7 +18,8 @@ function getRedis(): Redis {
 /**
  * Fixed-window rate limiter backed by Redis INCR.
  *
- * Fails **open** if Redis is unavailable — a Redis outage will never block the app.
+ * Fails **closed** in production if Redis is unavailable — prevents rate-limit bypass.
+ * Fails **open** in development so a missing Redis instance doesn't block local work.
  *
  * @param key        Unique key scoped to the caller and action, e.g. `ai-draft:${orgId}`
  * @param limit      Max requests allowed per window (default: 10)
@@ -43,7 +44,10 @@ export async function rateLimit(
     }
     return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
   } catch {
-    // Redis unavailable — fail open so a Redis outage doesn't take down the app
+    // Redis unavailable — fail closed in production to prevent rate-limit bypass
+    if (process.env.NODE_ENV !== 'development') {
+      return { success: false, remaining: 0, reset };
+    }
     return { success: true, remaining: limit, reset };
   }
 }

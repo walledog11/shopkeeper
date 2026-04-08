@@ -10,7 +10,7 @@ export default async function DashboardPage() {
 
   const [openThreadsRaw, closedCount, totalMessageCount] = await Promise.all([
     db.thread.findMany({
-      where: { organizationId: org.id, status: "open" },
+      where: { organizationId: org.id, status: "open", archivedAt: null },
       include: {
         customer: true,
         messages: {
@@ -23,8 +23,8 @@ export default async function DashboardPage() {
       },
       orderBy: { updatedAt: "desc" },
     }),
-    db.thread.count({ where: { organizationId: org.id, status: "closed" } }),
-    db.message.count({ where: { thread: { organizationId: org.id } } }),
+    db.thread.count({ where: { organizationId: org.id, status: "closed", archivedAt: null } }),
+    db.message.count({ where: { thread: { organizationId: org.id, archivedAt: null } } }),
   ])
 
   const serialize = (threads: typeof openThreadsRaw): Thread[] =>

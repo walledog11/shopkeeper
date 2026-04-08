@@ -11,13 +11,16 @@ export async function PATCH(request: Request) {
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return NextResponse.json({ error: 'Missing ids' }, { status: 400 });
     }
+    if (ids.length > 100) {
+      return NextResponse.json({ error: 'Too many ids — max 100 per request' }, { status: 400 });
+    }
     if (!['close', 'open', 'tag'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
     // Verify all threads belong to this org
     const threads = await db.thread.findMany({
-      where: { id: { in: ids }, organizationId: org.id },
+      where: { id: { in: ids }, organizationId: org.id, archivedAt: null },
       select: { id: true },
     });
 

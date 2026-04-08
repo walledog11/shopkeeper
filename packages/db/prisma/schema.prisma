@@ -55,6 +55,7 @@ model Organization {
   threads      Thread[]
   integrations Integration[]
   members      OrgMember[]
+  smsContexts  SmsContext[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -87,6 +88,7 @@ model Customer {
   platformId     String       @map("platform_id") @db.VarChar(255)
   profilePicUrl  String?      @map("profile_pic_url") @db.Text
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt      DateTime?    @map("deleted_at") @db.Timestamptz
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   threads        Thread[]
@@ -94,6 +96,7 @@ model Customer {
   // platformId is unique per org, not globally — two orgs can share the same customer email
   @@unique([organizationId, platformId])
   @@index([organizationId])
+  @@index([deletedAt])
   @@map("customers")
 }
 
@@ -110,6 +113,8 @@ model Thread {
   shopifyCustomerId    String?  @map("shopify_customer_id") @db.VarChar(255)
   cachedPlanMessageId  String?  @map("cached_plan_message_id") @db.Uuid
   cachedPlan           Json?    @map("cached_plan") @db.JsonB
+  archivedAt           DateTime? @map("archived_at") @db.Timestamptz
+  deletedAt            DateTime? @map("deleted_at") @db.Timestamptz
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -118,6 +123,8 @@ model Thread {
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
   @@index([customerId])
+  @@index([organizationId, archivedAt, status])
+  @@index([deletedAt])
   @@map("threads")
 }
 
@@ -129,12 +136,33 @@ model Message {
   mediaUrl          String?    @map("media_url") @db.Text
   externalMessageId String?    @map("external_message_id") @db.Text
   sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
+  deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz
 
   thread      Thread     @relation(fields: [threadId], references: [id], onDelete: Cascade)
 
   @@index([threadId])
   @@index([sentAt])
+  @@index([deletedAt])
   @@map("messages")
+}
+
+// Persists per-sender SMS/WhatsApp conversation context in the DB.
+// Replaces the Redis-based sms-context.js which lost state on Redis restart.
+model SmsContext {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  phoneNumber     String   @map("phone_number") @db.VarChar(20)
+  lastOrderNumber String?  @map("last_order_number") @db.VarChar(50)
+  lastThreadId    String?  @map("last_thread_id") @db.Uuid
+  history         Json     @default("[]") @db.JsonB
+  pendingPlan     Json?    @map("pending_plan") @db.JsonB
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, phoneNumber])
+  @@index([organizationId])
+  @@map("sms_contexts")
 }
 
 // Extends Clerk.com org membership with a verified phone number so

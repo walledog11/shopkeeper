@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db, SenderType } from '@clerk/db';
 import { generateText } from '@/lib/ai';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const systemPrompt = `You are an AI assistant summarizing a customer support thread. Provide a concise, 1-2 sentence summary of the customer's core issue and the current status of the resolution.`;
 
     const messages = thread.messages.map((msg) => ({
-      role: msg.senderType === 'customer' ? 'user' as const : 'assistant' as const,
+      role: msg.senderType === SenderType.customer ? 'user' as const : 'assistant' as const,
       content: msg.contentText || "",
     }));
 

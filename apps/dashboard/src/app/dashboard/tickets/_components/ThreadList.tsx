@@ -31,6 +31,9 @@ interface Props {
   onToggleSelect: (id: string) => void
   onBulkClose: () => void
   onClearSelection: () => void
+  hasMore?: boolean
+  isLoadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export default function ThreadList({
@@ -38,6 +41,7 @@ export default function ThreadList({
   searchQuery, isSearchMode, selectedIds,
   onSearchChange, onTabChange, onFilterChange, onSelectTicket,
   onToggleSelect, onBulkClose, onClearSelection,
+  hasMore, isLoadingMore, onLoadMore,
 }: Props) {
   const hasSelection = selectedIds.length > 0
 
@@ -125,7 +129,7 @@ export default function ThreadList({
                     : 'border-border bg-transparent hover:border-white/[0.18] hover:bg-white/[0.05]'
                 }`}
               >
-                <Image src={ch.logo} alt={ch.label} width={16} height={16} className="object-contain opacity-60" />
+                <Image src={ch.logo} alt={ch.label} width={16} height={16} className="object-contain opacity-60 brightness-0 invert" />
               </button>
             ))}
           </div>
@@ -259,6 +263,18 @@ export default function ThreadList({
               }
             </div>
           )
+        )}
+
+        {!isSearchMode && hasMore && (
+          <div className="px-4 py-3 border-t border-white/[0.05]">
+            <button
+              onClick={onLoadMore}
+              disabled={isLoadingMore}
+              className="w-full text-xs font-semibold text-white/40 hover:text-white/70 disabled:opacity-40 transition-colors py-1"
+            >
+              {isLoadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          </div>
         )}
       </div>
     </>

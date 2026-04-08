@@ -6,6 +6,7 @@
  * Forwards with x-internal-secret so the gateway trusts and skips re-validation.
  */
 import twilio from "twilio";
+import logger from "@/lib/logger";
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     const params = Object.fromEntries(new URLSearchParams(rawBody));
     const isValid = twilio.validateRequest(authToken, signature, webhookUrl, params);
     if (!isValid) {
-      console.warn("[Twilio proxy] Signature validation failed — rejecting.");
+      logger.warn('[Twilio proxy] Signature validation failed — rejecting');
       return new Response("Forbidden", { status: 403 });
     }
   }

@@ -1,15 +1,16 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
+import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { RefObject } from "react"
-import { ArrowLeft, CheckCircle2, Users, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, StickyNote, Smartphone, Info } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Users, RotateCcw, MessageSquare, Bot, Check, AlertCircle, RefreshCw, StickyNote, Smartphone, Info, AlertTriangle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AnimatePresence, motion } from "motion/react"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
-import type { Ticket, SenderType, AgentTurn, AgentPlan, RawToolCall } from "@/types"
+import type { Ticket, SenderType, AgentTurn, AgentPlan, RawToolCall, FailedMessage } from "@/types"
 import { TOOL_LABELS } from "@/lib/agent/tools"
 
 interface Props {
@@ -36,6 +37,8 @@ interface Props {
   initialPlan?: AgentPlan | null
   onPlanCached: (plan: AgentPlan | null) => void
   onOpenContext?: () => void
+  failedMessages?: FailedMessage[]
+  onRetry?: (id: string) => void
 }
 
 export default function ConversationView({
@@ -62,6 +65,8 @@ export default function ConversationView({
   initialPlan,
   onPlanCached,
   onOpenContext,
+  failedMessages = [],
+  onRetry,
 }: Props) {
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
   const [isNoteMode, setIsNoteMode] = useState(false)
@@ -72,6 +77,21 @@ export default function ConversationView({
   const [isPlanLoading, setIsPlanLoading] = useState(false)     // manual @clerk trigger
   const [isAutoPlanLoading, setIsAutoPlanLoading] = useState(false) // auto trigger
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
+
+  const planPhrase = useFillerPhrase([
+    'On it…',
+    'Reading the room…',
+    'Getting up to speed…',
+    'Cooking up a plan…',
+  ], isPlanLoading)
+
+  const runPhrase = useFillerPhrase([
+    'Making it happen…',
+    'Doing the thing…',
+    'Almost there…',
+    'Just a sec…',
+    'Finishing touches…',
+  ], isAgentRunning)
 
   // Auto-plan: fire when a ticket is opened and the last chat message is from the customer
   useEffect(() => {
@@ -196,7 +216,7 @@ export default function ConversationView({
     <div className="flex-1 flex flex-col min-w-0 bg-background">
 
       {/* Header */}
-      <div className="h-16 border-b border-border flex items-center justify-between px-6 shrink-0">
+      <div className="h-16 border-b border-border flex items-center justify-between px-3 md:px-6 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <Button
             variant="ghost"
@@ -236,7 +256,7 @@ export default function ConversationView({
               onClick={onResolve}
               className="bg-white hover:bg-white/90 text-black text-xs font-semibold flex items-center gap-1.5 h-8"
             >
-              <CheckCircle2 className="w-3.5 h-3.5" /> Close Ticket
+              <CheckCircle2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Close Ticket</span>
             </Button>
           )}
           {activeTab === 'closed' && (
@@ -422,7 +442,7 @@ export default function ConversationView({
                   <div className="px-4 py-3 bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm">
                     <div className="flex items-center gap-1.5 text-xs text-violet-400">
                       <RefreshCw className="w-3 h-3 animate-spin" />
-                      Thinking…
+                      {planPhrase}
                     </div>
                   </div>
                 </div>
@@ -448,7 +468,7 @@ export default function ConversationView({
                   <div className="px-4 py-3 bg-violet-500/10 border border-violet-500/20 rounded-md rounded-tl-sm">
                     <div className="flex items-center gap-1.5 text-xs text-violet-400">
                       <RefreshCw className="w-3 h-3 animate-spin" />
-                      Working on it…
+                      {runPhrase}
                     </div>
                   </div>
                 </div>
@@ -469,6 +489,25 @@ export default function ConversationView({
             </div>
           ))
         )}
+        {/* Failed messages */}
+        {viewTab === 'chat' && failedMessages.map(fm => (
+          <div key={fm.id} className="flex flex-col gap-1 items-end">
+            <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm">
+              {fm.text}
+            </div>
+            <div className="flex items-center gap-1.5 mx-1">
+              <AlertTriangle className="w-3 h-3 text-red-400" />
+              <span className="text-[10px] text-red-400">Failed to send</span>
+              <span className="text-[10px] text-white/20">·</span>
+              <button
+                onClick={() => onRetry?.(fm.id)}
+                className="text-[10px] font-semibold text-red-400 hover:text-red-300 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ))}
         <div ref={messagesEndRef} />
       </div>
 

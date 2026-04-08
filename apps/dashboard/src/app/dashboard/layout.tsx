@@ -5,6 +5,7 @@ import DashboardSidebar from "./_components/DashboardSidebar";
 import DashboardHeader from "./_components/DashboardHeader";
 import HelpPanel from "./_components/help/HelpPanel";
 import AgentPanelRoot from "./_components/agent/AgentPanelRoot";
+import { AgentPanelProvider } from "./_components/agent/AgentPanelContext";
 import { getOrCreateOrg } from "@/lib/org";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import type { OrgSettings } from "@/types";
@@ -39,6 +40,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <HelpProvider>
+      <AgentPanelProvider>
       <div className="flex flex-col h-screen bg-background font-sans overflow-hidden">
         <NotificationBar notifications={NOTIFICATIONS} />
         <NavProgressBar />
@@ -53,6 +55,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </DashboardSidebar>
       </div>
       <AgentPanelRoot agentName={settings.agentName} />
+      </AgentPanelProvider>
     </HelpProvider>
   );
 }

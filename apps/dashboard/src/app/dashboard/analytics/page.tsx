@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Bot, Clock, CheckCircle2, MessageSquare } from "lucide-react"
-import { useThreads } from "@/hooks/useThreads"
+import { useAnalytics } from "@/hooks/useAnalytics"
 import { DateRangeSelector } from "./_components/DateRangeSelector"
 import { AuditSection } from "./_components/AuditSection"
 import { OverviewStats } from "./_components/OverviewStats"
@@ -11,24 +11,46 @@ import { TopTopicsCard } from "./_components/TopTopicsCard"
 import { ChannelBreakdown } from "./_components/ChannelBreakdown"
 
 type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
+type KpiStatus = 'excellent' | 'good' | 'needs_work' | 'no_data'
+type Tip = { text: string; ok: boolean; benchmark: string }
+type Bucket = { label: string; count: number }
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+// Snap to day boundaries so the SWR key is stable across re-renders
 function getRangeFrom(preset: Preset, customFrom: string): Date {
-  if (preset === '7d')  { const d = new Date(); d.setDate(d.getDate() - 7);  return d }
-  if (preset === '30d') { const d = new Date(); d.setDate(d.getDate() - 30); return d }
-  if (preset === '90d') { const d = new Date(); d.setDate(d.getDate() - 90); return d }
-  if (preset === 'all') return new Date(0)
-  return new Date(customFrom)
+  if (preset === 'all') return new Date('2020-01-01T00:00:00.000Z')
+  const d = preset === 'custom' ? new Date(customFrom) : new Date()
+  if (preset === '7d')  d.setDate(d.getDate() - 7)
+  if (preset === '30d') d.setDate(d.getDate() - 30)
+  if (preset === '90d') d.setDate(d.getDate() - 90)
+  d.setHours(0, 0, 0, 0)
+  return d
 }
 
 function getRangeTo(preset: Preset, customTo: string): Date {
-  if (preset === 'custom') {
-    const d = new Date(customTo); d.setHours(23, 59, 59, 999); return d
-  }
-  return new Date()
+  const d = preset === 'custom' ? new Date(customTo) : new Date()
+  d.setHours(23, 59, 59, 999)
+  return d
+}
+
+function formatResponseTime(mins: number) {
+  if (mins < 60) return `${mins}m`
+  const h = Math.floor(mins / 60), m = mins % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
+
+function kpiStatus(score: number | null): KpiStatus {
+  if (score === null) return 'no_data'
+  if (score >= 80) return 'excellent'
+  if (score >= 55) return 'good'
+  return 'needs_work'
+}
+
+const STATUS_LABEL: Record<KpiStatus, string> = {
+  excellent: 'Excellent', good: 'On Track', needs_work: 'Needs Work', no_data: 'No Data',
 }
 
 const AUDIT_LABELS: Record<Preset, string> = {
@@ -40,87 +62,51 @@ const BADGE_LABELS: Record<Preset, string> = {
 }
 
 export default function AnalyticsPage() {
-  const { threads: openThreads, isLoading: loadingOpen } = useThreads('open')
-  const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed')
-
-  const isLoading = loadingOpen || loadingClosed
-  const allThreads = [...openThreads, ...closedThreads]
-
-  // ── Date range state ──
   const [preset, setPreset] = useState<Preset>('7d')
   const [customFrom, setCustomFrom] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]
   })
   const [customTo, setCustomTo] = useState(() => new Date().toISOString().split('T')[0])
 
-  const rangeFrom   = getRangeFrom(preset, customFrom)
-  const rangeTo     = getRangeTo(preset, customTo)
-  const rangeDays   = Math.max(1, Math.ceil((rangeTo.getTime() - rangeFrom.getTime()) / (1000 * 60 * 60 * 24)))
-  const auditLabel  = AUDIT_LABELS[preset]
-  const badgeLabel  = preset === 'custom'
+  const rangeFrom  = getRangeFrom(preset, customFrom)
+  const rangeTo    = getRangeTo(preset, customTo)
+  const rangeDays  = Math.max(1, Math.ceil((rangeTo.getTime() - rangeFrom.getTime()) / (1000 * 60 * 60 * 24)))
+  const auditLabel = AUDIT_LABELS[preset]
+  const badgeLabel = preset === 'custom'
     ? `${shortDate(rangeFrom.toISOString())} – ${shortDate(rangeTo.toISOString())}`
     : BADGE_LABELS[preset]
 
-  // ── Filtered threads ──
-  const rangeThreads = allThreads.filter(t => {
-    const d = new Date(t.createdAt)
-    return d >= rangeFrom && d <= rangeTo
-  })
-  const rangeClosed = rangeThreads.filter(t => t.status === 'closed')
-  const rangeOpen   = rangeThreads.filter(t => t.status === 'open')
+  const { data, isLoading } = useAnalytics(rangeFrom, rangeTo)
 
-  const totalThreads   = rangeThreads.length
-  const totalMessages  = rangeThreads.reduce((sum, t) => sum + t.messages.length, 0)
-  const resolutionRate = totalThreads > 0 ? Math.round((rangeClosed.length / totalThreads) * 100) : 0
+  // ── Derived values from API data ──
+  const totalThreads  = data?.threads.total ?? 0
+  const closedCount   = data?.resolution.closedCount ?? 0
+  const openCount     = (data?.threads.byStatus['open'] ?? 0) + (data?.threads.byStatus['pending'] ?? 0)
+  const totalMessages = data?.messages.total ?? 0
+  const resolutionRate = data?.resolution.rate ?? 0
 
-  // By channel
-  const channelMap = new Map<string, number>()
-  for (const t of rangeThreads) channelMap.set(t.channelType, (channelMap.get(t.channelType) ?? 0) + 1)
-  const byChannel = [...channelMap.entries()].map(([channel, count]) => ({ channel, count }))
+  const byChannel = data?.threads.byChannel ?? []
+  const byTag     = data?.threads.byTag ?? []
 
-  // By tag
-  const tagMap = new Map<string, number>()
-  for (const t of rangeThreads) if (t.tag) tagMap.set(t.tag, (tagMap.get(t.tag) ?? 0) + 1)
-  const byTag = [...tagMap.entries()]
-    .map(([tag, count]) => ({ tag, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8)
+  const aiReplies    = data?.aiUsage.aiReplies ?? 0
+  const agentReplies = data?.aiUsage.agentReplies ?? 0
+  const aiUsageRate  = data?.aiUsage.aiReplyPct ?? 0
 
-  // ── Audit KPIs ──
   const avgMessages = totalThreads > 0
-    ? Math.round((rangeThreads.reduce((sum, t) => sum + t.messages.length, 0) / totalThreads) * 10) / 10
+    ? Math.round((totalMessages / totalThreads) * 10) / 10
     : 0
 
-  const allOutbound = rangeThreads.flatMap(t => t.messages.filter(m => m.senderType === 'agent' || m.senderType === 'ai'))
-  const aiMessages  = allOutbound.filter(m => m.senderType === 'ai')
-  const aiUsageRate = allOutbound.length > 0 ? Math.round((aiMessages.length / allOutbound.length) * 100) : 0
+  const avgResponseMinutes = data?.firstReply.avgMinutes ?? null
+  const firstReplyCount    = data?.firstReply.measuredCount ?? 0
 
-  const responseTimes: number[] = []
-  for (const t of rangeThreads) {
-    const firstCustomer = t.messages.find(m => m.senderType === 'customer')
-    const firstResponse = t.messages.find(m => m.senderType === 'agent' || m.senderType === 'ai')
-    if (firstCustomer && firstResponse) {
-      const diff = (new Date(firstResponse.sentAt).getTime() - new Date(firstCustomer.sentAt).getTime()) / 60000
-      if (diff > 0) responseTimes.push(diff)
-    }
-  }
-  const avgResponseMinutes = responseTimes.length > 0
-    ? Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length)
-    : null
-
-  function formatResponseTime(mins: number) {
-    if (mins < 60) return `${mins}m`
-    const h = Math.floor(mins / 60), m = mins % 60
-    return m > 0 ? `${h}h ${m}m` : `${h}h`
-  }
-
-  // ── Audit score ──
+  // ── Audit scores ──
   const resolutionScore = totalThreads === 0 ? null :
     resolutionRate >= 80 ? 100 :
     resolutionRate >= 60 ? Math.round(60 + (resolutionRate - 60) / 20 * 40) :
     Math.round((resolutionRate / 60) * 60)
 
-  const aiScore = allOutbound.length === 0 ? null :
+  const totalReplies = aiReplies + agentReplies
+  const aiScore = totalReplies === 0 ? null :
     aiUsageRate >= 50 ? 100 :
     aiUsageRate >= 30 ? Math.round(60 + (aiUsageRate - 30) / 20 * 40) :
     Math.round((aiUsageRate / 30) * 60)
@@ -137,9 +123,9 @@ export default function AnalyticsPage() {
 
   const scoreParts = [
     { score: resolutionScore, weight: 40 },
-    { score: aiScore, weight: 20 },
-    { score: msgScore, weight: 20 },
-    { score: replyScore, weight: 20 },
+    { score: aiScore,         weight: 20 },
+    { score: msgScore,        weight: 20 },
+    { score: replyScore,      weight: 20 },
   ].filter((p): p is { score: number; weight: number } => p.score !== null)
 
   const totalWeight = scoreParts.reduce((s, p) => s + p.weight, 0)
@@ -150,20 +136,11 @@ export default function AnalyticsPage() {
   const auditGrade = auditScore === null ? '—' :
     auditScore >= 90 ? 'A' : auditScore >= 75 ? 'B' : auditScore >= 60 ? 'C' : auditScore >= 40 ? 'D' : 'F'
 
-  function kpiStatus(score: number | null): 'excellent' | 'good' | 'needs_work' | 'no_data' {
-    if (score === null) return 'no_data'
-    if (score >= 80) return 'excellent'
-    if (score >= 55) return 'good'
-    return 'needs_work'
-  }
-
-  const STATUS_LABEL = { excellent: 'Excellent', good: 'On Track', needs_work: 'Needs Work', no_data: 'No Data' }
-
   const kpiCards = [
     {
       label: 'Resolution Rate',
       value: totalThreads > 0 ? `${resolutionRate}%` : '—',
-      sub: `${rangeClosed.length} of ${totalThreads} tickets closed`,
+      sub: `${closedCount} of ${totalThreads} tickets closed`,
       icon: <CheckCircle2 className="w-3 h-3 text-current" />,
       status: kpiStatus(resolutionScore),
       statusLabel: STATUS_LABEL[kpiStatus(resolutionScore)],
@@ -172,8 +149,8 @@ export default function AnalyticsPage() {
     },
     {
       label: 'AI Usage',
-      value: allOutbound.length > 0 ? `${aiUsageRate}%` : '—',
-      sub: `${aiMessages.length} of ${allOutbound.length} replies`,
+      value: totalReplies > 0 ? `${aiUsageRate}%` : '—',
+      sub: `${aiReplies} of ${totalReplies} replies`,
       icon: <Bot className="w-3 h-3 text-current" />,
       status: kpiStatus(aiScore),
       statusLabel: STATUS_LABEL[kpiStatus(aiScore)],
@@ -193,7 +170,7 @@ export default function AnalyticsPage() {
     {
       label: 'First Reply Time',
       value: avgResponseMinutes !== null ? formatResponseTime(avgResponseMinutes) : '—',
-      sub: avgResponseMinutes !== null ? `${responseTimes.length} tickets measured` : 'No data yet',
+      sub: avgResponseMinutes !== null ? `${firstReplyCount} tickets measured` : 'No data yet',
       icon: <Clock className="w-3 h-3 text-current" />,
       status: kpiStatus(replyScore),
       statusLabel: STATUS_LABEL[kpiStatus(replyScore)],
@@ -204,15 +181,13 @@ export default function AnalyticsPage() {
 
   const auditIssues = kpiCards.filter(k => k.status === 'needs_work').length
 
-  // Audit tips
-  type Tip = { text: string; ok: boolean; benchmark: string }
   const auditTips: Tip[] = []
   if (totalThreads === 0) {
     auditTips.push({ ok: true, text: 'No tickets in this period yet.', benchmark: '' })
   } else {
     if (resolutionRate < 60)
       auditTips.push({ ok: false, text: `Resolution is ${resolutionRate}% — enable AI auto-replies to clear your backlog faster`, benchmark: 'Healthy ≥ 80% · OK 60–80% · Needs work < 60%' })
-    if (allOutbound.length > 0 && aiUsageRate < 30)
+    if (totalReplies > 0 && aiUsageRate < 30)
       auditTips.push({ ok: false, text: `AI handles only ${aiUsageRate}% of replies — turn on AI drafts to scale your team`, benchmark: 'Healthy ≥ 50% · OK 30–50% · Low < 30%' })
     if (avgMessages > 6)
       auditTips.push({ ok: false, text: `${avgMessages} messages per ticket on average — add FAQs to your AI context to shorten threads`, benchmark: 'Healthy ≤ 4 msgs · OK 4–6 · Too long > 6' })
@@ -223,18 +198,19 @@ export default function AnalyticsPage() {
   }
   const visibleTips = auditTips.slice(0, 4)
 
-  // ── Adaptive chart (per-day ≤30d · per-week ≤90d · per-month otherwise) ──
-  type Bucket = { label: string; count: number }
+  // ── Chart: bucket per-day thread data based on range width ──
   let chartData: Bucket[] = []
   let chartTitle = 'Tickets Over Time'
 
+  const dayMap = new Map((data?.threads.volumeByDay ?? []).map(d => [d.day, d.count]))
+
   if (rangeDays <= 30) {
-    chartTitle = rangeDays <= 7 ? 'Tickets Last 7 Days' : `Tickets — Daily`
+    chartTitle = rangeDays <= 7 ? 'Tickets Last 7 Days' : 'Tickets — Daily'
     chartData = Array.from({ length: rangeDays }, (_, i) => {
       const date = new Date(rangeFrom)
       date.setDate(date.getDate() + i)
-      const dateStr = date.toISOString().split('T')[0]
-      return { label: shortDate(date.toISOString()), count: rangeThreads.filter(t => t.createdAt.startsWith(dateStr)).length }
+      const dateStr = date.toISOString().slice(0, 10)
+      return { label: shortDate(date.toISOString()), count: dayMap.get(dateStr) ?? 0 }
     })
   } else if (rangeDays <= 91) {
     chartTitle = 'Tickets — Weekly'
@@ -242,18 +218,19 @@ export default function AnalyticsPage() {
     chartData = Array.from({ length: weeks }, (_, i) => {
       const start = new Date(rangeFrom); start.setDate(start.getDate() + i * 7)
       const end   = new Date(start);     end.setDate(end.getDate() + 6)
-      return {
-        label: shortDate(start.toISOString()),
-        count: rangeThreads.filter(t => { const d = new Date(t.createdAt); return d >= start && d <= end }).length,
+      let count = 0
+      for (const [day, c] of dayMap) {
+        const d = new Date(day)
+        if (d >= start && d <= end) count += c
       }
+      return { label: shortDate(start.toISOString()), count }
     })
   } else {
     chartTitle = 'Tickets — Monthly'
     const monthMap = new Map<string, number>()
-    for (const t of rangeThreads) {
-      const d = new Date(t.createdAt)
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      monthMap.set(key, (monthMap.get(key) ?? 0) + 1)
+    for (const [day, count] of dayMap) {
+      const key = day.slice(0, 7)
+      monthMap.set(key, (monthMap.get(key) ?? 0) + count)
     }
     chartData = [...monthMap.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -302,8 +279,8 @@ export default function AnalyticsPage() {
 
         <OverviewStats
           totalThreads={totalThreads}
-          openCount={rangeOpen.length}
-          closedCount={rangeClosed.length}
+          openCount={openCount}
+          closedCount={closedCount}
           totalMessages={totalMessages}
           resolutionRate={resolutionRate}
           isLoading={isLoading}

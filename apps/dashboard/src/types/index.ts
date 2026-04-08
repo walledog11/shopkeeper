@@ -160,3 +160,10 @@ export interface Ticket {
     isAgentNote?: boolean;
   }[];
 }
+
+export interface FailedMessage {
+  id: string;
+  threadId: string;
+  text: string;
+  isNote: boolean;
+}

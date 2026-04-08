@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       where: { id: threadId },
       data: {
         cachedPlanMessageId: lastCustomerMessage.id,
-        cachedPlan: plan as Prisma.InputJsonValue,
+        cachedPlan: plan as unknown as Prisma.InputJsonValue,
       },
     });
 

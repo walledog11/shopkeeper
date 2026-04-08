@@ -1,13 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Clock } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import { Card } from "@/components/ui/card"
 
 export default function AgentBanner() {
-  const [dismissed, setDismissed] = useState(() => localStorage.getItem('agentBannerDismissed') === 'true')
+  const [dismissed, setDismissed] = useState(false)
+
+  useEffect(() => {
+    if (localStorage.getItem('agentBannerDismissed') === 'true') setDismissed(true)
+  }, [])
 
   function dismiss() {
     localStorage.setItem('agentBannerDismissed', 'true')

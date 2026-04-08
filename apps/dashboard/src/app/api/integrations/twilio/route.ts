@@ -11,6 +11,7 @@ import twilio from "twilio";
 import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
+import logger from "@/lib/logger";
 
 function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -133,7 +134,7 @@ export async function DELETE() {
           await client.incomingPhoneNumbers(meta.twilioSid).remove();
         } catch (err) {
           // Log but don't block — remove from DB regardless
-          console.error("[Twilio] Failed to release number:", err);
+          logger.error({ err }, '[Twilio] Failed to release number');
         }
       }
       await db.integration.delete({ where: { id: integration.id } });

@@ -5,6 +5,7 @@ import { useThreads } from "@/hooks/useThreads"
 import { getCustomerName } from "@/lib/utils"
 import { getChannelInfo } from "@/lib/channels"
 import { fetcher } from "@/lib/fetcher"
+import { SENDER_TYPE } from "@/lib/constants"
 import type { Thread, Integration } from "@/types"
 import type { ViewId, NavView } from "./types"
 import type { ActivityEvent } from "./ActivityFeed"
@@ -89,8 +90,8 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const memberCount = memberships?.data?.length ?? 1
   const hasInvitedTeam = memberCount > 1
   const hasSentReply = useMemo(() => (
-    openThreads.some(t => t.messages[0]?.senderType === 'agent' || t.messages[0]?.senderType === 'ai') ||
-    closedThreads.some(t => t.messages[0]?.senderType === 'agent' || t.messages[0]?.senderType === 'ai')
+    openThreads.some(t => t.messages[0]?.senderType === SENDER_TYPE.AGENT || t.messages[0]?.senderType === SENDER_TYPE.AI) ||
+    closedThreads.some(t => t.messages[0]?.senderType === SENDER_TYPE.AGENT || t.messages[0]?.senderType === SENDER_TYPE.AI)
   ), [openThreads, closedThreads])
   const hasMultipleChannels = integrations.length > 1
 

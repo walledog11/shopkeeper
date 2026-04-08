@@ -9,9 +9,10 @@ export default async function TicketsPage() {
 
   const [openThreadsRaw, integrations] = await Promise.all([
     db.thread.findMany({
-      where: { organizationId: org.id, status: "open", channelType: { notIn: ["sms_agent", "dashboard_agent"] } },
+      where: { organizationId: org.id, status: "open", channelType: { notIn: ["sms_agent", "dashboard_agent"] }, archivedAt: null },
       include: { customer: true, messages: { orderBy: { sentAt: "asc" } } },
       orderBy: { updatedAt: "desc" },
+      take: 25,
     }),
     db.integration.findMany({
       where: { organizationId: org.id },
