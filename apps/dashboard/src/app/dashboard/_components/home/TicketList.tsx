@@ -196,7 +196,7 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
             />
           </motion.div>
         ) : (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex flex-col overflow-y-auto max-h-[340px] divide-y divide-white/[0.05]">
+          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex flex-col overflow-x-hidden overflow-y-auto max-h-[340px] divide-y divide-white/[0.05]">
             {displayedThreads.map(thread => (
               <TicketRow key={thread.id} thread={thread} />
             ))}

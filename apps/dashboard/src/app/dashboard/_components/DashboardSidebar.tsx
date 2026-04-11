@@ -53,7 +53,11 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
   const fullName = user?.fullName ?? user?.firstName ?? "User";
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
 
-  const handleNavClick = () => {
+  const handleNavClick = (e: React.MouseEvent, isActive: boolean) => {
+    if (isActive) {
+      e.preventDefault();
+      return;
+    }
     if (isMobile) setOpenMobile(false);
     window.dispatchEvent(new Event('nav-progress-start'));
   };
@@ -79,7 +83,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
                   isActive={isActive}
                   className="rounded-xl h-auto py-2.5 px-3 text-sm font-medium text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-white/[0.07] data-[active=true]:text-white"
                 >
-                  <Link href={item.href} onClick={handleNavClick}>
+                  <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
                     <item.icon className="w-[18px] h-[18px] shrink-0" />
                     <span>{item.name}</span>
                   </Link>
@@ -115,7 +119,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
                   isActive={isActive}
                   className="rounded-xl h-auto py-2.5 px-3 text-sm font-medium text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-white/[0.07] data-[active=true]:text-white"
                 >
-                  <Link href={item.href} onClick={handleNavClick}>
+                  <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
                     <item.icon className="w-[18px] h-[18px] shrink-0" />
                     <span>{item.name}</span>
                   </Link>
