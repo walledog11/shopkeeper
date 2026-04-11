@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
 
-    const systemPrompt = `You are an AI assistant summarizing a customer support thread. Provide a concise, 1-2 sentence summary of the customer's core issue and the current status of the resolution.`;
+    const systemPrompt = `You are an AI assistant summarizing a customer support thread. Write a single short sentence (max 20 words) describing what the customer needs. No labels, no formatting, no status — just the core issue.`;
 
     const messages = thread.messages.map((msg) => ({
       role: msg.senderType === SenderType.customer ? 'user' as const : 'assistant' as const,

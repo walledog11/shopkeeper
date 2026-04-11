@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import { CHANNEL_TYPE } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +10,8 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const org = await getOrCreateOrg();
+    const rl = await rateLimit(`threads:get:${org.id}`, 60, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
     const { searchParams } = new URL(request.url);
     const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
     const preview = searchParams.get('preview') === 'true';

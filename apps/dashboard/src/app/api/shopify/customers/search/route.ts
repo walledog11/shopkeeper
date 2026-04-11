@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import logger from '@/lib/logger';
 
 export async function GET(request: Request) {
   try {
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ customers: data.customers ?? [] });
 
   } catch (err) {
-    console.error('[Shopify Customer Search] Error:', err);
+    logger.error({ err }, '[Shopify Customer Search] Error');
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }

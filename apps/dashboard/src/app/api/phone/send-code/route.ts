@@ -12,6 +12,7 @@ import { auth } from "@clerk/nextjs/server";
 import { handleApiError } from "@/lib/api-errors";
 import { getOrCreateOrg } from "@/lib/org";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import logger from "@/lib/logger";
 
 function generateCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -24,8 +25,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // DEV ONLY: rate limiting disabled in development
-    // TODO: remove this condition before deploying to production
     if (process.env.NODE_ENV !== "development") {
       const rl = await rateLimit(`phone:send:${userId}`, 3, 600);
       if (!rl.success) return tooManyRequests(rl.reset);
@@ -56,22 +55,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // DEV ONLY: use a fixed code so real SMS is never needed locally
-    // TODO: remove this branch before deploying to production
     const isDev = process.env.NODE_ENV === "development";
     const code = isDev ? "000000" : generateCode();
 
     if (isDev) {
-      console.log(`[phone/send-code] DEV bypass — code is 000000 for ${phoneNumber}`);
+      logger.info({ phoneNumber }, '[phone/send-code] DEV bypass — code is 000000');
     }
 
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-    await db.orgMember.upsert({
-      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
-      update: { phoneNumber, phoneVerified: false },
-      create: { organizationId: org.id, clerkUserId: userId, phoneNumber, phoneVerified: false },
-    });
+    const memberKey = { organizationId: org.id, clerkUserId: userId };
+    const existingMemberRecord = await db.orgMember.findUnique({ where: { organizationId_clerkUserId: memberKey } });
+    if (existingMemberRecord) {
+      await db.orgMember.update({ where: { id: existingMemberRecord.id }, data: { phoneNumber, phoneVerified: false } });
+    } else {
+      try {
+        await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: userId, phoneNumber, phoneVerified: false } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        const race = (await db.orgMember.findUnique({ where: { organizationId_clerkUserId: memberKey } }))!;
+        await db.orgMember.update({ where: { id: race.id }, data: { phoneNumber, phoneVerified: false } });
+      }
+    }
 
     // Store the code in org settings keyed by userId — avoids a dedicated column
     const settings = (org.settings as Record<string, unknown>) ?? {};
@@ -90,7 +95,7 @@ export async function POST(request: Request) {
     const fromNumber = process.env.TWILIO_FROM_NUMBER;
 
     if (!accountSid || !authToken || !fromNumber) {
-      console.error("[phone/send-code] Twilio env vars missing");
+      logger.error('[phone/send-code] Twilio env vars missing');
       return NextResponse.json(
         { error: "SMS service is not configured. Contact your admin." },
         { status: 503 }

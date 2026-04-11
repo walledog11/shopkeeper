@@ -1,5 +1,5 @@
 import { db } from "@clerk/db";
-import { anthropic } from "@/lib/anthropic";
+import { anthropic } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/logger";
 import type Anthropic from "@anthropic-ai/sdk";
@@ -43,6 +43,7 @@ import type {
   SendEmailInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
+  SearchKbInput,
 } from "./tools";
 
 const DEFAULT_MAX_ITERATIONS = 10;
@@ -78,6 +79,7 @@ export interface AgentContext {
   openThreadCount: number;
   shopify: { shop: string; accessToken: string } | null;
   recentOrders: ShopifyOrderSummary[];
+  kbArticles: { title: string; body: string }[];
 }
 
 export async function buildContext(threadId: string, orgId: string): Promise<AgentContext> {
@@ -100,6 +102,13 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
   // Fire in parallel with the Shopify resolution below
   const openThreadCountPromise = db.thread.count({
     where: { customerId: thread.customerId, status: "open" },
+  });
+
+  const kbArticlesPromise = db.kbArticle.findMany({
+    where: { organizationId: orgId },
+    orderBy: { updatedAt: "desc" },
+    take: 3,
+    select: { title: true, body: true, tags: true },
   });
 
   // thread.customer.name can be an email address used as a fallback display name — treat that as "no real name"
@@ -175,7 +184,13 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
-  const openThreadCount = await openThreadCountPromise;
+  const [openThreadCount, allKbArticles] = await Promise.all([openThreadCountPromise, kbArticlesPromise]);
+
+  // Filter KB articles to those that share a tag with the thread, falling back to all
+  const threadTag = thread.tag?.toLowerCase();
+  const kbArticles = threadTag
+    ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase().includes(threadTag) || threadTag.includes(t.toLowerCase())))
+    : allKbArticles;
 
   return {
     orgId,
@@ -202,6 +217,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
         : null,
     recentOrders,
+    kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
   };
 }
 
@@ -273,6 +289,23 @@ async function executeTool(
     case "update_thread_tag":
       return updateThreadTag(cast<UpdateThreadTagInput>(args), threadCtx);
 
+    case "search_kb": {
+      const { query } = cast<SearchKbInput>(args);
+      const words = query.trim().split(/\s+/).filter(Boolean);
+      const wordConditions = words.flatMap(w => [
+        { title: { contains: w, mode: "insensitive" as const } },
+        { body:  { contains: w, mode: "insensitive" as const } },
+      ]);
+      const articles = await db.kbArticle.findMany({
+        where: { organizationId: ctx.orgId, OR: wordConditions },
+        take: 5,
+        orderBy: { updatedAt: "desc" },
+        select: { title: true, body: true, tags: true },
+      });
+      if (articles.length === 0) return "No knowledge base articles found for that query.";
+      return JSON.stringify(articles.map(a => ({ title: a.title, body: a.body, tags: a.tags })));
+    }
+
     default:
       return `Error: unknown tool "${name}".`;
   }
@@ -326,6 +359,7 @@ ${shopifyNote}
 ${shopifyCustomerNote}
 - When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
 - When given a customer name or email but no customer ID, call search_shopify_customers first.
+- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.
 ${ordersSection}
 ## Instructions
 - Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response — your text response is only a summary of what the tools did.
@@ -340,6 +374,12 @@ ${ordersSection}
   const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
     ? `- Always write customer-facing replies in ${s.replyLanguage}, regardless of the language the customer used.`
     : "";
+
+  const kbSection = ctx.kbArticles.length > 0
+    ? `\n## Knowledge base\nThe following articles are pre-loaded for this thread. Use the search_kb tool to find additional articles when these don't contain the answer.\n\n${
+        ctx.kbArticles.map(a => `### ${a.title}\n${a.body}`).join('\n\n')
+      }`
+    : `\n## Knowledge base\nNo articles are pre-loaded. Use the search_kb tool to search for relevant policy or FAQ information before replying.`;
 
   return `You are ${s.agentName}, an AI support agent for ${ctx.orgName}. You help support staff take actions on their behalf.
 
@@ -370,7 +410,7 @@ ${shopifyCustomerNote}
 - Respond like a knowledgeable coworker giving a quick status update — direct, factual, no fluff.
 - Keep summaries to 1–2 sentences. No bullet lists, no markdown formatting.
 - Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${kbSection}`;
 }
 
 // ── Main agent runner ─────────────────────────────────────────────────────────
@@ -430,6 +470,8 @@ function buildMessageHistory(
 function describeTool(name: string, input: unknown): string {
   const a = input as Record<string, unknown>
   switch (name) {
+    case 'search_kb':
+      return `Search knowledge base for "${String(a.query ?? '')}"`
     case 'update_shopify_order_address': {
       const parts = [a.address1, a.city, a.province, a.zip].filter(Boolean)
       return `Update their shipping address on Shopify to ${parts.join(', ')}`

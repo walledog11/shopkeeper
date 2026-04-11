@@ -8,7 +8,7 @@ import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk } from "@clerk/nextjs";
 
 import { navItems, footerNavItems } from "./nav-items";
-import { useAgentPanel } from "./agent/AgentPanelContext";
+import { useAgentPanel } from "./agent-panel/AgentPanelContext";
 import {
   Sidebar,
   SidebarContent,
@@ -39,7 +39,7 @@ function Logo() {
   return (
     <Link href="/dashboard" className="flex items-center gap-1.5">
       <span className="text-xl font-black text-white tracking-tight">clerk</span>
-      <span className="w-2 h-2 rounded-full bg-yellow-400 self-start mt-1.5 shrink-0" />
+      <span className="w-2 h-2 rounded-full bg-green-400 self-start mt-1.5 shrink-0" />
     </Link>
   );
 }
@@ -72,7 +72,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
             return (
               <SidebarMenuItem key={item.name} className="relative">
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-green-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
                 )}
                 <SidebarMenuButton
                   asChild
@@ -88,7 +88,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
                   <SidebarMenuBadge className="pointer-events-none">
                     <span
                       key={openCount}
-                      className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-yellow-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
+                      className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
                     >
                       {openCount > 9 ? "9+" : openCount}
                     </span>

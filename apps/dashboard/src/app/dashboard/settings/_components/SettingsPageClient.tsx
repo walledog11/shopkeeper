@@ -1,12 +1,13 @@
 "use client"
 
 import { useSearchParams, useRouter } from "next/navigation"
-import { Building2, User, Blocks, CreditCard, Bot, ChevronDown } from "lucide-react"
-import WorkspaceTab from "./WorkspaceTab"
+import { Building2, User, Blocks, CreditCard, Bot, ChevronDown, ClipboardList } from "lucide-react"
+import WorkspaceTab from "./workspace/WorkspaceTab"
 import AgentTab from "./AgentTab"
-import IntegrationsTab from "./IntegrationsTab"
+import IntegrationsTab from "./integrations/IntegrationsTab"
 import AccountTab from "./AccountTab"
 import BillingTab from "./BillingTab"
+import AuditLogTab from "./AuditLogTab"
 import type { OrgSettings } from "@/types"
 import {
   DropdownMenu,
@@ -20,7 +21,7 @@ interface Props {
   settings: OrgSettings
 }
 
-type Tab = 'workspace' | 'agent' | 'integrations' | 'billing' | 'account'
+type Tab = 'workspace' | 'agent' | 'integrations' | 'billing' | 'account' | 'audit'
 
 const NAV_ITEMS = [
   { id: 'workspace' as Tab, label: 'Workspace', icon: Building2 },
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { id: 'integrations' as Tab, label: 'Integrations', icon: Blocks },
   { id: 'billing' as Tab, label: 'Billing', icon: CreditCard },
   { id: 'account' as Tab, label: 'Account', icon: User },
+  { id: 'audit' as Tab, label: 'Audit Log', icon: ClipboardList },
 ]
 
 export default function SettingsPageClient({ orgName, settings }: Props) {
@@ -96,8 +98,9 @@ export default function SettingsPageClient({ orgName, settings }: Props) {
           {activeTab === 'workspace' && <WorkspaceTab orgName={orgName} />}
           {activeTab === 'agent' && <AgentTab settings={settings} />}
           {activeTab === 'integrations' && <IntegrationsTab />}
-          {activeTab === 'billing' && <BillingTab />}
+{activeTab === 'billing' && <BillingTab />}
           {activeTab === 'account' && <AccountTab />}
+          {activeTab === 'audit' && <AuditLogTab />}
         </div>
       </div>
 

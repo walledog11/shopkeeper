@@ -3,10 +3,14 @@ import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
 import stripe from '@/lib/stripe'
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 export async function GET() {
   try {
     const org = await getOrCreateOrg()
+
+    const rl = await rateLimit(`billing:get:${org.id}`, 10, 60)
+    if (!rl.success) return tooManyRequests(rl.reset)
 
     // Ensure the org has a Stripe customer
     let customerId = org.stripeCustomerId

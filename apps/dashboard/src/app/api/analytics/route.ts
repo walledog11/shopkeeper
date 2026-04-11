@@ -2,18 +2,26 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
     const org = await getOrCreateOrg();
+
+    const rl = await rateLimit(`analytics:${org.id}`, 10, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
     const { searchParams } = new URL(request.url);
 
     const to = searchParams.get('to') ? new Date(searchParams.get('to')!) : new Date();
     const from = searchParams.get('from')
       ? new Date(searchParams.get('from')!)
       : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    if (isNaN(to.getTime()) || isNaN(from.getTime())) {
+      return NextResponse.json({ error: 'Invalid date range' }, { status: 400 });
+    }
 
     const [
       threadStatusCounts,

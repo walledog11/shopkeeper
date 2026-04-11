@@ -6,6 +6,10 @@ import logger from '@/lib/logger';
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function GET() {
+  if (process.env.NODE_ENV !== 'development') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
   const appUrl = process.env.APP_URL;
   const pageAccessToken = process.env.META_PAGE_ACCESS_TOKEN;
   const igAccountId = process.env.META_INSTAGRAM_ACCOUNT_ID;
@@ -31,23 +35,19 @@ export async function GET() {
     }
 
     const org = await getOrCreateOrg();
-    await db.integration.upsert({
-      where: {
-        organizationId_platform_externalAccountId: {
-          organizationId: org.id,
-          platform: 'ig_dm',
-          externalAccountId: igAccountId,
-        },
-      },
-      update: { accessToken: pageAccessToken, fromEmail: accountName },
-      create: {
-        organizationId: org.id,
-        platform: 'ig_dm',
-        externalAccountId: igAccountId,
-        accessToken: pageAccessToken,
-        fromEmail: accountName,
-      },
-    });
+    const igKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
+    const existingIg = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igKey } });
+    if (existingIg) {
+      await db.integration.update({ where: { id: existingIg.id }, data: { accessToken: pageAccessToken, fromEmail: accountName } });
+    } else {
+      try {
+        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, accessToken: pageAccessToken, fromEmail: accountName } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igKey } }))!;
+        await db.integration.update({ where: { id: race.id }, data: { accessToken: pageAccessToken, fromEmail: accountName } });
+      }
+    }
 
     logger.info({ accountName, igAccountId, orgId: org.id }, '[IG Setup] Connected');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?connected=instagram`);

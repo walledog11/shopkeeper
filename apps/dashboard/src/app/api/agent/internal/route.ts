@@ -16,13 +16,15 @@ import { db } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { handleApiError } from "@/lib/api-errors";
 import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
+import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/auth-utils";
+import logger from "@/lib/logger";
 import type { RawToolCall } from "@/types";
 
 export async function POST(request: Request) {
   try {
-    // Authenticate via shared secret
+    // Authenticate via shared secret (supports rotation via INTERNAL_API_SECRET_PREV)
     const secret = request.headers.get("x-internal-secret");
-    if (!secret || secret !== process.env.INTERNAL_API_SECRET) {
+    if (!secret || !timingSafeIncludes(getValidInternalSecrets(), secret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -82,21 +84,28 @@ export async function POST(request: Request) {
             threadTag = `Order ${orderName}`;
           }
         } else {
-          console.warn(`[agent/internal] Shopify order lookup failed for ${orderNumber}`);
+          logger.warn({ orderNumber }, '[agent/internal] Shopify order lookup failed');
         }
       }
 
-      const customer = await db.customer.upsert({
-        where: {
-          organizationId_platformId: { organizationId: orgId, platformId: customerEmail },
-        },
-        update: { ...(customerName && { name: customerName }) },
-        create: {
-          organizationId: orgId,
-          platformId: customerEmail,
-          ...(customerName && { name: customerName }),
-        },
-      });
+      const customerKey = { organizationId: orgId, platformId: customerEmail };
+      let existingCustomer = await db.customer.findUnique({ where: { organizationId_platformId: customerKey } });
+      let customer;
+      if (existingCustomer) {
+        customer = customerName
+          ? await db.customer.update({ where: { id: existingCustomer.id }, data: { name: customerName } })
+          : existingCustomer;
+      } else {
+        try {
+          customer = await db.customer.create({ data: { organizationId: orgId, platformId: customerEmail, ...(customerName && { name: customerName }) } });
+        } catch (err) {
+          if ((err as { code?: string }).code !== 'P2002') throw err;
+          existingCustomer = (await db.customer.findUnique({ where: { organizationId_platformId: customerKey } }))!;
+          customer = customerName
+            ? await db.customer.update({ where: { id: existingCustomer.id }, data: { name: customerName } })
+            : existingCustomer;
+        }
+      }
 
       let thread = await db.thread.findFirst({
         where: {
@@ -154,7 +163,7 @@ export async function POST(request: Request) {
       threadId: resolvedThreadId,
     });
   } catch (error) {
-    console.error("[agent/internal] error:", error);
+    logger.error({ err: error }, "[agent/internal] error");;
     return handleApiError(error, "Agent internal POST", "Failed to run agent");
   }
 }

@@ -1,19 +1,5 @@
-import Redis from 'ioredis';
 import { NextResponse } from 'next/server';
-
-// Singleton Redis client — reused across warm invocations in the same process
-let redis: Redis | null = null;
-
-function getRedis(): Redis {
-  if (!redis) {
-    redis = new Redis(process.env.REDIS_URL!, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      connectTimeout: 2000,
-    });
-  }
-  return redis;
-}
+import { getRedis } from '@/lib/redis';
 
 /**
  * Fixed-window rate limiter backed by Redis INCR.

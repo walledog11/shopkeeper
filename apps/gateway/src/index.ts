@@ -1,12 +1,12 @@
-import express from 'express';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 import dotenv from 'dotenv';
+dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env'), override: true });
+
+import express from 'express';
 import * as Sentry from '@sentry/node';
-import { db } from '@clerk/db';
 import webhookRoutes from './routes/webhooks.js';
 import logger from './logger.js';
-
-// Load environment variables from your apps/gateway/.env file
-dotenv.config();
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
@@ -47,17 +47,8 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: false }));
 
 // A simple health-check route to prove the server is alive
-app.get('/', async (_req, res) => {
-  try {
-    const customerCount = await db.customer.count();
-    res.status(200).json({
-      status: 'Clerk Gateway is running 🟢',
-      customersInDatabase: customerCount,
-    });
-  } catch (error) {
-    logger.error({ err: error }, 'Database connection failed');
-    res.status(500).json({ status: 'Database connection failed 🔴' });
-  }
+app.get('/', (_req, res) => {
+  res.status(200).json({ status: 'Clerk Gateway is running 🟢' });
 });
 
 app.use('/webhooks', webhookRoutes);

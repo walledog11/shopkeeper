@@ -19,8 +19,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // DEV ONLY: rate limiting disabled in development
-    // TODO: remove this condition before deploying to production
     if (process.env.NODE_ENV !== "development") {
       const rl = await rateLimit(`phone:verify:${userId}`, 5, 600);
       if (!rl.success) return tooManyRequests(rl.reset);
@@ -55,16 +53,19 @@ export async function POST(request: Request) {
     }
 
     // Mark as verified
-    await db.orgMember.upsert({
-      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
-      update: { phoneNumber: stored.phoneNumber, phoneVerified: true },
-      create: {
-        organizationId: org.id,
-        clerkUserId: userId,
-        phoneNumber: stored.phoneNumber,
-        phoneVerified: true,
-      },
-    });
+    const memberKey = { organizationId: org.id, clerkUserId: userId };
+    const existingMemberVerify = await db.orgMember.findUnique({ where: { organizationId_clerkUserId: memberKey } });
+    if (existingMemberVerify) {
+      await db.orgMember.update({ where: { id: existingMemberVerify.id }, data: { phoneNumber: stored.phoneNumber, phoneVerified: true } });
+    } else {
+      try {
+        await db.orgMember.create({ data: { organizationId: org.id, clerkUserId: userId, phoneNumber: stored.phoneNumber, phoneVerified: true } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        const race = (await db.orgMember.findUnique({ where: { organizationId_clerkUserId: memberKey } }))!;
+        await db.orgMember.update({ where: { id: race.id }, data: { phoneNumber: stored.phoneNumber, phoneVerified: true } });
+      }
+    }
 
     // Remove the temp code from org settings
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

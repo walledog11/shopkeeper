@@ -4,7 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Check, Copy, ChevronDown, AlertTriangle, Loader2 } from "lucide-react"
+import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { Integration } from "@/types"
 
@@ -57,6 +57,8 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   const [shop, setShop] = useState('')
   const [loading, setLoading] = useState(false)
   const [notified, setNotified] = useState(false)
+  const [kbSyncing, setKbSyncing] = useState(false)
+  const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
 
   const isConnected = connected.length > 0
   const isComingSoon = config.connectType === 'coming-soon'
@@ -82,6 +84,23 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
     if (!domain) return
     setLoading(true)
     window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(domain)}`
+  }
+
+  async function handleKbSync() {
+    setKbSyncing(true)
+    setKbSyncResult(null)
+    try {
+      const res = await fetch('/api/integrations/shopify/kb-sync', { method: 'POST' })
+      if (!res.ok) throw new Error()
+      const { syncedPolicies, syncedPages } = await res.json() as { syncedPolicies: number; syncedPages: number }
+      const total = syncedPolicies + syncedPages
+      setKbSyncResult(`${total} article${total === 1 ? '' : 's'} synced to Knowledge Base`)
+    } catch {
+      setKbSyncResult('Sync failed — please try again')
+    } finally {
+      setKbSyncing(false)
+      setTimeout(() => setKbSyncResult(null), 4000)
+    }
   }
 
   return (
@@ -255,6 +274,30 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                   {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Reconnect' : 'Connect'}
                 </Button>
               </div>
+              {isConnected && (
+                <div className="flex items-center gap-3 pt-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={kbSyncing}
+                    onClick={handleKbSync}
+                    className="h-8 px-3 text-xs font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
+                  >
+                    {kbSyncing
+                      ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Syncing…</>
+                      : <><BookOpen className="w-3 h-3 mr-1.5" />Sync to KB</>
+                    }
+                  </Button>
+                  {kbSyncResult && (
+                    <span className={cn(
+                      "text-xs",
+                      kbSyncResult.startsWith('Sync failed') ? "text-red-400" : "text-emerald-400"
+                    )}>
+                      {kbSyncResult}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

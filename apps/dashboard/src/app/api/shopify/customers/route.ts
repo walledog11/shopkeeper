@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import logger from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ customer: data.customer });
 
   } catch (err) {
-    console.error('[Shopify Customer POST] Error:', err);
+    logger.error({ err }, '[Shopify Customer POST] Error');
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }

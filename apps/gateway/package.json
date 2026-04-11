@@ -4,9 +4,13 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts & tsx watch src/worker.ts",
+    "tunnel": "ngrok http 8080 --url=darren-unalloyed-reina.ngrok-free.dev",
+    "dev": "concurrently --kill-others-on-fail --names \"server,worker,tunnel\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"killall ngrok 2>/dev/null; sleep 1; ngrok http 8080 --url=darren-unalloyed-reina.ngrok-free.dev\"",
     "build": "tsc",
-    "start": "node dist/index.js & node dist/worker.js"
+    "start": "concurrently --kill-others-on-fail --names \"server,worker\" \"node dist/index.js\" \"node dist/worker.js\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "latest",
@@ -23,7 +27,12 @@
   "devDependencies": {
     "@types/express": "^5.0.0",
     "@types/node": "^22.19.17",
+    "@types/supertest": "^7.2.0",
+    "@vitest/coverage-v8": "^4.1.3",
+    "concurrently": "^9.2.1",
+    "supertest": "^7.2.2",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.3"
   }
 }

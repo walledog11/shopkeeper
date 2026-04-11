@@ -1,0 +1,196 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ChannelType, SenderType, db } from '@clerk/db';
+import {
+  createTestOrg,
+  createTestCustomer,
+  createTestIntegration,
+  createTestThread,
+  cleanupTestData,
+} from '@clerk/db/test-helpers';
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn(),
+  clerkClient: vi.fn(),
+}));
+
+// Mock outbound dispatch clients — we verify dispatch logic, not external APIs
+vi.mock('postmark', () => ({
+  ServerClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.sendEmail = vi.fn().mockResolvedValue({ MessageID: 'mock-msg-id' });
+  }),
+}));
+
+vi.mock('twilio', () => ({
+  default: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.messages = {
+      create: vi.fn().mockResolvedValue({ sid: 'SM_mock' }),
+    };
+  }),
+}));
+
+// Mock global fetch for Meta Graph API calls in the IG dispatch branch
+const { mockFetch } = vi.hoisted(() => ({
+  mockFetch: vi.fn(),
+}));
+vi.stubGlobal('fetch', mockFetch);
+
+import { POST } from './route';
+import { auth } from '@clerk/nextjs/server';
+
+let org: Awaited<ReturnType<typeof createTestOrg>>;
+
+beforeEach(async () => {
+  org = await createTestOrg();
+  vi.mocked(auth).mockResolvedValue({ userId: 'usr_test', orgId: org.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+  mockFetch.mockReset();
+});
+
+afterEach(async () => {
+  await cleanupTestData(org.id);
+  vi.clearAllMocks();
+});
+
+describe('POST /api/messages', () => {
+  it('returns 400 when threadId or text is missing', async () => {
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'hello' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('Missing threadId or text');
+  });
+
+  it('returns 404 when the thread belongs to a different org', async () => {
+    const otherOrg = await createTestOrg();
+    try {
+      const customer = await createTestCustomer(otherOrg.id, 'cust_other@test.com');
+      const thread = await createTestThread(otherOrg.id, customer.id, ChannelType.email);
+
+      const req = new Request('http://localhost:3000/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: thread.id, text: 'Hey' }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(404);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
+  });
+
+  it('saves a note without calling any dispatch API', async () => {
+    const customer = await createTestCustomer(org.id, 'note_cust@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Internal note', isNote: true }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
+    expect(savedMessage?.senderType).toBe(SenderType.note);
+    expect(savedMessage?.contentText).toBe('Internal note');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('dispatches via Meta Graph API for ig_dm threads and saves the message', async () => {
+    const igAccountId = `ig_acct_${org.id.slice(0, 8)}`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: igAccountId,
+      accessToken: 'test-ig-token',
+    });
+
+    const customer = await createTestCustomer(org.id, 'ig_sender_456');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ message_id: 'mid_test' }), { status: 200 }),
+    );
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Thanks for reaching out!' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [url] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('graph.facebook.com');
+
+    const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
+    expect(savedMessage?.senderType).toBe(SenderType.agent);
+    expect(savedMessage?.contentText).toBe('Thanks for reaching out!');
+  });
+
+  it('returns 502 when no IG integration is configured', async () => {
+    const customer = await createTestCustomer(org.id, 'ig_no_integration_456');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Hey' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(502);
+  });
+
+  it('dispatches via Postmark for email threads and saves the message', async () => {
+    const emailAddress = `support_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'customer@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Your issue has been resolved.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
+    expect(savedMessage?.senderType).toBe(SenderType.agent);
+  });
+
+  it('returns 502 when POSTMARK_API_KEY is not set', async () => {
+    const original = process.env.POSTMARK_API_KEY;
+    delete process.env.POSTMARK_API_KEY;
+
+    try {
+      const customer = await createTestCustomer(org.id, 'no_postmark@example.com');
+      const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+      const req = new Request('http://localhost:3000/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: thread.id, text: 'Hi' }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(502);
+    } finally {
+      if (original !== undefined) process.env.POSTMARK_API_KEY = original;
+    }
+  });
+});

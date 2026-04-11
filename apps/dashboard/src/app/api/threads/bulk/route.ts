@@ -14,7 +14,7 @@ export async function PATCH(request: Request) {
     if (ids.length > 100) {
       return NextResponse.json({ error: 'Too many ids — max 100 per request' }, { status: 400 });
     }
-    if (!['close', 'open', 'tag'].includes(action)) {
+    if (!['close', 'open', 'tag', 'archive'].includes(action)) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
@@ -34,6 +34,7 @@ export async function PATCH(request: Request) {
     if (action === 'close') data.status = 'closed';
     if (action === 'open') data.status = 'open';
     if (action === 'tag' && tag !== undefined) data.tag = tag || null;
+    if (action === 'archive') data.archivedAt = new Date();
 
     await db.thread.updateMany({
       where: { id: { in: verifiedIds }, organizationId: org.id },

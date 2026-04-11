@@ -2,11 +2,15 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 // DELETE /api/org/data?action=clear_tickets
 export async function DELETE(request: Request) {
   try {
     const org = await getOrCreateOrg();
+
+    const rl = await rateLimit(`org:data:delete:${org.id}`, 2, 3600);
+    if (!rl.success) return tooManyRequests(rl.reset);
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 

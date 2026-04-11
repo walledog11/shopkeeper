@@ -65,6 +65,7 @@ export function useAgentTurns({
       senderType: SENDER_TYPE.NOTE,
       contentText: `${AGENT_TURN_PREFIX}${JSON.stringify(turn)}`,
       mediaUrl: null,
+      attachments: [],
       sentAt: new Date().toISOString(),
     }
     mutateFn(

@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { CheckCircle2, Inbox } from "lucide-react"
+import useSWR from 'swr'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { useThreads, usePaginatedThreads } from '@/hooks/useThreads'
+import { usePaginatedThreads } from '@/hooks/useThreads'
 import { useAgentTurns } from '@/hooks/useAgentTurns'
 import { useTicketActions } from '@/hooks/useTicketActions'
 import { useTicketSelection } from '@/hooks/useTicketSelection'
-import { threadToTicket, getCustomerName } from '@/lib/utils'
+import { threadToTicket } from '@/lib/utils'
+import { fetcher } from '@/lib/fetcher'
 import ThreadList from './ThreadList'
 import ConversationView from './ConversationView'
 import ContextPanel from './ContextPanel'
@@ -40,22 +42,21 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const dbThreads = isSearchMode ? [] : (activeTab === 'open' ? openThreads : closedThreads)
   const isLoading = activeTab === 'open' ? openLoading : closedLoading
 
+  const { data: searchData, isLoading: isSearchLoading } = useSWR<{ threads: Thread[] }>(
+    isSearchMode ? `/api/search?q=${encodeURIComponent(searchQuery)}` : null,
+    fetcher,
+    { keepPreviousData: true },
+  )
+  const searchThreads = searchData?.threads ?? []
+
   const filteredTickets: Ticket[] = useMemo(() => {
     if (isSearchMode) {
-      const q = searchQuery.toLowerCase()
-      return [...openThreads, ...closedThreads]
-        .filter(t =>
-          getCustomerName(t.customer).toLowerCase().includes(q) ||
-          (t.tag ?? '').toLowerCase().includes(q) ||
-          (t.aiSummary ?? '').toLowerCase().includes(q) ||
-          t.messages.some(m => m.contentText?.toLowerCase().includes(q))
-        )
-        .map(t => threadToTicket(t, agentName))
+      return searchThreads.map(t => threadToTicket(t, agentName))
     }
     return dbThreads
       .filter(t => !activeFilter || t.channelType === activeFilter)
       .map(t => threadToTicket(t, agentName))
-  }, [isSearchMode, searchQuery, openThreads, closedThreads, dbThreads, activeFilter, agentName])
+  }, [isSearchMode, searchThreads, dbThreads, activeFilter, agentName])
 
   const liveTickets: Ticket[] = useMemo(
     () => isSearchMode ? filteredTickets : dbThreads.map(t => threadToTicket(t, agentName)),
@@ -63,7 +64,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   )
 
   const activeTicket = liveTickets.find(t => t.id === activeTicketId)
-  const allThreads = isSearchMode ? [...openThreads, ...closedThreads] : dbThreads
+  const allThreads = isSearchMode ? searchThreads : dbThreads
   const activeThread = allThreads.find(t => t.id === activeTicketId)
 
   const lastCustomerMessageId = activeThread?.messages
@@ -76,13 +77,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     ? planCache.get(planCacheKey)
     : undefined
 
-  const previousTicketsCount = useMemo(() => {
-    if (!activeThread) return 0
-    return [...openThreads, ...closedThreads].filter(
-      t => t.customerId === activeThread.customerId && t.id !== activeTicketId
-    ).length
-  }, [activeThread, openThreads, closedThreads, activeTicketId])
-
   const { selectedIds, setSelectedIds, handleToggleSelect, handleClearSelection } = useTicketSelection()
 
   const {
@@ -92,7 +86,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     failedMessages, handleRetry,
     handleSendMessage, handleSendNote, handleResolve, handleReopen,
     handleAiDraft, handleLinkShopifyCustomer, handleTagUpdate,
-    handleRefreshSummary, handleBulkClose,
+    handleRefreshSummary, handleBulkClose, handleBulkArchive, handleBulkTag,
   } = useTicketActions({
     activeTicketId,
     activeTab,
@@ -185,6 +179,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           openCount={openThreads.length}
           searchQuery={searchQuery}
           isSearchMode={isSearchMode}
+          isSearchLoading={isSearchLoading}
           selectedIds={selectedIds}
           onSearchChange={handleSearchChange}
           onTabChange={handleTabChange}
@@ -192,6 +187,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           onSelectTicket={id => { setActiveTicketId(id); setSendError(null) }}
           onToggleSelect={handleToggleSelect}
           onBulkClose={() => handleBulkClose(selectedIds)}
+          onBulkArchive={() => handleBulkArchive(selectedIds)}
+          onBulkTag={(tag) => handleBulkTag(selectedIds, tag)}
           onClearSelection={handleClearSelection}
           hasMore={activeTab === 'open' ? hasMoreOpen : hasMoreClosed}
           isLoadingMore={activeTab === 'open' ? isLoadingMoreOpen : isLoadingMoreClosed}
@@ -232,7 +229,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onDraft={handleAiDraft}
             />
             {/* Desktop context panel */}
-            <div className="hidden lg:flex">
+            <div className="hidden xl:flex">
               <ContextPanel
                 thread={activeThread}
                 hasShopify={hasShopify}
@@ -241,7 +238,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
                 onRefreshSummary={handleRefreshSummary}
                 onTagUpdate={handleTagUpdate}
                 onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                previousTicketsCount={previousTicketsCount}
               />
             </div>
 
@@ -249,7 +245,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
             <Sheet open={showContextDrawer} onOpenChange={setShowContextDrawer}>
               <SheetContent
                 side="bottom"
-                className="lg:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
+                className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
               >
                 <SheetHeader className="px-5 py-3 border-b border-border shrink-0">
                   <SheetTitle className="text-sm font-semibold text-white/70 text-left">Customer Details</SheetTitle>
@@ -263,7 +259,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
                     onRefreshSummary={handleRefreshSummary}
                     onTagUpdate={handleTagUpdate}
                     onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                    previousTicketsCount={previousTicketsCount}
                   />
                 </div>
               </SheetContent>

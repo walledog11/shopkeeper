@@ -3,6 +3,7 @@ import { db, SenderType } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import logger from '@/lib/logger';
 import { ServerClient } from 'postmark';
 import twilio from 'twilio';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/constants';
@@ -19,6 +20,10 @@ export async function POST(request: Request) {
 
     if (!threadId || !text) {
       return NextResponse.json({ error: 'Missing threadId or text' }, { status: 400 });
+    }
+
+    if (text.length > 4000) {
+      return NextResponse.json({ error: 'Message too long' }, { status: 400 });
     }
 
     // Fetch thread with full data needed for dispatch
@@ -70,7 +75,7 @@ export async function POST(request: Request) {
 
       if (!metaResponse.ok) {
         const err = await metaResponse.text();
-        console.error('[Dispatch] Meta API failed:', err);
+        logger.error({ err }, '[Dispatch] Meta API failed');
         return NextResponse.json({ error: 'Failed to send via Instagram' }, { status: 502 });
       }
     }

@@ -1,7 +1,7 @@
 import { getOrCreateOrg } from "@/lib/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
 import type { OrgSettings } from "@/types"
-import AgentPageClient from "./AgentPageClient"
+import AgentPageClient from "./_components/AgentPageClient"
 
 export default async function AgentPage() {
   const org = await getOrCreateOrg()

@@ -187,11 +187,16 @@ export async function sendEmail(
     targetThreadId = existingThread.id;
   } else {
     // No existing thread — upsert the customer then create a new thread shell
-    const customer = await db.customer.upsert({
-      where: { organizationId_platformId: { organizationId: ctx.orgId, platformId: input.to } },
-      update: {},
-      create: { organizationId: ctx.orgId, platformId: input.to },
-    });
+    const customerKey = { organizationId: ctx.orgId, platformId: input.to };
+    let customer = await db.customer.findUnique({ where: { organizationId_platformId: customerKey } });
+    if (!customer) {
+      try {
+        customer = await db.customer.create({ data: { organizationId: ctx.orgId, platformId: input.to } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        customer = (await db.customer.findUnique({ where: { organizationId_platformId: customerKey } }))!;
+      }
+    }
     const newThread = await db.thread.create({
       data: {
         organizationId: ctx.orgId,

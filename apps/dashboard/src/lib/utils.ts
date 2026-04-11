@@ -77,6 +77,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
           time: formatTime(msg.sentAt),
           author: msg.senderType === SENDER_TYPE.NOTE ? (isAgentNote ? (agentName ?? 'Agent') : 'You') : undefined,
           isAgentNote,
+          attachments: msg.attachments ?? [],
         }
       })
   }

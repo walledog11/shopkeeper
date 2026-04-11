@@ -182,7 +182,7 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
                 <button
                   onClick={handleRun}
                   disabled={isExecuting || enabledCount === 0}
-                  className="flex items-center gap-1.5 h-8 px-4 bg-yellow-400 hover:bg-yellow-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black text-xs font-semibold rounded-md transition-colors"
+                  className="flex items-center gap-1.5 h-8 px-4 bg-green-400 hover:bg-green-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black text-xs font-semibold rounded-md transition-colors"
                 >
                   {isExecuting
                     ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>

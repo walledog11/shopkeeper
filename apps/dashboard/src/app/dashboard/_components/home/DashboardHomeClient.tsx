@@ -9,8 +9,8 @@ import StatCards from "./StatCards"
 import ViewsNav from "./ViewsNav"
 import ChannelBreakdown from "./ChannelBreakdown"
 import ActivityFeed from "./ActivityFeed"
-import NeedsAttention from "./NeedsAttention"
 import TicketList from "./TicketList"
+import FeedbackSurvey from "./FeedbackSurvey"
 import WorkflowBasics from "./WorkflowBasics"
 import { useHomeData } from "./useHomeData"
 import type { Thread } from "@/types"
@@ -34,7 +34,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   const {
     activeView, setActiveView,
     isLoading, openCount, resolvedCount,
-    displayedThreads, needsAttention,
+    displayedThreads,
     channelBreakdown, activityEvents,
     workflowSteps, workflowDoneCount,
     navViews, channelConnected,
@@ -43,14 +43,14 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex flex-col min-h-full px-5 md:px-6 py-4 gap-3">
+        <div className="flex flex-col min-h-full px-5 md:px-6 pt-2 pb-4 gap-3">
 
           <AgentBanner />
 
           {/* Header */}
           <div className="flex items-start justify-between shrink-0 gap-4">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white/80">{greeting}, <span className="text-yellow-400">{userName}</span>.</h1>
+              <h1 className="text-xl font-bold tracking-tight text-white/80">{greeting}, <span className="text-green-400">{userName}</span>.</h1>
               <p className="text-sm text-white/35 mt-0.5">
                 {isLoading
                   ? "Loading your queue…"
@@ -60,12 +60,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 }
               </p>
             </div>
-            <Link
-              href="/dashboard/tickets"
-              className="hidden md:flex items-center gap-1.5 text-sm font-semibold text-black bg-yellow-400 hover:bg-yellow-300 rounded-md px-3.5 py-2 transition-all shrink-0"
-            >
-              View all tickets <ArrowRight className="w-4 h-4" />
-            </Link>
+           
           </div>
 
           <QuickActions />
@@ -78,30 +73,32 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           />
 
           {/* Main 3-column layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3 flex-1 min-h-0">
+          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3">
 
             {/* Left column */}
-            <div className="flex flex-col gap-3 self-start">
+            <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
               <ViewsNav navViews={navViews} activeView={activeView} setActiveView={setActiveView} />
               <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
               <ActivityFeed activityEvents={activityEvents} />
-              {!isLoading && <NeedsAttention needsAttention={needsAttention} openCount={openCount} />}
             </div>
 
             {/* Center column */}
-            <TicketList
-              isLoading={isLoading}
-              displayedThreads={displayedThreads}
-              activeView={activeView}
-              navViews={navViews}
-              openCount={openCount}
-              resolvedCount={resolvedCount}
-              setActiveView={setActiveView}
-              hasChannel={channelConnected}
-            />
+            <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
+              <TicketList
+                isLoading={isLoading}
+                displayedThreads={displayedThreads}
+                activeView={activeView}
+                navViews={navViews}
+                openCount={openCount}
+                resolvedCount={resolvedCount}
+                setActiveView={setActiveView}
+                hasChannel={channelConnected}
+              />
+              <FeedbackSurvey />
+            </div>
 
             {/* Right column */}
-            <div className="flex flex-col gap-3 self-start">
+            <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
               <WorkflowBasics workflowSteps={workflowSteps} workflowDoneCount={workflowDoneCount} />
               <ResourcesCard />
             </div>

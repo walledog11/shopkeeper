@@ -10,12 +10,12 @@ const PREVIEW_ARTICLES = tips.articles.slice(0, 4)
 
 export default function ResourcesCard() {
   return (
-    <Card className="bg-card border-border rounded-md overflow-hidden">
+    <Card className="bg-card border-border rounded-md overflow-hidden flex flex-col h-full">
       <div className="flex items-center justify-center px-4 py-2 border-b border-border shrink-0">
         <h2 className="text-sm font-semibold text-white/70">Articles</h2>
       </div>
 
-      <div className="divide-y divide-white/[0.05]">
+      <div className="flex-1 flex flex-col justify-evenly divide-y divide-white/[0.05]">
         {PREVIEW_ARTICLES.map(article => {
           const tag = article.tag ?? "Tips"
           const tagColor = TAG_COLORS[tag] ?? DEFAULT_TAG_COLOR

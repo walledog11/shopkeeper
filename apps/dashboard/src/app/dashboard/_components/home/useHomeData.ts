@@ -45,7 +45,7 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
     recent: sortByDate(recentThreads),
   }), [openThreads, closedThreads, recentThreads])
 
-  const displayedThreads = viewThreads[activeView]
+  const displayedThreads = viewThreads[activeView].slice(0, 7)
 
   const needsAttention = useMemo(() => viewThreads.open.slice(0, 4), [viewThreads.open])
 
@@ -83,7 +83,7 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
         time: thread.updatedAt,
       })
     })
-    return events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 12)
+    return events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6)
   }, [openThreads, closedThreads])
 
   const channelConnected = integrations.length > 0

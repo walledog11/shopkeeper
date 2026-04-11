@@ -23,6 +23,10 @@ export async function PATCH(request: Request) {
       settings?: Partial<OrgSettings>;
     };
 
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0 || name.length > 100)) {
+      return NextResponse.json({ error: 'Invalid name' }, { status: 400 });
+    }
+
     const currentSettings = (org.settings as OrgSettings | null) ?? {};
 
     const updated = await db.organization.update({

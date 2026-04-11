@@ -57,6 +57,9 @@ export async function POST(request: Request) {
     }
 
     const client = getTwilioClient();
+    if (!process.env.GATEWAY_PUBLIC_URL) {
+      return NextResponse.json({ error: "GATEWAY_PUBLIC_URL is not configured" }, { status: 500 });
+    }
     const webhookUrl = `${process.env.GATEWAY_PUBLIC_URL}/webhooks/twilio`;
 
     const body = await request.json().catch(() => ({}));

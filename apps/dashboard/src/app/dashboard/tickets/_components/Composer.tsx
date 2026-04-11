@@ -1,6 +1,10 @@
 "use client"
 
+import { useState, useEffect, useRef } from "react"
+import useSWR from "swr"
 import { Bot, Send, Loader2, Lock, StickyNote } from "lucide-react"
+import { fetcher } from "@/lib/fetcher"
+import type { CannedResponse } from "@/types"
 
 interface Props {
   customerName: string
@@ -43,8 +47,71 @@ export default function Composer({
   onAddNote,
   onCancelNote,
 }: Props) {
+  const [slashQuery, setSlashQuery] = useState<string | null>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const { data: cannedData } = useSWR<{ responses: CannedResponse[] }>(
+    slashQuery !== null ? '/api/canned-responses' : null,
+    fetcher,
+  )
+
+  const filteredCanned = slashQuery !== null
+    ? (cannedData?.responses ?? []).filter(r =>
+        r.title.toLowerCase().includes(slashQuery.toLowerCase()) ||
+        r.body.toLowerCase().includes(slashQuery.toLowerCase())
+      )
+    : []
+
+  const handleTextChange = (newValue: string) => {
+    onChange(newValue)
+    // Detect /query pattern at start of text or after whitespace
+    const match = newValue.match(/(^|\s)\/(\S*)$/)
+    if (match) {
+      setSlashQuery(match[2])
+    } else {
+      setSlashQuery(null)
+    }
+  }
+
+  const insertCanned = (body: string) => {
+    // Replace the trailing /query with the canned body
+    const newValue = value.replace(/(^|\s)\/\S*$/, (m) => {
+      const prefix = m.match(/^\s/) ? m[0] : ''
+      return prefix + body
+    })
+    onChange(newValue)
+    setSlashQuery(null)
+    textareaRef.current?.focus()
+  }
+
+  // Close popover on Escape
+  useEffect(() => {
+    if (slashQuery === null) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSlashQuery(null)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [slashQuery])
   return (
     <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-background border-t border-border shrink-0">
+      {/* Canned response popover */}
+      {slashQuery !== null && filteredCanned.length > 0 && (
+        <div className="mb-2 rounded-md border border-white/[0.12] bg-popover shadow-lg overflow-hidden max-h-52 overflow-y-auto">
+          {filteredCanned.map(r => (
+            <button
+              key={r.id}
+              onMouseDown={e => { e.preventDefault(); insertCanned(r.body) }}
+              className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-white/[0.07] transition-colors border-b border-white/[0.05] last:border-0"
+            >
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white/70">{r.title}</p>
+                <p className="text-xs text-white/35 truncate">{r.body}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
       <div className={`border rounded-md overflow-hidden transition-colors ${
         error
           ? 'border-red-500/40'
@@ -64,8 +131,9 @@ export default function Composer({
             </span>
           )}
           <textarea
+            ref={textareaRef}
             value={value}
-            onChange={e => onChange(e.target.value)}
+            onChange={e => handleTextChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 e.preventDefault()

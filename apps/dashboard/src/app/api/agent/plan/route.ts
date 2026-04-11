@@ -4,11 +4,16 @@ import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import type { OrgSettings } from "@/types";
 
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
+
+    const rl = await rateLimit(`agent:plan:${org.id}`, 20, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
+
     const { threadId, instruction } = await request.json();
 
     if (!threadId || !instruction?.trim()) {
@@ -16,6 +21,10 @@ export async function POST(request: Request) {
         { error: "Missing threadId or instruction" },
         { status: 400 }
       );
+    }
+
+    if (instruction.length > 2000) {
+      return NextResponse.json({ error: "Instruction too long" }, { status: 400 });
     }
 
     // Single query: fetch thread cache fields + last customer message

@@ -173,14 +173,11 @@ function TicketRow({ thread }: { thread: Thread }) {
 
 export default function TicketList({ isLoading, displayedThreads, activeView, navViews, openCount, resolvedCount, setActiveView, hasChannel }: Props) {
   return (
-    <Card className="bg-card border-border rounded-md flex flex-col min-h-0 overflow-hidden">
+    <Card className="bg-card border-border rounded-md flex flex-col overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h2 className="text-sm font-bold text-white/70">
           {navViews.find(v => v.id === activeView)?.label ?? 'Tickets'}
         </h2>
-        <Link href="/dashboard/tickets" className="text-xs font-medium text-white/30 hover:text-white/60 transition-colors">
-          View all
-        </Link>
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -199,13 +196,22 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
             />
           </motion.div>
         ) : (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="divide-y divide-white/[0.05]">
+          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="divide-y divide-white/[0.05] flex flex-col">
             {displayedThreads.map(thread => (
               <TicketRow key={thread.id} thread={thread} />
             ))}
           </motion.div>
         )}
       </AnimatePresence>
+
+      {!isLoading && displayedThreads.length > 0 && (
+        <Link
+          href="/dashboard/tickets"
+          className="flex items-center gap-1 px-4 py-3 border-t border-border text-sm text-white/40 hover:text-white/70 transition-colors"
+        >
+          View all {navViews.find(v => v.id === activeView)?.count ?? ''} tickets <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      )}
     </Card>
   )
 }

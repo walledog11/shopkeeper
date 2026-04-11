@@ -5,9 +5,13 @@ import crypto from 'crypto';
 import logger from '@/lib/logger';
 
 export async function GET(request: Request) {
-  const appUrl = process.env.APP_URL!;
-  const clientId = process.env.SHOPIFY_CLIENT_ID!;
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET!;
+  const appUrl = process.env.APP_URL;
+  const clientId = process.env.SHOPIFY_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+
+  if (!appUrl || !clientId || !clientSecret) {
+    return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
+  }
   const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
 
   const { searchParams } = new URL(request.url);
@@ -96,26 +100,19 @@ export async function GET(request: Request) {
       logger.error({ clerkOrgId }, '[Shopify OAuth] Org not found');
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=shopify_server_error`);
     }
-    await db.integration.upsert({
-      where: {
-        organizationId_platform_externalAccountId: {
-          organizationId: org.id,
-          platform: 'shopify',
-          externalAccountId: shop,
-        },
-      },
-      update: {
-        accessToken,
-        fromEmail: shopName,
-      },
-      create: {
-        organizationId: org.id,
-        platform: 'shopify',
-        externalAccountId: shop,
-        accessToken,
-        fromEmail: shopName,
-      },
-    });
+    const shopifyKey = { organizationId: org.id, platform: 'shopify' as const, externalAccountId: shop };
+    const existingShopify = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } });
+    if (existingShopify) {
+      await db.integration.update({ where: { id: existingShopify.id }, data: { accessToken, fromEmail: shopName } });
+    } else {
+      try {
+        await db.integration.create({ data: { organizationId: org.id, platform: 'shopify', externalAccountId: shop, accessToken, fromEmail: shopName } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } }))!;
+        await db.integration.update({ where: { id: race.id }, data: { accessToken, fromEmail: shopName } });
+      }
+    }
 
     logger.info({ shopName, shop, orgId: org.id }, '[Shopify OAuth] Integration saved');
     const successUrl = returnTo

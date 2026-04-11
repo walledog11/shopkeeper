@@ -1,8 +1,9 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Search, Inbox, X, CheckSquare, Square } from "lucide-react"
+import { Search, Inbox, X, CheckSquare, Square, Loader2, Archive, Tag } from "lucide-react"
 import type { ChannelType, Ticket } from "@/types"
 import { getChannelInfo } from "@/lib/channels"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -23,6 +24,7 @@ interface Props {
   openCount: number
   searchQuery: string
   isSearchMode?: boolean
+  isSearchLoading?: boolean
   selectedIds: string[]
   onSearchChange: (q: string) => void
   onTabChange: (tab: 'open' | 'closed') => void
@@ -30,6 +32,8 @@ interface Props {
   onSelectTicket: (id: string) => void
   onToggleSelect: (id: string) => void
   onBulkClose: () => void
+  onBulkArchive: () => void
+  onBulkTag: (tag: string) => void
   onClearSelection: () => void
   hasMore?: boolean
   isLoadingMore?: boolean
@@ -38,12 +42,14 @@ interface Props {
 
 export default function ThreadList({
   tickets, totalCount, activeTab, activeFilter, activeTicketId, openCount,
-  searchQuery, isSearchMode, selectedIds,
+  searchQuery, isSearchMode, isSearchLoading, selectedIds,
   onSearchChange, onTabChange, onFilterChange, onSelectTicket,
-  onToggleSelect, onBulkClose, onClearSelection,
+  onToggleSelect, onBulkClose, onBulkArchive, onBulkTag, onClearSelection,
   hasMore, isLoadingMore, onLoadMore,
 }: Props) {
   const hasSelection = selectedIds.length > 0
+  const [tagInput, setTagInput] = useState('')
+  const [showTagInput, setShowTagInput] = useState(false)
 
   return (
     <>
@@ -98,7 +104,12 @@ export default function ThreadList({
         {/* Search mode label */}
         {isSearchMode && (
           <div className="flex items-center justify-between px-0.5">
-            <span className="text-[11px] font-semibold text-white/40">Search results</span>
+            <div className="flex items-center gap-1.5">
+              {isSearchLoading && <Loader2 className="w-3 h-3 text-white/30 animate-spin" />}
+              <span className="text-[11px] font-semibold text-white/40">
+                {isSearchLoading ? 'Searching…' : 'Search results'}
+              </span>
+            </div>
             <button onClick={() => onSearchChange('')} className="text-[11px] text-white/30 hover:text-white/60 font-medium">
               Clear
             </button>
@@ -137,21 +148,63 @@ export default function ThreadList({
 
         {/* Bulk action bar */}
         {hasSelection ? (
-          <div className="flex items-center justify-between bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-2">
-            <span className="text-[11px] font-semibold text-white/80">
-              {selectedIds.length} selected
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onBulkClose}
-                className="text-[11px] font-semibold text-white bg-white/[0.15] hover:bg-white/[0.22] px-2.5 py-1 rounded transition-colors"
-              >
-                Close all
-              </button>
-              <button onClick={onClearSelection} className="text-white/40 hover:text-white transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-2">
+              <span className="text-[11px] font-semibold text-white/80">
+                {selectedIds.length} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={onBulkClose}
+                  className="text-[11px] font-semibold text-white bg-white/[0.15] hover:bg-white/[0.22] px-2.5 py-1 rounded transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={onBulkArchive}
+                  title="Archive selected"
+                  className="text-white/50 hover:text-white transition-colors"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => setShowTagInput(v => !v)}
+                  title="Tag selected"
+                  className="text-white/50 hover:text-white transition-colors"
+                >
+                  <Tag className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={onClearSelection} className="text-white/40 hover:text-white transition-colors">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
+            {showTagInput && (
+              <form
+                onSubmit={e => {
+                  e.preventDefault()
+                  onBulkTag(tagInput.trim())
+                  setTagInput('')
+                  setShowTagInput(false)
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <input
+                  autoFocus
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  placeholder="Tag name…"
+                  className="flex-1 text-[11px] text-white/70 bg-white/[0.06] border border-white/[0.12] rounded px-2 py-1 focus:outline-none focus:border-white/[0.25] placeholder:text-white/25"
+                />
+                <button
+                  type="submit"
+                  disabled={!tagInput.trim()}
+                  className="text-[11px] font-semibold text-white bg-white/[0.15] hover:bg-white/[0.22] disabled:opacity-40 px-2.5 py-1 rounded transition-colors"
+                >
+                  Apply
+                </button>
+              </form>
+            )}
           </div>
         ) : (
           <p className="text-[11px] text-white/25 font-medium px-0.5">

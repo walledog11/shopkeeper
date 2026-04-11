@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import Image from "next/image"
-import { RefreshCw, Pencil, ExternalLink, ShoppingBag, X, Search, UserPlus, Check, Copy, Sparkles, MoreHorizontal, Link, Unlink } from "lucide-react"
+import NextLink from "next/link"
+import { RefreshCw, Pencil, ExternalLink, ShoppingBag, X, Search, UserPlus, Check, Copy, Sparkles, MoreHorizontal, Link, Unlink, Clock, ChevronDown } from "lucide-react"
 import useSWR from "swr"
 import { getChannelInfo } from "@/lib/channels"
 import { getCustomerName } from "@/lib/utils"
@@ -18,7 +19,6 @@ interface Props {
   onTagUpdate: (tag: string) => void
   onLinkShopifyCustomer: (customerId: string | null) => void
   onRefreshSummary?: () => void
-  previousTicketsCount: number
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -301,36 +301,36 @@ function CustomerInfo({
       </button>
 
       {fullName && (
-        <div>
-          <p className="text-[10px] text-white/30 mb-0.5">Name</p>
-          <p className="text-xs text-white/60">{fullName}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] text-white/30 shrink-0">Name</span>
+          <span className="text-xs text-white/60 text-right">{fullName}</span>
         </div>
       )}
 
       {customer.email && (
-        <div>
-          <p className="text-[10px] text-white/30 mb-0.5">Email</p>
-          <div className="flex items-start gap-1">
-            <p className="text-xs text-white/60 flex-1 break-words">{customer.email}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] text-white/30 shrink-0">Email</span>
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-xs text-white/60 truncate">{customer.email}</span>
             <CopyButton value={customer.email} />
           </div>
         </div>
       )}
 
       {customer.phone && (
-        <div>
-          <p className="text-[10px] text-white/30 mb-0.5">Phone</p>
-          <div className="flex items-start gap-1">
-            <p className="text-xs text-white/60 flex-1">{customer.phone}</p>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[10px] text-white/30 shrink-0">Phone</span>
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-white/60">{customer.phone}</span>
             <CopyButton value={customer.phone} />
           </div>
         </div>
       )}
 
       {hasAddress && (
-        <div>
-          <p className="text-[10px] text-white/30 mb-0.5">Address</p>
-          <div className="text-xs text-white/60 space-y-0.5">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[10px] text-white/30 shrink-0 mt-0.5">Address</span>
+          <div className="text-xs text-white/60 text-right space-y-0.5">
             {addr?.address1 && <p>{addr.address1}</p>}
             {(addr?.city || addr?.province || addr?.zip) && (
               <p>{[addr?.city, [addr?.province, addr?.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</p>
@@ -340,10 +340,20 @@ function CustomerInfo({
         </div>
       )}
 
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] text-white/30 shrink-0">Orders</span>
+        <span className="text-xs text-white/60">{customer.orders_count}</span>
+      </div>
+
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[10px] text-white/30 shrink-0">Spent</span>
+        <span className="text-xs text-white/60">${parseFloat(customer.total_spent).toFixed(2)}</span>
+      </div>
+
       {customer.note && (
-        <div>
-          <p className="text-[10px] text-white/30 mb-0.5">Notes</p>
-          <p className="text-xs text-white/40 leading-relaxed">{customer.note}</p>
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[10px] text-white/30 shrink-0 mt-0.5">Notes</span>
+          <p className="text-xs text-white/40 leading-relaxed text-right">{customer.note}</p>
         </div>
       )}
     </div>
@@ -723,12 +733,9 @@ function ShopifySection({
     return (
       <div>
         {header}
-        <div className="space-y-4">
+        <div className="space-y-2">
           <CustomerInfo customer={data.customer} onSaved={handleCustomerSaved} />
-          <div>
-            <p className="text-xs text-white/30 mb-2">Orders</p>
-            <OrderList orders={data.orders} shop={data.shop} />
-          </div>
+          <OrderList orders={data.orders} shop={data.shop} />
         </div>
       </div>
     )
@@ -803,7 +810,6 @@ export default function ContextPanel({
   thread, hasShopify,
   aiSummary, isRefreshingSummary, onRefreshSummary,
   onTagUpdate, onLinkShopifyCustomer,
-  previousTicketsCount,
 }: Props) {
   const channel = getChannelInfo(thread.channelType)
   const name = getCustomerName(thread.customer)
@@ -815,10 +821,18 @@ export default function ContextPanel({
   const [isEditingTag, setIsEditingTag] = useState(false)
   const [tagDraft, setTagDraft] = useState('')
   const [shopifyCustomer, setShopifyCustomer] = useState<ShopifyCustomer | null>(null)
+  const [showPastConversations, setShowPastConversations] = useState(false)
 
-  // Reset shopify customer stat strip when switching threads
+  const { data: pastThreadsData } = useSWR<{ threads: Thread[] }>(
+    thread.customer?.id ? `/api/threads/customer/${thread.customer.id}` : null,
+    fetcher,
+  )
+  const pastThreads = (pastThreadsData?.threads ?? []).filter(t => t.id !== thread.id)
+
+  // Reset per-thread UI state when switching threads
   useEffect(() => {
     setShopifyCustomer(null)
+    setShowPastConversations(false)
   }, [thread.id])
 
   const startEditingTag = () => { setTagDraft(thread.tag || ''); setIsEditingTag(true) }
@@ -829,43 +843,43 @@ export default function ContextPanel({
   }
 
   return (
-    <aside className="w-full lg:w-92 shrink-0 lg:border-l lg:border-border flex flex-col lg:overflow-y-auto bg-background">
+    <aside className="w-full xl:w-92 shrink-0 xl:border-l xl:border-border flex flex-col xl:overflow-y-auto bg-background">
 
       {/* Customer identity */}
-      <div className="flex flex-col items-center text-center px-4 pt-6 pb-5 border-b border-border gap-2.5">
-        <div className="w-14 h-14 rounded-full overflow-hidden bg-white/[0.10] flex items-center justify-center text-white text-base font-bold shrink-0">
+      <div className="flex items-center justify-between gap-3 px-4 h-16 shrink-0 border-b border-border">
+        <div className="w-10 h-10 rounded-full overflow-hidden bg-white/[0.10] flex items-center justify-center text-white text-sm font-bold shrink-0">
           {thread.customer?.profilePicUrl ? (
-            <Image src={thread.customer.profilePicUrl} alt={name} width={56} height={56} className="w-full h-full object-cover" />
+            <Image src={thread.customer.profilePicUrl} alt={name} width={40} height={40} className="w-full h-full object-cover" />
           ) : initials}
         </div>
-        <div>
-          <p className="text-sm font-bold text-white/80 tracking-tight leading-tight">{name}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-white/80 tracking-tight leading-tight truncate">{name}</p>
           {showHandle && (
-            <p className="text-xs text-white/35 font-mono mt-0.5 truncate max-w-[160px]">
+            <p className="text-xs text-white/35 font-mono truncate">
               {thread.channelType === 'email' ? platformHandle : (platformHandle.startsWith('@') ? platformHandle : `@${platformHandle}`)}
             </p>
           )}
+          {(shopifyCustomer || pastThreads.length > 0) && (
+            <p className="text-[10px] text-white/30 mt-0.5">
+              {[
+                shopifyCustomer && `${shopifyCustomer.orders_count} order${shopifyCustomer.orders_count !== 1 ? 's' : ''} · $${parseFloat(shopifyCustomer.total_spent).toFixed(2)} spent`,
+                pastThreads.length > 0 && `${pastThreads.length} ticket${pastThreads.length !== 1 ? 's' : ''}`,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          )}
         </div>
-
-        {/* Channel badge */}
-        <div className="flex items-center gap-1.5 border border-border rounded-full px-2.5 py-1 bg-white/[0.04]">
-          <Image src={channel.logo} alt={channel.name} width={12} height={12} className="object-contain opacity-60" />
-          <span className="text-xs font-medium text-white/45">{channel.name}</span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-1 border border-border rounded-full px-2 py-0.5 bg-white/[0.04]">
+            <Image src={channel.logo} alt={channel.name} width={10} height={10} className="object-contain opacity-60" />
+            <span className="text-[10px] font-medium text-white/45">{channel.name}</span>
+          </div>
+          {pastThreads.filter(t => t.status === 'open').length > 0 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.5 rounded-full">
+              <span className="w-1 h-1 rounded-full bg-amber-400" />
+              {pastThreads.filter(t => t.status === 'open').length} open
+            </span>
+          )}
         </div>
-
-        {/* Shopify stat strip */}
-        {shopifyCustomer && (
-          <p className="text-xs text-white/30">
-            {shopifyCustomer.orders_count} order{shopifyCustomer.orders_count !== 1 ? 's' : ''} · ${parseFloat(shopifyCustomer.total_spent).toFixed(2)} spent
-          </p>
-        )}
-
-        {/* Previous tickets */}
-        {previousTicketsCount > 0 && (
-          <p className="text-xs text-white/30">
-            {previousTicketsCount} previous ticket{previousTicketsCount !== 1 ? 's' : ''}
-          </p>
-        )}
       </div>
 
       {/* Shopify section */}
@@ -948,8 +962,59 @@ export default function ContextPanel({
             <p className="text-xs font-medium text-white/60">{formatDate(thread.createdAt)}</p>
           </div>
         </div>
-      </div>
 
+        {/* Past conversations — collapsible */}
+        {pastThreads.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowPastConversations(v => !v)}
+              className="flex items-center gap-1.5 w-full text-left group"
+            >
+              <Clock className="w-3 h-3 text-white/25 shrink-0" />
+              <span className="text-[10px] text-white/30 font-medium flex-1">
+                Past conversations
+                <span className="ml-1 text-white/20">({pastThreads.length})</span>
+              </span>
+              <ChevronDown className={`w-3 h-3 text-white/25 transition-transform shrink-0 ${
+                showPastConversations ? 'rotate-180' : ''
+              }`} />
+            </button>
+
+            {showPastConversations && (
+              <div className="mt-2 space-y-1.5">
+                {pastThreads.map(t => {
+                    const ch = getChannelInfo(t.channelType)
+                    const preview = t.messages[0]?.contentText
+                    return (
+                      <NextLink
+                        key={t.id}
+                        href={`?thread=${t.id}`}
+                        className="flex items-start gap-2 rounded-md border border-white/[0.07] bg-white/[0.03] hover:bg-white/[0.07] hover:border-white/[0.12] px-2.5 py-2 transition-colors block"
+                      >
+                        <Image src={ch.logo} alt={ch.name} width={12} height={12} className="object-contain opacity-40 brightness-0 invert mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1 mb-0.5">
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                              t.status === 'open'
+                                ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
+                                : t.status === 'pending'
+                                  ? 'text-blue-400 bg-blue-400/10 border-blue-400/20'
+                                  : 'text-green-400 bg-green-400/10 border-green-400/20'
+                            }`}>{t.status}</span>
+                            <span className="text-[10px] text-white/25 shrink-0">{formatDate(t.updatedAt)}</span>
+                          </div>
+                          <p className="text-xs text-white/40 truncate leading-tight">
+                            {t.aiSummary ?? preview ?? 'No content'}
+                          </p>
+                        </div>
+                      </NextLink>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </aside>
   )
 }

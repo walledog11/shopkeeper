@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { auth } from '@clerk/nextjs/server';
 import crypto from 'crypto';
 
@@ -39,32 +38,6 @@ export async function GET(request: Request) {
   const nonce = crypto.randomBytes(16).toString('hex');
   const state = `${nonce}.${shopDomain}`;
 
-  const cookieStore = await cookies();
-  cookieStore.set('shopify_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  });
-  // Store orgId so the callback can identify the org without a Clerk session
-  cookieStore.set('shopify_oauth_org', orgId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  });
-  if (returnTo) {
-    cookieStore.set('shopify_oauth_return', returnTo, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 600,
-      path: '/',
-    });
-  }
-
   const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
   const scopes = 'read_customers,write_customers,read_orders,write_orders';
 
@@ -74,5 +47,19 @@ export async function GET(request: Request) {
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', state);
 
-  return NextResponse.redirect(authUrl.toString());
+  const cookieOpts = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 600,
+    path: '/',
+  };
+
+  const response = NextResponse.redirect(authUrl.toString());
+  response.cookies.set('shopify_oauth_state', state, cookieOpts);
+  response.cookies.set('shopify_oauth_org', orgId, cookieOpts);
+  if (returnTo) {
+    response.cookies.set('shopify_oauth_return', returnTo, cookieOpts);
+  }
+  return response;
 }

@@ -44,13 +44,16 @@ export async function POST(request: Request) {
     const { emailAddress, role } = await request.json();
     if (!emailAddress) return NextResponse.json({ error: 'Email required' }, { status: 400 });
 
+    const ALLOWED_ROLES = ['org:admin', 'org:member'];
+    const resolvedRole = ALLOWED_ROLES.includes(role) ? role : 'org:member';
+
     const client = await clerkClient();
     const invitation = await client.organizations.createOrganizationInvitation({
       organizationId: orgId,
       emailAddress,
-      role: role ?? 'org:member',
+      role: resolvedRole,
       inviterUserId: userId,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? ''}/dashboard`,
+      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/dashboard`,
     });
 
     return NextResponse.json({

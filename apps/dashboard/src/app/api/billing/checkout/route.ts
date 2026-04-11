@@ -3,6 +3,7 @@ import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
 import stripe from '@/lib/stripe'
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
 
 // Map tier slugs to env-var price IDs so the client never controls which price is used
 const TIER_PRICE_IDS: Record<string, string | undefined> = {
@@ -20,6 +21,9 @@ export async function POST(req: NextRequest) {
     }
 
     const org = await getOrCreateOrg()
+
+    const rl = await rateLimit(`billing:checkout:${org.id}`, 5, 3600)
+    if (!rl.success) return tooManyRequests(rl.reset)
 
     // Ensure Stripe customer exists
     let customerId = org.stripeCustomerId

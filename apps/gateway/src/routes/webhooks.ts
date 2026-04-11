@@ -10,6 +10,15 @@ import { CHANNEL, QUEUE, JOB, READ_TOOLS } from '../constants.js';
 
 const router = express.Router();
 
+const FILLER_PHRASES = [
+  'On it…',
+  'Give me a sec…',
+  'Making it happen…',
+  'Looking into that…',
+  'Just a moment…',
+];
+const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const redisConnection = new IORedis(process.env.REDIS_URL!) as any;
 const messageQueue = new Queue(QUEUE.INBOUND, { connection: redisConnection });
@@ -51,18 +60,20 @@ router.post('/meta', async (req: Request, res: Response) => {
   const APP_SECRET = process.env.META_APP_SECRET;
   const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
-  if (APP_SECRET) {
-    if (!signature || !req.rawBody) {
-      logger.warn('[Webhook] Missing signature or raw body — rejecting.');
-      return res.sendStatus(401);
-    }
-    const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
-    const trusted = Buffer.from(expected, 'utf8');
-    const received = Buffer.from(signature, 'utf8');
-    if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
-      logger.warn('[Webhook] Signature mismatch — rejecting request.');
-      return res.sendStatus(401);
-    }
+  if (!APP_SECRET) {
+    logger.error('[Webhook] META_APP_SECRET is not configured — rejecting.');
+    return res.sendStatus(500);
+  }
+  if (!signature || !req.rawBody) {
+    logger.warn('[Webhook] Missing signature or raw body — rejecting.');
+    return res.sendStatus(401);
+  }
+  const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
+  const trusted = Buffer.from(expected, 'utf8');
+  const received = Buffer.from(signature, 'utf8');
+  if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
+    logger.warn('[Webhook] Signature mismatch — rejecting request.');
+    return res.sendStatus(401);
   }
 
   const payload = req.body as {
@@ -196,17 +207,34 @@ router.post('/email/inbound', async (req: Request, res: Response) => {
 router.post('/twilio', async (req: Request, res: Response) => {
   const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 
-  const isInternalProxy = req.headers['x-internal-secret'] === process.env.INTERNAL_API_SECRET;
+  const incomingSecret = req.headers['x-internal-secret'] as string | undefined;
+  const validInternalSecrets = (
+    [process.env.INTERNAL_API_SECRET, process.env.INTERNAL_API_SECRET_PREV] as (string | undefined)[]
+  ).filter((s): s is string => typeof s === 'string' && s.length > 0);
+  const isInternalProxy = !!incomingSecret && validInternalSecrets.some((candidate) => {
+    try { return timingSafeEqual(Buffer.from(candidate, 'utf8'), Buffer.from(incomingSecret, 'utf8')); }
+    catch { return false; }
+  });
 
-  if (twilioAuthToken && !isInternalProxy) {
+  if (!isInternalProxy) {
+    if (!twilioAuthToken) {
+      logger.error('[Twilio] TWILIO_AUTH_TOKEN is not configured — rejecting.');
+      return res.status(500).send('Internal Server Error');
+    }
     const twilioSignature = req.headers['x-twilio-signature'] as string | undefined;
     const webhookUrl = process.env.TWILIO_WEBHOOK_URL;
-    if (twilioSignature && webhookUrl) {
-      const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body as Record<string, string>);
-      if (!isValid) {
-        logger.warn('[Twilio] Signature validation failed — rejecting request.');
-        return res.status(403).send('Forbidden');
-      }
+    if (!twilioSignature) {
+      logger.warn('[Twilio] Missing signature — rejecting.');
+      return res.status(403).send('Forbidden');
+    }
+    if (!webhookUrl) {
+      logger.error('[Twilio] TWILIO_WEBHOOK_URL is not configured — rejecting.');
+      return res.status(500).send('Internal Server Error');
+    }
+    const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body as Record<string, string>);
+    if (!isValid) {
+      logger.warn('[Twilio] Signature validation failed — rejecting request.');
+      return res.status(403).send('Forbidden');
     }
   }
 
@@ -236,15 +264,6 @@ router.post('/twilio', async (req: Request, res: Response) => {
       logger.warn({ err: (e as Error).message }, '[Twilio] Failed to send proactive message');
     }
   };
-
-  const FILLER_PHRASES = [
-    'On it…',
-    'Give me a sec…',
-    'Making it happen…',
-    'Looking into that…',
-    'Just a moment…',
-  ];
-  const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
 
   try {
     let organizationId: string;
@@ -414,18 +433,20 @@ router.post('/shopify', async (req: Request, res: Response) => {
   const APP_SECRET = process.env.SHOPIFY_APP_SECRET;
   const signature = req.headers['x-shopify-hmac-sha256'] as string | undefined;
 
-  if (APP_SECRET) {
-    if (!signature || !req.rawBody) {
-      logger.warn('[Webhook] Shopify missing signature or raw body — rejecting.');
-      return res.sendStatus(401);
-    }
-    const expected = createHmac('sha256', APP_SECRET).update(req.rawBody).digest('base64');
-    const trusted = Buffer.from(expected, 'utf8');
-    const received = Buffer.from(signature, 'utf8');
-    if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
-      logger.warn('[Webhook] Shopify signature mismatch — rejecting.');
-      return res.sendStatus(401);
-    }
+  if (!APP_SECRET) {
+    logger.error('[Webhook] SHOPIFY_APP_SECRET is not configured — rejecting.');
+    return res.sendStatus(500);
+  }
+  if (!signature || !req.rawBody) {
+    logger.warn('[Webhook] Shopify missing signature or raw body — rejecting.');
+    return res.sendStatus(401);
+  }
+  const expected = createHmac('sha256', APP_SECRET).update(req.rawBody).digest('base64');
+  const trusted = Buffer.from(expected, 'utf8');
+  const received = Buffer.from(signature, 'utf8');
+  if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
+    logger.warn('[Webhook] Shopify signature mismatch — rejecting.');
+    return res.sendStatus(401);
   }
 
   const topic = req.headers['x-shopify-topic'] as string | undefined;

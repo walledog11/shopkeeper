@@ -6,6 +6,7 @@ export const AGENT_TURN_PREFIX = "__clerk_agent__";
 
 // ── Tool category map — used for plan filtering and UI display ────────────────
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
+  search_kb:                    'read',
   search_shopify_products:      'read',
   search_shopify_customers:     'read',
   get_shopify_customer:         'read',
@@ -26,6 +27,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
 
 // ── Human-readable labels for executed tool calls (past tense) ───────────────
 export const TOOL_LABELS: Record<string, string> = {
+  search_kb:                    'Searched knowledge base',
   search_shopify_products:      'Searched products',
   search_shopify_customers:     'Searched customers',
   get_shopify_customer:         'Fetched customer',
@@ -46,6 +48,7 @@ export const TOOL_LABELS: Record<string, string> = {
 
 // ── Human-readable labels for plan steps ─────────────────────────────────────
 export const PLAN_STEP_LABELS: Record<string, string> = {
+  search_kb:                    'Search knowledge base',
   search_shopify_products:      'Search Shopify products',
   search_shopify_customers:     'Search Shopify customers',
   get_shopify_customer:         'Fetch customer profile',
@@ -67,6 +70,26 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
 // ── Tool definitions (OpenAI function-calling format) ─────────────────────────
 
 export const AGENT_TOOLS: ChatCompletionTool[] = [
+  // ── Knowledge base ───────────────────────────────────────────────────────
+  {
+    type: "function",
+    function: {
+      name: "search_kb",
+      description:
+        "Search the organization's knowledge base for articles matching a query. Use this to find store policies, FAQs, or how-to guides before answering customer questions about returns, shipping, or store procedures.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Search terms to look for in knowledge base article titles and bodies (e.g. 'return policy', 'shipping times').",
+          },
+        },
+        required: ["query"],
+      },
+    },
+  },
+
   // ── Shopify ──────────────────────────────────────────────────────────────
   {
     type: "function",
@@ -480,5 +503,9 @@ export interface UpdateThreadStatusInput {
 
 export interface UpdateThreadTagInput {
   tag: string;
+}
+
+export interface SearchKbInput {
+  query: string;
 }
 

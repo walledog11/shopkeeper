@@ -6,9 +6,13 @@ import logger from '@/lib/logger';
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function GET(request: Request) {
-  const appUrl = process.env.APP_URL!;
-  const appId = process.env.META_APP_ID!;
-  const appSecret = process.env.META_APP_SECRET!;
+  const appUrl = process.env.APP_URL;
+  const appId = process.env.META_APP_ID;
+  const appSecret = process.env.META_APP_SECRET;
+
+  if (!appUrl || !appId || !appSecret) {
+    return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
+  }
   const redirectUri = `${appUrl}/api/integrations/instagram/callback`;
 
   const { searchParams } = new URL(request.url);
@@ -126,28 +130,19 @@ export async function GET(request: Request) {
       return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
     }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
-    await db.integration.upsert({
-      where: {
-        organizationId_platform_externalAccountId: {
-          organizationId: org.id,
-          platform: 'ig_dm',
-          externalAccountId: igAccountId,
-        },
-      },
-      update: {
-        accessToken: pageToken,
-        fromEmail: igUsername,
-        tokenExpiresAt,
-      },
-      create: {
-        organizationId: org.id,
-        platform: 'ig_dm',
-        externalAccountId: igAccountId,
-        accessToken: pageToken,
-        fromEmail: igUsername,
-        tokenExpiresAt,
-      },
-    });
+    const igCbKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
+    const existingIgCb = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } });
+    if (existingIgCb) {
+      await db.integration.update({ where: { id: existingIgCb.id }, data: { accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+    } else {
+      try {
+        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } }))!;
+        await db.integration.update({ where: { id: race.id }, data: { accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+      }
+    }
 
     logger.info({ igUsername, igAccountId, orgId: org.id }, '[IG OAuth] Integration saved');
     const successUrl = returnTo

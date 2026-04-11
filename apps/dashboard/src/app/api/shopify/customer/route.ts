@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import logger from '@/lib/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,default_address';
 
@@ -58,7 +59,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ customer, orders, shop });
 
   } catch (err) {
-    console.error('[Shopify Customer GET] Error:', err);
+    logger.error({ err }, '[Shopify Customer GET] Error');
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }
@@ -117,14 +118,14 @@ export async function PATCH(request: Request) {
     const data = await res.json();
 
     if (!res.ok || !data.customer) {
-      console.error('[Shopify Customer PATCH] Shopify error:', data);
+      logger.error({ err: data }, '[Shopify Customer PATCH] Shopify error');
       return NextResponse.json({ error: data.errors ?? 'Failed to update customer' }, { status: res.status });
     }
 
     return NextResponse.json({ customer: data.customer });
 
   } catch (err) {
-    console.error('[Shopify Customer PATCH] Error:', err);
+    logger.error({ err }, '[Shopify Customer PATCH] Error');
     return NextResponse.json({ error: 'server_error' }, { status: 500 });
   }
 }

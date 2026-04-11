@@ -1,3 +1,8 @@
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import dotenv from 'dotenv';
+dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env'), override: true });
+
 import { Worker, Queue } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
 import type { PlanStep, AgentPlan } from './types.js';
@@ -5,12 +10,9 @@ import { db, SenderType, ChannelType, Prisma } from '@clerk/db';
 import Anthropic from '@anthropic-ai/sdk';
 import twilio from 'twilio';
 import { updateContext } from './sms-context.js';
-import dotenv from 'dotenv';
 import logger from './logger.js';
 import { CHANNEL, STATUS, MODEL, QUEUE, JOB } from './constants.js';
 import * as Sentry from '@sentry/node';
-
-dotenv.config();
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
@@ -22,6 +24,7 @@ const anthropic = new Anthropic({
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const CONCURRENCY = 5;
+const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 const twilioAccountSid = process.env.TWILIO_ACCOUNT_SID;
 const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
@@ -29,17 +32,19 @@ const twilioWhatsAppNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 const twilioClient = twilioAccountSid && twilioAuthToken ? twilio(twilioAccountSid, twilioAuthToken) : null;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const redisConnection = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
-const messageWorkerRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
-const tokenHealthWorkerRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
-const aiSummaryQueueRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
-const aiSummaryWorkerRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
-const archivalWorkerRedis = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
+// Queues (producers) use non-blocking commands — maxRetriesPerRequest left at default (20) so
+// enqueue calls fail fast rather than hanging indefinitely if Redis is unavailable.
+const sharedProducerConn = new IORedis(process.env.REDIS_URL!) as any;
+// Workers use maxRetriesPerRequest: null so they wait for Redis to recover instead of erroring.
+// setMaxListeners raised to accommodate one listener per Worker (5) plus our own error handler.
+const sharedWorkerConn = new IORedis(process.env.REDIS_URL!, { maxRetriesPerRequest: null }) as any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
-redisConnection.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis error'));
+sharedProducerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis producer error'));
+sharedWorkerConn.setMaxListeners(20);
+sharedWorkerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis worker error'));
 
 const aiSummaryQueue = new Queue(QUEUE.AI_SUMMARY, {
-  connection: aiSummaryQueueRedis,
+  connection: sharedProducerConn,
   defaultJobOptions: {
     attempts: 3,
     backoff: { type: 'exponential', delay: 5000 },
@@ -107,6 +112,7 @@ interface ProcessMessageOptions {
   initialTag?: string | null;
   externalMessageId?: string | null;
   traceId?: string | null;
+  attachments?: string[];
 }
 
 async function processInboundMessage(
@@ -114,7 +120,7 @@ async function processInboundMessage(
   platformId: string,
   channelType: ChannelType,
   messageText: string,
-  { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null }: ProcessMessageOptions = {}
+  { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null, attachments = [] }: ProcessMessageOptions = {}
 ) {
   messageText = sanitizeUserInput(messageText);
 
@@ -170,7 +176,13 @@ async function processInboundMessage(
 
   await db.$transaction([
     db.message.create({
-      data: { threadId: thread!.id, senderType: SenderType.customer, contentText: messageText, externalMessageId },
+      data: {
+        threadId: thread!.id,
+        senderType: SenderType.customer,
+        contentText: messageText,
+        externalMessageId,
+        ...(attachments.length > 0 && { attachments }),
+      },
     }),
     db.thread.update({
       where: { id: thread!.id },
@@ -376,18 +388,44 @@ const messageWorker = new Worker<InboundJobData>(QUEUE.INBOUND, async (job) => {
   if (job.data.platform === CHANNEL.IG_DM) {
     const rawPayload = job.data.rawPayload as {
       entry?: Array<{
-        messaging?: Array<{ sender: { id: string }; message: { text?: string; is_echo?: boolean; mid?: string } }>;
-        changes?: Array<{ value: { sender: { id: string }; message: { text?: string; is_echo?: boolean; mid?: string } } }>;
+        messaging?: Array<{
+          sender: { id: string };
+          message: {
+            text?: string;
+            is_echo?: boolean;
+            mid?: string;
+            attachments?: Array<{ type: string; payload: { url?: string } }>;
+          };
+        }>;
+        changes?: Array<{
+          value: {
+            sender: { id: string };
+            message: {
+              text?: string;
+              is_echo?: boolean;
+              mid?: string;
+              attachments?: Array<{ type: string; payload: { url?: string } }>;
+            };
+          };
+        }>;
       }>;
     };
     const entry = rawPayload.entry?.[0];
     const messagingEvent = entry?.messaging?.[0] ?? entry?.changes?.[0]?.value;
 
-    if (!messagingEvent || !messagingEvent.message || !messagingEvent.message.text) return;
+    if (!messagingEvent || !messagingEvent.message) return;
     if (messagingEvent.message.is_echo) return;
 
     const senderId = messagingEvent.sender.id;
-    const messageText = messagingEvent.message.text;
+    const messageText = messagingEvent.message.text ?? '';
+    const attachmentUrls = (messagingEvent.message.attachments ?? [])
+      .map(a => a.payload?.url)
+      .filter((u): u is string => typeof u === 'string' && u.length > 0);
+
+    // Drop events with neither text nor attachments
+    if (!messageText && attachmentUrls.length === 0) return;
+
+    const textToStore = messageText || '[Attachment]';
 
     try {
       let igName: string | null = null;
@@ -411,10 +449,11 @@ const messageWorker = new Worker<InboundJobData>(QUEUE.INBOUND, async (job) => {
         logger.warn({ err: (profileErr as Error).message, senderId }, '[Worker] Failed to fetch IG profile');
       }
 
-      await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, messageText, {
+      await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, {
         customerName: igName,
         profilePicUrl: igProfilePic,
         externalMessageId: messagingEvent.message.mid ?? null,
+        attachments: attachmentUrls,
         traceId,
       });
       logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved IG DM');
@@ -502,7 +541,7 @@ const messageWorker = new Worker<InboundJobData>(QUEUE.INBOUND, async (job) => {
       throw error;
     }
   }
-}, { connection: messageWorkerRedis });
+}, { connection: sharedWorkerConn });
 
 messageWorker.on('failed', (job, err) => {
   logger.error({ err: err.message, jobId: job?.id }, '[Worker] Job failed permanently');
@@ -511,7 +550,7 @@ messageWorker.on('failed', (job, err) => {
 
 // ─── Daily Instagram Token Health Check ────────────────────────────────────────
 
-const tokenHealthQueue = new Queue(QUEUE.TOKEN_HEALTH, { connection: redisConnection });
+const tokenHealthQueue = new Queue(QUEUE.TOKEN_HEALTH, { connection: sharedProducerConn });
 
 await tokenHealthQueue.add(
   JOB.TOKEN_HEALTH_CHECK,
@@ -521,8 +560,6 @@ await tokenHealthQueue.add(
     jobId: JOB.TOKEN_HEALTH_ID,
   }
 );
-
-const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 const tokenHealthWorker = new Worker(QUEUE.TOKEN_HEALTH, async () => {
   logger.info('[TokenHealth] Running daily Instagram token check');
@@ -564,7 +601,7 @@ const tokenHealthWorker = new Worker(QUEUE.TOKEN_HEALTH, async () => {
   }
 
   logger.info('[TokenHealth] Daily check complete');
-}, { connection: tokenHealthWorkerRedis });
+}, { connection: sharedWorkerConn });
 
 tokenHealthWorker.on('failed', (job, err) => {
   logger.error({ err: err.message, jobId: job?.id }, '[TokenHealth] Job failed');
@@ -587,7 +624,7 @@ const aiSummaryWorker = new Worker<AiSummaryJobData>(QUEUE.AI_SUMMARY, async (jo
   const updatedThread = await generateThreadIntelligence(threadId);
   const aiSummary = updatedThread?.aiSummary ?? null;
   await sendWhatsAppPlanNotification(organizationId, threadId, customerName, channelType, aiSummary);
-}, { connection: aiSummaryWorkerRedis });
+}, { connection: sharedWorkerConn });
 
 aiSummaryWorker.on('failed', (job, err) => {
   logger.error({ err: err.message, jobId: job?.id, threadId: job?.data?.threadId }, '[AISummary] Job failed');
@@ -598,7 +635,7 @@ aiSummaryWorker.on('failed', (job, err) => {
 
 const ARCHIVE_AFTER_DAYS = 90;
 
-const archivalQueue = new Queue(QUEUE.ARCHIVAL, { connection: redisConnection });
+const archivalQueue = new Queue(QUEUE.ARCHIVAL, { connection: sharedProducerConn });
 
 await archivalQueue.add(
   JOB.ARCHIVE_THREADS,
@@ -621,18 +658,61 @@ const archivalWorker = new Worker(QUEUE.ARCHIVAL, async () => {
     data: { archivedAt: new Date() },
   });
   logger.info({ count: result.count, cutoffDays: ARCHIVE_AFTER_DAYS }, '[Archival] Archived old closed threads');
-}, { connection: archivalWorkerRedis });
+}, { connection: sharedWorkerConn });
 
 archivalWorker.on('failed', (job, err) => {
   logger.error({ err: err.message, jobId: job?.id }, '[Archival] Job failed');
   Sentry.captureException(err, { extra: { jobId: job?.id } });
 });
 
+// ─── Hard-Delete Purge Worker ──────────────────────────────────────────────────
+
+const PURGE_AFTER_DAYS = 90;
+
+const purgeQueue = new Queue(QUEUE.PURGE, { connection: sharedProducerConn });
+
+await purgeQueue.add(
+  JOB.PURGE_DELETED,
+  {},
+  {
+    repeat: { every: ONE_DAY_MS },
+    jobId: JOB.PURGE_DELETED_ID,
+  }
+);
+
+const purgeWorker = new Worker(QUEUE.PURGE, async () => {
+  const cutoff = new Date(Date.now() - PURGE_AFTER_DAYS * ONE_DAY_MS);
+
+  // Delete in leaf-first order to avoid FK cascade wiping records that haven't
+  // reached their own retention cutoff. Only purge a parent after all its
+  // children are already gone (messages: none / threads: none).
+  const deletedMessages = await db.message.deleteMany({ where: { deletedAt: { lt: cutoff } } });
+  const deletedThreads = await db.thread.deleteMany({
+    where: { deletedAt: { lt: cutoff }, messages: { none: {} } },
+  });
+  const deletedCustomers = await db.customer.deleteMany({
+    where: { deletedAt: { lt: cutoff }, threads: { none: {} } },
+  });
+
+  logger.info(
+    { messages: deletedMessages.count, threads: deletedThreads.count, customers: deletedCustomers.count, cutoffDays: PURGE_AFTER_DAYS },
+    '[Purge] Hard-deleted expired soft-deleted records'
+  );
+}, { connection: sharedWorkerConn });
+
+purgeWorker.on('failed', (job, err) => {
+  logger.error({ err: err.message, jobId: job?.id }, '[Purge] Job failed');
+  Sentry.captureException(err, { extra: { jobId: job?.id } });
+});
+
 async function shutdown() {
   logger.info('[Worker] Shutting down gracefully');
-  await Promise.all([messageWorker.close(), tokenHealthWorker.close(), aiSummaryWorker.close(), archivalWorker.close()]);
-  await Promise.all([aiSummaryQueue.close(), tokenHealthQueue.close(), archivalQueue.close()]);
-  await Promise.all([redisConnection.quit(), messageWorkerRedis.quit(), tokenHealthWorkerRedis.quit(), aiSummaryQueueRedis.quit(), aiSummaryWorkerRedis.quit(), archivalWorkerRedis.quit()]);
+  await Promise.all([messageWorker.close(), tokenHealthWorker.close(), aiSummaryWorker.close(), archivalWorker.close(), purgeWorker.close()]);
+  await Promise.all([aiSummaryQueue.close(), tokenHealthQueue.close(), archivalQueue.close(), purgeQueue.close()]);
+  await Promise.all([
+    sharedProducerConn.quit().catch(() => sharedProducerConn.disconnect()),
+    sharedWorkerConn.quit().catch(() => sharedWorkerConn.disconnect()),
+  ]);
   process.exit(0);
 }
 process.on('SIGTERM', shutdown);

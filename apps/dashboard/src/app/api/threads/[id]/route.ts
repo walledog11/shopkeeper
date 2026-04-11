@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { THREAD_STATUS } from '@/lib/constants';
 
 export async function PATCH(
   request: Request,
@@ -15,6 +16,10 @@ export async function PATCH(
 
     if (!status && tag === undefined && shopifyCustomerId === undefined) {
       return NextResponse.json({ error: 'Missing status, tag, or shopifyCustomerId' }, { status: 400 });
+    }
+
+    if (status && !Object.values(THREAD_STATUS).includes(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
     const thread = await db.thread.findUnique({

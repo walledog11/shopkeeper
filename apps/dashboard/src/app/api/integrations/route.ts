@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import { CHANNEL_TYPE } from '@/lib/constants';
 
 export async function GET() {
   try {
@@ -21,30 +23,39 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
+    const rl = await rateLimit(`integrations:create:${org.id}`, 20, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
     const { platform, externalAccountId, fromEmail } = await request.json();
 
     if (!platform || !externalAccountId) {
       return NextResponse.json({ error: 'Missing platform or externalAccountId' }, { status: 400 });
     }
 
-    const integration = await db.integration.upsert({
-      where: {
-        organizationId_platform_externalAccountId: {
-          organizationId: org.id,
-          platform,
-          externalAccountId,
-        },
-      },
-      update: {
-        ...(fromEmail !== undefined && { fromEmail }),
-      },
-      create: {
-        organizationId: org.id,
-        platform,
-        externalAccountId,
-        ...(fromEmail && { fromEmail }),
-      },
+    if (!Object.values(CHANNEL_TYPE).includes(platform)) {
+      return NextResponse.json({ error: 'Invalid platform' }, { status: 400 });
+    }
+
+    const uniqueKey = { organizationId: org.id, platform, externalAccountId };
+    let existing = await db.integration.findUnique({
+      where: { organizationId_platform_externalAccountId: uniqueKey },
     });
+    let integration;
+    if (existing) {
+      integration = await db.integration.update({
+        where: { id: existing.id },
+        data: { ...(fromEmail !== undefined && { fromEmail }) },
+      });
+    } else {
+      try {
+        integration = await db.integration.create({
+          data: { organizationId: org.id, platform, externalAccountId, ...(fromEmail && { fromEmail }) },
+        });
+      } catch (err) {
+        if ((err as { code?: string }).code !== 'P2002') throw err;
+        existing = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: uniqueKey } }))!;
+        integration = await db.integration.update({ where: { id: existing.id }, data: { ...(fromEmail !== undefined && { fromEmail }) } });
+      }
+    }
 
     return NextResponse.json(integration, { status: 201 });
   } catch (error) {

@@ -25,6 +25,10 @@ export async function POST(request: Request) {
       );
     }
 
+    if (instruction.length > 2000) {
+      return NextResponse.json({ error: "Instruction too long" }, { status: 400 });
+    }
+
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const ctx = await buildContext(threadId, org.id);
     logger.info({ shopify: ctx.shopify?.shop ?? null, shopifyCustomerId: ctx.thread.shopifyCustomerId }, '[agent] context');

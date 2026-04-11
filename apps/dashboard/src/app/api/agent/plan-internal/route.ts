@@ -14,12 +14,13 @@ import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { handleApiError } from "@/lib/api-errors";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/auth-utils";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 export async function POST(request: Request) {
   try {
     const secret = request.headers.get("x-internal-secret");
-    if (!secret || secret !== process.env.INTERNAL_API_SECRET) {
+    if (!secret || !timingSafeIncludes(getValidInternalSecrets(), secret)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

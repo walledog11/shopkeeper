@@ -250,10 +250,7 @@ export default function AnalyticsPage() {
     <div className="h-full overflow-y-auto bg-background">
       <div className="px-5 md:px-6 py-4 space-y-3 pb-10">
 
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Analytics</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Support performance overview</p>
-        </div>
+      
 
         <DateRangeSelector
           preset={preset}

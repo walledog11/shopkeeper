@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import type { Thread, Message, FailedMessage } from '@/types'
 import { SENDER_TYPE } from '@/lib/constants'
+import logger from '@/lib/logger'
 
 
 interface UseTicketActionsProps {
@@ -64,6 +65,7 @@ export function useTicketActions({
       senderType: noteMode ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
       contentText: textToSend,
       mediaUrl: null,
+      attachments: [],
       sentAt: new Date().toISOString(),
     }
 
@@ -105,6 +107,7 @@ export function useTicketActions({
       senderType: SENDER_TYPE.NOTE,
       contentText: text,
       mediaUrl: null,
+      attachments: [],
       sentAt: new Date().toISOString(),
     }
 
@@ -243,6 +246,7 @@ export function useTicketActions({
       senderType: failed.isNote ? SENDER_TYPE.NOTE : SENDER_TYPE.AGENT,
       contentText: failed.text,
       mediaUrl: null,
+      attachments: [],
       sentAt: new Date().toISOString(),
     }
 
@@ -314,9 +318,46 @@ export function useTicketActions({
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} closed`)
     } catch (err) {
-      console.error('Bulk close failed', err)
+      logger.error({ err }, 'Bulk close failed')
     }
   }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
+
+  const handleBulkArchive = useCallback(async (selectedIds: string[]) => {
+    if (selectedIds.length === 0) return
+    const ids = [...selectedIds]
+    setSelectedIds([])
+    try {
+      await fetch('/api/threads/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'archive' }),
+      })
+      mutateOpen()
+      mutateClosed()
+      if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
+      showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} archived`)
+    } catch (err) {
+      logger.error({ err }, 'Bulk archive failed')
+    }
+  }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
+
+  const handleBulkTag = useCallback(async (selectedIds: string[], tag: string) => {
+    if (selectedIds.length === 0) return
+    const ids = [...selectedIds]
+    setSelectedIds([])
+    try {
+      await fetch('/api/threads/bulk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, action: 'tag', tag }),
+      })
+      mutateOpen()
+      mutateClosed()
+      showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)
+    } catch (err) {
+      logger.error({ err }, 'Bulk tag failed')
+    }
+  }, [mutateOpen, mutateClosed, setSelectedIds, showToast])
 
   return {
     replyText,
@@ -338,5 +379,7 @@ export function useTicketActions({
     handleTagUpdate,
     handleRefreshSummary,
     handleBulkClose,
+    handleBulkArchive,
+    handleBulkTag,
   }
 }

@@ -24,7 +24,7 @@ export default async function DashboardPage() {
       orderBy: { updatedAt: "desc" },
     }),
     db.thread.count({ where: { organizationId: org.id, status: "closed", archivedAt: null } }),
-    db.message.count({ where: { thread: { organizationId: org.id, archivedAt: null } } }),
+    db.message.count({ where: { thread: { organizationId: org.id, archivedAt: null }, NOT: { senderType: "note" } } }),
   ])
 
   const serialize = (threads: typeof openThreadsRaw): Thread[] =>

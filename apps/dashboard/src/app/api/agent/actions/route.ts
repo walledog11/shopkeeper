@@ -28,6 +28,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const cursor = searchParams.get("cursor");
 
+    if (cursor && isNaN(new Date(cursor).getTime())) {
+      return NextResponse.json({ error: "Invalid cursor" }, { status: 400 });
+    }
+
     const messages = await db.message.findMany({
       where: {
         senderType: "note",

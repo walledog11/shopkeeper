@@ -26,12 +26,13 @@ clerk/
 ## Channels
 - **Email** — complete (Postmark, inbound + outbound, reply threading, quote stripping, AI spam filter)
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page token, integrations UI)
-- **Shopify** — not started
-- **TikTok** — not started
+- **WhatsApp/SMS** — complete (Twilio, inbound via `/webhooks/twilio`, plan approval flow via yes/no/skip replies, outbound plan notifications to verified org members)
+- **Shopify** — complete (webhook ingestion for orders/created, fulfilled, updated, cancelled; HMAC verification; dashboard customer API routes)
+- **TikTok** — not started (type stubs and UI placeholder only)
 
 ## Key Files
-- `apps/gateway/src/routes/webhooks.js` — webhook handlers
-- `apps/gateway/src/worker.js` — BullMQ worker (email + ig_dm branches)
+- `apps/gateway/src/routes/webhooks.ts` — webhook handlers (Meta, Email, Twilio, Shopify)
+- `apps/gateway/src/worker.ts` — BullMQ worker (email, ig_dm, shopify branches + AI summary + token health workers)
 - `apps/dashboard/src/app/api/messages/route.ts` — outbound message dispatch
 - `apps/dashboard/src/app/api/threads/route.ts` — GET threads
 - `apps/dashboard/src/app/api/agent/plan/route.ts` — AI agent plan generation
@@ -39,9 +40,9 @@ clerk/
 
 ## Dev Environment
 - Uses ngrok for local webhook testing
-- Postmark for email, Meta developer tools for Instagram
-- `.env.local` (dashboard): CLERK keys, DATABASE_URL, OPENAI_API_KEY, POSTMARK_API_KEY, META_APP_ID, META_APP_SECRET, APP_URL, INBOUND_EMAIL_DOMAIN
-- `.env` (gateway): DATABASE_URL, REDIS_URL, PORT, META_VERIFY_TOKEN, OPENAI_API_KEY, INBOUND_EMAIL_DOMAIN
+- Postmark for email, Meta developer tools for Instagram, Twilio sandbox for WhatsApp
+- `.env.local` (dashboard): CLERK keys, DATABASE_URL, OPENAI_API_KEY, ANTHROPIC_API_KEY, INTERNAL_API_SECRET, POSTMARK_API_KEY, META_APP_ID, META_APP_SECRET, APP_URL, INBOUND_EMAIL_DOMAIN, GATEWAY_INTERNAL_URL, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER, TWILIO_WEBHOOK_URL
+- `.env` (gateway): DATABASE_URL, REDIS_URL, PORT, ANTHROPIC_API_KEY, INTERNAL_API_SECRET, META_APP_SECRET, META_VERIFY_TOKEN, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER, TWILIO_WEBHOOK_URL, SHOPIFY_APP_SECRET, DASHBOARD_INTERNAL_URL
 
 ## Coding Guidelines
 - Don't add features, comments, error handling, or abstractions beyond what's asked

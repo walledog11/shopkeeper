@@ -1,20 +1,20 @@
 "use client"
 
+import { useState } from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { Bot } from "lucide-react"
 import AgentChatClient from "../../agent/AgentChatClient"
-import { useAgentPanel } from "./AgentPanelContext"
 
 interface Props {
   agentName: string
 }
 
 export default function AgentPanelRoot({ agentName }: Props) {
-  const { isOpen, open, close } = useAgentPanel()
+  const [isOpen, setIsOpen] = useState(false)
 
   return (
     <>
-      {/* Slide-in panel */}
+      {/* Slide-in panel — fixed overlay from the right edge */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -23,14 +23,14 @@ export default function AgentPanelRoot({ agentName }: Props) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 35 }}
-            className="fixed top-0 right-0 h-full z-50 w-full md:w-[420px] bg-background border-l border-border shadow-xl flex flex-col"
+            className="fixed top-0 right-0 h-full z-40 w-[420px] bg-background border-l border-border shadow-xl flex flex-col"
           >
-            <AgentChatClient agentName={agentName} compact onClose={close} />
+            <AgentChatClient agentName={agentName} compact onClose={() => setIsOpen(false)} />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Desktop FAB — hidden on mobile (mobile uses header button) */}
+      {/* Floating action button — hidden when panel is open */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -41,9 +41,9 @@ export default function AgentPanelRoot({ agentName }: Props) {
             whileHover={{ scale: 1.08 }}
             whileTap={{ scale: 0.92 }}
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
-            onClick={open}
+            onClick={() => setIsOpen(true)}
             title="Open AI Agent"
-            className="hidden md:flex fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-violet-600 text-white shadow-lg items-center justify-center"
+            className="fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-violet-600 text-white shadow-lg flex items-center justify-center"
           >
             <Bot className="w-5 h-5" />
           </motion.button>

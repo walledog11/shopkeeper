@@ -77,6 +77,7 @@ export default function ConversationView({
   const [isPlanLoading, setIsPlanLoading] = useState(false)     // manual @clerk trigger
   const [isAutoPlanLoading, setIsAutoPlanLoading] = useState(false) // auto trigger
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
+  const [presenceCount, setPresenceCount] = useState(0)
 
   const planPhrase = useFillerPhrase([
     'On it…',
@@ -120,6 +121,29 @@ export default function ConversationView({
       .catch(() => {}) // silently fail — agent can still work manually
       .finally(() => setIsAutoPlanLoading(false))
   }, [ticket.id, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Presence tracking: heartbeat PUT every 15s, poll GET every 15s
+  useEffect(() => {
+    const presenceUrl = `/api/threads/${ticket.id}/presence`
+    const heartbeat = () => fetch(presenceUrl, { method: 'PUT' }).catch(() => {})
+    const poll = () =>
+      fetch(presenceUrl)
+        .then(r => r.ok ? r.json() : { count: 0 })
+        .then((d: { count: number }) => setPresenceCount(d.count))
+        .catch(() => {})
+
+    heartbeat()
+    poll()
+
+    const heartbeatTimer = setInterval(heartbeat, 15000)
+    const pollTimer = setInterval(poll, 15000)
+
+    return () => {
+      clearInterval(heartbeatTimer)
+      clearInterval(pollTimer)
+      fetch(presenceUrl, { method: 'DELETE' }).catch(() => {})
+    }
+  }, [ticket.id])
 
   const chatMessages = ticket.messages.filter((m: { sender: SenderType }) => m.sender !== 'note')
   const noteMessages = ticket.messages.filter((m: { sender: SenderType }) => m.sender === 'note')
@@ -227,7 +251,7 @@ export default function ConversationView({
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div
-            className={`min-w-0 ${onOpenContext ? 'cursor-pointer lg:cursor-auto lg:pointer-events-none' : ''}`}
+            className={`min-w-0 ${onOpenContext ? 'cursor-pointer xl:cursor-auto xl:pointer-events-none' : ''}`}
             onClick={onOpenContext}
           >
             <h3 className="text-[15px] font-semibold text-white/80 truncate leading-tight">
@@ -244,7 +268,7 @@ export default function ConversationView({
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden shrink-0 text-white/40 hover:text-white/80 hover:bg-white/[0.06] h-8 w-8"
+              className="xl:hidden shrink-0 text-white/40 hover:text-white/80 hover:bg-white/[0.06] h-8 w-8"
               onClick={onOpenContext}
             >
               <Info className="w-4 h-4" />
@@ -306,6 +330,16 @@ export default function ConversationView({
         </Tabs>
       </div>
 
+
+      {/* Presence warning */}
+      {presenceCount > 0 && (
+        <div className="px-5 py-2 border-b border-amber-400/20 bg-amber-400/[0.04] flex items-center gap-2 shrink-0">
+          <Users className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span className="text-xs text-amber-400 font-medium">
+            {presenceCount === 1 ? 'Another agent is' : `${presenceCount} other agents are`} viewing this ticket
+          </span>
+        </div>
+      )}
 
       {/* Messages */}
       <div className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
@@ -476,7 +510,7 @@ export default function ConversationView({
             )}
           </>
         ) : (
-          displayMessages.map((msg: { sender: SenderType; text: string | null; time: string }, i: number) => (
+          displayMessages.map((msg: { sender: SenderType; text: string | null; time: string; attachments: string[] }, i: number) => (
             <div key={i} className={`flex flex-col gap-1 ${msg.sender === 'agent' || msg.sender === 'ai' ? 'items-end' : 'items-start'}`}>
               <div className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
                 msg.sender === 'agent' || msg.sender === 'ai'
@@ -484,6 +518,15 @@ export default function ConversationView({
                   : 'bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm'
               }`}>
                 {msg.text}
+                {msg.attachments && msg.attachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {msg.attachments.map((url, j) => (
+                      /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)
+                        ? <img key={j} src={url} alt="attachment" className="max-w-[240px] rounded-md border border-white/[0.10]" />
+                        : <a key={j} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
+                    ))}
+                  </div>
+                )}
               </div>
               <span className="text-[10px] text-white/25 mx-1">{msg.time}</span>
             </div>

@@ -15,8 +15,9 @@ import { buildContext, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { handleApiError } from "@/lib/api-errors";
 import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
+import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import logger from "@/lib/logger";
 import type { OrgSettings } from "@/types";
-
 
 export async function POST(request: Request) {
   try {
@@ -26,10 +27,18 @@ export async function POST(request: Request) {
     }
 
     const org = await getOrCreateOrg();
+
+    const rl = await rateLimit(`agent:chat:${org.id}`, 10, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
+
     const { instruction, sessionId } = await request.json();
 
     if (!instruction?.trim()) {
       return NextResponse.json({ error: "Missing instruction" }, { status: 400 });
+    }
+
+    if (instruction.length > 2000) {
+      return NextResponse.json({ error: "Instruction too long" }, { status: 400 });
     }
 
     let resolvedSessionId: string;
@@ -48,11 +57,16 @@ export async function POST(request: Request) {
       // Bootstrap a new session: upsert a synthetic customer scoped to this user,
       // then create a dashboard_agent thread.
       const platformId = `dashboard:${userId}`;
-      const customer = await db.customer.upsert({
-        where: { organizationId_platformId: { organizationId: org.id, platformId } },
-        update: {},
-        create: { organizationId: org.id, platformId },
-      });
+      const customerKey = { organizationId: org.id, platformId };
+      let customer = await db.customer.findUnique({ where: { organizationId_platformId: customerKey } });
+      if (!customer) {
+        try {
+          customer = await db.customer.create({ data: { organizationId: org.id, platformId } });
+        } catch (err) {
+          if ((err as { code?: string }).code !== 'P2002') throw err;
+          customer = (await db.customer.findUnique({ where: { organizationId_platformId: customerKey } }))!;
+        }
+      }
 
       const thread = await db.thread.create({
         data: {
@@ -111,7 +125,7 @@ export async function POST(request: Request) {
       actionsPerformed: result.actionsPerformed,
     });
   } catch (error) {
-    console.error("[agent/chat] error:", error);
+    logger.error({ err: error }, "[agent/chat] error");
     return handleApiError(error, "Agent chat POST", "Failed to run agent");
   }
 }

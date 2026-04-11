@@ -75,7 +75,40 @@ export interface Message {
   senderType: SenderType;
   contentText: string | null;
   mediaUrl: string | null;
+  attachments: string[];
   sentAt: string;
+}
+
+export interface CannedResponse {
+  id: string;
+  organizationId: string;
+  title: string;
+  body: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface KbArticle {
+  id: string;
+  organizationId: string;
+  knowledgeBaseId: string;
+  title: string;
+  body: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type KbSource = 'shopify' | 'user';
+
+export interface KnowledgeBase {
+  id: string;
+  organizationId: string;
+  name: string;
+  source: KbSource;
+  createdAt: string;
+  articles: KbArticle[];
 }
 
 export interface ActionLogEntry {
@@ -158,6 +191,7 @@ export interface Ticket {
     time: string;
     author?: string;
     isAgentNote?: boolean;
+    attachments: string[];
   }[];
 }
 
