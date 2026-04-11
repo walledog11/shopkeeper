@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
 import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";

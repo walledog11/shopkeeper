@@ -8,6 +8,8 @@
  * Response: { sessionId: string, summary: string, actionsPerformed: ActionEntry[] }
  */
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";

@@ -9,6 +9,8 @@
  * Response: { plan, instruction }
  */
 import { NextResponse } from "next/server";
+
+export const maxDuration = 60;
 import { db } from "@clerk/db";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
