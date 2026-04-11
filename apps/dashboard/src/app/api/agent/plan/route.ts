@@ -5,7 +5,7 @@ import { handleApiError } from "@/lib/api-errors";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import type { OrgSettings } from "@/types";
+import type { AgentPlan, OrgSettings } from "@/types";
 
 export async function POST(request: Request) {
   try {
@@ -48,8 +48,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ instruction, steps: [], rawToolCalls: [] });
     }
 
-    if (thread?.cachedPlanMessageId === lastCustomerMessage.id && thread.cachedPlan) {
-      return NextResponse.json(thread.cachedPlan);
+    const cachedPlan = thread.cachedPlan as AgentPlan | null;
+    if (thread.cachedPlanMessageId === lastCustomerMessage.id && cachedPlan?.steps?.length) {
+      return NextResponse.json(cachedPlan);
     }
 
     // Cache miss — generate via LLM

@@ -544,23 +544,26 @@ export async function planAgent(
     input: b.input,
   }))
 
-  // Phase 2: if actions were planned but no send_reply yet, simulate success
+  // Phase 2: if no send_reply was planned yet, simulate any prior tool results
   // and ask the LLM what it would send to the customer so we can show a preview.
-  const hasActions = rawToolCalls.some((tc) => TOOL_CATEGORIES[tc.name] === 'action')
   const hasSendReply = rawToolCalls.some((tc) => tc.name === 'send_reply')
 
-  if (hasActions && !hasSendReply) {
+  const sendReplyTool = tools.find(t => t.name === 'send_reply')
+  if (!hasSendReply && sendReplyTool) {
     const phase2Messages: Anthropic.MessageParam[] = [
       ...messages,
       { role: "assistant", content: response.content },
-      {
-        role: "user",
-        content: toolUseBlocks.map((b) => ({
-          type: "tool_result" as const,
-          tool_use_id: b.id,
-          content: "Success",
-        })),
-      },
+      ...(toolUseBlocks.length > 0
+        ? [{
+            role: "user" as const,
+            content: toolUseBlocks.map((b) => ({
+              type: "tool_result" as const,
+              tool_use_id: b.id,
+              content: "Success",
+            })),
+          }]
+        : [{ role: "user" as const, content: "Now call send_reply to respond to the customer." }]
+      ),
     ]
 
     const response2 = await anthropic.messages.create({
@@ -568,7 +571,8 @@ export async function planAgent(
       max_tokens: 512,
       system: systemPrompt,
       messages: phase2Messages,
-      tools,
+      tools: [sendReplyTool],
+      tool_choice: { type: "any" },
     })
 
     const phase2ToolUse = response2.content.filter(

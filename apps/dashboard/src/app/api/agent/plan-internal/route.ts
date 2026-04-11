@@ -63,16 +63,8 @@ export async function POST(request: Request) {
 
     const lastCustomerMessage = thread.messages[0] ?? null;
 
-    const cached = thread.cachedPlan as unknown as AgentPlan | null;
-    const isValidCachedPlan =
-      cached !== null &&
-      Array.isArray(cached.steps) &&
-      Array.isArray(cached.rawToolCalls);
-    if (
-      lastCustomerMessage &&
-      thread.cachedPlanMessageId === lastCustomerMessage.id &&
-      isValidCachedPlan
-    ) {
+    const cached = thread.cachedPlan as AgentPlan | null;
+    if (lastCustomerMessage && thread.cachedPlanMessageId === lastCustomerMessage.id && cached?.steps?.length) {
       return NextResponse.json({ plan: cached, instruction });
     }
 

@@ -97,7 +97,7 @@ export default function ConversationView({
   // Auto-plan: fire when a ticket is opened and the last chat message is from the customer
   useEffect(() => {
     if (activeTab !== 'open') return
-    if (initialPlan !== undefined) return  // cache hit or confirmed miss — skip fetch
+    if (initialPlan) return  // cache hit with valid plan — skip fetch
 
     const chatMessages = ticket.messages.filter(m => m.sender !== 'note')
     const lastMsg = chatMessages[chatMessages.length - 1]

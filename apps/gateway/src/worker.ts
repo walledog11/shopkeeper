@@ -226,7 +226,10 @@ async function generateThreadIntelligence(threadId: string) {
       messages: [{ role: 'user', content: conversationText }],
     });
 
-    const aiData = JSON.parse((aiResponse.content[0] as { text: string }).text) as { summary: string; tag: string };
+    const block = aiResponse.content[0];
+    if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
+    const raw = block.text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
+    const aiData = JSON.parse(raw) as { summary: string; tag: string };
 
     const updated = await db.thread.update({
       where: { id: threadId },
