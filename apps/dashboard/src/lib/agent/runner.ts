@@ -18,6 +18,7 @@ import {
   createRefund,
   cancelOrder,
   createShopifyOrder,
+  editShopifyOrder,
 } from "./shopify-tools";
 import {
   addInternalNote,
@@ -38,6 +39,7 @@ import type {
   CreateRefundInput,
   CancelOrderInput,
   CreateShopifyOrderInput,
+  EditShopifyOrderInput,
   AddInternalNoteInput,
   SendReplyInput,
   SendEmailInput,
@@ -274,6 +276,9 @@ async function executeTool(
     case "create_shopify_order":
       return ctx.shopify ? createShopifyOrder(cast<CreateShopifyOrderInput>(args), ctx.shopify) : noShopify;
 
+    case "edit_shopify_order":
+      return ctx.shopify ? editShopifyOrder(cast<EditShopifyOrderInput>(args), ctx.shopify) : noShopify;
+
     case "add_internal_note":
       return addInternalNote(cast<AddInternalNoteInput>(args), threadCtx);
 
@@ -359,6 +364,7 @@ ${shopifyNote}
 ${shopifyCustomerNote}
 - When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
 - When given a customer name or email but no customer ID, call search_shopify_customers first.
+- To add an item to an existing order, call edit_shopify_order. Never claim you lack permission or that the API does not support this — the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id (from get_shopify_orders or the recent orders context) before calling this tool — do not attempt it with an order name or a guessed ID.
 - Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.
 ${ordersSection}
 ## Instructions
@@ -366,7 +372,7 @@ ${ordersSection}
 - Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions. If you have not called send_email, you have not sent anything.
 - Do NOT call send_reply or add_internal_note.
 - After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) — never just say "Done".
-- Be direct and factual. No bullet lists, no markdown. 1–2 sentences.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
+- Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1–2 sentences.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
   }
 
   const otherOpenThreads = Math.max(0, ctx.openThreadCount - 1);

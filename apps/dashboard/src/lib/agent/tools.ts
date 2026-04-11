@@ -18,6 +18,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   create_refund:                'action',
   cancel_order:                 'action',
   create_shopify_order:         'action',
+  edit_shopify_order:           'action',
   add_internal_note:            'internal',
   send_reply:                   'communication',
   send_email:                   'communication',
@@ -39,6 +40,7 @@ export const TOOL_LABELS: Record<string, string> = {
   create_refund:                'Issued refund',
   cancel_order:                 'Cancelled order',
   create_shopify_order:         'Created order',
+  edit_shopify_order:           'Edited order',
   add_internal_note:            'Added internal note',
   send_reply:                   'Sent reply',
   send_email:                   'Sent email',
@@ -60,6 +62,7 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
   create_refund:                'Issue refund',
   cancel_order:                 'Cancel order',
   create_shopify_order:         'Create Shopify order',
+  edit_shopify_order:           'Edit existing order',
   add_internal_note:            'Add internal note',
   send_reply:                   'Notify customer',
   send_email:                   'Send email to customer',
@@ -320,6 +323,24 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
     },
   },
 
+  {
+    type: "function",
+    function: {
+      name: "edit_shopify_order",
+      description:
+        "Add a line item to an existing Shopify order using the Order Editing API. Use this to add more of an existing product variant to an order that hasn't been fulfilled yet. Call search_shopify_products first if you don't have the variant_id.",
+      parameters: {
+        type: "object",
+        properties: {
+          order_id:   { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context." },
+          variant_id: { type: "string", description: "Shopify product variant ID to add to the order." },
+          quantity:   { type: "number", description: "Number of units to add." },
+        },
+        required: ["order_id", "variant_id", "quantity"],
+      },
+    },
+  },
+
   // ── Thread / DB ───────────────────────────────────────────────────────────
   {
     type: "function",
@@ -503,6 +524,12 @@ export interface UpdateThreadStatusInput {
 
 export interface UpdateThreadTagInput {
   tag: string;
+}
+
+export interface EditShopifyOrderInput {
+  order_id: string;
+  variant_id: string;
+  quantity: number;
 }
 
 export interface SearchKbInput {

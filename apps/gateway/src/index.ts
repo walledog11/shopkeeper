@@ -53,6 +53,20 @@ app.get('/', (_req, res) => {
 
 app.use('/webhooks', webhookRoutes);
 
+// During local dev, ngrok points to this gateway (port 8080) but dashboard OAuth
+// callbacks arrive here. Forward them to the dashboard so the OAuth flow completes.
+const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL;
+if (dashboardUrl) {
+  app.get('/api/integrations/:platform/callback', (req, res) => {
+    res.redirect(dashboardUrl + req.url);
+  });
+
+  // Forward any /dashboard/* paths so post-OAuth redirects land correctly.
+  app.get('/dashboard/*', (req, res) => {
+    res.redirect(dashboardUrl + req.url);
+  });
+}
+
 app.listen(PORT, () => {
   logger.info({ port: PORT }, '[Clerk Gateway] Server listening');
 });

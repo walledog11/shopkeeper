@@ -10,6 +10,7 @@ import type {
   CreateRefundInput,
   CancelOrderInput,
   CreateShopifyOrderInput,
+  EditShopifyOrderInput,
 } from "./tools";
 
 interface ShopifyContext {
@@ -469,4 +470,93 @@ export async function createShopifyOrder(
   return `Order ${o.name} created successfully for ${input.email}. Total: $${o.total_price}. Order ID: ${o.id}.`;
 }
 
+// ── edit_shopify_order ────────────────────────────────────────────────────────
 
+export async function editShopifyOrder(
+  input: EditShopifyOrderInput,
+  ctx: ShopifyContext
+): Promise<string> {
+  const endpoint = `https://${ctx.shop}/admin/api/${API_VERSION}/graphql.json`;
+  const orderId = `gid://shopify/Order/${input.order_id}`;
+  const variantId = `gid://shopify/ProductVariant/${input.variant_id}`;
+
+  // Step 1: Begin edit session
+  const beginRes = await fetch(endpoint, {
+    method: "POST",
+    headers: shopifyHeaders(ctx.accessToken),
+    body: JSON.stringify({
+      query: `mutation orderEditBegin($id: ID!) {
+        orderEditBegin(id: $id) {
+          calculatedOrder { id }
+          userErrors { field message }
+        }
+      }`,
+      variables: { id: orderId },
+    }),
+  });
+  const beginData = await beginRes.json();
+  const beginErrors = beginData.data?.orderEditBegin?.userErrors;
+  if (beginErrors?.length > 0) {
+    return `Error: could not begin order edit — ${beginErrors.map((e: { message: string }) => e.message).join(", ")}`;
+  }
+  const calculatedOrderId = beginData.data?.orderEditBegin?.calculatedOrder?.id;
+  if (!calculatedOrderId) {
+    return `Error: failed to begin order edit — ${JSON.stringify(beginData.errors ?? beginData)}`;
+  }
+
+  // Step 2: Add the variant
+  const addRes = await fetch(endpoint, {
+    method: "POST",
+    headers: shopifyHeaders(ctx.accessToken),
+    body: JSON.stringify({
+      query: `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
+        orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
+          calculatedOrder { id }
+          userErrors { field message }
+        }
+      }`,
+      variables: { id: calculatedOrderId, variantId, quantity: input.quantity },
+    }),
+  });
+  const addData = await addRes.json();
+  const addErrors = addData.data?.orderEditAddVariant?.userErrors;
+  if (addErrors?.length > 0) {
+    return `Error: could not add item to order — ${addErrors.map((e: { message: string }) => e.message).join(", ")}`;
+  }
+
+  // Step 3: Commit and return the updated line items in the same call
+  const commitRes = await fetch(endpoint, {
+    method: "POST",
+    headers: shopifyHeaders(ctx.accessToken),
+    body: JSON.stringify({
+      query: `mutation orderEditCommit($id: ID!) {
+        orderEditCommit(id: $id, notifyCustomer: false) {
+          order {
+            name
+            lineItems(first: 20) {
+              edges { node { title quantity variant { title } } }
+            }
+          }
+          userErrors { field message }
+        }
+      }`,
+      variables: { id: calculatedOrderId },
+    }),
+  });
+  const commitData = await commitRes.json();
+  const commitErrors = commitData.data?.orderEditCommit?.userErrors;
+  if (commitErrors?.length > 0) {
+    return `Error: could not commit order edit — ${commitErrors.map((e: { message: string }) => e.message).join(", ")}`;
+  }
+
+  const order = commitData.data?.orderEditCommit?.order;
+  const orderName = order?.name ?? `#${input.order_id}`;
+  const lineItems: { node: { title: string; quantity: number; variant: { title: string } | null } }[] =
+    order?.lineItems?.edges ?? [];
+
+  const itemList = lineItems
+    .map(({ node: li }) => `${li.quantity}x ${li.title}${li.variant?.title && li.variant.title !== 'Default Title' ? ` (${li.variant.title})` : ''}`)
+    .join(', ');
+
+  return `Added ${input.quantity}x item to order ${orderName} successfully. Current order items: ${itemList}.`;
+}
