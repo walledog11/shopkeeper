@@ -4,6 +4,10 @@
   "type": "module",
   "private": true,
   "main": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./test-helpers": "./test-helpers.ts"
+  },
   "scripts": {
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
@@ -12,8 +16,9 @@
     "typescript": "latest"
   },
   "dependencies": {
+    "@neondatabase/serverless": "0.10.4",
+    "@prisma/adapter-neon": "6.19.2",
     "@prisma/client": "6.19.2",
-    "express": "^5.2.1",
     "prisma": "6.19.2"
   }
 }
