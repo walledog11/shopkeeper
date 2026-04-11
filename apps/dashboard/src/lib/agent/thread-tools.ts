@@ -237,16 +237,9 @@ export async function sendEmail(
   }
 
   // Send confirmed — persist the message
-  if (existingThread) {
-    await db.thread.update({
-      where: { id: targetThreadId },
-      data: { messages: { create: { senderType: SenderType.agent, contentText: input.body } } },
-    });
-  } else {
-    await db.message.create({
-      data: { threadId: targetThreadId, senderType: SenderType.agent, contentText: input.body },
-    });
-  }
+  await db.message.create({
+    data: { threadId: targetThreadId, senderType: SenderType.agent, contentText: input.body },
+  });
 
   return existingThread
     ? `Email sent to ${input.to} via their existing open ticket.`
