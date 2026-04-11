@@ -83,7 +83,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
             </div>
 
             {/* Center column */}
-            <div className="flex flex-col gap-3 min-w-0 [&>*:last-child]:flex-1">
+            <div className="flex flex-col gap-3 min-w-0">
               <TicketList
                 isLoading={isLoading}
                 displayedThreads={displayedThreads}

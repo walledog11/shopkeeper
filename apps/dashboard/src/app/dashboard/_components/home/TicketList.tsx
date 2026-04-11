@@ -135,13 +135,13 @@ function TicketRow({ thread }: { thread: Thread }) {
   return (
     <Link
       href={`/dashboard/tickets?thread=${thread.id}`}
-      className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.04] transition-colors"
+      className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.04] transition-colors overflow-hidden"
     >
       <div className="w-7 h-7 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0 mt-0.5">
         <Image src={channel.logo} alt={channel.name} width={14} height={14} className="object-contain opacity-70" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2 mb-0.5">
+        <div className="flex items-center justify-between gap-2 mb-0.5 min-w-0">
           <span className="text-sm font-semibold text-white/80 truncate">{customer}</span>
           <span className="text-[11px] text-white/30 shrink-0">{timeAgo(thread.updatedAt)}</span>
         </div>
@@ -196,7 +196,7 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
             />
           </motion.div>
         ) : (
-          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="divide-y divide-white/[0.05] flex flex-col">
+          <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex flex-col overflow-y-auto max-h-[340px] divide-y divide-white/[0.05]">
             {displayedThreads.map(thread => (
               <TicketRow key={thread.id} thread={thread} />
             ))}
