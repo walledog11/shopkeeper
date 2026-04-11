@@ -10,7 +10,7 @@ export default async function DashboardPage() {
 
   const [openThreadsRaw, closedCount, totalMessageCount] = await Promise.all([
     db.thread.findMany({
-      where: { organizationId: org.id, status: "open", archivedAt: null },
+      where: { organizationId: org.id, status: "open", archivedAt: null, channelType: { notIn: ["sms_agent", "dashboard_agent"] } },
       include: {
         customer: true,
         messages: {
