@@ -68,6 +68,12 @@ export async function POST(request: Request) {
         }
       }
 
+      // Close any existing open dashboard_agent thread so each explicit new session is isolated
+      await db.thread.updateMany({
+        where: { organizationId: org.id, customerId: customer.id, channelType: "dashboard_agent", status: "open" },
+        data: { status: "closed" },
+      });
+
       const thread = await db.thread.create({
         data: {
           organizationId: org.id,
