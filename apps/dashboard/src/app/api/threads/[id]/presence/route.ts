@@ -41,7 +41,7 @@ export async function GET(
   try {
     const client = getRedis();
     const key = presenceKey(orgId, threadId);
-    const active = await client.zrangebyscore(key, cutoff, '+inf');
+    const active = await client.zrange(key, cutoff, '+inf', { byScore: true });
     const count = active.filter(uid => uid !== userId).length;
     return NextResponse.json({ count });
   } catch {
