@@ -9,6 +9,7 @@
     "./test-helpers": "./test-helpers.ts"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npx turbo run build --filter=clerk-dashboard",
+  "outputDirectory": "apps/dashboard/.next",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}
