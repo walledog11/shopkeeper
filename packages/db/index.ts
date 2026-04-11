@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaNeonHTTP } from '@prisma/adapter-neon';
-import { neonConfig } from '@neondatabase/serverless';
+import { PrismaNeon } from '@prisma/adapter-neon';
+import { Pool } from '@neondatabase/serverless';
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -9,8 +9,8 @@ const globalForPrisma = globalThis as unknown as {
 function createClient(): PrismaClient {
   const log = (process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error']) as ('query' | 'error' | 'warn')[];
   if (process.env.NEON_SERVERLESS_HTTP === 'true') {
-    neonConfig.fetchFunction = globalThis.fetch;
-    const adapter = new PrismaNeonHTTP(process.env.DATABASE_URL!, {});
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL! });
+    const adapter = new PrismaNeon(pool);
     return new PrismaClient({ adapter, log });
   }
   return new PrismaClient({ log });
