@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
+import { cookies } from 'next/headers';
 import crypto from 'crypto';
 
 export async function GET(request: Request) {
@@ -55,11 +56,11 @@ export async function GET(request: Request) {
     path: '/',
   };
 
-  const response = NextResponse.redirect(authUrl.toString());
-  response.cookies.set('shopify_oauth_state', state, cookieOpts);
-  response.cookies.set('shopify_oauth_org', orgId, cookieOpts);
+  const cookieStore = await cookies();
+  cookieStore.set('shopify_oauth_state', state, cookieOpts);
+  cookieStore.set('shopify_oauth_org', orgId, cookieOpts);
   if (returnTo) {
-    response.cookies.set('shopify_oauth_return', returnTo, cookieOpts);
+    cookieStore.set('shopify_oauth_return', returnTo, cookieOpts);
   }
-  return response;
+  return NextResponse.redirect(authUrl.toString());
 }
