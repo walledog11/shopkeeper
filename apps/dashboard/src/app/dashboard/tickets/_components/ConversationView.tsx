@@ -77,6 +77,7 @@ export default function ConversationView({
   const [isPlanLoading, setIsPlanLoading] = useState(false)     // manual @clerk trigger
   const [isAutoPlanLoading, setIsAutoPlanLoading] = useState(false) // auto trigger
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
+  const [isRegenerating, setIsRegenerating] = useState(false)
   const [presenceCount, setPresenceCount] = useState(0)
 
   const planPhrase = useFillerPhrase([
@@ -234,6 +235,28 @@ export default function ConversationView({
 
   const handlePlanDismiss = () => {
     setPendingPlan(null)
+  }
+
+  const handlePlanRegenerate = async () => {
+    if (!pendingPlan || isRegenerating) return
+    setIsRegenerating(true)
+    const instruction = pendingPlan.instruction
+    try {
+      const res = await fetch('/api/agent/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: ticket.id, instruction, force: true }),
+      })
+      if (!res.ok) throw new Error()
+      const plan: AgentPlan = await res.json()
+      const resolved = plan.steps.length > 0 ? { ...plan, instruction } : null
+      if (resolved) setPendingPlan(resolved)
+      onPlanCached(resolved)
+    } catch {
+      // leave existing plan in place on failure
+    } finally {
+      setIsRegenerating(false)
+    }
   }
 
   return (
@@ -579,8 +602,10 @@ export default function ConversationView({
                   <ActionPlanCard
                     plan={pendingPlan}
                     isExecuting={isPlanExecuting}
+                    isRegenerating={isRegenerating}
                     onApprove={handlePlanApprove}
                     onDismiss={handlePlanDismiss}
+                    onRegenerate={handlePlanRegenerate}
                   />
                 </div>
               </motion.div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2 } from "lucide-react"
+import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2, RefreshCw } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
 import { Badge } from "@/components/ui/badge"
@@ -38,11 +38,13 @@ const CONTENT_OUT = { duration: 0.07 }
 interface Props {
   plan: AgentPlan
   isExecuting: boolean
+  isRegenerating?: boolean
   onApprove: (approvedToolCalls: RawToolCall[]) => void
   onDismiss: () => void
+  onRegenerate?: () => void
 }
 
-export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss }: Props) {
+export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onApprove, onDismiss, onRegenerate }: Props) {
   const [steps, setSteps] = useState<PlanStep[]>(plan.steps)
   const [collapsed, setCollapsed] = useState(false)
 
@@ -119,16 +121,28 @@ export default function ActionPlanCard({ plan, isExecuting, onApprove, onDismiss
               exit={{ opacity: 0, transition: CONTENT_OUT }}
             >
               {/* Header */}
-              <button
-                onClick={() => setCollapsed(true)}
-                className="w-full flex items-center gap-2 px-4 py-2.5 border-b border-white/[0.08] bg-white/[0.04] hover:bg-white/[0.06] transition-colors"
-              >
-                <span className="text-[13px] font-semibold text-white/70">Proposed plan</span>
-                <span className="ml-auto text-[11px] text-white/35 font-medium">
-                  {enabledCount} of {steps.length} step{steps.length !== 1 ? 's' : ''}
-                </span>
-                <ChevronUp className="w-3.5 h-3.5 text-white/35" />
-              </button>
+              <div className="relative flex items-center px-4 py-2.5 border-b border-white/[0.08] bg-white/[0.04]">
+                <button
+                  onClick={() => setCollapsed(true)}
+                  className="flex-1 flex items-center gap-2 text-left"
+                >
+                  <span className="text-[13px] font-semibold text-white/70">Proposed plan</span>
+                  <span className="ml-auto text-[11px] text-white/35 font-medium">
+                    {enabledCount} of {steps.length} step{steps.length !== 1 ? 's' : ''}
+                  </span>
+                  <ChevronUp className="w-3.5 h-3.5 text-white/35" />
+                </button>
+                {onRegenerate && (
+                  <button
+                    onClick={onRegenerate}
+                    disabled={isExecuting || isRegenerating}
+                    title="Regenerate plan"
+                    className="ml-2 shrink-0 p-1 rounded text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                  </button>
+                )}
+              </div>
 
               {/* Steps */}
               <div className="divide-y divide-white/[0.06]">

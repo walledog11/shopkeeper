@@ -189,10 +189,10 @@ export function HowItWorks() {
       <div className="container mx-auto px-4 md:px-6">
         {/* Header */}
         <div className="mb-16 text-center">
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-foreground">
+          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-black">
             How it works
           </h2>
-          <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="mt-4 text-lg text-gray-700 max-w-2xl mx-auto">
             From incoming message to approved resolution, fast.
           </p>
         </div>
@@ -208,9 +208,9 @@ export function HowItWorks() {
             <div className="mt-6 px-2">
               <div className="flex items-center gap-3 mb-2">
                 <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">1</span>
-                <h3 className="text-lg font-bold text-foreground">Connect Channels</h3>
+                <h3 className="text-lg font-bold text-black">Connect Channels</h3>
               </div>
-              <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
+              <p className="text-sm text-gray-700 pl-10 leading-relaxed">
                 Connect Instagram, Email, SMS, Shopify, and SMS/WhatsApp agent workflows. TikTok is visible as coming soon.
               </p>
             </div>
@@ -224,9 +224,9 @@ export function HowItWorks() {
             <div className="mt-6 px-2">
               <div className="flex items-center gap-3 mb-2">
                 <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">2</span>
-                <h3 className="text-lg font-bold text-foreground">AI Extracts Context</h3>
+                <h3 className="text-lg font-bold text-black">AI Extracts Context</h3>
               </div>
-              <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
+              <p className="text-sm text-gray-700 pl-10 leading-relaxed">
                 Clerk extracts order context, suggests tags, and keeps statuses organized so triage stays clean.
               </p>
             </div>
@@ -240,9 +240,9 @@ export function HowItWorks() {
             <div className="mt-6 px-2">
               <div className="flex items-center gap-3 mb-2">
                 <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center justify-center shrink-0">3</span>
-                <h3 className="text-lg font-bold text-foreground">Approve Plan &amp; Resolve</h3>
+                <h3 className="text-lg font-bold text-black">Approve Plan &amp; Resolve</h3>
               </div>
-              <p className="text-sm text-muted-foreground pl-10 leading-relaxed">
+              <p className="text-sm text-gray-700 pl-10 leading-relaxed">
                 The AI proposes a step-by-step plan in internal notes. Your team approves, edits, or skips steps before customer replies go out.
               </p>
             </div>

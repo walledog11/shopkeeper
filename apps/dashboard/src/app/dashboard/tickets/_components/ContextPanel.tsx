@@ -50,7 +50,7 @@ interface ShopifyOrder {
   financial_status: string
   fulfillment_status: string | null
   total_price: string
-  line_items: { title: string; quantity: number }[]
+  line_items: { title: string; quantity: number; variant_title: string | null }[]
 }
 
 interface ShopifyData {
@@ -370,7 +370,6 @@ function OrderList({ orders, shop }: { orders: ShopifyOrder[]; shop?: string }) 
     <div className="space-y-2">
       {orders.map(order => {
         const { label, color } = fulfillmentLabel(order.fulfillment_status)
-        const itemSummary = order.line_items.map(li => `${li.quantity}× ${li.title}`).join(', ')
         const date = new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
         const adminUrl = shop ? `https://${shop}/admin/orders/${order.id}` : null
         return (
@@ -382,7 +381,16 @@ function OrderList({ orders, shop }: { orders: ShopifyOrder[]; shop?: string }) 
               </div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${color}`}>{label}</span>
             </div>
-            <p className="text-xs text-white/40 truncate" title={itemSummary}>{itemSummary}</p>
+            <div className="space-y-0.5">
+              {order.line_items.map((li, i) => (
+                <div key={i} className="flex items-baseline justify-between gap-2">
+                  <div className="min-w-0">
+                    <span className="text-xs text-white/40 truncate">{li.quantity}× {li.title}</span>
+                    {li.variant_title && <><span className="text-[10px] text-white/20 ml-1 mr-1">—</span><span className="text-[10px] text-white/25">{li.variant_title}</span></>}
+                  </div>
+                </div>
+              ))}
+            </div>
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-white/60">${parseFloat(order.total_price).toFixed(2)}</span>
               <div className="flex items-center gap-1.5">

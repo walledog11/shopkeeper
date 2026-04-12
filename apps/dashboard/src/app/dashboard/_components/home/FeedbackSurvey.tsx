@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Star } from "lucide-react"
 import { Card } from "@/components/ui/card"
 
@@ -10,6 +10,7 @@ export default function FeedbackSurvey() {
   const [visible, setVisible] = useState(false)
   const [rating, setRating] = useState(0)
   const [hovered, setHovered] = useState(0)
+  const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [comment, setComment] = useState("")
   const [submitted, setSubmitted] = useState(false)
 
@@ -53,8 +54,13 @@ export default function FeedbackSurvey() {
         {[1, 2, 3, 4, 5].map(star => (
           <button
             key={star}
-            onMouseEnter={() => setHovered(star)}
-            onMouseLeave={() => setHovered(0)}
+            onMouseEnter={() => {
+              if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
+              setHovered(star)
+            }}
+            onMouseLeave={() => {
+              hoverTimeout.current = setTimeout(() => setHovered(0), 80)
+            }}
             onClick={() => setRating(star)}
             className="transition-transform hover:scale-110"
           >

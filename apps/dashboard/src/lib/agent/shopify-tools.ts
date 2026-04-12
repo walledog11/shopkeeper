@@ -476,18 +476,26 @@ export async function editShopifyOrder(
   input: EditShopifyOrderInput,
   ctx: ShopifyContext
 ): Promise<string> {
+  if (!input.variant_id && !input.remove_variant_id) {
+    return `Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).`;
+  }
+
   const endpoint = `https://${ctx.shop}/admin/api/${API_VERSION}/graphql.json`;
   const orderId = `gid://shopify/Order/${input.order_id}`;
-  const variantId = `gid://shopify/ProductVariant/${input.variant_id}`;
 
-  // Step 1: Begin edit session
+  // Step 1: Begin edit session, also fetching existing line items so we can remove one if needed
   const beginRes = await fetch(endpoint, {
     method: "POST",
     headers: shopifyHeaders(ctx.accessToken),
     body: JSON.stringify({
       query: `mutation orderEditBegin($id: ID!) {
         orderEditBegin(id: $id) {
-          calculatedOrder { id }
+          calculatedOrder {
+            id
+            lineItems(first: 20) {
+              edges { node { id quantity variant { id } title } }
+            }
+          }
           userErrors { field message }
         }
       }`,
@@ -499,32 +507,64 @@ export async function editShopifyOrder(
   if (beginErrors?.length > 0) {
     return `Error: could not begin order edit — ${beginErrors.map((e: { message: string }) => e.message).join(", ")}`;
   }
-  const calculatedOrderId = beginData.data?.orderEditBegin?.calculatedOrder?.id;
+  const calculatedOrder = beginData.data?.orderEditBegin?.calculatedOrder;
+  const calculatedOrderId = calculatedOrder?.id;
   if (!calculatedOrderId) {
     return `Error: failed to begin order edit — ${JSON.stringify(beginData.errors ?? beginData)}`;
   }
 
-  // Step 2: Add the variant
-  const addRes = await fetch(endpoint, {
-    method: "POST",
-    headers: shopifyHeaders(ctx.accessToken),
-    body: JSON.stringify({
-      query: `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
-        orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
-          calculatedOrder { id }
-          userErrors { field message }
-        }
-      }`,
-      variables: { id: calculatedOrderId, variantId, quantity: input.quantity },
-    }),
-  });
-  const addData = await addRes.json();
-  const addErrors = addData.data?.orderEditAddVariant?.userErrors;
-  if (addErrors?.length > 0) {
-    return `Error: could not add item to order — ${addErrors.map((e: { message: string }) => e.message).join(", ")}`;
+  // Step 2: Add the new variant (skip for pure removal)
+  if (input.variant_id) {
+    const variantId = `gid://shopify/ProductVariant/${input.variant_id}`;
+    const addRes = await fetch(endpoint, {
+      method: "POST",
+      headers: shopifyHeaders(ctx.accessToken),
+      body: JSON.stringify({
+        query: `mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
+          orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
+            calculatedOrder { id }
+            userErrors { field message }
+          }
+        }`,
+        variables: { id: calculatedOrderId, variantId, quantity: input.quantity ?? 1 },
+      }),
+    });
+    const addData = await addRes.json();
+    const addErrors = addData.data?.orderEditAddVariant?.userErrors;
+    if (addErrors?.length > 0) {
+      return `Error: could not add item to order — ${addErrors.map((e: { message: string }) => e.message).join(", ")}`;
+    }
   }
 
-  // Step 3: Commit and return the updated line items in the same call
+  // Step 2.5: If a remove_variant_id was specified, zero out that line item (size/color swap)
+  if (input.remove_variant_id) {
+    const removeVariantGid = `gid://shopify/ProductVariant/${input.remove_variant_id}`;
+    type CalcLineItem = { node: { id: string; quantity: number; variant?: { id: string }; title: string } };
+    const existingItems: CalcLineItem[] = calculatedOrder?.lineItems?.edges ?? [];
+    const itemToRemove = existingItems.find(e => e.node.variant?.id === removeVariantGid);
+    if (itemToRemove) {
+      const setQtyRes = await fetch(endpoint, {
+        method: "POST",
+        headers: shopifyHeaders(ctx.accessToken),
+        body: JSON.stringify({
+          query: `mutation orderEditSetQuantity($id: ID!, $lineItemId: ID!, $quantity: Int!) {
+            orderEditSetQuantity(id: $id, lineItemId: $lineItemId, quantity: $quantity) {
+              calculatedOrder { id }
+              userErrors { field message }
+            }
+          }`,
+          variables: { id: calculatedOrderId, lineItemId: itemToRemove.node.id, quantity: 0 },
+        }),
+      });
+      const setQtyData = await setQtyRes.json();
+      const setQtyErrors = setQtyData.data?.orderEditSetQuantity?.userErrors;
+      if (setQtyErrors?.length > 0) {
+        return `Error: could not remove old item — ${setQtyErrors.map((e: { message: string }) => e.message).join(", ")}`;
+      }
+    }
+  }
+
+  // Step 3: Commit and return the updated line items
   const commitRes = await fetch(endpoint, {
     method: "POST",
     headers: shopifyHeaders(ctx.accessToken),
@@ -555,8 +595,12 @@ export async function editShopifyOrder(
     order?.lineItems?.edges ?? [];
 
   const itemList = lineItems
+    .filter(({ node: li }) => li.quantity > 0)
     .map(({ node: li }) => `${li.quantity}x ${li.title}${li.variant?.title && li.variant.title !== 'Default Title' ? ` (${li.variant.title})` : ''}`)
     .join(', ');
 
-  return `Added ${input.quantity}x item to order ${orderName} successfully. Current order items: ${itemList}.`;
+  const action = input.variant_id && input.remove_variant_id ? 'swapped item on'
+    : input.remove_variant_id ? 'removed item from'
+    : 'added item to'
+  return `Successfully ${action} order ${orderName}. Current order items: ${itemList}.`;
 }

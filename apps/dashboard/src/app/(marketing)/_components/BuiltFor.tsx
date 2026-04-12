@@ -49,9 +49,9 @@ function AccessControlsGraphic() {
             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
               <Shield className="w-3 h-3 text-blue-600" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground">Owner &middot; 2</span>
+            <span className="text-[11px] font-semibold text-slate-900">Owner &middot; 2</span>
           </div>
-          <div className="text-[10px] text-muted-foreground space-y-0.5">
+          <div className="text-[10px] text-slate-500 space-y-0.5">
             <div>All Channels</div>
             <div>Full Access</div>
           </div>
@@ -62,9 +62,9 @@ function AccessControlsGraphic() {
             <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
               <Users className="w-3 h-3 text-slate-600" />
             </div>
-            <span className="text-[11px] font-semibold text-foreground">Staff &middot; 8</span>
+            <span className="text-[11px] font-semibold text-slate-900">Staff &middot; 8</span>
           </div>
-          <div className="text-[10px] text-muted-foreground space-y-0.5">
+          <div className="text-[10px] text-slate-500 space-y-0.5">
             <div>View &amp; Reply Only</div>
             <div>3 Channels</div>
           </div>
@@ -78,7 +78,7 @@ function AccessControlsGraphic() {
           <div className="w-4 h-4 rounded bg-blue-100 flex items-center justify-center">
             <Lock className="w-2.5 h-2.5 text-blue-600" />
           </div>
-          <span className="font-semibold text-foreground">Permissions</span>
+          <span className="font-semibold text-slate-900">Permissions</span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {permissions.map((p) => (
@@ -98,7 +98,7 @@ function AccessControlsGraphic() {
           { label: "Allow staff to edit AI settings?", on: false },
         ].map((t) => (
           <div key={t.label} className="flex items-center justify-between">
-            <span className="text-[10px] text-muted-foreground">{t.label}</span>
+            <span className="text-[10px] text-slate-500">{t.label}</span>
             <div className={`w-7 h-4 rounded-full ${t.on ? "bg-blue-500" : "bg-slate-200"} relative`}>
               <div
                 className={`w-3 h-3 rounded-full bg-white absolute top-0.5 shadow-sm transition-all ${
@@ -135,16 +135,16 @@ function AuditLoggingGraphic() {
         >
           <div className={`w-1.5 h-1.5 rounded-full ${e.color} shrink-0`} />
           <div className="flex-1 min-w-0">
-            <div className="text-[11px] font-medium text-foreground">{e.action}</div>
+            <div className="text-[11px] font-medium text-slate-900">{e.action}</div>
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className={`w-3.5 h-3.5 rounded-full ${e.color} shrink-0`} />
-              <span className="text-[10px] text-muted-foreground">{e.user} &middot; {e.date}</span>
+              <span className="text-[10px] text-slate-500">{e.user} &middot; {e.date}</span>
             </div>
           </div>
         </motion.div>
       ))}
       <div className="rounded-lg border border-slate-100 bg-white px-3 py-2.5 shadow-sm">
-        <div className="bg-slate-50 rounded p-2 text-[10px] text-muted-foreground">
+        <div className="bg-slate-50 rounded p-2 text-[10px] text-slate-500">
           <div className="flex items-center gap-1.5">
             <CheckCircle2 className="w-3 h-3 text-green-500 shrink-0" />
             <span>Every action is logged and searchable</span>
@@ -224,9 +224,6 @@ function VPCGraphic() {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Bottom row feature cards                                           */
-/* ------------------------------------------------------------------ */
-/* ------------------------------------------------------------------ */
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 export function BuiltFor() {
@@ -252,12 +249,15 @@ export function BuiltFor() {
   ];
 
   return (
-    <section ref={sectionRef} className="relative z-10 w-full py-24 overflow-hidden bg-white">
+    <section ref={sectionRef} className="relative z-10 w-full py-24 overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight text-slate-900">
             Built to grow with you
           </h2>
+          <p className="mt-4 text-lg text-slate-500 max-w-xl mx-auto">
+            The infrastructure your team needs as ticket volume scales.
+          </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
@@ -273,8 +273,8 @@ export function BuiltFor() {
                 <card.graphic />
               </div>
               <div className="p-5">
-                <h3 className="text-base font-semibold text-foreground mb-1.5">{card.title}</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{card.description}</p>
+                <h3 className="text-base font-semibold text-slate-900 mb-1.5">{card.title}</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">{card.description}</p>
               </div>
             </motion.div>
           ))}

@@ -31,7 +31,7 @@ export function Hero() {
           <div className="flex flex-col items-center gap-3 mt-2">
             <Button
               size="lg"
-              className="h-12 px-8 text-base font-semibold rounded-full bg-slate-900 text-white shadow-lg hover:bg-slate-800 hover:shadow-xl transition-all"
+              className="h-12 px-8 text-base font-semibold rounded-full bg-amber-400 text-amber-950 shadow-lg hover:bg-amber-500 hover:shadow-xl transition-all"
               asChild
             >
               <Link href="/signup">Get started — for free</Link>

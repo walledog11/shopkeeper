@@ -62,7 +62,7 @@ if (dashboardUrl) {
   });
 
   // Forward any /dashboard/* paths so post-OAuth redirects land correctly.
-  app.get('/dashboard/*', (req, res) => {
+  app.get('/dashboard/{*path}', (req, res) => {
     res.redirect(dashboardUrl + req.url);
   });
 }

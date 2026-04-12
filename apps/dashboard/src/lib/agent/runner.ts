@@ -59,7 +59,7 @@ export interface ShopifyOrderSummary {
   financial_status: string;
   fulfillment_status: string | null;
   total_price: string;
-  items: string[];
+  items: { title: string; quantity: number; variant_id: string | null }[];
 }
 
 export interface AgentContext {
@@ -173,7 +173,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         financial_status: string;
         fulfillment_status: string | null;
         total_price: string;
-        line_items: { title: string; quantity: number }[];
+        line_items: { title: string; quantity: number; variant_id: number | null }[];
       }) => ({
         id: String(o.id),
         name: o.name,
@@ -181,7 +181,11 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         financial_status: o.financial_status,
         fulfillment_status: o.fulfillment_status,
         total_price: o.total_price,
-        items: o.line_items.map((li) => `${li.quantity}x ${li.title}`),
+        items: o.line_items.map((li) => ({
+          title: li.title,
+          quantity: li.quantity,
+          variant_id: li.variant_id ? String(li.variant_id) : null,
+        })),
       }));
     }
   }
@@ -364,7 +368,7 @@ ${shopifyNote}
 ${shopifyCustomerNote}
 - When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
 - When given a customer name or email but no customer ID, call search_shopify_customers first.
-- To add an item to an existing order, call edit_shopify_order. Never claim you lack permission or that the API does not support this — the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id (from get_shopify_orders or the recent orders context) before calling this tool — do not attempt it with an order name or a guessed ID.
+- To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Use variant_ids from the orders context when available; call search_shopify_products only if the needed variant_id isn't listed there. Never claim you lack permission or that the API does not support this — the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
 - Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.
 ${ordersSection}
 ## Instructions
@@ -412,6 +416,9 @@ ${shopifyCustomerNote}
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," — never use the email address as a greeting.
 - After successfully completing an action, call add_internal_note in a separate step to document what you did. Do not call it in the same batch as the action.
 - When the support agent refers to "this order" or "the order", infer they mean the most recent order in the list above unless context makes another order clear.
+- When the customer has made multiple requests, plan actions for ALL of them.
+- When the customer wants to remove an item from their order, call edit_shopify_order with only remove_variant_id — use the variant_id from the recent orders context above. No variant_id or quantity needed for a pure removal.
+- When the customer wants to swap a size or color, call edit_shopify_order with both variant_id (new) and remove_variant_id (old). Get the old item's variant_id from the recent orders context. Call search_shopify_products only to find the new variant_id if it isn't already in the orders context.
 - Be precise and only make changes explicitly requested.
 - Respond like a knowledgeable coworker giving a quick status update — direct, factual, no fluff.
 - Keep summaries to 1–2 sentences. No bullet lists, no markdown formatting.
@@ -518,6 +525,12 @@ function describeTool(name: string, input: unknown): string {
       return `Tag as "${a.tag}"`
     case 'get_order_by_name':
       return `Look up order ${a.order_name}`
+    case 'edit_shopify_order': {
+      const qty = a.quantity as number | undefined
+      if (a.variant_id && a.remove_variant_id) return `Swap order item — add new variant, remove old`
+      if (a.remove_variant_id) return `Remove item (variant ${a.remove_variant_id}) from order`
+      return qty ? `Add ${qty}x item to order` : 'Edit order'
+    }
     default:
       return name.replace(/_/g, ' ')
   }
@@ -528,41 +541,81 @@ export async function planAgent(
   instruction: string,
   settings?: OrgSettings
 ): Promise<AgentPlan> {
-  const messages = buildMessageHistory(ctx.recentMessages, instruction)
+  const baseMessages = buildMessageHistory(ctx.recentMessages, instruction)
   const systemPrompt = buildSystemPrompt(ctx, settings);
   const tools = toAnthropicTools(settings);
 
-  const response = await anthropic.messages.create({
+  // Phase 1: initial planning
+  const response1 = await anthropic.messages.create({
     model: AI_MODEL,
-    max_tokens: 1024,
+    max_tokens: 2048,
     system: systemPrompt,
-    messages,
+    messages: baseMessages,
     tools,
   })
 
-  const toolUseBlocks = response.content.filter(
-    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
-  )
+  const blocks1 = response1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
+  const rawToolCalls: RawToolCall[] = blocks1.map((b) => ({ id: b.id, name: b.name, input: b.input }))
 
-  const rawToolCalls: RawToolCall[] = toolUseBlocks.map((b) => ({
-    id: b.id,
-    name: b.name,
-    input: b.input,
-  }))
+  // planMessages grows as we add turns; used for the send_reply preview phase
+  let planMessages: Anthropic.MessageParam[] = [
+    ...baseMessages,
+    { role: "assistant", content: response1.content },
+  ]
+  let lastBlocks: Anthropic.ToolUseBlock[] = blocks1
 
-  // Phase 2: if no send_reply was planned yet, simulate any prior tool results
-  // and ask the LLM what it would send to the customer so we can show a preview.
+  // Phase 1.5: execute any read-only lookups so the LLM can plan the dependent write actions.
+  // (e.g. search_shopify_products → edit_shopify_order needs the variant_id from the search)
+  const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === 'read')
+  if (readBlocks.length > 0) {
+    // Execute reads in parallel to get real results
+    const readResultsMap = new Map<string, string>()
+    await Promise.all(
+      readBlocks.map(async (b) => {
+        let content: string
+        try { content = await executeTool(b.name, b.input, ctx) }
+        catch { content = 'Lookup failed' }
+        readResultsMap.set(b.id, content)
+      })
+    )
+
+    // Anthropic requires a tool_result for every tool_use in the preceding turn.
+    // Reads get their real results; any write blocks from Phase 1 get a fake "Success"
+    // so the conversation stays valid before we ask the LLM to plan dependent writes.
+    planMessages = [
+      ...planMessages,
+      {
+        role: "user",
+        content: blocks1.map(b => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id,
+          content: readResultsMap.get(b.id) ?? "Success",
+        })),
+      },
+    ]
+
+    const response15 = await anthropic.messages.create({
+      model: AI_MODEL,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: planMessages,
+      tools,
+    })
+    lastBlocks = response15.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
+    rawToolCalls.push(...lastBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })))
+    planMessages = [...planMessages, { role: "assistant", content: response15.content }]
+  }
+
+  // Phase 2: if no send_reply was planned yet, simulate write results and get a reply preview
   const hasSendReply = rawToolCalls.some((tc) => tc.name === 'send_reply')
-
   const sendReplyTool = tools.find(t => t.name === 'send_reply')
   if (!hasSendReply && sendReplyTool) {
     const phase2Messages: Anthropic.MessageParam[] = [
-      ...messages,
-      { role: "assistant", content: response.content },
-      ...(toolUseBlocks.length > 0
+      ...planMessages,
+      ...(lastBlocks.length > 0
         ? [{
             role: "user" as const,
-            content: toolUseBlocks.map((b) => ({
+            content: lastBlocks.map((b) => ({
               type: "tool_result" as const,
               tool_use_id: b.id,
               content: "Success",

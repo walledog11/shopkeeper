@@ -77,21 +77,21 @@ function FAQItem({ q, a }: { q: string; a: string }) {
 
 export function FAQ() {
   return (
-    <section id="faq" className="relative w-full py-24 bg-white">
+    <section id="faq" className="relative w-full py-24">
       <div className="container mx-auto px-4 md:px-6 max-w-3xl">
         <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900">
             Frequently asked questions
           </h2>
-          <p className="mt-4 text-base text-muted-foreground">
+          <p className="mt-4 text-base text-slate-500">
             Have more questions?{" "}
-            <a href="mailto:support@clerk.support" className="text-slate-800 font-semibold underline underline-offset-2 hover:text-slate-600 transition-colors">
+            <a href="mailto:hello@useclerk.co" className="text-slate-800 font-semibold underline underline-offset-2 hover:text-slate-600 transition-colors">
               Reach out to us.
             </a>
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white shadow-sm px-6 sm:px-8">
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm px-6 sm:px-8">
           {faqs.map((item) => (
             <FAQItem key={item.q} {...item} />
           ))}

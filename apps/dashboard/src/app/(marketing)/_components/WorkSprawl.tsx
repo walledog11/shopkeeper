@@ -3,14 +3,14 @@
 import { useRef } from "react";
 import { motion, useInView } from "motion/react";
 import Image from "next/image";
-import { Search, Loader2, ArrowRight } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 
 export function WorkSprawl() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
-    <section ref={ref} className="relative z-10 w-full py-24 md:py-32 bg-[#fffaf5] overflow-hidden">
+    <section ref={ref} className="relative z-10 w-full py-24 md:py-32 overflow-hidden">
       <div className="container mx-auto px-4 md:px-6">
         
         {/* ── Headline ── */}
@@ -20,12 +20,12 @@ export function WorkSprawl() {
           animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight leading-[1.1] text-foreground">
+          <h2 className="text-3xl md:text-5xl lg:text-[3.5rem] font-extrabold tracking-tight leading-[1.1] text-slate-900">
             Customer support shouldn&apos;t be a
             <br className="hidden md:block" />
-            <span className="text-muted-foreground"> full-time job.</span>
+            <span className="text-slate-400"> full-time job.</span>
           </h2>
-          <p className="mt-6 text-lg md:text-xl text-muted-foreground leading-relaxed">
+          <p className="mt-6 text-lg md:text-xl text-slate-500 leading-relaxed">
             As your e-commerce brand grows, keeping up with customers becomes a nightmare. 
             You&apos;re losing time to the chaos instead of growing your business.
           </p>
@@ -125,18 +125,18 @@ export function WorkSprawl() {
                   </div>
                   {/* Results skeleton */}
                   <div className="w-full flex-1 border border-slate-100 rounded-md border-dashed flex flex-col items-center justify-center gap-2 bg-slate-50/50">
-                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    <Loader2 className="w-5 h-5 text-amber-500 animate-spin" />
                     <div className="w-16 h-1.5 bg-slate-200 rounded-full" />
                   </div>
                 </div>
 
                 {/* Animated Scanner line */}
-                <motion.div 
+                <motion.div
                   animate={{ top: ["10%", "80%", "10%"] }}
                   transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                  className="absolute left-1/2 -translate-x-1/2 w-56 h-8 bg-gradient-to-b from-blue-400/0 via-blue-400/20 to-blue-400/0 z-20 pointer-events-none"
+                  className="absolute left-1/2 -translate-x-1/2 w-56 h-8 bg-gradient-to-b from-amber-400/0 via-amber-400/20 to-amber-400/0 z-20 pointer-events-none"
                 >
-                  <div className="w-full h-[1px] bg-blue-400/50 shadow-[0_0_8px_rgba(96,165,250,0.8)]" />
+                  <div className="w-full h-[1px] bg-amber-400/50 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
                 </motion.div>
               </div>
 

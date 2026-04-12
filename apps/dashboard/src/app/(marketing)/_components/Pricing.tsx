@@ -67,7 +67,7 @@ export function Pricing() {
   const [annual, setAnnual] = useState(true);
 
   return (
-    <section id="pricing" className="relative w-full py-24 bg-[#fffaf5] overflow-hidden">
+    <section id="pricing" className="relative w-full py-24 overflow-hidden">
       <div className="container relative z-10 mx-auto px-4 md:px-6">
         
         {/* Header Section */}
@@ -75,7 +75,7 @@ export function Pricing() {
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 shadow-sm">
             <Zap className="w-3.5 h-3.5 text-yellow-500" /> Select Your Agent
           </div>
-          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-foreground leading-[1.1] mb-6">
+          <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-6">
             Pricing that scales with your efficiency.
           </h2>
           
@@ -86,15 +86,13 @@ export function Pricing() {
             </span>
             <button
               onClick={() => setAnnual(!annual)}
-              className="relative inline-flex h-8 w-14 items-center rounded-full bg-slate-100 transition-colors shadow-inner border border-slate-200/50"
+              className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors shadow-inner border border-slate-200/50 ${annual ? "bg-amber-400" : "bg-slate-100"}`}
             >
               <span
                 className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${
-                  annual ? "translate-x-7 border border-yellow-400" : "translate-x-1 border border-slate-200"
+                  annual ? "translate-x-7" : "translate-x-1"
                 }`}
-              >
-                {annual && <div className="absolute inset-0 bg-yellow-400 rounded-full opacity-20" />}
-              </span>
+              />
             </button>
             <div className="flex items-center gap-1.5 px-3">
               <span className={`text-sm font-bold transition-colors ${annual ? "text-slate-900" : "text-slate-400"}`}>

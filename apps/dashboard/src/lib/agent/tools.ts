@@ -328,15 +328,16 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
     function: {
       name: "edit_shopify_order",
       description:
-        "Add a line item to an existing Shopify order using the Order Editing API. Use this to add more of an existing product variant to an order that hasn't been fulfilled yet. Call search_shopify_products first if you don't have the variant_id.",
+        "Add, remove, or swap a line item on an existing Shopify order using the Order Editing API. To add an item: provide variant_id and quantity. To remove an item (customer wants it gone): provide only remove_variant_id — get the variant_id from the orders context, no search needed. To swap size/color: provide variant_id (new) and remove_variant_id (old). At least one of variant_id or remove_variant_id must be provided.",
       parameters: {
         type: "object",
         properties: {
-          order_id:   { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context." },
-          variant_id: { type: "string", description: "Shopify product variant ID to add to the order." },
-          quantity:   { type: "number", description: "Number of units to add." },
+          order_id:          { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context." },
+          variant_id:        { type: "string", description: "Variant ID to add. Required when adding or swapping. Omit for pure removal." },
+          quantity:          { type: "number", description: "Number of units to add. Required when variant_id is provided." },
+          remove_variant_id: { type: "string", description: "Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context — no search needed." },
         },
-        required: ["order_id", "variant_id", "quantity"],
+        required: ["order_id"],
       },
     },
   },
@@ -528,8 +529,9 @@ export interface UpdateThreadTagInput {
 
 export interface EditShopifyOrderInput {
   order_id: string;
-  variant_id: string;
-  quantity: number;
+  variant_id?: string;
+  quantity?: number;
+  remove_variant_id?: string;
 }
 
 export interface SearchKbInput {

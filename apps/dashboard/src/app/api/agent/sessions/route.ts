@@ -39,10 +39,12 @@ export async function GET() {
         createdAt: t.createdAt,
         preview:
           t.messages.find((m) => m.senderType === "customer")?.contentText ?? "Empty session",
-        messages: t.messages.map((m) => ({
-          role: m.senderType === "customer" ? "user" : "agent",
-          text: m.contentText ?? "",
-        })),
+        messages: t.messages
+          .filter((m) => m.senderType === "customer" || m.senderType === "agent")
+          .map((m) => ({
+            role: m.senderType === "customer" ? "user" : "agent",
+            text: m.contentText ?? "",
+          })),
       }))
     );
   } catch (error) {

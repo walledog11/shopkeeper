@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const rl = await rateLimit(`agent:plan:${org.id}`, 20, 60);
     if (!rl.success) return tooManyRequests(rl.reset);
 
-    const { threadId, instruction } = await request.json();
+    const { threadId, instruction, force } = await request.json();
 
     if (!threadId || !instruction?.trim()) {
       return NextResponse.json(
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     const cachedPlan = thread?.cachedPlan as AgentPlan | null;
-    if (thread?.cachedPlanMessageId === lastCustomerMessage.id && cachedPlan?.steps?.length) {
+    if (!force && thread?.cachedPlanMessageId === lastCustomerMessage.id && cachedPlan?.steps?.length) {
       return NextResponse.json(cachedPlan);
     }
 
