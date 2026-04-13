@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db, SenderType } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
-import { SENDER_TYPE } from '@/lib/constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +23,7 @@ export async function GET(request: Request) {
     if (isCsv) {
       // Stream all records in batches — no arbitrary row cap
       const where = {
-        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] as string[] },
+        senderType: { in: [SenderType.ai, SenderType.note] },
         deletedAt: null,
         thread: { organizationId: org.id },
       };
@@ -74,7 +73,7 @@ export async function GET(request: Request) {
 
     const rows = await db.message.findMany({
       where: {
-        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] as string[] },
+        senderType: { in: [SenderType.ai, SenderType.note] },
         deletedAt: null,
         thread: { organizationId: org.id },
       },
