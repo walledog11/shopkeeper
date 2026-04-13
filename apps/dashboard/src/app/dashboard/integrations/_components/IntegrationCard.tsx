@@ -63,9 +63,15 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   const isConnected = connected.length > 0
   const isComingSoon = config.connectType === 'coming-soon'
 
+  const isTokenExpired = (integration: Integration) => {
+    if (!integration.tokenExpiresAt) return false
+    return new Date(integration.tokenExpiresAt).getTime() < Date.now()
+  }
+
   const isTokenExpiringSoon = (integration: Integration) => {
     if (!integration.tokenExpiresAt) return false
-    return (new Date(integration.tokenExpiresAt).getTime() - Date.now()) / 86_400_000 < 10
+    const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()
+    return msLeft > 0 && msLeft / 86_400_000 < 10
   }
 
   async function handleEmailConnect() {
@@ -129,6 +135,11 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         <div className="flex items-center gap-3 shrink-0">
           {isComingSoon ? (
             <span className="text-[11px] font-medium text-white/25">Coming soon</span>
+          ) : isConnected && connected.some(isTokenExpired) ? (
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400">
+              <AlertTriangle className="w-3 h-3" />
+              Token expired
+            </span>
           ) : isConnected ? (
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
@@ -159,11 +170,15 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                         <p className="text-xs font-medium text-white/55 truncate">
                           {integration.fromEmail || integration.externalAccountId}
                         </p>
-                        {isTokenExpiringSoon(integration) && (
+                        {isTokenExpired(integration) ? (
+                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-400 bg-red-400/[0.08] border border-red-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
+                            <AlertTriangle className="w-2.5 h-2.5" /> Expired — Reconnect
+                          </span>
+                        ) : isTokenExpiringSoon(integration) ? (
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
                             <AlertTriangle className="w-2.5 h-2.5" /> Expiring
                           </span>
-                        )}
+                        ) : null}
                       </div>
                     ) : (
                       <div className="flex items-center">

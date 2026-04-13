@@ -60,6 +60,7 @@ model Organization {
   cannedResponses  CannedResponse[]
   knowledgeBases   KnowledgeBase[]
   kbArticles       KbArticle[]
+  feedbacks        Feedback[]
   @@index([clerkOrgId])
   @@map("organizations")
 }
@@ -234,6 +235,22 @@ model KbArticle {
   @@index([organizationId])
   @@index([knowledgeBaseId])
   @@map("kb_articles")
+}
+
+model Feedback {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.VarChar(255)
+  rating         Int
+  comment        String?   @db.Text
+  categories     String[]  @default([])
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("feedback")
 }
 
 

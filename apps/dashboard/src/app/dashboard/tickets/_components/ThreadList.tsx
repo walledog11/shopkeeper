@@ -123,7 +123,7 @@ export default function ThreadList({
               onClick={() => onFilterChange(null)}
               className={`flex-1 h-9 rounded-md border text-[11px] font-semibold transition-all ${
                 activeFilter === null
-                  ? 'bg-white text-black border-white'
+                  ? 'bg-white/[0.15] text-white border-white/[0.35]'
                   : 'bg-transparent border-border text-white/40 hover:border-white/[0.18] hover:text-white/60'
               }`}
             >

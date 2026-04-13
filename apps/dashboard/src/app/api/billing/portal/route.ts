@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
-import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
-import stripe from '@/lib/stripe'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
+import stripe from '@/lib/stripe'
+import { getOrCreateStripeCustomer } from '@/lib/billing'
 
 export async function POST() {
   try {
@@ -13,19 +13,7 @@ export async function POST() {
     const rl = await rateLimit(`billing:portal:${org.id}`, 5, 3600)
     if (!rl.success) return tooManyRequests(rl.reset)
 
-    // Ensure customer exists
-    let customerId = org.stripeCustomerId
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        name: org.name,
-        metadata: { clerkOrgId: org.clerkOrgId },
-      })
-      customerId = customer.id
-      await db.organization.update({
-        where: { id: org.id },
-        data: { stripeCustomerId: customerId },
-      })
-    }
+    const customerId = await getOrCreateStripeCustomer(org)
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,

@@ -76,7 +76,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
             return (
               <SidebarMenuItem key={item.name} className="relative">
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-green-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-amber-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
                 )}
                 <SidebarMenuButton
                   asChild
@@ -112,7 +112,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
             return (
               <SidebarMenuItem key={item.name} className="relative">
                 {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-yellow-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-amber-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
                 )}
                 <SidebarMenuButton
                   asChild
@@ -134,7 +134,7 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
         {/* User dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.08] transition-colors text-left outline-none">
+            <button suppressHydrationWarning className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.08] transition-colors text-left outline-none">
               <OrgAvatar
                 name={fullName}
                 imageUrl={user?.imageUrl}

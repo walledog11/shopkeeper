@@ -27,7 +27,7 @@ export async function GET(request: Request) {
       threadStatusCounts,
       channelCounts,
       tagCounts,
-      closedThreads,
+      resolutionStats,
       messageSenderCounts,
       threadVolumeByDay,
       firstReplyStats,
@@ -57,15 +57,17 @@ export async function GET(request: Request) {
         take: 8,
       }),
 
-      db.thread.findMany({
-        where: {
-          organizationId: org.id,
-          status: 'closed',
-          deletedAt: null,
-          createdAt: { gte: from, lte: to },
-        },
-        select: { createdAt: true, updatedAt: true },
-      }),
+      db.$queryRaw<{ avg_minutes: number | null; closed_count: bigint }[]>`
+        SELECT
+          AVG(EXTRACT(EPOCH FROM (updated_at - created_at)) / 60)::float AS avg_minutes,
+          COUNT(*)::bigint AS closed_count
+        FROM threads
+        WHERE organization_id = ${org.id}
+          AND status = 'closed'
+          AND deleted_at IS NULL
+          AND created_at >= ${from}
+          AND created_at <= ${to}
+      `,
 
       db.$queryRaw<{ sender_type: string; count: bigint }[]>`
         SELECT m.sender_type, COUNT(*) AS count
@@ -115,7 +117,10 @@ export async function GET(request: Request) {
 
     const byStatus = Object.fromEntries(threadStatusCounts.map(r => [r.status, r._count.id]));
     const totalThreads = threadStatusCounts.reduce((s, r) => s + r._count.id, 0);
-    const closedCount = closedThreads.length;
+
+    const resolution = resolutionStats[0] ?? { avg_minutes: null, closed_count: BigInt(0) };
+    const closedCount = Number(resolution.closed_count);
+    const avgResolutionMinutes = resolution.avg_minutes != null ? Math.round(resolution.avg_minutes) : null;
 
     const senderCounts = Object.fromEntries(
       messageSenderCounts.map(r => [r.sender_type, Number(r.count)]),
@@ -125,15 +130,6 @@ export async function GET(request: Request) {
     const aiReplies = senderCounts['ai'] ?? 0;
     const agentReplies = senderCounts['agent'] ?? 0;
     const totalReplies = aiReplies + agentReplies;
-
-    let avgResolutionMinutes: number | null = null;
-    if (closedThreads.length > 0) {
-      const totalMs = closedThreads.reduce(
-        (s, t) => s + (t.updatedAt.getTime() - t.createdAt.getTime()),
-        0,
-      );
-      avgResolutionMinutes = Math.round(totalMs / closedThreads.length / 60_000);
-    }
 
     const firstReply = firstReplyStats[0] ?? { avg_minutes: null, measured_count: BigInt(0) };
 

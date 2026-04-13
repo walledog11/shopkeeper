@@ -19,10 +19,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (process.env.NODE_ENV !== "development") {
-      const rl = await rateLimit(`phone:verify:${userId}`, 5, 600);
-      if (!rl.success) return tooManyRequests(rl.reset);
-    }
+    const rl = await rateLimit(`phone:verify:${userId}`, 5, 600);
+    if (!rl.success) return tooManyRequests(rl.reset);
 
     const org = await getOrCreateOrg();
     const { code } = await request.json();

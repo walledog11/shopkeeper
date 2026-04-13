@@ -18,13 +18,13 @@ export default function WorkflowBasics({ workflowSteps, workflowDoneCount }: Pro
   const pct = Math.round((workflowDoneCount / workflowSteps.length) * 100)
 
   return (
-    <Card className="bg-card border-border rounded-md overflow-hidden">
-      <div className="px-4 pt-4 pb-3 border-b border-border">
-        <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-0.5">Setup guide</p>
+    <Card className="bg-card border-border rounded-md overflow-hidden noise-texture">
+      <div className="px-4 pt-4 pb-3 border-b border-border bg-gradient-to-b from-white/[0.04] to-transparent">
+        <p className="text-xs text-white/40 mb-0.5">Setup guide</p>
         <h2 className="text-base font-bold text-white/80 leading-tight">Workflow basics</h2>
         <div className="mt-2.5">
           <span className="text-[10px] text-white/30">{workflowDoneCount} of {workflowSteps.length} complete</span>
-          <Progress value={pct} className="mt-1 h-1 bg-white/[0.07]" />
+          <Progress value={pct} className="mt-1 h-2 bg-white/[0.07] [&>div]:bg-gradient-to-r [&>div]:from-green-500 [&>div]:to-emerald-400" />
         </div>
       </div>
 
@@ -48,7 +48,7 @@ export default function WorkflowBasics({ workflowSteps, workflowDoneCount }: Pro
               className={`text-xs font-semibold shrink-0 transition-colors ${
                 step.status === "done"
                   ? "text-white/25 hover:text-white/50"
-                  : "text-white/60 hover:text-white"
+                  : "text-amber-400/80 hover:text-amber-400"
               }`}
             >
               {step.status === "done" ? "View" : "Start"}

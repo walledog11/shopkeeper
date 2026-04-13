@@ -23,6 +23,7 @@ import {
 export default function DashboardHeader() {
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [isSwitching, setIsSwitching] = useState(false);
   const { isOpen: isHelpOpen, openHelp, closeHelp } = useHelp();
   const openCount = useOpenThreadCount();
   const { user } = useUser();
@@ -51,10 +52,18 @@ export default function DashboardHeader() {
 
   return (
     <>
+      {isSwitching && (
+        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex items-center gap-3 text-white/60">
+            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+            <span className="text-sm font-medium">Switching workspace…</span>
+          </div>
+        </div>
+      )}
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Desktop-only header */}
-      <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-border px-4 h-[52px] shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-border px-4 h-16 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
 
         {/* Left: page title */}
         <div className="flex items-center">
@@ -170,7 +179,12 @@ export default function DashboardHeader() {
               {userMemberships.data?.map((mem: { organization: { id: string; name: string; imageUrl?: string } }) => (
                 <DropdownMenuItem
                   key={mem.organization.id}
-                  onClick={() => setActive?.({ organization: mem.organization.id })}
+                  onClick={async () => {
+                    if (mem.organization.id === organization?.id) return;
+                    setIsSwitching(true);
+                    await setActive?.({ organization: mem.organization.id });
+                    window.location.reload();
+                  }}
                   className={`flex items-center gap-2.5 cursor-pointer focus:bg-white/[0.07] ${
                     mem.organization.id === organization?.id ? "bg-white/[0.04]" : ""
                   }`}

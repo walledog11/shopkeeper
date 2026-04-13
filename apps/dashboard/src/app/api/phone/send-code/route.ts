@@ -25,10 +25,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (process.env.NODE_ENV !== "development") {
-      const rl = await rateLimit(`phone:send:${userId}`, 3, 600);
-      if (!rl.success) return tooManyRequests(rl.reset);
-    }
+    const rl = await rateLimit(`phone:send:${userId}`, 3, 600);
+    if (!rl.success) return tooManyRequests(rl.reset);
 
     const org = await getOrCreateOrg();
     const { phoneNumber } = await request.json();
@@ -55,13 +53,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const isDev = process.env.NODE_ENV === "development";
-    const code = isDev ? "000000" : generateCode();
-
-    if (isDev) {
-      logger.info({ phoneNumber }, '[phone/send-code] DEV bypass — code is 000000');
-    }
-
+    const code = generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     const memberKey = { organizationId: org.id, clerkUserId: userId };
@@ -85,10 +77,6 @@ export async function POST(request: Request) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       data: { settings: { ...settings, [`_phoneCode_${userId}`]: { code, expiresAt: expiresAt.toISOString(), phoneNumber } } as any },
     });
-
-    if (isDev) {
-      return NextResponse.json({ sent: true });
-    }
 
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;

@@ -5,6 +5,7 @@ dotenv.config({ path: resolve(dirname(fileURLToPath(import.meta.url)), '../.env'
 
 import express from 'express';
 import * as Sentry from '@sentry/node';
+import { db } from '@clerk/db';
 import webhookRoutes from './routes/webhooks.js';
 import logger from './logger.js';
 
@@ -51,6 +52,23 @@ app.get('/', (_req, res) => {
   res.status(200).json({ status: 'Clerk Gateway is running 🟢' });
 });
 
+// Deep health check — verifies DB and Redis connectivity
+app.get('/health/deep', async (_req, res) => {
+  const checks: Record<string, string> = {};
+  let ok = true;
+
+  try {
+    await db.$queryRaw`SELECT 1`;
+    checks.db = 'ok';
+  } catch (err) {
+    checks.db = 'error';
+    ok = false;
+    logger.error({ err }, '[Health] DB check failed');
+  }
+
+  res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', checks });
+});
+
 app.use('/webhooks', webhookRoutes);
 
 // During local dev, ngrok points to this gateway (port 8080) but dashboard OAuth
@@ -67,6 +85,16 @@ if (dashboardUrl) {
   });
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info({ port: PORT }, '[Clerk Gateway] Server listening');
+});
+
+// Graceful shutdown — Railway sends SIGTERM before killing the container.
+// Stop accepting new connections and let in-flight requests finish.
+process.on('SIGTERM', () => {
+  logger.info('[Clerk Gateway] SIGTERM received — shutting down gracefully');
+  server.close(() => {
+    logger.info('[Clerk Gateway] HTTP server closed');
+    process.exit(0);
+  });
 });

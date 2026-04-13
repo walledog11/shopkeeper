@@ -104,7 +104,7 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
       )}
 
       <div className="space-y-1.5">
-        <p className="text-[10px] font-semibold text-white/25 uppercase tracking-widest">Suggested next steps</p>
+        <p className="text-xs text-white/40">Suggested next steps</p>
         {[
           { icon: Zap, label: "Connect a channel to start receiving messages", href: "/dashboard/settings?tab=integrations" },
           { icon: Settings, label: "Configure your AI agent", href: "/dashboard/settings" },
@@ -125,24 +125,35 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
   )
 }
 
+const CHANNEL_BORDER: Record<string, string> = {
+  ig_dm:           "group-hover:border-l-pink-500/60",
+  email:           "group-hover:border-l-blue-400/60",
+  shopify:         "group-hover:border-l-green-500/60",
+  sms:             "group-hover:border-l-purple-400/60",
+  sms_agent:       "group-hover:border-l-purple-400/60",
+  tiktok:          "group-hover:border-l-cyan-400/60",
+  dashboard_agent: "group-hover:border-l-white/20",
+}
+
 function TicketRow({ thread }: { thread: Thread }) {
   const channel = getChannelInfo(thread.channelType)
   const customer = getCustomerName(thread.customer)
   const lastMsg = thread.messages[0]
   const preview = lastMsg?.contentText || "No messages yet"
   const isAgent = lastMsg?.senderType === "agent" || lastMsg?.senderType === "ai"
+  const borderClass = CHANNEL_BORDER[thread.channelType] ?? "group-hover:border-l-white/20"
 
   return (
     <Link
       href={`/dashboard/tickets?thread=${thread.id}`}
-      className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/[0.04] transition-colors overflow-hidden"
+      className={`group flex items-start gap-3 pr-4 pl-3 py-2.5 border-l-2 border-l-transparent ${borderClass} hover:bg-white/[0.04] transition-all overflow-hidden`}
     >
-      <div className="w-7 h-7 rounded-full bg-white/[0.06] flex items-center justify-center shrink-0 mt-0.5">
-        <Image src={channel.logo} alt={channel.name} width={14} height={14} className="object-contain opacity-70" />
+      <div className="w-7 h-7 rounded-full bg-white/[0.09] flex items-center justify-center shrink-0 mt-0.5">
+        <Image src={channel.logo} alt={channel.name} width={14} height={14} className="object-contain opacity-80" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-0.5 min-w-0">
-          <span className="text-sm font-semibold text-white/80 truncate">{customer}</span>
+          <span className="text-sm font-semibold text-white/90 truncate">{customer}</span>
           <span className="text-[11px] text-white/30 shrink-0">{timeAgo(thread.updatedAt)}</span>
         </div>
         <p className="text-xs text-white/40 truncate">

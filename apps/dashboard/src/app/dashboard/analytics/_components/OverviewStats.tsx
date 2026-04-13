@@ -13,10 +13,10 @@ interface OverviewStatsProps {
 }
 
 const STATS = [
-  { key: 'total',    label: 'Total Tickets',  accent: 'border-t-teal-500',   iconBg: 'bg-teal-950/40',   iconColor: 'text-teal-400',   Icon: Inbox         },
-  { key: 'open',     label: 'Open',           accent: 'border-t-amber-400',  iconBg: 'bg-amber-950/40',  iconColor: 'text-amber-400',  Icon: Inbox         },
-  { key: 'resolved', label: 'Resolved',       accent: 'border-t-green-400',  iconBg: 'bg-green-950/40',  iconColor: 'text-green-400',  Icon: CheckCircle2  },
-  { key: 'messages', label: 'Total Messages', accent: 'border-t-purple-400', iconBg: 'bg-purple-950/40', iconColor: 'text-purple-400', Icon: MessageSquare },
+  { key: 'total',    label: 'Total Tickets',  Icon: Inbox         },
+  { key: 'open',     label: 'Open',           Icon: Inbox         },
+  { key: 'resolved', label: 'Resolved',       Icon: CheckCircle2  },
+  { key: 'messages', label: 'Total Messages', Icon: MessageSquare },
 ]
 
 export function OverviewStats({ totalThreads, openCount, closedCount, totalMessages, resolutionRate, isLoading }: OverviewStatsProps) {
@@ -27,8 +27,8 @@ export function OverviewStats({ totalThreads, openCount, closedCount, totalMessa
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {STATS.map(({ key, label, accent, iconBg, iconColor, Icon }) => (
-          <Card key={key} className={`border-t-2 ${accent} hover:shadow-md hover:-translate-y-px transition-all`}>
+        {STATS.map(({ key, label, Icon }) => (
+          <Card key={key} className="hover:border-white/[0.14] transition-all">
             <CardContent className="px-4 py-4 flex items-center justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
@@ -38,8 +38,8 @@ export function OverviewStats({ totalThreads, openCount, closedCount, totalMessa
                   <p className="text-3xl font-extrabold leading-none text-foreground">{values[key].toLocaleString()}</p>
                 )}
               </div>
-              <div className={`w-10 h-10 rounded-xl ${iconBg} flex items-center justify-center`}>
-                <Icon className={`w-5 h-5 ${iconColor}`} />
+              <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center">
+                <Icon className="w-5 h-5 text-white/40" />
               </div>
             </CardContent>
           </Card>

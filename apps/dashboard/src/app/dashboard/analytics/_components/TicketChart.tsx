@@ -42,7 +42,7 @@ export function TicketChart({ chartTitle, chartData, maxCount, isLoading }: Tick
                       className="h-full bg-amber-500 hover:bg-amber-400 transition-all duration-500 flex items-center justify-end pr-2 rounded cursor-default"
                       style={{ width: `${Math.max((bucket.count / maxCount) * 100, 6)}%` }}
                     >
-                      <span className="text-[10px] font-bold text-amber-950">{bucket.count}</span>
+                      <span className="text-[10px] font-bold text-black">{bucket.count}</span>
                     </div>
                   ) : (
                     <span className="text-[10px] text-muted-foreground pl-2">—</span>

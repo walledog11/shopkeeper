@@ -4,7 +4,9 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowLeft, Clock, ChevronRight } from "lucide-react"
 import type { Article } from "../../_components/help/content/index"
-import { TAG_COLORS_BORDERED, DEFAULT_TAG_COLOR_BORDERED } from "@/lib/articleTags"
+import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
+
+const READ_ARTICLES_KEY = "clerk_read_articles"
 
 interface Props {
   article: Article
@@ -18,6 +20,19 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
 
   const [activeHeading, setActiveHeading] = useState<string | null>(headings[0] ?? null)
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
+
+  // Persist read state to localStorage on mount
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(READ_ARTICLES_KEY)
+      const ids: string[] = stored ? JSON.parse(stored) : []
+      if (!ids.includes(article.id)) {
+        localStorage.setItem(READ_ARTICLES_KEY, JSON.stringify([...ids, article.id]))
+      }
+    } catch {
+      // localStorage unavailable — skip silently
+    }
+  }, [article.id])
 
   // Track which heading is in view for TOC highlighting
   useEffect(() => {
@@ -46,7 +61,7 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
   }
 
   const tag = article.tag ?? "Tips"
-  const tagColor = TAG_COLORS_BORDERED[tag] ?? DEFAULT_TAG_COLOR_BORDERED
+  const tagColor = TAG_COLORS[tag] ?? DEFAULT_TAG_COLOR
 
   return (
     <div className="h-full overflow-y-auto bg-background">

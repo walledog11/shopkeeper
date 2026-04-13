@@ -157,6 +157,13 @@ export default function KbPageClient() {
               <p className="text-sm font-medium text-white/50 mb-1.5">No knowledge bases yet</p>
               <p className="text-xs text-white/25 max-w-xs leading-relaxed">Connect Shopify to sync your store policies, or create a custom knowledge base for your agent.</p>
             </div>
+            <button
+              onClick={() => setIsCreatingKb(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Create your first knowledge base
+            </button>
           </div>
         )}
 

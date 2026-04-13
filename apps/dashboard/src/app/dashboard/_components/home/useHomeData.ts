@@ -10,6 +10,10 @@ import type { Thread, Integration } from "@/types"
 import type { ViewId, NavView } from "./types"
 import type { ActivityEvent } from "./ActivityFeed"
 
+interface AnalyticsSnapshot {
+  firstReply: { avgMinutes: number | null; measuredCount: number }
+}
+
 function sortByDate(threads: Thread[]): Thread[] {
   return [...threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
@@ -22,8 +26,19 @@ interface Options {
 export function useHomeData({ initialOpenThreads, initialClosedCount }: Options) {
   const [activeView, setActiveView] = useState<ViewId>('open')
 
-  const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
+  const { data: integrations = [], error: integrationsError } = useSWR<Integration[]>('/api/integrations', fetcher)
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
+
+  const analyticsFrom = useMemo(() => {
+    const d = new Date()
+    d.setDate(d.getDate() - 7)
+    return d.toISOString()
+  }, [])
+  const { data: analyticsData } = useSWR<AnalyticsSnapshot>(
+    `/api/analytics?from=${analyticsFrom}&to=${new Date().toISOString()}`,
+    fetcher,
+    { refreshInterval: 300_000, revalidateOnFocus: false },
+  )
 
   const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
   const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, true, true)
@@ -31,6 +46,18 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const isLoading = loadingOpen || (activeView === 'resolved' && loadingClosed)
   const openCount = openThreads.length
   const resolvedCount = closedThreads.length > 0 ? closedThreads.length : initialClosedCount
+
+  const resolvedTodayCount = useMemo(() => {
+    const today = new Date().toDateString()
+    return closedThreads.filter(t => new Date(t.updatedAt).toDateString() === today).length
+  }, [closedThreads])
+
+  const oldestOpenThread = useMemo(() => {
+    if (openThreads.length === 0) return null
+    return [...openThreads].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0]
+  }, [openThreads])
+
+  const avgResponseMinutes = analyticsData?.firstReply?.avgMinutes ?? null
 
   const allThreads = useMemo(() => [...openThreads, ...closedThreads], [openThreads, closedThreads])
 
@@ -46,8 +73,6 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   }), [openThreads, closedThreads, recentThreads])
 
   const displayedThreads = viewThreads[activeView].slice(0, 7)
-
-  const needsAttention = useMemo(() => viewThreads.open.slice(0, 4), [viewThreads.open])
 
   const channelBreakdown = useMemo(() => {
     const counts: Record<string, { name: string; logo: string; count: number }> = {}
@@ -115,13 +140,19 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
     isLoading,
     openCount,
     resolvedCount,
+    resolvedTodayCount,
+    oldestOpenThread,
+    avgResponseMinutes,
+    openThreads,
+    closedThreads,
     displayedThreads,
-    needsAttention,
     channelBreakdown,
     activityEvents,
     workflowSteps,
     workflowDoneCount,
     navViews,
     channelConnected,
+    hasInvitedTeam,
+    integrationsError,
   }
 }

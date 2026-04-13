@@ -8,41 +8,73 @@ import AgentPanelRoot from "./_components/agent-panel/AgentPanelRoot";
 import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext";
 import { getOrCreateOrg } from "@/lib/org";
 import { resolveAgentSettings } from "@/lib/agent/settings";
+import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
-
-const NOTIFICATIONS: Notification[] = [
-  {
-    id: "add-integration",
-    type: "info",
-    title: "Connect your first channel",
-    message: "Start receiving support tickets from email, Instagram, SMS, and more.",
-    action: { label: "Add an integration", href: "/dashboard/integrations" },
-  },
-  {
-    id: "billing",
-    type: "warning",
-    title: "Your free trial ends in 7 days.",
-    message: "Upgrade to keep your team running smoothly.",
-    action: { label: "Upgrade now", href: "/dashboard/settings?tab=billing" },
-  },
-  {
-    id: "sms",
-    type: "success",
-    title: "SMS support is now available!",
-    message: "Reach customers directly on their phones.",
-    action: { label: "Enable it", href: "/dashboard/settings" },
-  },
-];
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const org = await getOrCreateOrg();
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
 
+  // TODO (pre-launch): remove these hardwired demo notifications before shipping
+  const notifications: Notification[] = [
+    {
+      id: "demo-trial",
+      type: "warning",
+      title: "Your free trial ends in 3 days.",
+      message: "Upgrade to keep your team running smoothly.",
+      action: { label: "Upgrade now", href: "/dashboard/settings?tab=billing" },
+    },
+    {
+      id: "demo-integration",
+      type: "info",
+      title: "Connect your first channel",
+      message: "Start receiving support tickets from email, Instagram, SMS, and more.",
+      action: { label: "Add integration", href: "/dashboard/integrations" },
+    },
+  ];
+
+  // No channel connected yet
+  const integrationCount = await db.integration.count({ where: { organizationId: org.id } });
+  if (integrationCount === 0) {
+    notifications.push({
+      id: "no-integration",
+      type: "info",
+      title: "Connect your first channel",
+      message: "Start receiving support tickets from email, Instagram, SMS, and more.",
+      action: { label: "Add integration", href: "/dashboard/integrations" },
+    });
+  }
+
+  // Trial ending within 7 days
+  if (org.stripeStatus === "trialing" && org.trialEndsAt) {
+    const daysLeft = Math.ceil((org.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft > 0 && daysLeft <= 7) {
+      notifications.push({
+        id: "trial-ending",
+        type: "warning",
+        title: `Your free trial ends in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
+        message: "Upgrade to keep your team running smoothly.",
+        action: { label: "Upgrade now", href: "/dashboard/settings?tab=billing" },
+      });
+    }
+  }
+
+  // Payment past due
+  if (org.stripeStatus === "past_due") {
+    notifications.push({
+      id: "past-due",
+      type: "warning",
+      title: "Your payment failed.",
+      message: "Update your billing details to avoid service interruption.",
+      action: { label: "Update billing", href: "/dashboard/settings?tab=billing" },
+    });
+  }
+
   return (
     <HelpProvider>
       <AgentPanelProvider>
       <div className="dark flex flex-col h-screen bg-background font-sans overflow-hidden">
-        <NotificationBar notifications={NOTIFICATIONS} />
+        <NotificationBar notifications={notifications} />
         <NavProgressBar />
         <DashboardSidebar>
           <DashboardHeader />
@@ -51,10 +83,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
               {children}
             </div>
             <HelpPanel />
+            <AgentPanelRoot agentName={settings.agentName} />
           </div>
         </DashboardSidebar>
       </div>
-      <AgentPanelRoot agentName={settings.agentName} />
       </AgentPanelProvider>
     </HelpProvider>
   );

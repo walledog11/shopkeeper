@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { Plus, Trash2, Pencil, Check, Loader2, Tag } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, Loader2, Tag, MessageSquare } from "lucide-react"
 import { fetcher } from "@/lib/fetcher"
 import type { CannedResponse } from "@/types"
 
@@ -134,7 +134,22 @@ export default function CannedResponses() {
           )}
 
           {!isLoading && responses.length === 0 && !isAdding && (
-            <div className="text-sm text-white/30 py-2">No canned responses yet. Create one to speed up replies.</div>
+            <div className="flex flex-col items-center text-center py-8 gap-3">
+              <div className="w-10 h-10 rounded-lg bg-white/[0.04] border border-border flex items-center justify-center">
+                <MessageSquare className="w-4 h-4 text-white/20" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-white/50 mb-1">No canned responses yet</p>
+                <p className="text-xs text-white/25 max-w-xs leading-relaxed">Save reply templates and insert them with <span className="font-mono bg-white/[0.07] px-1 rounded">/</span> in the composer.</p>
+              </div>
+              <button
+                onClick={() => setIsAdding(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Create your first response
+              </button>
+            </div>
           )}
 
           <div className="space-y-2">

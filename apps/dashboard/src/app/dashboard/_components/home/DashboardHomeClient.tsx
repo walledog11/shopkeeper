@@ -1,15 +1,13 @@
 "use client"
 
-import Link from "next/link"
-import { ArrowRight } from "lucide-react"
 import ResourcesCard from "./ResourcesCard"
 import AgentBanner from "./AgentBanner"
-import QuickActions from "./QuickActions"
 import StatCards from "./StatCards"
 import ViewsNav from "./ViewsNav"
 import ChannelBreakdown from "./ChannelBreakdown"
 import ActivityFeed from "./ActivityFeed"
 import TicketList from "./TicketList"
+import InsightsCard from "./InsightsCard"
 import FeedbackSurvey from "./FeedbackSurvey"
 import WorkflowBasics from "./WorkflowBasics"
 import { useHomeData } from "./useHomeData"
@@ -34,6 +32,8 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   const {
     activeView, setActiveView,
     isLoading, openCount, resolvedCount,
+    resolvedTodayCount, avgResponseMinutes,
+    openThreads, closedThreads,
     displayedThreads,
     channelBreakdown, activityEvents,
     workflowSteps, workflowDoneCount,
@@ -41,7 +41,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
   } = useHomeData({ initialOpenThreads, initialClosedCount })
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-background">
+    <div className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <div className="flex flex-col min-h-full px-5 md:px-6 pt-2 pb-4 gap-3">
 
@@ -50,7 +50,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           {/* Header */}
           <div className="flex items-start justify-between shrink-0 gap-4">
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white/80">{greeting}, <span className="text-green-400">{userName}</span>.</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">{greeting}, <span className="text-white">{userName}</span>.</h1>
               <p className="text-sm text-white/35 mt-0.5">
                 {isLoading
                   ? "Loading your queue…"
@@ -60,20 +60,20 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 }
               </p>
             </div>
-           
           </div>
-
-          <QuickActions />
 
           <StatCards
             isLoading={isLoading}
             openCount={openCount}
-            resolvedCount={resolvedCount}
+            resolvedTodayCount={resolvedTodayCount}
+            avgResponseMinutes={avgResponseMinutes}
             totalMessageCount={totalMessageCount}
           />
 
+          <div className="border-t border-white/[0.04]" />
+
           {/* Main 3-column layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_260px] gap-3">
+          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[220px_1fr_260px] gap-3">
 
             {/* Left column */}
             <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
@@ -94,7 +94,10 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 setActiveView={setActiveView}
                 hasChannel={channelConnected}
               />
-              <FeedbackSurvey />
+              <InsightsCard openThreads={openThreads} closedThreads={closedThreads} />
+              <div className="flex-1 min-h-0">
+                <FeedbackSurvey />
+              </div>
             </div>
 
             {/* Right column */}

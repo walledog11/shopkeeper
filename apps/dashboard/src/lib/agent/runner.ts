@@ -142,7 +142,10 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
-  // Fetch customer name and recent orders in parallel
+  const isOperatorChannel = thread.channelType === "dashboard_agent" || thread.channelType === "sms_agent";
+
+  // Fetch customer name and recent orders in parallel.
+  // Operator-mode channels always call get_shopify_orders live, so skip prefetching orders.
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
     const { externalAccountId, accessToken } = shopifyIntegration;
@@ -153,8 +156,8 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
           .then(r => r.json()).catch(() => null)
       : Promise.resolve(null);
 
-    const ordersFetch = fetch(
-      `https://${externalAccountId}/admin/api/2024-01/orders.json?customer_id=${shopifyCustomerId}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,total_price,line_items`,
+    const ordersFetch = isOperatorChannel ? Promise.resolve(null) : fetch(
+      `https://${externalAccountId}/admin/api/2024-01/orders.json?customer_id=${shopifyCustomerId}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,current_total_price,line_items`,
       { headers }
     ).then(async r => ({ ok: r.ok, data: await r.json() })).catch(() => null);
 
@@ -172,16 +175,16 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         created_at: string;
         financial_status: string;
         fulfillment_status: string | null;
-        total_price: string;
-        line_items: { title: string; quantity: number; variant_id: number | null }[];
+        current_total_price: string;
+        line_items: { title: string; quantity: number; fulfillable_quantity: number; variant_id: number | null }[];
       }) => ({
         id: String(o.id),
         name: o.name,
         created_at: o.created_at,
         financial_status: o.financial_status,
         fulfillment_status: o.fulfillment_status,
-        total_price: o.total_price,
-        items: o.line_items.map((li) => ({
+        total_price: o.current_total_price,
+        items: o.line_items.filter((li) => li.fulfillable_quantity > 0).map((li) => ({
           title: li.title,
           quantity: li.quantity,
           variant_id: li.variant_id ? String(li.variant_id) : null,
@@ -354,9 +357,6 @@ function buildSystemPrompt(ctx: AgentContext, settings?: OrgSettings): string {
 
   if (isOperatorMode) {
     const channel = ctx.thread.channelType === "sms_agent" ? "WhatsApp/SMS" : "the dashboard";
-    const ordersSection = ctx.recentOrders.length > 0
-      ? `\n## Recent orders\n${JSON.stringify(ctx.recentOrders)}`
-      : "";
     const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
       ? `- Always respond in ${s.replyLanguage}.`
       : "";
@@ -367,10 +367,10 @@ function buildSystemPrompt(ctx: AgentContext, settings?: OrgSettings): string {
 ${shopifyNote}
 ${shopifyCustomerNote}
 - When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
-- When given a customer name or email but no customer ID, call search_shopify_customers first.
-- To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Use variant_ids from the orders context when available; call search_shopify_products only if the needed variant_id isn't listed there. Never claim you lack permission or that the API does not support this — the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
+- When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
+- Always call get_shopify_orders after resolving a customer ID — never rely on order data from earlier in the conversation as it may be stale.
+- To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this — the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
 - Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.
-${ordersSection}
 ## Instructions
 - Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response — your text response is only a summary of what the tools did.
 - Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions. If you have not called send_email, you have not sent anything.
@@ -541,7 +541,9 @@ export async function planAgent(
   instruction: string,
   settings?: OrgSettings
 ): Promise<AgentPlan> {
-  const baseMessages = buildMessageHistory(ctx.recentMessages, instruction)
+  const isOperatorMode = ctx.thread.channelType === 'dashboard_agent' || ctx.thread.channelType === 'sms_agent';
+  const historyWindow = isOperatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  const baseMessages = buildMessageHistory(historyWindow, instruction)
   const systemPrompt = buildSystemPrompt(ctx, settings);
   const tools = toAnthropicTools(settings);
 
@@ -663,7 +665,9 @@ export async function runAgent(
   const s = resolveAgentSettings(settings);
   const maxIterations = s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS;
   const actionsPerformed: ActionEntry[] = [];
-  const messages = buildMessageHistory(ctx.recentMessages, instruction);
+  const isOperatorMode = ctx.thread.channelType === 'dashboard_agent' || ctx.thread.channelType === 'sms_agent';
+  const history = isOperatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  const messages = buildMessageHistory(history, instruction);
 
   const tools = toAnthropicTools(settings);
 
@@ -696,15 +700,17 @@ export async function runAgent(
     messages.push({ role: "user", content: toolResults });
   }
 
-  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
   const systemPrompt = buildSystemPrompt(ctx, settings);
+
+  let totalTokens = 0;
+  const TOKEN_BUDGET = 20_000;
 
   for (let i = 0; i < maxIterations; i++) {
     logger.info({ iteration: i, messageCount: messages.length }, '[agent] iteration start');
 
     const response = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: systemPrompt,
       messages,
       tools,
@@ -716,10 +722,19 @@ export async function runAgent(
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
-    logger.info({ iteration: i, stopReason: response.stop_reason, tools: toolUseBlocks.map(b => b.name) }, '[agent] iteration end');
+    totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+    logger.info({ iteration: i, stopReason: response.stop_reason, tools: toolUseBlocks.map(b => b.name), totalTokens }, '[agent] iteration end');
 
     // Add the assistant turn before deciding what to do next
     messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "max_tokens") {
+      return { summary: "Agent response was cut off — the request may be too complex. Try breaking it into smaller steps.", actionsPerformed };
+    }
+
+    if (totalTokens >= TOKEN_BUDGET) {
+      return { summary: "Agent stopped — this request required too many steps. Please try a more specific instruction.", actionsPerformed };
+    }
 
     // No tool calls → final answer
     if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {

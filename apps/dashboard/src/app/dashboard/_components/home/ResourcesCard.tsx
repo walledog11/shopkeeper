@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, BookOpen } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { tips } from "../help/content/tips"
 import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
@@ -10,9 +10,12 @@ const PREVIEW_ARTICLES = tips.articles.slice(0, 4)
 
 export default function ResourcesCard() {
   return (
-    <Card className="bg-card border-border rounded-md overflow-hidden flex flex-col h-full">
-      <div className="flex items-center justify-center px-4 py-2 border-b border-border shrink-0">
-        <h2 className="text-sm font-semibold text-white/70">Articles</h2>
+    <Card className="bg-card border-border rounded-md overflow-hidden flex flex-col h-full noise-texture">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border shrink-0">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-3.5 h-3.5 text-white/30" />
+          <h2 className="text-sm font-semibold text-white/70">Articles</h2>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col justify-evenly divide-y divide-white/[0.05]">
@@ -23,7 +26,7 @@ export default function ResourcesCard() {
             <Link
               key={article.id}
               href={`/dashboard/learn/${article.id}`}
-              className="flex items-start gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors"
+              className="group flex items-start gap-3 px-4 py-3 hover:bg-white/[0.04] transition-colors"
             >
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-white/70 leading-snug line-clamp-2">
@@ -33,7 +36,7 @@ export default function ResourcesCard() {
                   {tag}
                 </span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-white/20 shrink-0 mt-0.5" />
+              <ArrowRight className="w-3.5 h-3.5 text-white/20 shrink-0 mt-0.5 group-hover:translate-x-0.5 transition-transform" />
             </Link>
           )
         })}

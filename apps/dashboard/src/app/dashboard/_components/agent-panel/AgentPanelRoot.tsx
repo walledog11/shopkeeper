@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
 import { Bot } from "lucide-react"
 import AgentChatClient from "../../agent/_components/AgentChatClient"
@@ -11,22 +12,48 @@ interface Props {
 
 export default function AgentPanelRoot({ agentName }: Props) {
   const { isOpen, open, close } = useAgentPanel()
+  const [isLargeScreen, setIsLargeScreen] = React.useState(false)
+
+  React.useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)")
+    const onChange = () => setIsLargeScreen(mql.matches)
+    mql.addEventListener("change", onChange)
+    setIsLargeScreen(mql.matches)
+    return () => mql.removeEventListener("change", onChange)
+  }, [])
+
+  const isMobile = !isLargeScreen
 
   return (
     <>
       {/* Slide-in panel */}
       <AnimatePresence>
         {isOpen && (
-          <motion.div
-            key="agent-panel"
-            initial={{ x: "100%" }}
-            animate={{ x: 0 }}
-            exit={{ x: "100%" }}
-            transition={{ type: "spring", stiffness: 300, damping: 35 }}
-            className="fixed top-0 right-0 h-full z-50 w-full md:w-[420px] bg-background border-l border-border shadow-xl flex flex-col"
-          >
-            <AgentChatClient agentName={agentName} compact onClose={close} />
-          </motion.div>
+          isMobile ? (
+            <motion.div
+              key="agent-panel-mobile"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ type: "spring", stiffness: 300, damping: 35 }}
+              className="fixed inset-0 z-50 bg-background flex flex-col"
+            >
+              <AgentChatClient agentName={agentName} compact onClose={close} />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="agent-panel-desktop"
+              initial={{ width: 0 }}
+              animate={{ width: 420 }}
+              exit={{ width: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 35 }}
+              className="flex-shrink-0 overflow-hidden h-full bg-background border-l border-border shadow-xl flex flex-col"
+            >
+              <div className="w-[420px] h-full flex flex-col">
+                <AgentChatClient agentName={agentName} compact onClose={close} />
+              </div>
+            </motion.div>
+          )
         )}
       </AnimatePresence>
 

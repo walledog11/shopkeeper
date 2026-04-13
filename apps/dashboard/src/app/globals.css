@@ -53,15 +53,15 @@
   --radius: 0.5rem;
 
   /* Base surfaces — layered dark */
-  --background: #111111;
+  --background: #0d0d0d;
   --foreground: #ffffff;
 
   /* Cards sit one level above background */
-  --card: #1a1a1a;
+  --card: #161616;
   --card-foreground: #ffffff;
 
   /* Popovers / dropdowns */
-  --popover: #1c1c1c;
+  --popover: #181818;
   --popover-foreground: #ffffff;
 
   /* Primary = yellow brand accent (used sparingly) */
@@ -69,15 +69,15 @@
   --primary-foreground: #0a0a0a;
 
   /* Secondary = subtle fills */
-  --secondary: #222222;
+  --secondary: #1c1c1c;
   --secondary-foreground: rgba(255, 255, 255, 0.85);
 
   /* Muted */
-  --muted: #1e1e1e;
+  --muted: #191919;
   --muted-foreground: rgba(255, 255, 255, 0.40);
 
   /* Accent = hover/active fills */
-  --accent: #242424;
+  --accent: #1e1e1e;
   --accent-foreground: #ffffff;
 
   /* Destructive = red, semantic only */
@@ -108,19 +108,19 @@
 
 /* Keep .dark in sync for any shadcn components that check for it */
 .dark {
-  --background: #111111;
+  --background: #0d0d0d;
   --foreground: #ffffff;
-  --card: #1a1a1a;
+  --card: #161616;
   --card-foreground: #ffffff;
-  --popover: #1c1c1c;
+  --popover: #181818;
   --popover-foreground: #ffffff;
   --primary: #fbbf24;
   --primary-foreground: #0a0a0a;
-  --secondary: #222222;
+  --secondary: #1c1c1c;
   --secondary-foreground: rgba(255, 255, 255, 0.85);
-  --muted: #1e1e1e;
+  --muted: #191919;
   --muted-foreground: rgba(255, 255, 255, 0.40);
-  --accent: #242424;
+  --accent: #1e1e1e;
   --accent-foreground: #ffffff;
   --destructive: oklch(0.704 0.191 22.216);
   --border: rgba(255, 255, 255, 0.08);
@@ -153,13 +153,9 @@
   }
 }
 
-@keyframes scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+@keyframes dot-drift {
+  from { background-position: 0px 0px; }
+  to   { background-position: 20px 20px; }
 }
 
 /* Custom Scrollbar */

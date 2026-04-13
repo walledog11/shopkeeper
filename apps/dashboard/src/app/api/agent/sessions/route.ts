@@ -27,6 +27,7 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
       include: {
         messages: {
+          where: { senderType: { in: ["customer", "agent"] } },
           orderBy: { sentAt: "asc" },
           select: { senderType: true, contentText: true },
         },
@@ -34,18 +35,19 @@ export async function GET() {
     });
 
     return NextResponse.json(
-      threads.map((t) => ({
-        id: t.id,
-        createdAt: t.createdAt,
-        preview:
-          t.messages.find((m) => m.senderType === "customer")?.contentText ?? "Empty session",
-        messages: t.messages
-          .filter((m) => m.senderType === "customer" || m.senderType === "agent")
-          .map((m) => ({
+      threads.map((t) => {
+        const raw = t.messages.find((m) => m.senderType === "customer")?.contentText ?? "Empty session"
+        const preview = raw.length > 60 ? raw.slice(0, 57) + "…" : raw
+        return {
+          id: t.id,
+          createdAt: t.createdAt,
+          preview,
+          messages: t.messages.map((m) => ({
             role: m.senderType === "customer" ? "user" : "agent",
             text: m.contentText ?? "",
           })),
-      }))
+        }
+      })
     );
   } catch (error) {
     return handleApiError(error, "GET /api/agent/sessions", "Failed to fetch sessions");

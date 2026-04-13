@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db, Prisma } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { THREAD_STATUS } from '@/lib/constants';
@@ -34,7 +34,7 @@ export async function PATCH(
     const updated = await db.thread.update({
       where: { id },
       data: {
-        ...(status && { status }),
+        ...(status && { status, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null }),
         ...(tag !== undefined && { tag: tag || null }),
         ...(shopifyCustomerId !== undefined && { shopifyCustomerId: shopifyCustomerId || null }),
       },

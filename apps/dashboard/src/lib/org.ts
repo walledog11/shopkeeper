@@ -21,10 +21,15 @@ export async function getOrCreateOrg() {
   const client = await clerkClient();
   const clerkOrg = await client.organizations.getOrganization({ organizationId: orgId });
 
-  return db.organization.create({
-    data: {
-      clerkOrgId: orgId,
-      name: clerkOrg.name,
-    },
-  });
+  try {
+    return await db.organization.create({
+      data: {
+        clerkOrgId: orgId,
+        name: clerkOrg.name,
+      },
+    });
+  } catch (err) {
+    if ((err as { code?: string }).code !== 'P2002') throw err;
+    return db.organization.findUniqueOrThrow({ where: { clerkOrgId: orgId } });
+  }
 }

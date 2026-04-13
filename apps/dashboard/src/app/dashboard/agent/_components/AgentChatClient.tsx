@@ -404,7 +404,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
               onKeyDown={handleKeyDown}
               disabled={isRunning}
               placeholder={`Message ${agentName}…`}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[24px] max-h-40"
+              className="flex-1 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[24px] max-h-40"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
             <button

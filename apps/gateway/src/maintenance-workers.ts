@@ -43,7 +43,11 @@ export async function createMaintenanceWorkers(workerConn: any, producerConn: an
           const data = await res.json() as { error?: { message: string } };
 
           if (data.error) {
-            logger.error({ organizationId: integration.organizationId, accountId: integration.externalAccountId, err: data.error.message }, '[TokenHealth] Token invalid');
+            logger.error({ organizationId: integration.organizationId, accountId: integration.externalAccountId, err: data.error.message }, '[TokenHealth] Token invalid — marking as expired');
+            await db.integration.update({
+              where: { id: integration.id },
+              data: { tokenExpiresAt: new Date(0) },
+            });
             return;
           }
 

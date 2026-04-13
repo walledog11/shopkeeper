@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
-import stripe from '@/lib/stripe'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
+import stripe from '@/lib/stripe'
+import { getOrCreateStripeCustomer } from '@/lib/billing'
 
 export async function GET() {
   try {
@@ -12,19 +13,7 @@ export async function GET() {
     const rl = await rateLimit(`billing:get:${org.id}`, 10, 60)
     if (!rl.success) return tooManyRequests(rl.reset)
 
-    // Ensure the org has a Stripe customer
-    let customerId = org.stripeCustomerId
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        name: org.name,
-        metadata: { clerkOrgId: org.clerkOrgId },
-      })
-      customerId = customer.id
-      await db.organization.update({
-        where: { id: org.id },
-        data: { stripeCustomerId: customerId },
-      })
-    }
+    const customerId = await getOrCreateStripeCustomer(org)
 
     // Fetch subscription — expand payment method only (product fetched separately below)
     let subscription: import('stripe').Stripe.Subscription | null = null

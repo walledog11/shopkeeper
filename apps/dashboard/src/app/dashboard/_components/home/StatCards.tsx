@@ -1,91 +1,96 @@
-"use client"
-
 import Link from "next/link"
-import { Inbox, CheckCircle2, MessageSquare } from "lucide-react"
-import { motion, useMotionValue, useTransform, animate } from "motion/react"
-import { useEffect } from "react"
-import { Card } from "@/components/ui/card"
+import { Inbox, CheckCircle2, Clock, MessageSquare } from "lucide-react"
 
-const MotionLink = motion.create(Link)
-const MotionCard = motion.create(Card)
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m > 0 ? `${h}h ${m}m` : `${h}h`
+}
 
-function AnimatedNumber({ value, format }: { value: number; format?: (n: number) => string }) {
-  const count = useMotionValue(0)
-  const display = useTransform(count, (latest) => {
-    const rounded = Math.round(latest)
-    return format ? format(rounded) : String(rounded)
-  })
-
-  useEffect(() => {
-    const controls = animate(count, value, { duration: 0.8, ease: [0.16, 1, 0.3, 1] })
-    return () => controls.stop()
-  }, [count, value])
-
-  return <motion.span>{display}</motion.span>
+function openCountColor(count: number): string {
+  if (count === 0) return "text-green-400"
+  if (count >= 10) return "text-amber-400"
+  return "text-white"
 }
 
 interface Props {
   isLoading: boolean
   openCount: number
-  resolvedCount: number
+  resolvedTodayCount: number
+  avgResponseMinutes: number | null
   totalMessageCount: number
 }
 
-export default function StatCards({ isLoading, openCount, resolvedCount, totalMessageCount }: Props) {
+export default function StatCards({ isLoading, openCount, resolvedTodayCount, avgResponseMinutes, totalMessageCount }: Props) {
+  const dash = <span className="text-white/15">—</span>
+
   return (
-    <div className="grid grid-cols-3 gap-3 shrink-0 items-start">
-      
-      {/* OPEN CARD */}
-      <MotionLink
+    <div className="grid grid-cols-2 @min-[640px]:grid-cols-4 gap-3 shrink-0">
+
+      {/* OPEN */}
+      <Link
         href="/dashboard/tickets"
-        whileHover={{ y: -2 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        className="group flex items-center justify-between px-4 py-4 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors"
+        className="group flex items-center justify-between px-4 py-2.5 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors"
       >
         <div>
-          <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wide mb-1">Open</p>
-          <p className="text-3xl font-extrabold text-white leading-none">
-            {isLoading ? <span className="text-white/15">—</span> : <AnimatedNumber value={openCount} />}
+          <p className="text-[11px] text-white/35 mb-1 font-medium">Open tickets</p>
+          <p className={`text-3xl font-bold tabular-nums leading-none transition-colors ${isLoading ? "" : openCountColor(openCount)}`}>
+            {isLoading ? dash : openCount}
           </p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center group-hover:bg-white/[0.08] transition-colors">
-          <Inbox className="w-5 h-5 text-white/40" />
+        <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+          <Inbox className="w-3.5 h-3.5 text-white/35" />
         </div>
-      </MotionLink>
+      </Link>
 
-      {/* RESOLVED CARD */}
-      <MotionCard
-        whileHover={{ y: -2 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        className="flex-row items-center justify-between px-4 py-4 hover:border-white/[0.14] transition-colors"
-      >
-       <div>
-          <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wide mb-1">Resolved</p>
-          <p className="text-3xl font-extrabold text-white leading-none">
-            <AnimatedNumber value={resolvedCount} />
-          </p>
-        </div>
-        <div className="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center">
-          <CheckCircle2 className="w-5 h-5 text-white/40" />
-        </div>
-      </MotionCard>
-
-      {/* MESSAGES CARD */}
-      <MotionCard
-        whileHover={{ y: -2 }}
-        transition={{ type: "spring", stiffness: 400, damping: 25 }}
-        className="flex-row items-center justify-between px-4 py-4 hover:border-white/[0.14] transition-colors"
+      {/* RESOLVED TODAY */}
+      <Link
+        href="/dashboard/analytics"
+        className="group flex items-center justify-between px-4 py-2.5 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors"
       >
         <div>
-          <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wide mb-1">Messages</p>
-          <p className="text-3xl font-extrabold text-white leading-none">
-            <AnimatedNumber value={totalMessageCount} format={(n) => n.toLocaleString()} />
+          <p className="text-[11px] text-white/35 mb-1 font-medium">Resolved today</p>
+          <p className="text-3xl font-bold tabular-nums text-white leading-none">
+            {isLoading ? dash : resolvedTodayCount}
           </p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-white/[0.05] flex items-center justify-center">
-          <MessageSquare className="w-5 h-5 text-white/40" />
+        <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+          <CheckCircle2 className="w-3.5 h-3.5 text-white/35" />
         </div>
-      </MotionCard>
+      </Link>
+
+      {/* AVG RESPONSE TIME */}
+      <Link
+        href="/dashboard/analytics"
+        className="group flex items-center justify-between px-4 py-2.5 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors"
+      >
+        <div>
+          <p className="text-[11px] text-white/35 mb-1 font-medium">Avg response <span className="text-white/20">(7d)</span></p>
+          <p className="text-3xl font-bold tabular-nums text-white leading-none">
+            {avgResponseMinutes == null ? dash : formatMinutes(Math.round(avgResponseMinutes))}
+          </p>
+        </div>
+        <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+          <Clock className="w-3.5 h-3.5 text-white/35" />
+        </div>
+      </Link>
+
+      {/* TOTAL MESSAGES */}
+      <Link
+        href="/dashboard/analytics"
+        className="group flex items-center justify-between px-4 py-2.5 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors"
+      >
+        <div>
+          <p className="text-[11px] text-white/35 mb-1 font-medium">Messages <span className="text-white/20">(all time)</span></p>
+          <p className="text-3xl font-bold tabular-nums text-white leading-none">
+            {totalMessageCount.toLocaleString()}
+          </p>
+        </div>
+        <div className="w-8 h-8 rounded-lg bg-white/[0.05] flex items-center justify-center shrink-0">
+          <MessageSquare className="w-3.5 h-3.5 text-white/35" />
+        </div>
+      </Link>
 
     </div>
   )

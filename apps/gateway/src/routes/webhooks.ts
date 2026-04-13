@@ -19,11 +19,18 @@ const FILLER_PHRASES = [
 ];
 const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
 
-const redisUrl = new URL(process.env.REDIS_URL!);
-redisUrl.pathname = '/0';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const redisConnection = new IORedis(redisUrl.toString()) as any;
-const messageQueue = new Queue(QUEUE.INBOUND, { connection: redisConnection });
+let _messageQueue: Queue | null = null;
+function getMessageQueue(): Queue {
+  if (!_messageQueue) {
+    const redisUrl = new URL(process.env.REDIS_URL!);
+    redisUrl.pathname = '/0';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const redisConnection = new IORedis(redisUrl.toString()) as any;
+    _messageQueue = new Queue(QUEUE.INBOUND, { connection: redisConnection });
+  }
+  return _messageQueue;
+}
 
 async function resolveOrganizationId(platform: ChannelType, externalAccountId: string): Promise<string | null> {
   const integration = await db.integration.findFirst({
@@ -112,7 +119,7 @@ router.post('/meta', async (req: Request, res: Response) => {
       }
 
       const traceId = randomUUID();
-      await messageQueue.add(JOB.IG_DM, {
+      await getMessageQueue().add(JOB.IG_DM, {
         platform: CHANNEL.IG_DM,
         organizationId,
         rawPayload: payload,
@@ -184,7 +191,7 @@ router.post('/email/inbound', async (req: Request, res: Response) => {
     }
 
     const traceId = randomUUID();
-    await messageQueue.add(JOB.EMAIL, {
+    await getMessageQueue().add(JOB.EMAIL, {
       platform: CHANNEL.EMAIL,
       organizationId,
       senderEmail: fromAddress,
@@ -471,7 +478,7 @@ router.post('/shopify', async (req: Request, res: Response) => {
     }
 
     const traceId = randomUUID();
-    await messageQueue.add(JOB.SHOPIFY, {
+    await getMessageQueue().add(JOB.SHOPIFY, {
       platform: CHANNEL.SHOPIFY,
       organizationId,
       topic,

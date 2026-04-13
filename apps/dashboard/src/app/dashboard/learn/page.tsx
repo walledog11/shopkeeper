@@ -1,15 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { ArrowRight, Clock } from "lucide-react"
+import { ArrowRight, Clock, Check } from "lucide-react"
 import { tips } from "../_components/help/content/tips"
-import { TAG_COLORS_BORDERED, DEFAULT_TAG_COLOR_BORDERED } from "@/lib/articleTags"
+import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
 
 const ALL_TAGS = ["All", ...Array.from(new Set(tips.articles.map(a => a.tag ?? "Tips")))]
+const READ_ARTICLES_KEY = "clerk_read_articles"
 
 export default function LearnPage() {
   const [activeTag, setActiveTag] = useState("All")
+  const [readIds, setReadIds] = useState<string[]>([])
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(READ_ARTICLES_KEY)
+      if (stored) setReadIds(JSON.parse(stored))
+    } catch {
+      // localStorage unavailable
+    }
+  }, [])
 
   const filtered = activeTag === "All"
     ? tips.articles
@@ -49,7 +60,8 @@ export default function LearnPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filtered.map(article => {
             const tag = article.tag ?? "Tips"
-            const tagColor = TAG_COLORS_BORDERED[tag] ?? DEFAULT_TAG_COLOR_BORDERED
+            const tagColor = TAG_COLORS[tag] ?? DEFAULT_TAG_COLOR
+            const isRead = readIds.includes(article.id)
 
             return (
               <Link
@@ -61,16 +73,24 @@ export default function LearnPage() {
                   <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${tagColor}`}>
                     {tag}
                   </span>
-                  {article.readingTime && (
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Clock className="w-3 h-3" />
-                      {article.readingTime} min read
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isRead && (
+                      <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60">
+                        <Check className="w-3 h-3" />
+                        Read
+                      </span>
+                    )}
+                    {article.readingTime && (
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        {article.readingTime} min read
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex-1">
-                  <h2 className="text-sm font-bold text-foreground leading-snug group-hover:text-violet-400 transition-colors">
+                  <h2 className={`text-sm font-bold leading-snug group-hover:text-violet-400 transition-colors ${isRead ? 'text-foreground/60' : 'text-foreground'}`}>
                     {article.title}
                   </h2>
                   {article.summary && (
@@ -80,8 +100,8 @@ export default function LearnPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 text-xs font-semibold text-indigo-500 group-hover:text-indigo-700 transition-colors mt-1">
-                  Read article <ArrowRight className="w-3.5 h-3.5" />
+                <div className={`flex items-center gap-1 text-xs font-semibold mt-1 transition-colors ${isRead ? 'text-muted-foreground/50 group-hover:text-indigo-500' : 'text-indigo-500 group-hover:text-indigo-700'}`}>
+                  {isRead ? 'Read again' : 'Read article'} <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </Link>
             )

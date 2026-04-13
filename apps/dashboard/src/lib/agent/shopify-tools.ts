@@ -166,7 +166,7 @@ export async function getShopifyOrders(
   ctx: ShopifyContext
 ): Promise<string> {
   const res = await fetch(
-    `https://${ctx.shop}/admin/api/${API_VERSION}/orders.json?customer_id=${input.customer_id}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,total_price,line_items`,
+    `https://${ctx.shop}/admin/api/${API_VERSION}/orders.json?customer_id=${input.customer_id}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,line_items`,
     { headers: shopifyHeaders(ctx.accessToken) }
   );
   const data = await res.json();
@@ -185,10 +185,10 @@ export async function getShopifyOrders(
       created_at: o.created_at,
       financial_status: o.financial_status,
       fulfillment_status: o.fulfillment_status,
-      total_price: o.total_price,
-      items: (o.line_items as { title: string; quantity: number }[]).map(
-        (li) => `${li.quantity}x ${li.title}`
-      ),
+      total_price: o.current_total_price ?? o.total_price,
+      items: (o.line_items as { title: string; quantity: number; fulfillable_quantity: number }[])
+        .filter((li) => li.fulfillable_quantity > 0)
+        .map((li) => `${li.quantity}x ${li.title}`),
     }))
   );
 }
@@ -292,7 +292,7 @@ export async function getOrderByName(
 ): Promise<string> {
   const name = input.order_name.startsWith("#") ? input.order_name : `#${input.order_name}`;
   const res = await fetch(
-    `https://${ctx.shop}/admin/api/${API_VERSION}/orders.json?name=${encodeURIComponent(name)}&status=any&limit=1&fields=id,name,created_at,financial_status,fulfillment_status,total_price,line_items`,
+    `https://${ctx.shop}/admin/api/${API_VERSION}/orders.json?name=${encodeURIComponent(name)}&status=any&limit=1&fields=id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,line_items`,
     { headers: shopifyHeaders(ctx.accessToken) }
   );
   const data = await res.json();
@@ -311,10 +311,10 @@ export async function getOrderByName(
     created_at: o.created_at,
     financial_status: o.financial_status,
     fulfillment_status: o.fulfillment_status,
-    total_price: o.total_price,
-    items: (o.line_items as { title: string; quantity: number }[]).map(
-      (li) => `${li.quantity}x ${li.title}`
-    ),
+    total_price: o.current_total_price ?? o.total_price,
+    items: (o.line_items as { title: string; quantity: number; fulfillable_quantity: number }[])
+      .filter((li) => li.fulfillable_quantity > 0)
+      .map((li) => `${li.quantity}x ${li.title}`),
   });
 }
 

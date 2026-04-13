@@ -74,9 +74,13 @@ export async function POST(request: Request) {
       });
 
       if (!metaResponse.ok) {
-        const err = await metaResponse.text();
-        logger.error({ err }, '[Dispatch] Meta API failed');
-        return NextResponse.json({ error: 'Failed to send via Instagram' }, { status: 502 });
+        const errBody = await metaResponse.json().catch(() => ({})) as { error?: { code?: number; message?: string } };
+        const isTokenExpired = errBody.error?.code === 190;
+        logger.error({ err: errBody }, '[Dispatch] Meta API failed');
+        return NextResponse.json(
+          { error: isTokenExpired ? 'Instagram token expired — reconnect your account in Settings.' : 'Failed to send via Instagram' },
+          { status: 502 }
+        );
       }
     }
     // -------------------------------------------------------------

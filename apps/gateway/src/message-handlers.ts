@@ -102,12 +102,13 @@ async function processInboundMessage(
 ) {
   messageText = sanitizeUserInput(messageText);
 
-  if (externalMessageId) {
-    const existing = await db.message.findFirst({ where: { externalMessageId } });
-    if (existing) {
-      logger.info({ externalMessageId }, '[Worker] Duplicate message detected — skipping');
-      return null;
-    }
+  const idempotencyKey = externalMessageId
+    ?? `${organizationId}:${platformId}:${messageText?.slice(0, 100) ?? ''}:${Math.floor(Date.now() / 60_000)}`;
+
+  const existing = await db.message.findFirst({ where: { externalMessageId: idempotencyKey } });
+  if (existing) {
+    logger.info({ idempotencyKey }, '[Worker] Duplicate message detected — skipping');
+    return null;
   }
 
   const customer = await db.customer.upsert({
@@ -156,7 +157,7 @@ async function processInboundMessage(
         threadId: thread!.id,
         senderType: SenderType.customer,
         contentText: messageText,
-        externalMessageId,
+        externalMessageId: idempotencyKey,
         ...(attachments.length > 0 && { attachments }),
       },
     }),
