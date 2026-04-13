@@ -3,7 +3,6 @@
 import ResourcesCard from "./ResourcesCard"
 import AgentBanner from "./AgentBanner"
 import StatCards from "./StatCards"
-import ViewsNav from "./ViewsNav"
 import ChannelBreakdown from "./ChannelBreakdown"
 import ActivityFeed from "./ActivityFeed"
 import TicketList from "./TicketList"
@@ -72,17 +71,10 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
 
           <div className="border-t border-white/[0.04]" />
 
-          {/* Main 3-column layout */}
-          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[220px_1fr_260px] gap-3">
+          {/* Main 2-column layout */}
+          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[1fr_256px] gap-3 items-start">
 
-            {/* Left column */}
-            <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
-              <ViewsNav navViews={navViews} activeView={activeView} setActiveView={setActiveView} />
-              <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
-              <ActivityFeed activityEvents={activityEvents} />
-            </div>
-
-            {/* Center column */}
+            {/* Main column */}
             <div className="flex flex-col gap-3 min-w-0">
               <TicketList
                 isLoading={isLoading}
@@ -95,15 +87,15 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 hasChannel={channelConnected}
               />
               <InsightsCard openThreads={openThreads} closedThreads={closedThreads} />
-              <div className="flex-1 min-h-0">
-                <FeedbackSurvey />
-              </div>
+              <FeedbackSurvey />
+              <ResourcesCard />
             </div>
 
-            {/* Right column */}
-            <div className="flex flex-col gap-3 [&>*:last-child]:flex-1">
+            {/* Right sidebar */}
+            <div className="flex flex-col gap-3">
               <WorkflowBasics workflowSteps={workflowSteps} workflowDoneCount={workflowDoneCount} />
-              <ResourcesCard />
+              <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
+              <ActivityFeed activityEvents={activityEvents} />
             </div>
 
           </div>

@@ -24,10 +24,10 @@ export async function GET(request: Request) {
     if (isCsv) {
       // Stream all records in batches — no arbitrary row cap
       const where = {
-        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] },
+        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] as string[] },
         deletedAt: null,
         thread: { organizationId: org.id },
-      } as const;
+      };
       const include = {
         thread: {
           select: {
@@ -74,7 +74,7 @@ export async function GET(request: Request) {
 
     const rows = await db.message.findMany({
       where: {
-        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] },
+        senderType: { in: [SENDER_TYPE.AI, SENDER_TYPE.NOTE] as string[] },
         deletedAt: null,
         thread: { organizationId: org.id },
       },

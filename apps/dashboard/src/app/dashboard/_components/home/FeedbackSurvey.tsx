@@ -69,7 +69,7 @@ export default function FeedbackSurvey() {
 
   if (submitted) {
     return (
-      <Card className="bg-card border-border rounded-md h-full flex flex-col items-center justify-center gap-1 p-4 text-center">
+      <Card className="bg-card border-border rounded-md flex flex-col items-center justify-center gap-1 p-4 text-center">
         <p className="text-sm font-semibold text-white/70">Thanks for the feedback!</p>
         <p className="text-xs text-white/35">It helps us make Clerk better.</p>
       </Card>
@@ -77,7 +77,7 @@ export default function FeedbackSurvey() {
   }
 
   return (
-    <Card className="bg-card border-border rounded-md h-full flex flex-col">
+    <Card className="bg-card border-border rounded-md flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
         <span className="text-xs text-white/40">Feedback</span>
@@ -137,12 +137,13 @@ export default function FeedbackSurvey() {
         </div>
 
         {/* Textarea */}
-        <div className="relative flex-1 flex flex-col min-h-[56px]">
+        <div className="relative">
           <textarea
             value={comment}
             onChange={e => setComment(e.target.value.slice(0, MAX_COMMENT))}
             placeholder={getPlaceholder(rating)}
-            className="w-full flex-1 min-h-[56px] bg-white/[0.04] border border-white/[0.08] rounded-md px-3 py-2 text-xs text-white/70 placeholder:text-white/25 resize-none focus:outline-none focus:border-white/20"
+            rows={3}
+            className="w-full h-16 bg-white/[0.04] border border-white/[0.08] rounded-md px-3 py-2 text-xs text-white/70 placeholder:text-white/25 resize-none focus:outline-none focus:border-white/20"
           />
           <span className="absolute bottom-2 right-3 text-[10px] text-white/20 select-none pointer-events-none">
             {comment.length}/{MAX_COMMENT}

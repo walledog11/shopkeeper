@@ -146,7 +146,7 @@ function TicketRow({ thread }: { thread: Thread }) {
   return (
     <Link
       href={`/dashboard/tickets?thread=${thread.id}`}
-      className={`group flex items-start gap-3 pr-4 pl-3 py-2.5 border-l-2 border-l-transparent ${borderClass} hover:bg-white/[0.04] transition-all overflow-hidden`}
+      className={`group flex items-start gap-3 pr-5 pl-4 py-3 border-l-2 border-l-transparent ${borderClass} hover:bg-white/[0.04] transition-all overflow-hidden`}
     >
       <div className="w-7 h-7 rounded-full bg-white/[0.09] flex items-center justify-center shrink-0 mt-0.5">
         <Image src={channel.logo} alt={channel.name} width={14} height={14} className="object-contain opacity-80" />
@@ -185,10 +185,29 @@ function TicketRow({ thread }: { thread: Thread }) {
 export default function TicketList({ isLoading, displayedThreads, activeView, navViews, openCount, resolvedCount, setActiveView, hasChannel }: Props) {
   return (
     <Card className="bg-card border-border rounded-md flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h2 className="text-sm font-bold text-white/70">
-          {navViews.find(v => v.id === activeView)?.label ?? 'Tickets'}
-        </h2>
+      <div className="flex border-b border-border">
+        {navViews.map(view => (
+          <button
+            key={view.id}
+            onClick={() => setActiveView(view.id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium border-b-2 transition-all ${
+              activeView === view.id
+                ? "border-white/70 text-white"
+                : "border-transparent text-white/35 hover:text-white/60"
+            }`}
+          >
+            {view.label}
+            {view.count > 0 && (
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                activeView === view.id
+                  ? "bg-white/10 text-white/70"
+                  : "bg-white/[0.06] text-white/30"
+              }`}>
+                {view.count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -215,14 +234,12 @@ export default function TicketList({ isLoading, displayedThreads, activeView, na
         )}
       </AnimatePresence>
 
-      {!isLoading && displayedThreads.length > 0 && (
-        <Link
-          href="/dashboard/tickets"
-          className="flex items-center gap-1 px-4 py-3 border-t border-border text-sm text-white/40 hover:text-white/70 transition-colors"
-        >
-          View all {navViews.find(v => v.id === activeView)?.count ?? ''} tickets <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      )}
+      <Link
+        href="/dashboard/tickets"
+        className="flex items-center justify-center gap-1.5 px-4 py-2.5 border-t border-border text-xs text-white/30 hover:text-white/60 transition-colors"
+      >
+        View all tickets <ArrowRight className="w-3 h-3" />
+      </Link>
     </Card>
   )
 }
