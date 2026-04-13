@@ -281,7 +281,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
         ) : !hideHeader ? (
         <div className="h-16 flex items-center justify-between px-6 bg-card border-b border-border shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-full bg-green-500 flex items-center justify-center">
               <Bot className="w-4 h-4 text-white" />
             </div>
             <span className="font-semibold text-foreground">{agentName}</span>

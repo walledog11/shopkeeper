@@ -6,9 +6,9 @@ import { ArrowLeft } from "lucide-react";
 
 export default function CreateOrgPage() {
   return (
-    <div className="min-h-screen relative flex items-center justify-center bg-slate-50/50 overflow-hidden px-4 font-sans">
+    <div className="min-h-screen relative flex items-center justify-center bg-black overflow-hidden px-4 font-sans">
 
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-yellow-400/15 blur-[100px] rounded-full pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-green-400/15 blur-[100px] rounded-full pointer-events-none" />
 
       <Link
         href="/select-org"
@@ -33,7 +33,7 @@ export default function CreateOrgPage() {
               headerTitle: "text-slate-900 font-extrabold",
               headerSubtitle: "text-slate-500",
               formButtonPrimary: "bg-slate-900 hover:bg-slate-800 rounded-full font-bold",
-              formFieldInput: "rounded-lg border-slate-200 bg-slate-50 focus:bg-white focus:ring-yellow-400",
+              formFieldInput: "rounded-lg border-slate-200 bg-slate-50 focus:bg-white focus:ring-green-400",
             }
           }}
         />

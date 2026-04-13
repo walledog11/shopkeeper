@@ -17,7 +17,7 @@ interface Props {
 
 export default function ActivityFeed({ activityEvents }: Props) {
   return (
-    <Card className="bg-card border-border rounded-md overflow-hidden shrink-0 noise-texture">
+    <Card className="bg-card border-border rounded-md overflow-hidden noise-texture h-full">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
         <p className="text-xs text-white/40">Activity</p>
         <Activity className="w-3 h-3 text-white/40" />

@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useContext } from "react";
-import { Bot, LogOut, ChevronsUpDown } from "lucide-react";
+import { createContext, useContext, useState } from "react";
+import { Bot, LogOut, ChevronsUpDown, ChevronDown } from "lucide-react";
 import { useOpenThreads } from "@/hooks/useThreads";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useUser, useClerk, useOrganization, useOrganizationList } from "@clerk/nextjs";
 
-import { navItems, footerNavItems } from "./nav-items";
+import { navGroups, footerNavItems } from "./nav-items";
 import { useAgentPanel } from "./agent-panel/AgentPanelContext";
 import {
   Sidebar,
@@ -28,6 +28,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { OrgAvatar } from "@/components/OrgAvatar";
@@ -36,19 +37,36 @@ const OpenThreadCountContext = createContext(0);
 export const useOpenThreadCount = () => useContext(OpenThreadCountContext);
 
 function Logo() {
+  const pathname = usePathname();
   return (
-    <Link href="/dashboard" className="flex items-center gap-1.5">
+    <Link
+      href="/dashboard"
+      className="flex items-center gap-1.5"
+      onClick={() => {
+        if (pathname !== "/dashboard") {
+          window.dispatchEvent(new Event("nav-progress-start"));
+        }
+      }}
+    >
       <span className="text-xl font-black text-white tracking-tight">clerk</span>
       <span className="w-2 h-2 rounded-full bg-green-400 self-start mt-1.5 shrink-0" />
     </Link>
   );
 }
 
-function SidebarNavContent({ openCount }: { openCount: number }) {
+function SidebarNavContent({
+  openCount,
+  onSwitching,
+}: {
+  openCount: number;
+  onSwitching: (v: boolean) => void;
+}) {
   const pathname = usePathname();
   const { setOpenMobile, isMobile } = useSidebar();
   const { user } = useUser();
   const { signOut } = useClerk();
+  const { organization } = useOrganization();
+  const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });
 
   const fullName = user?.fullName ?? user?.firstName ?? "User";
   const email = user?.primaryEmailAddress?.emailAddress ?? "";
@@ -59,82 +77,148 @@ function SidebarNavContent({ openCount }: { openCount: number }) {
       return;
     }
     if (isMobile) setOpenMobile(false);
-    window.dispatchEvent(new Event('nav-progress-start'));
+    window.dispatchEvent(new Event("nav-progress-start"));
   };
 
   return (
     <>
-      {/* Main nav */}
       <SidebarContent className="px-3 py-3 gap-0">
-        <SidebarMenu className="gap-0.5">
-          {navItems.map((item) => {
-            const isActive =
-              item.href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(item.href);
-
-            return (
-              <SidebarMenuItem key={item.name} className="relative">
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-amber-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
-                )}
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  className="rounded-xl h-auto py-2.5 px-3 text-sm font-medium text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-white/[0.07] data-[active=true]:text-white"
-                >
-                  <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
-                    <item.icon className="w-[18px] h-[18px] shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                </SidebarMenuButton>
-                {item.badge && openCount > 0 && (
-                  <SidebarMenuBadge className="pointer-events-none">
-                    <span
-                      key={openCount}
-                      className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
-                    >
-                      {openCount > 9 ? "9+" : openCount}
-                    </span>
-                  </SidebarMenuBadge>
-                )}
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarContent>
-
-      {/* Footer: Settings + User */}
-      <SidebarFooter className="border-t border-sidebar-border px-3 py-3 gap-0">
-        <SidebarMenu className="gap-0.5">
-          {footerNavItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
-            return (
-              <SidebarMenuItem key={item.name} className="relative">
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] bg-amber-400 rounded-r-full z-10 pointer-events-none animate-in fade-in-0 duration-150" />
-                )}
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive}
-                  className="rounded-xl h-auto py-2.5 px-3 text-sm font-medium text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-white/[0.07] data-[active=true]:text-white"
-                >
-                  <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
-                    <item.icon className="w-[18px] h-[18px] shrink-0" />
-                    <span>{item.name}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-
-        <SidebarSeparator className="my-2 bg-sidebar-border" />
-
-        {/* User dropdown */}
+        {/* Org switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button suppressHydrationWarning className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.08] transition-colors text-left outline-none">
+            <button className="w-full flex items-center gap-2 px-2 py-2 mb-2 rounded-xl hover:bg-white/[0.06] transition-colors outline-none text-left">
+              <OrgAvatar
+                name={organization?.name}
+                imageUrl={organization?.imageUrl}
+                className="w-6 h-6 rounded bg-white/10 text-[10px] text-white/70 shrink-0"
+              />
+              <span className="flex-1 text-xs font-semibold text-white/70 truncate">
+                {organization?.name ?? "Workspace"}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 text-white/30 shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="bottom"
+            align="start"
+            className="w-[--radix-popper-anchor-width] bg-popover border-white/[0.09] text-white"
+          >
+            {userMemberships.data?.map(
+              (mem: { organization: { id: string; name: string; imageUrl?: string } }) => (
+                <DropdownMenuItem
+                  key={mem.organization.id}
+                  onClick={async () => {
+                    if (mem.organization.id === organization?.id) return;
+                    onSwitching(true);
+                    await setActive?.({ organization: mem.organization.id });
+                    window.location.reload();
+                  }}
+                  className={`flex items-center gap-2.5 cursor-pointer focus:bg-white/[0.07] ${
+                    mem.organization.id === organization?.id ? "bg-white/[0.04]" : ""
+                  }`}
+                >
+                  <OrgAvatar
+                    name={mem.organization.name}
+                    imageUrl={mem.organization.imageUrl}
+                    className="w-5 h-5 rounded bg-white/10 text-[10px] text-white/70 shrink-0"
+                  />
+                  <span className="flex-1 text-xs font-medium text-white/80 truncate">
+                    {mem.organization.name}
+                  </span>
+                  {mem.organization.id === organization?.id && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
+                  )}
+                </DropdownMenuItem>
+              )
+            )}
+            <DropdownMenuSeparator className="bg-white/[0.08]" />
+            <DropdownMenuItem asChild className="cursor-pointer focus:bg-white/[0.07]">
+              <Link href="/create-org" className="flex items-center gap-2.5">
+                <div className="w-5 h-5 rounded bg-white/[0.06] flex items-center justify-center text-white/30 text-sm font-light leading-none shrink-0">
+                  +
+                </div>
+                <span className="text-xs font-medium text-white/40">Create workspace</span>
+              </Link>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <SidebarSeparator className="mb-3 bg-sidebar-border" />
+
+        {/* Nav groups */}
+        {navGroups.map((group, i) => (
+          <div key={group.label || "home"} className={i > 0 ? "mt-4" : ""}>
+            {group.label && (
+              <p className="px-3 mb-1 text-xs font-medium tracking-wide text-white/30">
+                {group.label}
+              </p>
+            )}
+            <SidebarMenu className="gap-0.5">
+              {group.items.map((item) => {
+                const isActive =
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : pathname.startsWith(item.href);
+
+                return (
+                  <SidebarMenuItem key={item.name}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive}
+                      className="rounded-xl h-auto py-2.5 px-3 text-sm font-normal text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-green-400/[0.08] data-[active=true]:text-white data-[active=true]:font-medium"
+                    >
+                      <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
+                        <item.icon className="w-[18px] h-[18px] shrink-0" />
+                        <span>{item.name}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {item.badge && openCount > 0 && (
+                      <SidebarMenuBadge className="pointer-events-none">
+                        <span
+                          key={openCount}
+                          className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
+                        >
+                          {openCount > 9 ? "9+" : openCount}
+                        </span>
+                      </SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </div>
+        ))}
+      </SidebarContent>
+
+      {/* Footer */}
+      <SidebarFooter className="border-t border-sidebar-border px-3 py-3 gap-0">
+        {footerNavItems.length > 0 && (
+          <SidebarMenu className="gap-0.5 mb-2">
+            {footerNavItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <SidebarMenuItem key={item.name}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive}
+                    className="rounded-xl h-auto py-2.5 px-3 text-sm font-normal text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-green-400/[0.08] data-[active=true]:text-white data-[active=true]:font-medium"
+                  >
+                    <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
+                      <item.icon className="w-[18px] h-[18px] shrink-0" />
+                      <span>{item.name}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              suppressHydrationWarning
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/[0.08] transition-colors text-left outline-none"
+            >
               <OrgAvatar
                 name={fullName}
                 imageUrl={user?.imageUrl}
@@ -170,42 +254,49 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
   const { threads: openThreads } = useOpenThreads();
   const openCount = openThreads.length;
   const { isOpen: isAgentOpen, toggle: toggleAgent } = useAgentPanel();
+  const [isSwitching, setIsSwitching] = useState(false);
 
   return (
     <OpenThreadCountContext.Provider value={openCount}>
-    <SidebarProvider className="flex-1 min-h-0">
-      <Sidebar className="border-r-0 bg-sidebar" collapsible="offcanvas">
-        <SidebarHeader className="h-16 flex-row items-center px-5 border-b border-sidebar-border shrink-0">
-          <Logo />
-        </SidebarHeader>
-
-        <SidebarNavContent openCount={openCount} />
-      </Sidebar>
-
-      {/* Main content */}
-      <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-background flex flex-col">
-        {/* Mobile-only top bar */}
-        <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar">
-          <Logo />
-          <div className="flex items-center gap-1">
-            <button
-              onClick={toggleAgent}
-              className={`p-2 rounded-md transition-colors ${
-                isAgentOpen
-                  ? 'text-amber-400 bg-amber-400/15'
-                  : 'text-amber-400/70 hover:text-amber-400 hover:bg-amber-400/10'
-              }`}
-              title="AI Agent"
-            >
-              <Bot className="w-5 h-5" />
-            </button>
-            <SidebarTrigger className="text-white/60 hover:text-white hover:bg-white/[0.08]" />
+      {isSwitching && (
+        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex items-center gap-3 text-white/60">
+            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+            <span className="text-sm font-medium">Switching workspace…</span>
           </div>
         </div>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
+      )}
+      <SidebarProvider className="flex-1 min-h-0">
+        <Sidebar className="border-r-0 bg-background" collapsible="offcanvas">
+          <SidebarHeader className="h-12 flex-row items-center px-5 border-b border-sidebar-border shrink-0">
+            <Logo />
+          </SidebarHeader>
+          <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} />
+        </Sidebar>
+
+        {/* Main content */}
+        <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-black flex flex-col">
+          {/* Mobile-only top bar */}
+          <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar">
+            <Logo />
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleAgent}
+                className={`p-2 rounded-md transition-colors ${
+                  isAgentOpen
+                    ? "text-green-400 bg-green-400/15"
+                    : "text-green-400/70 hover:text-green-400 hover:bg-green-400/10"
+                }`}
+                title="AI Agent"
+              >
+                <Bot className="w-5 h-5" />
+              </button>
+              <SidebarTrigger className="text-white/60 hover:text-white hover:bg-white/[0.08]" />
+            </div>
+          </div>
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
     </OpenThreadCountContext.Provider>
   );
 }
-

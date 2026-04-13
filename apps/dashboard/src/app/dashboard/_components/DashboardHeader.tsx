@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Bell, ChevronDown, HelpCircle, Search } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { Bell, HelpCircle, Search, UserPlus } from "lucide-react";
 import CommandPalette from "./CommandPalette";
 import { useHelp } from "./help/HelpContext";
 import { useOpenThreadCount } from "./DashboardSidebar";
-import { useUser, useOrganization, useOrganizationList } from "@clerk/nextjs";
+import { useUser, useOrganization } from "@clerk/nextjs";
 import type { OrganizationMembershipResource } from "@clerk/shared/types";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";
@@ -16,19 +16,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
 export default function DashboardHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
   const { isOpen: isHelpOpen, openHelp, closeHelp } = useHelp();
   const openCount = useOpenThreadCount();
   const { user } = useUser();
-  const { organization, memberships } = useOrganization({ memberships: { infinite: false, pageSize: 5 } });
-  const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });
+  const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 5 } });
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -48,22 +46,14 @@ export default function DashboardHeader() {
   const pageTitle = [...navItems]
     .sort((a, b) => b.href.length - a.href.length)
     .find(item => pathname === item.href || pathname.startsWith(item.href + "/"))?.name
-    ?? (pathname.includes("settings") ? "Settings" : "Dashboard");
+    ?? "Dashboard";
 
   return (
     <>
-      {isSwitching && (
-        <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
-          <div className="flex items-center gap-3 text-white/60">
-            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
-            <span className="text-sm font-medium">Switching workspace…</span>
-          </div>
-        </div>
-      )}
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
 
       {/* Desktop-only header */}
-      <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-border px-4 h-16 shrink-0 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
+      <div className="hidden md:grid md:grid-cols-[1fr_auto_1fr] items-center border-b border-border px-4 h-12 shrink-0 bg-background/80 backdrop-blur-sm">
 
         {/* Left: page title */}
         <div className="flex items-center">
@@ -73,11 +63,11 @@ export default function DashboardHeader() {
         {/* Center: search trigger */}
         <button
           onClick={() => setCmdOpen(true)}
-          className="flex items-center gap-2 w-80 px-4 py-1.5 rounded-full border border-white/[0.10] bg-white/[0.05] hover:bg-white/[0.08] hover:border-white/[0.15] transition-all text-white/30 hover:text-white/50"
+          className="flex items-center gap-2 w-100 px-4 py-1.5 rounded-full border border-white/[0.10] bg-white/[0.05] hover:bg-white/[0.08] hover:border-white/[0.15] transition-all text-white/30 hover:text-white/50"
         >
           <Search className="w-3.5 h-3.5 shrink-0" />
           <span className="flex-1 text-xs text-left">Search…</span>
-          <kbd className="text-[10px] font-semibold bg-white/[0.06] border border-white/[0.10] px-1.5 py-0.5 rounded text-white/30 shrink-0">⌘K</kbd>
+          <kbd className="text-[10px] font-semibold bg-white/[0.06] border border-white/[0.10] px-1.5 rounded text-white/30 shrink-0">⌘K</kbd>
         </button>
 
         {/* Right: controls */}
@@ -105,6 +95,15 @@ export default function DashboardHeader() {
               <span className="ml-2 text-[11px] text-white/30">{otherMembers.length} online</span>
             </div>
           )}
+
+          {/* Invite */}
+          <button
+            onClick={() => router.push("/dashboard/team?invite=1")}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-black bg-green-400 hover:bg-green-300 transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Invite
+          </button>
 
           {/* Help */}
           <button
@@ -155,58 +154,6 @@ export default function DashboardHeader() {
                   <span className="text-xs font-semibold text-white/40">View →</span>
                 </Link>
               )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="w-px h-5 bg-white/[0.08] mx-1" />
-
-          {/* Org switcher */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-2 pl-1.5 pr-2 py-1 rounded-md hover:bg-white/[0.06] transition-colors outline-none">
-                <OrgAvatar
-                  name={organization?.name}
-                  imageUrl={organization?.imageUrl}
-                  className="w-6 h-6 rounded bg-white/10 text-[10px] text-white/70"
-                />
-                <span className="text-xs font-semibold text-white/70 max-w-[140px] truncate">
-                  {organization?.name ?? "Workspace"}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-white/30 shrink-0" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 bg-popover border-white/[0.09] text-white">
-              {userMemberships.data?.map((mem: { organization: { id: string; name: string; imageUrl?: string } }) => (
-                <DropdownMenuItem
-                  key={mem.organization.id}
-                  onClick={async () => {
-                    if (mem.organization.id === organization?.id) return;
-                    setIsSwitching(true);
-                    await setActive?.({ organization: mem.organization.id });
-                    window.location.reload();
-                  }}
-                  className={`flex items-center gap-2.5 cursor-pointer focus:bg-white/[0.07] ${
-                    mem.organization.id === organization?.id ? "bg-white/[0.04]" : ""
-                  }`}
-                >
-                  <OrgAvatar
-                    name={mem.organization.name}
-                    imageUrl={mem.organization.imageUrl}
-                    className="w-5 h-5 rounded bg-white/10 text-[10px] text-white/70 shrink-0"
-                  />
-                  <span className="flex-1 text-xs font-medium text-white/80 truncate">{mem.organization.name}</span>
-                  {mem.organization.id === organization?.id && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />
-                  )}
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator className="bg-white/[0.08]" />
-              <DropdownMenuItem asChild className="cursor-pointer focus:bg-white/[0.07]">
-                <Link href="/create-org" className="flex items-center gap-2.5">
-                  <div className="w-5 h-5 rounded bg-white/[0.06] flex items-center justify-center text-white/30 text-sm font-light leading-none shrink-0">+</div>
-                  <span className="text-xs font-medium text-white/40">Create workspace</span>
-                </Link>
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

@@ -83,15 +83,15 @@ export default function WelcomePage() {
                   className={cn(
                     "flex items-start gap-3 p-4 rounded-xl border text-left transition-all",
                     selected
-                      ? "border-yellow-400 bg-yellow-50 ring-1 ring-yellow-400"
+                      ? "border-green-400 bg-green-50 ring-1 ring-green-400"
                       : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
                   )}
                 >
                   <div className={cn(
                     "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
-                    selected ? "bg-yellow-100 border-yellow-300" : "bg-slate-50 border-slate-200"
+                    selected ? "bg-green-100 border-green-300" : "bg-slate-50 border-slate-200"
                   )}>
-                    <Icon className={cn("w-4 h-4", selected ? "text-yellow-600" : "text-slate-500")} />
+                    <Icon className={cn("w-4 h-4", selected ? "text-green-600" : "text-slate-500")} />
                   </div>
                   <div>
                     <p className={cn("text-sm font-semibold", selected ? "text-slate-900" : "text-slate-700")}>{label}</p>
@@ -117,11 +117,11 @@ export default function WelcomePage() {
                   className={cn(
                     "flex flex-col items-center justify-center py-3 px-2 rounded-xl border text-sm font-semibold transition-all",
                     selected
-                      ? "border-yellow-400 bg-yellow-50 text-yellow-800 ring-1 ring-yellow-400"
+                      ? "border-green-400 bg-green-50 text-green-800 ring-1 ring-green-400"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
                   )}
                 >
-                  <Icon className={cn("w-4 h-4 mb-1", selected ? "text-yellow-600" : "text-slate-400")} />
+                  <Icon className={cn("w-4 h-4 mb-1", selected ? "text-green-600" : "text-slate-400")} />
                   {label}
                 </button>
               );
@@ -138,7 +138,7 @@ export default function WelcomePage() {
             className={cn(
               "w-full h-11 rounded-full text-sm font-bold gap-2 transition-all",
               canContinue
-                ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md"
+                ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed"
             )}
           >

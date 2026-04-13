@@ -1,10 +1,9 @@
 "use client"
 
-import { Activity, Bot, BookOpen, MessageSquare, Settings } from "lucide-react"
+import { Activity, Bot, MessageSquare, Settings } from "lucide-react"
 import Link from "next/link"
 import AgentChatClient from "./AgentChatClient"
 import ActionLog from "./ActionLog"
-import KbPageClient from "../../kb/_components/KbPageClient"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 interface Props {
@@ -41,10 +40,6 @@ export default function AgentPageClient({ agentName }: Props) {
             <Activity className="w-3.5 h-3.5" />
             Activity
           </TabsTrigger>
-          <TabsTrigger value="knowledge" className="rounded-none px-3 py-2 text-sm">
-            <BookOpen className="w-3.5 h-3.5" />
-            Knowledge Base
-          </TabsTrigger>
         </TabsList>
       </div>
 
@@ -60,10 +55,6 @@ export default function AgentPageClient({ agentName }: Props) {
 
         <TabsContent value="activity" className="h-full overflow-y-auto">
           <ActionLog />
-        </TabsContent>
-
-        <TabsContent value="knowledge" className="h-full overflow-hidden">
-          <KbPageClient />
         </TabsContent>
 
       </div>

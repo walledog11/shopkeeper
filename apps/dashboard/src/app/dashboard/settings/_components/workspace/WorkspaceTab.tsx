@@ -3,7 +3,6 @@
 import { useState } from "react"
 import { Input } from "@/components/ui/input"
 import { SaveButton, SectionCard } from "../shared"
-import CannedResponses from "./CannedResponses"
 
 interface Props {
   orgName: string
@@ -39,7 +38,7 @@ export default function WorkspaceTab({ orgName }: Props) {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold text-white/80">Workspace</h1>
-        <p className="text-sm text-white/35 mt-0.5">Manage your workspace settings and reply templates.</p>
+        <p className="text-sm text-white/35 mt-0.5">Manage your workspace settings.</p>
       </div>
 
       <SectionCard title="General" description="How your workspace is identified across the dashboard.">
@@ -65,7 +64,6 @@ export default function WorkspaceTab({ orgName }: Props) {
         </div>
       </SectionCard>
 
-      <CannedResponses />
     </div>
   )
 }

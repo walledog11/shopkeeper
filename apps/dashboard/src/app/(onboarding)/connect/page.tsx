@@ -233,7 +233,7 @@ export default function ConnectPage() {
           className={cn(
             "h-11 px-8 rounded-full text-sm font-bold transition-all gap-2",
             hasConnected
-              ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md"
+              ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md"
               : "bg-slate-100 text-slate-500 hover:bg-slate-200"
           )}
         >

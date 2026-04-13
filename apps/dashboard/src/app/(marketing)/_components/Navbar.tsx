@@ -10,7 +10,7 @@ export function Navbar() {
         
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center space-x-2 group">
-            <Bot className="w-5 h-5 text-slate-800 transition-colors group-hover:text-yellow-500"/>
+            <Bot className="w-5 h-5 text-slate-800 transition-colors group-hover:text-green-500"/>
             <span className="text-xl font-extrabold text-slate-900 tracking-tight">clerk</span>
           </Link>
           

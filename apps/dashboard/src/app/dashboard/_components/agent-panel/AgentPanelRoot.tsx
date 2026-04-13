@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { Bot } from "lucide-react"
+import { Bot, Ghost } from "lucide-react"
 import AgentChatClient from "../../agent/_components/AgentChatClient"
 import { useAgentPanel } from "./AgentPanelContext"
 
@@ -70,9 +70,9 @@ export default function AgentPanelRoot({ agentName }: Props) {
             transition={{ type: "spring", stiffness: 400, damping: 25 }}
             onClick={open}
             title="Open AI Agent"
-            className="hidden md:flex fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-violet-600 text-white shadow-lg items-center justify-center"
+            className="hidden md:flex fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full bg-green-600 text-white shadow-lg items-center justify-center"
           >
-            <Bot className="w-5 h-5" />
+            <Ghost className="w-5 h-5" />
           </motion.button>
         )}
       </AnimatePresence>

@@ -46,7 +46,7 @@ const testimonial = {
 
 export default function SignUpPage() {
   return (
-    <div className="min-h-screen relative flex bg-white overflow-hidden font-sans">
+    <div className="min-h-screen relative flex bg-black overflow-hidden font-sans">
 
       {/* Background — identical to landing hero */}
       <DotPattern
@@ -56,7 +56,7 @@ export default function SignUpPage() {
         className="absolute inset-0 z-0 opacity-70 [mask-image:linear-gradient(to_bottom,white_40%,transparent_100%)]"
       />
       {/* Tight top-left glow — less creamy than centered */}
-      <div className="absolute top-0 left-0 w-[500px] h-[350px] opacity-[0.10] pointer-events-none blur-[120px] bg-yellow-400 z-0" />
+      <div className="absolute top-0 left-0 w-[500px] h-[350px] opacity-[0.10] pointer-events-none blur-[120px] bg-green-400 z-0" />
 
       {/* ── LEFT PANEL ── */}
       <div className="hidden lg:flex lg:w-[54%] relative flex-col px-14 xl:px-20 py-12">
@@ -64,20 +64,20 @@ export default function SignUpPage() {
 
           {/* Logo — matches navbar exactly */}
           <Link href="/" className="flex items-center gap-2 group w-fit">
-            <Bot className="w-5 h-5 text-slate-800 group-hover:text-yellow-500 transition-colors" />
+            <Bot className="w-5 h-5 text-slate-800 group-hover:text-green-500 transition-colors" />
             <span className="text-xl font-extrabold text-slate-900 tracking-tight">clerk</span>
           </Link>
 
           {/* Headline block */}
           <div className="mt-14 xl:mt-20">
             <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest mb-5 shadow-sm">
-              <Zap className="w-3 h-3 text-yellow-500" />
+              <Zap className="w-3 h-3 text-green-500" />
               Free 14-day trial
             </div>
 
             <h1 className="text-5xl xl:text-6xl font-extrabold tracking-tighter text-slate-900 leading-[1.05] mb-4">
               Support that<br />
-              <span className="text-yellow-500">runs itself.</span>
+              <span className="text-green-500">runs itself.</span>
             </h1>
 
             <p className="text-slate-500 text-base leading-relaxed max-w-sm">
@@ -119,7 +119,7 @@ export default function SignUpPage() {
                     <p className="text-xs text-slate-500 mt-0.5 truncate">{item.preview}</p>
                     <div className="mt-1.5">
                       {item.aiDrafted ? (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-full px-2 py-0.5">
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
                           <Zap className="w-2.5 h-2.5" />
                           AI drafted
                         </span>
@@ -138,7 +138,7 @@ export default function SignUpPage() {
                 <span className="text-[11px] text-slate-500 font-medium">
                   <span className="font-extrabold text-slate-800">143</span> tickets resolved today
                 </span>
-                <span className="text-[11px] font-extrabold text-yellow-600">
+                <span className="text-[11px] font-extrabold text-green-600">
                   AI handled 91%
                 </span>
               </div>
@@ -150,14 +150,14 @@ export default function SignUpPage() {
             <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5">
               <div className="flex gap-0.5 mb-2.5">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} className="w-3 h-3 text-yellow-400 fill-yellow-400" />
+                  <Star key={i} className="w-3 h-3 text-green-400 fill-green-400" />
                 ))}
               </div>
               <p className="text-sm text-slate-600 leading-relaxed italic">
                 &ldquo;{testimonial.quote}&rdquo;
               </p>
               <div className="mt-3.5 flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-yellow-100 border border-yellow-200 flex items-center justify-center text-yellow-700 text-[10px] font-extrabold">
+                <div className="w-7 h-7 rounded-full bg-green-100 border border-green-200 flex items-center justify-center text-green-700 text-[10px] font-extrabold">
                   {testimonial.initials}
                 </div>
                 <div>
@@ -188,7 +188,7 @@ export default function SignUpPage() {
         {/* Mobile-only logo */}
         <div className="lg:hidden mb-8">
           <Link href="/" className="flex items-center gap-2 group">
-            <Bot className="w-5 h-5 text-slate-800 group-hover:text-yellow-500 transition-colors" />
+            <Bot className="w-5 h-5 text-slate-800 group-hover:text-green-500 transition-colors" />
             <span className="text-xl font-extrabold text-slate-900 tracking-tight">clerk</span>
           </Link>
         </div>
@@ -216,16 +216,16 @@ export default function SignUpPage() {
                 header: "hidden",
                 formButtonPrimary:
                   "bg-slate-900 hover:bg-slate-800 rounded-full font-bold transition-colors",
-                footerActionLink: "text-yellow-600 hover:text-yellow-700 font-bold",
+                footerActionLink: "text-green-600 hover:text-green-700 font-bold",
                 formFieldInput:
-                  "rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-yellow-400 transition-all",
+                  "rounded-xl border-slate-200 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-green-400 transition-all",
                 socialButtonsBlockButton:
                   "rounded-full border-slate-200 font-semibold text-slate-700 hover:bg-slate-50 bg-white transition-colors",
                 dividerLine: "bg-slate-200",
                 dividerText: "text-slate-400 text-xs font-medium",
                 formFieldLabel: "text-slate-700 font-semibold text-sm",
                 identityPreviewText: "text-slate-700",
-                identityPreviewEditButtonIcon: "text-yellow-500",
+                identityPreviewEditButtonIcon: "text-green-500",
               },
             }}
           />

@@ -53,7 +53,7 @@
   --radius: 0.5rem;
 
   /* Base surfaces — layered dark */
-  --background: #0d0d0d;
+  --background: #000000;
   --foreground: #ffffff;
 
   /* Cards sit one level above background */
@@ -108,7 +108,7 @@
 
 /* Keep .dark in sync for any shadcn components that check for it */
 .dark {
-  --background: #0d0d0d;
+  --background: #000000;
   --foreground: #ffffff;
   --card: #161616;
   --card-foreground: #ffffff;

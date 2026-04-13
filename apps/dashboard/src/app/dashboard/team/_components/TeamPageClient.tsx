@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
 import { timeAgo } from "@/lib/utils";
 import { OrgAvatar } from "@/components/OrgAvatar";
@@ -48,9 +49,18 @@ function RolePill({ role }: { role: string }) {
 }
 
 export default function TeamPageClient({ initialMembers, initialInvitations, currentUserId }: Props) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("invite") === "1") {
+      setShowInviteModal(true);
+      router.replace("/dashboard/team");
+    }
+  }, [searchParams, router]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);
@@ -115,7 +125,7 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
           </div>
           <button
             onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-black bg-yellow-400 hover:bg-yellow-300 rounded-md px-3.5 py-2 transition-all"
+            className="flex items-center gap-1.5 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md px-3.5 py-2 transition-all"
           >
             <UserPlus className="w-4 h-4" /> Invite member
           </button>
@@ -242,7 +252,7 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
                 <button
                   type="submit"
                   disabled={inviting || !inviteEmail.trim()}
-                  className="flex-1 py-2 text-sm font-semibold text-black bg-yellow-400 hover:bg-yellow-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {inviting ? "Sending…" : "Send invite"}
                 </button>

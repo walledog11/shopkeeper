@@ -189,7 +189,7 @@ function SummaryPreview() {
         </div>
         <div className="border-t border-slate-100 bg-white px-4 py-4 shrink-0 min-h-[120px]">
           <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-yellow-600 uppercase tracking-widest">Clerk Context</p>
+            <p className="text-xs font-bold text-green-600 uppercase tracking-widest">Clerk Context</p>
             <RefreshCw className={`w-3 h-3 text-slate-300 ${step === 1 ? "animate-spin" : ""}`} />
           </div>
           {step === 0 && (

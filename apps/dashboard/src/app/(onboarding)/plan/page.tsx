@@ -115,7 +115,7 @@ export default function PlanPage() {
           }`}
         >
           Annually
-          <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide">
+          <span className="bg-green-400 text-green-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide">
             Save 20%
           </span>
         </button>
@@ -134,16 +134,16 @@ export default function PlanPage() {
               key={tier.slug}
               className={`relative flex flex-col rounded-[2rem] p-8 bg-white transition-all duration-300 ${
                 tier.popular
-                  ? "border-2 border-yellow-400 shadow-[0_20px_60px_-15px_rgba(250,204,21,0.25)] md:-translate-y-3 z-10"
+                  ? "border-2 border-green-400 shadow-[0_20px_60px_-15px_rgba(74,222,128,0.25)] md:-translate-y-3 z-10"
                   : "border border-slate-200 shadow-sm hover:shadow-md"
               }`}
             >
               {tier.popular && (
-                <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 to-transparent rounded-[2rem] pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-b from-green-50/50 to-transparent rounded-[2rem] pointer-events-none" />
               )}
               {tier.popular && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                  <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
+                  <span className="bg-green-400 text-green-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
                     <Zap className="w-3 h-3" /> Most Popular
                   </span>
                 </div>
@@ -151,9 +151,9 @@ export default function PlanPage() {
 
               <div className="mb-5 relative z-10">
                 <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 border ${
-                  tier.popular ? "bg-white border-yellow-200 shadow-sm" : "bg-slate-50 border-slate-200"
+                  tier.popular ? "bg-white border-green-200 shadow-sm" : "bg-slate-50 border-slate-200"
                 }`}>
-                  <TierIcon className={`w-5 h-5 ${tier.popular ? "text-yellow-500" : "text-slate-600"}`} />
+                  <TierIcon className={`w-5 h-5 ${tier.popular ? "text-green-500" : "text-slate-600"}`} />
                 </div>
                 <h3 className="text-xl font-extrabold tracking-tight text-slate-900 mb-1.5">{tier.name}</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">{tier.description}</p>
@@ -178,7 +178,7 @@ export default function PlanPage() {
                 disabled={isDisabled || isLoading}
                 className={`w-full rounded-full h-11 text-sm font-bold mb-6 group relative z-10 transition-all ${
                   tier.popular
-                    ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md disabled:opacity-60"
+                    ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md disabled:opacity-60"
                     : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
                 }`}
               >
@@ -202,9 +202,9 @@ export default function PlanPage() {
                 <ul className="space-y-3">
                   {tier.features.map((f, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm">
-                      <div className={`mt-0.5 shrink-0 ${f.ai ? "text-yellow-500" : "text-slate-400"}`}>
+                      <div className={`mt-0.5 shrink-0 ${f.ai ? "text-green-500" : "text-slate-400"}`}>
                         {f.ai
-                          ? <Zap className="w-3.5 h-3.5 fill-yellow-500/20" />
+                          ? <Zap className="w-3.5 h-3.5 fill-green-500/20" />
                           : <Check className="w-3.5 h-3.5" />
                         }
                       </div>

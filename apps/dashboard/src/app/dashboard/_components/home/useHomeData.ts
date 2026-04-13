@@ -6,7 +6,8 @@ import { getCustomerName } from "@/lib/utils"
 import { getChannelInfo } from "@/lib/channels"
 import { fetcher } from "@/lib/fetcher"
 import { SENDER_TYPE } from "@/lib/constants"
-import type { Thread, Integration } from "@/types"
+import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
+import type { Thread, Integration, OrgSettings } from "@/types"
 import type { ViewId, NavView } from "./types"
 import type { ActivityEvent } from "./ActivityFeed"
 
@@ -27,6 +28,7 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const [activeView, setActiveView] = useState<ViewId>('open')
 
   const { data: integrations = [], error: integrationsError } = useSWR<Integration[]>('/api/integrations', fetcher)
+  const { data: orgData } = useSWR<{ settings: Partial<OrgSettings> }>('/api/org', fetcher)
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const analyticsFrom = useMemo(() => {
@@ -119,13 +121,22 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
     closedThreads.some(t => t.messages[0]?.senderType === SENDER_TYPE.AGENT || t.messages[0]?.senderType === SENDER_TYPE.AI)
   ), [openThreads, closedThreads])
   const hasMultipleChannels = integrations.length > 1
+  const hasConfiguredAgent = useMemo(() => {
+    const s = orgData?.settings ?? {}
+    return !!(
+      (s.aiContext && s.aiContext.trim().length > 0) ||
+      (s.brandVoice && s.brandVoice.trim().length > 0) ||
+      (s.agentName && s.agentName !== AGENT_SETTINGS_DEFAULTS.agentName)
+    )
+  }, [orgData])
 
   const workflowSteps = useMemo(() => [
     { label: "Connect a channel", href: "/dashboard/settings?tab=integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
     { label: "Send your first reply", href: "/dashboard/tickets", status: (hasSentReply ? "done" : "pending") as "done" | "pending" },
     { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
     { label: "Add more channels", href: "/dashboard/settings?tab=integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
-  ], [channelConnected, hasSentReply, hasInvitedTeam, hasMultipleChannels])
+    { label: "Configure agent", href: "/dashboard/agent", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
+  ], [channelConnected, hasSentReply, hasInvitedTeam, hasMultipleChannels, hasConfiguredAgent])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
   const navViews = useMemo<NavView[]>(() => [

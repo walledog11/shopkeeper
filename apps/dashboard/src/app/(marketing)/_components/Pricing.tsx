@@ -73,7 +73,7 @@ export function Pricing() {
         {/* Header Section */}
         <div className="flex flex-col items-center text-center max-w-3xl mx-auto mb-16">
           <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 shadow-sm">
-            <Zap className="w-3.5 h-3.5 text-yellow-500" /> Select Your Agent
+            <Zap className="w-3.5 h-3.5 text-green-500" /> Select Your Agent
           </div>
           <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-6">
             Pricing that scales with your efficiency.
@@ -98,7 +98,7 @@ export function Pricing() {
               <span className={`text-sm font-bold transition-colors ${annual ? "text-slate-900" : "text-slate-400"}`}>
                 Annually
               </span>
-              <span className="bg-yellow-100 text-yellow-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide border border-yellow-200">
+              <span className="bg-green-100 text-green-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide border border-green-200">
                 Save 20%
               </span>
             </div>
@@ -119,19 +119,19 @@ export function Pricing() {
                 transition={{ duration: 0.5, delay: index * 0.15 }}
                 className={`relative flex flex-col rounded-[2rem] p-8 transition-all duration-300 bg-white ${
                   tier.popular
-                    ? "border-2 border-yellow-400 shadow-[0_20px_60px_-15px_rgba(250,204,21,0.25)] lg:-translate-y-4 z-10"
+                    ? "border-2 border-green-400 shadow-[0_20px_60px_-15px_rgba(74,222,128,0.25)] lg:-translate-y-4 z-10"
                     : "border border-slate-200 shadow-sm hover:shadow-md"
                 }`}
               >
                 {/* Popular Glow Background inside card */}
                 {tier.popular && (
-                  <div className="absolute inset-0 bg-gradient-to-b from-yellow-50/50 to-transparent rounded-[2rem] pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-green-50/50 to-transparent rounded-[2rem] pointer-events-none" />
                 )}
 
                 {/* Popular Badge */}
                 {tier.popular && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                    <span className="bg-yellow-400 text-yellow-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
+                    <span className="bg-green-400 text-green-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
                       <Zap className="w-3.5 h-3.5" /> Most Popular
                     </span>
                   </div>
@@ -140,9 +140,9 @@ export function Pricing() {
                 {/* Tier Header */}
                 <div className="mb-6 relative z-10">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-5 border ${
-                    tier.popular ? 'bg-white border-yellow-200 shadow-sm' : 'bg-slate-50 border-slate-200'
+                    tier.popular ? 'bg-white border-green-200 shadow-sm' : 'bg-slate-50 border-slate-200'
                   }`}>
-                    <tier.icon className={`w-6 h-6 ${tier.popular ? 'text-yellow-500' : 'text-slate-600'}`} />
+                    <tier.icon className={`w-6 h-6 ${tier.popular ? 'text-green-500' : 'text-slate-600'}`} />
                   </div>
                   <h3 className="text-2xl font-extrabold tracking-tight text-slate-900 mb-2">
                     {tier.name}
@@ -164,7 +164,7 @@ export function Pricing() {
                 <Button
                   className={`w-full rounded-full h-12 text-sm font-bold transition-all mb-8 group relative z-10 ${
                     tier.popular
-                      ? "bg-yellow-400 text-yellow-950 hover:bg-yellow-500 shadow-md"
+                      ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md"
                       : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300"
                   }`}
                   asChild
@@ -185,8 +185,8 @@ export function Pricing() {
                   <ul className="space-y-4 flex-1">
                     {tier.features.map((f, i) => (
                       <li key={i} className="flex items-start gap-3 text-sm">
-                        <div className={`mt-0.5 shrink-0 ${f.ai ? 'text-yellow-500' : 'text-slate-400'}`}>
-                          {f.ai ? <Zap className="w-4 h-4 fill-yellow-500/20" /> : <Check className="w-4 h-4" />}
+                        <div className={`mt-0.5 shrink-0 ${f.ai ? 'text-green-500' : 'text-slate-400'}`}>
+                          {f.ai ? <Zap className="w-4 h-4 fill-green-500/20" /> : <Check className="w-4 h-4" />}
                         </div>
                         <span className="font-medium text-slate-700">
                           {f.text}

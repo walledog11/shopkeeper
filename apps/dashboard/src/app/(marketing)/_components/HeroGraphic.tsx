@@ -66,7 +66,7 @@ export default function HeroGraphic() {
         <div className="w-12 sm:w-16 bg-[#1e3f3b] flex flex-col items-center py-3 gap-3 shrink-0">
           {/* Logo */}
           <div className="flex items-center justify-center w-full mb-1">
-            <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-400" />
+            <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-green-400" />
           </div>
 
           {SIDEBAR_CHANNELS.map((ch) => (
@@ -86,7 +86,7 @@ export default function HeroGraphic() {
                 className="object-contain"
               />
               {ch.badge > 0 && (
-                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-yellow-400 flex items-center justify-center text-[7px] font-bold text-slate-900 ring-1 ring-[#1e3f3b]">
+                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-400 flex items-center justify-center text-[7px] font-bold text-slate-900 ring-1 ring-[#1e3f3b]">
                   {ch.badge}
                 </div>
               )}
@@ -217,7 +217,7 @@ export default function HeroGraphic() {
             className="border-t border-slate-100 bg-white px-3 sm:px-4 py-2 sm:py-2.5 shrink-0"
           >
             <div className="flex items-center justify-between mb-1">
-              <p className="text-[8px] sm:text-[9px] font-bold text-yellow-600 uppercase tracking-widest">Clerk Context</p>
+              <p className="text-[8px] sm:text-[9px] font-bold text-green-600 uppercase tracking-widest">Clerk Context</p>
               <RefreshCw className="w-2.5 h-2.5 text-slate-300" />
             </div>
             <p className="text-[8px] sm:text-[10px] text-slate-500 leading-relaxed line-clamp-2">

@@ -33,7 +33,7 @@ function ConnectCard() {
           ))}
           
           {/* Center Connector Hub */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-yellow-400 rounded-xl flex items-center justify-center shadow-lg border-2 border-white z-10">
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-green-400 rounded-xl flex items-center justify-center shadow-lg border-2 border-white z-10">
             <Inbox className="w-5 h-5 text-white" />
           </div>
         </div>
@@ -99,7 +99,7 @@ function AICard() {
 
           {/* 2. Conditionally pause the infinite scanning beam if off-screen */}
           <motion.div
-            className="absolute left-0 right-0 h-1 bg-yellow-400/80 shadow-[0_0_15px_rgba(250,204,21,0.6)] z-20"
+            className="absolute left-0 right-0 h-1 bg-green-400/80 shadow-[0_0_15px_rgba(74,222,128,0.6)] z-20"
             animate={isInView ? { top: ["0%", "100%", "0%"] } : { top: "0%" }}
             transition={{ duration: 3.5, repeat: Infinity, ease: "linear" }}
           />
@@ -115,7 +115,7 @@ function AICard() {
             className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg shadow-sm"
           >
             <div className="flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 text-yellow-500" />
+              <Sparkles className="w-3.5 h-3.5 text-green-500" />
               <span className="text-[11px] font-bold text-slate-600">Intent</span>
             </div>
             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">Address Change</span>
@@ -129,7 +129,7 @@ function AICard() {
             className="flex items-center justify-between bg-white border border-slate-200 px-3 py-2 rounded-lg shadow-sm"
           >
             <div className="flex items-center gap-2">
-              <Tag className="w-3.5 h-3.5 text-yellow-500" />
+              <Tag className="w-3.5 h-3.5 text-green-500" />
               <span className="text-[11px] font-bold text-slate-600">Entity</span>
             </div>
             <span className="text-[10px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded">Order #MX8922</span>
@@ -144,7 +144,7 @@ function AICard() {
 function RunCard() {
   const workflowSteps = [
     { icon: Inbox, label: "Ticket Created", sub: "Aggregated and triaged", iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-    { icon: BrainCircuit, label: "Proposed Action Plan", sub: "Drafted for human approval", iconBg: "bg-yellow-400", iconColor: "text-white", active: true },
+    { icon: BrainCircuit, label: "Proposed Action Plan", sub: "Drafted for human approval", iconBg: "bg-green-400", iconColor: "text-white", active: true },
     { icon: Send, label: "Approved & Sent", sub: "Only approved steps run", iconBg: "bg-green-100", iconColor: "text-green-600" },
   ];
 
@@ -169,7 +169,7 @@ function RunCard() {
                 <div className={`w-9 h-9 rounded-full ${step.iconBg} flex items-center justify-center shrink-0 shadow-sm border border-white ring-4 ring-slate-50/50`}>
                   <step.icon className={`w-4 h-4 ${step.iconColor}`} />
                 </div>
-                <div className={`bg-white border ${step.active ? 'border-yellow-300 shadow-md' : 'border-slate-200 shadow-sm'} rounded-xl p-3 flex-1`}>
+                <div className={`bg-white border ${step.active ? 'border-green-300 shadow-md' : 'border-slate-200 shadow-sm'} rounded-xl p-3 flex-1`}>
                   <div className="text-xs font-bold text-slate-800 mb-0.5">{step.label}</div>
                   <div className="text-[10px] text-slate-500">{step.sub}</div>
                 </div>

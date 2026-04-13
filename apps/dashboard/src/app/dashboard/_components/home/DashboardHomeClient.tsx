@@ -72,7 +72,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
           <div className="border-t border-white/[0.04]" />
 
           {/* Main 2-column layout */}
-          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[1fr_256px] gap-3 items-start">
+          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[1fr_256px] gap-3">
 
             {/* Main column */}
             <div className="flex flex-col gap-3 min-w-0">
@@ -87,18 +87,22 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
                 hasChannel={channelConnected}
               />
               <InsightsCard openThreads={openThreads} closedThreads={closedThreads} />
-              <FeedbackSurvey />
               <ResourcesCard />
             </div>
 
             {/* Right sidebar */}
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 h-full">
               <WorkflowBasics workflowSteps={workflowSteps} workflowDoneCount={workflowDoneCount} />
               <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
-              <ActivityFeed activityEvents={activityEvents} />
+              <div className="flex-1 flex flex-col min-h-0">
+                <ActivityFeed activityEvents={activityEvents} />
+              </div>
             </div>
 
           </div>
+
+          {/* Full-width feedback strip */}
+          <FeedbackSurvey />
         </div>
       </div>
     </div>

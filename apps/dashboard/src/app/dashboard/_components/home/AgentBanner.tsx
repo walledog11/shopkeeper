@@ -41,7 +41,7 @@ export default function AgentBanner() {
               {/* Top edge inner highlight */}
               <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
             </div>
-            <div className="flex items-stretch justify-left pl-4 sm:h-[150px]">
+            <div className="flex items-stretch justify-left pl-4 sm:min-h-[150px]">
               {/* Illustration — overflows above the card */}
               <div className="hidden sm:block relative w-[220px] shrink-0">
                 <div className="absolute bottom-[-10px] left-0 pointer-events-none">
@@ -50,10 +50,10 @@ export default function AgentBanner() {
               </div>
 
               {/* Content */}
-                <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center lg:gap-6 px-4 py-3">
+                <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center lg:gap-6 px-4 py-4 lg:py-3">
                 <div className="flex-1 min-w-0 ml-4">
                   <div className="mb-1">
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-black bg-amber-400 px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-black bg-green-400 px-2.5 py-1 rounded-full">
                       <Clock className="w-3 h-3" /> 3-min setup
                     </span>
                   </div>
@@ -66,7 +66,7 @@ export default function AgentBanner() {
                   <div className="flex flex-row lg:flex-col gap-2 mt-3 lg:mt-0 shrink-0">
                   <Link
                     href="/dashboard/settings?tab=agent"
-                    className="flex-1 lg:flex-none text-center bg-amber-400 hover:bg-amber-300 active:bg-amber-500 text-black text-sm font-semibold px-5 py-1.5 lg:px-10 lg:py-2 rounded-lg shadow-[0_0_16px_rgba(251,191,36,0.25)] hover:shadow-[0_0_20px_rgba(251,191,36,0.40)] transition-all duration-150 select-none"
+                    className="flex-1 lg:flex-none text-center bg-green-400 hover:bg-green-300 active:bg-green-500 text-black text-sm font-semibold px-5 py-1.5 lg:px-10 lg:py-2 rounded-lg shadow-[0_0_16px_rgba(251,191,36,0.25)] hover:shadow-[0_0_20px_rgba(251,191,36,0.40)] transition-all duration-150 select-none"
                   >
                     Start
                   </Link>

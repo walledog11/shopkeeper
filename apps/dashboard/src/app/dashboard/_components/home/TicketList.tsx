@@ -42,8 +42,8 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
   if (!hasChannel && openCount === 0 && resolvedCount === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4">
-        <div className="w-12 h-12 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center">
-          <Zap className="w-6 h-6 text-yellow-400" />
+        <div className="w-12 h-12 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center">
+          <Zap className="w-6 h-6 text-green-400" />
         </div>
         <div>
           <p className="text-sm font-semibold text-white/70">No channel connected yet</p>
@@ -53,7 +53,7 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
         </div>
         <Link
           href="/dashboard/settings?tab=integrations"
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-yellow-400 text-black text-xs font-semibold hover:bg-yellow-300 transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-green-400 text-black text-xs font-semibold hover:bg-green-300 transition-colors"
         >
           Connect a channel <ArrowRight className="w-3.5 h-3.5" />
         </Link>

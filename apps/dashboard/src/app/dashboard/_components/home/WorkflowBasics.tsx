@@ -48,7 +48,7 @@ export default function WorkflowBasics({ workflowSteps, workflowDoneCount }: Pro
               className={`text-xs font-semibold shrink-0 transition-colors ${
                 step.status === "done"
                   ? "text-white/25 hover:text-white/50"
-                  : "text-amber-400/80 hover:text-amber-400"
+                  : "text-green-400/80 hover:text-green-400"
               }`}
             >
               {step.status === "done" ? "View" : "Start"}
