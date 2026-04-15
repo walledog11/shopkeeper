@@ -41,7 +41,7 @@ export default function NavProgressBar() {
     <div className="relative z-20 h-[2px] shrink-0 bg-transparent">
       {navBar && (
         <div
-          className="absolute inset-y-0 left-0 bg-indigo-500 pointer-events-none"
+          className="absolute inset-y-0 left-0 bg-green-500 pointer-events-none"
           style={{ width: `${navBar.width}%`, opacity: navBar.opacity, transition: navBar.transition }}
         />
       )}

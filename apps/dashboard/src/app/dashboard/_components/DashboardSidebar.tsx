@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { createContext, useContext, useState } from "react";
-import { Bot, LogOut, ChevronsUpDown, ChevronDown } from "lucide-react";
+import { Bot, LogOut, ChevronsUpDown, ChevronDown, ChevronUpCircle } from "lucide-react";
 import { useOpenThreads } from "@/hooks/useThreads";
 import { useUser, useClerk, useOrganization, useOrganizationList } from "@clerk/nextjs";
 
@@ -82,11 +82,11 @@ function SidebarNavContent({
 
   return (
     <>
-      <SidebarContent className="px-3 py-3 gap-0">
+      <SidebarContent className="px-1 py-2 gap-0 overflow-x-hidden bg-black">
         {/* Org switcher */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-2 px-2 py-2 mb-2 rounded-xl hover:bg-white/[0.06] transition-colors outline-none text-left">
+            <button className="w-full flex items-center border-1 border-solid border-white/10 gap-1 px-2 py-2 mb-3 rounded-lg hover:bg-white/[0.1] transition-colors outline-none text-left">
               <OrgAvatar
                 name={organization?.name}
                 imageUrl={organization?.imageUrl}
@@ -143,15 +143,17 @@ function SidebarNavContent({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <SidebarSeparator className="mb-3 bg-sidebar-border" />
+        
 
         {/* Nav groups */}
         {navGroups.map((group, i) => (
           <div key={group.label || "home"} className={i > 0 ? "mt-4" : ""}>
             {group.label && (
-              <p className="px-3 mb-1 text-xs font-medium tracking-wide text-white/30">
-                {group.label}
-              </p>
+              <div className="flex items-center px-3 mt-1 mb-[0.5] gap-1">
+                <p className="text-[0.7rem] font-bold tracking-widest letter-spacing:0.05em uppercase text-white/20 whitespace-nowrap">
+                  {group.label}
+                </p>
+              </div>
             )}
             <SidebarMenu className="gap-0.5">
               {group.items.map((item) => {
@@ -165,7 +167,7 @@ function SidebarNavContent({
                     <SidebarMenuButton
                       asChild
                       isActive={isActive}
-                      className="rounded-xl h-auto py-2.5 px-3 text-sm font-normal text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-green-400/[0.08] data-[active=true]:text-white data-[active=true]:font-medium"
+                      className="rounded-lg h-auto py-2 px-3 text-sm font-medium leading-snug text-gray-400 hover:text-white hover:bg-white/[0.05] data-[active=true]:bg-white/[0.15] data-[active=true]:text-white data-[active=true]:font-medium"
                     >
                       <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
                         <item.icon className="w-[18px] h-[18px] shrink-0" />
@@ -191,7 +193,7 @@ function SidebarNavContent({
       </SidebarContent>
 
       {/* Footer */}
-      <SidebarFooter className="border-t border-sidebar-border px-3 py-3 gap-0">
+      <SidebarFooter className="border-t bg-black border-sidebar-border px-3 py-2 gap-0">
         {footerNavItems.length > 0 && (
           <SidebarMenu className="gap-0.5 mb-2">
             {footerNavItems.map((item) => {
@@ -201,7 +203,7 @@ function SidebarNavContent({
                   <SidebarMenuButton
                     asChild
                     isActive={isActive}
-                    className="rounded-xl h-auto py-2.5 px-3 text-sm font-normal text-white/45 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-green-400/[0.08] data-[active=true]:text-white data-[active=true]:font-medium"
+                    className="rounded-lg h-auto py-1.5 px-3 text-sm font-normal text-gray-500 hover:text-white/80 hover:bg-white/[0.05] data-[active=true]:bg-white/[0.15] data-[active=true]:text-white data-[active=true]:font-medium"
                   >
                     <Link href={item.href} onClick={(e) => handleNavClick(e, isActive)}>
                       <item.icon className="w-[18px] h-[18px] shrink-0" />
@@ -226,15 +228,16 @@ function SidebarNavContent({
               />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-white/90 truncate leading-tight">{fullName}</p>
-                <p className="text-[10px] text-white/40 truncate leading-tight">{email}</p>
+                <p className="text-[10px] text-white/40 leading-tight">{email}</p>
               </div>
-              <ChevronsUpDown className="w-3.5 h-3.5 text-white/25 shrink-0" />
+              <ChevronUpCircle className="w-3.5 h-3.5 text-white/25 shrink-0" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-[--radix-popper-anchor-width] bg-popover border-white/[0.09] text-white"
+            sideOffset={8}
+            className="w-[--radix-popper-anchor-width] min-w-max bg-popover border-white/[0.09] text-white"
           >
             <DropdownMenuItem
               onClick={() => signOut({ redirectUrl: "/login" })}
@@ -266,9 +269,9 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
           </div>
         </div>
       )}
-      <SidebarProvider className="flex-1 min-h-0">
+      <SidebarProvider className="flex-1 min-h-0 w-full overflow-x-hidden">
         <Sidebar className="border-r-0 bg-background" collapsible="offcanvas">
-          <SidebarHeader className="h-12 flex-row items-center px-5 border-b border-sidebar-border shrink-0">
+          <SidebarHeader className="h-12 flex-row items-center px-5 border-b border-sidebar-border bg-black shrink-0">
             <Logo />
           </SidebarHeader>
           <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} />

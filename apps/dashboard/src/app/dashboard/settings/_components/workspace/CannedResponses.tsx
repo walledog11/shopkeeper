@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import useSWR from "swr"
-import { Plus, Trash2, Pencil, Check, Loader2, Tag, MessageSquare } from "lucide-react"
+import { Plus, Trash2, Pencil, Check, Loader2, Tag, MessageSquare, X } from "lucide-react"
 import { fetcher } from "@/lib/fetcher"
 import type { CannedResponse } from "@/types"
 
@@ -15,6 +15,7 @@ export default function CannedResponses() {
   const [isSaving, setIsSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState({ title: '', body: '', tags: '' })
+  
 
   const parseTags = (raw: string) =>
     raw.split(',').map(t => t.trim()).filter(Boolean)
@@ -68,22 +69,16 @@ export default function CannedResponses() {
   const inputCls = "w-full text-sm text-white/70 bg-white/[0.06] border border-white/[0.12] rounded-md px-3 py-2 focus:outline-none focus:border-white/[0.25] placeholder:text-white/25"
 
   return (
-    <div className="bg-card rounded-md border border-border overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
-        <div>
-          <h2 className="text-sm font-semibold text-white/75">Canned Responses</h2>
-          <p className="text-xs text-white/35 mt-1 leading-relaxed">
-            Reusable reply templates. Type <span className="font-mono bg-white/[0.07] px-1 rounded">/</span> in the composer to insert one.
-          </p>
-        </div>
+    <div className="overflow-hidden">
+      <div className="sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
         <div className="space-y-3">
           <div className="flex justify-end">
             <button
-              onClick={() => setIsAdding(true)}
+              onClick={() => setIsAdding((prev) => !prev)}
               className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" />
-              New
+              {isAdding ? (<X className="w-3.5 h-3.5" />) : (<Plus className="w-3.5 h-3.5" />)}
+              {isAdding ? "Cancel" : "New"}
             </button>
           </div>
 
@@ -111,12 +106,6 @@ export default function CannedResponses() {
                 className={inputCls}
               />
               <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => { setIsAdding(false); setDraft({ title: '', body: '', tags: '' }) }}
-                  className="text-xs text-white/40 hover:text-white/70 transition-colors px-3 py-1.5"
-                >
-                  Cancel
-                </button>
                 <button
                   onClick={handleCreate}
                   disabled={isSaving || !draft.title.trim() || !draft.body.trim()}

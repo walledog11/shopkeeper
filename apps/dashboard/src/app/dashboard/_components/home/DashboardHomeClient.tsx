@@ -100,9 +100,6 @@ export default function DashboardHomeClient({ userName, initialOpenThreads, init
             </div>
 
           </div>
-
-          {/* Full-width feedback strip */}
-          <FeedbackSurvey />
         </div>
       </div>
     </div>

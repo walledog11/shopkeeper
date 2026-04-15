@@ -18,9 +18,9 @@ interface NotificationBarProps {
 }
 
 const TYPE_STYLES: Record<NonNullable<Notification["type"]>, { bar: string; icon: string; title: string; action: string }> = {
-  info:    { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-indigo-400", title: "text-white/80", action: "text-indigo-400" },
-  warning: { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-amber-400",  title: "text-amber-400", action: "text-amber-400" },
-  success: { bar: "bg-[#1a1a1a] text-white/60 border-white/[0.08]", icon: "text-emerald-400", title: "text-emerald-400", action: "text-emerald-400" },
+  info:    { bar: "bg-linear-to-b from-indigo-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-indigo-400", title: "text-white/80", action: "text-indigo-400" },
+  warning: { bar: "bg-linear-to-b from-amber-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-amber-400",  title: "text-amber-400", action: "text-amber-400" },
+  success: { bar: "bg-linear-to-b from-emerald-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-emerald-400", title: "text-emerald-400", action: "text-emerald-400" },
 };
 
 const TYPE_ICONS = {
@@ -123,7 +123,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 animate="center"
                 exit="exit"
                 transition={{ duration: 0.18, ease: "easeInOut" }}
-                className="flex items-center gap-2.5"
+                className="flex items-center gap-2.5 transition-colors"
               >
                 <Icon className={`w-4 h-4 shrink-0 ${styles.icon}`} />
                 <div className="flex items-center gap-1.5 min-w-0">
@@ -154,7 +154,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
             </AnimatePresence>
           </div>
 
-<motion.button
+          <motion.button
             onClick={() => dismiss(n.id)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
