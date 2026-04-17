@@ -3,6 +3,7 @@ import { db, Prisma } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
 import { THREAD_STATUS } from '@/lib/constants';
+import { runPlaybooks } from '@/lib/playbook-runner';
 
 export async function PATCH(
   request: Request,
@@ -39,6 +40,13 @@ export async function PATCH(
         ...(shopifyCustomerId !== undefined && { shopifyCustomerId: shopifyCustomerId || null }),
       },
     });
+
+    // Fire playbooks in background (never await — don't block the response)
+    if (tag !== undefined && tag) {
+      runPlaybooks(org.id, { type: 'tag_applied', tag }, id);
+    } else if (status === THREAD_STATUS.CLOSED) {
+      runPlaybooks(org.id, { type: 'ticket_closed' }, id);
+    }
 
     return NextResponse.json(updated);
   } catch (error) {

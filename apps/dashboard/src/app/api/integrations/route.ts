@@ -9,12 +9,29 @@ export async function GET() {
   try {
     const org = await getOrCreateOrg();
 
-    const integrations = await db.integration.findMany({
-      where: { organizationId: org.id },
-      orderBy: { createdAt: 'asc' },
-    });
+    const [integrations, activityRows] = await Promise.all([
+      db.integration.findMany({
+        where: { organizationId: org.id },
+        orderBy: { createdAt: 'asc' },
+      }),
+      db.thread.groupBy({
+        by: ['channelType'],
+        where: { organizationId: org.id, deletedAt: null },
+        _max: { updatedAt: true },
+      }),
+    ]);
 
-    return NextResponse.json(integrations);
+    const lastActivityByChannel: Record<string, string | null> = {};
+    for (const row of activityRows) {
+      lastActivityByChannel[row.channelType] = row._max.updatedAt?.toISOString() ?? null;
+    }
+
+    const result = integrations.map(i => ({
+      ...i,
+      lastActivity: lastActivityByChannel[i.platform] ?? null,
+    }));
+
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error, 'Integrations GET', 'Failed to fetch integrations');
   }

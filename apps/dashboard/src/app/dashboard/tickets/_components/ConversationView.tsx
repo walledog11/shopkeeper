@@ -17,6 +17,8 @@ interface Props {
   ticket: Ticket
   activeTab: 'open' | 'closed'
   agentName: string
+  shopifyCustomerId?: string | null
+  customerPlatformId?: string
   replyText: string
   isDrafting: boolean
   isSending: boolean
@@ -45,6 +47,8 @@ export default function ConversationView({
   ticket,
   activeTab,
   agentName,
+  shopifyCustomerId,
+  customerPlatformId,
   replyText,
   isDrafting,
   isSending,
@@ -615,6 +619,9 @@ export default function ConversationView({
           <Composer
             customerName={ticket.customer}
             agentName={agentName}
+            channelType={ticket.channelType}
+            shopifyCustomerId={shopifyCustomerId}
+            customerPlatformId={customerPlatformId}
             value={isClerkMode ? clerkInstruction : replyText}
             isNote={viewTab === 'notes' ? false : effectiveIsNote}
             isClerkMode={isClerkMode}

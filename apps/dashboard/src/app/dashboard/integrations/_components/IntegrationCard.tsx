@@ -49,9 +49,20 @@ interface Props {
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
   onDisconnect: (integrationId: string) => void
+  lastActivity?: string | null
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect }: Props) {
+function formatLastActivity(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diffMs / 60_000)
+  if (mins < 60) return mins <= 1 ? 'just now' : `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days}d ago`
+}
+
+export default function IntegrationCard({ config, connected, onConnect, onDisconnect, lastActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [shop, setShop] = useState('')
@@ -133,6 +144,9 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
+          {isConnected && lastActivity && (
+            <span className="text-[11px] text-white/25 hidden sm:block">{formatLastActivity(lastActivity)}</span>
+          )}
           {isComingSoon ? (
             <span className="text-[11px] font-medium text-white/25">Coming soon</span>
           ) : isConnected && connected.some(isTokenExpired) ? (

@@ -159,25 +159,20 @@
 }
 
 /* Custom Scrollbar */
-@layers utilities {
-.custom-scrollbar::-webkit-scrollbar {
-  width: 3px;
-  height: 6px;
+@layer utilities {
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 1.5s ease;
+  height: 10px
 }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(37, 37, 37, 0.345);
-  border-radius: 20px;
+.custom-scrollbar.is-scrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  transition: scrollbar-color 0.5s;
+  height: 10px
 }
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(37, 37, 37, 0.345);
-}
 }

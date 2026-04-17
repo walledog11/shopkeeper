@@ -19,7 +19,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
-    const { title, body, tags } = await request.json();
+    const { title, body, tags, channels } = await request.json();
     if (!title?.trim() || !body?.trim()) {
       return NextResponse.json({ error: 'title and body are required' }, { status: 400 });
     }
@@ -29,6 +29,7 @@ export async function POST(request: Request) {
         title: title.trim(),
         body: body.trim(),
         tags: Array.isArray(tags) ? tags.map((t: string) => t.trim()).filter(Boolean) : [],
+        channels: Array.isArray(channels) ? channels.map((c: string) => c.trim()).filter(Boolean) : [],
       },
     });
     return NextResponse.json({ response }, { status: 201 });

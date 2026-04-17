@@ -227,6 +227,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               key={activeTicket.id}
               ticket={activeTicket}
               agentName={agentName}
+              shopifyCustomerId={activeThread.shopifyCustomerId}
+              customerPlatformId={activeThread.customer?.platformId}
               agentTurns={activeAgentTurns}
               isAgentRunning={isAgentRunning}
               onAgentTurnAdd={handleAgentTurnAdd}

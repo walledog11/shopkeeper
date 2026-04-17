@@ -1,7 +1,5 @@
-export default function CustomersPage() {
-  return (
-    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Orders coming soon
-    </div>
-  );
+import OrdersPageClient from "./_components/OrdersPageClient"
+
+export default function OrdersPage() {
+  return <OrdersPageClient />
 }

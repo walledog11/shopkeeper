@@ -9,17 +9,13 @@ import { Footer } from "./_components/Footer";
 import { WorkSprawl } from "./_components/WorkSprawl";
 import { MidPageCTA } from "./_components/MidPageCTA";
 import { HowItWorks } from "./_components/HowItWorks";
+import NotificationBar from "./_components/NotificationBar";
 
 export default function Home() {
   return (
-    <main
-      className="relative flex min-h-screen flex-col"
-      style={{
-        background:
-          "linear-gradient(to bottom, #fddcc9 0%, #fef0e6 6%, #fff8f4 14%, #fffaf5 28%, #fffdf9 55%, #fefefe 80%, #ffffff 100%)",
-      }}
-    >
+    <main className="relative flex min-h-screen flex-col bg-white">
       <div className="relative z-30 w-full">
+        <NotificationBar />
         <Navbar />
         <Hero />
       </div>

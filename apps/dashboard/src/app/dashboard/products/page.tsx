@@ -1,7 +1,5 @@
-export default function CustomersPage() {
-  return (
-    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Products coming soon
-    </div>
-  );
+import ProductsPageClient from "./_components/ProductsPageClient"
+
+export default function ProductsPage() {
+  return <ProductsPageClient />
 }

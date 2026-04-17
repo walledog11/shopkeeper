@@ -2,13 +2,23 @@
 
 import { useState, useEffect, useRef } from "react"
 import useSWR from "swr"
+import { useOrganization } from "@clerk/nextjs"
 import { Bot, Send, Loader2, Lock, StickyNote } from "lucide-react"
 import { fetcher } from "@/lib/fetcher"
 import type { CannedResponse } from "@/types"
 
+interface ShopifyData {
+  customer: { first_name: string; last_name: string } | null
+  orders: { name: string }[]
+  shop?: string
+}
+
 interface Props {
   customerName: string
   agentName?: string
+  channelType?: string
+  shopifyCustomerId?: string | null
+  customerPlatformId?: string
   value: string
   isNote: boolean
   isClerkMode?: boolean
@@ -30,6 +40,9 @@ interface Props {
 export default function Composer({
   customerName,
   agentName = "Clerk",
+  channelType,
+  shopifyCustomerId,
+  customerPlatformId,
   value,
   isNote,
   isClerkMode = false,
@@ -47,24 +60,54 @@ export default function Composer({
   onAddNote,
   onCancelNote,
 }: Props) {
+  const { organization } = useOrganization()
+
   const [slashQuery, setSlashQuery] = useState<string | null>(null)
+  const [selectedIdx, setSelectedIdx] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
 
   const { data: cannedData } = useSWR<{ responses: CannedResponse[] }>(
     slashQuery !== null ? '/api/canned-responses' : null,
     fetcher,
   )
 
+  // Same SWR key as ContextPanel — deduplicated, no extra requests
+  const shopifySwrKey = (() => {
+    if (channelType === 'email' && customerPlatformId) {
+      return `/api/shopify/customer?email=${encodeURIComponent(customerPlatformId)}`
+    }
+    if (shopifyCustomerId) {
+      return `/api/shopify/customer?customerId=${encodeURIComponent(shopifyCustomerId)}`
+    }
+    return null
+  })()
+  const { data: shopifyData } = useSWR<ShopifyData>(shopifySwrKey, fetcher, {
+    revalidateOnFocus: false,
+  })
+
   const filteredCanned = slashQuery !== null
-    ? (cannedData?.responses ?? []).filter(r =>
-        r.title.toLowerCase().includes(slashQuery.toLowerCase()) ||
-        r.body.toLowerCase().includes(slashQuery.toLowerCase())
-      )
+    ? (cannedData?.responses ?? []).filter(r => {
+        const q = slashQuery.toLowerCase()
+        const matchesQuery = !q || r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)
+        const ch = r.channels ?? []
+        const matchesChannel = ch.length === 0 || !channelType || ch.includes(channelType)
+        return matchesQuery && matchesChannel
+      })
     : []
+
+  // Reset selection when results change
+  useEffect(() => { setSelectedIdx(0) }, [slashQuery, filteredCanned.length])
+
+  // Scroll selected item into view
+  useEffect(() => {
+    if (!listRef.current) return
+    const item = listRef.current.children[selectedIdx] as HTMLElement | undefined
+    item?.scrollIntoView({ block: 'nearest' })
+  }, [selectedIdx])
 
   const handleTextChange = (newValue: string) => {
     onChange(newValue)
-    // Detect /query pattern at start of text or after whitespace
     const match = newValue.match(/(^|\s)\/(\S*)$/)
     if (match) {
       setSlashQuery(match[2])
@@ -73,41 +116,67 @@ export default function Composer({
     }
   }
 
-  const insertCanned = (body: string) => {
-    // Replace the trailing /query with the canned body
+  const insertCanned = (r: CannedResponse) => {
+    let body = r.body
+
+    // Substitute variables using Shopify data when available
+    const shopifyCustomer = shopifyData?.customer
+    const shopifyOrders   = shopifyData?.orders ?? []
+
+    if (shopifyCustomer?.first_name) {
+      body = body.replace(/{{customer_name}}/g, shopifyCustomer.first_name)
+    }
+    if (shopifyOrders[0]?.name) {
+      body = body.replace(/{{order_number}}/g, shopifyOrders[0].name)
+    }
+    if (organization?.name) {
+      body = body.replace(/{{store_name}}/g, organization.name)
+    }
     const newValue = value.replace(/(^|\s)\/\S*$/, (m) => {
       const prefix = m.match(/^\s/) ? m[0] : ''
       return prefix + body
     })
     onChange(newValue)
     setSlashQuery(null)
+    setSelectedIdx(0)
     textareaRef.current?.focus()
+    // Fire-and-forget usage tracking
+    fetch(`/api/canned-responses/${r.id}/use`, { method: 'POST' }).catch(() => {})
   }
 
-  // Close popover on Escape
-  useEffect(() => {
-    if (slashQuery === null) return
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSlashQuery(null)
-    }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [slashQuery])
   return (
     <div className="px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] bg-background border-t border-border shrink-0">
       {/* Canned response popover */}
       {slashQuery !== null && filteredCanned.length > 0 && (
-        <div className="mb-2 rounded-md border border-white/[0.12] bg-popover shadow-lg overflow-hidden max-h-52 overflow-y-auto">
-          {filteredCanned.map(r => (
+        <div
+          ref={listRef}
+          className="mb-2 rounded-md border border-white/[0.12] bg-popover shadow-lg overflow-hidden max-h-52 overflow-y-auto"
+        >
+          {filteredCanned.map((r, idx) => (
             <button
               key={r.id}
-              onMouseDown={e => { e.preventDefault(); insertCanned(r.body) }}
-              className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-white/[0.07] transition-colors border-b border-white/[0.05] last:border-0"
+              onMouseDown={e => { e.preventDefault(); insertCanned(r) }}
+              onMouseEnter={() => setSelectedIdx(idx)}
+              className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors border-b border-white/[0.05] last:border-0 ${
+                idx === selectedIdx ? 'bg-white/[0.10]' : 'hover:bg-white/[0.07]'
+              }`}
             >
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-white/70">{r.title}</p>
                 <p className="text-xs text-white/35 truncate">{r.body}</p>
               </div>
+              {(r.channels ?? []).length > 0 && (
+                <div className="flex items-center gap-1 shrink-0 pt-px">
+                  {(r.channels ?? []).map(ch => (
+                    <span
+                      key={ch}
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        ch === 'email' ? 'bg-blue-400' : ch === 'ig_dm' ? 'bg-pink-400' : 'bg-green-400'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </button>
           ))}
         </div>
@@ -135,6 +204,30 @@ export default function Composer({
             value={value}
             onChange={e => handleTextChange(e.target.value)}
             onKeyDown={e => {
+              // Slash-picker keyboard navigation
+              if (slashQuery !== null && filteredCanned.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setSelectedIdx(i => (i + 1) % filteredCanned.length)
+                  return
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setSelectedIdx(i => (i - 1 + filteredCanned.length) % filteredCanned.length)
+                  return
+                }
+                if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
+                  e.preventDefault()
+                  insertCanned(filteredCanned[selectedIdx])
+                  return
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setSlashQuery(null)
+                  return
+                }
+              }
+
               if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
                 e.preventDefault()
                 if (value.trim() && !isSending) onSend(isNote)

@@ -1,7 +1,66 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
+import { handleApiError } from '@/lib/api-errors';
+import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 import logger from '@/lib/logger';
+
+const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
+const API_VERSION = '2024-01';
+
+export async function GET(request: Request) {
+  try {
+    const org = await getOrCreateOrg();
+    const rl = await rateLimit(`customers:get:${org.id}`, 30, 60);
+    if (!rl.success) return tooManyRequests(rl.reset);
+
+    const integration = await db.integration.findFirst({
+      where: { organizationId: org.id, platform: 'shopify' },
+    });
+
+    if (!integration?.accessToken) {
+      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+    }
+
+    const shop = integration.externalAccountId;
+    const token = integration.accessToken;
+    const { searchParams } = new URL(request.url);
+    const q = searchParams.get('q')?.trim() ?? '';
+    const pageInfo = searchParams.get('page_info') ?? '';
+    const limit = 25;
+
+    let url: string;
+    const base = `https://${shop}/admin/api/${API_VERSION}`;
+
+    if (pageInfo) {
+      url = `${base}/customers.json?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
+    } else if (q.length >= 1) {
+      // Search endpoint — no cursor pagination supported by Shopify
+      url = `${base}/customers/search.json?query=${encodeURIComponent(q)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
+    } else {
+      url = `${base}/customers.json?limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}&order=updated_at+DESC`;
+    }
+
+    const res = await fetch(url, { headers: { 'X-Shopify-Access-Token': token } });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    }
+
+    const data = await res.json();
+    const customers = data.customers ?? [];
+
+    // Extract next cursor from Link header (only available on list endpoint, not search)
+    const linkHeader = res.headers.get('link') ?? '';
+    const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
+    const nextPageInfo = nextMatch ? nextMatch[1] : null;
+
+    return NextResponse.json({ customers, nextPageInfo, shop });
+  } catch (error) {
+    return handleApiError(error, 'Customers GET', 'Failed to fetch customers');
+  }
+}
 
 export async function POST(request: Request) {
   try {

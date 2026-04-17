@@ -61,6 +61,7 @@ model Organization {
   knowledgeBases   KnowledgeBase[]
   kbArticles       KbArticle[]
   feedbacks        Feedback[]
+  playbooks        Playbook[]
   @@index([clerkOrgId])
   @@map("organizations")
 }
@@ -191,13 +192,16 @@ model OrgMember {
 }
 
 model CannedResponse {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  title          String   @db.VarChar(255)
-  body           String   @db.Text
-  tags           String[] @default([])
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  title          String    @db.VarChar(255)
+  body           String    @db.Text
+  tags           String[]  @default([])
+  channels       String[]  @default([])
+  useCount       Int       @default(0) @map("use_count")
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -235,6 +239,22 @@ model KbArticle {
   @@index([organizationId])
   @@index([knowledgeBaseId])
   @@map("kb_articles")
+}
+
+model Playbook {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  enabled        Boolean  @default(true)
+  trigger        Json     @db.JsonB
+  actions        Json     @default("[]") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("playbooks")
 }
 
 model Feedback {
