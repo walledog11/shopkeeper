@@ -19,7 +19,7 @@ export async function runPlaybooks(
     });
 
     const matching = playbooks.filter(pb => {
-      const t = pb.trigger as PlaybookTrigger;
+      const t = pb.trigger as unknown as PlaybookTrigger;
       if (t.type !== trigger.type) return false;
       if (t.type === 'tag_applied') return t.tag === trigger.tag;
       return true;
@@ -28,7 +28,7 @@ export async function runPlaybooks(
     if (matching.length === 0) return;
 
     for (const playbook of matching) {
-      await executePlaybook(orgId, threadId, playbook.actions as PlaybookAction[]);
+      await executePlaybook(orgId, threadId, playbook.actions as unknown as PlaybookAction[]);
     }
   } catch (err) {
     logger.error({ err }, '[playbook-runner] Failed to run playbooks');
