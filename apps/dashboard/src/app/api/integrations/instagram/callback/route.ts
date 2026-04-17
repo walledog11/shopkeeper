@@ -131,16 +131,17 @@ export async function GET(request: Request) {
     }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
     const igCbKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
+    const integrationData = { accessToken: pageToken, refreshToken: userToken, fromEmail: igUsername, tokenExpiresAt };
     const existingIgCb = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } });
     if (existingIgCb) {
-      await db.integration.update({ where: { id: existingIgCb.id }, data: { accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+      await db.integration.update({ where: { id: existingIgCb.id }, data: integrationData });
     } else {
       try {
-        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, ...integrationData } });
       } catch (err) {
         if ((err as { code?: string }).code !== 'P2002') throw err;
         const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } }))!;
-        await db.integration.update({ where: { id: race.id }, data: { accessToken: pageToken, fromEmail: igUsername, tokenExpiresAt } });
+        await db.integration.update({ where: { id: race.id }, data: integrationData });
       }
     }
 

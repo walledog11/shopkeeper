@@ -19,6 +19,18 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   blockCustomLineItems: false,
   maxIterations: 10,
   replyLanguage: "auto",
+  digestEnabled: false,
+  digestFrequency: 'daily',
+  digestHour: 8,
+  digestSecondHour: 17,
+  digestDays: 'every_day',
+  digestTimezoneOffset: 0,
+  businessHoursEnabled: false,
+  businessHoursStart: 9,
+  businessHoursEnd: 17,
+  businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+  businessHoursTimezoneOffset: 0,
+  autoAckMessage: "Thanks for reaching out! We're currently outside business hours and will get back to you soon.",
 };
 
 export function resolveAgentSettings(settings: Partial<OrgSettings> | null | undefined): OrgSettings {

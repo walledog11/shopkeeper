@@ -10,6 +10,14 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const FILTER_IDS: ChannelType[] = ['email', 'ig_dm', 'sms_agent']
 
+function getSlaInfo(lastCustomerMessageAt: string | null) {
+  if (!lastCustomerMessageAt) return null
+  const ageH = (Date.now() - new Date(lastCustomerMessageAt).getTime()) / 3_600_000
+  if (ageH < 4) return { color: 'text-emerald-400/80', dot: 'bg-emerald-400', label: `${Math.round(ageH * 10) / 10}h` }
+  if (ageH < 24) return { color: 'text-amber-400/80', dot: 'bg-amber-400', label: `${Math.round(ageH)}h` }
+  return { color: 'text-red-400/80', dot: 'bg-red-400', label: `${Math.floor(ageH / 24)}d` }
+}
+
 const CHANNEL_FILTERS = FILTER_IDS.map(id => {
   const info = getChannelInfo(id)
   return { id, logo: info.logo, label: info.name }
@@ -221,11 +229,12 @@ export default function ThreadList({
           const isSelected = selectedIds.includes(ticket.id)
           const lastRealMsg = [...ticket.messages].reverse().find(m => m.sender !== 'note')
           const awaitingReply = ticket.status === 'open' && lastRealMsg?.sender === 'customer'
+          const sla = awaitingReply ? getSlaInfo(ticket.lastCustomerMessageAt) : null
           return (
             <div
               key={ticket.id}
               className={`cursor-pointer relative px-4 py-3.5 transition-colors group ${
-                activeTicketId === ticket.id ? 'bg-white/[0.07]' : 'hover:bg-white/[0.04]'
+                activeTicketId === ticket.id ? 'bg-white/[0.07]' : sla?.dot === 'bg-red-400' ? 'bg-red-400/[0.03] hover:bg-red-400/[0.05]' : 'hover:bg-white/[0.04]'
               }`}
             >
               {/* Active indicator */}
@@ -258,8 +267,8 @@ export default function ThreadList({
                       <Image src={ticket.logo} fill alt={ticket.platform} className="object-contain" />
                     </div>
                     <span className="text-xs font-semibold text-white/80 truncate">{ticket.customer}</span>
-                    {awaitingReply && (
-                      <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400" title="Awaiting your reply" />
+                    {sla && (
+                      <span className={`shrink-0 w-1.5 h-1.5 rounded-full ${sla.dot}`} title="Awaiting your reply" />
                     )}
                   </div>
                   <span className="text-[10px] text-white/25 shrink-0">{ticket.time}</span>
@@ -279,8 +288,8 @@ export default function ThreadList({
                     }`} />
                     {ticket.status === 'closed' || activeTab === 'closed' ? 'Closed' : 'Open'}
                   </span>
-                  {awaitingReply ? (
-                    <span className="text-[10px] font-semibold text-amber-400/70">Awaiting reply</span>
+                  {sla ? (
+                    <span className={`text-[10px] font-semibold ${sla.color}`}>{sla.label} · Awaiting reply</span>
                   ) : isSearchMode && ticket.status ? (
                     <span className="text-[10px] text-white/20 font-medium capitalize">{ticket.status}</span>
                   ) : null}

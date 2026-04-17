@@ -9,6 +9,8 @@ import type { InboundJobData, ShopifyOrderPayload, AgentPlan, PlanStep } from '.
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 const MAX_INPUT_LENGTH = 4000;
+const DASHBOARD_URL = process.env.DASHBOARD_INTERNAL_URL ?? 'http://localhost:3000';
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? '';
 
 const INJECTION_PATTERNS = [
   /ignore (all |previous |prior )?(instructions?|prompts?|rules?|context)/i,
@@ -29,7 +31,7 @@ let _twilioInitialized = false;
 let _twilioClient: TwilioInstance | null = null;
 let _twilioFrom: string | null = null;
 
-function getTwilio(): { client: TwilioInstance; from: string } | null {
+export function getTwilio(): { client: TwilioInstance; from: string } | null {
   if (!_twilioInitialized) {
     _twilioInitialized = true;
     const sid = process.env.TWILIO_ACCOUNT_SID;
@@ -258,14 +260,11 @@ export async function sendWhatsAppPlanNotification(
   aiSummary: string | null
 ): Promise<void> {
   try {
-    const dashboardUrl = process.env.DASHBOARD_INTERNAL_URL || 'http://localhost:3000';
-    const internalSecret = process.env.INTERNAL_API_SECRET;
-
-    const planRes = await fetch(`${dashboardUrl}/api/agent/plan-internal`, {
+    const planRes = await fetch(`${DASHBOARD_URL}/api/agent/plan-internal`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-internal-secret': internalSecret || '',
+        'x-internal-secret': INTERNAL_SECRET,
       },
       body: JSON.stringify({ orgId: organizationId, threadId }),
     });
@@ -320,6 +319,85 @@ export async function sendWhatsAppPlanNotification(
     }
   } catch (err) {
     logger.error({ err: (err as Error).message, threadId }, '[Worker] sendWhatsAppPlanNotification error');
+  }
+}
+
+interface BusinessHoursSettings {
+  businessHoursEnabled: boolean;
+  businessHoursDays: string[];
+  businessHoursStart: number;
+  businessHoursEnd: number;
+  businessHoursTimezoneOffset: number;
+}
+
+const BUSINESS_HOURS_DEFAULTS: BusinessHoursSettings = {
+  businessHoursEnabled: false,
+  businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
+  businessHoursStart: 9,
+  businessHoursEnd: 17,
+  businessHoursTimezoneOffset: 0,
+};
+
+export function resolveBusinessHoursSettings(raw: Record<string, unknown>): BusinessHoursSettings {
+  return {
+    businessHoursEnabled: (raw.businessHoursEnabled as boolean) ?? BUSINESS_HOURS_DEFAULTS.businessHoursEnabled,
+    businessHoursDays: (raw.businessHoursDays as string[]) ?? BUSINESS_HOURS_DEFAULTS.businessHoursDays,
+    businessHoursStart: (raw.businessHoursStart as number) ?? BUSINESS_HOURS_DEFAULTS.businessHoursStart,
+    businessHoursEnd: (raw.businessHoursEnd as number) ?? BUSINESS_HOURS_DEFAULTS.businessHoursEnd,
+    businessHoursTimezoneOffset: (raw.businessHoursTimezoneOffset as number) ?? BUSINESS_HOURS_DEFAULTS.businessHoursTimezoneOffset,
+  };
+}
+
+export function isWithinBusinessHours(settings: BusinessHoursSettings): boolean {
+  if (!settings.businessHoursEnabled) return true;
+  // Use Intl.DateTimeFormat with an Etc/GMT timezone so day boundaries are correct
+  // for negative offsets (Americas). Note: Etc/GMT sign is inverted vs UTC convention.
+  const offset = settings.businessHoursTimezoneOffset;
+  const tzName = offset === 0
+    ? 'UTC'
+    : `Etc/GMT${offset > 0 ? '-' : '+'}${Math.abs(offset)}`;
+
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tzName,
+    hour: 'numeric',
+    weekday: 'short',
+    hour12: false,
+  }).formatToParts(now);
+
+  const localHour = parseInt(parts.find(p => p.type === 'hour')!.value, 10);
+  const localDay = parts.find(p => p.type === 'weekday')!.value.toLowerCase().slice(0, 3);
+
+  const withinHours = settings.businessHoursEnd > settings.businessHoursStart
+    ? localHour >= settings.businessHoursStart && localHour < settings.businessHoursEnd
+    : localHour >= settings.businessHoursStart || localHour < settings.businessHoursEnd;
+
+  return settings.businessHoursDays.includes(localDay) && withinHours;
+}
+
+export async function sendAutoAck(organizationId: string, threadId: string): Promise<void> {
+  try {
+    const res = await fetch(`${DASHBOARD_URL}/api/messages/auto-ack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': INTERNAL_SECRET,
+      },
+      body: JSON.stringify({ threadId }),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status, threadId, organizationId }, '[Worker] Auto-ack dispatch failed');
+    } else {
+      const body = await res.json() as { ok: boolean; skipped?: boolean };
+      if (body.skipped) {
+        logger.warn({ threadId, organizationId }, '[Worker] Auto-ack skipped by dashboard — check businessHoursEnabled setting sync');
+      } else {
+        logger.info({ threadId, organizationId }, '[Worker] Auto-ack sent to customer');
+      }
+    }
+  } catch (err) {
+    logger.error({ err: (err as Error).message, threadId }, '[Worker] sendAutoAck error');
   }
 }
 

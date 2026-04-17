@@ -6,7 +6,8 @@ import { db, ChannelType } from '@clerk/db';
 import twilio from 'twilio';
 import { getContext, updateContext, extractOrderNumber, type ToolCall } from '../sms-context.js';
 import logger from '../logger.js';
-import { CHANNEL, QUEUE, JOB, READ_TOOLS } from '../constants.js';
+import { CHANNEL, QUEUE, JOB, READ_TOOLS, STATUS } from '../constants.js';
+import { getTwilio } from '../message-handlers.js';
 
 const router = express.Router();
 
@@ -264,11 +265,10 @@ router.post('/twilio', async (req: Request, res: Response) => {
   };
 
   const proactiveSend = async (text: string) => {
-    const sid = process.env.TWILIO_ACCOUNT_SID;
-    const token = process.env.TWILIO_AUTH_TOKEN;
-    if (!sid || !token) return;
+    const tw = getTwilio();
+    if (!tw) return;
     try {
-      await twilio(sid, token).messages.create({ from: toRaw, to: fromRaw, body: text });
+      await tw.client.messages.create({ from: toRaw, to: fromRaw, body: text });
     } catch (e) {
       logger.warn({ err: (e as Error).message }, '[Twilio] Failed to send proactive message');
     }
@@ -376,6 +376,69 @@ router.post('/twilio', async (req: Request, res: Response) => {
 
       await proactiveSend(summary || 'Done.');
       return;
+    }
+
+    // ── Order/ticket lookup shortcut ─────────────────────────────────────────────
+    // If the message is only an order reference (e.g. "#1234", "order 1234"),
+    // return a ticket summary directly without invoking the full agent.
+    // Mirror extractOrderNumber's pattern but anchored to the full message body
+    const lookupMatch = body.trim().match(/^#(\d+)$|^order[- #]*(\d+)$/i);
+    if (lookupMatch) {
+      const num = lookupMatch[1] ?? lookupMatch[2];
+      const orderRef = `#${num}`;
+
+      // NOTE: messages.contentText has no index — a trigram/GIN index or a
+      // dedicated Thread.relatedOrderNumber field would speed this up at scale.
+      const thread = await db.thread.findFirst({
+        where: {
+          organizationId,
+          status: STATUS.OPEN,
+          deletedAt: null,
+          messages: { some: { contentText: { contains: orderRef }, deletedAt: null } },
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          aiSummary: true,
+          tag: true,
+          customer: { select: { name: true } },
+          messages: {
+            where: { senderType: { not: 'note' }, deletedAt: null },
+            orderBy: { sentAt: 'desc' },
+            take: 1,
+            select: { sentAt: true, contentText: true },
+          },
+        },
+      });
+
+      if (thread) {
+        const lastMsg = thread.messages[0];
+        const ageMs = lastMsg ? Date.now() - new Date(lastMsg.sentAt).getTime() : null;
+        const ageStr = ageMs == null ? ''
+          : ageMs < 3_600_000  ? `${Math.round(ageMs / 60_000)}m ago`
+          : ageMs < 86_400_000 ? `${Math.round(ageMs / 3_600_000)}h ago`
+          : `${Math.round(ageMs / 86_400_000)}d ago`;
+
+        const lines = [
+          `${orderRef} — ${thread.customer.name ?? 'Unknown customer'}`,
+          thread.aiSummary ? `"${thread.aiSummary}"` : null,
+          `Tag: ${thread.tag ?? 'Untagged'} · Open`,
+          lastMsg
+            ? `Last message${ageStr ? ` (${ageStr})` : ''}: "${(lastMsg.contentText ?? '').slice(0, 120)}"`
+            : null,
+          ``,
+          `Reply yes to execute the last plan, or type an instruction.`,
+        ].filter((l): l is string => l !== null);
+
+        await updateContext(organizationId, fromNumber, {
+          lastOrderNumber: orderRef,
+          lastThreadId: thread.id,
+        });
+
+        return twimlReply(lines.join('\n'));
+      }
+      // Order not found in open tickets — fall through to freeform agent
+      // which will use get_order_by_name to look it up in Shopify
     }
 
     // Free-form agent instruction path

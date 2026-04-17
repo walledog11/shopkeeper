@@ -4,25 +4,10 @@ Items are organized into phases by effort and dependencies. Items within a phase
 
 ---
 
-## Phase 1 — Code Fixes
-> ~2–3 hours total. All items are parallel. Zero risk to dev — pure code changes with no external dependencies.
-
-- [x] **Remove dev bypass in `send-code`** — `apps/dashboard/src/app/api/phone/send-code/route.ts`: delete the `isDev` branch that uses hardcoded code `000000`; delete the `NODE_ENV !== "development"` guard around the send rate limiter so it applies in all environments
-- [x] **Remove dev bypass in `verify-code`** — `apps/dashboard/src/app/api/phone/verify-code/route.ts`: delete the `NODE_ENV !== "development"` guard around the verify rate limiter
-- [x] **Fix analytics resolution time query** — `apps/dashboard/src/app/api/analytics/route.ts`: replace the `db.thread.findMany` that loads all closed threads into Node memory with a single `$queryRaw` `AVG(updated_at - created_at)` query — same pattern as `firstReplyStats` directly below it
-- [x] **Fix audit log CSV cap** — `apps/dashboard/src/app/api/org/audit-log/route.ts`: the CSV export is hard-capped at 50 rows, making it useless for compliance; remove the cap (or paginate) so a full export downloads all records
-- [x] **Gateway graceful shutdown** — `apps/gateway/src/index.ts`: add `process.on('SIGTERM', ...)` that calls `server.close()` and drains in-flight BullMQ workers before exit; Railway sends SIGTERM before killing the container — without this, in-flight webhook jobs are hard-killed mid-flight
-- [x] **Gateway deep health endpoint** — `apps/gateway/src/index.ts`: add `GET /health/deep` that runs `db.$queryRaw\`SELECT 1\`` and a Redis ping; the existing `GET /` returns 200 even if the DB or Redis connection is broken
-
----
 
 ## Phase 2 — Code Features
 > ~1–2 days total. All items are parallel. No external services or migrations required — can be shipped before deployment.
 
-- [ ] **Thread SLA age indicators** — color-code thread list rows by time since last customer message (green < 4h, yellow < 24h, red > 24h); pure client-side math on `updatedAt`, no DB change (~30 min)
-- [ ] **Keyboard shortcuts** — add `K` to open command palette, `R` to resolve current thread, `N` to focus note composer; all client-side event listeners, no API changes (~1–2 hours)
-- [ ] **Shopify outbound via email** — `apps/dashboard/src/app/api/messages/route.ts`: the Shopify branch currently returns `501`; Shopify threads already have the customer's email in `customer.platformId` — reuse the existing email dispatch block instead of returning an error (~1 hour)
-- [ ] **Canned response template variables** — support `{{customer_name}}` and `{{order_number}}` in canned response bodies, substituted at send-time from the `Customer` row and Shopify order data already loaded in the thread context; no DB migration needed (~2–3 hours)
 - [ ] **Search full-text index** — `packages/db/prisma/schema.prisma`: add a `GIN` index on `messages.content_text` via raw migration; update `apps/dashboard/src/app/api/search/route.ts` to use `to_tsvector` / `@@` instead of `contains` — the current implementation does a sequential scan on every search (~1–2 hours)
 
 ---
@@ -158,10 +143,26 @@ Items are organized into phases by effort and dependencies. Items within a phase
 
 ---
 
+## Phase 7 — High-Value Features (Post-Launch)
+> Features most impactful for the target user (solo Shopify merchant / small team). Prioritized by value-to-effort ratio. All are independent unless noted.
+
+
+### Inbox Efficiency
+- [ ] **Stale-ticket auto-close playbook trigger** — add a `no_customer_response` trigger type to playbooks (fires N days after last customer message with no reply); requires a new daily BullMQ cron that scans open threads; pairs with the existing `close_ticket` action type
+
+### Out-of-Office / Business Hours
+- [x] **Business hours + auto-acknowledgment** — add `businessHours` (days + start/end time) and `autoAckMessage` to `Organization.settings`; in the gateway worker, check current time against business hours before sending the WhatsApp plan notification; if outside hours, send the `autoAckMessage` via the customer's channel instead of immediately running a plan; surface as a Settings → Agent toggle with a message editor
+
+### Channels
+- [ ] **Facebook Messenger** — Meta Graph API is already wired for Instagram; Messenger uses the same platform but routes via `page_id` instead of `ig_user_id`; add `CHANNEL.MESSENGER` constant, a new `POST /webhooks/meta-messenger` handler (or extend the existing Meta handler with a page message event branch), and a `messenger` outbound block in `apps/dashboard/src/app/api/messages/route.ts`; OAuth connects the Facebook Page (separate from the IG integration)
+
+### Future Platform
+- [ ] **Live chat Shopify app** — a separate embeddable Shopify storefront widget that opens a real-time chat bubble; routes customer messages into Clerk as a new `live_chat` channel type; requires a Shopify app listing, a WebSocket or SSE connection from the widget to the gateway, and a new channel handler in the worker; scoped as a future standalone project after the main app ships
+
+---
+
 ## Backlog
 > Lower-priority items with no blocking dependency. Can be picked up at any time.
-
-- [ ] **Remove hardwired demo notifications** — `apps/dashboard/src/app/dashboard/layout.tsx`: delete the two hardcoded entries (`demo-trial`, `demo-integration`) at the top of the `notifications` array; the real computed notifications below them (integration count, trial days, past-due) will take over automatically
 
 - [ ] **Inbound email attachments** — handle the `Attachments` array from Postmark inbound webhooks; store URLs in `Message.attachments` (field already exists in schema); display in `ConversationView`
 - [ ] **Webhook / Zapier outbound** — document the payload schema for outbound events (thread created, message received, thread closed); implement an `Integration` type of `webhook` that POSTs to a configured URL on each event

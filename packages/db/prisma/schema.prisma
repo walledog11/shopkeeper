@@ -75,6 +75,7 @@ model Integration {
   externalAccountId String      @map("external_account_id") @db.VarChar(255)
   fromEmail         String?     @map("from_email") @db.VarChar(255)
   accessToken       String?     @map("access_token") @db.Text
+  refreshToken      String?     @map("refresh_token") @db.Text
   tokenExpiresAt    DateTime?   @map("token_expires_at") @db.Timestamptz
   metadata          Json?       @default("{}") @db.JsonB
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz

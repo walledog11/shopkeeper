@@ -51,14 +51,14 @@ Conversations
 Automation
   Concierge              /dashboard/agent         — standalone AI agent chat
   Memory                 /dashboard/kb            — knowledge base
-  Playbooks              /dashboard/playbooks    
+  Playbooks              /dashboard/playbooks     — trigger-based automation rules
 Storefront
   Orders                 /dashboard/orders        — Shopify order browser
   Customers              /dashboard/customers     — Shopify customer browser
-  Products               /dashboard/products      
+  Products               /dashboard/products      — Shopify product browser with inventory
 Insights
   Analytics              /dashboard/analytics
-  Reports                /dashboard/reports       
+  Reports                /dashboard/reports       — exportable reports + GDPR data export
 Workspace
   Team                   /dashboard/team
   Integrations           /dashboard/integrations
@@ -159,16 +159,26 @@ Configurable per org via Settings → Agent tab:
 ### Analytics
 - Ticket volume chart, channel breakdown, top topics, overview stats, audit log
 
-### Orders / Customers (Storefront)
+### Orders / Customers / Products (Storefront)
 - `/dashboard/orders` — Shopify order browser with fulfillment/payment status filters, stat strip, search, pagination
 - `/dashboard/customers` — Shopify customer browser
+- `/dashboard/products` — Shopify product browser with search, status filters (active/draft/archived), stat strip (total/active/out-of-stock), per-product drawer showing variants/SKUs/pricing/inventory, Shopify admin deep-link, load-more pagination
 - Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
 
-### Pending / Stub Pages
-These pages are stubbed with "coming soon" — design them with the target user in mind: a solo Shopify merchant or small team who wants simplicity.
-- `/dashboard/playbooks` — automation rules triggered by events (e.g. auto-reply to common questions, auto-close after resolution)
-- `/dashboard/products` — Shopify product browser, likely similar to Orders page (search, browse, link to threads)
-- `/dashboard/reports` — exportable reports (ticket volume by channel, agent response times, resolution rates)
+### Playbooks (Automation)
+- `/dashboard/playbooks` — trigger-based automation rules; create/edit via slide-over drawer, enable/disable toggle per playbook
+- Triggers: `new_ticket`, `tag_applied` (with specific tag selector), `ticket_closed`
+- Actions (chainable): `send_reply`, `apply_tag`, `close_ticket`, `add_note`
+- Pre-built templates: WISMO Auto-Reply, Returns & Refunds, Auto-close Resolved
+- Active/inactive grouping in list view
+
+### Reports
+- `/dashboard/reports` — exportable reports with date range selector (7d / 30d / 90d / all time / custom range)
+- **Support Summary** — total tickets, resolved count, resolution rate, avg first reply time, breakdown by channel; CSV export
+- **Agent Activity** — agent runs, replies sent, refunds issued, cancellations, order edits, orders created, address updates, top tools used; CSV export
+- **Top Topics** — ticket distribution by AI-assigned tag with percentage bars; CSV export
+- **Customer Contact** — unique customers, repeat customers (3+ tickets), most active customers list; CSV export
+- **GDPR / CCPA Data Export** — enter customer email → download all their data as JSON (Art. 15 compliance)
 
 ### Billing
 - Stripe subscriptions (starter/pro tiers)

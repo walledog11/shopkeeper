@@ -95,7 +95,38 @@ export async function dispatchMessage(
     await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
 
   } else if (thread.channelType === CHANNEL_TYPE.SHOPIFY) {
-    return { ok: false, error: 'Shopify outbound messaging is not yet implemented' };
+    const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
+    if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
+
+    const integration = await db.integration.findFirst({
+      where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+    });
+    if (!integration) return { ok: false, error: 'No email integration configured' };
+
+    const client = new ServerClient(POSTMARK_API_KEY);
+    const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
+    const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
+    const fromEmail = integration.fromEmail || integration.externalAccountId;
+
+    const lastCustomerMsg = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.customer, externalMessageId: { not: null } },
+      orderBy: { sentAt: 'desc' },
+      select: { externalMessageId: true },
+    });
+    const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
+
+    await client.sendEmail({
+      From: `${org.name} <${fromEmail}>`,
+      ReplyTo: integration.externalAccountId,
+      To: recipientId,
+      Subject: `Re: Your inquiry`,
+      TextBody: text,
+      Headers: [
+        { Name: 'Message-ID', Value: syntheticMessageId },
+        { Name: 'In-Reply-To', Value: inReplyTo },
+        { Name: 'References', Value: inReplyTo },
+      ],
+    });
   }
 
   await db.message.create({

@@ -38,6 +38,22 @@ export interface OrgSettings {
 
   // Response
   replyLanguage: string; // "auto" | ISO language name e.g. "English"
+
+  // WhatsApp digest
+  digestEnabled: boolean;
+  digestFrequency: 'daily' | 'twice_daily' | 'every_4h' | 'every_6h' | 'every_8h' | 'every_12h';
+  digestHour: number;           // 0–23 local time — first (or only) send time
+  digestSecondHour: number;     // 0–23 local time — second send time, only used for twice_daily
+  digestDays: 'every_day' | 'weekdays';
+  digestTimezoneOffset: number; // integer UTC offset, e.g. -5 for New York
+
+  // Business hours
+  businessHoursEnabled: boolean;
+  businessHoursStart: number;          // 0–23 local hour open (inclusive)
+  businessHoursEnd: number;            // 0–23 local hour close (exclusive)
+  businessHoursDays: string[];         // e.g. ['mon','tue','wed','thu','fri']
+  businessHoursTimezoneOffset: number; // integer UTC offset
+  autoAckMessage: string;
 }
 
 // Database models
@@ -189,6 +205,7 @@ export interface Ticket {
   tagColor: string;
   aiSummary: string;
   status: ThreadStatus;
+  lastCustomerMessageAt: string | null;
   messages: {
     sender: SenderType;
     text: string | null;

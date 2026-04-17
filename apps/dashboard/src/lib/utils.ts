@@ -67,6 +67,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
     aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...",
     status: thread.status,
+    lastCustomerMessageAt: thread.messages.filter(m => m.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
     messages: thread.messages
       .filter(msg => !(msg.senderType === SENDER_TYPE.NOTE && msg.contentText?.startsWith(AGENT_TURN_PREFIX)))
       .map((msg) => {
