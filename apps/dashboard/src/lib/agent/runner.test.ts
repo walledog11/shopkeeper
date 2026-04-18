@@ -81,7 +81,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await cleanupTestData(org.id);
   vi.resetAllMocks();
-  mockSendReply.mockResolvedValue('Reply sent to customer via email.');
 });
 
 // ── Tool: add_internal_note ───────────────────────────────────────────────────

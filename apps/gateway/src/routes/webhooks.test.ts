@@ -60,11 +60,10 @@ function hmacSha256Base64(secret: string, body: Buffer | string) {
   return createHmac('sha256', secret).update(body).digest('base64');
 }
 
-const META_SECRET = process.env.META_APP_SECRET ?? 'test-meta-secret';
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET ?? 'test-internal-secret';
-const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? 'test-verify-token';
-const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET ?? 'test-shopify-secret';
-process.env.SHOPIFY_APP_SECRET = SHOPIFY_SECRET;
+const META_SECRET = process.env.META_APP_SECRET!;
+const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET!;
+const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN!;
+const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 const app = createApp();
