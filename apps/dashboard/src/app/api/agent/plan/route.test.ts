@@ -67,7 +67,8 @@ describe('POST /api/agent/plan', () => {
       expect.arrayContaining([
         expect.objectContaining({
           field: 'instruction',
-          code: 'invalid',
+          code: 'required',
+          message: 'Instruction is required',
         }),
       ])
     );
