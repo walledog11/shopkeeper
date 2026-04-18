@@ -45,7 +45,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await cleanupTestData(org.id);
+  if (org?.id) {
+    await cleanupTestData(org.id);
+  }
   vi.clearAllMocks();
 });
 
@@ -59,8 +61,16 @@ describe('POST /api/agent/plan', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(400);
-    const body = await res.json() as { error: string };
-    expect(body.error).toContain('Missing');
+    const body = await res.json() as { error: string; details?: Array<{ field?: string; code: string; message: string }> };
+    expect(body.error).toBe('Validation failed');
+    expect(body.details).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: 'instruction',
+          code: 'invalid',
+        }),
+      ])
+    );
   });
 
   it('returns empty steps when there are no customer messages', async () => {
