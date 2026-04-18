@@ -31,9 +31,6 @@ Run both tracks concurrently. Track A is gated on external parties and can take 
 
 ### Track B — Code (no external dependencies — write now, ship when Track A is ready)
 
-**Search**
-- [ ] **Full-text search index** — `packages/db/prisma/schema.prisma`: add a `GIN` index on `messages.content_text` via raw migration; update `apps/dashboard/src/app/api/search/route.ts` to use `to_tsvector` / `@@` instead of `contains` — the current implementation does a sequential scan on every search
-
 **Inbox**
 - [ ] **Smart inbox auto-sort** — automatically float urgent threads to the top of the queue based on Shopify order state; a thread with a linked unfulfilled Shopify order and an open customer action request (address change, cancellation, etc.) should rank above threads with no time constraint; implement as an `urgencyScore` computed in the thread list query (no schema change required — derive from existing `Thread.shopifyCustomerId` + order data) or as a nullable `urgencyScore Int?` column updated when the order state is known
 
@@ -128,3 +125,98 @@ Run both tracks concurrently. Track A is gated on external parties and can take 
 - [ ] **Inbound email attachments** — handle the `Attachments` array from Postmark inbound webhooks; store URLs in `Message.attachments` (field already exists in schema); display in `ConversationView`
 - [ ] **Typing indicators** — show a typing indicator in the outbound composer before send; scoped to the UI only (no backend changes needed)
 - [ ] **Browser notifications / SSE** — replace the 3-second SWR poll on `/api/threads` with a Server-Sent Events stream; the natural home is the gateway (Railway/Express) since it's a persistent server and already knows when new messages arrive (Vercel serverless has a max execution time that makes SSE impractical there); 3s polling is acceptable at low volume, not a launch blocker
+
+
+  Inbox (Highest-Traffic Feature)
+
+  1. "Needs My Reply" filter view
+  The SLA dots (green/amber/red) exist but there's no dedicated filter for threads where the last real message was from a customer. This is the most common mental
+   model for a solo merchant ("show me what I haven't answered yet") and would save the most time. The data is already in the thread list (lastCustomerMessageAt +
+   sender type).
+
+  2. Right-click / swipe quick actions on thread rows
+  To triage a backlog, a merchant has to open every ticket. A context menu (or hover action strip) on each row for Close, Tag, and Assign would let them process
+  20 tickets in 60 seconds without opening any of them.
+
+  3. Draft auto-save
+  If you type a partial reply and click away to check an order or another ticket, the draft is gone. Auto-saving to localStorage keyed by threadId is a small
+  change with outsized UX value — especially on mobile.
+
+  4. Ticket assignment to team members
+  For orgs with 2+ people, there's no way to divide the queue. A simple assigneeId field on Thread + an "Assign to" dropdown in the conversation header would be
+  enough. Threads can default to unassigned. This unblocks the small-team use case entirely.
+
+  ---
+  Customer Context Panel
+
+  8. VIP / risk badge
+  total_spent and orders_count are already shown, but there's no signal synthesis. A "VIP" badge (e.g., >5 orders or >$500 spent) and a "First order" badge would
+  immediately change how an agent handles the conversation — a $1,200 customer gets a different response than a first-time buyer. One computed badge, no new data.
+
+  9. Visual order timeline
+  The order list shows fulfillment status as a text pill, but a merchant glancing at the panel often just wants to know: is the most recent order on its way or
+  not? A compact 4-step timeline (Placed → Paid → Fulfilled → Delivered) with the current step highlighted would replace reading four separate status fields.
+
+  ---
+  Post-Close / Customer Satisfaction
+
+  10. CSAT survey
+  This is the biggest missing feature for a Shopify merchant. After a ticket closes, automatically send a short survey: "Was your issue resolved? 👍 Yes / 👎 No."
+   One follow-up text field. Feed the scores into Analytics as a new CSAT card. The infrastructure (outbound email/SMS, thread close hooks) all exists. This is
+  the metric investors and the merchant's own customers will reference first.
+
+  ---
+  Playbooks
+
+  11. no_customer_response trigger (stale auto-close)
+  Already called out in the production checklist backlog, but worth emphasizing — a merchant's biggest time sink is "zombie" tickets that are waiting on a
+  customer who will never reply. An N-day stale trigger is the single most-requested feature in every helpdesk tool and pairs naturally with the existing
+  close_ticket action.
+
+  12. More trigger types
+  new_ticket, tag_applied, ticket_closed cover the basics. Adding order_fulfilled (Shopify webhook already ingested) and first_order_customer would let merchants
+  set up proactive shipping confirmations and first-purchase thank-you flows entirely from the playbook UI.
+
+  ---
+  Knowledge Base
+
+  13. Article import (CSV / paste)
+  Merchants with an existing FAQ document have to copy-paste every article manually. A "Bulk import" button that accepts CSV (title,body,tags) or even a raw text
+  dump (auto-split by headings) would cut onboarding time for anyone with more than 5 articles.
+
+  14. KB article usage stats
+  Which articles does the agent actually retrieve and cite? Showing a small "Used X times" count on each article helps the merchant know what's working and what
+  gaps to fill. This needs one write on article retrieval in the agent runner, then display in the KB UI.
+
+  ---
+  Analytics
+
+  15. Period-over-period trend arrows
+  Every KPI card shows a value but not whether it's going up or down. Adding a +12% / -5% vs. the previous equivalent period would convert the page from a
+  snapshot into an actual trend indicator. The data is already there — just compute the same query for the prior window.
+
+  16. Agent savings estimate
+  Merchants don't intuitively know how much the AI is saving them. A "~X hours saved this month" estimate based on aiReplies × avg_handle_time_per_ticket (a
+  reasonable constant like 5 min) would make the product's ROI concrete and visible. One derived stat, no backend changes.
+
+  ---
+  Settings / Org-level
+
+  17. Custom SLA targets
+  The inbox SLA dots use hard-coded 4h/24h thresholds. Letting merchants set their own target (e.g., "I want to respond within 2 hours") in Settings would make
+  the color coding mean something to their actual business. One slaTargetHours field on OrgSettings.
+
+  18. Email signature
+  Outbound email replies have no signature. A brand name, tagline, and store URL footer on every email is a basic expectation that Shopify merchants will notice
+  is missing when emailing customers. A emailSignature textarea in the Agent settings tab, appended to outbound Postmark sends.
+
+  19. Integration health alerts in-app
+  The Integrations page shows token health but a merchant might not visit it for weeks. A subtle warning banner (or notification dot on the sidebar nav icon) when
+   any integration token is expiring or broken would surface this before it silently breaks their support flow.
+
+  ---
+  Concierge (Agent Chat)
+
+  20. Suggested prompts / shortcuts
+  The standalone Concierge chat starts with a blank input. Showing 3–4 prompt chips ("Check order status for [customer]", "Draft a refund for the last return
+  request", "Summarize today's tickets") would reduce the blank-slate friction and demonstrate the agent's full capabilities to new users.

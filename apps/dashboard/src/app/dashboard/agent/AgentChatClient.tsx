@@ -29,6 +29,11 @@ interface SessionEntry {
   id: string
   createdAt: string
   preview: string
+}
+
+interface SessionDetail {
+  id: string
+  createdAt: string
   messages: Array<{ role: "user" | "agent"; text: string }>
 }
 
@@ -56,7 +61,7 @@ interface SessionSidebarProps {
   sessionId: string | null
   isClearing: boolean
   onNewSession: () => void
-  onLoadSession: (session: SessionEntry) => void
+  onLoadSession: (session: SessionEntry) => void | Promise<void>
   onClearRequest: () => void
 }
 
@@ -131,12 +136,42 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
     }
   }, [])
 
+  const fetchSessionDetail = useCallback(async (id: string): Promise<SessionDetail | null> => {
+    try {
+      const res = await fetch(`/api/agent/sessions/${id}`)
+      if (!res.ok) {
+        if (res.status === 404) {
+          localStorage.removeItem(SESSION_KEY)
+          setSessionId(null)
+          await fetchSessions()
+        }
+        return null
+      }
+      return await res.json()
+    } catch (err) {
+      console.error("[AgentChat] fetchSessionDetail failed:", err)
+      return null
+    }
+  }, [fetchSessions])
+
   // Restore sessionId from localStorage and load session history on mount
   useEffect(() => {
     const stored = localStorage.getItem(SESSION_KEY)
-    if (stored) setSessionId(stored)
     fetchSessions()
-  }, [fetchSessions])
+    if (!stored) return
+
+    setSessionId(stored)
+    void fetchSessionDetail(stored).then((session) => {
+      if (!session) return
+      setMessages(
+        session.messages.map((m) =>
+          m.role === "user"
+            ? { role: "user" as const, text: m.text }
+            : { role: "agent" as const, summary: m.text, actions: [] }
+        )
+      )
+    })
+  }, [fetchSessionDetail, fetchSessions])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -152,18 +187,24 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
     }
   }, [pendingPrompt])
 
-  const loadSession = useCallback((session: SessionEntry) => {
+  const loadSession = useCallback(async (session: SessionEntry) => {
     setSessionId(session.id)
     localStorage.setItem(SESSION_KEY, session.id)
+    const detail = await fetchSessionDetail(session.id)
+    if (!detail) {
+      setMessages([])
+      textareaRef.current?.focus()
+      return
+    }
     setMessages(
-      session.messages.map((m) =>
+      detail.messages.map((m) =>
         m.role === "user"
           ? { role: "user" as const, text: m.text }
           : { role: "agent" as const, summary: m.text, actions: [] }
       )
     )
     textareaRef.current?.focus()
-  }, [])
+  }, [fetchSessionDetail])
 
   const handleNewSession = useCallback(() => {
     setSessionId(null)

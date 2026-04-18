@@ -12,12 +12,15 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { db } from "@clerk/db";
+import { requireOrgThread } from "@/lib/agent/api/auth";
+import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
+import { parseAgentPlanInternalBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { handleApiError } from "@/lib/api-errors";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/auth-utils";
-import type { AgentPlan, OrgSettings } from "@/types";
+import type { OrgSettings } from "@/types";
 
 export async function POST(request: Request) {
   try {
@@ -26,58 +29,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { orgId, threadId } = await request.json();
-
-    if (!orgId || !threadId) {
-      return NextResponse.json(
-        { error: "Missing orgId or threadId" },
-        { status: 400 }
-      );
-    }
+    const { orgId, threadId } = parseAgentPlanInternalBody(await request.json());
 
     const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
     if (!rl.success) {
       return tooManyRequests(rl.reset);
     }
 
-    const thread = await db.thread.findUnique({
-      where: { id: threadId },
-      select: {
-        organizationId: true,
-        aiSummary: true,
-        cachedPlanMessageId: true,
-        cachedPlan: true,
-        messages: {
-          where: { senderType: "customer" },
-          orderBy: { sentAt: "desc" },
-          take: 1,
-          select: { id: true },
-        },
-      },
-    });
-
-    if (!thread || thread.organizationId !== orgId) {
-      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
-    }
+    const thread = await requireOrgThread(threadId, orgId);
 
     const instruction =
       thread.aiSummary || "Handle this customer's latest request";
 
     const lastCustomerMessage = thread.messages[0] ?? null;
-
-    const cached = thread.cachedPlan as AgentPlan | null;
-    if (lastCustomerMessage && thread.cachedPlanMessageId === lastCustomerMessage.id && cached?.steps?.length) {
-      return NextResponse.json({ plan: cached, instruction });
-    }
-
     const org = await db.organization.findUnique({
       where: { id: orgId },
       select: { settings: true },
     });
-
     const settings = resolveAgentSettings(
       org?.settings as Partial<OrgSettings> | null
     );
+
+    const cached = readAgentPlanCache(thread.cachedPlan);
+    if (lastCustomerMessage && isAgentPlanCacheHit({
+      cache: cached,
+      instruction,
+      lastCustomerMessageId: lastCustomerMessage.id,
+      settings,
+    })) {
+      return NextResponse.json({ plan: cached?.plan, instruction });
+    }
     const ctx = await buildContext(threadId, orgId);
     const plan = await planAgent(ctx, instruction, settings);
 
@@ -86,7 +67,12 @@ export async function POST(request: Request) {
         where: { id: threadId },
         data: {
           cachedPlanMessageId: lastCustomerMessage.id,
-          cachedPlan: plan as object,
+          cachedPlan: buildAgentPlanCacheRecord({
+            instruction,
+            lastCustomerMessageId: lastCustomerMessage.id,
+            settings,
+            plan,
+          }) as object,
         },
       });
     }

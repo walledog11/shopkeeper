@@ -3,7 +3,7 @@ import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
-import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
+import { agentTurnMessageFilter } from '@/lib/agent/api/action-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
         messages: {
           where: {
             deletedAt: null,
-            NOT: { AND: [{ senderType: 'note' }, { contentText: { startsWith: AGENT_TURN_PREFIX } }] },
+            NOT: { AND: [agentTurnMessageFilter] },
           },
           orderBy: { sentAt: 'asc' },
           select: { senderType: true, contentText: true, sentAt: true },

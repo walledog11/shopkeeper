@@ -3,8 +3,7 @@ import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/org'
 import { handleApiError } from '@/lib/api-errors'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
-import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
-import type { AgentTurn } from '@/types'
+import { listAgentTurnsForOrgInRange } from '@/lib/agent/api/action-log'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +29,7 @@ export async function GET(request: Request) {
       channelCounts,
       tagCounts,
       firstReplyStats,
-      agentTurnNotes,
+      agentTurns,
       customerStats,
       topCustomers,
     ] = await Promise.all([
@@ -82,18 +81,7 @@ export async function GET(request: Request) {
           AND first_response > first_customer
       `,
 
-      db.$queryRaw<{ content_text: string }[]>`
-        SELECT m.content_text
-        FROM messages m
-        INNER JOIN threads t ON t.id = m.thread_id
-        WHERE t.organization_id = ${org.id}
-          AND m.sender_type = 'note'
-          AND starts_with(m.content_text, ${AGENT_TURN_PREFIX})
-          AND m.sent_at >= ${from}
-          AND m.sent_at <= ${to}
-          AND m.deleted_at IS NULL
-        LIMIT 5000
-      `,
+      listAgentTurnsForOrgInRange(org.id, from, to),
 
       // Unique + repeat customers in one scan
       db.$queryRaw<{ unique_customers: bigint; repeat_count: bigint }[]>`
@@ -135,15 +123,10 @@ export async function GET(request: Request) {
     const toolCounts: Record<string, number> = {}
     let totalRuns = 0
 
-    for (const row of agentTurnNotes) {
-      try {
-        const note = JSON.parse(row.content_text.slice(AGENT_TURN_PREFIX.length)) as AgentTurn
-        totalRuns++
-        for (const action of note.actions ?? []) {
-          toolCounts[action.tool] = (toolCounts[action.tool] ?? 0) + 1
-        }
-      } catch {
-        // skip malformed notes
+    for (const turn of agentTurns) {
+      totalRuns++
+      for (const action of turn.actions ?? []) {
+        toolCounts[action.tool] = (toolCounts[action.tool] ?? 0) + 1
       }
     }
 

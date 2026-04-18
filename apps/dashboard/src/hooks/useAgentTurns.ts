@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import type { Thread, Message, AgentTurn } from '@/types'
-import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
+import { extractAgentTurnsFromMessages } from '@/lib/agent/api/action-log'
+import { serializeAgentTurn } from '@/lib/agent/api/turns'
 import { SENDER_TYPE } from '@/lib/constants'
 
 interface UseAgentTurnsProps {
@@ -27,13 +28,7 @@ export function useAgentTurns({
 
   // Derive persisted agent turns from the thread messages (survive page refresh)
   const activeAgentTurns = useMemo((): AgentTurn[] => {
-    const dbTurns = (activeThread?.messages ?? [])
-      .filter(m => m.senderType === SENDER_TYPE.NOTE && m.contentText?.startsWith(AGENT_TURN_PREFIX))
-      .map(m => {
-        try { return JSON.parse(m.contentText!.slice(AGENT_TURN_PREFIX.length)) as AgentTurn }
-        catch { return null }
-      })
-      .filter((t): t is AgentTurn => t !== null)
+    const dbTurns = extractAgentTurnsFromMessages(activeThread?.messages ?? [])
     // Overlay in-session error turns (transient, not persisted)
     const errorTurns = activeTicketId ? (agentTurnsByThread[activeTicketId] ?? []) : []
     return [...dbTurns, ...errorTurns]
@@ -63,7 +58,7 @@ export function useAgentTurns({
       id: `agent-turn-${Date.now()}`,
       threadId: activeTicketId,
       senderType: SENDER_TYPE.NOTE,
-      contentText: `${AGENT_TURN_PREFIX}${JSON.stringify(turn)}`,
+      contentText: serializeAgentTurn(turn),
       mediaUrl: null,
       attachments: [],
       sentAt: new Date().toISOString(),

@@ -1,7 +1,7 @@
 "use client"
 
-import { useState } from "react"
-import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2, RefreshCw } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
 import { Badge } from "@/components/ui/badge"
@@ -47,6 +47,10 @@ interface Props {
 export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onApprove, onDismiss, onRegenerate }: Props) {
   const [steps, setSteps] = useState<PlanStep[]>(plan.steps)
   const [collapsed, setCollapsed] = useState(false)
+
+  useEffect(() => {
+    setSteps(plan.steps)
+  }, [plan])
 
   const toggleStep = (id: string) => {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s))
@@ -143,6 +147,18 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
                   </button>
                 )}
               </div>
+
+              {/* Warnings */}
+              {plan.warnings && plan.warnings.length > 0 && (
+                <div className="px-4 py-2.5 border-b border-white/[0.06] space-y-1.5 bg-amber-400/[0.04]">
+                  {plan.warnings.map((w, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-300/80 leading-relaxed">{w}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Steps */}
               <div className="divide-y divide-white/[0.06]">

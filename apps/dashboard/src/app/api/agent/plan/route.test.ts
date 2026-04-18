@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, db } from '@clerk/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -7,6 +7,8 @@ import {
   createTestMessage,
   cleanupTestData,
 } from '@clerk/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@/lib/agent/api/plan-cache';
+import type { AgentPlan } from '@/types';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),
@@ -18,7 +20,7 @@ const { mockPlanAgent, mockBuildContext } = vi.hoisted(() => ({
   mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
   mockPlanAgent: vi.fn().mockResolvedValue({
     instruction: 'Resolve order issue',
-    steps: [{ label: 'Send reply', description: 'Reply to customer', category: 'write', enabled: true }],
+    steps: [{ id: 'step_1', tool: 'send_reply', label: 'Send reply', description: 'Reply to customer', category: 'communication', enabled: true }],
     rawToolCalls: [],
   }),
 }));
@@ -106,9 +108,9 @@ describe('POST /api/agent/plan', () => {
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     const message = await createTestMessage(thread.id, 'Problem with my shipment');
 
-    const cachedPlan = {
+    const cachedPlan: AgentPlan = {
       instruction: 'Check shipping',
-      steps: [{ label: 'Lookup order', description: 'Look up the order', category: 'read', enabled: true }],
+      steps: [{ id: 'step_1', tool: 'lookup_order', label: 'Lookup order', description: 'Look up the order', category: 'read', enabled: true }],
       rawToolCalls: [],
     };
 
@@ -116,7 +118,12 @@ describe('POST /api/agent/plan', () => {
       where: { id: thread.id },
       data: {
         cachedPlanMessageId: message.id,
-        cachedPlan: cachedPlan as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: 'Check shipping',
+          lastCustomerMessageId: message.id,
+          settings: {},
+          plan: cachedPlan,
+        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
       },
     });
 
@@ -142,7 +149,12 @@ describe('POST /api/agent/plan', () => {
       where: { id: thread.id },
       data: {
         cachedPlanMessageId: oldMessage.id,
-        cachedPlan: { instruction: 'old', steps: [], rawToolCalls: [] } as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: 'old',
+          lastCustomerMessageId: oldMessage.id,
+          settings: {},
+          plan: { instruction: 'old', steps: [], rawToolCalls: [] },
+        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
       },
     });
 
@@ -153,6 +165,73 @@ describe('POST /api/agent/plan', () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ threadId: thread.id, instruction: 'Handle new issue' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockPlanAgent).toHaveBeenCalledOnce();
+  });
+
+  it('does not return another orgs cached plan', async () => {
+    const otherOrg = await createTestOrg();
+    try {
+      const customer = await createTestCustomer(otherOrg.id, 'cross-org@test.com');
+      const thread = await createTestThread(otherOrg.id, customer.id, ChannelType.email);
+      const message = await createTestMessage(thread.id, 'Cross org message');
+
+      await db.thread.update({
+        where: { id: thread.id },
+        data: {
+          cachedPlanMessageId: message.id,
+          cachedPlan: buildAgentPlanCacheRecord({
+            instruction: 'Cross org message',
+            lastCustomerMessageId: message.id,
+            settings: {},
+            plan: { instruction: 'Cross org message', steps: [], rawToolCalls: [] },
+          }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+        },
+      });
+
+      const req = new Request('http://localhost:3000/api/agent/plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId: thread.id, instruction: 'Cross org message' }),
+      });
+
+      const res = await POST(req);
+      expect(res.status).toBe(404);
+      expect(mockPlanAgent).not.toHaveBeenCalled();
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
+  });
+
+  it('invalidates the cache when the instruction changes', async () => {
+    const customer = await createTestCustomer(org.id, 'cache-miss@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, 'Problem with billing');
+
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: 'Old instruction',
+          lastCustomerMessageId: message.id,
+          settings: {},
+          plan: {
+            instruction: 'Old instruction',
+            steps: [{ id: 'step_1', tool: 'lookup_order', label: 'Old', description: 'Old', category: 'read', enabled: true }],
+            rawToolCalls: [],
+          },
+        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+      },
+    });
+
+    const req = new Request('http://localhost:3000/api/agent/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'New instruction' }),
     });
 
     const res = await POST(req);

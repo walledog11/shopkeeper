@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { getChannelInfo } from '@/lib/channels'
 import { AGENT_NOTE_PREFIX } from '@/lib/constants'
-import { AGENT_TURN_PREFIX } from '@/lib/agent/tools'
+import { isAgentTurnContent } from '@/lib/agent/api/action-log'
 import { SENDER_TYPE } from '@/lib/constants'
 import type { Thread, Ticket } from '@/types'
 
@@ -69,10 +69,11 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     status: thread.status,
     lastCustomerMessageAt: thread.messages.filter(m => m.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
     messages: thread.messages
-      .filter(msg => !(msg.senderType === SENDER_TYPE.NOTE && msg.contentText?.startsWith(AGENT_TURN_PREFIX)))
+      .filter(msg => !(msg.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(msg.contentText)))
       .map((msg) => {
         const isAgentNote = msg.senderType === SENDER_TYPE.NOTE && msg.contentText?.startsWith(AGENT_NOTE_PREFIX)
         return {
+          id: msg.id,
           sender: msg.senderType,
           text: isAgentNote ? msg.contentText!.slice(AGENT_NOTE_PREFIX.length) : msg.contentText,
           time: formatTime(msg.sentAt),

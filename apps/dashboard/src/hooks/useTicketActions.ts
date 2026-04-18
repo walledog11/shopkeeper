@@ -96,48 +96,6 @@ export function useTicketActions({
     }
   }, [replyText, activeTicketId, getMutate, getCurrentThreads])
 
-  const handleSendNote = useCallback(async (text: string) => {
-    if (!text.trim() || !activeTicketId) return
-    setIsSending(true)
-    setSendError(null)
-
-    const optimisticMessage: Message = {
-      id: `temp-${Date.now()}`,
-      threadId: activeTicketId,
-      senderType: SENDER_TYPE.NOTE,
-      contentText: text,
-      mediaUrl: null,
-      attachments: [],
-      sentAt: new Date().toISOString(),
-    }
-
-    const mutateFn = getMutate()
-    const currentThreads = getCurrentThreads()
-
-    await mutateFn(
-      currentThreads.map(t => t.id === activeTicketId
-        ? { ...t, messages: [...t.messages, optimisticMessage] }
-        : t),
-      false
-    )
-
-    try {
-      const res = await fetch('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: activeTicketId, text, isNote: true }),
-      })
-      if (!res.ok) throw new Error(`Server error: ${res.status}`)
-      mutateFn()
-    } catch (err) {
-      console.error('Failed to send note', err)
-      setFailedMessages(prev => [...prev, { id: optimisticMessage.id, threadId: activeTicketId, text, isNote: true }])
-      mutateFn()
-    } finally {
-      setIsSending(false)
-    }
-  }, [activeTicketId, getMutate, getCurrentThreads])
-
   const handleResolve = useCallback(async () => {
     if (!activeTicketId) return
     const resolvedId = activeTicketId
@@ -370,7 +328,6 @@ export function useTicketActions({
     toast,
     failedMessages,
     handleSendMessage,
-    handleSendNote,
     handleRetry,
     handleResolve,
     handleReopen,

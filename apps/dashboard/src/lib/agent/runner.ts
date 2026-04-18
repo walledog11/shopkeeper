@@ -85,7 +85,7 @@ export interface AgentContext {
 }
 
 export async function buildContext(threadId: string, orgId: string): Promise<AgentContext> {
-  const [thread, org, shopifyIntegration] = await Promise.all([
+  const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
       include: {
@@ -95,22 +95,21 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }),
     db.organization.findUnique({ where: { id: orgId } }),
     db.integration.findFirst({ where: { organizationId: orgId, platform: "shopify" } }),
+    db.kbArticle.findMany({
+      where: { organizationId: orgId },
+      orderBy: { updatedAt: "desc" },
+      take: 3,
+      select: { title: true, body: true, tags: true },
+    }),
   ]);
 
   if (!thread || thread.organizationId !== orgId) {
     throw new Error("Thread not found");
   }
 
-  // Fire in parallel with the Shopify resolution below
+  // Fired after thread resolves since it depends on thread.customerId
   const openThreadCountPromise = db.thread.count({
     where: { customerId: thread.customerId, status: "open" },
-  });
-
-  const kbArticlesPromise = db.kbArticle.findMany({
-    where: { organizationId: orgId },
-    orderBy: { updatedAt: "desc" },
-    take: 3,
-    select: { title: true, body: true, tags: true },
   });
 
   // thread.customer.name can be an email address used as a fallback display name — treat that as "no real name"
@@ -193,12 +192,12 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
-  const [openThreadCount, allKbArticles] = await Promise.all([openThreadCountPromise, kbArticlesPromise]);
+  const openThreadCount = await openThreadCountPromise;
 
-  // Filter KB articles to those that share a tag with the thread, falling back to all
+  // Filter KB articles to those whose tags exactly match the thread tag, falling back to all
   const threadTag = thread.tag?.toLowerCase();
   const kbArticles = threadTag
-    ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase().includes(threadTag) || threadTag.includes(t.toLowerCase())))
+    ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
     : allKbArticles;
 
   return {
@@ -569,6 +568,7 @@ export async function planAgent(
   // Phase 1.5: execute any read-only lookups so the LLM can plan the dependent write actions.
   // (e.g. search_shopify_products → edit_shopify_order needs the variant_id from the search)
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === 'read')
+  const warnings: string[] = []
   if (readBlocks.length > 0) {
     // Execute reads in parallel to get real results
     const readResultsMap = new Map<string, string>()
@@ -580,6 +580,24 @@ export async function planAgent(
         readResultsMap.set(b.id, content)
       })
     )
+
+    // Collect warnings for missing/failed lookups
+    for (const [id, result] of readResultsMap.entries()) {
+      const block = readBlocks.find(b => b.id === id)
+      if (!block) continue
+      const lower = result.toLowerCase()
+      const isMissing = lower.includes('not found') || lower.includes('no customer') || lower === 'lookup failed'
+      if (isMissing) {
+        if (block.name === 'get_shopify_customer' || block.name === 'search_shopify_customers')
+          warnings.push("Couldn't find a Shopify customer — verify the correct account is linked before approving.")
+        else if (block.name === 'get_shopify_orders' || block.name === 'get_order_by_name')
+          warnings.push("No matching order found — confirm the order number with the customer before proceeding.")
+        else if (block.name === 'search_shopify_products')
+          warnings.push("No matching product found — the order edit step may need a corrected product name.")
+      }
+      if (block.name === 'search_kb' && (lower.includes('no articles') || result.trim() === '[]' || result.trim() === ''))
+        warnings.push("No relevant KB articles found — the reply is based only on the conversation, not your documentation.")
+    }
 
     // Anthropic requires a tool_result for every tool_use in the preceding turn.
     // Reads get their real results; any write blocks from Phase 1 get a fake "Success"
@@ -653,7 +671,7 @@ export async function planAgent(
       enabled: true,
     }))
 
-  return { instruction, steps, rawToolCalls }
+  return { instruction, steps, rawToolCalls, warnings: warnings.length > 0 ? warnings : undefined }
 }
 
 export async function runAgent(

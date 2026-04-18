@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
-import { buildContext, runAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
-import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
+import { requireOrgThread } from "@/lib/agent/api/auth";
+import { executeAgentTurn } from "@/lib/agent/api/execution";
+import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/logger";
@@ -15,40 +14,19 @@ export async function POST(request: Request) {
 
     const rl = await rateLimit(`agent:${org.id}`, 10, 60);
     if (!rl.success) return tooManyRequests(rl.reset);
-    const { threadId, instruction, approvedToolCalls } = await request.json();
-    logger.info({ threadId, instruction, approvedToolCalls: approvedToolCalls?.length ?? 0 }, '[agent] POST');
+    const { threadId, instruction, approvedToolCalls } = parseAgentRouteBody(await request.json());
+    await requireOrgThread(threadId, org.id);
+    logger.info({ orgId: org.id, threadId, approvedToolCalls: approvedToolCalls?.length ?? 0 }, "[agent] POST");
 
-    if (!threadId || !instruction?.trim()) {
-      return NextResponse.json(
-        { error: "Missing threadId or instruction" },
-        { status: 400 }
-      );
-    }
-
-    if (instruction.length > 2000) {
-      return NextResponse.json({ error: "Instruction too long" }, { status: 400 });
-    }
-
-    const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
-    const ctx = await buildContext(threadId, org.id);
-    logger.info({ shopify: ctx.shopify?.shop ?? null, shopifyCustomerId: ctx.thread.shopifyCustomerId }, '[agent] context');
-
-    const result = await runAgent(ctx, instruction.trim(), approvedToolCalls ?? undefined, settings);
-    logger.info({ result }, '[agent] result');
-
-    // Persist the agent turn so it survives page refreshes
-    await db.message.create({
-      data: {
-        threadId,
-        senderType: "note",
-        contentText: `${AGENT_TURN_PREFIX}${JSON.stringify({
-          instruction: instruction.trim(),
-          actions: result.actionsPerformed,
-          summary: result.summary,
-          error: null,
-        })}`,
-      },
+    const result = await executeAgentTurn({
+      orgId: org.id,
+      threadId,
+      instruction,
+      orgSettings: org.settings as Partial<OrgSettings> | null,
+      approvedToolCalls: approvedToolCalls ?? undefined,
+      persistAuditNote: true,
     });
+    logger.info({ orgId: org.id, threadId, actionCount: result.actionsPerformed.length }, "[agent] result");
 
     return NextResponse.json(result);
   } catch (error) {

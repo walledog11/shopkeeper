@@ -73,15 +73,12 @@ export default function Composer({
   )
 
   // Same SWR key as ContextPanel — deduplicated, no extra requests
-  const shopifySwrKey = (() => {
-    if (channelType === 'email' && customerPlatformId) {
-      return `/api/shopify/customer?email=${encodeURIComponent(customerPlatformId)}`
-    }
-    if (shopifyCustomerId) {
-      return `/api/shopify/customer?customerId=${encodeURIComponent(shopifyCustomerId)}`
-    }
-    return null
-  })()
+  const shopifySwrKey =
+    channelType === 'email' && customerPlatformId
+      ? `/api/shopify/customer?email=${encodeURIComponent(customerPlatformId)}`
+      : shopifyCustomerId
+        ? `/api/shopify/customer?customerId=${encodeURIComponent(shopifyCustomerId)}`
+        : null
   const { data: shopifyData } = useSWR<ShopifyData>(shopifySwrKey, fetcher, {
     revalidateOnFocus: false,
   })
@@ -90,8 +87,7 @@ export default function Composer({
     ? (cannedData?.responses ?? []).filter(r => {
         const q = slashQuery.toLowerCase()
         const matchesQuery = !q || r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)
-        const ch = r.channels ?? []
-        const matchesChannel = ch.length === 0 || !channelType || ch.includes(channelType)
+        const matchesChannel = r.channels.length === 0 || !channelType || r.channels.includes(channelType)
         return matchesQuery && matchesChannel
       })
     : []
@@ -165,9 +161,9 @@ export default function Composer({
                 <p className="text-xs font-semibold text-white/70">{r.title}</p>
                 <p className="text-xs text-white/35 truncate">{r.body}</p>
               </div>
-              {(r.channels ?? []).length > 0 && (
+              {r.channels.length > 0 && (
                 <div className="flex items-center gap-1 shrink-0 pt-px">
-                  {(r.channels ?? []).map(ch => (
+                  {r.channels.map(ch => (
                     <span
                       key={ch}
                       className={`w-1.5 h-1.5 rounded-full ${

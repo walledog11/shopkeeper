@@ -12,7 +12,7 @@ import { useTicketSelection } from '@/hooks/useTicketSelection'
 import { threadToTicket } from '@/lib/utils'
 import { fetcher } from '@/lib/fetcher'
 import ThreadList from './ThreadList'
-import ConversationView from './ConversationView'
+import ConversationView from './conversation/ConversationView'
 import ContextPanel from './ContextPanel'
 import type { Thread, Ticket, ChannelType, AgentPlan } from '@/types'
 
@@ -84,7 +84,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     isDrafting, isSending, sendError, setSendError,
     isRefreshingSummary, toast,
     failedMessages, handleRetry,
-    handleSendMessage, handleSendNote, handleResolve, handleReopen,
+    handleSendMessage, handleResolve, handleReopen,
     handleAiDraft, handleLinkShopifyCustomer, handleTagUpdate,
     handleRefreshSummary, handleBulkClose, handleBulkArchive, handleBulkTag,
   } = useTicketActions({
@@ -235,6 +235,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onAgentRunningChange={handleAgentRunningChange}
               onAgentComplete={handleAgentComplete}
               activeTab={isSearchMode ? (activeThread.status === 'closed' ? 'closed' : 'open') : activeTab}
+              planRevisionKey={planCacheKey}
               initialPlan={cachedPlan}
               onPlanCached={(plan) => { if (planCacheKey) planCache.set(planCacheKey, plan) }}
               replyText={replyText}
@@ -250,7 +251,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onReopen={handleReopen}
               onReplyChange={text => { setReplyText(text); if (sendError) setSendError(null) }}
               onSend={handleSendMessage}
-              onSendNote={handleSendNote}
               onDraft={handleAiDraft}
             />
             {/* Desktop context panel */}

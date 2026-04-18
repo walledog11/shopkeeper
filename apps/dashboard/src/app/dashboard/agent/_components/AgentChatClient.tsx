@@ -10,15 +10,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 
 const SESSION_KEY = "dashboard_agent_session"
 
-const QUICK_CHIPS = [
-  "Look up all orders for [email]",
-  "Find customer [email]",
-  "Refund the most recent order for [email]",
-  "Issue a refund for order [order number]",
-  "Get order details for [order number]",
-  "Update shipping address on order [order number]",
-  "Cancel order [order number]",
-  "Add a note to customer [email]",
+const QUICK_CHIPS: { label: string; prefix: string }[] = [
+  { label: "Look up orders for...", prefix: "Look up all orders for " },
+  { label: "Find customer...", prefix: "Find customer " },
+  { label: "Refund most recent order for...", prefix: "Refund the most recent order for " },
+  { label: "Issue a refund for order...", prefix: "Issue a refund for order " },
+  { label: "Get order details for...", prefix: "Get order details for " },
+  { label: "Update shipping address on order...", prefix: "Update shipping address on order " },
+  { label: "Cancel order...", prefix: "Cancel order " },
+  { label: "Add a note to customer...", prefix: "Add a note to customer " },
 ]
 
 type ChatMessage =
@@ -30,6 +30,11 @@ interface SessionEntry {
   id: string
   createdAt: string
   preview: string
+}
+
+interface SessionDetail {
+  id: string
+  createdAt: string
   messages: Array<{ role: "user" | "agent"; text: string }>
 }
 
@@ -57,7 +62,7 @@ interface SessionSidebarProps {
   sessionId: string | null
   isClearing: boolean
   onNewSession: () => void
-  onLoadSession: (session: SessionEntry) => void
+  onLoadSession: (session: SessionEntry) => void | Promise<void>
   onClearRequest: () => void
 }
 
@@ -139,12 +144,42 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
     }
   }, [])
 
+  const fetchSessionDetail = useCallback(async (id: string): Promise<SessionDetail | null> => {
+    try {
+      const res = await fetch(`/api/agent/sessions/${id}`)
+      if (!res.ok) {
+        if (res.status === 404) {
+          localStorage.removeItem(SESSION_KEY)
+          setSessionId(null)
+          await fetchSessions()
+        }
+        return null
+      }
+      return await res.json()
+    } catch (err) {
+      console.error("[AgentChat] fetchSessionDetail failed:", err)
+      return null
+    }
+  }, [fetchSessions])
+
   // Restore sessionId from localStorage and load session history on mount
   useEffect(() => {
     const stored = localStorage.getItem(SESSION_KEY)
-    if (stored) setSessionId(stored)
     fetchSessions()
-  }, [fetchSessions])
+    if (!stored) return
+
+    setSessionId(stored)
+    void fetchSessionDetail(stored).then((session) => {
+      if (!session) return
+      setMessages(
+        session.messages.map((m) =>
+          m.role === "user"
+            ? { role: "user" as const, text: m.text }
+            : { role: "agent" as const, summary: m.text, actions: [] }
+        )
+      )
+    })
+  }, [fetchSessionDetail, fetchSessions])
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -160,18 +195,24 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
     }
   }, [pendingPrompt])
 
-  const loadSession = useCallback((session: SessionEntry) => {
+  const loadSession = useCallback(async (session: SessionEntry) => {
     setSessionId(session.id)
     localStorage.setItem(SESSION_KEY, session.id)
+    const detail = await fetchSessionDetail(session.id)
+    if (!detail) {
+      setMessages([])
+      textareaRef.current?.focus()
+      return
+    }
     setMessages(
-      session.messages.map((m) =>
+      detail.messages.map((m) =>
         m.role === "user"
           ? { role: "user" as const, text: m.text }
           : { role: "agent" as const, summary: m.text, actions: [] }
       )
     )
     textareaRef.current?.focus()
-  }, [])
+  }, [fetchSessionDetail])
 
   const handleNewSession = useCallback(() => {
     setSessionId(null)
@@ -379,14 +420,20 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
               {QUICK_CHIPS.map((chip) => (
                 <button
-                  key={chip}
+                  key={chip.label}
                   onClick={() => {
-                    setInput(chip)
-                    textareaRef.current?.focus()
+                    setInput(chip.prefix)
+                    setTimeout(() => {
+                      const el = textareaRef.current
+                      if (el) {
+                        el.focus()
+                        el.setSelectionRange(chip.prefix.length, chip.prefix.length)
+                      }
+                    }, 0)
                   }}
                   className="shrink-0 text-xs bg-card border border-border hover:border-violet-300 hover:text-violet-400 text-muted-foreground rounded-full px-3 py-1.5 transition-colors whitespace-nowrap"
                 >
-                  {chip}
+                  {chip.label}
                 </button>
               ))}
             </div>

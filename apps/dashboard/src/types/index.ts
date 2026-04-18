@@ -160,11 +160,13 @@ export interface Thread {
 
 // Agent turn in the notes tab
 export interface AgentTurn {
+  id?: string
   instruction: string
   actions: { tool: string; result: string }[]
   summary: string | null
   error: string | null
   senderPhone?: string | null
+  clerkUserId?: string | null
 }
 
 // Agent plan — proposed steps before execution
@@ -189,6 +191,7 @@ export interface AgentPlan {
   instruction: string
   steps: PlanStep[]          // visible steps (reads excluded)
   rawToolCalls: RawToolCall[] // all tool calls including reads
+  warnings?: string[]
 }
 
 // UI-mapped ticket shape used in the tickets page
@@ -211,8 +214,10 @@ export interface Ticket {
     text: string | null;
     time: string;
     author?: string;
+    id: string;
     isAgentNote?: boolean;
     attachments: string[];
+    rating?: number | null;
   }[];
 }
 

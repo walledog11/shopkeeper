@@ -1,2 +1,0 @@
-- [user_profile.md](./user_profile.md) — User is a solo SaaS founder building Clerk (Shopify helpdesk), comfortable with Next.js/React/TypeScript
-- [codebase_patterns.md](./codebase_patterns.md) — Recurring anti-patterns found in DashboardSidebar.tsx review (double Clerk hooks, fragile index access, mounted guard duplication)
