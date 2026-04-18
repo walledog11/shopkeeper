@@ -80,7 +80,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await cleanupTestData(org.id);
-  vi.clearAllMocks();
+  vi.resetAllMocks();
+  mockSendReply.mockResolvedValue('Reply sent to customer via email.');
 });
 
 // ── Tool: add_internal_note ───────────────────────────────────────────────────
@@ -217,6 +218,7 @@ describe('runAgent', () => {
           { type: 'tool_use', id: 'tu_1', name: 'update_thread_tag', input: { tag: 'Billing' } },
           { type: 'tool_use', id: 'tu_2', name: 'add_internal_note', input: { text: 'Billing issue' } },
         ],
+        usage: { input_tokens: 10, output_tokens: 5 },
       })
       .mockResolvedValueOnce(endTurn('All done.'));
 

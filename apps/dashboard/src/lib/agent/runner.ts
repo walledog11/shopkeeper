@@ -722,7 +722,7 @@ export async function runAgent(
     const toolUseBlocks = response.content.filter(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
-    totalTokens += response.usage.input_tokens + response.usage.output_tokens;
+    totalTokens += (response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
     logger.info({ iteration: i, stopReason: response.stop_reason, tools: toolUseBlocks.map(b => b.name), totalTokens }, '[agent] iteration end');
 
     // Add the assistant turn before deciding what to do next
