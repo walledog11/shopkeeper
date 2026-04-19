@@ -328,7 +328,7 @@ function DemoCard() {
   }, [activeId]);
 
   return (
-    <div style={{ background: "var(--m-ink)", color: "var(--m-paper)", borderRadius: 18, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,.08)" }}>
+    <div style={{ margin: "10px", background: "var(--m-ink)", color: "var(--m-paper)", borderRadius: 18, overflow: "hidden", boxShadow: "0 30px 80px -20px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,.08)" }}>
       {/* Browser chrome */}
       <div style={{ padding: "11px 16px", display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid rgba(255,255,255,0.08)", fontSize: 12 }}>
         <div style={{ display: "flex", gap: 5 }}>
@@ -342,15 +342,15 @@ function DemoCard() {
       </div>
 
       {/* 3-column layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 300px", height: 540, background: "#0d0c0b" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "260px 1fr 300px", height: 600, background: "#0d0c0b" }}>
 
         {/* INBOX */}
-        <div style={{ borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column" }}>
-          <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+        <div style={{ borderRight: "1px solid rgba(255,255,255,0.08)", display: "grid", gridTemplateRows: "auto 1fr", overflow: "hidden" }}>
+          <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             <span>Inbox</span>
             <span style={{ fontFamily: "var(--m-mono)" }}>{tickets.length} open</span>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }} className="no-scrollbar">
+          <div style={{ overflowY: "auto" }} className="no-scrollbar">
             {tickets.map(t => (
               <div key={t.id} onClick={() => setActiveId(t.id)} style={{ padding: "11px 15px", borderBottom: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", position: "relative", background: t.id === activeId ? "rgba(255,255,255,0.07)" : "transparent", animation: t.isNew ? "m-slidein 0.5s ease" : undefined }}>
                 {t.id === activeId && <span style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: "var(--m-acid)" }} />}
@@ -370,8 +370,8 @@ function DemoCard() {
         </div>
 
         {/* CONVERSATION */}
-        <div style={{ borderRight: "1px solid rgba(255,255,255,0.08)", display: "flex", flexDirection: "column" }}>
-          <div style={{ padding: "11px 17px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <div style={{ borderRight: "1px solid rgba(255,255,255,0.08)", display: "grid", gridTemplateRows: "auto 1fr auto", overflow: "hidden" }}>
+          <div style={{ padding: "11px 17px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 30, height: 30, borderRadius: "50%", background: conv.avBg, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 600, fontSize: 12, flexShrink: 0 }}>{conv.av}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, color: "var(--m-paper)", fontSize: 13 }}>{active.name}</div>
@@ -379,21 +379,24 @@ function DemoCard() {
             </div>
             <button style={{ fontSize: 11, padding: "5px 10px", borderRadius: 6, background: "rgba(255,255,255,0.1)", color: "var(--m-paper)", border: 0, cursor: "pointer", fontFamily: "inherit" }}>Resolve</button>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "20px 20px", display: "flex", flexDirection: "column", gap: 11, minHeight: 0 }} className="no-scrollbar">
+          <div style={{ overflowY: "auto", padding: "20px 20px", display: "flex", flexDirection: "column", gap: 11 }} className="no-scrollbar">
             {conv.msgs.map((m, i) => (
               <div key={i} style={{ maxWidth: "78%", padding: "10px 14px", borderRadius: 12, fontSize: 13, lineHeight: 1.5, alignSelf: m.dir === "in" ? "flex-start" : "flex-end", background: m.dir === "in" ? "rgba(255,255,255,0.1)" : "var(--m-paper)", color: m.dir === "in" ? "var(--m-paper)" : "var(--m-ink)", borderBottomLeftRadius: m.dir === "in" ? 4 : 12, borderBottomRightRadius: m.dir === "out" ? 4 : 12 }}>
                 {m.text}
                 <span style={{ fontSize: 10, display: "block", marginTop: 4, color: m.dir === "in" ? "rgba(255,255,255,0.38)" : "rgba(22,20,19,0.5)" }}>{m.ts}</span>
               </div>
             ))}
+            <div style={{ marginTop: 2 }}>
+              <ProposedPlan conv={conv} />
+            </div>
           </div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "12px 15px", flexShrink: 0 }}>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "12px 15px" }}>
             <div style={{ background: "rgba(255,255,255,0.06)", border: "1px solid var(--m-acid)", borderRadius: 10, padding: "11px 13px" }}>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "var(--m-acid)", fontWeight: 600, marginBottom: 5, display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--m-acid)", display: "inline-block", animation: "m-pulse 1.8s ease infinite" }} />
                 Clerk drafted a reply
               </div>
-              <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--m-paper)", minHeight: 32 }}>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--m-paper)", minHeight: 32, maxHeight: 72, overflowY: "auto" }} className="no-scrollbar">
                 {draftText}
                 <span style={{ display: "inline-block", width: 2, height: 13, background: "var(--m-acid)", animation: "m-blink 1s step-end infinite", verticalAlign: "middle", marginLeft: 2 }} />
               </div>
@@ -407,12 +410,12 @@ function DemoCard() {
         </div>
 
         {/* CONTEXT */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)", flexShrink: 0 }}>
+        <div style={{ display: "grid", gridTemplateRows: "auto 1fr", overflow: "hidden" }}>
+          <div style={{ padding: "13px 15px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", justifyContent: "space-between", fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
             <span>Context</span>
             <span style={{ fontFamily: "var(--m-mono)", color: "var(--m-acid)", fontSize: 11 }}>● live</span>
           </div>
-          <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px", display: "flex", flexDirection: "column", gap: 14, minHeight: 0 }} className="no-scrollbar">
+          <div style={{ overflowY: "auto", padding: "14px 14px", display: "flex", flexDirection: "column", gap: 14 }} className="no-scrollbar">
             {/* Customer */}
             <div>
               <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.5)", marginBottom: 7, fontWeight: 600 }}>Customer</div>
@@ -432,11 +435,6 @@ function DemoCard() {
                 <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginTop: 3 }}>{conv.ctx.orderMeta}</div>
               </div>
             </div>
-            {/* Action plan */}
-            <div>
-              <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: "0.12em", color: "rgba(255,255,255,0.5)", marginBottom: 7, fontWeight: 600 }}>Action plan</div>
-              <ProposedPlan conv={conv} />
-            </div>
           </div>
         </div>
       </div>
@@ -448,7 +446,7 @@ function MobileDemoCard() {
   const conv = CONVS["t1"];
   const draftText = useTypewriter(conv.draft);
   return (
-    <div style={{ background: "var(--m-ink)", color: "var(--m-paper)", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 50px -10px rgba(0,0,0,0.3)" }}>
+    <div style={{ margin: "10px", background: "var(--m-ink)", color: "var(--m-paper)", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 50px -10px rgba(0,0,0,0.3)" }}>
       <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)", fontSize: 11 }}>
         <div style={{ display: "flex", gap: 5 }}>{[0,1,2].map(i => <span key={i} style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-block" }} />)}</div>
         <span style={{ fontFamily: "var(--m-mono)", color: "rgba(255,255,255,0.5)", fontSize: 10 }}>clerk.app/inbox</span>
