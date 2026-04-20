@@ -106,7 +106,7 @@ export async function createMaintenanceWorkers(
 
   tokenHealthWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id }, '[TokenHealth] Job failed');
-    Sentry.captureException(err, { extra: { jobId: job?.id } });
+    Sentry.captureException(err, { extra: { jobId: job?.id, queue: 'token-health', attemptsMade: job?.attemptsMade } });
   });
 
   // ─── Thread Archival ──────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ export async function createMaintenanceWorkers(
 
   archivalWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id }, '[Archival] Job failed');
-    Sentry.captureException(err, { extra: { jobId: job?.id } });
+    Sentry.captureException(err, { extra: { jobId: job?.id, queue: 'thread-archival', attemptsMade: job?.attemptsMade } });
   });
 
   // ─── Hard-Delete Purge ────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ export async function createMaintenanceWorkers(
 
   purgeWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id }, '[Purge] Job failed');
-    Sentry.captureException(err, { extra: { jobId: job?.id } });
+    Sentry.captureException(err, { extra: { jobId: job?.id, queue: 'purge', attemptsMade: job?.attemptsMade } });
   });
 
   // ─── Daily WhatsApp Digest ────────────────────────────────────────────────────
@@ -301,11 +301,61 @@ export async function createMaintenanceWorkers(
 
   digestWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id }, '[Digest] Job failed');
-    Sentry.captureException(err, { extra: { jobId: job?.id } });
+    Sentry.captureException(err, { extra: { jobId: job?.id, queue: 'whatsapp-digest', attemptsMade: job?.attemptsMade } });
+  });
+
+  // ─── Queue Health Monitor ─────────────────────────────────────────────────────
+
+  const FIVE_MINUTES_MS = 5 * 60 * 1000;
+  const QUEUE_ALERT_FAILED_THRESHOLD = parseInt(process.env.QUEUE_ALERT_FAILED_THRESHOLD ?? '10', 10);
+  const QUEUE_ALERT_WAITING_THRESHOLD = parseInt(process.env.QUEUE_ALERT_WAITING_THRESHOLD ?? '100', 10);
+
+  const queueHealthQueue = new Queue(QUEUE.QUEUE_HEALTH, { connection: producerConn });
+
+  await queueHealthQueue.add(
+    JOB.QUEUE_HEALTH_CHECK,
+    {},
+    { repeat: { every: FIVE_MINUTES_MS }, jobId: JOB.QUEUE_HEALTH_ID }
+  );
+
+  const queueHealthWorker = new Worker(QUEUE.QUEUE_HEALTH, async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const conn = producerConn as unknown as any;
+    const inboundQueue = new Queue(QUEUE.INBOUND, { connection: conn });
+    const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection: conn });
+
+    try {
+      const [inboundCounts, summaryCounts] = await Promise.all([
+        inboundQueue.getJobCounts('waiting', 'failed'),
+        summaryQueue.getJobCounts('waiting', 'failed'),
+      ]);
+
+      if (inboundCounts.failed > QUEUE_ALERT_FAILED_THRESHOLD) {
+        logger.warn({ failed: inboundCounts.failed, threshold: QUEUE_ALERT_FAILED_THRESHOLD }, '[QueueHealth] Inbound failed jobs exceeded threshold');
+        Sentry.captureMessage(`Queue alert: inbound failed jobs (${inboundCounts.failed}) exceeded threshold (${QUEUE_ALERT_FAILED_THRESHOLD})`, 'warning');
+      }
+
+      if (summaryCounts.failed > QUEUE_ALERT_FAILED_THRESHOLD) {
+        logger.warn({ failed: summaryCounts.failed, threshold: QUEUE_ALERT_FAILED_THRESHOLD }, '[QueueHealth] AI summary failed jobs exceeded threshold');
+        Sentry.captureMessage(`Queue alert: aiSummary failed jobs (${summaryCounts.failed}) exceeded threshold (${QUEUE_ALERT_FAILED_THRESHOLD})`, 'warning');
+      }
+
+      if (inboundCounts.waiting > QUEUE_ALERT_WAITING_THRESHOLD) {
+        logger.warn({ waiting: inboundCounts.waiting, threshold: QUEUE_ALERT_WAITING_THRESHOLD }, '[QueueHealth] Inbound backlog is high');
+        Sentry.captureMessage(`Queue alert: inbound backlog (${inboundCounts.waiting}) exceeded threshold (${QUEUE_ALERT_WAITING_THRESHOLD})`, 'warning');
+      }
+    } finally {
+      await Promise.all([inboundQueue.close(), summaryQueue.close()]);
+    }
+  }, { connection: workerConn, ...workerOptions });
+
+  queueHealthWorker.on('failed', (job, err) => {
+    logger.error({ err: err.message, jobId: job?.id }, '[QueueHealth] Job failed');
+    Sentry.captureException(err, { extra: { jobId: job?.id, queue: 'queue-health', attemptsMade: job?.attemptsMade } });
   });
 
   return {
-    workers: [tokenHealthWorker, archivalWorker, purgeWorker, digestWorker],
-    queues: [tokenHealthQueue, archivalQueue, purgeQueue, digestQueue],
+    workers: [tokenHealthWorker, archivalWorker, purgeWorker, digestWorker, queueHealthWorker],
+    queues: [tokenHealthQueue, archivalQueue, purgeQueue, digestQueue, queueHealthQueue],
   };
 }

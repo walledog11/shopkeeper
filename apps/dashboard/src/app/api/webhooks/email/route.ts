@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import logger from '@/lib/logger';
 
-const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8080';
+const GATEWAY_URL = process.env.GATEWAY_INTERNAL_URL || 'http://localhost:8080';
 
 // Postmark inbound email webhook — proxied to the gateway.
 // In dev, Postmark can't reach localhost:8080 directly, so this

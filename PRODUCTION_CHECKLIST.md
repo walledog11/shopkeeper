@@ -11,36 +11,23 @@ This checklist is organized by launch priority rather than implementation phase.
 ## Blockers
 
 ### Deployment & Runtime Reliability
-- [x] Fix the Railway gateway start command so production runs both the HTTP server and the BullMQ worker. The root `railway.json` currently starts only `apps/gateway/dist/index.js`, while the gateway package expects `npm run start` to run both server and worker.
 - [ ] Verify the deployed gateway actually processes inbound jobs end-to-end after deploy: webhook accepted -> BullMQ job created -> worker processes -> dashboard reflects the result.
-- [ ] Add a worker readiness check to the operational runbook so queue consumption failures are caught immediately after deploy.
-- [ ] Create an Upstash Redis database in the same region as Vercel/Railway and confirm TLS is enabled with the `rediss://` URL. Do not rely on the free 500k-command tier for an always-on BullMQ worker.
-- [ ] Confirm `DATABASE_URL` points to the production Neon PostgreSQL instance, not a dev branch, and includes `?pgbouncer=true&connection_limit=1`.
 - [ ] Run `prisma migrate deploy` against the production Neon DB before first deploy.
 - [ ] Deploy dashboard to Vercel.
 - [ ] Deploy gateway to Railway with the corrected production start command.
 
 ### Configuration & Secrets
-- [x] Replace partial env checks with a typed env validation layer per app so both dashboard and gateway fail startup consistently when critical config is missing.
-- [x] Ensure Redis env vars are treated as required at startup, not via non-null assertions that fail later on first request.
 - [ ] Rotate `INTERNAL_API_SECRET` to a new production-only value and remove any dev/shared secret reuse.
-- [x] Set `DASHBOARD_URL` in production for gateway -> dashboard internal API calls, and keep `DASHBOARD_INTERNAL_URL` reserved for local callback forwarding only.
-- [ ] Pin critical runtime dependencies instead of using `latest` for production deploys, especially `next`, `react`, `openai`, `@anthropic-ai/sdk`, `express`, `bullmq`, `ioredis`, `postmark`, and Sentry SDKs.
+- [x] Pin critical runtime dependencies instead of using `latest` for production deploys, especially `next`, `react`, `openai`, `@anthropic-ai/sdk`, `express`, `bullmq`, `ioredis`, `postmark`, and Sentry SDKs.
 
 ### Observability, Health Checks & Abuse Protection
-- [x] Extend the gateway deep health check to verify Redis and queue readiness, not just Postgres connectivity.
-- [ ] Add alerting for stuck queues, repeated webhook signature failures, repeated provider send failures, and repeated agent execution/tool failures.
-- [ ] Add visibility into queue backlog, failed jobs, and retry counts so operational issues are diagnosable without reading raw logs.
-- [ ] Expand abuse protection beyond dashboard APIs: add replay/idempotency and rate limits around webhook ingress, internal endpoints, and other high-cost AI/action paths.
-- [ ] Verify Sentry is wired in both apps for production and that critical failures include enough org/thread/job context to debug incidents.
+- [x] Add alerting for stuck queues, repeated webhook signature failures, repeated provider send failures, and repeated agent execution/tool failures.
+- [x] Expand abuse protection beyond dashboard APIs: add replay/idempotency and rate limits around webhook ingress, internal endpoints, and other high-cost AI/action paths.
 
 ### Testing & CI
-- [x] Stop relying on a live shared Neon database for automated tests. Provision an isolated test database per CI run or switch the test strategy so CI is deterministic.
 - [ ] Make `npm test` pass reliably in CI without external network/database fragility.
-- [x] Add proper setup/teardown for test data so cleanup does not fail when test fixtures were never created.
 - [ ] Add a true end-to-end launch flow test: inbound message -> thread appears -> plan generated -> approval -> outbound reply sent.
 - [ ] Unskip and finish the browser E2E for the main support flow, including Clerk auth setup and outbound provider interception.
-- [x] Keep the webhook ingest E2E, but make it safe and deterministic for CI by isolating its database and environment dependencies.
 
 ### Billing & Core External Accounts
 - [ ] Create a Stripe account and obtain a restricted production `STRIPE_SECRET_KEY`.
@@ -64,7 +51,7 @@ This checklist is organized by launch priority rather than implementation phase.
 - [ ] `INBOUND_EMAIL_DOMAIN`
 - [ ] `GATEWAY_INTERNAL_URL`
 - [ ] `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`
-- [ ] `SHOPIFY_APP_SECRET`
+- [ ] `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`
 - [ ] `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`
 - [ ] `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
 - [ ] `SENTRY_DSN` if enabled
@@ -75,7 +62,7 @@ This checklist is organized by launch priority rather than implementation phase.
 - [ ] `ANTHROPIC_API_KEY`
 - [ ] `INTERNAL_API_SECRET`
 - [ ] `DASHBOARD_URL`
-- [ ] `META_APP_SECRET`, `META_VERIFY_TOKEN`
+- [ ] `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`
 - [ ] `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL`
 - [ ] `SHOPIFY_APP_SECRET`
 - [ ] `SENTRY_DSN` if enabled
@@ -83,6 +70,8 @@ This checklist is organized by launch priority rather than implementation phase.
 ### Webhook Wiring
 - [ ] In the Meta developer console, set the webhook callback URL to `https://gateway.up.railway.app/webhooks/meta` and verify `META_VERIFY_TOKEN` matches.
 - [ ] In the Twilio console, point the WhatsApp Business webhook to `https://gateway.up.railway.app/webhooks/twilio`.
+- [ ] In Postmark, set the inbound webhook URL to `https://gateway.up.railway.app/webhooks/email/inbound` (point directly at the gateway — the dashboard email proxy is dev-only).
+- [ ] After connecting each merchant's Shopify store via OAuth, verify the 4 order webhooks (`orders/created`, `orders/fulfilled`, `orders/updated`, `orders/cancelled`) were auto-registered in the Shopify admin under Settings → Notifications → Webhooks.
 
 ---
 

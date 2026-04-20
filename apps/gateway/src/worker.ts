@@ -79,7 +79,16 @@ export async function startWorkerRuntime() {
 
   messageWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id }, '[Worker] Job failed permanently');
-    Sentry.captureException(err, { extra: { jobId: job?.id, platform: job?.data?.platform } });
+    Sentry.captureException(err, {
+      extra: {
+        jobId: job?.id,
+        queue: 'inbound',
+        platform: job?.data?.platform,
+        organizationId: job?.data?.organizationId,
+        traceId: job?.data?.traceId,
+        attemptsMade: job?.attemptsMade,
+      },
+    });
   });
 
   const aiSummaryWorker = new Worker<AiSummaryJobData>(QUEUE.AI_SUMMARY, async (job) => {
@@ -105,7 +114,16 @@ export async function startWorkerRuntime() {
 
   aiSummaryWorker.on('failed', (job, err) => {
     logger.error({ err: err.message, jobId: job?.id, threadId: job?.data?.threadId }, '[AISummary] Job failed');
-    Sentry.captureException(err, { extra: { jobId: job?.id, threadId: job?.data?.threadId } });
+    Sentry.captureException(err, {
+      extra: {
+        jobId: job?.id,
+        queue: 'aiSummary',
+        threadId: job?.data?.threadId,
+        organizationId: job?.data?.organizationId,
+        traceId: job?.data?.traceId,
+        attemptsMade: job?.attemptsMade,
+      },
+    });
   });
 
   const { workers: maintenanceWorkers, queues: maintenanceQueues } = workerRedisConfig.maintenanceWorkersEnabled

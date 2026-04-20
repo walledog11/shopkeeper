@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const GATEWAY_URL = process.env.GATEWAY_URL || 'http://localhost:8080';
+const GATEWAY_URL = process.env.GATEWAY_INTERNAL_URL || 'http://localhost:8080';
 
 async function proxy(request: NextRequest) {
   const url = `${GATEWAY_URL}/webhooks/meta${request.nextUrl.search}`;
