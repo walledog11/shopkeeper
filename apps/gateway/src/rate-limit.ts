@@ -30,7 +30,7 @@ export async function rateLimit(
     }
     return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
   } catch {
-    if (process.env.NODE_ENV !== 'development') {
+    if (process.env.NODE_ENV === 'production') {
       return { success: false, remaining: 0, reset };
     }
     return { success: true, remaining: limit, reset };
