@@ -1,0 +1,101 @@
+export type GatewayRuntimeRole = 'all' | 'server' | 'worker';
+
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    throw new Error(`[Gateway] ${name} must be a positive integer`);
+  }
+
+  return parsedValue;
+}
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const rawValue = process.env[name];
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const normalizedValue = rawValue.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalizedValue)) {
+    return true;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalizedValue)) {
+    return false;
+  }
+
+  throw new Error(`[Gateway] ${name} must be a boolean`);
+}
+
+export function getGatewayRuntimeRole(): GatewayRuntimeRole {
+  const rawRole = process.env.GATEWAY_RUNTIME_ROLE?.trim().toLowerCase();
+  if (!rawRole) {
+    return 'all';
+  }
+
+  if (rawRole === 'all' || rawRole === 'server' || rawRole === 'worker') {
+    return rawRole;
+  }
+
+  throw new Error('[Gateway] GATEWAY_RUNTIME_ROLE must be one of: all, server, worker');
+}
+
+export function shouldRunGatewayServer(role = getGatewayRuntimeRole()): boolean {
+  return role === 'all' || role === 'server';
+}
+
+export function shouldRunGatewayWorker(role = getGatewayRuntimeRole()): boolean {
+  return role === 'all' || role === 'worker';
+}
+
+export interface GatewayWorkerRedisConfig {
+  drainDelaySeconds: number;
+  stalledIntervalMs: number;
+  heartbeatIntervalMs: number;
+  heartbeatTtlSecs: number;
+  heartbeatStaleMs: number;
+  queueDiagnosticsCacheMs: number;
+  maintenanceWorkersEnabled: boolean;
+}
+
+export function getGatewayWorkerRedisConfig(): GatewayWorkerRedisConfig {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const heartbeatIntervalMs = parsePositiveIntEnv(
+    'GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS',
+    isProduction ? 300_000 : 15_000,
+  );
+  const heartbeatTtlSecs = parsePositiveIntEnv(
+    'GATEWAY_WORKER_HEARTBEAT_TTL_SECS',
+    Math.max(Math.ceil((heartbeatIntervalMs * 3) / 1000), 60),
+  );
+  const heartbeatStaleMs = Math.min(
+    parsePositiveIntEnv(
+      'GATEWAY_WORKER_HEARTBEAT_STALE_MS',
+      Math.max(heartbeatIntervalMs * 2, 60_000),
+    ),
+    heartbeatTtlSecs * 1000,
+  );
+
+  return {
+    drainDelaySeconds: parsePositiveIntEnv(
+      'GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS',
+      isProduction ? 60 : 5,
+    ),
+    stalledIntervalMs: parsePositiveIntEnv(
+      'GATEWAY_BULLMQ_STALLED_INTERVAL_MS',
+      isProduction ? 300_000 : 30_000,
+    ),
+    heartbeatIntervalMs,
+    heartbeatTtlSecs,
+    heartbeatStaleMs,
+    queueDiagnosticsCacheMs: parsePositiveIntEnv(
+      'GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS',
+      isProduction ? 30_000 : 5_000,
+    ),
+    maintenanceWorkersEnabled: parseBooleanEnv('GATEWAY_ENABLE_MAINTENANCE_WORKERS', true),
+  };
+}

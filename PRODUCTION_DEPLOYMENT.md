@@ -26,7 +26,17 @@ DATABASE_URL='postgresql://...' npm run db:migrate:deploy
 ## Config Notes
 
 - Railway start command is `npm run start -w apps/gateway`.
-- `nixpacks.toml` mirrors that start command so Nixpacks-based deploys also launch both the HTTP server and the worker.
+- `nixpacks.toml` mirrors that start command.
+- `GATEWAY_RUNTIME_ROLE=all` is the default. For split Railway services, use `server` on the web service and `worker` on the background worker service while keeping the same start command.
+- Upstash Redis free tier is usually not enough for always-on BullMQ workers. Use Upstash pay-as-you-go/fixed pricing or another Redis deployment for production.
+- The gateway exposes cost-tuning env vars for BullMQ and health polling:
+  `GATEWAY_BULLMQ_DRAIN_DELAY_SECONDS`,
+  `GATEWAY_BULLMQ_STALLED_INTERVAL_MS`,
+  `GATEWAY_WORKER_HEARTBEAT_INTERVAL_MS`,
+  `GATEWAY_WORKER_HEARTBEAT_TTL_SECS`,
+  `GATEWAY_WORKER_HEARTBEAT_STALE_MS`,
+  `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
+  `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel builds `packages/db` before the dashboard so the shared package output is current during deploy.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.

@@ -1,11 +1,14 @@
 import type { Redis as IORedis } from 'ioredis';
 import { Queue } from 'bullmq';
 import { QUEUE } from './constants.js';
+import { getGatewayWorkerRedisConfig } from './runtime-config.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
-export const WORKER_HEARTBEAT_INTERVAL_MS = 15_000;
-export const WORKER_HEARTBEAT_TTL_SECS = 60;
-export const WORKER_HEARTBEAT_STALE_MS = 45_000;
+
+let cachedQueueDiagnostics:
+  | { expiresAt: number; value: Record<string, unknown> }
+  | null = null;
+let queueDiagnosticsPromise: Promise<Record<string, unknown>> | null = null;
 
 export interface WorkerHeartbeatPayload {
   timestamp: string;
@@ -13,6 +16,7 @@ export interface WorkerHeartbeatPayload {
 }
 
 export async function writeWorkerHeartbeat(redis: IORedis): Promise<void> {
+  const { heartbeatTtlSecs } = getGatewayWorkerRedisConfig();
   const payload: WorkerHeartbeatPayload = {
     timestamp: new Date().toISOString(),
     pid: process.pid,
@@ -22,7 +26,7 @@ export async function writeWorkerHeartbeat(redis: IORedis): Promise<void> {
     WORKER_HEARTBEAT_KEY,
     JSON.stringify(payload),
     'EX',
-    WORKER_HEARTBEAT_TTL_SECS,
+    heartbeatTtlSecs,
   );
 }
 
@@ -31,6 +35,7 @@ export async function readWorkerHeartbeat(redis: IORedis): Promise<{
   ageMs: number | null;
   payload: WorkerHeartbeatPayload | null;
 }> {
+  const { heartbeatStaleMs } = getGatewayWorkerRedisConfig();
   const raw = await redis.get(WORKER_HEARTBEAT_KEY);
   if (!raw) {
     return { healthy: false, ageMs: null, payload: null };
@@ -40,7 +45,7 @@ export async function readWorkerHeartbeat(redis: IORedis): Promise<{
     const payload = JSON.parse(raw) as WorkerHeartbeatPayload;
     const ageMs = Date.now() - new Date(payload.timestamp).getTime();
     return {
-      healthy: ageMs <= WORKER_HEARTBEAT_STALE_MS,
+      healthy: ageMs <= heartbeatStaleMs,
       ageMs,
       payload,
     };
@@ -50,22 +55,46 @@ export async function readWorkerHeartbeat(redis: IORedis): Promise<{
 }
 
 export async function getQueueDiagnostics(redis: IORedis): Promise<Record<string, unknown>> {
-  const connection = redis as unknown as Record<string, unknown>;
-  const inboundQueue = new Queue(QUEUE.INBOUND, { connection });
-  const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection });
+  const now = Date.now();
+  if (cachedQueueDiagnostics && cachedQueueDiagnostics.expiresAt > now) {
+    return cachedQueueDiagnostics.value;
+  }
+
+  if (queueDiagnosticsPromise) {
+    return queueDiagnosticsPromise;
+  }
+
+  queueDiagnosticsPromise = (async () => {
+    const { queueDiagnosticsCacheMs } = getGatewayWorkerRedisConfig();
+    const connection = redis as unknown as Record<string, unknown>;
+    const inboundQueue = new Queue(QUEUE.INBOUND, { connection });
+    const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection });
+
+    try {
+      const [inboundCounts, summaryCounts] = await Promise.all([
+        inboundQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
+        summaryQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
+      ]);
+
+      const diagnostics = {
+        inbound: inboundCounts,
+        aiSummary: summaryCounts,
+      };
+
+      cachedQueueDiagnostics = {
+        value: diagnostics,
+        expiresAt: now + queueDiagnosticsCacheMs,
+      };
+
+      return diagnostics;
+    } finally {
+      await Promise.all([inboundQueue.close(), summaryQueue.close()]);
+    }
+  })();
 
   try {
-    const [inboundCounts, summaryCounts] = await Promise.all([
-      inboundQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-      summaryQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-    ]);
-
-    return {
-      inbound: inboundCounts,
-      aiSummary: summaryCounts,
-    };
+    return await queueDiagnosticsPromise;
   } finally {
-    await Promise.all([inboundQueue.close(), summaryQueue.close()]);
+    queueDiagnosticsPromise = null;
   }
 }
-

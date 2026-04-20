@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { getGatewayRuntimeRole, shouldRunGatewayServer, shouldRunGatewayWorker } from './runtime-config.js';
 
 const distDir = dirname(fileURLToPath(import.meta.url));
 const children = new Map<string, ChildProcess>();
@@ -56,6 +57,17 @@ function shutdown(signal: NodeJS.Signals): void {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-spawnProcess('server', './index.js');
-spawnProcess('worker', './worker.js');
+const runtimeRole = getGatewayRuntimeRole();
 
+if (shouldRunGatewayServer(runtimeRole)) {
+  spawnProcess('server', './index.js');
+}
+
+if (shouldRunGatewayWorker(runtimeRole)) {
+  spawnProcess('worker', './worker.js');
+}
+
+if (children.size === 0) {
+  console.error('[GatewayStart] No child processes were started');
+  process.exit(1);
+}

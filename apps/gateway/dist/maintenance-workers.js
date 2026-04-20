@@ -11,7 +11,7 @@ const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 const ARCHIVE_AFTER_DAYS = 90;
 const PURGE_AFTER_DAYS = 90;
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export async function createMaintenanceWorkers(workerConn, producerConn) {
+export async function createMaintenanceWorkers(workerConn, producerConn, workerOptions) {
     /* eslint-enable @typescript-eslint/no-explicit-any */
     // ─── Daily Instagram Token Health Check ──────────────────────────────────────
     const tokenHealthQueue = new Queue(QUEUE.TOKEN_HEALTH, { connection: producerConn });
@@ -74,7 +74,7 @@ export async function createMaintenanceWorkers(workerConn, producerConn) {
             }));
         }
         logger.info('[TokenHealth] Daily check complete');
-    }, { connection: workerConn });
+    }, { connection: workerConn, ...workerOptions });
     tokenHealthWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[TokenHealth] Job failed');
         Sentry.captureException(err, { extra: { jobId: job?.id } });
@@ -89,7 +89,7 @@ export async function createMaintenanceWorkers(workerConn, producerConn) {
             data: { archivedAt: new Date() },
         });
         logger.info({ count: result.count, cutoffDays: ARCHIVE_AFTER_DAYS }, '[Archival] Archived old closed threads');
-    }, { connection: workerConn });
+    }, { connection: workerConn, ...workerOptions });
     archivalWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[Archival] Job failed');
         Sentry.captureException(err, { extra: { jobId: job?.id } });
@@ -109,7 +109,7 @@ export async function createMaintenanceWorkers(workerConn, producerConn) {
             where: { deletedAt: { lt: cutoff }, threads: { none: {} } },
         });
         logger.info({ messages: deletedMessages.count, threads: deletedThreads.count, customers: deletedCustomers.count, cutoffDays: PURGE_AFTER_DAYS }, '[Purge] Hard-deleted expired soft-deleted records');
-    }, { connection: workerConn });
+    }, { connection: workerConn, ...workerOptions });
     purgeWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[Purge] Job failed');
         Sentry.captureException(err, { extra: { jobId: job?.id } });
@@ -232,7 +232,7 @@ export async function createMaintenanceWorkers(workerConn, producerConn) {
                 }
             }
         }
-    }, { connection: workerConn });
+    }, { connection: workerConn, ...workerOptions });
     digestWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[Digest] Job failed');
         Sentry.captureException(err, { extra: { jobId: job?.id } });

@@ -7,10 +7,11 @@ import logger from './logger.js';
 import { QUEUE } from './constants.js';
 import { CHANNEL } from './constants.js';
 import { validateGatewayEnv } from './env.js';
-import { WORKER_HEARTBEAT_INTERVAL_MS, writeWorkerHeartbeat } from './health.js';
+import { writeWorkerHeartbeat } from './health.js';
 import { handleIgDmJob, handleEmailJob, handleShopifyJob, generateThreadIntelligence, sendWhatsAppPlanNotification, isWithinBusinessHours, sendAutoAck, resolveBusinessHoursSettings } from './message-handlers.js';
 import { createMaintenanceWorkers } from './maintenance-workers.js';
 import { loadGatewayEnv } from './load-env.js';
+import { getGatewayWorkerRedisConfig } from './runtime-config.js';
 export async function startWorkerRuntime() {
     validateGatewayEnv();
     if (process.env.SENTRY_DSN) {
@@ -19,6 +20,7 @@ export async function startWorkerRuntime() {
     const redisUrl = new URL(process.env.REDIS_URL);
     redisUrl.pathname = '/0';
     const redisUrlStr = redisUrl.toString();
+    const workerRedisConfig = getGatewayWorkerRedisConfig();
     /* eslint-disable @typescript-eslint/no-explicit-any */
     // Queues (producers) use non-blocking commands — maxRetriesPerRequest left at default (20) so
     // enqueue calls fail fast rather than hanging indefinitely if Redis is unavailable.
@@ -30,11 +32,16 @@ export async function startWorkerRuntime() {
     sharedProducerConn.on('error', (err) => logger.error({ err: err.message }, '[Worker] Redis producer error'));
     sharedWorkerConn.setMaxListeners(20);
     sharedWorkerConn.on('error', (err) => logger.error({ err: err.message }, '[Worker] Redis worker error'));
+    const workerOptions = {
+        connection: sharedWorkerConn,
+        drainDelay: workerRedisConfig.drainDelaySeconds,
+        stalledInterval: workerRedisConfig.stalledIntervalMs,
+    };
     const heartbeatTimer = setInterval(() => {
         writeWorkerHeartbeat(sharedProducerConn).catch((err) => {
             logger.error({ err: err instanceof Error ? err.message : String(err) }, '[Worker] Failed to write heartbeat');
         });
-    }, WORKER_HEARTBEAT_INTERVAL_MS);
+    }, workerRedisConfig.heartbeatIntervalMs);
     heartbeatTimer.unref();
     await writeWorkerHeartbeat(sharedProducerConn).catch((err) => {
         logger.error({ err: err instanceof Error ? err.message : String(err) }, '[Worker] Failed to write startup heartbeat');
@@ -59,7 +66,7 @@ export async function startWorkerRuntime() {
         else if (job.data.platform === CHANNEL.SHOPIFY) {
             await handleShopifyJob(job, aiSummaryQueue);
         }
-    }, { connection: sharedWorkerConn });
+    }, workerOptions);
     messageWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[Worker] Job failed permanently');
         Sentry.captureException(err, { extra: { jobId: job?.id, platform: job?.data?.platform } });
@@ -80,12 +87,14 @@ export async function startWorkerRuntime() {
             return;
         }
         await sendWhatsAppPlanNotification(organizationId, threadId, customerName, channelType, updatedThread?.aiSummary ?? null);
-    }, { connection: sharedWorkerConn });
+    }, workerOptions);
     aiSummaryWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id, threadId: job?.data?.threadId }, '[AISummary] Job failed');
         Sentry.captureException(err, { extra: { jobId: job?.id, threadId: job?.data?.threadId } });
     });
-    const { workers: maintenanceWorkers, queues: maintenanceQueues } = await createMaintenanceWorkers(sharedWorkerConn, sharedProducerConn);
+    const { workers: maintenanceWorkers, queues: maintenanceQueues } = workerRedisConfig.maintenanceWorkersEnabled
+        ? await createMaintenanceWorkers(sharedWorkerConn, sharedProducerConn, workerOptions)
+        : { workers: [], queues: [] };
     const shutdown = async (exitProcess = false) => {
         logger.info('[Worker] Shutting down gracefully');
         clearInterval(heartbeatTimer);

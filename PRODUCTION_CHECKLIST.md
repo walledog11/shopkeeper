@@ -14,7 +14,7 @@ This checklist is organized by launch priority rather than implementation phase.
 - [x] Fix the Railway gateway start command so production runs both the HTTP server and the BullMQ worker. The root `railway.json` currently starts only `apps/gateway/dist/index.js`, while the gateway package expects `npm run start` to run both server and worker.
 - [ ] Verify the deployed gateway actually processes inbound jobs end-to-end after deploy: webhook accepted -> BullMQ job created -> worker processes -> dashboard reflects the result.
 - [ ] Add a worker readiness check to the operational runbook so queue consumption failures are caught immediately after deploy.
-- [ ] Create an Upstash Redis database in the same region as Vercel/Railway and confirm TLS is enabled with the `rediss://` URL.
+- [ ] Create an Upstash Redis database in the same region as Vercel/Railway and confirm TLS is enabled with the `rediss://` URL. Do not rely on the free 500k-command tier for an always-on BullMQ worker.
 - [ ] Confirm `DATABASE_URL` points to the production Neon PostgreSQL instance, not a dev branch, and includes `?pgbouncer=true&connection_limit=1`.
 - [ ] Run `prisma migrate deploy` against the production Neon DB before first deploy.
 - [ ] Deploy dashboard to Vercel.
