@@ -7,6 +7,7 @@ import type {
   UpdateShopifyOrderAddressInput,
   AddShopifyCustomerNoteInput,
   GetOrderByNameInput,
+  GetOrderTrackingInput,
   CreateRefundInput,
   CancelOrderInput,
   CreateShopifyOrderInput,
@@ -315,6 +316,105 @@ export async function getOrderByName(
     items: (o.line_items as { title: string; quantity: number; fulfillable_quantity: number }[])
       .filter((li) => li.fulfillable_quantity > 0)
       .map((li) => `${li.quantity}x ${li.title}`),
+  });
+}
+
+// ── get_order_tracking ────────────────────────────────────────────────────────
+
+export async function getOrderTracking(
+  input: GetOrderTrackingInput,
+  ctx: ShopifyContext
+): Promise<string> {
+  const res = await fetch(
+    `https://${ctx.shop}/admin/api/${API_VERSION}/orders/${input.order_id}/fulfillments.json`,
+    { headers: shopifyHeaders(ctx.accessToken) }
+  );
+  const data = await res.json();
+
+  if (!res.ok) {
+    return `Error: could not fetch fulfillments — ${JSON.stringify(data.errors ?? data)}`;
+  }
+
+  const fulfillments: {
+    tracking_number: string | null;
+    tracking_company: string | null;
+    tracking_url: string | null;
+    status: string;
+    shipment_status: string | null;
+    created_at: string;
+  }[] = data.fulfillments ?? [];
+
+  if (fulfillments.length === 0) {
+    return "This order has not been fulfilled yet — no tracking information is available.";
+  }
+
+  const trackingNumber = fulfillments[0].tracking_number;
+  const carrier = fulfillments[0].tracking_company;
+
+  if (!trackingNumber) {
+    return JSON.stringify({
+      fulfillment_status: fulfillments[0].status,
+      tracking_number: null,
+      tracking_company: carrier ?? null,
+      tracking_url: fulfillments[0].tracking_url ?? null,
+      note: "Order has been marked as fulfilled but no tracking number was provided.",
+    });
+  }
+
+  // Fetch live tracking events from Trackingmore
+  const trackingmoreKey = process.env.TRACKINGMORE_API_KEY;
+  if (!trackingmoreKey) {
+    return JSON.stringify({
+      fulfillment_status: fulfillments[0].status,
+      tracking_number: trackingNumber,
+      tracking_company: carrier ?? null,
+      tracking_url: fulfillments[0].tracking_url ?? null,
+      note: "Live tracking unavailable — Trackingmore not configured.",
+    });
+  }
+
+  const tmRes = await fetch("https://api.trackingmore.com/v4/trackings/create", {
+    method: "POST",
+    headers: {
+      "Tracking-Api-Key": trackingmoreKey,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tracking_number: trackingNumber, courier_code: carrier ?? undefined }),
+  });
+  const tmData = await tmRes.json();
+
+  if (!tmRes.ok || tmData.code !== 200) {
+    return JSON.stringify({
+      fulfillment_status: fulfillments[0].status,
+      tracking_number: trackingNumber,
+      tracking_company: carrier ?? null,
+      tracking_url: fulfillments[0].tracking_url ?? null,
+      note: "Live tracking lookup failed — carrier data unavailable.",
+    });
+  }
+
+  type TrackingmoreEvent = {
+    description: string;
+    date: string;
+    location: string;
+    tag: string;
+  };
+
+  const tracking = tmData.data ?? {};
+  const events: TrackingmoreEvent[] = (tracking.origin_info?.trackinfo ?? tracking.destination_info?.trackinfo ?? []).slice(0, 10);
+
+  return JSON.stringify({
+    status: tracking.delivery_status ?? fulfillments[0].shipment_status ?? fulfillments[0].status,
+    est_delivery_date: tracking.expected_delivery ?? null,
+    tracking_number: trackingNumber,
+    tracking_company: carrier ?? null,
+    tracking_url: fulfillments[0].tracking_url ?? null,
+    events: events.map((e) => ({
+      message: e.description,
+      status: e.tag,
+      datetime: e.date,
+      location: e.location ?? null,
+    })),
   });
 }
 

@@ -15,6 +15,7 @@ import {
   updateShopifyOrderAddress,
   addShopifyCustomerNote,
   getOrderByName,
+  getOrderTracking,
   createRefund,
   cancelOrder,
   createShopifyOrder,
@@ -36,6 +37,7 @@ import type {
   UpdateShopifyOrderAddressInput,
   AddShopifyCustomerNoteInput,
   GetOrderByNameInput,
+  GetOrderTrackingInput,
   CreateRefundInput,
   CancelOrderInput,
   CreateShopifyOrderInput,
@@ -272,6 +274,9 @@ async function executeTool(
 
     case "get_order_by_name":
       return ctx.shopify ? getOrderByName(cast<GetOrderByNameInput>(args), ctx.shopify) : noShopify;
+
+    case "get_order_tracking":
+      return ctx.shopify ? getOrderTracking(cast<GetOrderTrackingInput>(args), ctx.shopify) : noShopify;
 
     case "create_refund":
       return ctx.shopify ? createRefund(cast<CreateRefundInput>(args), ctx.shopify) : noShopify;
@@ -598,6 +603,8 @@ export async function planAgent(
           warnings.push("Couldn't find a Shopify customer — verify the correct account is linked before approving.")
         else if (block.name === 'get_shopify_orders' || block.name === 'get_order_by_name')
           warnings.push("No matching order found — confirm the order number with the customer before proceeding.")
+        else if (block.name === 'get_order_tracking')
+          warnings.push("No tracking information found — the order may not have been fulfilled yet.")
         else if (block.name === 'search_shopify_products')
           warnings.push("No matching product found — the order edit step may need a corrected product name.")
       }

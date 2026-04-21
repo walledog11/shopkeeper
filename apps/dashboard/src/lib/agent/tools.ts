@@ -15,6 +15,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   update_shopify_order_address: 'action',
   add_shopify_customer_note:    'action',
   get_order_by_name:            'read',
+  get_order_tracking:           'read',
   create_refund:                'action',
   cancel_order:                 'action',
   create_shopify_order:         'action',
@@ -37,6 +38,7 @@ export const TOOL_LABELS: Record<string, string> = {
   update_shopify_order_address: 'Updated shipping address',
   add_shopify_customer_note:    'Added Shopify note',
   get_order_by_name:            'Looked up order',
+  get_order_tracking:           'Fetched tracking info',
   create_refund:                'Issued refund',
   cancel_order:                 'Cancelled order',
   create_shopify_order:         'Created order',
@@ -59,6 +61,7 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
   update_shopify_order_address: 'Update shipping address on Shopify',
   add_shopify_customer_note:    'Add note to Shopify customer',
   get_order_by_name:            'Look up order',
+  get_order_tracking:           'Fetch order tracking',
   create_refund:                'Issue refund',
   cancel_order:                 'Cancel order',
   create_shopify_order:         'Create Shopify order',
@@ -245,6 +248,25 @@ export const AGENT_TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_order_tracking",
+      description:
+        "Fetch live fulfillment and tracking details for a Shopify order. Returns tracking number, carrier, shipment status, estimated delivery date, and the full scan event timeline (including exceptions like return to sender, delivery attempt failed, weather delay, etc.). Use this whenever a customer asks where their order is (WISMO) or reports a delivery problem.",
+      parameters: {
+        type: "object",
+        properties: {
+          order_id: {
+            type: "string",
+            description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context or from get_order_by_name.",
+          },
+        },
+        required: ["order_id"],
+      },
+    },
+  },
+
   {
     type: "function",
     function: {
@@ -532,6 +554,10 @@ export interface EditShopifyOrderInput {
   variant_id?: string;
   quantity?: number;
   remove_variant_id?: string;
+}
+
+export interface GetOrderTrackingInput {
+  order_id: string;
 }
 
 export interface SearchKbInput {
