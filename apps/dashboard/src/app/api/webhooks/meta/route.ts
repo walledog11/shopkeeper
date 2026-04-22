@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const GATEWAY_URL = process.env.GATEWAY_INTERNAL_URL || 'http://localhost:8080';
+import { getGatewayBaseUrl } from '@/lib/gateway-url';
 
 async function proxy(request: NextRequest) {
-  const url = `${GATEWAY_URL}/webhooks/meta${request.nextUrl.search}`;
+  const url = `${getGatewayBaseUrl({ required: true })}/webhooks/meta${request.nextUrl.search}`;
   const body = request.method === 'GET' ? undefined : await request.arrayBuffer();
 
   const res = await fetch(url, {

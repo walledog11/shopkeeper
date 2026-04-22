@@ -20,6 +20,7 @@
     "test:integration": "node ./scripts/test-bootstrap.mjs && npx turbo run test:integration --env-mode=loose",
     "test:integration:local": "node ./scripts/test-integration-local.mjs",
     "test:e2e": "node ./scripts/test-bootstrap.mjs && node ./scripts/with-test-env.mjs npx playwright test",
+    "verify:production:env": "node ./scripts/check-production-env.mjs all",
     "verify:production": "node ./scripts/verify-production.mjs"
   },
   "devDependencies": {

@@ -1,9 +1,31 @@
+function hasEnv(name: string): boolean {
+  const value = process.env[name];
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`[Dashboard] Missing required environment variable: ${name}`);
   }
-  return value;
+  return value.trim();
+}
+
+function normalizeAbsoluteUrl(name: string): string {
+  const value = requireEnv(name);
+
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`[Dashboard] ${name} must be a valid absolute URL`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`[Dashboard] ${name} must use http or https`);
+  }
+
+  return value.replace(/\/+$/, '');
 }
 
 export function validateDashboardEnv(): void {
@@ -15,13 +37,33 @@ export function validateDashboardEnv(): void {
     'INTERNAL_API_SECRET',
   ] as const;
 
-  const missing = required.filter((name) => !process.env[name]);
+  const missing = required.filter((name) => !hasEnv(name));
   if (missing.length > 0) {
     throw new Error(`[Dashboard] Missing required environment variables: ${missing.join(', ')}`);
   }
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (process.env.NODE_ENV === 'production') {
+    const productionRequired = [
+      'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+      'APP_URL',
+      'NEXT_PUBLIC_APP_URL',
+    ] as const;
+    const missingProduction = productionRequired.filter((name) => !hasEnv(name));
+    if (missingProduction.length > 0) {
+      throw new Error(
+        `[Dashboard] Missing required production environment variables: ${missingProduction.join(', ')}`
+      );
+    }
+
+    const appUrl = normalizeAbsoluteUrl('APP_URL');
+    const publicAppUrl = normalizeAbsoluteUrl('NEXT_PUBLIC_APP_URL');
+    if (appUrl !== publicAppUrl) {
+      throw new Error('[Dashboard] APP_URL and NEXT_PUBLIC_APP_URL must match in production');
+    }
+  }
+
+  const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if ((redisUrl && !redisToken) || (!redisUrl && redisToken)) {
     throw new Error('[Dashboard] UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set together');
   }
@@ -39,8 +81,8 @@ export function validateDashboardEnv(): void {
 }
 
 export function getDashboardRedisEnv(): { url: string; token: string } {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
 
   if (!url || !token) {
     throw new Error('[Dashboard] Redis is not configured. Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN.');
@@ -48,4 +90,3 @@ export function getDashboardRedisEnv(): { url: string; token: string } {
 
   return { url, token };
 }
-

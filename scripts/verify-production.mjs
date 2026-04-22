@@ -1,9 +1,26 @@
 function requireEnv(name) {
   const value = process.env[name];
-  if (!value) {
+  if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`[verify-production] Missing required environment variable: ${name}`);
   }
-  return value;
+  return value.trim();
+}
+
+function requireAbsoluteUrlEnv(name) {
+  const value = requireEnv(name);
+
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`[verify-production] ${name} must be a valid absolute URL`);
+  }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`[verify-production] ${name} must use http or https`);
+  }
+
+  return value.replace(/\/+$/, '');
 }
 
 function buildUrl(base, path) {
@@ -65,6 +82,21 @@ async function verifyGateway(baseUrl) {
   console.log(`[verify-production] Gateway deep health OK: ${url}`);
 }
 
+async function verifyGatewayQueues(baseUrl) {
+  const url = buildUrl(baseUrl, '/health/queues');
+  const { data } = await fetchJson(url, [200]);
+
+  if (data?.worker?.healthy !== true) {
+    throw new Error(`[verify-production] Expected worker.healthy=true, received ${JSON.stringify(data?.worker)}`);
+  }
+
+  if (!data?.queues || typeof data.queues !== 'object') {
+    throw new Error('[verify-production] Queue diagnostics payload is missing or invalid');
+  }
+
+  console.log(`[verify-production] Gateway queue health OK: ${url}`);
+}
+
 async function verifyInboundEmailWebhook(baseUrl) {
   const to = process.env.VERIFY_INBOUND_EMAIL_TO;
   if (!to) {
@@ -103,11 +135,12 @@ async function verifyInboundEmailWebhook(baseUrl) {
 }
 
 async function main() {
-  const dashboardUrl = requireEnv('DASHBOARD_URL');
-  const gatewayUrl = requireEnv('GATEWAY_URL');
+  const dashboardUrl = requireAbsoluteUrlEnv('DASHBOARD_URL');
+  const gatewayUrl = requireAbsoluteUrlEnv('GATEWAY_URL');
 
   await verifyDashboard(dashboardUrl);
   await verifyGateway(gatewayUrl);
+  await verifyGatewayQueues(gatewayUrl);
   await verifyInboundEmailWebhook(gatewayUrl);
 
   console.log('[verify-production] Production verification passed');

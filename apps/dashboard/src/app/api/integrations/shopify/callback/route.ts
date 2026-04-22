@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
 import crypto from 'crypto';
 import logger from '@/lib/logger';
+import { getGatewayBaseUrl } from '@/lib/gateway-url';
 
 export async function GET(request: Request) {
   const appUrl = process.env.APP_URL;
@@ -118,7 +119,13 @@ export async function GET(request: Request) {
 
     // Register order webhooks so the gateway receives Shopify order events for this store.
     // Soft-fail: a registration error should not break the OAuth flow.
-    const gatewayUrl = process.env.GATEWAY_INTERNAL_URL;
+    let gatewayUrl: string | null = null;
+    try {
+      gatewayUrl = getGatewayBaseUrl();
+    } catch (error) {
+      logger.warn({ err: error, shop }, '[Shopify OAuth] Gateway URL invalid — skipping webhook registration');
+    }
+
     if (gatewayUrl) {
       const webhookTopics = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled'];
       await Promise.allSettled(
@@ -138,7 +145,7 @@ export async function GET(request: Request) {
         )
       );
     } else {
-      logger.warn({ shop }, '[Shopify OAuth] GATEWAY_INTERNAL_URL not set — skipping webhook registration');
+      logger.warn({ shop }, '[Shopify OAuth] Gateway URL not set — skipping webhook registration');
     }
 
     const successUrl = returnTo

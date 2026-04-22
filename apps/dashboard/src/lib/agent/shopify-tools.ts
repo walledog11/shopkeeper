@@ -361,63 +361,95 @@ export async function getOrderTracking(
     });
   }
 
-  // Fetch live tracking events from Ship24
-  const ship24Key = process.env.SHIP24_API_KEY;
-  if (!ship24Key) {
+  // For non-USPS carriers, return Shopify fulfillment data only
+  const normalizedCarrier = carrier?.toLowerCase() ?? "";
+  const isUSPS =
+    normalizedCarrier.includes("usps") ||
+    normalizedCarrier.includes("united states postal service") ||
+    normalizedCarrier.includes("u.s. postal service");
+  if (!isUSPS) {
     return JSON.stringify({
       fulfillment_status: fulfillments[0].status,
       tracking_number: trackingNumber,
       tracking_company: carrier ?? null,
       tracking_url: fulfillments[0].tracking_url ?? null,
-      note: "Live tracking unavailable — Ship24 not configured.",
+      note: "Live tracking events are only available for USPS shipments. Use the tracking URL for carrier updates.",
     });
   }
 
-  const s24Res = await fetch("https://api.ship24.com/public/v1/trackers/track", {
+  const uspsClientId = process.env.USPS_CLIENT_ID;
+  const uspsClientSecret = process.env.USPS_CLIENT_SECRET;
+
+  if (!uspsClientId || !uspsClientSecret) {
+    return JSON.stringify({
+      fulfillment_status: fulfillments[0].status,
+      tracking_number: trackingNumber,
+      tracking_company: "USPS",
+      tracking_url: fulfillments[0].tracking_url ?? null,
+      note: "Live tracking unavailable — USPS API not configured.",
+    });
+  }
+
+  // Get OAuth token
+  const tokenRes = await fetch("https://apis.usps.com/oauth2/v3/token", {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${ship24Key}`,
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      trackingNumber,
-      ...(carrier ? { courierCode: [carrier] } : {}),
+      grant_type: "client_credentials",
+      client_id: uspsClientId,
+      client_secret: uspsClientSecret,
     }),
   });
-  const s24Data = await s24Res.json();
+  const tokenData = await tokenRes.json();
 
-  if (!s24Res.ok || !s24Data.data) {
+  if (!tokenRes.ok || !tokenData.access_token) {
     return JSON.stringify({
       fulfillment_status: fulfillments[0].status,
       tracking_number: trackingNumber,
-      tracking_company: carrier ?? null,
+      tracking_company: "USPS",
       tracking_url: fulfillments[0].tracking_url ?? null,
-      note: "Live tracking lookup failed — carrier data unavailable.",
+      note: "Live tracking unavailable — USPS authentication failed.",
     });
   }
 
-  type Ship24Event = {
-    status: string | null;
-    occurrenceDatetime: string;
-    location: string | null;
-    statusCode: string | null;
-    statusMilestone: string;
+  // Fetch tracking detail from USPS
+  const trackRes = await fetch(
+    `https://apis.usps.com/tracking/v3/tracking/${trackingNumber}?expand=DETAIL`,
+    { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+  );
+  const trackData = await trackRes.json();
+
+  if (!trackRes.ok) {
+    return JSON.stringify({
+      fulfillment_status: fulfillments[0].status,
+      tracking_number: trackingNumber,
+      tracking_company: "USPS",
+      tracking_url: fulfillments[0].tracking_url ?? null,
+      note: "Live tracking lookup failed — USPS data unavailable.",
+    });
+  }
+
+  type USPSEvent = {
+    eventType: string;
+    eventTimestamp: string;
+    eventCity: string;
+    eventState: string;
+    eventZIP: string;
+    eventCountry: string;
   };
 
-  const shipment = s24Data.data.shipment ?? {};
-  const events: Ship24Event[] = (s24Data.data.events ?? []).slice(0, 10);
+  const events: USPSEvent[] = (trackData.trackingEvents ?? []).slice(0, 10);
 
   return JSON.stringify({
-    status: shipment.statusMilestone ?? fulfillments[0].shipment_status ?? fulfillments[0].status,
-    est_delivery_date: shipment.delivery?.estimatedDeliveryDate ?? null,
+    status: trackData.statusCategory ?? trackData.status ?? fulfillments[0].shipment_status ?? fulfillments[0].status,
+    status_summary: trackData.statusSummary ?? null,
     tracking_number: trackingNumber,
-    tracking_company: carrier ?? null,
+    tracking_company: "USPS",
     tracking_url: fulfillments[0].tracking_url ?? null,
     events: events.map((e) => ({
-      message: e.status,
-      status: e.statusCode,
-      datetime: e.occurrenceDatetime,
-      location: e.location ?? null,
+      message: e.eventType,
+      datetime: e.eventTimestamp,
+      location: [e.eventCity, e.eventState, e.eventZIP].filter(Boolean).join(", ") || null,
     })),
   });
 }

@@ -7,6 +7,7 @@
  */
 import twilio from "twilio";
 import logger from "@/lib/logger";
+import { getGatewayBaseUrl } from "@/lib/gateway-url";
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const gatewayUrl = process.env.GATEWAY_INTERNAL_URL || "http://localhost:8080";
+  const gatewayUrl = getGatewayBaseUrl({ required: true });
 
   const gatewayRes = await fetch(`${gatewayUrl}/webhooks/twilio`, {
     method: "POST",

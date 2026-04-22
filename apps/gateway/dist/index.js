@@ -126,13 +126,24 @@ export async function startGatewayServer() {
         logger.info({ port: PORT }, '[Clerk Gateway] Server listening');
     });
     const shutdown = () => {
-        logger.info('[Clerk Gateway] SIGTERM received — shutting down gracefully');
-        server.close(() => {
+        const forceExit = setTimeout(() => {
+            logger.warn('[Clerk Gateway] Graceful shutdown timed out — forcing exit');
+            process.exit(1);
+        }, 25_000);
+        forceExit.unref();
+        logger.info('[Clerk Gateway] Shutting down gracefully');
+        server.closeAllConnections?.();
+        server.close(async () => {
             logger.info('[Clerk Gateway] HTTP server closed');
-            healthRedis.quit().catch(() => healthRedis.disconnect()).finally(() => process.exit(0));
+            await db.$disconnect().catch(() => { });
+            healthRedis.quit().catch(() => healthRedis.disconnect()).finally(() => {
+                clearTimeout(forceExit);
+                process.exit(0);
+            });
         });
     };
     process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
     return { app, server, shutdown };
 }
 function isMainModule() {

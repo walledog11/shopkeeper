@@ -43,6 +43,19 @@ DATABASE_URL='postgresql://...' npm run db:migrate:deploy
 
 ## Post-Deploy Verification
 
+Run the env preflight before deploy:
+
+```bash
+npm run verify:production:env
+```
+
+Or validate the app env files directly:
+
+```bash
+node scripts/check-production-env.mjs dashboard --scope=launch --env-file=apps/dashboard/.env.local
+node scripts/check-production-env.mjs gateway --scope=launch --env-file=apps/gateway/.env
+```
+
 Run the automated verification first:
 
 ```bash

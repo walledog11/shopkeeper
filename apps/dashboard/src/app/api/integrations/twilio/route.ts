@@ -12,6 +12,7 @@ import { db } from "@clerk/db";
 import { getOrCreateOrg } from "@/lib/org";
 import { handleApiError } from "@/lib/api-errors";
 import logger from "@/lib/logger";
+import { getGatewayBaseUrl } from "@/lib/gateway-url";
 
 function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -57,10 +58,7 @@ export async function POST(request: Request) {
     }
 
     const client = getTwilioClient();
-    if (!process.env.GATEWAY_PUBLIC_URL) {
-      return NextResponse.json({ error: "GATEWAY_PUBLIC_URL is not configured" }, { status: 500 });
-    }
-    const webhookUrl = `${process.env.GATEWAY_PUBLIC_URL}/webhooks/twilio`;
+    const webhookUrl = `${getGatewayBaseUrl({ required: true })}/webhooks/twilio`;
 
     const body = await request.json().catch(() => ({}));
     const providedNumber: string | undefined = body.phoneNumber;

@@ -9,6 +9,7 @@ import { getGatewayDashboardUrl } from '../env.js';
 import logger from '../logger.js';
 import { CHANNEL, QUEUE, JOB, READ_TOOLS, STATUS } from '../constants.js';
 import { getTwilio } from '../message-handlers.js';
+import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 const router = express.Router();
 const FILLER_PHRASES = [
     'On it…',
@@ -29,6 +30,16 @@ function getMessageQueue() {
         _messageQueue = new Queue(QUEUE.INBOUND, { connection: redisConnection });
     }
     return _messageQueue;
+}
+let _rateLimitRedis = null;
+function getRateLimitRedis() {
+    if (!_rateLimitRedis) {
+        const redisUrl = new URL(process.env.REDIS_URL);
+        redisUrl.pathname = '/0';
+        _rateLimitRedis = new IORedis(redisUrl.toString());
+        _rateLimitRedis.on('error', (err) => logger.error({ err: err.message }, '[Webhook] Rate-limit Redis error'));
+    }
+    return _rateLimitRedis;
 }
 async function resolveOrganizationId(platform, externalAccountId) {
     const integration = await db.integration.findFirst({
@@ -97,6 +108,11 @@ router.post('/meta', async (req, res) => {
                 logger.warn({ recipientPageId }, '[Webhook] No integration for IG page id — dropping.');
                 return res.status(200).send('EVENT_RECEIVED');
             }
+            const igRateLimit = await rateLimit(getRateLimitRedis(), `webhook:ig:${organizationId}`);
+            if (!igRateLimit.success) {
+                logger.warn({ organizationId }, '[Webhook] IG rate limit exceeded');
+                return sendTooManyRequests(res, igRateLimit.reset);
+            }
             const traceId = randomUUID();
             await getMessageQueue().add(JOB.IG_DM, {
                 platform: CHANNEL.IG_DM,
@@ -160,6 +176,11 @@ router.post('/email/inbound', async (req, res) => {
                 return res.status(200).send('OK');
             }
             organizationId = integration.organizationId;
+        }
+        const emailRateLimit = await rateLimit(getRateLimitRedis(), `webhook:email:${organizationId}`);
+        if (!emailRateLimit.success) {
+            logger.warn({ organizationId }, '[Webhook] Email rate limit exceeded');
+            return sendTooManyRequests(res, emailRateLimit.reset);
         }
         const traceId = randomUUID();
         await getMessageQueue().add(JOB.EMAIL, {
@@ -466,6 +487,11 @@ router.post('/shopify', async (req, res) => {
         if (!organizationId) {
             logger.warn({ shopDomain }, '[Webhook] No Shopify integration found — dropping.');
             return res.status(200).send('OK');
+        }
+        const shopifyRateLimit = await rateLimit(getRateLimitRedis(), `webhook:shopify:${organizationId}`);
+        if (!shopifyRateLimit.success) {
+            logger.warn({ organizationId }, '[Webhook] Shopify rate limit exceeded');
+            return sendTooManyRequests(res, shopifyRateLimit.reset);
         }
         const traceId = randomUUID();
         await getMessageQueue().add(JOB.SHOPIFY, {

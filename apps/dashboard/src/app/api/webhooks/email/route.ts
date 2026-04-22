@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import logger from '@/lib/logger';
-
-const GATEWAY_URL = process.env.GATEWAY_INTERNAL_URL || 'http://localhost:8080';
+import { getGatewayBaseUrl } from '@/lib/gateway-url';
 
 // Postmark inbound email webhook — proxied to the gateway.
 // In dev, Postmark can't reach localhost:8080 directly, so this
@@ -12,7 +11,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    const response = await fetch(`${GATEWAY_URL}/webhooks/email/inbound`, {
+    const response = await fetch(`${getGatewayBaseUrl({ required: true })}/webhooks/email/inbound`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

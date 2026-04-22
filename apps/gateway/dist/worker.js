@@ -69,7 +69,16 @@ export async function startWorkerRuntime() {
     }, workerOptions);
     messageWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id }, '[Worker] Job failed permanently');
-        Sentry.captureException(err, { extra: { jobId: job?.id, platform: job?.data?.platform } });
+        Sentry.captureException(err, {
+            extra: {
+                jobId: job?.id,
+                queue: 'inbound',
+                platform: job?.data?.platform,
+                organizationId: job?.data?.organizationId,
+                traceId: job?.data?.traceId,
+                attemptsMade: job?.attemptsMade,
+            },
+        });
     });
     const aiSummaryWorker = new Worker(QUEUE.AI_SUMMARY, async (job) => {
         const { threadId, organizationId, customerName, channelType, traceId } = job.data;
@@ -90,12 +99,26 @@ export async function startWorkerRuntime() {
     }, workerOptions);
     aiSummaryWorker.on('failed', (job, err) => {
         logger.error({ err: err.message, jobId: job?.id, threadId: job?.data?.threadId }, '[AISummary] Job failed');
-        Sentry.captureException(err, { extra: { jobId: job?.id, threadId: job?.data?.threadId } });
+        Sentry.captureException(err, {
+            extra: {
+                jobId: job?.id,
+                queue: 'aiSummary',
+                threadId: job?.data?.threadId,
+                organizationId: job?.data?.organizationId,
+                traceId: job?.data?.traceId,
+                attemptsMade: job?.attemptsMade,
+            },
+        });
     });
     const { workers: maintenanceWorkers, queues: maintenanceQueues } = workerRedisConfig.maintenanceWorkersEnabled
         ? await createMaintenanceWorkers(sharedWorkerConn, sharedProducerConn, workerOptions)
         : { workers: [], queues: [] };
     const shutdown = async (exitProcess = false) => {
+        const forceExit = setTimeout(() => {
+            logger.warn('[Worker] Graceful shutdown timed out — forcing exit');
+            process.exit(1);
+        }, 25_000);
+        forceExit.unref();
         logger.info('[Worker] Shutting down gracefully');
         clearInterval(heartbeatTimer);
         await Promise.all([messageWorker.close(), aiSummaryWorker.close(), ...maintenanceWorkers.map(w => w.close())]);
@@ -104,6 +127,8 @@ export async function startWorkerRuntime() {
             sharedProducerConn.quit().catch(() => sharedProducerConn.disconnect()),
             sharedWorkerConn.quit().catch(() => sharedWorkerConn.disconnect()),
         ]);
+        await db.$disconnect().catch(() => { });
+        clearTimeout(forceExit);
         if (exitProcess)
             process.exit(0);
     };
