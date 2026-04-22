@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { handleApiError } from '@/lib/api-errors';
+import { getDashboardAppUrl } from '@/lib/env';
 
 export async function GET() {
   try {
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
       emailAddress,
       role: resolvedRole,
       inviterUserId: userId,
-      redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/dashboard`,
+      redirectUrl: `${getDashboardAppUrl()}/dashboard`,
     });
 
     return NextResponse.json({

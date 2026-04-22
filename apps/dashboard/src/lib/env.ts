@@ -1,18 +1,26 @@
-function hasEnv(name: string): boolean {
+function readEnv(name: string): string | null {
   const value = process.env[name];
-  return typeof value === 'string' && value.trim().length > 0;
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function hasEnv(name: string): boolean {
+  return readEnv(name) !== null;
 }
 
 function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (typeof value !== 'string' || value.trim().length === 0) {
+  const value = readEnv(name);
+  if (!value) {
     throw new Error(`[Dashboard] Missing required environment variable: ${name}`);
   }
-  return value.trim();
+  return value;
 }
 
-function normalizeAbsoluteUrl(name: string): string {
-  const value = requireEnv(name);
+function normalizeAbsoluteUrl(name: string, value = requireEnv(name)): string {
 
   let parsed: URL;
   try {
@@ -26,6 +34,24 @@ function normalizeAbsoluteUrl(name: string): string {
   }
 
   return value.replace(/\/+$/, '');
+}
+
+export function getDashboardAppUrl(): string {
+  const appUrl = readEnv('APP_URL');
+  if (appUrl) {
+    return normalizeAbsoluteUrl('APP_URL', appUrl);
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    const publicAppUrl = readEnv('NEXT_PUBLIC_APP_URL');
+    if (publicAppUrl) {
+      return normalizeAbsoluteUrl('NEXT_PUBLIC_APP_URL', publicAppUrl);
+    }
+
+    return 'http://localhost:3000';
+  }
+
+  throw new Error('[Dashboard] Missing required environment variable: APP_URL');
 }
 
 export function validateDashboardEnv(): void {
@@ -46,7 +72,6 @@ export function validateDashboardEnv(): void {
     const productionRequired = [
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       'APP_URL',
-      'NEXT_PUBLIC_APP_URL',
     ] as const;
     const missingProduction = productionRequired.filter((name) => !hasEnv(name));
     if (missingProduction.length > 0) {
@@ -56,9 +81,12 @@ export function validateDashboardEnv(): void {
     }
 
     const appUrl = normalizeAbsoluteUrl('APP_URL');
-    const publicAppUrl = normalizeAbsoluteUrl('NEXT_PUBLIC_APP_URL');
-    if (appUrl !== publicAppUrl) {
-      throw new Error('[Dashboard] APP_URL and NEXT_PUBLIC_APP_URL must match in production');
+    const publicAppUrl = readEnv('NEXT_PUBLIC_APP_URL');
+    if (publicAppUrl) {
+      const normalizedPublicAppUrl = normalizeAbsoluteUrl('NEXT_PUBLIC_APP_URL', publicAppUrl);
+      if (appUrl !== normalizedPublicAppUrl) {
+        throw new Error('[Dashboard] APP_URL and NEXT_PUBLIC_APP_URL must match in production');
+      }
     }
   }
 

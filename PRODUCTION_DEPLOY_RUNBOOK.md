@@ -74,14 +74,13 @@ npm run build -w apps/gateway
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
 - `APP_URL`
-- `NEXT_PUBLIC_APP_URL`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 
 Rules:
 
-- `APP_URL` and `NEXT_PUBLIC_APP_URL` must be valid absolute `http` or `https` URLs.
-- `APP_URL` and `NEXT_PUBLIC_APP_URL` must match in production.
+- `APP_URL` must be a valid absolute `http` or `https` URL.
+- If `NEXT_PUBLIC_APP_URL` is set, it must be a valid absolute `http` or `https` URL and match `APP_URL`.
 - `DATABASE_URL` should include `pgbouncer=true` and `connection_limit=1`.
 
 ### Dashboard Required For Launch Scope Features
@@ -148,7 +147,8 @@ Optional:
 1. Prepare production URLs.
    - Decide the canonical dashboard URL, for example `https://app.example.com`.
    - Decide the public Railway gateway URL, for example `https://gateway.up.railway.app`.
-   - Set `APP_URL` and `NEXT_PUBLIC_APP_URL` to the same dashboard URL.
+   - Set `APP_URL` to the canonical dashboard URL.
+   - If you define `NEXT_PUBLIC_APP_URL` for compatibility, set it to the same dashboard URL.
    - Set dashboard `GATEWAY_INTERNAL_URL` to the public Railway gateway URL.
    - Set gateway `DASHBOARD_URL` to the public dashboard URL.
 

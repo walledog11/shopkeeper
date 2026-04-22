@@ -16,7 +16,6 @@ const CONTRACTS = {
       'ANTHROPIC_API_KEY',
       'INTERNAL_API_SECRET',
       'APP_URL',
-      'NEXT_PUBLIC_APP_URL',
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
     ],

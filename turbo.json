@@ -5,6 +5,7 @@
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
       "env": [
+        "APP_URL",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
         "NEXT_PUBLIC_APP_URL",
         "NEXT_PUBLIC_CLERK_SIGN_IN_URL",

@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/api-errors'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
 import stripe from '@/lib/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing'
+import { getDashboardAppUrl } from '@/lib/env'
 
 // Map tier slugs to env-var price IDs so the client never controls which price is used
 const TIER_PRICE_IDS: Record<string, string | undefined> = {
@@ -27,7 +28,7 @@ export async function POST(req: NextRequest) {
 
     const customerId = await getOrCreateStripeCustomer(org)
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+    const appUrl = getDashboardAppUrl()
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

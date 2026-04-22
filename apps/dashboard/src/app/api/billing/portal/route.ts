@@ -4,6 +4,7 @@ import { handleApiError } from '@/lib/api-errors'
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
 import stripe from '@/lib/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing'
+import { getDashboardAppUrl } from '@/lib/env'
 
 export async function POST() {
   try {
@@ -17,7 +18,7 @@ export async function POST() {
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/dashboard/settings?tab=billing`,
+      return_url: `${getDashboardAppUrl()}/dashboard/settings?tab=billing`,
     })
 
     return NextResponse.json({ url: session.url })

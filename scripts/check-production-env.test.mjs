@@ -78,6 +78,17 @@ test('dashboard launch contract rejects mismatched app URLs', () => {
   assert.equal(result.errors.includes('APP_URL and NEXT_PUBLIC_APP_URL must match'), true);
 });
 
+test('dashboard launch contract allows NEXT_PUBLIC_APP_URL to be omitted', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      NEXT_PUBLIC_APP_URL: '',
+    }),
+  });
+
+  assert.deepEqual(result.errors, []);
+});
+
 test('dashboard launch contract warns on deprecated GATEWAY_PUBLIC_URL usage', () => {
   const result = validateProductionEnv('dashboard', {
     scope: 'launch',

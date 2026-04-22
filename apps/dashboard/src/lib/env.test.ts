@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validateDashboardEnv } from './env';
+import { getDashboardAppUrl, validateDashboardEnv } from './env';
 
 function stubBaseDashboardEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/clerk?pgbouncer=true&connection_limit=1');
@@ -28,7 +28,7 @@ describe('validateDashboardEnv', () => {
     expect(() => validateDashboardEnv()).toThrow(/UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN/);
   });
 
-  it('requires public app URLs and the Clerk publishable key in production', () => {
+  it('requires APP_URL and the Clerk publishable key in production', () => {
     stubBaseDashboardEnv();
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', '');
@@ -36,7 +36,7 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
 
     expect(() => validateDashboardEnv()).toThrow(
-      /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, APP_URL, NEXT_PUBLIC_APP_URL/
+      /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, APP_URL/
     );
   });
 
@@ -76,6 +76,18 @@ describe('validateDashboardEnv', () => {
     expect(() => validateDashboardEnv()).not.toThrow();
   });
 
+  it('passes in production without NEXT_PUBLIC_APP_URL when APP_URL is set', () => {
+    stubBaseDashboardEnv();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
+    vi.stubEnv('APP_URL', 'https://app.example.com');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
+
+    expect(() => validateDashboardEnv()).not.toThrow();
+  });
+
   it('rejects whitespace-only production env values', () => {
     stubBaseDashboardEnv();
     vi.stubEnv('NODE_ENV', 'production');
@@ -86,5 +98,22 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
 
     expect(() => validateDashboardEnv()).toThrow(/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  });
+});
+
+describe('getDashboardAppUrl', () => {
+  it('prefers APP_URL when it is set', () => {
+    vi.stubEnv('APP_URL', 'https://app.example.com/');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://preview.example.com');
+
+    expect(getDashboardAppUrl()).toBe('https://app.example.com');
+  });
+
+  it('falls back to localhost outside production when no app URL env is set', () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('APP_URL', '');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+
+    expect(getDashboardAppUrl()).toBe('http://localhost:3000');
   });
 });
