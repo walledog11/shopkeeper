@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
+import { AGENT_TURN_PREFIX, TOOL_LABELS } from "@/lib/agent/tools";
 import type { ActionLogEntry, AgentTurn } from "@/types";
 
 export interface ActionLogCursor {
@@ -75,7 +75,9 @@ export function toActionLogEntry(
     threadTag: message.thread.tag,
     customerHandle: handle,
     instruction: turn.instruction ?? null,
-    summary: turn.summary ?? "",
+    summary:
+      turn.summary?.trim() ||
+      turn.actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · "),
     actions: turn.actions,
   };
 }

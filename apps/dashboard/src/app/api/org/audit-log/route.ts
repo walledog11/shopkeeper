@@ -1,102 +1,46 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/org';
 import { handleApiError } from '@/lib/api-errors';
+import {
+  listAgentActionLogEntries,
+  listAllAgentActionLogEntries,
+  serializeAgentActionLogCsv,
+} from '@/lib/agent/api/action-log';
+import { parseActionLogCursorQuery } from '@/lib/agent/api/validation';
 import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
-const PAGE_SIZE = 50;
-const CSV_BATCH = 500;
-
+// Legacy alias for the Settings audit log. The canonical structured source is /api/agent/actions.
 export async function GET(request: Request) {
   try {
     const org = await getOrCreateOrg();
-    const rl = await rateLimit(`audit-log:${org.id}`, 60, 60);
+    const { searchParams } = new URL(request.url);
+    const format = searchParams.get('format');
+
+    const rl = await rateLimit(
+      format === 'csv' ? `audit-log:export:${org.id}` : `audit-log:${org.id}`,
+      format === 'csv' ? 5 : 60,
+      60,
+    );
     if (!rl.success) return tooManyRequests(rl.reset);
 
-    const { searchParams } = new URL(request.url);
-    const cursor = searchParams.get('cursor') ?? undefined;
-    const format = searchParams.get('format');
-    const isCsv = format === 'csv';
-
-    if (isCsv) {
-      // Stream all records in batches — no arbitrary row cap
-      const where = {
-        senderType: { in: [SenderType.ai, SenderType.note] },
-        deletedAt: null,
-        thread: { organizationId: org.id },
-      };
-      const include = {
-        thread: {
-          select: {
-            id: true,
-            channelType: true,
-            customer: { select: { name: true, platformId: true } },
-          },
-        },
-      } as const;
-
-      let csvCursor: string | undefined;
-      const lines: string[] = ['timestamp,customer,channel,type,content'];
-
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const batch = await db.message.findMany({
-          where,
-          include,
-          orderBy: { sentAt: 'desc' },
-          ...(csvCursor ? { cursor: { id: csvCursor }, skip: 1 } : {}),
-          take: CSV_BATCH,
-        });
-
-        for (const row of batch) {
-          const customer =
-            row.thread.customer?.name ??
-            row.thread.customer?.platformId ??
-            'Unknown';
-          const content = (row.contentText ?? '').replace(/"/g, '""');
-          lines.push(`"${row.sentAt.toISOString()}","${customer}","${row.thread.channelType}","${row.senderType}","${content}"`);
-        }
-
-        if (batch.length < CSV_BATCH) break;
-        csvCursor = batch[batch.length - 1].id;
-      }
-
-      return new NextResponse(lines.join('\n'), {
+    if (format === 'csv') {
+      const entries = await listAllAgentActionLogEntries({ orgId: org.id });
+      const csv = serializeAgentActionLogCsv(entries);
+      return new NextResponse(csv, {
         headers: {
           'Content-Type': 'text/csv',
-          'Content-Disposition': `attachment; filename="audit-log-${Date.now()}.csv"`,
+          'Content-Disposition': `attachment; filename="audit-log-${new Date().toISOString().slice(0, 10)}.csv"`,
         },
       });
     }
 
-    const rows = await db.message.findMany({
-      where: {
-        senderType: { in: [SenderType.ai, SenderType.note] },
-        deletedAt: null,
-        thread: { organizationId: org.id },
-      },
-      include: {
-        thread: {
-          select: {
-            id: true,
-            channelType: true,
-            customer: { select: { name: true, platformId: true } },
-          },
-        },
-      },
-      orderBy: { sentAt: 'desc' },
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      take: PAGE_SIZE + 1,
+    const { cursor } = parseActionLogCursorQuery(request);
+    const { entries, nextCursor } = await listAgentActionLogEntries({
+      orgId: org.id,
+      cursor,
     });
-
-    let entries = rows;
-    let nextCursor: string | null = null;
-    if (rows.length > PAGE_SIZE) {
-      entries = rows.slice(0, PAGE_SIZE);
-      nextCursor = entries[entries.length - 1].id;
-    }
 
     return NextResponse.json({ entries, nextCursor });
   } catch (error) {

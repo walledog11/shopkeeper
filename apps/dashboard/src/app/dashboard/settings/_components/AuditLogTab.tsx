@@ -1,54 +1,129 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
 import Image from "next/image"
-import { Download, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { AlertCircle, Check, Download, ExternalLink, Loader2 } from "lucide-react"
 import useSWRInfinite from "swr/infinite"
+import { TOOL_LABELS } from "@/lib/agent/tools"
 import { getChannelInfo } from "@/lib/channels"
-import { formatDate } from "@/lib/utils"
 import { fetcher } from "@/lib/fetcher"
-import type { ChannelType, SenderType } from "@/types"
-
-interface AuditEntry {
-  id: string
-  senderType: SenderType
-  contentText: string | null
-  sentAt: string
-  thread: {
-    id: string
-    channelType: ChannelType
-    customer: { name: string | null; platformId: string } | null
-  }
-}
+import { formatDate, timeAgo } from "@/lib/utils"
+import type { ActionLogEntry, ChannelType } from "@/types"
 
 interface Page {
-  entries: AuditEntry[]
+  entries: ActionLogEntry[]
   nextCursor: string | null
 }
 
-function getKey(pageIndex: number, previousPage: Page | null): string | null {
+const OPERATOR_CHANNELS = new Set(["dashboard_agent", "sms_agent"])
+
+function getKey(_pageIndex: number, previousPage: Page | null): string | null {
   if (previousPage && !previousPage.nextCursor) return null
   const cursor = previousPage?.nextCursor
   return cursor
-    ? `/api/org/audit-log?cursor=${encodeURIComponent(cursor)}`
-    : '/api/org/audit-log'
+    ? `/api/agent/actions?cursor=${encodeURIComponent(cursor)}`
+    : "/api/agent/actions"
+}
+
+function ActionPill({ tool, result }: { tool: string; result: string }) {
+  const isError = result.startsWith("Error")
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+        isError
+          ? "border-red-400/20 bg-red-400/10 text-red-300"
+          : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
+      }`}
+      title={result}
+    >
+      {isError ? (
+        <AlertCircle className="h-3 w-3 shrink-0" />
+      ) : (
+        <Check className="h-3 w-3 shrink-0" />
+      )}
+      {TOOL_LABELS[tool] ?? tool}
+    </span>
+  )
+}
+
+function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
+  const channel = getChannelInfo(entry.channelType as ChannelType)
+  const isOperator = OPERATOR_CHANNELS.has(entry.channelType)
+  const href = isOperator ? "/dashboard/agent" : `/dashboard/tickets?thread=${entry.threadId}`
+  const linkLabel = isOperator ? "View Concierge" : "View thread"
+
+  return (
+    <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-4 py-3">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04]">
+          <Image
+            src={channel.logo}
+            alt={channel.name}
+            width={14}
+            height={14}
+            className="object-contain opacity-70"
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="truncate text-sm font-semibold text-white/80">{entry.customerHandle}</span>
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-white/35">
+                  {channel.name}
+                </span>
+                {entry.threadTag && (
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-white/35">
+                    {entry.threadTag}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[11px] text-white/25" title={formatDate(entry.sentAt)}>
+                {timeAgo(entry.sentAt)} · {formatDate(entry.sentAt)}
+              </p>
+            </div>
+            <Link
+              href={href}
+              className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-white/35 transition-colors hover:text-white/65"
+            >
+              {linkLabel}
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+
+          {entry.instruction && (
+            <p className="mt-2 truncate text-xs italic text-white/35">&ldquo;{entry.instruction}&rdquo;</p>
+          )}
+
+          <p className="mt-1.5 text-sm leading-relaxed text-white/50">{entry.summary}</p>
+
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {entry.actions.map((action, index) => (
+              <ActionPill key={`${entry.id}-${action.tool}-${index}`} tool={action.tool} result={action.result} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function AuditLogTab() {
   const { data, isLoading, size, setSize } = useSWRInfinite<Page>(getKey, fetcher)
   const [isExporting, setIsExporting] = useState(false)
 
-  const allEntries = data?.flatMap(p => p.entries) ?? []
+  const allEntries = data?.flatMap((page) => page.entries) ?? []
   const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      const res = await fetch('/api/org/audit-log?format=csv')
+      const res = await fetch("/api/agent/actions?format=csv")
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
       a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`
       a.click()
@@ -63,81 +138,51 @@ export default function AuditLogTab() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-bold text-white/80">Audit Log</h1>
-          <p className="text-sm text-white/35 mt-0.5">All AI and agent actions across your workspace.</p>
+          <p className="mt-0.5 text-sm text-white/35">
+            Structured agent actions across your workspace. Human notes stay in thread history.
+          </p>
         </div>
         <button
           onClick={handleExport}
           disabled={isExporting || allEntries.length === 0}
-          className="flex items-center gap-1.5 shrink-0 text-xs font-semibold text-white/60 hover:text-white bg-white/[0.07] hover:bg-white/[0.12] border border-border rounded-md px-3 py-1.5 transition-colors disabled:opacity-40"
+          className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/[0.07] px-3 py-1.5 text-xs font-semibold text-white/60 transition-colors hover:bg-white/[0.12] hover:text-white disabled:opacity-40"
         >
-          {isExporting
-            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            : <Download className="w-3.5 h-3.5" />}
+          {isExporting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="h-3.5 w-3.5" />
+          )}
           Export CSV
         </button>
       </div>
 
       {isLoading && allEntries.length === 0 ? (
         <div className="space-y-2 animate-pulse">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="h-16 rounded-md bg-white/[0.04] border border-white/[0.06]" />
+          {Array.from({ length: 8 }).map((_, index) => (
+            <div key={index} className="h-24 rounded-md border border-white/[0.06] bg-white/[0.04]" />
           ))}
         </div>
       ) : allEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-sm font-semibold text-white/40">No audit entries yet</p>
-          <p className="text-xs text-white/25 mt-1">AI actions and internal notes will appear here.</p>
+          <p className="text-sm font-semibold text-white/40">No structured agent actions yet</p>
+          <p className="mt-1 text-xs text-white/25">
+            Executed replies, refunds, order updates, and other agent actions will appear here.
+          </p>
         </div>
       ) : (
-        <div className="space-y-1.5">
-          {allEntries.map(entry => {
-            const ch = getChannelInfo(entry.thread.channelType)
-            const customer =
-              entry.thread.customer?.name ??
-              entry.thread.customer?.platformId ??
-              'Unknown'
-            return (
-              <div
-                key={entry.id}
-                className="flex items-start gap-3 rounded-md border border-white/[0.07] bg-white/[0.03] px-3 py-2.5"
-              >
-                <div className="flex flex-col items-center gap-1 pt-0.5 shrink-0">
-                  <Image
-                    src={ch.logo}
-                    alt={ch.name}
-                    width={12}
-                    height={12}
-                    className="object-contain opacity-40 brightness-0 invert"
-                  />
-                  <span className={`text-[9px] font-bold px-1 py-0.5 rounded border ${
-                    entry.senderType === 'ai'
-                      ? 'text-violet-400 bg-violet-400/10 border-violet-400/20'
-                      : 'text-amber-400 bg-amber-400/10 border-amber-400/20'
-                  }`}>
-                    {entry.senderType === 'ai' ? 'AI' : 'Note'}
-                  </span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs font-semibold text-white/60 truncate">{customer}</span>
-                    <span className="text-[10px] text-white/25 shrink-0">{formatDate(entry.sentAt)}</span>
-                  </div>
-                  <p className="text-xs text-white/40 leading-relaxed line-clamp-3">
-                    {entry.contentText ?? <span className="italic">No content</span>}
-                  </p>
-                </div>
-              </div>
-            )
-          })}
+        <div className="space-y-2">
+          {allEntries.map((entry) => (
+            <AuditEntryRow key={entry.id} entry={entry} />
+          ))}
 
           {hasMore && (
-            <div className="pt-2 flex justify-center">
+            <div className="flex justify-center pt-2">
               <button
                 onClick={() => setSize(size + 1)}
                 disabled={isLoading}
-                className="text-xs font-semibold text-white/40 hover:text-white/70 transition-colors disabled:opacity-40"
+                className="text-xs font-semibold text-white/40 transition-colors hover:text-white/70 disabled:opacity-40"
               >
-                {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Load more'}
+                {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Load more"}
               </button>
             </div>
           )}

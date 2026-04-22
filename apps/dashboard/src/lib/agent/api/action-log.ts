@@ -1,6 +1,7 @@
 import { db } from "@clerk/db";
-import { AGENT_TURN_PREFIX } from "@/lib/agent/tools";
+import { AGENT_TURN_PREFIX, TOOL_LABELS } from "@/lib/agent/tools";
 import {
+  decodeActionLogCursor,
   encodeActionLogCursor,
   parseAgentTurn,
   toActionLogEntry,
@@ -10,6 +11,7 @@ import type { ActionLogEntry, AgentTurn } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_BATCH_SIZE = 100;
+const DEFAULT_EXPORT_PAGE_SIZE = 250;
 
 export const agentTurnMessageFilter = {
   senderType: "note" as const,
@@ -118,6 +120,89 @@ export async function listAgentActionLogEntries(params: {
   }
 
   return { entries, nextCursor };
+}
+
+export async function listAllAgentActionLogEntries(params: {
+  orgId: string;
+  pageSize?: number;
+  batchSize?: number;
+}): Promise<ActionLogEntry[]> {
+  const pageSize = params.pageSize ?? DEFAULT_EXPORT_PAGE_SIZE;
+  const batchSize = params.batchSize ?? Math.max(pageSize, DEFAULT_BATCH_SIZE);
+
+  const entries: ActionLogEntry[] = [];
+  let cursor: ActionLogCursor | null = null;
+
+  // Export uses cursor-based pagination so Settings and Activity share the same source of truth.
+  // We step through the entire action log in bounded chunks rather than querying raw notes again.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const page = await listAgentActionLogEntries({
+      orgId: params.orgId,
+      cursor,
+      pageSize,
+      batchSize,
+    });
+    entries.push(...page.entries);
+
+    if (!page.nextCursor) {
+      break;
+    }
+
+    const nextCursor = decodeActionLogCursor(page.nextCursor);
+    if (!nextCursor) {
+      break;
+    }
+
+    cursor = nextCursor;
+  }
+
+  return entries;
+}
+
+function escapeCsvCell(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+function normalizeCsvText(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim();
+}
+
+export function serializeAgentActionLogCsv(entries: ActionLogEntry[]): string {
+  const headers = [
+    "timestamp",
+    "customer",
+    "channel",
+    "thread_tag",
+    "thread_id",
+    "instruction",
+    "summary",
+    "actions",
+    "action_results",
+  ];
+
+  const rows = entries.map((entry) => {
+    const actions = entry.actions
+      .map((action) => normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool))
+      .join(" | ");
+    const actionResults = entry.actions
+      .map((action) => `${normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool)}: ${normalizeCsvText(action.result)}`)
+      .join(" || ");
+
+    return [
+      entry.sentAt,
+      entry.customerHandle,
+      entry.channelType,
+      entry.threadTag ?? "",
+      entry.threadId,
+      entry.instruction ?? "",
+      entry.summary,
+      actions,
+      actionResults,
+    ].map((cell) => escapeCsvCell(normalizeCsvText(cell))).join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\n");
 }
 
 export async function listAgentTurnsForOrgInRange(orgId: string, from: Date, to: Date): Promise<AgentTurn[]> {

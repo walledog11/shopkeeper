@@ -4,8 +4,9 @@ import {
   excludeAgentTurnMessages,
   extractAgentTurnsFromMessages,
   isAgentTurnContent,
+  serializeAgentActionLogCsv,
 } from "@/lib/agent/api/action-log";
-import { serializeAgentTurn } from "@/lib/agent/api/turns";
+import { serializeAgentTurn, toActionLogEntry } from "@/lib/agent/api/turns";
 
 describe("agent action-log helpers", () => {
   it("detects serialized agent turn content", () => {
@@ -58,5 +59,58 @@ describe("agent action-log helpers", () => {
       senderType: "note",
       contentText: { startsWith: "__clerk_agent__" },
     });
+  });
+
+  it("falls back to tool labels when a turn summary is missing", () => {
+    const entry = toActionLogEntry(
+      {
+        id: "msg_1",
+        sentAt: new Date("2026-04-21T12:00:00.000Z"),
+        thread: {
+          id: "thread_1",
+          channelType: "email",
+          tag: "Returns",
+          customer: {
+            name: "Taylor",
+            platformId: "taylor@example.com",
+          },
+        },
+      },
+      {
+        instruction: "Close this out",
+        actions: [
+          { tool: "send_reply", result: "Reply sent." },
+          { tool: "update_thread_status", result: "Status set to closed." },
+        ],
+        summary: null,
+        error: null,
+      },
+    );
+
+    expect(entry?.summary).toBe("Sent reply · Updated thread status");
+  });
+
+  it("serializes action log entries as CSV with action details", () => {
+    const csv = serializeAgentActionLogCsv([
+      {
+        id: "msg_1",
+        sentAt: "2026-04-21T12:00:00.000Z",
+        threadId: "thread_1",
+        channelType: "email",
+        threadTag: "Returns",
+        customerHandle: "Taylor",
+        instruction: "Refund the order",
+        summary: "Issued the refund and closed the ticket.",
+        actions: [
+          { tool: "create_refund", result: "Refunded $25.00." },
+          { tool: "update_thread_status", result: "Status set to closed." },
+        ],
+      },
+    ]);
+
+    expect(csv).toContain("timestamp,customer,channel,thread_tag,thread_id,instruction,summary,actions,action_results");
+    expect(csv).toContain('"Taylor","email","Returns","thread_1","Refund the order"');
+    expect(csv).toContain('"Issued refund | Updated thread status"');
+    expect(csv).toContain('"Issued refund: Refunded $25.00. || Updated thread status: Status set to closed."');
   });
 });

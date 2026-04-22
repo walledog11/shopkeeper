@@ -158,5 +158,6 @@ Repo audit status as of April 21, 2026:
 
 ## Notes
 
+- Repo-side deploy support now exists for env/config validation and production smoke checks via `scripts/check-production-env.mjs`, `scripts/verify-production.mjs`, and `PRODUCTION_DEPLOY_RUNBOOK.md`, but those changes do not by themselves complete the live deployment, migration, webhook-console, or provider-account checklist items.
 - The app is already feature-rich enough to be a real product. The biggest remaining work is production hardening, operational visibility, test reliability, and a few high-frequency inbox workflows.
 - The launch decision should be gated primarily on queue processing reliability, deterministic CI, env/config validation, billing readiness, and the ability for a merchant to triage and collaborate inside the inbox without friction.
