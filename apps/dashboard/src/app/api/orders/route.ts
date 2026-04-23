@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 
 export const dynamic = 'force-dynamic';
 

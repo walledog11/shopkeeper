@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { createHmac } from 'crypto';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType } from '@clerk/db';
 import {
   createTestOrg,
   createTestIntegration,

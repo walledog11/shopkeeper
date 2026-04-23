@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
-import { getOrCreateOrg } from '@/lib/org'
-import { handleApiError } from '@/lib/api-errors'
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
-import stripe from '@/lib/stripe'
-import { getOrCreateStripeCustomer } from '@/lib/billing'
+import { getOrCreateOrg } from '@/lib/server/org'
+import { handleApiError } from '@/lib/api/errors'
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
+import stripe from '@/lib/billing/stripe'
+import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
 
 export async function GET() {
   try {

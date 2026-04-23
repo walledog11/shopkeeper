@@ -1,9 +1,8 @@
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import type { ToolCategory } from "@/types";
+export { AGENT_TURN_PREFIX } from "./turn-content";
 
 // ── Shared prefix used to tag agent turn notes in the DB ─────────────────────
-export const AGENT_TURN_PREFIX = "__clerk_agent__";
-
 // ── Tool category map — used for plan filtering and UI display ────────────────
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   search_kb:                    'read',
@@ -563,4 +562,3 @@ export interface GetOrderTrackingInput {
 export interface SearchKbInput {
   query: string;
 }
-

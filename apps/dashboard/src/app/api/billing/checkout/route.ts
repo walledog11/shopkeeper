@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getOrCreateOrg } from '@/lib/org'
-import { handleApiError } from '@/lib/api-errors'
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit'
-import stripe from '@/lib/stripe'
-import { getOrCreateStripeCustomer } from '@/lib/billing'
+import { getOrCreateOrg } from '@/lib/server/org'
+import { handleApiError } from '@/lib/api/errors'
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
+import stripe from '@/lib/billing/stripe'
+import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
 import { getDashboardAppUrl } from '@/lib/env'
 
 // Map tier slugs to env-var price IDs so the client never controls which price is used

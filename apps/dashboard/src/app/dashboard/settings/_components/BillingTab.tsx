@@ -1,7 +1,7 @@
 "use client"
 
 import useSWR from "swr"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
 import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react"
 

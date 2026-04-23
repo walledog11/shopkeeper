@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 

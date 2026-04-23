@@ -7,7 +7,7 @@ import {
   createTestMessage,
   cleanupTestData,
 } from '@clerk/db/test-helpers';
-import { AGENT_NOTE_PREFIX } from '@/lib/constants';
+import { AGENT_NOTE_PREFIX } from '@/lib/messaging/thread-constants';
 import { AGENT_SETTINGS_DEFAULTS } from './settings';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────

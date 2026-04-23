@@ -7,10 +7,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
 import { auth } from "@clerk/nextjs/server";
-import { handleApiError } from "@/lib/api-errors";
-import logger from "@/lib/logger";
-import { getOrCreateOrg } from "@/lib/org";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { handleApiError } from "@/lib/api/errors";
+import logger from "@/lib/server/logger";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 
 export async function POST(request: Request) {
   try {

@@ -18,6 +18,7 @@
   "scripts": {
     "postinstall": "prisma generate --schema=prisma/schema.prisma && tsc",
     "build": "tsc",
+    "lint": "cd ../.. && eslint packages/db/index.ts packages/db/test-helpers.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

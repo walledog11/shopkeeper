@@ -5,8 +5,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
 import { auth } from "@clerk/nextjs/server";
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
 
 export async function GET() {
   try {

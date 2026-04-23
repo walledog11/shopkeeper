@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { MessageSquare, Plus, Search, X, ArrowUpDown } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import { ReplyForm, emptyForm, formFrom, type FormState } from "./_components/ReplyForm"
 import { ReplyCard } from "./_components/ReplyCard"
 import type { CannedResponse } from "@/types"

@@ -26,6 +26,9 @@
         "UPSTASH_REDIS_REST_TOKEN"
       ]
     },
+    "lint": {
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true

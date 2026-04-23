@@ -6,8 +6,8 @@ import useSWR from "swr"
 import { Check, ChevronDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { fetcher } from "@/lib/fetcher"
-import { cn } from "@/lib/utils"
+import { fetcher } from "@/lib/api/fetcher"
+import { cn } from "@/lib/ui/cn"
 
 interface TwilioStatus {
   connected: boolean

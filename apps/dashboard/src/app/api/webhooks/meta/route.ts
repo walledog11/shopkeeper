@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getGatewayBaseUrl } from '@/lib/gateway-url';
+import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
 async function proxy(request: NextRequest) {
   const url = `${getGatewayBaseUrl({ required: true })}/webhooks/meta${request.nextUrl.search}`;

@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
 import {
   listAgentActionLogEntries,
   listAllAgentActionLogEntries,
   serializeAgentActionLogCsv,
 } from '@/lib/agent/api/action-log';
 import { parseActionLogCursorQuery } from '@/lib/agent/api/validation';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 
 export const dynamic = 'force-dynamic';
 

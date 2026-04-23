@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import logger from '@/lib/logger';
+import { getOrCreateOrg } from '@/lib/server/org';
+import logger from '@/lib/server/logger';
 
 export async function GET(request: Request) {
   try {

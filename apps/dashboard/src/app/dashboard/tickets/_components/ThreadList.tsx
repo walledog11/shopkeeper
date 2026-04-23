@@ -5,7 +5,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Search, Inbox, X, CheckSquare, Square, Loader2, Archive, Tag } from "lucide-react"
 import type { ChannelType, Ticket } from "@/types"
-import { getChannelInfo } from "@/lib/channels"
+import { getChannelInfo } from "@/lib/messaging/channels"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const FILTER_IDS: ChannelType[] = ['email', 'ig_dm', 'sms_agent']

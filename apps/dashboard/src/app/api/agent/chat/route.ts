@@ -11,16 +11,16 @@ import { NextResponse } from "next/server";
 
 export const maxDuration = 60;
 import { auth } from "@clerk/nextjs/server";
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import {
   createDashboardAgentSession,
   resolveDashboardAgentSession,
 } from "@/lib/agent/api/sessions";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import logger from "@/lib/logger";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";
 
 export async function POST(request: Request) {

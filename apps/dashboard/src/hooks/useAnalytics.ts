@@ -1,5 +1,5 @@
 import useSWR from 'swr';
-import { fetcher } from '@/lib/fetcher';
+import { fetcher } from '@/lib/api/fetcher';
 
 export interface AnalyticsData {
   window: { from: string; to: string }

@@ -14,12 +14,12 @@
  * All outbound platform API calls (Postmark, Meta) are intercepted via
  * Playwright route() so no real emails are sent.
  */
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 // TODO: Uncomment once @clerk/testing is installed and credentials are configured.
 // import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright';
 
-test.skip('receive message → view thread → send reply', async ({ page, request }) => {
+test.skip('receive message → view thread → send reply', async ({ page }) => {
   // --- Auth ---
   // await setupClerkTestingToken({ page });
   // await clerk.signIn({ page, signInParams: {
@@ -29,9 +29,7 @@ test.skip('receive message → view thread → send reply', async ({ page, reque
   // }});
 
   // --- Intercept outbound Postmark send ---
-  let postmarkPayload: unknown = null;
   await page.route('https://api.postmarkapp.com/email', async route => {
-    postmarkPayload = JSON.parse(route.request().postData() ?? '{}');
     await route.fulfill({ status: 200, body: JSON.stringify({ MessageID: 'mock-id' }) });
   });
 

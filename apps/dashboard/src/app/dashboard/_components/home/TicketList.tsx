@@ -6,8 +6,9 @@ import { CheckCircle2, Zap, Settings, BarChart2, ArrowRight } from "lucide-react
 import { motion, AnimatePresence } from "motion/react"
 import { Card } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { timeAgo, getCustomerName } from "@/lib/utils"
-import { getChannelInfo } from "@/lib/channels"
+import { getCustomerName } from "@/lib/messaging/customer-name"
+import { timeAgo } from "@/lib/format/date"
+import { getChannelInfo } from "@/lib/messaging/channels"
 import type { Thread } from "@/types"
 import type { ViewId, NavView } from "./types"
 

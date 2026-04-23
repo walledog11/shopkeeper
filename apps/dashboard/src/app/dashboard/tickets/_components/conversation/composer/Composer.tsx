@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { Bot, Send, Loader2, Lock, StickyNote } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import type { CannedResponse } from "@/types"
 
 interface ShopifyData {

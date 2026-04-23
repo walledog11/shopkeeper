@@ -1,13 +1,11 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
     "rootDir": ".",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "declaration": true
   },
   "include": ["index.ts", "test-helpers.ts"],

@@ -1,4 +1,4 @@
-import { BadRequestError, type ApiErrorDetail } from "@/lib/api-errors";
+import { BadRequestError, type ApiErrorDetail } from "@/lib/api/errors";
 import { requireTrimmedInstruction } from "@/lib/agent/api/auth";
 import { decodeActionLogCursor } from "@/lib/agent/api/turns";
 import type { RawToolCall } from "@/types";

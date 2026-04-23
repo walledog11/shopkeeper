@@ -17,7 +17,6 @@ export function getTestEnv(baseEnv = process.env) {
     GATEWAY_INTERNAL_URL: baseEnv.GATEWAY_INTERNAL_URL || 'http://localhost:8080',
     GATEWAY_PUBLIC_URL: baseEnv.GATEWAY_PUBLIC_URL || baseEnv.GATEWAY_INTERNAL_URL || 'http://localhost:8080',
     CLERK_SECRET_KEY: baseEnv.CLERK_SECRET_KEY || 'sk_test_clerk',
-    OPENAI_API_KEY: baseEnv.OPENAI_API_KEY || 'sk-test-openai',
     ANTHROPIC_API_KEY: baseEnv.ANTHROPIC_API_KEY || 'test-anthropic-key',
     INTERNAL_API_SECRET: baseEnv.INTERNAL_API_SECRET || 'test-internal-secret',
     INTERNAL_API_SECRET_PREV: baseEnv.INTERNAL_API_SECRET_PREV || 'test-internal-secret-prev',

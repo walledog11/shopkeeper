@@ -1,5 +1,5 @@
-import Link from "next/link";
-import { Bot, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
+import { BrandMark } from "@/components/BrandMark";
 import { DotPattern } from "@/components/ui/dot-pattern";
 
 interface Props {
@@ -20,31 +20,28 @@ export default function OnboardingShell({
   children,
 }: Props) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black">
+    <div className="dark relative min-h-screen overflow-hidden bg-background text-foreground">
       <DotPattern
         width={26}
         height={26}
         cr={1}
-        className="absolute inset-0 z-0 opacity-70 [mask-image:linear-gradient(to_bottom,white_40%,transparent_100%)]"
+        className="absolute inset-0 z-0 opacity-[0.16] [mask-image:radial-gradient(circle_at_top,white,transparent_72%)]"
       />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] opacity-[0.12] pointer-events-none blur-[120px] bg-gradient-to-b from-green-400 to-transparent z-0" />
+      <div className="absolute inset-x-0 top-0 z-0 h-[28rem] bg-[radial-gradient(circle_at_top,rgba(74,222,128,0.16),transparent_60%)]" />
+      <div className="absolute inset-x-0 bottom-0 z-0 h-48 bg-[linear-gradient(to_top,rgba(255,255,255,0.03),transparent)]" />
 
       <div className="relative z-10 flex flex-col items-center px-4 py-14 sm:py-20">
-
-        <Link href="/" className="flex items-center gap-2 group mb-12">
-          <Bot className="w-5 h-5 text-slate-800 group-hover:text-green-500 transition-colors" />
-          <span className="text-xl font-extrabold text-slate-900 tracking-tight">clerk</span>
-        </Link>
+        <BrandMark className="mb-12" />
 
         <div className={`text-center ${headerWidth} mb-10`}>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-200 text-xs font-bold text-slate-600 uppercase tracking-widest mb-4 shadow-sm">
-            <Zap className="w-3 h-3 text-green-500" />
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-white/45">
+            <Zap className="w-3 h-3 text-green-400" />
             Step {step} of {totalSteps}
           </div>
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tighter text-slate-900 leading-[1.1] mb-3">
+          <h1 className="mb-3 text-4xl font-extrabold leading-[1.1] tracking-tighter text-white sm:text-5xl">
             {title}
           </h1>
-          <p className="text-slate-500 text-base">{subtitle}</p>
+          <p className="text-base text-white/60">{subtitle}</p>
         </div>
 
         {children}

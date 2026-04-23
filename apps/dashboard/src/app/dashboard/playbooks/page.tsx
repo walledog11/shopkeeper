@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import useSWR from "swr"
 import { Plus, X, Trash2, Pencil, ChevronDown, Loader2, Zap } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import type { Playbook, PlaybookTrigger, PlaybookAction, PlaybookTriggerType, PlaybookActionType } from "@/types"
 
 // ── Constants ─────────────────────────────────────────────────────────────────

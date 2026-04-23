@@ -6,9 +6,9 @@ import { useState } from "react"
 import { AlertCircle, Check, Download, ExternalLink, Loader2 } from "lucide-react"
 import useSWRInfinite from "swr/infinite"
 import { TOOL_LABELS } from "@/lib/agent/tools"
-import { getChannelInfo } from "@/lib/channels"
-import { fetcher } from "@/lib/fetcher"
-import { formatDate, timeAgo } from "@/lib/utils"
+import { getChannelInfo } from "@/lib/messaging/channels"
+import { fetcher } from "@/lib/api/fetcher"
+import { formatDate, timeAgo } from "@/lib/format/date"
 import type { ActionLogEntry, ChannelType } from "@/types"
 
 interface Page {

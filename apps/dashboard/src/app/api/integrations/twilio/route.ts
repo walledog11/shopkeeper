@@ -9,10 +9,10 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { db } from "@clerk/db";
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
-import logger from "@/lib/logger";
-import { getGatewayBaseUrl } from "@/lib/gateway-url";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
+import logger from "@/lib/server/logger";
+import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 
 function getTwilioClient() {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;

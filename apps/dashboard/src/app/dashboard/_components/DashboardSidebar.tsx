@@ -212,7 +212,7 @@ function SidebarNavContent({
                       <SidebarMenuBadge className="pointer-events-none">
                         <span
                           key={openCount}
-                          className="min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
+                          className="min-w-[20px] h-5 px-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
                         >
                           {openCount > 9 ? "9+" : openCount}
                         </span>
@@ -413,7 +413,7 @@ function MobileNavSheet({
                       <item.icon className="w-[18px] h-[18px] shrink-0" />
                       <span className="text-sm">{item.name}</span>
                       {item.badge && openCount > 0 && (
-                        <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums">
+                        <span className="ml-auto min-w-[20px] h-5 px-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums">
                           {openCount > 9 ? "9+" : openCount}
                         </span>
                       )}

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanupTestData, createTestOrg } from "@clerk/db/test-helpers";
-import { BadRequestError } from "@/lib/api-errors";
+import { BadRequestError } from "@/lib/api/errors";
 
 const { mockExecuteAgentTurn, mockResolveInternalAgentThread } = vi.hoisted(() => ({
   mockExecuteAgentTurn: vi.fn().mockResolvedValue({

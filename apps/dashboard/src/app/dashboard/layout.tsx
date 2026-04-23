@@ -6,7 +6,7 @@ import DashboardHeader from "./_components/DashboardHeader";
 import HelpPanel from "./_components/help/HelpPanel";
 import AgentPanelRoot from "./_components/agent-panel/AgentPanelRoot";
 import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext";
-import { getOrCreateOrg } from "@/lib/org";
+import { getOrCreateOrg } from "@/lib/server/org";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";

@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Check, ChevronRight, Loader2, AlertCircle, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/cn";
 import OnboardingShell from "../_components/OnboardingShell";
 
 const NEXT_STEP = "/plan";

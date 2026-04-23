@@ -1,6 +1,6 @@
 import { currentUser } from "@clerk/nextjs/server"
 import { db } from "@clerk/db"
-import { getOrCreateOrg } from "@/lib/org"
+import { getOrCreateOrg } from "@/lib/server/org"
 import { agentTurnMessageFilter } from "@/lib/agent/api/action-log"
 import DashboardHomeClient from "./_components/home/DashboardHomeClient"
 import type { Thread } from "@/types"

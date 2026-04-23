@@ -120,4 +120,19 @@ describe('GET /api/threads', () => {
 
     expect(res.status).toBe(401);
   });
+
+  it('returns 403 when the user has no active organization', async () => {
+    vi.mocked(auth).mockResolvedValueOnce(
+      { userId: 'usr_test', orgId: null } as unknown as ReturnType<typeof auth> extends Promise<infer T>
+        ? T
+        : never
+    );
+
+    const req = new Request('http://localhost:3000/api/threads');
+    const res = await GET(req);
+    const body = await res.json() as { error: string };
+
+    expect(res.status).toBe(403);
+    expect(body.error).toBe('No active organization');
+  });
 });

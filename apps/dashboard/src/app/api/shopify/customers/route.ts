@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
-import logger from '@/lib/logger';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import logger from '@/lib/server/logger';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 const API_VERSION = '2024-01';

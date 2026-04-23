@@ -5,8 +5,8 @@ import Link from "next/link"
 import Image from "next/image"
 import useSWR from "swr"
 import { ArrowRight, Zap } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
-import { getChannelInfo } from "@/lib/channels"
+import { fetcher } from "@/lib/api/fetcher"
+import { getChannelInfo } from "@/lib/messaging/channels"
 import type { ActionLogEntry, ChannelType } from "@/types"
 
 // ── Tool metadata ──────────────────────────────────────────────────────────────

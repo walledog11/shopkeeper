@@ -8,10 +8,10 @@ import {
   CheckCircle2, AlertCircle, AlertTriangle, Loader2,
   BookOpen, Check, Copy, X, Zap,
 } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/ui/cn"
 import SmsCard from "../../settings/_components/integrations/SmsCard"
 import type { Integration } from "@/types"
 

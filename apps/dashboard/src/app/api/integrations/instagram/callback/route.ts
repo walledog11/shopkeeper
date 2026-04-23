@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
-import logger from '@/lib/logger';
+import logger from '@/lib/server/logger';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 

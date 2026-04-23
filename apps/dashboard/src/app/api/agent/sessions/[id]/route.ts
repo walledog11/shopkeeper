@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
 import { getDashboardAgentSession } from "@/lib/agent/api/sessions";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {

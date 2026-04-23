@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { ArrowLeft, Clock, ChevronRight } from "lucide-react"
 import type { Article } from "../../_components/help/content/index"
-import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
+import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/app/dashboard/_lib/article-tags"
 
 const READ_ARTICLES_KEY = "clerk_read_articles"
 

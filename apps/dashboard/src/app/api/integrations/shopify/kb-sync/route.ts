@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();

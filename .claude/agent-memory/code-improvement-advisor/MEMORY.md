@@ -1,1 +1,0 @@
-- [user_profile.md](./user_profile.md) — User is building a Shopify-first AI helpdesk SaaS (Clerk), active full-stack developer

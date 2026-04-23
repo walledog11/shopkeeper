@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getOrCreateOrg } from "@/lib/org";
-import { handleApiError } from "@/lib/api-errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { handleApiError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { parseAgentRouteBody } from "@/lib/agent/api/validation";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import type { OrgSettings } from "@/types";
-import logger from "@/lib/logger";
+import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
   try {

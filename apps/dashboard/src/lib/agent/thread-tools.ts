@@ -1,8 +1,8 @@
 import { db, SenderType } from "@clerk/db";
 import { ServerClient } from "postmark";
 import twilio from "twilio";
-import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "../constants";
-import logger from "@/lib/logger";
+import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@/lib/messaging/thread-constants";
+import logger from "@/lib/server/logger";
 import type {
   AddInternalNoteInput,
   SendReplyInput,

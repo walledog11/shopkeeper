@@ -6,8 +6,8 @@
  * Forwards with x-internal-secret so the gateway trusts and skips re-validation.
  */
 import twilio from "twilio";
-import logger from "@/lib/logger";
-import { getGatewayBaseUrl } from "@/lib/gateway-url";
+import logger from "@/lib/server/logger";
+import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 
 export async function POST(request: Request) {
   const rawBody = await request.text();

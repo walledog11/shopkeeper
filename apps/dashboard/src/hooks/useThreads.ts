@@ -1,7 +1,7 @@
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import { useEffect, useState, useCallback } from "react";
-import { fetcher } from "@/lib/fetcher";
+import { fetcher } from "@/lib/api/fetcher";
 import type { Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { ArrowRight, BookOpen } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { tips } from "../help/content/tips"
-import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
+import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/app/dashboard/_lib/article-tags"
 
 const PREVIEW_ARTICLES = tips.articles.slice(0, 6)
 

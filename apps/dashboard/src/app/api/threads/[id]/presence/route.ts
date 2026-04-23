@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
-import { getRedis } from '@/lib/redis';
+import { getRedis } from '@/lib/server/redis';
 
 const PRESENCE_TTL = 20; // seconds — heartbeat must arrive within this window
 

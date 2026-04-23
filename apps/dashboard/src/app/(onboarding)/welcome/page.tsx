@@ -6,7 +6,7 @@ import { useUser } from "@clerk/nextjs";
 import { Zap, ChevronRight, Loader2, Users, User, BarChart2, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/ui/cn";
 import OnboardingShell from "../_components/OnboardingShell";
 
 const USE_CASES = [

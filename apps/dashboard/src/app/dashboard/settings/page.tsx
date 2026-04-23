@@ -1,4 +1,4 @@
-import { getOrCreateOrg } from "@/lib/org"
+import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
 import SettingsPageClient from "./_components/SettingsPageClient"
 import type { OrgSettings } from "@/types"

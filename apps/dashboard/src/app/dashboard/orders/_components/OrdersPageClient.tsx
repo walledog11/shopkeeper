@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from "react"
 import { Search, X, ShoppingBag, AlertCircle } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import OrdersTable, { OrdersTableSkeleton } from "./OrdersTable"
 import type { OrderRow } from "./OrdersTable"
 

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Pencil, Copy, Trash2, TrendingUp, Clock, ChevronDown, ChevronUp, ClipboardCheck } from "lucide-react"
-import { timeAgo } from "@/lib/utils"
+import { timeAgo } from "@/lib/format/date"
 import { TagPill } from "./TagInput"
 import type { CannedResponse } from "@/types"
 

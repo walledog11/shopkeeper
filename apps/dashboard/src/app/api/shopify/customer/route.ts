@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import logger from '@/lib/logger';
+import { getOrCreateOrg } from '@/lib/server/org';
+import logger from '@/lib/server/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,default_address';
 

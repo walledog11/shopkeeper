@@ -17,9 +17,9 @@ import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } fr
 import { parseAgentPlanInternalBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
-import { handleApiError } from "@/lib/api-errors";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/auth-utils";
+import { handleApiError } from "@/lib/api/errors";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
 import type { OrgSettings } from "@/types";
 
 export async function POST(request: Request) {

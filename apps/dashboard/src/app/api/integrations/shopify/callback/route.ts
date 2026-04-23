@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@clerk/db';
 import crypto from 'crypto';
-import logger from '@/lib/logger';
-import { getGatewayBaseUrl } from '@/lib/gateway-url';
+import logger from '@/lib/server/logger';
+import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
 export async function GET(request: Request) {
   const appUrl = process.env.APP_URL;

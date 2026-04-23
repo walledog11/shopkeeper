@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { handleApiError } from '@/lib/api-errors';
+import { handleApiError } from '@/lib/api/errors';
 import { getDashboardAppUrl } from '@/lib/env';
 
 export async function GET() {

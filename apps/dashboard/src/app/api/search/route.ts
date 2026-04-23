@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
-import { CHANNEL_TYPE } from '@/lib/constants';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
 
 export const dynamic = 'force-dynamic';
 

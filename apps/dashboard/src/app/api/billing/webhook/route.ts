@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
-import stripe from '@/lib/stripe'
+import stripe from '@/lib/billing/stripe'
 import type Stripe from 'stripe'
 
 export async function POST(request: Request) {

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import useSWR from "swr"
 import { Plus, Trash2, Pencil, Check, Loader2, Tag, MessageSquare, X } from "lucide-react"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 import type { CannedResponse } from "@/types"
 
 export default function CannedResponses() {

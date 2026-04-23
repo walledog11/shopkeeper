@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from 'react'
 import type { Thread, Message, AgentTurn } from '@/types'
 import { extractAgentTurnsFromMessages } from '@/lib/agent/api/action-log'
 import { serializeAgentTurn } from '@/lib/agent/api/turns'
-import { SENDER_TYPE } from '@/lib/constants'
+import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 interface UseAgentTurnsProps {
   activeTicketId: string | null

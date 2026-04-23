@@ -1,73 +1,185 @@
 "use client";
 
+import { useState } from "react";
 import { useOrganizationList } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus, Building2, Loader2 } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  CheckCircle2,
+  Loader2,
+  Plus,
+  ShieldCheck,
+  Workflow,
+} from "lucide-react";
+import AuthShell from "../_components/AuthShell";
 import { OrgAvatar } from "@/components/OrgAvatar";
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+
+type MembershipItem = {
+  role?: string | null;
+  organization: {
+    id: string;
+    name: string;
+    imageUrl?: string | null;
+  };
+};
+
+const highlights = [
+  {
+    icon: Workflow,
+    title: "Separate inboxes, same product",
+    description: "Every workspace keeps its own conversations, settings, and analytics.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Safe to switch",
+    description: "Changing workspaces updates your active org before returning to the dashboard.",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Create another team space anytime",
+    description: "Spin up a new workspace when you need a separate brand or operation.",
+  },
+];
+
+function formatRole(role?: string | null) {
+  if (!role) return "Member";
+
+  return role
+    .replace(/^org:/, "")
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function SelectOrgPage() {
   const { isLoaded, userMemberships, setActive } = useOrganizationList({
     userMemberships: { infinite: false },
   });
   const router = useRouter();
+  const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const orgs = (userMemberships?.data ?? []) as MembershipItem[];
 
   async function handleSelect(orgId: string) {
-    await setActive?.({ organization: orgId });
-    router.push("/dashboard");
+    if (!setActive || pendingOrgId) return;
+
+    setError(null);
+    setPendingOrgId(orgId);
+
+    try {
+      await setActive({ organization: orgId });
+      router.push("/dashboard");
+    } catch {
+      setPendingOrgId(null);
+      setError("Could not switch workspaces. Please try again.");
+    }
   }
 
-  const orgs = userMemberships?.data ?? [];
-
   return (
-    <div className="min-h-screen relative flex items-center justify-center bg-black overflow-hidden px-4 font-sans">
-
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-green-400/15 blur-[100px] rounded-full pointer-events-none" />
-
-      <Link
-        href="/"
-        className="absolute top-6 left-6 sm:top-8 sm:left-8 flex items-center gap-2 text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span className="hidden sm:inline">Back to website</span>
-      </Link>
-
-      <div className="relative z-10 w-full max-w-sm flex flex-col items-center gap-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Select a workspace</h1>
-          <p className="text-sm text-slate-500 mt-1">Choose the workspace you want to work in.</p>
+    <AuthShell
+      backHref="/"
+      backLabel="Back to website"
+      eyebrow="Workspace access"
+      title="Choose the workspace you want to drop into."
+      description="Select an active workspace and go straight back to the dashboard with the right team, inbox, and settings already in context."
+      aside={
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+          {highlights.map(({ icon: Icon, title, description }) => (
+            <div
+              key={title}
+              className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-[0_20px_80px_-56px_rgba(0,0,0,0.95)]"
+            >
+              <div className="mb-3 inline-flex size-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04]">
+                <Icon className="size-4 text-green-400" />
+              </div>
+              <p className="text-sm font-semibold text-white">{title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-white/55">{description}</p>
+            </div>
+          ))}
         </div>
+      }
+      contentClassName="max-w-[30rem]"
+    >
+      <Card className="overflow-hidden rounded-[1.75rem] border-white/10 bg-[#0f0f0f]/95 shadow-[0_24px_100px_-48px_rgba(0,0,0,0.95)] backdrop-blur-xl">
+        <CardHeader className="border-b border-white/10 pb-5">
+          <CardTitle className="text-lg font-semibold text-white">Your workspaces</CardTitle>
+          <CardDescription className="text-white/55">
+            {isLoaded
+              ? `${orgs.length} available ${orgs.length === 1 ? "workspace" : "workspaces"}`
+              : "Loading your workspace access"}
+          </CardDescription>
+        </CardHeader>
 
-        <div className="w-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <CardContent className="p-0">
           {!isLoaded ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-5 animate-spin text-white/45" />
             </div>
           ) : orgs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 px-6 text-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                <Building2 className="w-5 h-5 text-slate-400" />
+            <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
+              <div className="flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                <Building2 className="size-6 text-white/45" />
               </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-900">No workspaces yet</p>
-                <p className="text-xs text-slate-500 mt-0.5">Create your first workspace to get started.</p>
+              <div className="space-y-1">
+                <p className="text-base font-semibold text-white">No workspaces yet</p>
+                <p className="text-sm leading-relaxed text-white/55">
+                  Create your first workspace to start organizing tickets, teammates, and integrations.
+                </p>
               </div>
+              <Button
+                asChild
+                className="mt-2 h-10 rounded-xl bg-green-400 px-4 text-sm font-semibold text-black hover:bg-green-300"
+              >
+                <Link href="/create-org">
+                  <Plus className="size-4" />
+                  Create workspace
+                </Link>
+              </Button>
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
-              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-              {orgs.map((membership: any) => {
+            <ul className="divide-y divide-white/10">
+              {orgs.map((membership) => {
                 const org = membership.organization;
+                const isPending = pendingOrgId === org.id;
+
                 return (
                   <li key={org.id}>
                     <button
+                      type="button"
                       onClick={() => handleSelect(org.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-slate-50 transition-colors text-left"
+                      disabled={pendingOrgId !== null}
+                      className="group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-white/[0.04] disabled:cursor-wait"
                     >
-                      <OrgAvatar name={org.name} imageUrl={org.imageUrl} className="w-8 h-8 rounded-md bg-slate-900 text-white text-xs" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-900 truncate">{org.name}</p>
-                        <p className="text-xs text-slate-400 truncate">{membership.role}</p>
+                      <OrgAvatar
+                        name={org.name}
+                        imageUrl={org.imageUrl}
+                        className="size-11 rounded-xl border border-white/10 bg-white/[0.05] text-sm font-semibold text-white/70"
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-white">{org.name}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/35">
+                          {formatRole(membership.role)}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-white/30 transition-colors group-hover:text-white/65">
+                        {isPending ? (
+                          <Loader2 className="size-4 animate-spin text-green-400" />
+                        ) : (
+                          <ArrowRight className="size-4" />
+                        )}
                       </div>
                     </button>
                   </li>
@@ -76,19 +188,28 @@ export default function SelectOrgPage() {
             </ul>
           )}
 
-          <div className="px-4 py-3 border-t border-slate-100">
-            <Link
-              href="/create-org"
-              className="flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-colors"
+          {error ? (
+            <div className="border-t border-white/10 px-5 py-4 text-sm text-red-300">
+              {error}
+            </div>
+          ) : null}
+        </CardContent>
+
+        {orgs.length > 0 ? (
+          <CardFooter className="border-t border-white/10 px-5 py-4">
+            <Button
+              asChild
+              variant="outline"
+              className="h-10 w-full rounded-xl border-white/10 bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white"
             >
-              <div className="w-6 h-6 rounded-md border border-slate-200 flex items-center justify-center">
-                <Plus className="w-3.5 h-3.5 text-slate-500" />
-              </div>
-              Create a workspace
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+              <Link href="/create-org">
+                <Plus className="size-4" />
+                Create another workspace
+              </Link>
+            </Button>
+          </CardFooter>
+        ) : null}
+      </Card>
+    </AuthShell>
   );
 }

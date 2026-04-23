@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react'
 import type { Thread, Message, FailedMessage } from '@/types'
-import { SENDER_TYPE } from '@/lib/constants'
-import logger from '@/lib/logger'
+import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 
 interface UseTicketActionsProps {
@@ -276,7 +275,7 @@ export function useTicketActions({
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} closed`)
     } catch (err) {
-      logger.error({ err }, 'Bulk close failed')
+      console.error('Bulk close failed', err)
     }
   }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
 
@@ -295,7 +294,7 @@ export function useTicketActions({
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} archived`)
     } catch (err) {
-      logger.error({ err }, 'Bulk archive failed')
+      console.error('Bulk archive failed', err)
     }
   }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
 
@@ -313,7 +312,7 @@ export function useTicketActions({
       mutateClosed()
       showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)
     } catch (err) {
-      logger.error({ err }, 'Bulk tag failed')
+      console.error('Bulk tag failed', err)
     }
   }, [mutateOpen, mutateClosed, setSelectedIds, showToast])
 

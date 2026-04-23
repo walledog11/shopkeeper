@@ -10,7 +10,6 @@ function createDashboardLaunchEnv(overrides = {}) {
     DATABASE_URL: 'postgresql://prod.example/db?pgbouncer=true&connection_limit=1',
     CLERK_SECRET_KEY: 'sk_test_clerk',
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_clerk',
-    OPENAI_API_KEY: 'sk-test-openai',
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     INTERNAL_API_SECRET: 'test-internal-secret',
     APP_URL: 'https://app.example.com',

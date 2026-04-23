@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { getChannelInfo } from "@/lib/channels"
+import { getChannelInfo } from "@/lib/messaging/channels"
 
 interface ChannelItem {
   channel: string

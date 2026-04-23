@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { THREAD_STATUS } from '@/lib/constants';
-import { runPlaybooks } from '@/lib/playbook-runner';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { THREAD_STATUS } from '@/lib/messaging/thread-constants';
+import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
 
 export async function PATCH(
   request: Request,

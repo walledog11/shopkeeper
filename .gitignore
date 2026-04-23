@@ -10,6 +10,27 @@ node_modules/
 
 # Next.js build output
 .next/
+next-env.d.ts
+
+# Common build output
+dist/
+coverage/
+playwright-report/
+test-results/
+.nyc_output/
 
 # Turborepo cache
 .turbo/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# macOS Finder metadata
+.DS_Store
+
+# App-local Clerk configuration
+/apps/dashboard/.clerk/
+
+# Local Claude metadata
+/.claude/agent-memory/
+/.claude/settings.local.json

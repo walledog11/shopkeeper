@@ -12,12 +12,12 @@
  * Response: { summary, actionsPerformed, threadId }
  */
 import { NextResponse } from "next/server";
-import { handleApiError } from "@/lib/api-errors";
+import { handleApiError } from "@/lib/api/errors";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { resolveInternalAgentThread } from "@/lib/agent/api/internal";
 import { parseAgentInternalBody } from "@/lib/agent/api/validation";
-import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/auth-utils";
-import logger from "@/lib/logger";
+import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
+import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
   try {

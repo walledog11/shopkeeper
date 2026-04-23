@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { clerkClient, auth } from '@clerk/nextjs/server';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
 import type { OrgSettings } from '@/types';
 
 export async function GET() {

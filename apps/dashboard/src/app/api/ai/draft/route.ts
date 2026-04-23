@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
 import { generateText } from '@/lib/ai';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 import { excludeAgentTurnMessages } from '@/lib/agent/api/action-log';
 import type { OrgSettings } from '@/types';
 

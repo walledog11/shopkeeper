@@ -11,9 +11,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { resolveAgentSettings } from '@/lib/agent/settings';
-import { dispatchMessage } from '@/lib/dispatch-message';
-import { handleApiError } from '@/lib/api-errors';
-import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/auth-utils';
+import { dispatchMessage } from '@/lib/messaging/dispatch-message';
+import { handleApiError } from '@/lib/api/errors';
+import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/server/auth-utils';
 
 export async function POST(request: Request) {
   try {

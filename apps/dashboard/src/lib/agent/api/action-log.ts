@@ -1,5 +1,6 @@
 import { db } from "@clerk/db";
-import { AGENT_TURN_PREFIX, TOOL_LABELS } from "@/lib/agent/tools";
+import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@/lib/agent/turn-content";
+import { TOOL_LABELS } from "@/lib/agent/tools";
 import {
   decodeActionLogCursor,
   encodeActionLogCursor,
@@ -8,6 +9,8 @@ import {
   type ActionLogCursor,
 } from "@/lib/agent/api/turns";
 import type { ActionLogEntry, AgentTurn } from "@/types";
+
+export { isAgentTurnContent } from "@/lib/agent/turn-content";
 
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_BATCH_SIZE = 100;
@@ -22,10 +25,6 @@ type MessageWithAgentTurn = {
   id: string;
   contentText: string | null;
 };
-
-export function isAgentTurnContent(contentText: string | null | undefined): boolean {
-  return !!contentText?.startsWith(AGENT_TURN_PREFIX);
-}
 
 export function extractAgentTurnsFromMessages<T extends MessageWithAgentTurn>(messages: T[]): AgentTurn[] {
   return messages

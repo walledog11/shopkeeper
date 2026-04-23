@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { Queue } from 'bullmq';
+import { Queue, type ConnectionOptions } from 'bullmq';
 import { Redis as IORedis } from 'ioredis';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db, ChannelType } from '@clerk/db';
@@ -22,14 +22,12 @@ const FILLER_PHRASES = [
 ];
 const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _messageQueue: Queue | null = null;
 function getMessageQueue(): Queue {
   if (!_messageQueue) {
     const redisUrl = new URL(process.env.REDIS_URL!);
     redisUrl.pathname = '/0';
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const redisConnection = new IORedis(redisUrl.toString()) as any;
+    const redisConnection = new IORedis(redisUrl.toString()) as unknown as ConnectionOptions;
     _messageQueue = new Queue(QUEUE.INBOUND, { connection: redisConnection });
   }
   return _messageQueue;

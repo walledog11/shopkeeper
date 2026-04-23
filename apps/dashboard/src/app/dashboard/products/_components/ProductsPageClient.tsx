@@ -5,7 +5,7 @@ import {
   Search, X, Package, ExternalLink, ChevronRight, ShoppingBag,
 } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/fetcher"
+import { fetcher } from "@/lib/api/fetcher"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

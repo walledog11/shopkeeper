@@ -1,7 +1,7 @@
 import { db } from "@clerk/db";
-import { BadRequestError } from "@/lib/api-errors";
+import { BadRequestError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
-import logger from "@/lib/logger";
+import logger from "@/lib/server/logger";
 
 interface ResolveInternalAgentThreadParams {
   orgId: string;

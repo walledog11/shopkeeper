@@ -1,5 +1,5 @@
 import { db } from "@clerk/db"
-import { getOrCreateOrg } from "@/lib/org"
+import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
 import TicketsPageClient from "./_components/TicketsPageClient"
 import type { Thread, OrgSettings } from "@/types"

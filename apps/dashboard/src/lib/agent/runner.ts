@@ -1,7 +1,7 @@
 import { db } from "@clerk/db";
 import { anthropic } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
-import logger from "@/lib/logger";
+import logger from "@/lib/server/logger";
 import type Anthropic from "@anthropic-ai/sdk";
 import { AGENT_TOOLS, TOOL_CATEGORIES, PLAN_STEP_LABELS } from "./tools";
 import type { PlanStep, RawToolCall, AgentPlan, OrgSettings } from "@/types";

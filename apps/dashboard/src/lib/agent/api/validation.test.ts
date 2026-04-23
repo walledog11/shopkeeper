@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BadRequestError } from "@/lib/api-errors";
+import { BadRequestError } from "@/lib/api/errors";
 import { encodeActionLogCursor } from "@/lib/agent/api/turns";
 import {
   parseActionLogCursorQuery,

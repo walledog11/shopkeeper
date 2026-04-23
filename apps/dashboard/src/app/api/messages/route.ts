@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/org';
-import { handleApiError } from '@/lib/api-errors';
-import { rateLimit, tooManyRequests } from '@/lib/rate-limit';
-import { dispatchMessage } from '@/lib/dispatch-message';
+import { getOrCreateOrg } from '@/lib/server/org';
+import { handleApiError } from '@/lib/api/errors';
+import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 
 export async function POST(request: Request) {
   try {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowRight, Clock, Check } from "lucide-react"
 import { tips } from "../_components/help/content/tips"
-import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/lib/articleTags"
+import { TAG_COLORS, DEFAULT_TAG_COLOR } from "@/app/dashboard/_lib/article-tags"
 
 const ALL_TAGS = ["All", ...Array.from(new Set(tips.articles.map(a => a.tag ?? "Tips")))]
 const READ_ARTICLES_KEY = "clerk_read_articles"

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
-import { timeAgo } from "@/lib/utils";
+import { timeAgo } from "@/lib/format/date";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";
 

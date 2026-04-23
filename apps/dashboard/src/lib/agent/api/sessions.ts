@@ -1,5 +1,5 @@
 import { db } from "@clerk/db";
-import { NotFoundError } from "@/lib/api-errors";
+import { NotFoundError } from "@/lib/api/errors";
 import { getDashboardPlatformId, getOrCreateDashboardCustomer } from "@/lib/agent/api/auth";
 
 const SESSION_LIMIT = 50;

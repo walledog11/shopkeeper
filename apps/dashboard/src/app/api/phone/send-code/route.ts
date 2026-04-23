@@ -9,10 +9,10 @@ import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { db } from "@clerk/db";
 import { auth } from "@clerk/nextjs/server";
-import { handleApiError } from "@/lib/api-errors";
-import { getOrCreateOrg } from "@/lib/org";
-import { rateLimit, tooManyRequests } from "@/lib/rate-limit";
-import logger from "@/lib/logger";
+import { handleApiError } from "@/lib/api/errors";
+import { getOrCreateOrg } from "@/lib/server/org";
+import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import logger from "@/lib/server/logger";
 
 function generateCode(): string {
   return String(Math.floor(100000 + Math.random() * 900000));

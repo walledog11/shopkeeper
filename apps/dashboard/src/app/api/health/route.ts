@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { validateDashboardEnv } from '@/lib/env';
-import logger from '@/lib/logger';
-import { getRedis } from '@/lib/redis';
+import logger from '@/lib/server/logger';
+import { getRedis } from '@/lib/server/redis';
 
 export const dynamic = 'force-dynamic';
 

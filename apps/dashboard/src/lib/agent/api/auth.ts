@@ -1,5 +1,5 @@
 import { db } from "@clerk/db";
-import { BadRequestError, NotFoundError } from "@/lib/api-errors";
+import { BadRequestError, NotFoundError } from "@/lib/api/errors";
 
 type DashboardCustomerClient = Pick<typeof db, "customer">;
 

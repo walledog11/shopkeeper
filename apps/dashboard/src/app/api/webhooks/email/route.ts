@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import logger from '@/lib/logger';
-import { getGatewayBaseUrl } from '@/lib/gateway-url';
+import logger from '@/lib/server/logger';
+import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
 // Postmark inbound email webhook — proxied to the gateway.
 // In dev, Postmark can't reach localhost:8080 directly, so this

@@ -11,7 +11,7 @@ const { mockListEntries, mockListAllEntries, mockSerializeCsv } = vi.hoisted(() 
   mockSerializeCsv: vi.fn(),
 }));
 
-vi.mock("@/lib/org", () => ({
+vi.mock("@/lib/server/org", () => ({
   getOrCreateOrg: vi.fn(),
 }));
 
@@ -23,7 +23,7 @@ vi.mock("@/lib/agent/api/action-log", () => ({
 
 import { GET } from "./route";
 import { auth } from "@clerk/nextjs/server";
-import { getOrCreateOrg } from "@/lib/org";
+import { getOrCreateOrg } from "@/lib/server/org";
 
 describe("GET /api/agent/actions", () => {
   beforeEach(() => {
