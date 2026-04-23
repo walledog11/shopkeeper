@@ -27,6 +27,7 @@ const { mockPlanAgent, mockBuildContext } = vi.hoisted(() => ({
 
 vi.mock('@/lib/agent/runner', () => ({
   buildContext: mockBuildContext,
+  hashInstructionForLog: vi.fn(() => 'test-hash'),
   planAgent: mockPlanAgent,
 }));
 
