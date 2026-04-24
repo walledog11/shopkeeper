@@ -191,6 +191,7 @@ export interface AgentPlan {
   instruction: string
   steps: PlanStep[]          // visible steps (reads excluded)
   rawToolCalls: RawToolCall[] // all tool calls including reads
+  readResults?: Record<string, string> // tool_use.id → raw result string, for read-only tools
   warnings?: string[]
 }
 

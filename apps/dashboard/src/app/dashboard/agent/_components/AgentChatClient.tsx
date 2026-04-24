@@ -7,6 +7,7 @@ import type { ActionEntry } from "@/lib/agent/runner"
 import { TOOL_LABELS } from "@/lib/agent/tools"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { AgentMessageMarkdown } from "./AgentMessageMarkdown"
 
 const SESSION_KEY = "dashboard_agent_session"
 
@@ -387,7 +388,7 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
             return (
               <div key={i} className="flex justify-start">
                 <div className="max-w-[75%] bg-card border border-violet-400/20 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm space-y-2.5">
-                  <p className="text-sm text-foreground">{msg.summary}</p>
+                  <AgentMessageMarkdown text={msg.summary} />
                   {visibleActions.length > 0 && (
                     <div className="space-y-1 pt-1 border-t border-border">
                       {visibleActions.map((action, j) => {

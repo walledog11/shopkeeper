@@ -104,6 +104,50 @@ describe('selectToolNamesForInstruction', () => {
     ]);
   });
 
+  it('prunes operator create-order requests with explicit customer info to product lookup and order creation', () => {
+    const tools = selectToolNamesForInstruction(
+      makeCtx({
+        thread: {
+          id: 'thread_test',
+          status: 'open',
+          channelType: 'dashboard_agent',
+          tag: 'Support',
+          aiSummary: null,
+          shopifyCustomerId: null,
+        },
+      }),
+      'Create an order for 1 Pencil Half Zip XL for scooby@example.com'
+    );
+
+    expect(tools).toEqual([
+      'search_shopify_products',
+      'create_shopify_order',
+    ]);
+  });
+
+  it('allows customer lookup for create-order requests without explicit customer info', () => {
+    const tools = selectToolNamesForInstruction(
+      makeCtx({
+        thread: {
+          id: 'thread_test',
+          status: 'open',
+          channelType: 'dashboard_agent',
+          tag: 'Support',
+          aiSummary: null,
+          shopifyCustomerId: null,
+        },
+      }),
+      'Create an order for 1 Pencil Half Zip XL for Scooby'
+    );
+
+    expect(tools).toEqual([
+      'search_shopify_products',
+      'search_shopify_customers',
+      'get_shopify_customer',
+      'create_shopify_order',
+    ]);
+  });
+
   it('does not prune action-oriented operator requests', () => {
     const tools = selectToolNamesForInstruction(
       makeCtx({

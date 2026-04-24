@@ -12,8 +12,11 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-const { mockBuildContext, mockRunAgent } = vi.hoisted(() => ({
+const { mockBuildContext, mockHashInstructionForLog, mockPlanAgent, mockResolveAgentSettings, mockRunAgent } = vi.hoisted(() => ({
   mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
+  mockHashInstructionForLog: vi.fn().mockReturnValue("hash_test"),
+  mockPlanAgent: vi.fn(),
+  mockResolveAgentSettings: vi.fn().mockReturnValue({ requireApprovalForActions: false }),
   mockRunAgent: vi.fn().mockResolvedValue({
     summary: "Done",
     actionsPerformed: [],
@@ -22,11 +25,13 @@ const { mockBuildContext, mockRunAgent } = vi.hoisted(() => ({
 
 vi.mock("@/lib/agent/runner", () => ({
   buildContext: mockBuildContext,
+  hashInstructionForLog: mockHashInstructionForLog,
+  planAgent: mockPlanAgent,
   runAgent: mockRunAgent,
 }));
 
 vi.mock("@/lib/agent/settings", () => ({
-  resolveAgentSettings: vi.fn().mockReturnValue({}),
+  resolveAgentSettings: mockResolveAgentSettings,
 }));
 
 import { auth } from "@clerk/nextjs/server";
@@ -45,6 +50,8 @@ beforeEach(async () => {
 afterEach(async () => {
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
+  mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: false });
+  mockHashInstructionForLog.mockReturnValue("hash_test");
 });
 
 describe("POST /api/agent/chat", () => {

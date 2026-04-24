@@ -580,6 +580,7 @@ const ORDER_STATUS_ACTION_PHRASES = [
 ] as const;
 
 const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
+const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
 function isOperatorChannel(channelType: string): boolean {
   return channelType === "dashboard_agent" || channelType === "sms_agent";
@@ -596,6 +597,12 @@ function looksLikeOrderStatusIntent(instruction: string): boolean {
   if (!hasPhrase(text, ORDER_STATUS_PHRASES)) return false;
   if (hasPhrase(text, ORDER_STATUS_ACTION_PHRASES)) return false;
   return true;
+}
+
+function looksLikeCreateOrderIntent(instruction: string): boolean {
+  const text = instruction.toLowerCase();
+  if (!text.includes("order")) return false;
+  return /\b(create|place|make)\b/.test(text);
 }
 
 interface CustomerSearchResult {
@@ -731,6 +738,12 @@ function summarizeLatestOrder(customerName: string | null, orders: ShopifyOrderS
   return `${subject}${orderName}${datePhrase} is ${financial ? `${financial} and ` : ""}${fulfillment}.${total}${itemsPhrase}`;
 }
 
+function summarizeApprovedDashboardActions(actions: ActionEntry[]): string {
+  const visibleActions = actions.filter((action) => TOOL_CATEGORIES[action.tool] !== "read");
+  const lastAction = visibleActions.at(-1) ?? actions.at(-1);
+  return lastAction?.result ?? "Approved plan executed.";
+}
+
 async function tryRunOperatorOrderStatusFastPath(
   ctx: AgentContext,
   instruction: string,
@@ -807,6 +820,16 @@ export function selectToolNamesForInstruction(
   instruction: string
 ): string[] | null {
   if (!isOperatorChannel(ctx.thread.channelType)) return null;
+
+  if (looksLikeCreateOrderIntent(instruction)) {
+    const allowed = ["search_shopify_products"];
+    if (!EMAIL_RE.test(instruction)) {
+      allowed.push("search_shopify_customers", "get_shopify_customer");
+    }
+    allowed.push("create_shopify_order");
+    return allowed;
+  }
+
   if (!looksLikeOrderStatusIntent(instruction)) return null;
 
   const allowed = new Set<string>();
@@ -991,6 +1014,7 @@ export async function planAgent(
   // (e.g. search_shopify_products → edit_shopify_order needs the variant_id from the search)
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === 'read')
   const warnings: string[] = []
+  const readResultsMap = new Map<string, string>()
 
   // Always warn if Shopify is connected but no customer is linked on a support thread
   if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode) {
@@ -999,7 +1023,6 @@ export async function planAgent(
 
   if (readBlocks.length > 0) {
     // Execute reads in parallel to get real results
-    const readResultsMap = new Map<string, string>()
     await Promise.all(
       readBlocks.map(async (b) => {
         readToolCalls.push(b.name);
@@ -1083,10 +1106,11 @@ export async function planAgent(
     planMessages = [...planMessages, { role: "assistant", content: response15.content }]
   }
 
-  // Phase 2: if no send_reply was planned yet, simulate write results and get a reply preview
+  // Phase 2: if no send_reply was planned yet, simulate write results and get a reply preview.
+  // Operator channels approve actions in-chat, so a customer-facing reply preview is wasted work.
   const hasSendReply = rawToolCalls.some((tc) => tc.name === 'send_reply')
   const sendReplyTool = tools.find(t => t.name === 'send_reply')
-  if (!hasSendReply && sendReplyTool) {
+  if (!operatorMode && !hasSendReply && sendReplyTool) {
     const phase2Messages: Anthropic.MessageParam[] = [
       ...planMessages,
       ...(lastBlocks.length > 0
@@ -1153,7 +1177,8 @@ export async function planAgent(
     instructionHash,
   }, "[agent:plan] complete");
 
-  return { instruction, steps, rawToolCalls, warnings: warnings.length > 0 ? warnings : undefined }
+  const readResults = readResultsMap.size > 0 ? Object.fromEntries(readResultsMap) : undefined;
+  return { instruction, steps, rawToolCalls, readResults, warnings: warnings.length > 0 ? warnings : undefined }
 }
 
 export async function runAgent(
@@ -1206,9 +1231,20 @@ export async function runAgent(
   // If the caller pre-approved a plan, inject those tool calls and execute them
   // before starting the regular loop so Claude can follow up.
   if (approvedToolCalls && approvedToolCalls.length > 0) {
+    const executableToolCalls = ctx.thread.channelType === "dashboard_agent"
+      ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
+      : approvedToolCalls;
+
+    if (ctx.thread.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
+      return finish({
+        summary: "No approved dashboard action was available to execute.",
+        actionsPerformed,
+      }, "approved_dashboard_actions_empty");
+    }
+
     messages.push({
       role: "assistant",
-      content: approvedToolCalls.map((tc) => ({
+      content: executableToolCalls.map((tc) => ({
         type: "tool_use" as const,
         id: tc.id,
         name: tc.name,
@@ -1216,21 +1252,40 @@ export async function runAgent(
       })),
     });
 
-    const toolResults = await Promise.all(
-      approvedToolCalls.map(async (tc) => {
-        let result: string;
-        try {
-          result = await executeTool(tc.name, tc.input, ctx, settings);
-        } catch (err) {
-          result = `Error: tool "${tc.name}" threw — ${err instanceof Error ? err.message : String(err)}`;
-        }
-        executedToolCalls.push(tc.name);
-        actionsPerformed.push({ tool: tc.name, result });
-        return { type: "tool_result" as const, tool_use_id: tc.id, content: result };
-      })
-    );
+    const executeApprovedToolCall = async (tc: RawToolCall) => {
+      let result: string;
+      try {
+        result = await executeTool(tc.name, tc.input, ctx, settings);
+      } catch (err) {
+        result = `Error: tool "${tc.name}" threw — ${err instanceof Error ? err.message : String(err)}`;
+      }
+      executedToolCalls.push(tc.name);
+      actionsPerformed.push({ tool: tc.name, result });
+      return { type: "tool_result" as const, tool_use_id: tc.id, content: result };
+    };
+
+    const toolResults = ctx.thread.channelType === "dashboard_agent"
+      ? []
+      : await Promise.all(
+        executableToolCalls.map(async (tc) => {
+          return executeApprovedToolCall(tc);
+        })
+      );
+
+    if (ctx.thread.channelType === "dashboard_agent") {
+      for (const tc of executableToolCalls) {
+        toolResults.push(await executeApprovedToolCall(tc));
+      }
+    }
 
     messages.push({ role: "user", content: toolResults });
+
+    if (ctx.thread.channelType === "dashboard_agent") {
+      return finish({
+        summary: summarizeApprovedDashboardActions(actionsPerformed),
+        actionsPerformed,
+      }, "approved_dashboard_actions");
+    }
   }
 
   const systemPrompt = buildSystemPrompt(ctx, settings);
