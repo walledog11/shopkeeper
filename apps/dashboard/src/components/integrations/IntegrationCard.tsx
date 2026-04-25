@@ -6,18 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
+import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'twilio' | 'coming-soon'
-
-export interface PlatformConfig {
-  id: string
-  platform: string | null
-  name: string
-  logo: string
-  description: string
-  connectType: ConnectType
-}
+export type { ConnectType, PlatformConfig }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 

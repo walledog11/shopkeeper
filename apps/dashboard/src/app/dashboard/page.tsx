@@ -8,36 +8,25 @@ import type { Thread } from "@/types"
 export default async function DashboardPage() {
   const [org, user] = await Promise.all([getOrCreateOrg(), currentUser()])
 
-  const [openThreadsRaw, closedCount, totalMessageCount] = await Promise.all([
-    db.thread.findMany({
-      where: { organizationId: org.id, status: "open", archivedAt: null, channelType: { notIn: ["sms_agent", "dashboard_agent"] } },
-      include: {
-        customer: true,
-        messages: {
-          where: {
-            NOT: { AND: [agentTurnMessageFilter] },
-          },
-          orderBy: { sentAt: "desc" },
-          take: 1,
-        },
+  const openThreadsRaw = await db.thread.findMany({
+    where: { organizationId: org.id, status: "open", archivedAt: null, channelType: { notIn: ["sms_agent", "dashboard_agent"] } },
+    include: {
+      customer: true,
+      messages: {
+        where: { NOT: { AND: [agentTurnMessageFilter] } },
+        orderBy: { sentAt: "desc" },
+        take: 1,
       },
-      orderBy: { updatedAt: "desc" },
-    }),
-    db.thread.count({ where: { organizationId: org.id, status: "closed", archivedAt: null } }),
-    db.message.count({ where: { thread: { organizationId: org.id, archivedAt: null }, NOT: { senderType: "note" } } }),
-  ])
-
-  const serialize = (threads: typeof openThreadsRaw): Thread[] =>
-    JSON.parse(JSON.stringify(threads))
+    },
+    orderBy: { updatedAt: "desc" },
+  })
 
   const userName = user?.firstName ?? user?.fullName ?? "there"
 
   return (
     <DashboardHomeClient
       userName={userName}
-      initialOpenThreads={serialize(openThreadsRaw)}
-      initialClosedCount={closedCount}
-      totalMessageCount={totalMessageCount}
+      initialOpenThreads={JSON.parse(JSON.stringify(openThreadsRaw)) as Thread[]}
     />
   )
 }

@@ -59,7 +59,10 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
   const count = visibleNotifications.length;
 
   const safeIndex = Math.min(current, Math.max(0, count - 1));
-  if (safeIndex !== current) setCurrent(safeIndex);
+
+  useEffect(() => {
+    if (safeIndex !== current) setCurrent(safeIndex);
+  }, [current, safeIndex]);
 
   useEffect(() => {
     if (count <= 1) return;
@@ -79,7 +82,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
     if (current >= count - 1) setCurrent(Math.max(0, count - 2));
   }
 
-  const n = count > 0 ? visibleNotifications[Math.min(current, count - 1)] : null;
+  const n = count > 0 ? visibleNotifications[safeIndex] : null;
   const type = n?.type ?? "info";
   const styles = TYPE_STYLES[type];
   const Icon = TYPE_ICONS[type];

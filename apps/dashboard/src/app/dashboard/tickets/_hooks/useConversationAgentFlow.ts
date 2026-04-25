@@ -139,7 +139,7 @@ export function useConversationAgentFlow({
   const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
     setPendingPlan(null)
     setPendingInstruction(instruction)
-    setIsPlanExecuting(false)
+    setIsPlanExecuting(true)
     onAgentRunningChange(true)
 
     try {
@@ -170,6 +170,7 @@ export function useConversationAgentFlow({
       }))
     } finally {
       onAgentRunningChange(false)
+      setIsPlanExecuting(false)
       setPendingInstruction(null)
     }
   }
@@ -269,7 +270,6 @@ export function useConversationAgentFlow({
 
   const handlePlanApprove = async (approvedToolCalls: RawToolCall[]) => {
     if (!pendingPlan) return
-    setIsPlanExecuting(true)
     await executeApprovedPlan(pendingPlan.instruction, approvedToolCalls)
   }
 

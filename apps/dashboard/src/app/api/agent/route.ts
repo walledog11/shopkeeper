@@ -11,6 +11,10 @@ import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
+function serializeToolInput(input: unknown): string {
+  return JSON.stringify(input ?? null);
+}
+
 export async function POST(request: Request) {
   const startedAt = Date.now();
   try {
@@ -35,12 +39,15 @@ export async function POST(request: Request) {
       lastCustomerMessageId: lastCustomerMessage?.id ?? null,
       settings,
     }) ? cachedPlan?.plan : null;
+    const plannedToolCallsById = new Map(
+      currentPlan?.rawToolCalls.map((toolCall) => [toolCall.id, toolCall]) ?? []
+    );
     const approvedCallsMatchPlan = approvedToolCalls.every((approved) => {
-      const planned = currentPlan?.rawToolCalls.find((toolCall) => toolCall.id === approved.id);
+      const planned = plannedToolCallsById.get(approved.id);
       return Boolean(
         planned &&
         planned.name === approved.name &&
-        JSON.stringify(planned.input ?? null) === JSON.stringify(approved.input ?? null)
+        serializeToolInput(planned.input) === serializeToolInput(approved.input)
       );
     });
 
@@ -51,7 +58,7 @@ export async function POST(request: Request) {
     logger.info({
       orgId: org.id,
       threadId,
-      approvedToolCalls: approvedToolCalls?.length ?? 0,
+      approvedToolCalls: approvedToolCalls.length,
       instructionLength: instruction.length,
       instructionHash,
     }, "[agent] POST");
@@ -69,7 +76,7 @@ export async function POST(request: Request) {
       threadId,
       durationMs: Date.now() - startedAt,
       actionCount: result.actionsPerformed.length,
-      approvedToolCalls: approvedToolCalls?.length ?? 0,
+      approvedToolCalls: approvedToolCalls.length,
       instructionHash,
     }, "[agent] result");
 

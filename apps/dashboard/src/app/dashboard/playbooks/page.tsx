@@ -23,6 +23,13 @@ const ACTION_LABELS: Record<PlaybookActionType, string> = {
   add_note: 'Add an internal note',
 }
 
+const ACTION_CHIP_CLS: Record<PlaybookActionType, string> = {
+  send_reply: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+  apply_tag: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  close_ticket: 'bg-sky-500/15 text-sky-400 border-sky-500/25',
+  add_note: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+}
+
 const TEMPLATES: Array<{ name: string; trigger: PlaybookTrigger; actions: PlaybookAction[] }> = [
   {
     name: 'WISMO Auto-Reply',
@@ -50,6 +57,19 @@ const TEMPLATES: Array<{ name: string; trigger: PlaybookTrigger; actions: Playbo
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function triggerChipText(trigger: PlaybookTrigger): string {
+  if (trigger.type === 'new_ticket') return 'When new ticket'
+  if (trigger.type === 'tag_applied') return `When tag applied = ${trigger.tag ?? 'any'}`
+  return 'When ticket closed'
+}
+
+function generateDescription(trigger: PlaybookTrigger, actions: PlaybookAction[]): string {
+  const parts = actions.map(a => ACTION_LABELS[a.type].toLowerCase()).join(' + ')
+  if (trigger.type === 'tag_applied') return `On '${trigger.tag}' tag, ${parts}.`
+  if (trigger.type === 'new_ticket') return `On new tickets, ${parts}.`
+  return `On ticket close, ${parts}.`
+}
+
 function triggerSummary(trigger: PlaybookTrigger): string {
   if (trigger.type === 'tag_applied') return `Tag: ${trigger.tag ?? 'any'}`
   return TRIGGER_LABELS[trigger.type]
@@ -74,7 +94,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${checked ? 'bg-white/70' : 'bg-white/[0.12]'}`}
+      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${checked ? 'bg-green-500' : 'bg-white/[0.12]'}`}
       role="switch"
       aria-checked={checked}
     >
@@ -150,15 +170,11 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ease-in-out ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={handleClose}
       />
-
-      {/* Panel */}
       <div className={`fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-[#0f0f0f] border-l border-white/[0.1] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}>
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <h2 className="text-sm font-semibold text-white">{isEditing ? 'Edit Playbook' : 'New Playbook'}</h2>
           <button onClick={handleClose} className="text-white/40 hover:text-white/70 transition-colors">
@@ -166,9 +182,7 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {/* Name */}
           <div className="space-y-1.5">
             <label className={labelCls}>Name</label>
             <input
@@ -180,7 +194,6 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
             />
           </div>
 
-          {/* Trigger */}
           <div className="space-y-2">
             <label className={labelCls}>Trigger</label>
             <p className="text-xs text-white/30">When does this run?</p>
@@ -213,7 +226,6 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
             )}
           </div>
 
-          {/* Actions */}
           <div className="space-y-2">
             <label className={labelCls}>Actions</label>
             <p className="text-xs text-white/30">What happens when the trigger fires?</p>
@@ -289,7 +301,6 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/[0.08]">
           <button
             onClick={handleClose}
@@ -308,6 +319,37 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
         </div>
       </div>
     </>
+  )
+}
+
+// ── Templates modal ───────────────────────────────────────────────────────────
+
+function TemplatesModal({ onSelect, onClose }: { onSelect: (t: typeof TEMPLATES[number]) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-[#0f0f0f] border border-white/[0.1] rounded-xl p-6 w-full max-w-lg shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-white">Start from a template</h2>
+          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <div className="space-y-2">
+          {TEMPLATES.map(t => (
+            <button
+              key={t.name}
+              onClick={() => { onSelect(t); onClose() }}
+              className="w-full text-left rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.06] p-4 transition-colors group"
+            >
+              <p className="text-sm font-medium text-white/70 group-hover:text-white/90 transition-colors mb-1">{t.name}</p>
+              <p className="text-xs text-white/30">{triggerSummary(t.trigger)}</p>
+              <p className="text-xs text-white/20 mt-1">{actionSummary(t.actions)}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -359,29 +401,46 @@ function PlaybookCard({
   const actions = playbook.actions as PlaybookAction[]
 
   return (
-    <div className={`flex items-start gap-4 rounded-lg border p-4 transition-colors ${playbook.enabled ? 'border-white/[0.1] bg-white/[0.03]' : 'border-white/[0.06] bg-transparent opacity-60'}`}>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <p className="text-sm font-medium text-white/80 truncate">{playbook.name}</p>
-        </div>
-        <p className="text-xs text-white/40">{triggerSummary(trigger)}</p>
-        <p className="text-xs text-white/25 mt-0.5">{actionSummary(actions)}</p>
+    <div className={`flex items-center gap-4 rounded-lg border p-4 group transition-colors ${playbook.enabled ? 'border-white/[0.08] bg-white/[0.025]' : 'border-white/[0.05] bg-transparent'}`}>
+      {/* Play icon */}
+      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${playbook.enabled ? 'bg-orange-500/20' : 'bg-white/[0.05]'}`}>
+        <div className={`ml-0.5 border-y-[5px] border-y-transparent border-l-[8px] ${playbook.enabled ? 'border-l-orange-400' : 'border-l-white/20'}`} />
       </div>
 
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-semibold mb-0.5 ${playbook.enabled ? 'text-white' : 'text-white/50'}`}>{playbook.name}</p>
+        <p className="text-xs text-white/35 mb-2">{generateDescription(trigger, actions)}</p>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-mono text-xs bg-white/[0.06] text-white/45 px-2 py-0.5 rounded">
+            {triggerChipText(trigger)}
+          </span>
+          <span className="text-white/25 text-xs">→</span>
+          {actions.map((a, i) => (
+            <span key={i} className={`text-xs px-2 py-0.5 rounded border ${ACTION_CHIP_CLS[a.type]}`}>
+              {a.type}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Run count */}
+      <div className="text-right shrink-0">
+        <p className={`text-sm font-semibold ${playbook.enabled ? 'text-white' : 'text-white/30'}`}>{playbook.runCount}</p>
+        <p className="text-xs text-white/25">runs</p>
+      </div>
+
+      {/* Toggle + hover actions */}
       <div className="flex items-center gap-2 shrink-0">
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+          <button onClick={onEdit} className="text-white/30 hover:text-white/60 transition-colors p-1">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors p-1">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <Toggle checked={playbook.enabled} onChange={onToggle} />
-        <button
-          onClick={onEdit}
-          className="text-white/30 hover:text-white/60 transition-colors p-1"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={onDelete}
-          className="text-white/30 hover:text-red-400 transition-colors p-1"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
       </div>
     </div>
   )
@@ -396,6 +455,7 @@ export default function PlaybooksPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<Playbook | null>(null)
   const [templateDraft, setTemplateDraft] = useState<typeof TEMPLATES[number] | null>(null)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   const openNew = () => { setEditing(null); setTemplateDraft(null); setDrawerOpen(true) }
   const openEdit = (pb: Playbook) => { setEditing(pb); setTemplateDraft(null); setDrawerOpen(true) }
@@ -422,23 +482,31 @@ export default function PlaybooksPage() {
   }
 
   const active = playbooks.filter(p => p.enabled)
-  const inactive = playbooks.filter(p => !p.enabled)
+  const paused = playbooks.filter(p => !p.enabled)
 
   return (
-    <div className="p-5 sm:p-6">
+    <div className="p-6 sm:p-8">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div className="space-y-1">
-          <h1 className="text-lg font-semibold text-white">Playbooks</h1>
-          <p className="text-sm text-white/40">Automate repetitive support tasks with trigger-based rules.</p>
+      <div className="flex items-start justify-between mb-8">
+        <div>
+          <h1 className="text-2xl font-bold text-white mb-1">Playbooks</h1>
+          <p className="text-sm text-white/40">Trigger-based rules that run automatically. Combine tags, replies, and closures.</p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Playbook
-        </button>
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            onClick={() => setTemplatesOpen(true)}
+            className="text-sm text-white/50 hover:text-white/80 transition-colors"
+          >
+            Browse templates
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-500 px-4 py-1.5 rounded-md transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New playbook
+          </button>
+        </div>
       </div>
 
       {/* Content */}
@@ -451,41 +519,53 @@ export default function PlaybooksPage() {
       ) : playbooks.length === 0 ? (
         <EmptyState onUseTemplate={handleUseTemplate} />
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-6">
           {active.length > 0 && (
-            <section className="space-y-2">
-              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider">
-                Active ({active.length})
+            <section>
+              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">
+                Active · {active.length}
               </p>
-              {active.map(pb => (
-                <PlaybookCard
-                  key={pb.id}
-                  playbook={pb}
-                  onToggle={() => handleToggle(pb)}
-                  onEdit={() => openEdit(pb)}
-                  onDelete={() => handleDelete(pb.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {active.map(pb => (
+                  <PlaybookCard
+                    key={pb.id}
+                    playbook={pb}
+                    onToggle={() => handleToggle(pb)}
+                    onEdit={() => openEdit(pb)}
+                    onDelete={() => handleDelete(pb.id)}
+                  />
+                ))}
+              </div>
             </section>
           )}
 
-          {inactive.length > 0 && (
-            <section className="space-y-2">
-              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider">
-                Inactive ({inactive.length})
+          {paused.length > 0 && (
+            <section>
+              <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">
+                Paused · {paused.length}
               </p>
-              {inactive.map(pb => (
-                <PlaybookCard
-                  key={pb.id}
-                  playbook={pb}
-                  onToggle={() => handleToggle(pb)}
-                  onEdit={() => openEdit(pb)}
-                  onDelete={() => handleDelete(pb.id)}
-                />
-              ))}
+              <div className="space-y-2">
+                {paused.map(pb => (
+                  <PlaybookCard
+                    key={pb.id}
+                    playbook={pb}
+                    onToggle={() => handleToggle(pb)}
+                    onEdit={() => openEdit(pb)}
+                    onDelete={() => handleDelete(pb.id)}
+                  />
+                ))}
+              </div>
             </section>
           )}
         </div>
+      )}
+
+      {/* Templates modal */}
+      {templatesOpen && (
+        <TemplatesModal
+          onSelect={handleUseTemplate}
+          onClose={() => setTemplatesOpen(false)}
+        />
       )}
 
       {/* Drawer */}

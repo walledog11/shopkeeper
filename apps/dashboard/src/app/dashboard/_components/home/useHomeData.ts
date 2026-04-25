@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react"
+import { useMemo } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { useThreads } from "@/hooks/useThreads"
@@ -8,26 +8,111 @@ import { fetcher } from "@/lib/api/fetcher"
 import { CHANNEL_TYPE, SENDER_TYPE } from "@/lib/messaging/thread-constants"
 import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
 import type { Thread, Integration, OrgSettings, KnowledgeBase } from "@/types"
-import type { ViewId, NavView } from "./types"
-import type { ActivityEvent } from "./ActivityFeed"
+
+// Rough heuristic: a typical Shopify-support reply takes ~14 minutes of human
+// time end-to-end (read, look up order, draft, send). Used only for the
+// "saved you ~Xh" copy on the home page.
+const MINUTES_SAVED_PER_AUTO_TICKET = 14
+const DAY_MS = 24 * 60 * 60 * 1000
 
 interface AnalyticsSnapshot {
-  firstReply: { avgMinutes: number | null; measuredCount: number }
+  firstReply: { avgMinutes: number | null }
+  aiUsage: { aiReplyPct: number | null }
 }
 
-function sortByDate(threads: Thread[]): Thread[] {
-  return [...threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+interface OrdersResponse {
+  orders: Array<{
+    id: number
+    name: string
+    fulfillment_status: string | null
+    financial_status: string
+    total_price: string
+    customer: { name: string } | null
+    line_items: { title: string; variant_title: string | null }[]
+  }>
+}
+
+interface NeedsYouItem {
+  threadId: string
+  customerName: string
+  channelLogo: string
+  channelName: string
+  ticketRef: string
+  timeAgo: string
+  proposalSummary: string
+  tag: string | null
+}
+
+interface ClearedTopic {
+  tag: string
+  count: number
+  subtitle: string
+}
+
+interface RepeatCustomer {
+  customerId: string
+  name: string
+  initials: string
+  ticketCount: number
+}
+
+const TAG_SUBTITLES: Record<string, string> = {
+  Shipping: "WISMO replies sent",
+  Returns: "size swaps + refunds",
+  "Order Status": "tracking pulled & shared",
+  "Product Inquiry": "answered from KB",
+  General: "answered from KB",
+}
+
+function timeAgoShort(iso: string): string {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (m < 1) return "just now"
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
+
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10)
+}
+
+function lastNDays(n: number): string[] {
+  const out: string[] = []
+  const d = new Date()
+  d.setHours(0, 0, 0, 0)
+  for (let i = n - 1; i >= 0; i--) {
+    const dd = new Date(d)
+    dd.setDate(d.getDate() - i)
+    out.push(dayKey(dd))
+  }
+  return out
+}
+
+function planSummary(plan: unknown): string {
+  const fallback = "Concierge plan ready for review"
+  if (!plan || typeof plan !== "object") return fallback
+  const p = plan as { steps?: { label?: string }[]; instruction?: string }
+  if (Array.isArray(p.steps) && p.steps.length > 0) {
+    const labels = p.steps.slice(0, 2).map(s => s?.label).filter(Boolean)
+    if (labels.length > 0) return labels.join(" · ")
+  }
+  if (typeof p.instruction === "string" && p.instruction.length > 0) {
+    return p.instruction.slice(0, 120)
+  }
+  return fallback
+}
+
+function initialsOf(name: string): string {
+  return name.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
 }
 
 interface Options {
   initialOpenThreads: Thread[]
-  initialClosedCount: number
 }
 
-export function useHomeData({ initialOpenThreads, initialClosedCount }: Options) {
-  const [activeView, setActiveView] = useState<ViewId>('open')
-
-  const { data: integrations = [], error: integrationsError } = useSWR<Integration[]>('/api/integrations', fetcher)
+export function useHomeData({ initialOpenThreads }: Options) {
+  const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
   const { data: orgData } = useSWR<{ settings: Partial<OrgSettings> }>('/api/org', fetcher)
   const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>('/api/kb', fetcher, { revalidateOnFocus: false })
   const { data: phoneData } = useSWR<{ phoneNumber: string | null; phoneVerified: boolean }>('/api/phone', fetcher, { revalidateOnFocus: false })
@@ -42,85 +127,203 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
   const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, true, true)
 
-  const isLoading = loadingOpen || (activeView === 'resolved' && loadingClosed)
-  const openCount = openThreads.length
-  const resolvedCount = closedThreads.length > 0 ? closedThreads.length : initialClosedCount
-
-  const resolvedTodayCount = useMemo(() => {
-    const today = new Date().toDateString()
-    return closedThreads.filter(t => new Date(t.updatedAt).toDateString() === today).length
-  }, [closedThreads])
-
-  const oldestOpenThread = useMemo(() => {
-    if (openThreads.length === 0) return null
-    return [...openThreads].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0]
-  }, [openThreads])
-
-  const avgResponseMinutes = analyticsData?.firstReply?.avgMinutes ?? null
-
-  const allThreads = useMemo(() => [...openThreads, ...closedThreads], [openThreads, closedThreads])
-
-  const recentThreads = useMemo(() => {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000
-    return allThreads.filter(t => new Date(t.updatedAt).getTime() > cutoff)
-  }, [allThreads])
-
-  const viewThreads = useMemo<Record<ViewId, Thread[]>>(() => ({
-    open: sortByDate(openThreads),
-    resolved: sortByDate(closedThreads),
-    recent: sortByDate(recentThreads),
-  }), [openThreads, closedThreads, recentThreads])
-
-  const displayedThreads = viewThreads[activeView].slice(0, 7)
-
-  const channelBreakdown = useMemo(() => {
-    const counts: Record<string, { name: string; logo: string; count: number }> = {}
-    openThreads.forEach(t => {
-      const info = getChannelInfo(t.channelType)
-      if (!counts[t.channelType]) counts[t.channelType] = { ...info, count: 0 }
-      counts[t.channelType].count++
-    })
-    return Object.values(counts).sort((a, b) => b.count - a.count)
-  }, [openThreads])
-
-  const activityEvents = useMemo<ActivityEvent[]>(() => {
-    const events: ActivityEvent[] = []
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000
-
-    openThreads.forEach(thread => {
-      const customer = getCustomerName(thread.customer)
-      const channel = getChannelInfo(thread.channelType)
-      const createdAt = new Date(thread.createdAt).getTime()
-      if (createdAt > sevenDaysAgo) {
-        events.push({ id: thread.id + '_new', type: 'new_ticket', customer, channel, time: thread.createdAt })
-      }
-      if (thread.messages[0]) {
-        events.push({ id: thread.id + '_msg', type: 'message', customer, channel, time: thread.messages[0].sentAt })
-      }
-    })
-    closedThreads.forEach(thread => {
-      events.push({
-        id: thread.id + '_resolved',
-        type: 'resolved',
-        customer: getCustomerName(thread.customer),
-        channel: getChannelInfo(thread.channelType),
-        time: thread.updatedAt,
-      })
-    })
-    return events.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 6)
-  }, [openThreads, closedThreads])
-
   const channelConnected = integrations.length > 0
   const hasShopify = integrations.some(i => i.platform === CHANNEL_TYPE.SHOPIFY)
+
+  const { data: ordersData } = useSWR<OrdersResponse>(
+    hasShopify ? '/api/orders?limit=10' : null,
+    fetcher,
+    { refreshInterval: 300_000, revalidateOnFocus: false },
+  )
+
+  const isLoading = loadingOpen || loadingClosed
+  const openCount = openThreads.length
+
+  // Single combined list — re-used by every cross-status derivation below.
+  const allThreads = useMemo(() => openThreads.concat(closedThreads), [openThreads, closedThreads])
+
+  // Per-customer thread counts — drives both VIP queue + repeat-customer panel.
+  const customerCounts = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const t of allThreads) m.set(t.customerId, (m.get(t.customerId) ?? 0) + 1)
+    return m
+  }, [allThreads])
+
+  // ── Overnight cleared (last 24h, AI-resolved) ──────────────────────────────
+  const overnight = useMemo(() => {
+    const cutoff = Date.now() - DAY_MS
+    const cleared: Thread[] = []
+    let replies = 0
+    const channelNames = new Set<string>()
+    for (const t of allThreads) {
+      const msg = t.messages[0]
+      if (!msg) continue
+      const sentAt = new Date(msg.sentAt).getTime()
+      if (sentAt >= cutoff && (msg.senderType === SENDER_TYPE.AGENT || msg.senderType === SENDER_TYPE.AI)) {
+        replies++
+      }
+      if (
+        t.status === 'closed' &&
+        msg.senderType === SENDER_TYPE.AI &&
+        new Date(t.updatedAt).getTime() >= cutoff
+      ) {
+        cleared.push(t)
+        channelNames.add(getChannelInfo(t.channelType).name)
+      }
+    }
+    return { cleared, replies, channelNames: Array.from(channelNames) }
+  }, [allThreads])
+
+  const overnightClearedCount = overnight.cleared.length
+  const repliesSent24h = overnight.replies
+  const briefingChannels = overnight.channelNames
+  const timeSavedHours = (overnightClearedCount * MINUTES_SAVED_PER_AUTO_TICKET) / 60
+
+  const clearedTopics = useMemo<ClearedTopic[]>(() => {
+    const counts: Record<string, number> = {}
+    for (const t of overnight.cleared) {
+      const tag = t.tag ?? "General"
+      counts[tag] = (counts[tag] ?? 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([tag, count]) => ({ tag, count, subtitle: TAG_SUBTITLES[tag] ?? "auto-resolved" }))
+      .sort((a, b) => b.count - a.count)
+  }, [overnight.cleared])
+
+  // ── Needs-you queue ────────────────────────────────────────────────────────
+  const needsYouAll = useMemo(
+    () => openThreads.filter(t => t.cachedPlan != null && t.messages[0]?.senderType === SENDER_TYPE.CUSTOMER),
+    [openThreads],
+  )
+  const needsYouCount = needsYouAll.length
+  const needsYouItems = useMemo<NeedsYouItem[]>(
+    () => needsYouAll.slice(0, 5).map(t => {
+      const channel = getChannelInfo(t.channelType)
+      return {
+        threadId: t.id,
+        customerName: getCustomerName(t.customer),
+        channelLogo: channel.logo,
+        channelName: channel.name,
+        ticketRef: `#${t.id.slice(0, 6)}`,
+        timeAgo: timeAgoShort(t.messages[0]?.sentAt ?? t.updatedAt),
+        proposalSummary: planSummary(t.cachedPlan),
+        tag: t.tag,
+      }
+    }),
+    [needsYouAll],
+  )
+
+  // ── Sparklines + week chart (single walk producing 3 daily series) ─────────
+  const days = useMemo(() => lastNDays(7), [])
+
+  const series = useMemo(() => {
+    const newThreads: Record<string, number> = {}
+    const aiResolved: Record<string, number> = {}
+    const totalReplies: Record<string, number> = {}
+    for (const d of days) {
+      newThreads[d] = 0
+      aiResolved[d] = 0
+      totalReplies[d] = 0
+    }
+
+    for (const t of allThreads) {
+      const created = dayKey(new Date(t.createdAt))
+      if (created in newThreads) newThreads[created]++
+
+      const msg = t.messages[0]
+      if (!msg) continue
+      if (msg.senderType === SENDER_TYPE.AGENT || msg.senderType === SENDER_TYPE.AI) {
+        const sent = dayKey(new Date(msg.sentAt))
+        if (sent in totalReplies) totalReplies[sent]++
+      }
+      if (t.status === 'closed' && msg.senderType === SENDER_TYPE.AI) {
+        const closed = dayKey(new Date(t.updatedAt))
+        if (closed in aiResolved) aiResolved[closed]++
+      }
+    }
+
+    return {
+      newThreadsByDay: days.map(d => newThreads[d]),
+      aiResolvedByDay: days.map(d => aiResolved[d]),
+      totalRepliesByDay: days.map(d => totalReplies[d]),
+    }
+  }, [days, allThreads])
+
+  const yourWeek = useMemo(
+    () => days.map((d, i) => ({
+      label: new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' }),
+      auto: series.aiResolvedByDay[i],
+      manual: Math.max(0, series.totalRepliesByDay[i] - series.aiResolvedByDay[i]),
+    })),
+    [days, series],
+  )
+
+  const weeklyVolume = series.newThreadsByDay.reduce((s, n) => s + n, 0)
+
+  const openDelta = useMemo(() => {
+    const arr = series.newThreadsByDay
+    if (arr.length < 2) return null
+    return arr[arr.length - 1] - arr[arr.length - 2]
+  }, [series])
+
+  // ── Today's shape ──────────────────────────────────────────────────────────
+  const refundsPending = openThreads.filter(t => t.tag === "Returns").length
+
+  const ordersToShip = useMemo(() => {
+    if (!ordersData?.orders) return null
+    return ordersData.orders.filter(o => o.fulfillment_status == null && o.financial_status === 'paid').length
+  }, [ordersData])
+
+  const vipsInQueue = useMemo(
+    () => openThreads.filter(t => (customerCounts.get(t.customerId) ?? 0) >= 3).length,
+    [openThreads, customerCounts],
+  )
+
+  // ── Repeat customers (≥3 threads in 30d) ───────────────────────────────────
+  const repeatCustomers = useMemo<RepeatCustomer[]>(() => {
+    const cutoff = Date.now() - 30 * DAY_MS
+    const recent = new Map<string, { customer: Thread['customer']; count: number }>()
+    for (const t of allThreads) {
+      if (new Date(t.updatedAt).getTime() < cutoff) continue
+      const e = recent.get(t.customerId)
+      if (e) e.count++
+      else recent.set(t.customerId, { customer: t.customer, count: 1 })
+    }
+    return Array.from(recent.values())
+      .filter(e => e.count >= 3)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4)
+      .map(e => {
+        const name = getCustomerName(e.customer)
+        return { customerId: e.customer.id, name, initials: initialsOf(name), ticketCount: e.count }
+      })
+  }, [allThreads])
+
+  const todaysOrders = useMemo(() => {
+    if (!ordersData?.orders) return []
+    return ordersData.orders.slice(0, 5).map(o => {
+      const li = o.line_items[0]
+      const summary = li ? `${li.title}${li.variant_title ? ` — ${li.variant_title}` : ''}` : ''
+      const status: 'ship' | 'refund' = o.financial_status === 'refunded' || o.financial_status === 'partially_refunded' ? 'refund' : 'ship'
+      return {
+        id: o.id,
+        name: o.name,
+        customerName: o.customer?.name || 'Guest',
+        summary,
+        status,
+        amount: status === 'refund' ? o.total_price : null,
+      }
+    })
+  }, [ordersData])
+
+  // ── Workflow setup ─────────────────────────────────────────────────────────
   const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
   const hasVerifiedPhone = phoneData?.phoneVerified ?? false
-  const memberCount = memberships?.data?.length ?? 1
-  const hasInvitedTeam = memberCount > 1
-  const hasSentReply = useMemo(() => (
+  const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
+  const hasMultipleChannels = integrations.length > 1
+  const hasSentReply =
     openThreads.some(t => t.messages[0]?.senderType === SENDER_TYPE.AGENT || t.messages[0]?.senderType === SENDER_TYPE.AI) ||
     closedThreads.some(t => t.messages[0]?.senderType === SENDER_TYPE.AGENT || t.messages[0]?.senderType === SENDER_TYPE.AI)
-  ), [openThreads, closedThreads])
-  const hasMultipleChannels = integrations.length > 1
   const hasConfiguredAgent = useMemo(() => {
     const s = orgData?.settings ?? {}
     return !!(
@@ -142,31 +345,34 @@ export function useHomeData({ initialOpenThreads, initialClosedCount }: Options)
   ], [channelConnected, hasShopify, hasConfiguredAgent, hasKbArticle, hasSentReply, hasInvitedTeam, hasVerifiedPhone, hasMultipleChannels])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
-  const navViews = useMemo<NavView[]>(() => [
-    { id: 'open', label: 'Open', count: openCount },
-    { id: 'resolved', label: 'Resolved', count: resolvedCount },
-    { id: 'recent', label: 'Recent (24h)', count: recentThreads.length },
-  ], [openCount, resolvedCount, recentThreads.length])
+  const agentName = (orgData?.settings?.agentName ?? AGENT_SETTINGS_DEFAULTS.agentName) as string
 
   return {
-    activeView,
-    setActiveView,
     isLoading,
     openCount,
-    resolvedCount,
-    resolvedTodayCount,
-    oldestOpenThread,
-    avgResponseMinutes,
-    openThreads,
-    closedThreads,
-    displayedThreads,
-    channelBreakdown,
-    activityEvents,
+    openDelta,
+    weeklyVolume,
+    firstReplyMinutes: analyticsData?.firstReply?.avgMinutes ?? null,
+    autoResolvedPct: analyticsData?.aiUsage?.aiReplyPct ?? null,
+    repliesSent24h,
+    overnightClearedCount,
+    needsYouCount,
+    needsYouItems,
+    clearedTopics,
+    briefingChannels,
+    timeSavedHours,
+    newThreadsByDay: series.newThreadsByDay,
+    aiResolvedByDay: series.aiResolvedByDay,
+    totalRepliesByDay: series.totalRepliesByDay,
+    yourWeek,
+    refundsPending,
+    ordersToShip,
+    vipsInQueue,
+    repeatCustomers,
+    todaysOrders,
+    hasShopify,
     workflowSteps,
     workflowDoneCount,
-    navViews,
-    channelConnected,
-    hasInvitedTeam,
-    integrationsError,
+    agentName,
   }
 }

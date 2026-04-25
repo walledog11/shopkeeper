@@ -57,7 +57,7 @@
   --foreground: #ffffff;
 
   /* Cards sit one level above background */
-  --card: #101010;
+  --card: #111111;
   --card-foreground: #ffffff;
 
   /* Popovers / dropdowns */
@@ -110,7 +110,7 @@
 .dark {
   --background: #000000;
   --foreground: #ffffff;
-  --card: #101010;
+  --card: #0c0c0c;
   --card-foreground: #ffffff;
   --popover: #181818;
   --popover-foreground: #ffffff;

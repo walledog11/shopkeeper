@@ -11,6 +11,25 @@ import type { InboundJobData, ShopifyOrderPayload, AgentPlan, PlanStep } from '.
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 const MAX_INPUT_LENGTH = 4000;
 
+async function triggerPlaybooks(
+  organizationId: string,
+  threadId: string,
+  trigger: { type: string; tag?: string }
+): Promise<void> {
+  try {
+    await fetch(`${getGatewayDashboardUrl()}/api/playbooks/trigger`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': getInternalApiSecret(),
+      },
+      body: JSON.stringify({ organizationId, threadId, trigger }),
+    });
+  } catch (err) {
+    logger.warn({ err: (err as Error).message, threadId, trigger }, '[Worker] triggerPlaybooks call failed');
+  }
+}
+
 function getInternalApiSecret(): string {
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) {
@@ -132,7 +151,7 @@ async function processInboundMessage(
   messageText: string,
   aiSummaryQueue: Queue,
   { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null, attachments = [] }: ProcessMessageOptions = {}
-) {
+): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
 
   const idempotencyKey = externalMessageId
@@ -162,6 +181,7 @@ async function processInboundMessage(
     where: { organizationId, customerId: customer.id, status: STATUS.OPEN, channelType },
   });
 
+  let isNew = false;
   if (!thread) {
     try {
       thread = await db.thread.create({
@@ -173,6 +193,7 @@ async function processInboundMessage(
           ...(initialTag && { tag: initialTag }),
         },
       });
+      isNew = true;
     } catch (e) {
       if ((e as { code?: string }).code === 'P2002') {
         thread = await db.thread.findFirst({
@@ -208,7 +229,7 @@ async function processInboundMessage(
     traceId: traceId ?? undefined,
   });
 
-  return thread;
+  return { thread: thread!, isNew };
 }
 
 export async function generateThreadIntelligence(threadId: string) {
@@ -247,6 +268,13 @@ export async function generateThreadIntelligence(threadId: string) {
     });
 
     logger.info({ tag: aiData.tag, summary: aiData.summary, threadId }, '[Worker] AI Summary saved');
+
+    // Fire tag_applied playbooks in background — don't await
+    const org = await db.thread.findUnique({ where: { id: threadId }, select: { organizationId: true } });
+    if (org) {
+      void triggerPlaybooks(org.organizationId, threadId, { type: 'tag_applied', tag: aiData.tag });
+    }
+
     return updated;
   } catch (aiError) {
     logger.error({ err: aiError, threadId }, '[Worker] Failed to generate AI summary');
@@ -497,13 +525,16 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       logger.warn({ err: (profileErr as Error).message, senderId }, '[Worker] Failed to fetch IG profile');
     }
 
-    await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, aiSummaryQueue, {
+    const result = await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, aiSummaryQueue, {
       customerName: igName,
       profilePicUrl: igProfilePic,
       externalMessageId: messagingEvent.message.mid ?? null,
       attachments: attachmentUrls,
       traceId,
     });
+    if (result?.isNew) {
+      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
+    }
     logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved IG DM');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for IG DM');
@@ -549,12 +580,15 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       resolvedName = emailLocal;
     }
 
-    await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
+    const result = await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
       customerName: resolvedName,
       initialTag: subject!.substring(0, 50),
       externalMessageId: job.data.inboundMessageId,
       traceId,
     });
+    if (result?.isNew) {
+      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
+    }
     logger.info({ senderEmail, organizationId, traceId }, '[Worker] Successfully saved Email');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
@@ -588,11 +622,14 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
   const messageText = EVENT_MESSAGES[topic] ?? `Shopify event '${topic}' for order ${orderName}.`;
 
   try {
-    await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
+    const result = await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
       customerName,
       initialTag: 'Order Status',
       traceId,
     });
+    if (result?.isNew) {
+      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
+    }
     logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Shopify order event');

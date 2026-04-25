@@ -3,37 +3,20 @@
 import { useState } from 'react'
 import { Bot, Clock, CheckCircle2, MessageSquare } from "lucide-react"
 import { useAnalytics } from "@/hooks/useAnalytics"
-import { DateRangeSelector } from "./_components/DateRangeSelector"
+import { DateRangeSelector } from "@/components/dashboard/DateRangeSelector"
+import { getDateRangeFrom, getDateRangeTo, type DateRangePreset as Preset } from "@/lib/analytics/date-range"
 import { AuditSection } from "./_components/AuditSection"
 import { OverviewStats } from "./_components/OverviewStats"
 import { TicketChart } from "./_components/TicketChart"
 import { TopTopicsCard } from "./_components/TopTopicsCard"
 import { ChannelBreakdown } from "./_components/ChannelBreakdown"
 
-type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
 type KpiStatus = 'excellent' | 'good' | 'needs_work' | 'no_data'
 type Tip = { text: string; ok: boolean; benchmark: string }
 type Bucket = { label: string; count: number }
 
 function shortDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
-// Snap to day boundaries so the SWR key is stable across re-renders
-function getRangeFrom(preset: Preset, customFrom: string): Date {
-  if (preset === 'all') return new Date('2020-01-01T00:00:00.000Z')
-  const d = preset === 'custom' ? new Date(customFrom) : new Date()
-  if (preset === '7d')  d.setDate(d.getDate() - 7)
-  if (preset === '30d') d.setDate(d.getDate() - 30)
-  if (preset === '90d') d.setDate(d.getDate() - 90)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function getRangeTo(preset: Preset, customTo: string): Date {
-  const d = preset === 'custom' ? new Date(customTo) : new Date()
-  d.setHours(23, 59, 59, 999)
-  return d
 }
 
 function formatResponseTime(mins: number) {
@@ -68,8 +51,8 @@ export default function AnalyticsPage() {
   })
   const [customTo, setCustomTo] = useState(() => new Date().toISOString().split('T')[0])
 
-  const rangeFrom  = getRangeFrom(preset, customFrom)
-  const rangeTo    = getRangeTo(preset, customTo)
+  const rangeFrom  = getDateRangeFrom(preset, customFrom)
+  const rangeTo    = getDateRangeTo(preset, customTo)
   const rangeDays  = Math.max(1, Math.ceil((rangeTo.getTime() - rangeFrom.getTime()) / (1000 * 60 * 60 * 24)))
   const auditLabel = AUDIT_LABELS[preset]
   const badgeLabel = preset === 'custom'

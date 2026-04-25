@@ -1,64 +1,86 @@
 "use client"
 
-import { Activity, Bot, MessageSquare, Settings } from "lucide-react"
-import Link from "next/link"
-import AgentChatClient from "./AgentChatClient"
+import { useState } from "react"
+import { Activity, Plus, X } from "lucide-react"
+import AgentChatClient from "@/components/agent/AgentChatClient"
 import ActionLog from "./ActionLog"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 interface Props {
   agentName: string
 }
 
 export default function AgentPageClient({ agentName }: Props) {
+  const [showActivity, setShowActivity] = useState(false)
+  const [sessionResetKey, setSessionResetKey] = useState(0)
+
   return (
-    <Tabs defaultValue="chat" className="h-full flex flex-col gap-0 overflow-hidden bg-background">
-
-      {/* Page header + tab bar */}
-      <div className="shrink-0 border-b border-border">
-        <div className="px-5 md:px-6 flex items-center justify-between py-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-violet-600 flex items-center justify-center shadow-sm">
-              <Bot className="w-4 h-4 text-white" />
-            </div>
-            <h1 className="text-base font-semibold tracking-tight text-foreground">{agentName}</h1>
+    <div className="h-full flex flex-col bg-background overflow-hidden">
+      {/* Header */}
+      <div className="shrink-0 border-b border-border px-5 md:px-6 py-3.5 flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-semibold text-foreground">Concierge</h1>
           </div>
-          <Link
-            href="/dashboard/settings?tab=agent"
-            className="flex items-center gap-1.5 px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-border/70 rounded-md transition-colors"
-          >
-            <Settings className="w-3 h-3" />
-            Settings
-          </Link>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            Direct line to your AI — ask about the store, draft campaigns, pull data.
+          </p>
         </div>
-        <TabsList variant="line" className="h-auto px-5 md:px-6 w-full justify-start rounded-none bg-transparent border-0 p-0 gap-1">
-          <TabsTrigger value="chat" className="rounded-none px-3 py-2 text-sm">
-            <MessageSquare className="w-3.5 h-3.5" />
-            Chat
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="rounded-none px-3 py-2 text-sm">
-            <Activity className="w-3.5 h-3.5" />
-            Activity
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Activity log toggle — mobile only */}
+          <button
+            onClick={() => setShowActivity(v => !v)}
+            className={`flex md:hidden items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
+              showActivity
+                ? "border-violet-500/50 text-violet-400 bg-violet-500/10"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Activity className="w-3 h-3" />
+            Activity log
+          </button>
+          <button
+            onClick={() => setSessionResetKey(k => k + 1)}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="w-3 h-3" />
+            New session
+          </button>
+        </div>
       </div>
 
-      {/* Tab content */}
-      <div className="flex-1 min-h-0 overflow-hidden">
+      {/* Content */}
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-row relative">
+        {/* Chat — always visible */}
+        <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
+          <AgentChatClient agentName={agentName} hideHeader sessionResetKey={sessionResetKey} />
+        </div>
 
-        {/* Chat tab — always mounted to preserve session state */}
-        <TabsContent value="chat" forceMount className="h-full flex flex-col data-[state=inactive]:hidden">
-          <div className="flex-1 min-h-0 mx-5 md:mx-6 my-4 border border-border rounded-md shadow-sm overflow-hidden">
-            <AgentChatClient agentName={agentName} hideHeader />
+        {/* Desktop sidebar — always visible */}
+        <div className="hidden md:flex w-100 shrink-0 border-l border-border overflow-y-auto flex-col">
+          <div className="sticky top-0 px-4 py-3 border-b border-border bg-background">
+            <p className="text-xs font-medium text-foreground">Activity log</p>
           </div>
-        </TabsContent>
+          <ActionLog sidebarLimit={999} />
+        </div>
 
-        <TabsContent value="activity" className="h-full overflow-y-auto">
-          <ActionLog />
-        </TabsContent>
-
+        {/* Mobile dropdown — full overlay over chat, below header */}
+        {showActivity && (
+          <div className="md:hidden absolute inset-0 z-10 bg-background flex flex-col overflow-hidden">
+            <div className="shrink-0 px-4 py-3 border-b border-border flex items-center justify-between">
+              <p className="text-xs font-medium text-foreground">Activity log</p>
+              <button
+                onClick={() => setShowActivity(false)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <ActionLog sidebarLimit={999} />
+            </div>
+          </div>
+        )}
       </div>
-
-    </Tabs>
+    </div>
   )
 }

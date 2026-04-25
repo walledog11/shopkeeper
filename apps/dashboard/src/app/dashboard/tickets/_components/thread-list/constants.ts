@@ -1,4 +1,5 @@
 import { getChannelInfo } from "@/lib/messaging/channels"
+export { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { ChannelType } from "@/types"
 
 export type TicketListTab = "open" | "closed"
@@ -9,19 +10,6 @@ export const CHANNEL_FILTERS = FILTER_IDS.map(id => {
   const info = getChannelInfo(id)
   return { id, logo: info.logo, label: info.name }
 })
-
-const TAG_STYLES: Record<string, { label: string; className: string }> = {
-  Shipping:          { label: "Shipping",        className: "bg-blue-500/15 text-blue-300" },
-  Returns:           { label: "Returns",         className: "bg-amber-700/25 text-amber-300" },
-  "Order Status":    { label: "Order Status",    className: "bg-purple-500/15 text-purple-300" },
-  "Product Inquiry": { label: "Product Inquiry", className: "bg-rose-500/15 text-rose-300" },
-  General:           { label: "General",         className: "bg-slate-500/20 text-slate-300" },
-}
-
-export function getTagStyle(tag: string | null | undefined) {
-  if (tag && TAG_STYLES[tag]) return TAG_STYLES[tag]
-  return TAG_STYLES.General
-}
 
 const AVATAR_GRADIENTS = [
   "from-orange-400 to-rose-500",

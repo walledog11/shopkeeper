@@ -125,6 +125,7 @@ model Thread {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   messages       Message[]
+  playbookRuns   PlaybookRun[]
 
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
@@ -249,13 +250,28 @@ model Playbook {
   enabled        Boolean  @default(true)
   trigger        Json     @db.JsonB
   actions        Json     @default("[]") @db.JsonB
+  runCount       Int      @default(0) @map("run_count")
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  runs           PlaybookRun[]
 
   @@index([organizationId])
   @@map("playbooks")
+}
+
+model PlaybookRun {
+  id         String   @id @default(uuid()) @db.Uuid
+  playbookId String   @map("playbook_id") @db.Uuid
+  threadId   String   @map("thread_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  playbook   Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+  thread     Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@unique([playbookId, threadId])
+  @@map("playbook_runs")
 }
 
 model Feedback {

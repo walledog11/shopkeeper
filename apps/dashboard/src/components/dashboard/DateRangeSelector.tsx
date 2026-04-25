@@ -2,12 +2,13 @@
 
 import { Calendar } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import type { DateRangePreset } from "@/lib/analytics/date-range"
 
-type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
+export type { DateRangePreset }
 
 interface DateRangeSelectorProps {
-  preset: Preset
-  setPreset: (p: Preset) => void
+  preset: DateRangePreset
+  setPreset: (p: DateRangePreset) => void
   customFrom: string
   setCustomFrom: (v: string) => void
   customTo: string
@@ -15,7 +16,7 @@ interface DateRangeSelectorProps {
   today: string
 }
 
-const PRESETS: { value: Preset; label: string }[] = [
+const PRESETS: { value: DateRangePreset; label: string }[] = [
   { value: '7d',     label: 'Last 7 days'  },
   { value: '30d',    label: 'Last 30 days' },
   { value: '90d',    label: 'Last 90 days' },

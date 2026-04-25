@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { Bot, Ghost } from "lucide-react"
-import AgentChatClient from "../../agent/_components/AgentChatClient"
+import { Ghost } from "lucide-react"
+import AgentChatClient from "@/components/agent/AgentChatClient"
 import { useAgentPanel } from "./AgentPanelContext"
 
 interface Props {

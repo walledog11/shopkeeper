@@ -50,8 +50,6 @@ export async function runAgent(
   const maxIterations = s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS;
   const actionsPerformed: ActionEntry[] = [];
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
-  const history = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
-  const messages = buildMessageHistory(history, instruction);
 
   const finish = (result: AgentResult, outcome: string): AgentResult => {
     logger.info({
@@ -130,8 +128,6 @@ export async function runAgent(
     }
   }
 
-  const tools = toAnthropicTools(settings, selectToolNamesForInstruction(ctx, instruction));
-
   if (approvedToolCalls && approvedToolCalls.length > 0) {
     const executableToolCalls = ctx.thread.channelType === "dashboard_agent"
       ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
@@ -144,18 +140,7 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
-    messages.push({
-      role: "assistant",
-      content: executableToolCalls.map((tc) => ({
-        type: "tool_use" as const,
-        id: tc.id,
-        name: tc.name,
-        input: tc.input as Record<string, unknown>,
-      })),
-    });
-
-    const toolResults = await executeToolCalls(executableToolCalls);
-    messages.push({ role: "user", content: toolResults });
+    await executeToolCalls(executableToolCalls);
 
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
@@ -163,6 +148,9 @@ export async function runAgent(
     }, ctx.thread.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
   }
 
+  const history = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  const messages = buildMessageHistory(history, instruction);
+  const tools = toAnthropicTools(settings, selectToolNamesForInstruction(ctx, instruction));
   const systemPrompt = buildSystemPrompt(ctx, settings);
 
   for (let i = 0; i < maxIterations; i += 1) {

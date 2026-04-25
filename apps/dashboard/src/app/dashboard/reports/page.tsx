@@ -7,31 +7,9 @@ import {
   MapPin, Package, ShoppingCart, Shield, Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DateRangeSelector } from '../analytics/_components/DateRangeSelector'
+import { DateRangeSelector } from '@/components/dashboard/DateRangeSelector'
+import { getDateRangeFrom, getDateRangeTo, type DateRangePreset as Preset } from '@/lib/analytics/date-range'
 import { useReports } from '@/hooks/useReports'
-
-type Preset = '7d' | '30d' | '90d' | 'all' | 'custom'
-
-function getRangeFrom(preset: Preset, customFrom: string): Date {
-  if (preset === 'all') return new Date('2020-01-01T00:00:00.000Z')
-  if (preset === 'custom') {
-    const d = new Date(customFrom)
-    d.setHours(0, 0, 0, 0)
-    return d
-  }
-  const d = new Date()
-  if (preset === '7d')       d.setDate(d.getDate() - 7)
-  else if (preset === '30d') d.setDate(d.getDate() - 30)
-  else if (preset === '90d') d.setDate(d.getDate() - 90)
-  d.setHours(0, 0, 0, 0)
-  return d
-}
-
-function getRangeTo(preset: Preset, customTo: string): Date {
-  const d = preset === 'custom' ? new Date(customTo) : new Date()
-  d.setHours(23, 59, 59, 999)
-  return d
-}
 
 function formatMinutes(mins: number | null): string {
   if (mins === null) return '—'
@@ -625,8 +603,8 @@ export default function ReportsPage() {
   })
   const [customTo, setCustomTo] = useState(() => new Date().toISOString().split('T')[0])
 
-  const rangeFrom = getRangeFrom(preset, customFrom)
-  const rangeTo   = getRangeTo(preset, customTo)
+  const rangeFrom = getDateRangeFrom(preset, customFrom)
+  const rangeTo   = getDateRangeTo(preset, customTo)
 
   const rangeLabel = preset === 'custom'
     ? `${shortDate(rangeFrom.toISOString())} – ${shortDate(rangeTo.toISOString())}`

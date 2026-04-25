@@ -255,6 +255,7 @@ export interface Playbook {
   enabled: boolean
   trigger: PlaybookTrigger
   actions: PlaybookAction[]
+  runCount: number
   createdAt: string
   updatedAt: string
 }

@@ -23,7 +23,24 @@ export async function runPlaybooks(
     if (matching.length === 0) return;
 
     for (const playbook of matching) {
+      // Deduplicate: skip if this playbook already ran on this thread
+      const run = await db.playbookRun.create({
+        data: { playbookId: playbook.id, threadId },
+      }).catch((e: { code?: string }) => {
+        if (e.code === "P2002") return null;
+        throw e;
+      });
+      if (!run) {
+        logger.info({ playbookId: playbook.id, threadId }, "[playbook-runner] Already ran — skipping");
+        continue;
+      }
+
       await executePlaybook(orgId, threadId, playbook.actions as unknown as PlaybookAction[]);
+
+      await db.playbook.update({
+        where: { id: playbook.id },
+        data: { runCount: { increment: 1 } },
+      });
     }
   } catch (error) {
     logger.error({ err: error }, "[playbook-runner] Failed to run playbooks");

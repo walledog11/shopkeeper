@@ -1,13 +1,14 @@
 "use client"
 
-import ResourcesCard from "./ResourcesCard"
-import AgentBanner from "./AgentBanner"
+import WorkflowSetupBanner from "./WorkflowSetupBanner"
+import ConciergeBriefing from "./ConciergeBriefing"
 import StatCards from "./StatCards"
-import ChannelBreakdown from "./ChannelBreakdown"
-import ActivityFeed from "./ActivityFeed"
-import TicketList from "./TicketList"
-import InsightsCard from "./InsightsCard"
-import WorkflowBasics from "./WorkflowBasics"
+import NeedsYou from "./NeedsYou"
+import ClearedOvernight from "./ClearedOvernight"
+import TodayShape from "./TodayShape"
+import TodayOrders from "./TodayOrders"
+import RepeatCustomers from "./RepeatCustomers"
+import WeekChart from "./WeekChart"
 import { useHomeData } from "./useHomeData"
 import type { Thread } from "@/types"
 
@@ -21,83 +22,68 @@ function getGreeting(): string {
 interface Props {
   userName: string
   initialOpenThreads: Thread[]
-  initialClosedCount: number
-  totalMessageCount: number
 }
 
-export default function DashboardHomeClient({ userName, initialOpenThreads, initialClosedCount, totalMessageCount }: Props) {
+export default function DashboardHomeClient({ userName, initialOpenThreads }: Props) {
   const greeting = getGreeting()
-  const {
-    activeView, setActiveView,
-    isLoading, openCount, resolvedCount,
-    resolvedTodayCount, avgResponseMinutes,
-    openThreads, closedThreads,
-    displayedThreads,
-    channelBreakdown, activityEvents,
-    workflowSteps, workflowDoneCount,
-    navViews, channelConnected,
-  } = useHomeData({ initialOpenThreads, initialClosedCount })
+  const data = useHomeData({ initialOpenThreads })
 
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex flex-col min-h-full px-5 md:px-6 pt-2 pb-4 gap-3">
+        <div className="flex flex-col min-h-full px-5 md:px-6 pt-3 pb-6 gap-3">
 
-          <AgentBanner />
-
-          {/* Header */}
-          <div className="flex items-start justify-between shrink-0 gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white">{greeting}, <span className="text-white">{userName}</span>.</h1>
-              <p className="text-sm text-white/35 mt-0.5">
-                {isLoading
-                  ? "Loading your queue…"
-                  : openCount === 0
-                    ? "You're all caught up. No open tickets."
-                    : `You have ${openCount} open ticket${openCount !== 1 ? "s" : ""} waiting.`
-                }
-              </p>
-            </div>
-          </div>
-
-          <StatCards
-            isLoading={isLoading}
-            openCount={openCount}
-            resolvedTodayCount={resolvedTodayCount}
-            avgResponseMinutes={avgResponseMinutes}
-            totalMessageCount={totalMessageCount}
+          <WorkflowSetupBanner
+            steps={data.workflowSteps}
+            doneCount={data.workflowDoneCount}
           />
 
-          <div className="border-t border-white/[0.04]" />
-
-          {/* Main 2-column layout */}
-          <div className="grid grid-cols-1 @min-[800px]:grid-cols-[1fr_256px] gap-3">
-
-            {/* Main column */}
-            <div className="flex flex-col gap-3 min-w-0">
-              <TicketList
-                isLoading={isLoading}
-                displayedThreads={displayedThreads}
-                activeView={activeView}
-                navViews={navViews}
-                openCount={openCount}
-                resolvedCount={resolvedCount}
-                setActiveView={setActiveView}
-                hasChannel={channelConnected}
+          <div className="grid grid-cols-1 @min-[1000px]:grid-cols-[1fr_280px] gap-4">
+            <div className="flex flex-col gap-4 min-w-0">
+              <ConciergeBriefing
+                greeting={greeting}
+                userName={userName}
+                agentName={data.agentName}
+                needsYouCount={data.needsYouCount}
+                overnightClearedCount={data.overnightClearedCount}
+                briefingChannels={data.briefingChannels}
+                timeSavedHours={data.timeSavedHours}
+                repliesSent={data.repliesSent24h}
               />
-              <InsightsCard openThreads={openThreads} closedThreads={closedThreads} />
-              <ResourcesCard />
+
+              <StatCards
+                isLoading={data.isLoading}
+                openCount={data.openCount}
+                openDelta={data.openDelta}
+                firstReplyMinutes={data.firstReplyMinutes}
+                autoResolvedPct={data.autoResolvedPct}
+                weeklyVolume={data.weeklyVolume}
+                newThreadsByDay={data.newThreadsByDay}
+                aiResolvedByDay={data.aiResolvedByDay}
+                totalRepliesByDay={data.totalRepliesByDay}
+              />
+
+              <NeedsYou items={data.needsYouItems} agentName={data.agentName} />
+
+              <ClearedOvernight
+                agentName={data.agentName}
+                totalCount={data.overnightClearedCount}
+                topics={data.clearedTopics}
+                timeSavedHours={data.timeSavedHours}
+                repliesSent={data.repliesSent24h}
+              />
             </div>
 
-            {/* Right sidebar */}
-            <div className="flex flex-col gap-3 h-full">
-              <WorkflowBasics workflowSteps={workflowSteps} workflowDoneCount={workflowDoneCount} />
-              <ChannelBreakdown channelBreakdown={channelBreakdown} openCount={openCount} />
-              <div className="flex-1 flex flex-col min-h-0">
-                <ActivityFeed activityEvents={activityEvents} />
-              </div>
+            <div className="flex flex-col gap-4">
+              <TodayShape
+                ordersToShip={data.ordersToShip}
+                refundsPending={data.refundsPending}
+                vipsInQueue={data.vipsInQueue}
+              />
+              <TodayOrders orders={data.todaysOrders} hasShopify={data.hasShopify} />
+              <RepeatCustomers customers={data.repeatCustomers} />
+              <WeekChart data={data.yourWeek} />
             </div>
-
           </div>
         </div>
       </div>
