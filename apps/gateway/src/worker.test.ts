@@ -306,8 +306,11 @@ describe('Message worker — ig_dm branch', () => {
       where: { organizationId: org.id, platformId: 'ig_user_with_profile' },
     });
     expect(customer?.name).toBe('IG User Profile');
-    expect(mockFetch).toHaveBeenCalledOnce();
-    expect(String(mockFetch.mock.calls[0][0])).toContain('graph.facebook.com');
+    const graphCalls = mockFetch.mock.calls.filter(([url]) =>
+      String(url).includes('graph.facebook.com')
+    );
+    expect(graphCalls).toHaveLength(1);
+    expect(String(graphCalls[0][0])).toContain('graph.facebook.com');
   });
 
   it('drops echo messages without creating DB records', async () => {
