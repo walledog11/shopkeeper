@@ -110,6 +110,13 @@ export function parseAgentAskBody(body: unknown) {
   };
 }
 
+export function parseAgentQuickApproveBody(body: unknown) {
+  const candidate = requireObject(body);
+  return {
+    threadId: requireNonEmptyString(candidate.threadId, "threadId"),
+  };
+}
+
 export function parseAgentChatBody(body: unknown) {
   const candidate = requireObject(body);
   return {

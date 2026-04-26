@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useCallback, useMemo } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { useThreads } from "@/hooks/useThreads"
@@ -8,7 +8,7 @@ import { fetcher } from "@/lib/api/fetcher"
 import { CHANNEL_TYPE, SENDER_TYPE } from "@/lib/messaging/thread-constants"
 import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
 import { readAgentPlanCachePlan } from "@/lib/agent/plan-cache-shape"
-import { buildPlanPreview } from "@/lib/agent/plan-preview"
+import { buildPlanPreview, classifyHomePlan } from "@/lib/agent/plan-preview"
 import type { Thread, Integration, OrgSettings, KnowledgeBase, AgentPlan } from "@/types"
 
 // Rough heuristic: a typical Shopify-support reply takes ~14 minutes of human
@@ -36,12 +36,14 @@ interface OrdersResponse {
 
 interface NeedsYouItem {
   threadId: string
+  kind: "quick_reply" | "needs_review"
   customerName: string
   channelName: string
   timeAgo: string
-  actionHeadline: string
+  headline: string
   contextLine: string
   proposalSummary: string
+  replyText: string | null
   orderRef: string | null
   tag: string | null
 }
@@ -121,7 +123,7 @@ export function useHomeData({ initialOpenThreads }: Options) {
     { refreshInterval: 300_000, revalidateOnFocus: false },
   )
 
-  const { threads: openThreads, isLoading: loadingOpen } = useThreads('open', initialOpenThreads, true, true)
+  const { threads: openThreads, isLoading: loadingOpen, mutate: mutateOpenThreads } = useThreads('open', initialOpenThreads, true, true)
   const { threads: closedThreads, isLoading: loadingClosed } = useThreads('closed', undefined, true, true)
 
   const channelConnected = integrations.length > 0
@@ -199,14 +201,17 @@ export function useHomeData({ initialOpenThreads }: Options) {
       const plan = currentPlanForThread(t)
       const firstMessage = t.messages[0]?.contentText ?? null
       const copy = buildPlanPreview(plan, t.aiSummary, firstMessage)
+      const classification = classifyHomePlan(plan)
       return {
         threadId: t.id,
+        kind: classification.kind,
         customerName: getCustomerName(t.customer),
         channelName: channel.name,
         timeAgo: timeAgoShort(t.messages[0]?.sentAt ?? t.updatedAt),
-        actionHeadline: copy.headline,
+        headline: copy.headline,
         contextLine: copy.context,
         proposalSummary: copy.proposal,
+        replyText: classification.replyText,
         orderRef: copy.orderRef,
         tag: t.tag,
       }
@@ -347,6 +352,9 @@ export function useHomeData({ initialOpenThreads }: Options) {
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
   const agentName = (orgData?.settings?.agentName ?? AGENT_SETTINGS_DEFAULTS.agentName) as string
+  const refreshOpenThreads = useCallback(() => {
+    void mutateOpenThreads()
+  }, [mutateOpenThreads])
 
   return {
     isLoading,
@@ -375,5 +383,6 @@ export function useHomeData({ initialOpenThreads }: Options) {
     workflowSteps,
     workflowDoneCount,
     agentName,
+    refreshOpenThreads,
   }
 }

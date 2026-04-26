@@ -118,6 +118,9 @@ export interface KbArticle {
   tags: string[];
   createdAt: string;
   updatedAt: string;
+  citationCount?: number;
+  citationCountWeek?: number;
+  lastCitedAt?: string | null;
 }
 
 export type KbSource = 'shopify' | 'user';

@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
 
     const fulfillmentStatus = searchParams.get('fulfillment_status') ?? 'any';
+    const financialStatus = searchParams.get('financial_status') ?? 'any';
     const q = searchParams.get('q') ?? '';
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '25', 10), 50);
@@ -45,7 +46,8 @@ export async function GET(request: Request) {
       }
     } else {
       const fsParam = fulfillmentStatus !== 'any' ? `&fulfillment_status=${fulfillmentStatus}` : '';
-      url = `${base}?status=any&limit=${limit}&fields=${ORDER_FIELDS}${fsParam}`;
+      const finParam = financialStatus !== 'any' ? `&financial_status=${financialStatus}` : '';
+      url = `${base}?status=any&limit=${limit}&fields=${ORDER_FIELDS}${fsParam}${finParam}`;
     }
 
     const res = await fetch(url, {

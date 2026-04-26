@@ -1,19 +1,22 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
-import { Bot, Camera, Mail, MessageSquare, ShoppingBag, Smartphone, Sparkles } from "lucide-react"
+import { AlertCircle, Bot, Camera, Loader2, Mail, MessageSquare, ShoppingBag, Smartphone, Sparkles } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 
 interface NeedsYouItem {
   threadId: string
+  kind: "quick_reply" | "needs_review"
   customerName: string
   channelName: string
   timeAgo: string
-  actionHeadline: string
+  headline: string
   contextLine: string
   proposalSummary: string
+  replyText: string | null
   orderRef: string | null
   tag: string | null
 }
@@ -21,6 +24,7 @@ interface NeedsYouItem {
 interface Props {
   items: NeedsYouItem[]
   agentName: string
+  onApproved: () => void
 }
 
 const CHANNEL_META: Record<string, { Icon: LucideIcon; className: string }> = {
@@ -33,7 +37,7 @@ const CHANNEL_META: Record<string, { Icon: LucideIcon; className: string }> = {
   "Dashboard Agent": { Icon: Bot, className: "text-amber-400" },
 }
 
-export default function NeedsYou({ items, agentName }: Props) {
+export default function NeedsYou({ items, agentName, onApproved }: Props) {
   if (items.length === 0) return null
 
   return (
@@ -44,17 +48,46 @@ export default function NeedsYou({ items, agentName }: Props) {
 
       <div className="space-y-2">
         {items.map(item => (
-          <NeedsYouRow key={item.threadId} item={item} agentName={agentName} />
+          <NeedsYouRow key={item.threadId} item={item} agentName={agentName} onApproved={onApproved} />
         ))}
       </div>
     </section>
   )
 }
 
-function NeedsYouRow({ item, agentName }: { item: NeedsYouItem; agentName: string }) {
+function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agentName: string; onApproved: () => void }) {
   const channelMeta = CHANNEL_META[item.channelName] ?? { Icon: MessageSquare, className: "text-white/40" }
   const ChannelIcon = channelMeta.Icon
   const tagStyle = getTagStyle(item.tag)
+  const [isApproving, setIsApproving] = useState(false)
+  const [approvalError, setApprovalError] = useState<string | null>(null)
+
+  const approveQuickReply = async () => {
+    if (item.kind !== "quick_reply" || isApproving) return
+
+    setIsApproving(true)
+    setApprovalError(null)
+
+    try {
+      const response = await fetch("/api/agent/quick-approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threadId: item.threadId }),
+      })
+      const data = await response.json().catch(() => null) as { error?: string } | null
+
+      if (!response.ok) {
+        setApprovalError(data?.error ?? "Could not send reply.")
+        return
+      }
+
+      onApproved()
+    } catch {
+      setApprovalError("Network error. Try again.")
+    } finally {
+      setIsApproving(false)
+    }
+  }
 
   return (
     <Card className="bg-card border-border rounded-md overflow-hidden">
@@ -68,7 +101,7 @@ function NeedsYouRow({ item, agentName }: { item: NeedsYouItem; agentName: strin
               href={`/dashboard/tickets?thread=${item.threadId}`}
               className="text-sm font-semibold text-white/95 truncate hover:text-white transition-colors"
             >
-              {item.actionHeadline}
+              {item.headline}
             </Link>
           </div>
 
@@ -91,30 +124,68 @@ function NeedsYouRow({ item, agentName }: { item: NeedsYouItem; agentName: strin
             <p className="text-xs text-white/55 leading-snug mb-1.5">{item.contextLine}</p>
           )}
 
-          <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
-            <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-              <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80" />
-              <span>
-                <span className="font-semibold text-white/85">{agentName} proposes: </span>
-                <span className="text-white/80">{item.proposalSummary}</span>
-              </span>
+          {item.kind === "quick_reply" && item.replyText ? (
+            <div className="px-2.5 py-2 rounded-md bg-green-400/[0.06] border border-green-400/[0.12]">
+              <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
+                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80" />
+                <span>
+                  <span className="font-semibold text-white/85">{agentName} drafted: </span>
+                  <span className="text-white/80">{item.replyText}</span>
+                </span>
+              </p>
+            </div>
+          ) : (
+            <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
+              <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
+                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80" />
+                <span>
+                  <span className="font-semibold text-white/85">{agentName} proposes: </span>
+                  <span className="text-white/80">{item.proposalSummary}</span>
+                </span>
+              </p>
+            </div>
+          )}
+
+          {approvalError && (
+            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-red-300">
+              <AlertCircle aria-hidden className="h-3 w-3 shrink-0" />
+              {approvalError}
             </p>
-          </div>
+          )}
         </div>
 
-        <div className="flex flex-col gap-1.5 px-3 py-3 border-l border-border bg-white/[0.01]">
-          <Link
-            href={`/dashboard/tickets?thread=${item.threadId}`}
-            className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
-          >
-            Review
-          </Link>
-          <Link
-            href={`/dashboard/tickets?thread=${item.threadId}`}
-            className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
-          >
-            Edit & run
-          </Link>
+        <div className="flex flex-col gap-1.5 justify-center px-3 py-3 border-l border-border bg-white/[0.01]">
+          {item.kind === "quick_reply" ? (
+            <>
+              <button
+                type="button"
+                onClick={approveQuickReply}
+                disabled={isApproving}
+                className="inline-flex items-center justify-center gap-1.5 text-center text-[11px] font-semibold px-3 py-1.5 rounded-md bg-green-400 hover:bg-green-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
+              >
+                {isApproving && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
+                {isApproving ? "Sending" : "Approve & send"}
+              </button>
+              <Link
+                href={`/dashboard/tickets?thread=${item.threadId}`}
+                className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
+              >
+                Edit
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.08] text-white/40">
+                Requires review
+              </div>
+              <Link
+                href={`/dashboard/tickets?thread=${item.threadId}`}
+                className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
+              >
+                Review decision
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </Card>

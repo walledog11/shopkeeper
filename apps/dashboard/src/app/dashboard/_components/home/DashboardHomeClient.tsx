@@ -63,7 +63,11 @@ export default function DashboardHomeClient({ userName, initialOpenThreads }: Pr
                 totalRepliesByDay={data.totalRepliesByDay}
               />
 
-              <NeedsYou items={data.needsYouItems} agentName={data.agentName} />
+              <NeedsYou
+                items={data.needsYouItems}
+                agentName={data.agentName}
+                onApproved={data.refreshOpenThreads}
+              />
 
               <ClearedOvernight
                 agentName={data.agentName}

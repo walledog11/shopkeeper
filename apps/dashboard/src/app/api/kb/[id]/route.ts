@@ -1,20 +1,42 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError, ForbiddenError, handleApiError, NotFoundError } from '@/lib/api/errors';
+
+function normalizeTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map(tag => tag.trim())
+    .filter(Boolean);
+}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
     const org = await getOrCreateOrg();
-    const { title, body, tags } = await request.json();
+    const { title, body, tags } = await request.json() as {
+      title?: unknown;
+      body?: unknown;
+      tags?: unknown;
+    };
 
-    const existing = await db.kbArticle.findUnique({
-      where: { id },
-      select: { organizationId: true },
+    const existing = await db.kbArticle.findFirst({
+      where: { id, organizationId: org.id },
+      select: { id: true, knowledgeBase: { select: { source: true } } },
     });
-    if (!existing || existing.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!existing) throw new NotFoundError();
+    if (existing.knowledgeBase.source !== 'user') {
+      throw new ForbiddenError('Synced knowledge base articles are read-only');
+    }
+    if (title !== undefined && (typeof title !== 'string' || !title.trim())) {
+      throw new BadRequestError('title must be a non-empty string');
+    }
+    if (body !== undefined && (typeof body !== 'string' || !body.trim())) {
+      throw new BadRequestError('body must be a non-empty string');
+    }
+    if (tags !== undefined && !Array.isArray(tags)) {
+      throw new BadRequestError('tags must be an array');
     }
 
     const updated = await db.kbArticle.update({
@@ -22,7 +44,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       data: {
         ...(title !== undefined && { title: title.trim() }),
         ...(body !== undefined && { body: body.trim() }),
-        ...(tags !== undefined && { tags: tags.map((t: string) => t.trim()).filter(Boolean) }),
+        ...(tags !== undefined && { tags: normalizeTags(tags) }),
       },
     });
     return NextResponse.json({ article: updated });
@@ -35,8 +57,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   try {
     const { id } = await params;
     const org = await getOrCreateOrg();
-    const deleted = await db.kbArticle.deleteMany({ where: { id, organizationId: org.id } });
-    if (deleted.count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const existing = await db.kbArticle.findFirst({
+      where: { id, organizationId: org.id },
+      select: { id: true, knowledgeBase: { select: { source: true } } },
+    });
+    if (!existing) throw new NotFoundError();
+    if (existing.knowledgeBase.source !== 'user') {
+      throw new ForbiddenError('Synced knowledge base articles are read-only');
+    }
+    await db.kbArticle.delete({ where: { id } });
     return NextResponse.json({ ok: true });
   } catch (error) {
     return handleApiError(error, 'KB DELETE', 'Failed to delete article');

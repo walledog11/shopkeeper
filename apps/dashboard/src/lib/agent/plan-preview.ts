@@ -1,4 +1,30 @@
-import type { AgentPlan, PlanStep } from "@/types"
+import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
+
+export type HomePlanKind = "quick_reply" | "needs_review"
+
+export interface HomePlanClassification {
+  kind: HomePlanKind
+  replyText: string | null
+  sendReplyToolCall: RawToolCall | null
+}
+
+const QUICK_REPLY_READ_TOOLS = new Set([
+  "search_kb",
+  "search_shopify_products",
+  "search_shopify_customers",
+  "get_shopify_customer",
+  "get_shopify_orders",
+  "get_order_by_name",
+  "get_order_tracking",
+])
+
+const CUSTOMER_OR_ORDER_READ_TOOLS = new Set([
+  "search_shopify_customers",
+  "get_shopify_customer",
+  "get_shopify_orders",
+  "get_order_by_name",
+  "get_order_tracking",
+])
 
 const ACTION_TOOL_PRIORITY = [
   "create_refund",
@@ -23,6 +49,56 @@ export interface PlanPreview {
   context: string
   proposal: string
   orderRef: string | null
+}
+
+function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
+  const input = toolCall?.input
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  const text = (input as { text?: unknown }).text
+  return typeof text === "string" && text.trim() ? text.trim() : null
+}
+
+function usesCustomerOrOrderContext(plan: AgentPlan): boolean {
+  return plan.rawToolCalls.some(toolCall => CUSTOMER_OR_ORDER_READ_TOOLS.has(toolCall.name))
+}
+
+function warningBlocksQuickReply(warning: string, plan: AgentPlan): boolean {
+  const lower = warning.toLowerCase()
+
+  if (lower.includes("couldn't find a shopify customer") || lower.includes("could not find a shopify customer")) {
+    return usesCustomerOrOrderContext(plan)
+  }
+
+  return true
+}
+
+export function classifyHomePlan(plan: AgentPlan | null): HomePlanClassification {
+  if (!plan || (plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
+    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+  }
+
+  if (plan.steps.length !== 1 || plan.steps[0].tool !== "send_reply") {
+    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+  }
+
+  const sendReplyCalls = plan.rawToolCalls.filter(toolCall => toolCall.name === "send_reply")
+  if (sendReplyCalls.length !== 1 || sendReplyCalls[0].id !== plan.steps[0].id) {
+    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+  }
+
+  const sendReplyToolCall = sendReplyCalls[0]
+  const rawCallsAreSafe = plan.rawToolCalls.every(toolCall => (
+    toolCall.id === sendReplyToolCall.id
+      ? toolCall.name === "send_reply"
+      : QUICK_REPLY_READ_TOOLS.has(toolCall.name)
+  ))
+  const replyText = replyTextFromToolCall(sendReplyToolCall)
+
+  if (!rawCallsAreSafe || !replyText) {
+    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+  }
+
+  return { kind: "quick_reply", replyText, sendReplyToolCall }
 }
 
 function findActionStep(plan: AgentPlan): PlanStep | null {

@@ -176,9 +176,18 @@ export async function executeTool(
         where: { organizationId: ctx.orgId, OR: wordConditions },
         take: 5,
         orderBy: { updatedAt: "desc" },
-        select: { title: true, body: true, tags: true },
+        select: { id: true, title: true, body: true, tags: true },
       });
       if (articles.length === 0) return "No knowledge base articles found for that query.";
+
+      await db.kbCitation.createMany({
+        data: articles.map(a => ({
+          organizationId: ctx.orgId,
+          kbArticleId: a.id,
+          threadId: ctx.thread.id,
+        })),
+      });
+
       return JSON.stringify(articles.map(a => ({ title: a.title, body: a.body, tags: a.tags })));
     }
 

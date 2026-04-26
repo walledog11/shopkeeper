@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError, ForbiddenError, handleApiError, NotFoundError } from '@/lib/api/errors';
+
+function normalizeTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return tags
+    .filter((tag): tag is string => typeof tag === 'string')
+    .map(tag => tag.trim())
+    .filter(Boolean);
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -10,13 +18,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const kb = await db.knowledgeBase.findFirst({
       where: { id: knowledgeBaseId, organizationId: org.id },
-      select: { id: true },
+      select: { id: true, source: true },
     });
-    if (!kb) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    if (!kb) throw new NotFoundError();
+    if (kb.source !== 'user') {
+      throw new ForbiddenError('Synced knowledge bases are read-only');
+    }
 
-    const { title, body, tags } = await request.json();
-    if (!title?.trim() || !body?.trim()) {
-      return NextResponse.json({ error: 'title and body are required' }, { status: 400 });
+    const { title, body, tags } = await request.json() as {
+      title?: unknown;
+      body?: unknown;
+      tags?: unknown;
+    };
+    if (typeof title !== 'string' || !title.trim() || typeof body !== 'string' || !body.trim()) {
+      throw new BadRequestError('title and body are required');
+    }
+    if (tags !== undefined && !Array.isArray(tags)) {
+      throw new BadRequestError('tags must be an array');
     }
 
     const article = await db.kbArticle.create({
@@ -25,7 +43,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         knowledgeBaseId,
         title: title.trim(),
         body: body.trim(),
-        tags: Array.isArray(tags) ? tags.map((t: string) => t.trim()).filter(Boolean) : [],
+        tags: normalizeTags(tags),
       },
     });
     return NextResponse.json({ article }, { status: 201 });

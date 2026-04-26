@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { AgentPlan } from "@/types";
-import { AGENT_PLAN_CACHE_VERSION } from "@/lib/agent/plan-cache-shape";
+import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from "@/lib/agent/plan-cache-shape";
 
 export interface AgentPlanCacheRecord {
   version: number;
@@ -30,28 +30,7 @@ export function buildAgentPlanCacheRecord(params: {
 }
 
 export function readAgentPlanCache(value: unknown): AgentPlanCacheRecord | null {
-  if (!value || typeof value !== "object") {
-    return null;
-  }
-
-  const candidate = value as Partial<AgentPlanCacheRecord>;
-  if (
-    candidate.version !== AGENT_PLAN_CACHE_VERSION ||
-    typeof candidate.instruction !== "string" ||
-    typeof candidate.settingsFingerprint !== "string" ||
-    !candidate.plan ||
-    typeof candidate.plan !== "object"
-  ) {
-    return null;
-  }
-
-  return {
-    version: candidate.version,
-    instruction: candidate.instruction,
-    lastCustomerMessageId: typeof candidate.lastCustomerMessageId === "string" ? candidate.lastCustomerMessageId : null,
-    settingsFingerprint: candidate.settingsFingerprint,
-    plan: candidate.plan as AgentPlan,
-  };
+  return readAgentPlanCacheRecordShape(value);
 }
 
 export function isAgentPlanCacheHit(params: {

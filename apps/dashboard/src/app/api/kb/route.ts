@@ -11,7 +11,36 @@ export async function GET() {
       include: { articles: { orderBy: { updatedAt: 'desc' } } },
       orderBy: { createdAt: 'asc' },
     });
-    return NextResponse.json({ knowledgeBases });
+
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const [allTime, lastWeek] = await Promise.all([
+      db.kbCitation.groupBy({
+        by: ['kbArticleId'],
+        where: { organizationId: org.id },
+        _count: { _all: true },
+        _max: { createdAt: true },
+      }),
+      db.kbCitation.groupBy({
+        by: ['kbArticleId'],
+        where: { organizationId: org.id, createdAt: { gte: weekAgo } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const totalByArticle = new Map(allTime.map(r => [r.kbArticleId, { count: r._count._all, lastCitedAt: r._max.createdAt }]));
+    const weekByArticle = new Map(lastWeek.map(r => [r.kbArticleId, r._count._all]));
+
+    const enriched = knowledgeBases.map(kb => ({
+      ...kb,
+      articles: kb.articles.map(a => ({
+        ...a,
+        citationCount: totalByArticle.get(a.id)?.count ?? 0,
+        citationCountWeek: weekByArticle.get(a.id) ?? 0,
+        lastCitedAt: totalByArticle.get(a.id)?.lastCitedAt ?? null,
+      })),
+    }));
+
+    return NextResponse.json({ knowledgeBases: enriched });
   } catch (error) {
     return handleApiError(error, 'KB GET', 'Failed to fetch knowledge bases');
   }
