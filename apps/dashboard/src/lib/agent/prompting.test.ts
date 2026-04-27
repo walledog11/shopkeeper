@@ -169,19 +169,13 @@ describe('selectToolNamesForInstruction', () => {
 
 describe('AGENT_TOOLS', () => {
   it('guides status checks toward order data before tracking', () => {
-    const getOrders = AGENT_TOOLS.find((tool) => (
-      tool.type === 'function' && tool.function.name === 'get_shopify_orders'
-    ));
-    const getTracking = AGENT_TOOLS.find((tool) => (
-      tool.type === 'function' && tool.function.name === 'get_order_tracking'
-    ));
+    const getOrders = AGENT_TOOLS.find((tool) => tool.name === 'get_shopify_orders');
+    const getTracking = AGENT_TOOLS.find((tool) => tool.name === 'get_order_tracking');
 
-    expect(getOrders?.type).toBe('function');
-    expect(getOrders && getOrders.type === 'function' ? getOrders.function.description : '').toContain('Use this first for basic order-status questions');
-    expect(getOrders && getOrders.type === 'function' ? getOrders.function.description : '').toContain('you usually do not need get_order_tracking');
+    expect(getOrders?.description).toContain('Use this first for basic order-status questions');
+    expect(getOrders?.description).toContain('you usually do not need get_order_tracking');
 
-    expect(getTracking?.type).toBe('function');
-    expect(getTracking && getTracking.type === 'function' ? getTracking.function.description : '').toContain('Use this only when an order is already fulfilled or partially fulfilled');
-    expect(getTracking && getTracking.type === 'function' ? getTracking.function.description : '').toContain('Do not use it for unfulfilled orders or basic status checks');
+    expect(getTracking?.description).toContain('Use this only when an order is already fulfilled or partially fulfilled');
+    expect(getTracking?.description).toContain('Do not use it for unfulfilled orders or basic status checks');
   });
 });

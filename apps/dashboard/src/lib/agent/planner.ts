@@ -3,10 +3,9 @@ import { anthropic } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types";
-import { PLAN_STEP_LABELS, TOOL_CATEGORIES } from "./tools";
+import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools";
 import { buildSystemPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
-import { toAnthropicTools } from "./tools/adapter";
 import { executeTool } from "./tools/executor";
 import { buildMessageHistory } from "./message-history";
 import type { AgentContext } from "./types";
@@ -81,7 +80,7 @@ export async function planAgent(
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, instruction);
   const systemPrompt = buildSystemPrompt(ctx, settings);
-  const tools = toAnthropicTools(settings, selectToolNamesForInstruction(ctx, instruction));
+  const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
 
   logger.info({
     orgId: ctx.orgId,

@@ -1,8 +1,8 @@
 import type { OrgSettings } from "@/types";
-import { TOOL_CATEGORIES } from "../tools";
-import { executeTool } from "../tools/executor";
-import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "../intent";
-import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "../types";
+import { TOOL_CATEGORIES } from "./tools";
+import { executeTool } from "./tools/executor";
+import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent";
+import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./types";
 
 interface CustomerSearchResult {
   customer_id: string;

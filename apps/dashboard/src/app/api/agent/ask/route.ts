@@ -4,8 +4,7 @@ import { getOrCreateOrg } from "@/lib/server/org";
 import { handleApiError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { parseAgentAskBody } from "@/lib/agent/api/validation";
-import { buildContext, hashInstructionForLog } from "@/lib/agent/runner";
-import { answerComposerQuestion } from "@/lib/agent/composer-ask";
+import { buildContext, hashInstructionForLog, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
@@ -35,7 +34,7 @@ export async function POST(request: Request) {
 
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const ctx = await buildContext(threadId, org.id);
-    const result = await answerComposerQuestion(ctx, instruction, settings);
+    const result = await runAgent(ctx, instruction, undefined, settings, { readOnly: true });
 
     await createMessage({
       threadId,

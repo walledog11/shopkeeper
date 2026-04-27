@@ -31,16 +31,27 @@ Email (Postmark), Instagram DM (Meta OAuth), WhatsApp/SMS (Twilio), Shopify (OAu
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (team-via-WhatsApp).
 
 ## Agent (`apps/dashboard/src/lib/agent/`)
-- `runner.ts` — `buildContext()`, `planAgent()`, `runAgent()`
-- `tools.ts` — all tool definitions, `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`
-- `shopify-tools.ts`, `thread-tools.ts` — implementations
+- `context.ts` — `buildContext()` (loads thread, customer, recent messages, KB, recent orders)
+- `planner.ts` — `planAgent()` (generates plan with no side effects, caches in `Thread.cachedPlan`)
+- `run.ts` — `runAgent()` (executes approved plan or runs an instruction end-to-end)
+- `runner.ts` — barrel re-export for the above
+- `prompt.ts` — system prompt builder
+- `intent.ts` — operator-channel intent classification + tool subset selection
+- `composer-ask.ts` — read-only "ask the agent about this thread" mode
+- `order-status-fast-path.ts` — bypasses LLM for "where is X's order?" in operator channels
+- `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
+- `tools/registry.ts` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
+- `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
+- `tools/thread.ts`, `shopify/*.ts` — implementations
 - `settings.ts` — defaults + resolver. Settings live in `Organization.settings` JSON.
+- `api/*` — glue between Next.js routes and the agent core (auth, validation, plan-cache, action-log, sessions)
 
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in Internal tab.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and WhatsApp via `sms_agent`.
+- **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Filters tools to `read` category; never mutates anything.
 
-Read tool list and exact behavior from `tools.ts` — do not infer.
+Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 
 `Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `alwaysDraftReply`, `defaultInstruction`, `requireApprovalForActions`, `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
 

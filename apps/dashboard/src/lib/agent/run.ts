@@ -4,18 +4,26 @@ import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { OrgSettings, RawToolCall } from "@/types";
 import { resolveAgentSettings } from "./settings";
-import { TOOL_CATEGORIES } from "./tools";
-import { buildSystemPrompt } from "./prompt";
+import { TOOL_CATEGORIES, selectAgentTools } from "./tools";
+import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
-import { toAnthropicTools } from "./tools/adapter";
 import { executeTool } from "./tools/executor";
 import { buildMessageHistory } from "./message-history";
-import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./fast-paths/order-status";
+import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentContext, AgentResult } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 
 const DEFAULT_MAX_ITERATIONS = 10;
+const READ_ONLY_MAX_ITERATIONS = 4;
 const TOKEN_BUDGET = 20_000;
+
+const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES)
+  .filter(([, category]) => category === "read")
+  .map(([name]) => name);
+
+export interface RunAgentOptions {
+  readOnly?: boolean;
+}
 
 function inputKeys(input: unknown): string[] {
   return input && typeof input === "object" ? Object.keys(input) : [];
@@ -40,14 +48,18 @@ export async function runAgent(
   ctx: AgentContext,
   instruction: string,
   approvedToolCalls?: RawToolCall[],
-  settings?: OrgSettings
+  settings?: OrgSettings,
+  options?: RunAgentOptions,
 ): Promise<AgentResult> {
   const startedAt = Date.now();
   const usageTotals = createModelUsageMetrics();
   const executedToolCalls: string[] = [];
   const instructionHash = hashInstructionForLog(instruction);
   const s = resolveAgentSettings(settings);
-  const maxIterations = s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS;
+  const readOnly = options?.readOnly ?? false;
+  const maxIterations = readOnly
+    ? READ_ONLY_MAX_ITERATIONS
+    : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
   const actionsPerformed: ActionEntry[] = [];
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
 
@@ -57,6 +69,7 @@ export async function runAgent(
       threadId: ctx.thread.id,
       channelType: ctx.thread.channelType,
       outcome,
+      readOnly,
       durationMs: Date.now() - startedAt,
       modelCalls: usageTotals.modelCalls,
       usageTotals,
@@ -80,7 +93,9 @@ export async function runAgent(
     }, "[agent] tool call");
 
     let result: string;
-    if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
+    if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
+      result = `Error: ${toolCall.name} is not available in private ask mode.`;
+    } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
       result = "Error: skipped status update because send_reply failed.";
     } else {
       try {
@@ -119,7 +134,7 @@ export async function runAgent(
     return results;
   };
 
-  if (!approvedToolCalls?.length) {
+  if (!readOnly && !approvedToolCalls?.length) {
     const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
     if (fastResult) {
       logger.info({ actionCount: fastResult.actionsPerformed.length }, "[agent] fast order-status result");
@@ -128,7 +143,7 @@ export async function runAgent(
     }
   }
 
-  if (approvedToolCalls && approvedToolCalls.length > 0) {
+  if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
     const executableToolCalls = ctx.thread.channelType === "dashboard_agent"
       ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
       : approvedToolCalls;
@@ -148,21 +163,28 @@ export async function runAgent(
     }, ctx.thread.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
   }
 
-  const history = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
-  const messages = buildMessageHistory(history, instruction);
-  const tools = toAnthropicTools(settings, selectToolNamesForInstruction(ctx, instruction));
-  const systemPrompt = buildSystemPrompt(ctx, settings);
+  const history = operatorMode || readOnly ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  const messageInstruction = readOnly
+    ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
+    : instruction;
+  const messages = buildMessageHistory(history, messageInstruction);
+  const tools = readOnly
+    ? selectAgentTools(settings, READ_TOOL_NAMES)
+    : selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
+  const systemPrompt = readOnly
+    ? buildComposerAskPrompt(ctx, settings)
+    : buildSystemPrompt(ctx, settings);
 
   for (let i = 0; i < maxIterations; i += 1) {
-    logger.info({ iteration: i, messageCount: messages.length }, "[agent] iteration start");
+    logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
 
     const response = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 4096,
+      max_tokens: readOnly ? 2048 : 4096,
       system: systemPrompt,
       messages,
       tools,
-      ...(operatorMode && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {}),
+      ...(operatorMode && !readOnly && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {}),
     });
 
     const toolUseBlocks = response.content.filter(
@@ -180,10 +202,15 @@ export async function runAgent(
     messages.push({ role: "assistant", content: response.content });
 
     if (response.stop_reason === "max_tokens") {
-      return finish({ summary: "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.", actionsPerformed }, "max_tokens");
+      return finish({
+        summary: readOnly
+          ? "The answer was cut off because the request was too large. Try asking a more specific question."
+          : "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.",
+        actionsPerformed,
+      }, "max_tokens");
     }
 
-    if (usageTotals.totalTokens >= TOKEN_BUDGET) {
+    if (!readOnly && usageTotals.totalTokens >= TOKEN_BUDGET) {
       return finish({ summary: "Agent stopped - this request required too many steps. Please try a more specific instruction.", actionsPerformed }, "token_budget");
     }
 
@@ -191,7 +218,12 @@ export async function runAgent(
       const textBlock = response.content.find(
         (b): b is Anthropic.TextBlock => b.type === "text"
       );
-      return finish({ summary: textBlock?.text ?? "Done.", actionsPerformed }, "end_turn");
+      return finish({
+        summary: readOnly
+          ? (textBlock?.text?.trim() || "I do not have enough information to answer that.")
+          : (textBlock?.text ?? "Done."),
+        actionsPerformed,
+      }, "end_turn");
     }
 
     const toolResults = await executeToolCalls(toolUseBlocks);
@@ -199,7 +231,9 @@ export async function runAgent(
   }
 
   return finish({
-    summary: "Reached maximum steps without completing the task.",
+    summary: readOnly
+      ? "I could not finish answering that. Try asking a narrower question."
+      : "Reached maximum steps without completing the task.",
     actionsPerformed,
   }, "max_iterations");
 }
