@@ -50,7 +50,7 @@ export default function ConciergeBriefing({
     narrative = (
       <>
         Nothing auto-resolved since yesterday, but{' '}
-        <span className="px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 font-semibold tabular-nums">{needsYouCount}</span>
+        <span className="px-1.5 py-0.5 rounded bg-blue-400/15 text-blue-300 font-semibold tabular-nums">{needsYouCount}</span>
         {' '}ticket{needsYouCount === 1 ? '' : 's'} need your eye.
       </>
     )
@@ -58,13 +58,13 @@ export default function ConciergeBriefing({
     narrative = (
       <>
         Overnight I cleared{' '}
-        <span className="px-1.5 py-0.5 rounded bg-green-400/15 text-green-300 font-semibold tabular-nums">{overnightClearedCount}</span>
+        <span className="px-1.5 py-0.5 rounded bg-green-400/15 text-blue-300 font-semibold tabular-nums">{overnightClearedCount}</span>
         {' '}ticket{overnightClearedCount === 1 ? '' : 's'}
         {channelText && <> across {channelText}</>}.
         {needsYouCount > 0 && (
           <>
             {' '}
-            <span className="px-1.5 py-0.5 rounded bg-amber-400/15 text-amber-300 font-semibold tabular-nums">{needsYouCount}</span>
+            <span className="px-1.5 py-0.5 rounded bg-blue-400/15 text-blue-300 font-semibold tabular-nums">{needsYouCount}</span>
             {' '}need{needsYouCount === 1 ? 's' : ''} your eye.
           </>
         )}
@@ -73,11 +73,11 @@ export default function ConciergeBriefing({
   }
 
   return (
-    <Card className="relative bg-card border-border rounded-xl overflow-hidden noise-texture shadow-[0_24px_80px_-52px_rgba(74,222,128,0.42)]">
+    <Card className="relative bg-card border-border rounded-xl overflow-hidden noise-texture">
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(255,255,255,0.045),transparent_46%)]" />
-      <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-[320px] h-[200px] rounded-full opacity-[0.06] pointer-events-none" style={{ background: "radial-gradient(ellipse at center, #4ade80 0%, transparent 70%)" }} />
-      <div className="absolute -right-20 -top-24 h-56 w-56 rounded-full bg-green-400/[0.10] blur-3xl pointer-events-none" />
-      <div className="absolute right-0 top-0 h-px w-2/3 bg-gradient-to-l from-green-300/35 to-transparent pointer-events-none" />
+      <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-[320px] h-[200px] rounded-full opacity-[0.06] pointer-events-none" />
+      <div className="absolute -right-20 -top-24 h-56 w-56 rounded-full bg-blue-400/[0.10] blur-3xl pointer-events-none" />
+      <div className="absolute right-0 top-0 h-px w-2/3 bg-gradient-to-l from-blue-300/35 to-transparent pointer-events-none" />
       <GridPattern
         width={34}
         height={34}
@@ -90,14 +90,14 @@ export default function ConciergeBriefing({
           [8, 3],
           [12, 4],
         ]}
-        className="stroke-green-300/[0.13] fill-green-300/[0.055] [mask-image:radial-gradient(340px_circle_at_85%_18%,white,transparent)]"
+        className="stroke-blue-300/[0.13] fill-blue-300/[0.055] [mask-image:radial-gradient(340px_circle_at_85%_18%,white,transparent)]"
       />
 
       <div className="relative px-6 pt-5 pb-5">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-green-400/15 border border-green-400/25 flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5 text-green-400" />
+            <div className="w-6 h-6 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 border border-blue-800 flex items-center justify-center">
+              <Sparkles className="w-3.5 h-3.5 text-blue-800" />
             </div>
             <span className="text-[11px] uppercase tracking-wider font-semibold text-white/45">
               Daily briefing

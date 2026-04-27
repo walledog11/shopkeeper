@@ -125,9 +125,9 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
           )}
 
           {item.kind === "quick_reply" && item.replyText ? (
-            <div className="px-2.5 py-2 rounded-md bg-green-400/[0.06] border border-green-400/[0.12]">
+            <div className="px-2.5 py-2 rounded-md bg-gradient-to-r from-sky-600/[0.1] to-sky-400/[0.1] border border-blue-400/[0.12]">
               <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80" />
+                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-sky-400/80" />
                 <span>
                   <span className="font-semibold text-white/85">{agentName} drafted: </span>
                   <span className="text-white/80">{item.replyText}</span>
@@ -137,7 +137,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
           ) : (
             <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
               <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80" />
+                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80 " />
                 <span>
                   <span className="font-semibold text-white/85">{agentName} proposes: </span>
                   <span className="text-white/80">{item.proposalSummary}</span>
@@ -161,26 +161,26 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
                 type="button"
                 onClick={approveQuickReply}
                 disabled={isApproving}
-                className="inline-flex items-center justify-center gap-1.5 text-center text-[11px] font-semibold px-3 py-1.5 rounded-md bg-green-400 hover:bg-green-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-center text-[11px] font-semibold px-3 md:py-3 py-6 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 hover:bg-sky-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
               >
                 {isApproving && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
                 {isApproving ? "Sending" : "Approve & send"}
               </button>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
+                className="text-center text-[11px] font-semibold px-3 md:py-3 py-6 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
               >
                 Edit
               </Link>
             </>
           ) : (
             <>
-              <div className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md border border-white/[0.08] text-white/40">
+              <div className="text-center text-[11px] font-semibold px-3 md:py-3 py-6 rounded-md border border-white/[0.08] text-white/40">
                 Requires review
               </div>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center text-[11px] font-semibold px-3 py-1.5 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
+                className="text-center text-[11px] font-semibold px-3 md:py-3 py-6 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
               >
                 Review decision
               </Link>
