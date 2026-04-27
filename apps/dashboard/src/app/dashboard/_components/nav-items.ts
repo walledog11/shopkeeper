@@ -1,4 +1,4 @@
-import { Inbox, BarChart2, Users, Bot, Settings, BookOpen, UserCircle, MessageSquare, MessageCircle, NotebookTabs, Box, ShoppingBasket, ClipboardMinus, Cable, MessageSquareDashed, BrainCircuit, IdCardLanyard, MessageSquareCode, Activity, Home } from "lucide-react";
+import { Inbox, BarChart2, Users, Bot, Settings, BookOpen, UserCircle, MessageSquare, MessageCircle, NotebookTabs, Box, ShoppingBasket, ClipboardMinus, Cable, MessageSquareDashed, BrainCircuit, IdCardLanyard, MessageSquareCode, Activity, Home, Play } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -32,7 +32,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { name: "Concierge", href: "/dashboard/agent", icon: Bot },
       { name: "Memory", href: "/dashboard/kb", icon: BrainCircuit },
-      { name: "Playbooks", href: "/dashboard/playbooks", icon: BookOpen },
+      { name: "Playbooks", href: "/dashboard/playbooks", icon: Play },
     ],
   },
   {

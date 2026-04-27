@@ -445,9 +445,9 @@ function CollectionRow({
           type="button"
           onClick={onDelete}
           aria-label={`Delete ${label}`}
-          className="mr-2 opacity-0 group-hover:opacity-100 text-white/30 hover:text-red-400 transition-opacity focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/70"
+          className="flex items-center justify-center shrink-0 w-0 opacity-0 overflow-hidden text-white/30 hover:text-red-400 transition-all duration-200 group-hover:w-7 group-hover:opacity-100 focus-visible:w-7 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/70"
         >
-          <X className="w-3 h-3" />
+          <X className="w-3 h-3 shrink-0" />
         </button>
       )}
     </div>

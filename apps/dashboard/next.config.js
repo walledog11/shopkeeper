@@ -16,6 +16,7 @@ const nextConfig = {
   turbopack: {
     root: path.resolve(__dirname, '../..'),
   },
+  serverExternalPackages: ['stripe'],
   transpilePackages: ['@clerk/db'],
   images: {
     dangerouslyAllowSVG: true,

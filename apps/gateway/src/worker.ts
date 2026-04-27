@@ -9,7 +9,7 @@ import { CHANNEL } from './constants.js';
 import type { InboundJobData, AiSummaryJobData } from './types.js';
 import { validateGatewayEnv } from './env.js';
 import { writeWorkerHeartbeat } from './health.js';
-import { handleIgDmJob, handleEmailJob, handleShopifyJob, generateThreadIntelligence, sendWhatsAppPlanNotification, isWithinBusinessHours, sendAutoAck, resolveBusinessHoursSettings } from './message-handlers.js';
+import { handleIgDmJob, handleEmailJob, handleShopifyJob, generateThreadIntelligence, sendWhatsAppPlanNotification, precomputeThreadPlan, isWithinBusinessHours, sendAutoAck, resolveBusinessHoursSettings } from './message-handlers.js';
 import { createMaintenanceWorkers } from './maintenance-workers.js';
 import { loadGatewayEnv } from './load-env.js';
 import { getGatewayWorkerRedisConfig } from './runtime-config.js';
@@ -96,20 +96,35 @@ export async function startWorkerRuntime() {
     logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
     const updatedThread = await generateThreadIntelligence(threadId);
 
-    // Check business hours before deciding whether to send a plan notification or an auto-ack
     const org = await db.organization.findUnique({
       where: { id: organizationId },
       select: { settings: true },
     });
-    const bizSettings = resolveBusinessHoursSettings((org?.settings ?? {}) as Record<string, unknown>);
+    const rawSettings = (org?.settings ?? {}) as Record<string, unknown>;
 
-    if (!isWithinBusinessHours(bizSettings)) {
+    const planPromise = precomputeThreadPlan(organizationId, threadId, rawSettings);
+
+    if (!isWithinBusinessHours(resolveBusinessHoursSettings(rawSettings))) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — sending auto-ack');
-      await sendAutoAck(organizationId, threadId);
+      await Promise.all([planPromise, sendAutoAck(organizationId, threadId)]);
       return;
     }
 
-    await sendWhatsAppPlanNotification(organizationId, threadId, customerName, channelType, updatedThread?.aiSummary ?? null);
+    const planResult = await planPromise;
+    if (!planResult) {
+      logger.info({ threadId, organizationId }, '[AISummary] No plan precomputed — skipping WhatsApp notification');
+      return;
+    }
+
+    await sendWhatsAppPlanNotification(
+      organizationId,
+      threadId,
+      customerName,
+      channelType,
+      updatedThread?.aiSummary ?? null,
+      planResult.plan,
+      planResult.instruction,
+    );
   }, workerOptions);
 
   aiSummaryWorker.on('failed', (job, err) => {

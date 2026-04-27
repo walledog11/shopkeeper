@@ -308,14 +308,25 @@ function formatPlanMessage(customerName: string | null, channelType: DbChannelTy
   return lines.filter((l): l is string => l !== null).join('\n');
 }
 
-export async function sendWhatsAppPlanNotification(
+export async function precomputeThreadPlan(
   organizationId: string,
   threadId: string,
-  customerName: string | null,
-  channelType: DbChannelType,
-  aiSummary: string | null
-): Promise<void> {
+  settings: Record<string, unknown>,
+): Promise<{ plan: AgentPlan; instruction: string } | null> {
+  if (settings.autoPlanOnOpen === false) {
+    logger.info({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — skipping plan precompute');
+    return null;
+  }
+
   try {
+    const thread = await db.thread.findUnique({
+      where: { id: threadId },
+      select: { status: true },
+    });
+    if (!thread || thread.status !== STATUS.OPEN) {
+      return null;
+    }
+
     const planRes = await fetch(`${getGatewayDashboardUrl()}/api/agent/plan-internal`, {
       method: 'POST',
       headers: {
@@ -326,17 +337,31 @@ export async function sendWhatsAppPlanNotification(
     });
 
     if (!planRes.ok) {
-      logger.warn({ status: planRes.status, threadId }, '[Worker] plan-internal failed — skipping WhatsApp notification');
-      return;
+      logger.warn({ status: planRes.status, threadId }, '[Worker] plan-internal failed during precompute');
+      return null;
     }
 
     const { plan, instruction } = await planRes.json() as { plan: AgentPlan | null; instruction: string };
-
     if (!plan || !plan.steps || plan.steps.length === 0) {
-      logger.info({ threadId }, '[Worker] No plan steps — skipping notification');
-      return;
+      return null;
     }
+    return { plan, instruction };
+  } catch (err) {
+    logger.error({ err: (err as Error).message, threadId }, '[Worker] precomputeThreadPlan error');
+    return null;
+  }
+}
 
+export async function sendWhatsAppPlanNotification(
+  organizationId: string,
+  threadId: string,
+  customerName: string | null,
+  channelType: DbChannelType,
+  aiSummary: string | null,
+  plan: AgentPlan,
+  instruction: string,
+): Promise<void> {
+  try {
     const twilioInstance = getTwilio();
     if (!twilioInstance) {
       logger.warn('[Worker] Twilio env vars not set — skipping WhatsApp notification');
