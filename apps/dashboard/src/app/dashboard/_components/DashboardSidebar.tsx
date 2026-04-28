@@ -323,7 +323,7 @@ function NavGroupList({
                       isActive ? "bg-white/[0.12] text-white font-medium" : "text-gray-400 hover:text-white hover:bg-white/[0.06]",
                     )}
                   >
-                    <item.icon className="w-[18px] h-[18px] shrink-0" />
+                    <item.icon className="w-[16px] h-[18px] shrink-0" />
                     <span className="text-sm">{item.name}</span>
                     {item.badge && (
                       <OpenCountBadge
@@ -361,10 +361,10 @@ function NavGroupList({
                   <SidebarMenuButton
                     asChild
                     isActive={isActive}
-                    className="rounded-md h-auto py-1 px-3 text-sm font-medium leading-snug text-gray-400 hover:text-white hover:bg-white/[0.05] data-[active=true]:bg-white/[0.06] data-[active=true]:text-white data-[active=true]:font-semibold"
+                    className="rounded-md h-auto py-1 px-3 text-sm font-light leading-snug text-white/60 hover:text-white hover:bg-white/[0.05] data-[active=true]:bg-white/[0.06] data-[active=true]:text-white data-[active=true]:font-medium"
                   >
                     <Link href={item.href} onClick={(e) => onNavigate(e, isActive)}>
-                      <item.icon className="w-[10px] h-[10px] shrink-0" />
+                      <item.icon className="w-[10px] h-[10px] shrink-0 stroke-1 mr-1" />
                       <span>{item.name}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -631,19 +631,6 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
           <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar">
             <Logo />
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={toggleAgent}
-                aria-label="Toggle AI Agent"
-                className={cn(
-                  "p-2 rounded-md transition-colors",
-                  isAgentOpen
-                    ? "text-green-400 bg-green-400/15"
-                    : "text-green-400/70 hover:text-green-400 hover:bg-green-400/10",
-                )}
-              >
-                <Bot className="w-5 h-5" />
-              </button>
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
