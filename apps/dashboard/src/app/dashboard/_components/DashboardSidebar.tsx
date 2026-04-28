@@ -320,10 +320,10 @@ function NavGroupList({
                     onClick={(e) => onNavigate(e, isActive)}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2 rounded-lg transition-colors",
-                      isActive ? "bg-white/[0.12] text-white font-medium" : "text-gray-400 hover:text-white hover:bg-white/[0.06]",
+                      isActive ? "bg-white/[0.12] text-white font-medium" : "text-white/60 hover:text-white hover:bg-white/[0.06]",
                     )}
                   >
-                    <item.icon className="w-[16px] h-[18px] shrink-0" />
+                    <item.icon className="w-[16px] h-[18px] shrink-0 mr-1 stroke-1" />
                     <span className="text-sm">{item.name}</span>
                     {item.badge && (
                       <OpenCountBadge
@@ -533,7 +533,7 @@ function MobileNavSheet({
       >
         <SheetTitle className="sr-only">Navigation</SheetTitle>
 
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.08] shrink-0">
+        <div className="sticky top-0 z-50 flex bg-black items-center gap-2 px-3 py-2 border-b border-white/[0.08] shrink-0">
           <div className="flex-1 min-w-0">
             <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="mobileCompact" />
           </div>
@@ -551,8 +551,8 @@ function MobileNavSheet({
           <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="mobile" />
         </div>
 
-        <div className="border-t border-white/[0.08] px-3 py-3">
-          <div className="flex items-center gap-1">
+        <div className="sticky bottom-0 bg-black w-full border-t border-white/[0.08] px-3 py-2">
+          <div className="flex items-center gap-1 ">
             <UserMenu navAuth={navAuth} variant="mobile" />
             <FooterLinks pathname={pathname} onNavigate={handleNavClick} variant="mobile" />
           </div>
