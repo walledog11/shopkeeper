@@ -529,7 +529,7 @@ function MobileNavSheet({
       <SheetContent
         side="top"
         showCloseButton={false}
-        className="bg-black border-b border-white/[0.08] p-0 max-h-[85dvh] overflow-y-auto"
+        className="bg-black border-b border-white/[0.08] p-0 max-h-[90dvh] overflow-y-auto"
       >
         <SheetTitle className="sr-only">Navigation</SheetTitle>
 
@@ -547,7 +547,7 @@ function MobileNavSheet({
           </button>
         </div>
 
-        <div className="px-3 py-3">
+        <div className="px-3 py-2">
           <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="mobile" />
         </div>
 
