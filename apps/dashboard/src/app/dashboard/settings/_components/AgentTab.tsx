@@ -66,6 +66,7 @@ export default function AgentTab({ settings }: Props) {
   const [businessHoursDays, setBusinessHoursDays] = useState<string[]>(settings.businessHoursDays)
   const [businessHoursTimezoneOffset, setBusinessHoursTimezoneOffset] = useState<string>(String(settings.businessHoursTimezoneOffset))
   const [autoAckMessage, setAutoAckMessage] = useState(settings.autoAckMessage)
+  const [spamFilterEnabled, setSpamFilterEnabled] = useState(settings.spamFilterEnabled ?? true)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +114,7 @@ export default function AgentTab({ settings }: Props) {
             businessHoursDays,
             businessHoursTimezoneOffset: Math.min(14, Math.max(-12, businessHoursTimezoneOffset.trim() === '' ? 0 : parseInt(businessHoursTimezoneOffset, 10))),
             autoAckMessage,
+            spamFilterEnabled,
           },
         }),
       })
@@ -523,6 +525,15 @@ export default function AgentTab({ settings }: Props) {
             </>
           )}
         </div>
+      </SectionCard>
+
+      <SectionCard title="Spam Filter" description="Automatically classify inbound emails. Filtered ones are hidden from your inbox and purged after 7 days unless you recover them.">
+        <ToggleRow
+          label="Filter spam emails"
+          description="When off, every email lands in your inbox as a normal ticket."
+          checked={spamFilterEnabled}
+          onChange={setSpamFilterEnabled}
+        />
       </SectionCard>
 
       <div className="flex items-center justify-end gap-3 pt-1">

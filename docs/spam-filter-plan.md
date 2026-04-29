@@ -144,39 +144,39 @@ Coverage:
 
 Each phase is a coherent unit that can be shipped, reviewed, and merged on its own. Tests are part of the phase that introduces the behavior.
 
-### Phase 1 — Foundation
+### Phase 1 — Foundation ✅
 
-- [ ] Add `ThreadFilterStatus` enum to `schema.prisma`.
-- [ ] Add `ThreadFilterFeedback` enum to `schema.prisma`.
-- [ ] Add `filterStatus`, `filterReason`, `filterDecidedAt`, `filterFeedback` columns to `Thread`.
-- [ ] Add `@@index([organizationId, filterStatus, filterDecidedAt])`.
-- [ ] Update `Organization.settings` TypeScript shape to include `spamFilterEnabled?: boolean`.
-- [ ] Generate and apply Prisma migration.
+- [x] Add `ThreadFilterStatus` enum to `schema.prisma`.
+- [x] Add `ThreadFilterFeedback` enum to `schema.prisma`.
+- [x] Add `filterStatus`, `filterReason`, `filterDecidedAt`, `filterFeedback` columns to `Thread`.
+- [x] Add `@@index([organizationId, filterStatus, filterDecidedAt])`.
+- [x] Update `Organization.settings` TypeScript shape to include `spamFilterEnabled?: boolean`.
+- [x] Generate and apply Prisma migration.
 
-### Phase 2 — Classification core (gateway)
+### Phase 2 — Classification core (gateway) ✅
 
-- [ ] Delete `isCustomerSupportMessage` and its caller in `handleEmailJob`.
-- [ ] Rewrite `generateThreadIntelligence` prompt to return `{summary, tag, classification, reason}`.
-- [ ] Add `classifyAndSummarizeNewEmail` helper for pre-persistence path.
-- [ ] Add `processInboundMessage`'s optional `precomputed` parameter; skip summary enqueue for the email path when supplied.
-- [ ] Wire `handleEmailJob` to: open-thread bypass → existing-customer bypass → classifier → persist with all filter columns set inline.
-- [ ] Honor `Organization.settings.spamFilterEnabled === false` (treat every email as genuine).
-- [ ] Gate `sendWhatsAppPlanNotification` (`worker.ts:119`) on `filterStatus === 'genuine'`.
-- [ ] Gate `precomputeThreadPlan` to skip when `filterStatus === 'questionable'` or `'filtered'`.
-- [ ] Gate `triggerPlaybooks` to skip when `filterStatus === 'filtered'`.
-- [ ] Tests: bucket assignment, existing-customer bypass, kill switch, reply on existing thread skips classifier.
+- [x] Delete `isCustomerSupportMessage` and its caller in `handleEmailJob`.
+- [x] Rewrite `generateThreadIntelligence` prompt to return `{summary, tag, classification, reason}`.
+- [x] Add `classifyAndSummarizeNewEmail` helper for pre-persistence path.
+- [x] Add `processInboundMessage`'s optional `precomputed` parameter; skip summary enqueue for the email path when supplied.
+- [x] Wire `handleEmailJob` to: open-thread bypass → existing-customer bypass → classifier → persist with all filter columns set inline.
+- [x] Honor `Organization.settings.spamFilterEnabled === false` (treat every email as genuine).
+- [x] Gate `sendWhatsAppPlanNotification` (`worker.ts:119`) on `filterStatus === 'genuine'`.
+- [x] Gate `precomputeThreadPlan` to skip when `filterStatus === 'questionable'` or `'filtered'`.
+- [x] Gate `triggerPlaybooks` to skip when `filterStatus === 'filtered'`.
+- [x] Tests: bucket assignment, existing-customer bypass, kill switch, reply on existing thread skips classifier.
 
-### Phase 3 — Dashboard surface (inbox + settings)
+### Phase 3 — Dashboard surface (inbox + settings) ✅
 
-- [ ] `GET /api/threads`: default list excludes `filterStatus = filtered`; accept `?filterStatus=filtered`.
-- [ ] `ThreadListHeader.tsx`: add **Filtered** pill alongside existing status pills.
-- [ ] `TicketRow.tsx`: render "Flagged" badge when `filterStatus === 'questionable'`; hover tooltip shows `filterReason`.
-- [ ] Row action: **Mark as spam** (sets `filterStatus = filtered`, `filterFeedback = confirmed_spam`).
-- [ ] Row action in Filtered view: **Recover** (sets `filterStatus = genuine`, `filterFeedback = confirmed_genuine`).
-- [ ] `POST /api/messages`: on outbound dispatch, write `confirmed_genuine` and promote `filtered → genuine` if applicable.
-- [ ] `PATCH /api/threads/[id]`: on close, write `confirmed_genuine` if previously `questionable`.
-- [ ] Settings page: add "Filter spam emails" toggle bound to `Organization.settings.spamFilterEnabled`.
-- [ ] Tests: feedback writes on reply / close / mark-spam / recover; threads API filter param.
+- [x] `GET /api/threads`: default list excludes `filterStatus = filtered`; accept `?filterStatus=filtered`.
+- [x] `ThreadListHeader.tsx`: add **Filtered** pill alongside existing status pills.
+- [x] `TicketRow.tsx`: render "Flagged" badge when `filterStatus === 'questionable'`; hover tooltip shows `filterReason`.
+- [x] Row action: **Mark as spam** (sets `filterStatus = filtered`, `filterFeedback = confirmed_spam`).
+- [x] Row action in Filtered view: **Recover** (sets `filterStatus = genuine`, `filterFeedback = confirmed_genuine`).
+- [x] `POST /api/messages`: on outbound dispatch, write `confirmed_genuine` and promote `filtered → genuine` if applicable.
+- [x] `PATCH /api/threads/[id]`: on close, write `confirmed_genuine` if previously `questionable`.
+- [x] Settings page: add "Filter spam emails" toggle bound to `Organization.settings.spamFilterEnabled`.
+- [x] Tests: feedback writes on reply / close / mark-spam / recover; threads API filter param.
 
 ### Phase 4 — Daily digest (gateway)
 

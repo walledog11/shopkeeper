@@ -25,13 +25,15 @@ export function usePaginatedThreads(
   status: "open" | "closed" = "open",
   initialData?: Thread[],
   preview = false,
+  filterStatus?: "filtered",
 ) {
   const isVisible = useIsDocumentVisible();
   const baseInterval = status === "open" ? 15000 : 60000;
 
   const getKey = (pageIndex: number, previousPageData: ThreadsPage | null) => {
     if (previousPageData && !previousPageData.nextCursor) return null;
-    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}`;
+    const filterParam = filterStatus ? `&filterStatus=${filterStatus}` : "";
+    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}`;
     if (pageIndex === 0) return base;
     return `${base}&cursor=${previousPageData!.nextCursor}`;
   };

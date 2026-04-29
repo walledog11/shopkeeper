@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, Prisma } from '@clerk/db';
+import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError } from '@/lib/api/errors';
 import { THREAD_STATUS } from '@/lib/messaging/thread-constants';
@@ -13,24 +13,38 @@ export async function PATCH(
     const org = await getOrCreateOrg();
     const { id } = await params;
     const body = await request.json();
-    const { status, tag, shopifyCustomerId } = body;
+    const { status, tag, shopifyCustomerId, filterStatus, filterFeedback } = body;
 
-    if (!status && tag === undefined && shopifyCustomerId === undefined) {
-      return NextResponse.json({ error: 'Missing status, tag, or shopifyCustomerId' }, { status: 400 });
+    if (!status && tag === undefined && shopifyCustomerId === undefined && filterStatus === undefined && filterFeedback === undefined) {
+      return NextResponse.json({ error: 'Missing status, tag, shopifyCustomerId, filterStatus, or filterFeedback' }, { status: 400 });
     }
 
     if (status && !Object.values(THREAD_STATUS).includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    if (filterStatus !== undefined && !(filterStatus in ThreadFilterStatus)) {
+      return NextResponse.json({ error: 'Invalid filterStatus' }, { status: 400 });
+    }
+
+    if (filterFeedback !== undefined && !(filterFeedback in ThreadFilterFeedback)) {
+      return NextResponse.json({ error: 'Invalid filterFeedback' }, { status: 400 });
+    }
+
     const thread = await db.thread.findUnique({
       where: { id },
-      select: { organizationId: true },
+      select: { organizationId: true, filterStatus: true },
     });
 
     if (!thread || thread.organizationId !== org.id) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
+
+    // Closing a questionable thread implies the merchant treated it as legit.
+    const resolvedFeedback = filterFeedback
+      ?? (status === THREAD_STATUS.CLOSED && thread.filterStatus === ThreadFilterStatus.questionable
+            ? ThreadFilterFeedback.confirmed_genuine
+            : undefined);
 
     const updated = await db.thread.update({
       where: { id },
@@ -38,6 +52,8 @@ export async function PATCH(
         ...(status && { status, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null }),
         ...(tag !== undefined && { tag: tag || null }),
         ...(shopifyCustomerId !== undefined && { shopifyCustomerId: shopifyCustomerId || null }),
+        ...(filterStatus !== undefined && { filterStatus }),
+        ...(resolvedFeedback !== undefined && { filterFeedback: resolvedFeedback }),
       },
     });
 

@@ -5,13 +5,15 @@ import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 interface UseTicketActionsProps {
   activeTicketId: string | null
-  activeTab: 'open' | 'closed'
+  activeTab: 'open' | 'closed' | 'filtered'
   dbThreads: Thread[]
   openThreads: Thread[]
   closedThreads: Thread[]
+  filteredThreads: Thread[]
   mutateOpen: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
   mutateClosed: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
-  setActiveTab: (tab: 'open' | 'closed') => void
+  mutateFiltered: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
+  setActiveTab: (tab: 'open' | 'closed' | 'filtered') => void
   setActiveTicketId: (id: string | null) => void
   setSelectedIds: (ids: string[]) => void
 }
@@ -22,8 +24,10 @@ export function useTicketActions({
   dbThreads,
   openThreads,
   closedThreads,
+  filteredThreads,
   mutateOpen,
   mutateClosed,
+  mutateFiltered,
   setActiveTab,
   setActiveTicketId,
   setSelectedIds,
@@ -41,13 +45,13 @@ export function useTicketActions({
   }, [])
 
   const getMutate = useCallback(
-    () => activeTab === 'open' ? mutateOpen : mutateClosed,
-    [activeTab, mutateOpen, mutateClosed]
+    () => activeTab === 'open' ? mutateOpen : activeTab === 'closed' ? mutateClosed : mutateFiltered,
+    [activeTab, mutateOpen, mutateClosed, mutateFiltered]
   )
 
   const getCurrentThreads = useCallback(
-    () => activeTab === 'open' ? openThreads : closedThreads,
-    [activeTab, openThreads, closedThreads]
+    () => activeTab === 'open' ? openThreads : activeTab === 'closed' ? closedThreads : filteredThreads,
+    [activeTab, openThreads, closedThreads, filteredThreads]
   )
 
   const handleSendMessage = useCallback(async (noteMode: boolean) => {
@@ -94,6 +98,12 @@ export function useTicketActions({
     }
   }, [replyText, activeTicketId, getMutate, getCurrentThreads])
 
+  const refreshAllLists = useCallback(() => {
+    mutateOpen()
+    mutateClosed()
+    mutateFiltered()
+  }, [mutateOpen, mutateClosed, mutateFiltered])
+
   const handleResolve = useCallback(async () => {
     if (!activeTicketId) return
     const resolvedId = activeTicketId
@@ -104,14 +114,13 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'closed' }),
       })
-      mutateOpen()
-      mutateClosed()
+      refreshAllLists()
       setActiveTab('closed')
       showToast('Ticket resolved')
     } catch (err) {
       console.error('Failed to resolve ticket', err)
     }
-  }, [activeTicketId, mutateOpen, mutateClosed, setActiveTab, setActiveTicketId, showToast])
+  }, [activeTicketId, refreshAllLists, setActiveTab, setActiveTicketId, showToast])
 
   const handleReopen = useCallback(async () => {
     if (!activeTicketId) return
@@ -123,14 +132,13 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'open' }),
       })
-      mutateOpen()
-      mutateClosed()
+      refreshAllLists()
       setActiveTab('open')
       showToast('Ticket reopened')
     } catch (err) {
       console.error('Failed to reopen ticket', err)
     }
-  }, [activeTicketId, mutateOpen, mutateClosed, setActiveTab, setActiveTicketId, showToast])
+  }, [activeTicketId, refreshAllLists, setActiveTab, setActiveTicketId, showToast])
 
   const handleAiDraft = useCallback(async () => {
     if (!activeTicketId) return
@@ -222,14 +230,13 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'close' }),
       })
-      mutateOpen()
-      mutateClosed()
+      refreshAllLists()
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} closed`)
     } catch (err) {
       console.error('Bulk close failed', err)
     }
-  }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
+  }, [activeTicketId, refreshAllLists, setActiveTicketId, setSelectedIds, showToast])
 
   const handleBulkArchive = useCallback(async (selectedIds: string[]) => {
     if (selectedIds.length === 0) return
@@ -241,14 +248,43 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'archive' }),
       })
-      mutateOpen()
-      mutateClosed()
+      refreshAllLists()
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} archived`)
     } catch (err) {
       console.error('Bulk archive failed', err)
     }
-  }, [activeTicketId, mutateOpen, mutateClosed, setActiveTicketId, setSelectedIds, showToast])
+  }, [activeTicketId, refreshAllLists, setActiveTicketId, setSelectedIds, showToast])
+
+  const handleMarkAsSpam = useCallback(async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }),
+      })
+      refreshAllLists()
+      if (activeTicketId === threadId) setActiveTicketId(null)
+      showToast('Marked as spam')
+    } catch (err) {
+      console.error('Failed to mark as spam', err)
+    }
+  }, [activeTicketId, refreshAllLists, setActiveTicketId, showToast])
+
+  const handleRecover = useCallback(async (threadId: string) => {
+    try {
+      await fetch(`/api/threads/${threadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }),
+      })
+      refreshAllLists()
+      if (activeTicketId === threadId) setActiveTicketId(null)
+      showToast('Recovered to inbox')
+    } catch (err) {
+      console.error('Failed to recover thread', err)
+    }
+  }, [activeTicketId, refreshAllLists, setActiveTicketId, showToast])
 
   const handleBulkTag = useCallback(async (selectedIds: string[], tag: string) => {
     if (selectedIds.length === 0) return
@@ -260,13 +296,12 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'tag', tag }),
       })
-      mutateOpen()
-      mutateClosed()
+      refreshAllLists()
       showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)
     } catch (err) {
       console.error('Bulk tag failed', err)
     }
-  }, [mutateOpen, mutateClosed, setSelectedIds, showToast])
+  }, [refreshAllLists, setSelectedIds, showToast])
 
   return {
     replyText,
@@ -286,5 +321,7 @@ export function useTicketActions({
     handleBulkClose,
     handleBulkArchive,
     handleBulkTag,
+    handleMarkAsSpam,
+    handleRecover,
   }
 }

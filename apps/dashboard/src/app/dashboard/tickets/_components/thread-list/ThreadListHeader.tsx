@@ -83,6 +83,13 @@ export function ThreadListHeader({
               <span className={`w-1.5 h-1.5 rounded-full ${activeTab === "closed" ? "bg-green-400" : "bg-white/20"}`} />
               Closed
             </TabsTrigger>
+            <TabsTrigger
+              value="filtered"
+              className="flex-1 gap-1.5 py-1.5 h-auto text-xs font-semibold data-[state=active]:bg-white/[0.12] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${activeTab === "filtered" ? "bg-red-400" : "bg-white/20"}`} />
+              Filtered
+            </TabsTrigger>
           </TabsList>
         </Tabs>
       )}

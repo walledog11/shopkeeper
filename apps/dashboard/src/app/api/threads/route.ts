@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType } from '@clerk/db';
+import { db, SenderType, ThreadFilterStatus } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError } from '@/lib/api/errors';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     if (!rl.success) return tooManyRequests(rl.reset);
     const { searchParams } = new URL(request.url);
     const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
+    const filterStatusParam = searchParams.get('filterStatus');
     const preview = searchParams.get('preview') === 'true';
     const countOnly = searchParams.get('count') === 'true';
     const cursor = searchParams.get('cursor') ?? undefined;
@@ -26,6 +27,9 @@ export async function GET(request: Request) {
       channelType: { notIn: [CHANNEL_TYPE.SMS_AGENT, CHANNEL_TYPE.DASHBOARD_AGENT] },
       archivedAt: null,
       deletedAt: null,
+      filterStatus: filterStatusParam === ThreadFilterStatus.filtered
+        ? ThreadFilterStatus.filtered
+        : { not: ThreadFilterStatus.filtered },
     };
 
     if (countOnly) {

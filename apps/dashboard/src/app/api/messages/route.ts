@@ -46,6 +46,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
 
+    // Implicit-genuine feedback: replying to a non-genuine thread implies the merchant
+    // sees it as legit. Promote filtered → genuine; capture feedback either way.
+    if (thread.filterStatus !== 'genuine') {
+      await db.thread.update({
+        where: { id: threadId },
+        data: {
+          filterFeedback: 'confirmed_genuine',
+          ...(thread.filterStatus === 'filtered' && { filterStatus: 'genuine' }),
+        },
+      });
+    }
+
     const message = await db.message.findFirst({
       where: { threadId, senderType: SenderType.agent },
       orderBy: { sentAt: 'desc' },

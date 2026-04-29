@@ -30,7 +30,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const searchParams = useSearchParams()
 
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
-  const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open')
+  const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showContextDrawer, setShowContextDrawer] = useState(false)
@@ -42,12 +42,18 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads)
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed')
+  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, false, 'filtered')
   const isSearchMode = searchQuery.length >= 2
   const dbThreads = useMemo(
-    () => isSearchMode ? [] : (activeTab === 'open' ? openThreads : closedThreads),
-    [activeTab, closedThreads, isSearchMode, openThreads],
+    () => {
+      if (isSearchMode) return []
+      if (activeTab === 'open') return openThreads
+      if (activeTab === 'closed') return closedThreads
+      return filteredThreads
+    },
+    [activeTab, closedThreads, filteredThreads, isSearchMode, openThreads],
   )
-  const isLoading = activeTab === 'open' ? openLoading : closedLoading
+  const isLoading = activeTab === 'open' ? openLoading : activeTab === 'closed' ? closedLoading : filteredLoading
 
   const { data: searchData, isLoading: isSearchLoading, mutate: mutateSearch } = useSWR<{ threads: Thread[] }>(
     isSearchMode ? `/api/search?q=${encodeURIComponent(searchQuery)}` : null,
@@ -94,14 +100,17 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     handleSendMessage, handleResolve, handleReopen,
     handleAiDraft, handleLinkShopifyCustomer,
     handleBulkClose, handleBulkArchive, handleBulkTag,
+    handleMarkAsSpam, handleRecover,
   } = useTicketActions({
     activeTicketId,
     activeTab,
     dbThreads,
     openThreads,
     closedThreads,
+    filteredThreads,
     mutateOpen,
     mutateClosed,
+    mutateFiltered,
     setActiveTab,
     setActiveTicketId,
     setSelectedIds,
@@ -116,8 +125,10 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     activeThread,
     mutateOpen,
     mutateClosed,
+    mutateFiltered,
     openThreads,
     closedThreads,
+    filteredThreads,
   })
 
   // Pre-select thread from ?thread= query param
@@ -130,8 +141,11 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     } else if (closedThreads.find(t => t.id === threadId)) {
       setActiveTab('closed')
       setActiveTicketId(threadId)
+    } else if (filteredThreads.find(t => t.id === threadId)) {
+      setActiveTab('filtered')
+      setActiveTicketId(threadId)
     }
-  }, [searchParams, openThreads, closedThreads])
+  }, [searchParams, openThreads, closedThreads, filteredThreads])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -144,6 +158,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     await Promise.all([
       mutateOpen([...(openThreads.map(updateThread))], false),
       mutateClosed([...(closedThreads.map(updateThread))], false),
+      mutateFiltered([...(filteredThreads.map(updateThread))], false),
       mutateSearch(
         current => current
           ? { ...current, threads: current.threads.map(updateThread) }
@@ -151,7 +166,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
         { revalidate: false },
       ),
     ])
-  }, [closedThreads, mutateClosed, mutateOpen, mutateSearch, openThreads])
+  }, [closedThreads, filteredThreads, mutateClosed, mutateFiltered, mutateOpen, mutateSearch, openThreads])
 
   const handleRefreshSummary = useCallback(async (threadId: string) => {
     if (refreshingSummaryId === threadId) return
@@ -186,7 +201,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     handleRefreshSummary(activeThread.id)
   }, [activeThread, handleRefreshSummary])
 
-  const handleTabChange = (tab: 'open' | 'closed') => {
+  const handleTabChange = (tab: 'open' | 'closed' | 'filtered') => {
     setActiveTab(tab)
     setActiveTicketId(null)
     setSearchQuery('')
@@ -269,9 +284,11 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           onBulkArchive={() => handleBulkArchive(selectedIds)}
           onBulkTag={(tag) => handleBulkTag(selectedIds, tag)}
           onClearSelection={handleClearSelection}
-          hasMore={activeTab === 'open' ? hasMoreOpen : hasMoreClosed}
-          isLoadingMore={activeTab === 'open' ? isLoadingMoreOpen : isLoadingMoreClosed}
-          onLoadMore={activeTab === 'open' ? loadMoreOpen : loadMoreClosed}
+          hasMore={activeTab === 'open' ? hasMoreOpen : activeTab === 'closed' ? hasMoreClosed : hasMoreFiltered}
+          isLoadingMore={activeTab === 'open' ? isLoadingMoreOpen : activeTab === 'closed' ? isLoadingMoreClosed : isLoadingMoreFiltered}
+          onLoadMore={activeTab === 'open' ? loadMoreOpen : activeTab === 'closed' ? loadMoreClosed : loadMoreFiltered}
+          onMarkAsSpam={handleMarkAsSpam}
+          onRecover={handleRecover}
         />
       </div>
 
@@ -290,7 +307,9 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onAgentTurnAdd={handleAgentTurnAdd}
               onAgentRunningChange={handleAgentRunningChange}
               onAgentComplete={handleAgentComplete}
-              activeTab={isSearchMode ? (activeThread.status === 'closed' ? 'closed' : 'open') : activeTab}
+              activeTab={isSearchMode || activeTab === 'filtered'
+                ? (activeThread.status === 'closed' ? 'closed' : 'open')
+                : activeTab}
               planRevisionKey={planCacheKey}
               initialPlan={cachedPlan}
               onPlanCached={(plan) => { if (planCacheKey) planCache.set(planCacheKey, plan) }}

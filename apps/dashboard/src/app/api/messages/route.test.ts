@@ -173,6 +173,83 @@ describe('POST /api/messages', () => {
     expect(savedMessage?.senderType).toBe(SenderType.agent);
   });
 
+  it('promotes filtered → genuine and writes confirmed_genuine on outbound dispatch', async () => {
+    const emailAddress = `support_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'recovered@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({ where: { id: thread.id }, data: { filterStatus: 'filtered' } });
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Hi — sorry for the delay.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.filterStatus).toBe('genuine');
+    expect(updated?.filterFeedback).toBe('confirmed_genuine');
+  });
+
+  it('writes confirmed_genuine on a questionable thread without changing filterStatus', async () => {
+    const emailAddress = `support2_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'maybe@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({ where: { id: thread.id }, data: { filterStatus: 'questionable' } });
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Got it!' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.filterStatus).toBe('questionable');
+    expect(updated?.filterFeedback).toBe('confirmed_genuine');
+  });
+
+  it('does not touch filter columns for a genuine thread', async () => {
+    const emailAddress = `support3_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'normal@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Sure thing.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.filterStatus).toBe('genuine');
+    expect(updated?.filterFeedback).toBe('none');
+  });
+
   it('returns 502 when POSTMARK_API_KEY is not set', async () => {
     const original = process.env.POSTMARK_API_KEY;
     delete process.env.POSTMARK_API_KEY;

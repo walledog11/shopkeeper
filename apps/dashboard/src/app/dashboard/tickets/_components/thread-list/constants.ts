@@ -2,7 +2,7 @@ import { getChannelInfo } from "@/lib/messaging/channels"
 export { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { ChannelType } from "@/types"
 
-export type TicketListTab = "open" | "closed"
+export type TicketListTab = "open" | "closed" | "filtered"
 
 export const FILTER_IDS: ChannelType[] = ["email", "ig_dm", "sms_agent"]
 

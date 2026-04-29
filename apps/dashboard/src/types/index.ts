@@ -2,6 +2,8 @@
 export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify" | "sms" | "sms_agent" | "dashboard_agent";
 export type ThreadStatus = "open" | "pending" | "closed";
 export type SenderType = "customer" | "agent" | "ai" | "note";
+export type ThreadFilterStatus = "genuine" | "questionable" | "filtered";
+export type ThreadFilterFeedback = "none" | "confirmed_genuine" | "confirmed_spam";
 
 // Settings stored as JSON on the Organization
 export interface AgentToolPermissions {
@@ -163,6 +165,9 @@ export interface Thread {
   shopifyCustomerId: string | null;
   cachedPlanMessageId: string | null;
   cachedPlan: unknown | null;
+  filterStatus: ThreadFilterStatus;
+  filterReason: string | null;
+  filterFeedback: ThreadFilterFeedback;
   customer: Customer;
   messages: Message[];
 }
@@ -220,6 +225,8 @@ export interface Ticket {
   status: ThreadStatus;
   lastCustomerMessageAt: string | null;
   hasPlan: boolean;
+  filterStatus: ThreadFilterStatus;
+  filterReason: string | null;
   messages: {
     sender: SenderType;
     text: string | null;

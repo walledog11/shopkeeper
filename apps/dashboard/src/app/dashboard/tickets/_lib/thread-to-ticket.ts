@@ -30,6 +30,8 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
     hasPlan: planIsForLastMessage,
+    filterStatus: thread.filterStatus,
+    filterReason: thread.filterReason,
     messages: thread.messages
       .filter((message) => !(message.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(message.contentText)))
       .map((message) => {

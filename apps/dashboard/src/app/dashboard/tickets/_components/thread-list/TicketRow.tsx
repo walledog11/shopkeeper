@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { CheckSquare, Sparkle, Sparkles, Square } from "lucide-react"
+import { Ban, CheckSquare, Flag, RotateCcw, Sparkle, Sparkles, Square } from "lucide-react"
 import { getSlaInfo } from "./sla"
 import { getAvatarGradient, getInitials, getTagStyle, type TicketListTab } from "./constants"
 import type { Ticket } from "@/types"
@@ -15,6 +15,8 @@ interface TicketRowProps {
   ticket: Ticket
   onSelectTicket: (id: string) => void
   onToggleSelect: (id: string) => void
+  onMarkAsSpam?: (id: string) => void
+  onRecover?: (id: string) => void
 }
 
 export function TicketRow({
@@ -26,6 +28,8 @@ export function TicketRow({
   ticket,
   onSelectTicket,
   onToggleSelect,
+  onMarkAsSpam,
+  onRecover,
 }: TicketRowProps) {
   const lastRealMsg = [...ticket.messages].reverse().find(message => message.sender !== "note")
   const awaitingReply = ticket.status === "open" && lastRealMsg?.sender === "customer"
@@ -91,6 +95,14 @@ export function TicketRow({
                 <Sparkles className="w-2.5 h-2.5 mr-1"/> Plan ready
               </span>
             )}
+            {ticket.filterStatus === "questionable" && !closed && (
+              <span
+                title={ticket.filterReason ?? undefined}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400"
+              >
+                <Flag className="w-2.5 h-2.5 mr-1" /> Flagged
+              </span>
+            )}
             {closed && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-400/10 text-green-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
@@ -103,6 +115,27 @@ export function TicketRow({
           </div>
         </div>
       </div>
+
+      {!hasSelection && !isSearchMode && (activeTab === "filtered"
+        ? onRecover && (
+            <button
+              onClick={event => { event.stopPropagation(); onRecover(ticket.id) }}
+              title="Recover to inbox"
+              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-white/[0.08] text-white/40 hover:text-emerald-400"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )
+        : !closed && ticket.filterStatus !== "filtered" && onMarkAsSpam && (
+            <button
+              onClick={event => { event.stopPropagation(); onMarkAsSpam(ticket.id) }}
+              title="Mark as spam"
+              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-white/[0.08] text-white/40 hover:text-red-400"
+            >
+              <Ban className="w-3.5 h-3.5" />
+            </button>
+          )
+      )}
     </div>
   )
 }

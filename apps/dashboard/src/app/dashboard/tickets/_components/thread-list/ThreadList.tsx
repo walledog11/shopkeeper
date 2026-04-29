@@ -29,6 +29,8 @@ interface Props {
   hasMore?: boolean
   isLoadingMore?: boolean
   onLoadMore?: () => void
+  onMarkAsSpam?: (id: string) => void
+  onRecover?: (id: string) => void
 }
 
 export default function ThreadList({
@@ -54,6 +56,8 @@ export default function ThreadList({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  onMarkAsSpam,
+  onRecover,
 }: Props) {
   const hasSelection = selectedIds.length > 0
 
@@ -89,6 +93,8 @@ export default function ThreadList({
             ticket={ticket}
             onSelectTicket={onSelectTicket}
             onToggleSelect={onToggleSelect}
+            onMarkAsSpam={onMarkAsSpam}
+            onRecover={onRecover}
           />
         ))}
 

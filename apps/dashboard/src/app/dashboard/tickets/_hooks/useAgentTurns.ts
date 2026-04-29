@@ -5,12 +5,14 @@ import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 interface UseAgentTurnsProps {
   activeTicketId: string | null
-  activeTab: 'open' | 'closed'
+  activeTab: 'open' | 'closed' | 'filtered'
   activeThread: Thread | undefined
   mutateOpen: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
   mutateClosed: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
+  mutateFiltered: (data?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
   openThreads: Thread[]
   closedThreads: Thread[]
+  filteredThreads: Thread[]
 }
 
 export function useAgentTurns({
@@ -19,8 +21,10 @@ export function useAgentTurns({
   activeThread,
   mutateOpen,
   mutateClosed,
+  mutateFiltered,
   openThreads,
   closedThreads,
+  filteredThreads,
 }: UseAgentTurnsProps) {
   const [agentTurnsByThread, setAgentTurnsByThread] = useState<Record<string, AgentTurn[]>>({})
   const [agentRunningThread, setAgentRunningThread] = useState<string | null>(null)
@@ -50,8 +54,8 @@ export function useAgentTurns({
 
   const handleAgentComplete = useCallback((turn: AgentTurn) => {
     if (!activeTicketId) return
-    const mutateFn = activeTab === 'open' ? mutateOpen : mutateClosed
-    const currentThreads = activeTab === 'open' ? openThreads : closedThreads
+    const mutateFn = activeTab === 'open' ? mutateOpen : activeTab === 'closed' ? mutateClosed : mutateFiltered
+    const currentThreads = activeTab === 'open' ? openThreads : activeTab === 'closed' ? closedThreads : filteredThreads
     // Optimistically insert the turn into the thread messages so it shows instantly
     const optimisticMsg: Message = {
       id: `agent-turn-${Date.now()}`,
@@ -70,7 +74,8 @@ export function useAgentTurns({
     )
     mutateOpen()
     mutateClosed()
-  }, [activeTicketId, activeTab, mutateOpen, mutateClosed, openThreads, closedThreads])
+    mutateFiltered()
+  }, [activeTicketId, activeTab, mutateOpen, mutateClosed, mutateFiltered, openThreads, closedThreads, filteredThreads])
 
   return {
     activeAgentTurns,

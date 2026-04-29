@@ -121,6 +121,36 @@ describe('GET /api/threads', () => {
     expect(res.status).toBe(401);
   });
 
+  it('excludes filterStatus=filtered threads by default', async () => {
+    const customer = await createTestCustomer(org.id, 'cust_genuine@test.com', { name: 'Gen' });
+    await createTestThread(org.id, customer.id, ChannelType.email);
+    const spammer = await createTestCustomer(org.id, 'spam@test.com', { name: 'Spam' });
+    const spamThread = await createTestThread(org.id, spammer.id, ChannelType.email);
+    await db.thread.update({ where: { id: spamThread.id }, data: { filterStatus: 'filtered' } });
+
+    const req = new Request('http://localhost:3000/api/threads');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads).toHaveLength(1);
+    expect(body.threads[0].id).not.toBe(spamThread.id);
+  });
+
+  it('returns only filtered threads when ?filterStatus=filtered', async () => {
+    const customer = await createTestCustomer(org.id, 'cust_genuine2@test.com', { name: 'Gen' });
+    await createTestThread(org.id, customer.id, ChannelType.email);
+    const spammer = await createTestCustomer(org.id, 'spam2@test.com', { name: 'Spam' });
+    const spamThread = await createTestThread(org.id, spammer.id, ChannelType.email);
+    await db.thread.update({ where: { id: spamThread.id }, data: { filterStatus: 'filtered' } });
+
+    const req = new Request('http://localhost:3000/api/threads?filterStatus=filtered');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads).toHaveLength(1);
+    expect(body.threads[0].id).toBe(spamThread.id);
+  });
+
   it('returns 403 when the user has no active organization', async () => {
     vi.mocked(auth).mockResolvedValueOnce(
       { userId: 'usr_test', orgId: null } as unknown as ReturnType<typeof auth> extends Promise<infer T>
