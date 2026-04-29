@@ -7,6 +7,8 @@ export interface PlatformConfig {
   logo: string
   description: string
   connectType: ConnectType
+  accentBg: string
+  accentBorder: string
 }
 
 export const PLATFORM_CONFIG: PlatformConfig[] = [
@@ -17,6 +19,8 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logo: "/logos/email.svg",
     description: "Route your support inbox directly into Clerk and reply from a verified sender address.",
     connectType: 'email',
+    accentBg: "bg-blue-500/[0.08]",
+    accentBorder: "border-blue-500/20",
   },
   {
     id: "instagram",
@@ -25,6 +29,8 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logo: "/logos/instagram-logo.png",
     description: "Manage Direct Messages from your Instagram business account alongside every other channel.",
     connectType: 'ig',
+    accentBg: "bg-pink-500/[0.08]",
+    accentBorder: "border-pink-500/20",
   },
   {
     id: "tiktok",
@@ -33,6 +39,8 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logo: "/logos/tiktok-logo.png",
     description: "Manage TikTok Shop messages and video comments in one unified inbox.",
     connectType: 'coming-soon',
+    accentBg: "bg-white/[0.05]",
+    accentBorder: "border-white/[0.10]",
   },
   {
     id: "shopify",
@@ -41,6 +49,8 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logo: "/logos/shopify.svg",
     description: "Sync customer orders, returns, and Shopify Inbox messages directly into Clerk.",
     connectType: 'shopify',
+    accentBg: "bg-emerald-500/[0.08]",
+    accentBorder: "border-emerald-500/20",
   },
 ]
 

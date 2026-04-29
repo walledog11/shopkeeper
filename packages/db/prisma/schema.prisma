@@ -34,6 +34,18 @@ enum SenderType {
   note
 }
 
+enum ThreadFilterStatus {
+  genuine
+  questionable
+  filtered
+}
+
+enum ThreadFilterFeedback {
+  none
+  confirmed_genuine
+  confirmed_spam
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -123,6 +135,10 @@ model Thread {
   cachedPlan           Json?    @map("cached_plan") @db.JsonB
   archivedAt           DateTime? @map("archived_at") @db.Timestamptz
   deletedAt            DateTime? @map("deleted_at") @db.Timestamptz
+  filterStatus     ThreadFilterStatus   @default(genuine) @map("filter_status")
+  filterReason     String?              @map("filter_reason") @db.Text
+  filterDecidedAt  DateTime?            @map("filter_decided_at") @db.Timestamptz
+  filterFeedback   ThreadFilterFeedback @default(none) @map("filter_feedback")
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -136,6 +152,7 @@ model Thread {
   @@index([customerId])
   @@index([organizationId, archivedAt, status])
   @@index([deletedAt])
+  @@index([organizationId, filterStatus, filterDecidedAt(sort: Desc)])
   @@map("threads")
 }
 

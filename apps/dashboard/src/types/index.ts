@@ -54,6 +54,9 @@ export interface OrgSettings {
   businessHoursDays: string[];         // e.g. ['mon','tue','wed','thu','fri']
   businessHoursTimezoneOffset: number; // integer UTC offset
   autoAckMessage: string;
+
+  // Spam filter
+  spamFilterEnabled?: boolean;
 }
 
 // Database models

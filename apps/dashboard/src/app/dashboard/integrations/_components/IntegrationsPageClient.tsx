@@ -67,7 +67,7 @@ export default function IntegrationsPageClient() {
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="max-w-2xl w-full mx-auto px-6 py-8 space-y-8">
+      <div className="max-w-4xl w-full mx-auto px-6 py-8 space-y-8">
 
         {/* Header */}
         <div>
@@ -134,24 +134,12 @@ export default function IntegrationsPageClient() {
           </div>
         )}
 
-        {/* Messaging */}
+        {/* Data sources */}
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-white/25 uppercase tracking-widest">Messaging</p>
-          {PLATFORM_CONFIG.filter(p => ['email', 'instagram', 'tiktok'].includes(p.id)).map(def => (
-            <IntegrationCard
-              key={def.id}
-              config={def}
-              connected={def.platform ? getConnected(def.platform) : []}
-              lastActivity={def.platform ? getLastActivity(def.platform) : null}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-            />
-          ))}
-        </div>
-
-        {/* Commerce */}
-        <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-white/25 uppercase tracking-widest">Commerce</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">Data sources</p>
+            <p className="text-[11px] italic text-white/25">What Concierge reads from to answer questions and take action.</p>
+          </div>
           {PLATFORM_CONFIG.filter(p => p.id === 'shopify').map(def => (
             <IntegrationCard
               key={def.id}
@@ -164,10 +152,33 @@ export default function IntegrationsPageClient() {
           ))}
         </div>
 
-        {/* Team */}
+        {/* Channels */}
         <div className="space-y-3">
-          <p className="text-[11px] font-semibold text-white/25 uppercase tracking-widest">Team</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">Channels</p>
+            <p className="text-[11px] italic text-white/25">Where Concierge talks to your customers and team.</p>
+          </div>
+          {PLATFORM_CONFIG.filter(p => ['email', 'instagram'].includes(p.id)).map(def => (
+            <IntegrationCard
+              key={def.id}
+              config={def}
+              connected={def.platform ? getConnected(def.platform) : []}
+              lastActivity={def.platform ? getLastActivity(def.platform) : null}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+            />
+          ))}
           <SmsCard />
+          {PLATFORM_CONFIG.filter(p => p.id === 'tiktok').map(def => (
+            <IntegrationCard
+              key={def.id}
+              config={def}
+              connected={def.platform ? getConnected(def.platform) : []}
+              lastActivity={def.platform ? getLastActivity(def.platform) : null}
+              onConnect={handleConnect}
+              onDisconnect={handleDisconnect}
+            />
+          ))}
         </div>
 
       </div>

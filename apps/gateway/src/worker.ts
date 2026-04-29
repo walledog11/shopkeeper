@@ -92,9 +92,19 @@ export async function startWorkerRuntime() {
   });
 
   const aiSummaryWorker = new Worker<AiSummaryJobData>(QUEUE.AI_SUMMARY, async (job) => {
-    const { threadId, organizationId, customerName, channelType, traceId } = job.data;
+    const { threadId, organizationId, customerName, channelType, traceId, skipSummary } = job.data;
     logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
-    const updatedThread = await generateThreadIntelligence(threadId);
+    const updatedThread = await generateThreadIntelligence(threadId, { skipSummary });
+
+    // Only genuine threads get a plan + WhatsApp notify. Questionable show in
+    // the inbox but skip both; filtered skip everything downstream.
+    if (updatedThread?.filterStatus && updatedThread.filterStatus !== 'genuine') {
+      logger.info(
+        { threadId, organizationId, classification: updatedThread.filterStatus },
+        '[AISummary] Non-genuine thread — skipping plan precompute and notification',
+      );
+      return;
+    }
 
     const org = await db.organization.findUnique({
       where: { id: organizationId },

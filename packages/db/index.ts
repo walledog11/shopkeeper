@@ -9,10 +9,14 @@ const {
   Prisma: PrismaRuntime,
   SenderType: SenderTypeRuntime,
   ChannelType: ChannelTypeRuntime,
+  ThreadFilterStatus: ThreadFilterStatusRuntime,
+  ThreadFilterFeedback: ThreadFilterFeedbackRuntime,
 } = prismaClient;
 
 type DbChannelType = (typeof ChannelTypeRuntime)[keyof typeof ChannelTypeRuntime];
 type DbSenderType = (typeof SenderTypeRuntime)[keyof typeof SenderTypeRuntime];
+type DbThreadFilterStatus = (typeof ThreadFilterStatusRuntime)[keyof typeof ThreadFilterStatusRuntime];
+type DbThreadFilterFeedback = (typeof ThreadFilterFeedbackRuntime)[keyof typeof ThreadFilterFeedbackRuntime];
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClientType | undefined;
@@ -67,5 +71,7 @@ export {
   PrismaRuntime as Prisma,
   SenderTypeRuntime as SenderType,
   ChannelTypeRuntime as ChannelType,
+  ThreadFilterStatusRuntime as ThreadFilterStatus,
+  ThreadFilterFeedbackRuntime as ThreadFilterFeedback,
 };
-export type { PrismaClientType as PrismaClient, DbChannelType, DbSenderType };
+export type { PrismaClientType as PrismaClient, DbChannelType, DbSenderType, DbThreadFilterStatus, DbThreadFilterFeedback };

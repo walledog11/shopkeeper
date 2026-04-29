@@ -31,6 +31,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
   businessHoursTimezoneOffset: 0,
   autoAckMessage: "Thanks for reaching out! We're currently outside business hours and will get back to you soon.",
+  spamFilterEnabled: true,
 };
 
 export function resolveAgentSettings(settings: Partial<OrgSettings> | null | undefined): OrgSettings {

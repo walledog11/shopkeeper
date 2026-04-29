@@ -119,36 +119,41 @@ export default function SmsCard() {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
+    <div className="rounded-xl border border-white/[0.08] bg-card overflow-hidden">
 
       {/* ── Row header ── */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+        className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
       >
-        <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-white/[0.06] border border-white/[0.08]">
-          <Image src="/logos/sms.svg" alt="SMS" width={20} height={20} className="object-contain" unoptimized />
+        <div className="h-11 w-11 rounded-lg flex items-center justify-center shrink-0 bg-violet-500/[0.08] border border-violet-500/20">
+          <Image src="/logos/sms.svg" alt="SMS" width={22} height={22} className="object-contain" unoptimized />
         </div>
 
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white/85">SMS / WhatsApp</p>
-          <p className="text-xs text-white/35 mt-0.5 truncate">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <p className="text-[15px] font-bold text-white/95 leading-none">SMS / WhatsApp</p>
+            {isConnected ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                Enabled
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                Not enabled
+              </span>
+            )}
+            {isConnected && twilioStatus?.phoneNumber && (
+              <span className="text-xs font-mono text-white/35 truncate max-w-[260px]">{twilioStatus.phoneNumber}</span>
+            )}
+          </div>
+          <p className="text-xs text-white/40 leading-relaxed">
             Let your team interact with the AI agent via text or WhatsApp.
           </p>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          {isConnected ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              Enabled
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/25">
-              <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-              Not enabled
-            </span>
-          )}
+        <div className="flex items-center gap-3 shrink-0 mt-1">
           <ChevronDown className={cn("w-4 h-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
         </div>
       </button>

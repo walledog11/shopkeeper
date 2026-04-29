@@ -1,5 +1,5 @@
 import type { Job, Queue } from 'bullmq';
-import { db, SenderType, Prisma, createMessage, type DbChannelType } from '@clerk/db';
+import { db, SenderType, Prisma, ThreadFilterStatus, createMessage, type DbChannelType, type DbThreadFilterStatus } from '@clerk/db';
 import Anthropic from '@anthropic-ai/sdk';
 import twilio from 'twilio';
 import { updateContext } from './sms-context.js';
@@ -116,22 +116,65 @@ function stripQuotedReply(text: string): string {
     .trim();
 }
 
-async function isCustomerSupportMessage(subject: string, body: string): Promise<boolean> {
+interface ClassificationResult {
+  summary: string;
+  tag: string;
+  filterStatus: DbThreadFilterStatus;
+  filterReason: string;
+}
+
+const CLASSIFIER_SYSTEM_PROMPT = `You are an AI assistant for a customer support team.
+Read the customer message and produce four fields in strict JSON:
+- "summary": one-sentence third-person summary of what the customer said. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".').
+- "tag": exactly one of Shipping, Returns, Order Status, Product Inquiry, General.
+- "classification": exactly one of "genuine", "questionable", "filtered".
+  - "genuine": real human reaching out for support (question, complaint, request).
+  - "questionable": ambiguous — may be a real customer or may be unsolicited (cold pitch, vague outreach, possibly automated).
+  - "filtered": clearly spam, newsletters, promotions, automated system alerts, or delivery status notifications.
+- "reason": one short sentence (under 20 words) justifying the classification.
+
+Respond ONLY in strict JSON: {"summary":"...","tag":"...","classification":"...","reason":"..."}`;
+
+const JSON_FENCE_OPEN = /^```json\s*/i;
+const JSON_FENCE_CLOSE = /```\s*$/;
+const VALID_FILTER_STATUSES: ReadonlySet<string> = new Set(Object.values(ThreadFilterStatus));
+
+function isFilterStatus(value: string): value is DbThreadFilterStatus {
+  return VALID_FILTER_STATUSES.has(value);
+}
+
+function parseClassifierJson(raw: string): ClassificationResult {
+  const cleaned = raw.replace(JSON_FENCE_OPEN, '').replace(JSON_FENCE_CLOSE, '').trim();
+  const parsed = JSON.parse(cleaned) as { summary?: string; tag?: string; classification?: string; reason?: string };
+  if (!parsed.summary || !parsed.tag || !parsed.classification || !parsed.reason) {
+    throw new Error('Classifier response missing required fields');
+  }
+  if (!isFilterStatus(parsed.classification)) {
+    throw new Error(`Classifier returned invalid classification: ${parsed.classification}`);
+  }
+  return { summary: parsed.summary, tag: parsed.tag, filterStatus: parsed.classification, filterReason: parsed.reason };
+}
+
+// Fails open to 'genuine' so a classifier outage never drops legitimate mail.
+async function classifyAndSummarizeNewEmail(subject: string, body: string): Promise<ClassificationResult> {
   try {
     const response = await getAnthropic().messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 10,
-      system: `You are a strict email filter for a customer support helpdesk.
-          Analyze the email subject and body.
-          Return ONLY "true" if it is a real person reaching out for help, asking a question, making a complaint, or needing support.
-          Return ONLY "false" if it is spam, a newsletter, a promotional email, an automated system alert, or a delivery status notification.`,
+      max_tokens: 256,
+      system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: `Subject: ${subject}\n\nBody: ${body}` }],
     });
-    const decision = (response.content[0] as { text: string }).text.trim().toLowerCase();
-    return decision === 'true';
+    const block = response.content[0];
+    if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
+    return parseClassifierJson(block.text);
   } catch (error) {
-    logger.error({ err: error }, '[Worker] AI Filter failed — failing open to avoid dropping emails');
-    return true;
+    logger.error({ err: error }, '[Worker] Classifier failed — failing open as genuine');
+    return {
+      summary: subject?.slice(0, 200) || 'New email',
+      tag: 'General',
+      filterStatus: 'genuine',
+      filterReason: 'Classifier unavailable',
+    };
   }
 }
 
@@ -142,6 +185,10 @@ interface ProcessMessageOptions {
   externalMessageId?: string | null;
   traceId?: string | null;
   attachments?: string[];
+  // Email path classifies pre-persistence so we can write filter columns inline
+  // and skip the LLM round-trip in the SUMMARIZE_THREAD job. The job still runs
+  // (with skipSummary=true) so plan precompute + WhatsApp notify still fire.
+  precomputed?: ClassificationResult | null;
 }
 
 async function processInboundMessage(
@@ -150,7 +197,7 @@ async function processInboundMessage(
   channelType: DbChannelType,
   messageText: string,
   aiSummaryQueue: Queue,
-  { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null, attachments = [] }: ProcessMessageOptions = {}
+  { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null, attachments = [], precomputed = null }: ProcessMessageOptions = {}
 ): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
 
@@ -191,6 +238,13 @@ async function processInboundMessage(
           channelType,
           status: STATUS.OPEN,
           ...(initialTag && { tag: initialTag }),
+          ...(precomputed && {
+            aiSummary: precomputed.summary,
+            tag: precomputed.tag,
+            filterStatus: precomputed.filterStatus,
+            filterReason: precomputed.filterReason,
+            filterDecidedAt: new Date(),
+          }),
         },
       });
       isNew = true;
@@ -222,13 +276,24 @@ async function processInboundMessage(
     customerName: customer.name ?? null,
     channelType,
     traceId: traceId ?? undefined,
+    ...(precomputed && { skipSummary: true }),
   });
 
   return { thread: thread!, isNew };
 }
 
-export async function generateThreadIntelligence(threadId: string, opts?: { triggerPlaybooks?: boolean }) {
+export async function generateThreadIntelligence(
+  threadId: string,
+  opts?: { triggerPlaybooks?: boolean; skipSummary?: boolean },
+) {
   try {
+    // skipSummary path: email worker already classified pre-persistence; the
+    // thread row is fully populated. Return it as-is so downstream plan
+    // precompute + WhatsApp notify can still run.
+    if (opts?.skipSummary) {
+      return db.thread.findUnique({ where: { id: threadId } });
+    }
+
     logger.info({ threadId }, '[Worker] Generating AI Summary');
     const fullThread = await db.thread.findUnique({
       where: { id: threadId },
@@ -244,32 +309,37 @@ export async function generateThreadIntelligence(threadId: string, opts?: { trig
     const aiResponse = await getAnthropic().messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 256,
-      system: `You are an AI assistant for a customer support team.
-          Read the following customer service transcript and produce a 1-sentence summary of what the customer said or asked. Always describe the actual content, even if the message is a single word, a fragment, or unclear. Never refuse, never say you cannot summarize, never ask for more information — if the message is just one word, your summary should quote or paraphrase that word (e.g., 'Customer wrote a single word: "Palettegarments".'). Write the summary in third person about the customer.
-          Also choose exactly one tag from this list: Shipping, Returns, Order Status, Product Inquiry, General.
-          You must respond ONLY in strict JSON format like this: {"summary": "...", "tag": "..."}`,
+      system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: conversationText }],
     });
 
     const block = aiResponse.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
-    const raw = block.text.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
-    const aiData = JSON.parse(raw) as { summary: string; tag: string };
+    const aiData = parseClassifierJson(block.text);
+
+    // filterDecidedAt is the lock: once any path commits a decision, subsequent
+    // summaries refresh aiSummary/tag but don't reclassify.
+    const shouldSetFilter = fullThread.filterDecidedAt === null;
 
     const updated = await db.thread.update({
       where: { id: threadId },
-      data: { aiSummary: aiData.summary, tag: aiData.tag },
+      data: {
+        aiSummary: aiData.summary,
+        tag: aiData.tag,
+        ...(shouldSetFilter && {
+          filterStatus: aiData.filterStatus,
+          filterReason: aiData.filterReason,
+          filterDecidedAt: new Date(),
+        }),
+      },
     });
 
-    logger.info({ tag: aiData.tag, summary: aiData.summary, threadId }, '[Worker] AI Summary saved');
+    logger.info({ tag: aiData.tag, summary: aiData.summary, classification: updated.filterStatus, threadId }, '[Worker] AI Summary saved');
 
-    // Fire tag_applied playbooks in background — don't await.
-    // Skipped when called from a backfill so we don't re-run automation on historical tickets.
-    if (opts?.triggerPlaybooks !== false) {
-      const org = await db.thread.findUnique({ where: { id: threadId }, select: { organizationId: true } });
-      if (org) {
-        void triggerPlaybooks(org.organizationId, threadId, { type: 'tag_applied', tag: aiData.tag });
-      }
+    // Skip on backfills (don't re-run automation on historical tickets) and on
+    // filtered threads (no automation on spam).
+    if (opts?.triggerPlaybooks !== false && updated.filterStatus !== 'filtered') {
+      void triggerPlaybooks(updated.organizationId, threadId, { type: 'tag_applied', tag: aiData.tag });
     }
 
     return updated;
@@ -569,10 +639,17 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
   const { senderEmail, senderName, subject, body } = job.data;
 
   try {
-    const existingCustomer = await db.customer.findUnique({
-      where: { organizationId_platformId: { organizationId, platformId: senderEmail! } },
-      select: { id: true, name: true },
-    });
+    const [existingCustomer, org] = await Promise.all([
+      db.customer.findUnique({
+        where: { organizationId_platformId: { organizationId, platformId: senderEmail! } },
+        select: { id: true, name: true },
+      }),
+      db.organization.findUnique({
+        where: { id: organizationId },
+        select: { settings: true },
+      }),
+    ]);
+    const spamFilterEnabled = ((org?.settings ?? {}) as { spamFilterEnabled?: boolean }).spamFilterEnabled !== false;
 
     const hasOpenThread = existingCustomer
       ? await db.thread.findFirst({
@@ -581,12 +658,30 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
         })
       : null;
 
-    if (!hasOpenThread) {
-      const isCustomer = await isCustomerSupportMessage(subject!, body!);
-      if (!isCustomer) {
-        logger.info({ senderEmail }, '[Worker] AI dropped non-customer email');
-        return;
-      }
+    // Classify only on new email threads. Replies on open threads inherit the
+    // existing filterStatus; the kill switch defers classification to the
+    // standard SUMMARIZE_THREAD path (which treats unset filter as genuine).
+    let precomputed: ClassificationResult | null = null;
+    if (!hasOpenThread && spamFilterEnabled) {
+      const priorGenuine = existingCustomer
+        ? await db.thread.findFirst({
+            where: {
+              organizationId,
+              customerId: existingCustomer.id,
+              channelType: CHANNEL.EMAIL,
+              filterStatus: 'genuine',
+            },
+            select: { id: true },
+          })
+        : null;
+      precomputed = priorGenuine
+        ? {
+            summary: subject?.slice(0, 200) || 'New email',
+            tag: 'General',
+            filterStatus: 'genuine',
+            filterReason: 'Existing customer with prior genuine thread',
+          }
+        : await classifyAndSummarizeNewEmail(subject!, body!);
     }
 
     const emailLocal = senderEmail!.split('@')[0];
@@ -607,11 +702,12 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       initialTag: subject!.substring(0, 50),
       externalMessageId: job.data.inboundMessageId,
       traceId,
+      precomputed,
     });
-    if (result?.isNew) {
+    if (result?.isNew && precomputed?.filterStatus !== 'filtered') {
       void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
     }
-    logger.info({ senderEmail, organizationId, traceId }, '[Worker] Successfully saved Email');
+    logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
     throw error;

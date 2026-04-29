@@ -152,53 +152,74 @@ afterEach(async () => {
   await cleanupTestData(org?.id);
 });
 
+function classifierResponse(
+  classification: 'genuine' | 'questionable' | 'filtered',
+  opts: { summary?: string; tag?: string; reason?: string } = {},
+) {
+  const payload = {
+    summary: opts.summary ?? 'Customer asked about their order.',
+    tag: opts.tag ?? 'Order Status',
+    classification,
+    reason: opts.reason ?? `Looks ${classification}.`,
+  };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
+}
+
 describe('Message worker — email branch', () => {
-  it('drops spam emails without creating any DB records', async () => {
-    // No open thread for this customer → AI spam filter IS called
-    mockAnthropicCreate.mockResolvedValueOnce({
-      content: [{ text: 'false' }], // AI classifies as spam
-    });
+  it('persists genuine email with filterStatus + filterDecidedAt set inline', async () => {
+    mockAnthropicCreate.mockResolvedValueOnce(
+      classifierResponse('genuine', { summary: 'Customer needs shipping help.', tag: 'Shipping' }),
+    );
 
     const handler = capturedHandlers.get('inbound-messages');
-    expect(handler, 'message worker handler should be captured').toBeDefined();
-
-    await handler!(makeEmailJob(org.id));
-
-    const customer = await db.customer.findFirst({
-      where: { organizationId: org.id, platformId: 'customer@example.com' },
-    });
-    expect(customer).toBeNull();
-    expect(mockAnthropicCreate).toHaveBeenCalledOnce();
-  });
-
-  it('creates customer + thread + message for a legitimate first email', async () => {
-    // AI spam filter returns "true" (is a customer support email)
-    mockAnthropicCreate.mockResolvedValueOnce({
-      content: [{ text: 'true' }],
-    });
-
-    const handler = capturedHandlers.get('inbound-messages');
+    expect(handler).toBeDefined();
     await handler!(makeEmailJob(org.id));
 
     const customer = await db.customer.findFirst({
       where: { organizationId: org.id, platformId: 'customer@example.com' },
     });
     expect(customer).not.toBeNull();
-    expect(customer?.name).toBe('Test Customer');
 
     const thread = await db.thread.findFirst({
       where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.email },
     });
-    expect(thread).not.toBeNull();
-    expect(thread?.status).toBe('open');
-
-    const message = await db.message.findFirst({ where: { threadId: thread!.id } });
-    expect(message).not.toBeNull();
-    expect(message?.senderType).toBe('customer');
+    expect(thread?.filterStatus).toBe('genuine');
+    expect(thread?.filterReason).toBe('Looks genuine.');
+    expect(thread?.filterDecidedAt).not.toBeNull();
+    expect(thread?.aiSummary).toBe('Customer needs shipping help.');
+    expect(thread?.tag).toBe('Shipping');
   });
 
-  it('skips the spam filter when the customer already has an open thread', async () => {
-    // Pre-create customer + open thread so the spam filter is skipped
+  it('persists spam as filtered (no playbooks fired)', async () => {
+    mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('filtered', { reason: 'Promotional newsletter.' }));
+
+    const playbookCalls: string[] = [];
+    mockFetch.mockImplementation((url: string) => {
+      if (String(url).includes('/api/playbooks/trigger')) playbookCalls.push(String(url));
+      return Promise.resolve({ ok: true, json: vi.fn().mockResolvedValue({}), text: vi.fn().mockResolvedValue('') });
+    });
+
+    const handler = capturedHandlers.get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
+    expect(thread?.filterStatus).toBe('filtered');
+    expect(thread?.filterReason).toBe('Promotional newsletter.');
+    expect(playbookCalls).toHaveLength(0);
+  });
+
+  it('persists ambiguous email as questionable', async () => {
+    mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('questionable', { reason: 'Cold pitch — unclear if real customer.' }));
+
+    const handler = capturedHandlers.get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
+    expect(thread?.filterStatus).toBe('questionable');
+    expect(thread?.filterReason).toBe('Cold pitch — unclear if real customer.');
+  });
+
+  it('skips classifier and inherits status when customer already has an open thread', async () => {
     const existingCustomer = await db.customer.create({
       data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Test Customer' },
     });
@@ -215,15 +236,56 @@ describe('Message worker — email branch', () => {
     await handler!(makeEmailJob(org.id));
 
     expect(mockAnthropicCreate).not.toHaveBeenCalled();
+  });
 
-    const messageCount = await db.message.count({
-      where: { thread: { organizationId: org.id } },
+  it('skips classifier when customer has a prior genuine thread (existing-customer bypass)', async () => {
+    const existing = await db.customer.create({
+      data: { organizationId: org.id, platformId: 'customer@example.com', name: 'Existing' },
     });
-    expect(messageCount).toBeGreaterThanOrEqual(1);
+    // Prior genuine, but closed — so no open-thread bypass; existing-customer bypass kicks in.
+    await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: existing.id,
+        channelType: ChannelType.email,
+        status: 'closed',
+        filterStatus: 'genuine',
+        filterDecidedAt: new Date(),
+      },
+    });
+
+    const handler = capturedHandlers.get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+
+    const newThread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: existing.id, status: 'open', channelType: ChannelType.email },
+    });
+    expect(newThread?.filterStatus).toBe('genuine');
+    expect(newThread?.filterReason).toBe('Existing customer with prior genuine thread');
+  });
+
+  it('skips classifier when spamFilterEnabled is false (kill switch)', async () => {
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: { spamFilterEnabled: false } },
+    });
+
+    const handler = capturedHandlers.get('inbound-messages');
+    await handler!(makeEmailJob(org.id));
+
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+
+    const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
+    // No precomputed inline → defaults to 'genuine', filterDecidedAt remains null
+    // until the SUMMARIZE_THREAD job runs (which is mocked away in this test).
+    expect(thread?.filterStatus).toBe('genuine');
+    expect(thread?.filterDecidedAt).toBeNull();
   });
 
   it('deduplicates messages with the same externalMessageId', async () => {
-    mockAnthropicCreate.mockResolvedValue({ content: [{ text: 'true' }] });
+    mockAnthropicCreate.mockResolvedValue(classifierResponse('genuine'));
 
     const handler = capturedHandlers.get('inbound-messages');
     const job = makeEmailJob(org.id, { inboundMessageId: 'duplicate-mid-001' });
@@ -235,6 +297,47 @@ describe('Message worker — email branch', () => {
       where: { externalMessageId: 'duplicate-mid-001' },
     });
     expect(messageCount).toBe(1);
+  });
+});
+
+describe('AI Summary worker — filter gating', () => {
+  it('skips plan precompute and WhatsApp notification when filterStatus is questionable', async () => {
+    mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('questionable'));
+
+    const fetchUrls: string[] = [];
+    mockFetch.mockImplementation((url: string) => {
+      fetchUrls.push(String(url));
+      return Promise.resolve({ ok: true, json: vi.fn().mockResolvedValue({}), text: vi.fn().mockResolvedValue('') });
+    });
+
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: 'questionable@example.com' },
+    });
+    const thread = await db.thread.create({
+      data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.email, status: 'open' },
+    });
+    await db.message.create({
+      data: { threadId: thread.id, senderType: 'customer', contentText: 'hey there' },
+    });
+
+    const aiHandler = capturedHandlers.get('ai-summary');
+    expect(aiHandler).toBeDefined();
+    await aiHandler!({
+      id: 'ai-job',
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        customerName: 'Q',
+        channelType: ChannelType.email,
+        traceId: 'trace-q',
+      },
+    });
+
+    const planInternalCalls = fetchUrls.filter(u => u.includes('/api/agent/plan-internal'));
+    expect(planInternalCalls).toHaveLength(0);
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.filterStatus).toBe('questionable');
   });
 });
 
