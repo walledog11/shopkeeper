@@ -5,7 +5,7 @@ import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/lib/ui/cn"
 import type { Integration } from "@/types"
 
 export type ConnectType = 'email' | 'ig' | 'shopify' | 'twilio' | 'coming-soon'

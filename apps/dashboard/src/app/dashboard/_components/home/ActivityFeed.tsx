@@ -1,7 +1,7 @@
 import Image from "next/image"
 import { Activity } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import { timeAgo } from "@/lib/utils"
+import { timeAgo } from "@/lib/format/date"
 
 export interface ActivityEvent {
   id: string

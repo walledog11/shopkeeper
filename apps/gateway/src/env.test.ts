@@ -16,6 +16,7 @@ afterEach(() => {
 describe('getGatewayDashboardUrl', () => {
   it('falls back to DASHBOARD_INTERNAL_URL outside production flows', () => {
     stubBaseGatewayEnv();
+    vi.stubEnv('DASHBOARD_URL', '');
     vi.stubEnv('DASHBOARD_INTERNAL_URL', 'http://localhost:3000');
 
     expect(getGatewayDashboardUrl()).toBe('http://localhost:3000');
@@ -25,6 +26,7 @@ describe('getGatewayDashboardUrl', () => {
 describe('validateGatewayEnv', () => {
   it('passes outside production with only DASHBOARD_INTERNAL_URL set', () => {
     stubBaseGatewayEnv();
+    vi.stubEnv('DASHBOARD_URL', '');
     vi.stubEnv('DASHBOARD_INTERNAL_URL', 'http://localhost:3000');
 
     expect(() => validateGatewayEnv()).not.toThrow();
