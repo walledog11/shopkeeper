@@ -20,11 +20,11 @@ export function getTestEnv(baseEnv = process.env) {
     GATEWAY_PUBLIC_URL: baseEnv.GATEWAY_PUBLIC_URL || baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',
     PORT: baseEnv.PORT || '8180',
     CLERK_SECRET_KEY: baseEnv.CLERK_SECRET_KEY || 'sk_test_clerk',
-    CLERK_PUBLISHABLE_KEY: baseEnv.CLERK_PUBLISHABLE_KEY || baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k',
+    CLERK_PUBLISHABLE_KEY: baseEnv.CLERK_PUBLISHABLE_KEY || baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     ANTHROPIC_API_KEY: baseEnv.ANTHROPIC_API_KEY || 'test-anthropic-key',
     INTERNAL_API_SECRET: baseEnv.INTERNAL_API_SECRET || 'test-internal-secret',
     INTERNAL_API_SECRET_PREV: baseEnv.INTERNAL_API_SECRET_PREV || 'test-internal-secret-prev',
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || baseEnv.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k',
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || baseEnv.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     E2E_AUTH_BYPASS: baseEnv.E2E_AUTH_BYPASS || 'false',
     E2E_CLERK_ORG_ID: baseEnv.E2E_CLERK_ORG_ID || 'org_e2e_test',
     E2E_CLERK_USER_ID: baseEnv.E2E_CLERK_USER_ID || 'user_e2e_test',

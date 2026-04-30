@@ -188,7 +188,8 @@ Each phase is a coherent unit that can be shipped, reviewed, and merged on its o
 - [x] Internal endpoint `apps/dashboard/src/app/api/messages/internal/route.ts` for REPLY dispatch (with implicit `confirmed_genuine` feedback).
 - [x] Tests: aggregator math, formatter output, each inbound command branch.
 
-### Phase 5 — Purge sweep
+### Phase 5 — Purge sweep ✅
 
-- [ ] Extend `maintenance-workers.ts`: hard-delete threads where `filterStatus = filtered AND filterDecidedAt < now - 7d AND filterFeedback = none AND no agent-sent messages`.
-- [ ] Tests: 7-day-old filtered with no feedback are deleted; recovered or merchant-touched ones survive.
+- [x] Add `FILTERED_PURGE_AFTER_DAYS = 7` constant and exported `purgeFilteredThreads(now)` helper in `maintenance-workers.ts`. Deletes threads where `filterStatus = filtered AND filterFeedback = none AND filterDecidedAt < now - 7d AND messages.none.senderType = 'agent'`. Cascades to messages via existing FK.
+- [x] Wire helper into the existing daily `purgeWorker` (after the soft-delete cascade) — same cadence, no new queue.
+- [x] Tests against the real DB: aged filtered/none deletes (with cascade verified); recovered (`confirmed_genuine`), `confirmed_spam`, agent-replied, recent (<7d), and `null` filterDecidedAt threads all survive; non-filtered threads (genuine/questionable) untouched; customer + note-only messages do not block deletion.
