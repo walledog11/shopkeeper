@@ -44,6 +44,9 @@ export function TicketRow({
 
   return (
     <div
+      data-testid="ticket-row"
+      data-ticket-id={ticket.id}
+      data-ticket-channel={ticket.channelType}
       className={`cursor-pointer relative px-4 py-2 mt-0.5 transition-colors group ${
         isActive ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
       }`}
@@ -65,6 +68,8 @@ export function TicketRow({
       </button>
 
       <div
+        data-testid="ticket-row-open"
+        data-ticket-id={ticket.id}
         onClick={() => onSelectTicket(ticket.id)}
         className={`flex items-start gap-3 transition-all ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
       >

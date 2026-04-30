@@ -8,9 +8,10 @@
  * Requires both servers to be running (handled by playwright.config.ts webServer).
  */
 import { test, expect } from '@playwright/test';
-import { db } from '../packages/db/index.js';
-import { createTestOrg, createTestIntegration, cleanupTestData } from '../packages/db/test-helpers.js';
-import { ChannelType } from '@clerk/db';
+import dbHelpers from './db-helpers.cjs';
+
+const { ChannelType, cleanupTestData, createTestIntegration, createTestOrg, db, disconnectDb } = dbHelpers;
+const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://localhost:8180';
 
 let orgId: string;
 
@@ -21,6 +22,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await cleanupTestData(orgId);
+  await disconnectDb();
 });
 
 test('inbound email webhook creates a thread and message in the database', async ({ request }) => {
@@ -30,7 +32,7 @@ test('inbound email webhook creates a thread and message in the database', async
     externalAccountId: emailAddress,
   });
 
-  const res = await request.post('http://localhost:8080/webhooks/email/inbound', {
+  const res = await request.post(`${gatewayUrl}/webhooks/email/inbound`, {
     form: {
       From: 'E2E Tester <e2e@example.com>',
       To: emailAddress,
@@ -39,8 +41,9 @@ test('inbound email webhook creates a thread and message in the database', async
     },
   });
 
-  expect(res.ok()).toBeTruthy();
-  expect(await res.text()).toBe('OK');
+  const responseText = await res.text();
+  expect(res.ok(), `Expected email webhook 2xx, got ${res.status()}: ${responseText}`).toBeTruthy();
+  expect(responseText).toBe('OK');
 
   // Poll the DB (up to 10s) for the worker to process the job
   let thread = null;
@@ -80,11 +83,12 @@ test('inbound IG DM webhook enqueues the job and gateway returns 200', async ({ 
   });
   const sig = `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}`;
 
-  const res = await request.post('http://localhost:8080/webhooks/meta', {
+  const res = await request.post(`${gatewayUrl}/webhooks/meta`, {
     headers: { 'Content-Type': 'application/json', 'x-hub-signature-256': sig },
-    data: payload,
+    data: Buffer.from(payload),
   });
 
-  expect(res.ok()).toBeTruthy();
-  expect(await res.text()).toBe('EVENT_RECEIVED');
+  const responseText = await res.text();
+  expect(res.ok(), `Expected IG webhook 2xx, got ${res.status()}: ${responseText}`).toBeTruthy();
+  expect(responseText).toBe('EVENT_RECEIVED');
 });

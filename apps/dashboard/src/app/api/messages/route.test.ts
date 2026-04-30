@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ChannelType, SenderType, db } from '@clerk/db';
 import {
@@ -36,17 +39,33 @@ vi.stubGlobal('fetch', mockFetch);
 
 import { POST } from './route';
 import { auth } from '@clerk/nextjs/server';
+import { ServerClient } from 'postmark';
+import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+let tempDir: string | null = null;
+const originalEnv = {
+  E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
+  E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
+  POSTMARK_API_KEY: process.env.POSTMARK_API_KEY,
+};
 
 beforeEach(async () => {
   org = await createTestOrg();
   vi.mocked(auth).mockResolvedValue({ userId: 'usr_test', orgId: org.clerkOrgId } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
   mockFetch.mockReset();
+  vi.mocked(ServerClient).mockClear();
 });
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
+  process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
+  process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
+  process.env.POSTMARK_API_KEY = originalEnv.POSTMARK_API_KEY;
+  if (tempDir) {
+    await rm(tempDir, { recursive: true, force: true });
+    tempDir = null;
+  }
   vi.clearAllMocks();
 });
 
@@ -168,6 +187,50 @@ describe('POST /api/messages', () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
+
+    const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
+    expect(savedMessage?.senderType).toBe(SenderType.agent);
+  });
+
+  it('records email dispatch and skips Postmark in E2E recording mode', async () => {
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'clerk-message-records-'));
+    process.env.E2E_OUTBOUND_MODE = 'record';
+    process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
+    delete process.env.POSTMARK_API_KEY;
+
+    const emailAddress = `support_record_${org.id.slice(0, 8)}@acme.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'recorded-customer@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'Recorded manual reply.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(ServerClient).not.toHaveBeenCalled();
+
+    const records = await readOutboundRecords();
+    expect(records).toMatchObject([
+      {
+        source: 'dispatch_message',
+        provider: 'postmark',
+        channel: 'email',
+        organizationId: org.id,
+        threadId: thread.id,
+        to: 'recorded-customer@example.com',
+        from: emailAddress,
+        text: 'Recorded manual reply.',
+      },
+    ]);
 
     const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
     expect(savedMessage?.senderType).toBe(SenderType.agent);

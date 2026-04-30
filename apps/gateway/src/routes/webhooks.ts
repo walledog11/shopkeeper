@@ -339,6 +339,113 @@ router.post('/twilio', async (req: Request, res: Response) => {
     const isDismiss = normalised === 'dismiss' || normalised === 'no';
     const skipMatch = normalised.match(/^skip\s+(\d+)$/);
 
+    // ── Daily Digest commands ───────────────────────────────────────────────────
+    // Match the four digest commands against ctx.pendingDigest, which the digest
+    // worker writes when it sends the WhatsApp summary. <n> is 1-indexed.
+    const isReview      = normalised === 'review';
+    const openMatch     = normalised.match(/^open\s+(\d+)$/);
+    const spamMatch     = normalised.match(/^spam\s+(\d+)$/);
+    // REPLY preserves the original casing of <text> by slicing the raw body.
+    const replyMatch    = body.match(/^reply\s+(\d+)\s+([\s\S]+)$/i);
+
+    if ((isReview || openMatch || spamMatch || replyMatch) && ctx.pendingDigest) {
+      const { threadIds } = ctx.pendingDigest;
+
+      if (isReview) {
+        if (threadIds.length === 0) {
+          return twimlReply('No flagged tickets in your last digest.');
+        }
+        const rows = await db.thread.findMany({
+          where: { id: { in: threadIds }, organizationId },
+          select: { id: true, aiSummary: true, filterReason: true, customer: { select: { name: true } } },
+        });
+        const byId = new Map(rows.map(r => [r.id, r]));
+        const lines = ['Flagged tickets:'];
+        threadIds.forEach((id, i) => {
+          const t = byId.get(id);
+          if (!t) return;
+          const blurb = (t.aiSummary ?? t.filterReason ?? '').trim();
+          const truncated = blurb.length > 90 ? `${blurb.slice(0, 90)}…` : blurb;
+          lines.push(`${i + 1}. ${t.customer.name ?? 'Unknown'}${truncated ? ` — ${truncated}` : ''}`);
+        });
+        lines.push('', 'OPEN <n> · SPAM <n> · REPLY <n> <text>');
+        return twimlReply(lines.join('\n'));
+      }
+
+      const idxMatch = openMatch ?? spamMatch ?? replyMatch;
+      const idx = parseInt(idxMatch![1], 10) - 1;
+      if (idx < 0 || idx >= threadIds.length) {
+        return twimlReply(`No flagged ticket ${idx + 1}. Reply REVIEW to see the list.`);
+      }
+      const targetId = threadIds[idx];
+
+      if (openMatch) {
+        const t = await db.thread.findFirst({
+          where: { id: targetId, organizationId },
+          select: {
+            aiSummary: true,
+            tag: true,
+            filterReason: true,
+            customer: { select: { name: true } },
+            messages: {
+              where: { senderType: { not: 'note' }, deletedAt: null },
+              orderBy: { sentAt: 'desc' },
+              take: 1,
+              select: { sentAt: true, contentText: true },
+            },
+          },
+        });
+        if (!t) return twimlReply('Ticket not found.');
+        const last = t.messages[0];
+        const ageMs = last ? Date.now() - new Date(last.sentAt).getTime() : null;
+        const ageStr = ageMs == null ? ''
+          : ageMs < 3_600_000  ? `${Math.round(ageMs / 60_000)}m ago`
+          : ageMs < 86_400_000 ? `${Math.round(ageMs / 3_600_000)}h ago`
+          : `${Math.round(ageMs / 86_400_000)}d ago`;
+        const lines = [
+          `${idx + 1}. ${t.customer.name ?? 'Unknown'}`,
+          t.aiSummary ? `"${t.aiSummary}"` : null,
+          `Tag: ${t.tag ?? 'Untagged'}${t.filterReason ? ` · Flagged: ${t.filterReason}` : ''}`,
+          last ? `Last${ageStr ? ` (${ageStr})` : ''}: "${(last.contentText ?? '').slice(0, 120)}"` : null,
+          '',
+          `Reply SPAM ${idx + 1} or REPLY ${idx + 1} <text>.`,
+        ].filter((l): l is string => l !== null);
+        return twimlReply(lines.join('\n'));
+      }
+
+      if (spamMatch) {
+        await db.thread.update({
+          where: { id: targetId },
+          data: {
+            filterStatus: 'filtered',
+            filterFeedback: 'confirmed_spam',
+            filterDecidedAt: new Date(),
+          },
+        });
+        return twimlReply(`Marked ${idx + 1} as spam.`);
+      }
+
+      if (replyMatch) {
+        const text = replyMatch[2].trim();
+        await proactiveSend(filler());
+        res.type('text/xml').send('<Response/>');
+
+        const apiRes = await fetch(`${dashboardUrl}/api/messages/internal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret || '' },
+          body: JSON.stringify({ threadId: targetId, text }),
+        });
+        if (!apiRes.ok) {
+          const err = await apiRes.text();
+          logger.error({ status: apiRes.status, err, threadId: targetId }, '[Twilio] Digest REPLY failed');
+          await proactiveSend('Reply failed to send. Please try again from the dashboard.');
+          return;
+        }
+        await proactiveSend(`Reply sent on ticket ${idx + 1}.`);
+        return;
+      }
+    }
+
     if ((isRun || isDismiss || skipMatch) && ctx.pendingPlan) {
       const { threadId, instruction, rawToolCalls } = ctx.pendingPlan;
 

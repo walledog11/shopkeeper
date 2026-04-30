@@ -3,6 +3,7 @@ import { ServerClient } from 'postmark';
 import twilio from 'twilio';
 import logger from '@/lib/server/logger';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
+import { recordOutboundCall } from '@/lib/server/outbound-recorder';
 
 interface DispatchThread {
   id: string;
@@ -35,33 +36,46 @@ export async function dispatchMessage(
     const igToken = igIntegration?.accessToken;
     const igAccountId = igIntegration?.externalAccountId;
 
-    if (!igToken || !igAccountId) {
+    if (!igAccountId) {
       return { ok: false, error: 'No Instagram integration configured' };
     }
 
-    const metaRes = await fetch(`https://graph.facebook.com/v22.0/${igAccountId}/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${igToken}` },
-      body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }),
+    const recorded = await recordOutboundCall({
+      source: 'dispatch_message',
+      provider: 'meta',
+      channel: 'ig_dm',
+      organizationId: org.id,
+      threadId: thread.id,
+      to: recipientId,
+      from: igAccountId,
+      text,
+      metadata: { igAccountId },
     });
+    if (!recorded && !igToken) {
+      return { ok: false, error: 'No Instagram integration configured' };
+    }
 
-    if (!metaRes.ok) {
-      const errBody = await metaRes.json().catch(() => ({})) as { error?: { code?: number } };
-      const isExpired = errBody.error?.code === 190;
-      logger.error({ err: errBody }, '[dispatchMessage] Meta API failed');
-      return { ok: false, error: isExpired ? 'Instagram token expired' : 'Failed to send via Instagram' };
+    if (!recorded) {
+      const metaRes = await fetch(`https://graph.facebook.com/v22.0/${igAccountId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${igToken}` },
+        body: JSON.stringify({ recipient: { id: recipientId }, message: { text } }),
+      });
+
+      if (!metaRes.ok) {
+        const errBody = await metaRes.json().catch(() => ({})) as { error?: { code?: number } };
+        const isExpired = errBody.error?.code === 190;
+        logger.error({ err: errBody }, '[dispatchMessage] Meta API failed');
+        return { ok: false, error: isExpired ? 'Instagram token expired' : 'Failed to send via Instagram' };
+      }
     }
 
   } else if (thread.channelType === CHANNEL_TYPE.EMAIL) {
-    const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-    if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
-
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
     });
     if (!integration) return { ok: false, error: 'No email integration configured' };
 
-    const client = new ServerClient(POSTMARK_API_KEY);
     const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
     const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
     const fromEmail = integration.fromEmail || integration.externalAccountId;
@@ -73,37 +87,65 @@ export async function dispatchMessage(
     });
     const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
 
-    await client.sendEmail({
-      From: `${org.name} <${fromEmail}>`,
-      ReplyTo: integration.externalAccountId,
-      To: recipientId,
-      Subject: `Re: Your inquiry`,
-      TextBody: text,
-      Headers: [
-        { Name: 'Message-ID', Value: syntheticMessageId },
-        { Name: 'In-Reply-To', Value: inReplyTo },
-        { Name: 'References', Value: inReplyTo },
-      ],
+    const headers = [
+      { Name: 'Message-ID', Value: syntheticMessageId },
+      { Name: 'In-Reply-To', Value: inReplyTo },
+      { Name: 'References', Value: inReplyTo },
+    ];
+    const recorded = await recordOutboundCall({
+      source: 'dispatch_message',
+      provider: 'postmark',
+      channel: 'email',
+      organizationId: org.id,
+      threadId: thread.id,
+      to: recipientId,
+      from: fromEmail,
+      subject: 'Re: Your inquiry',
+      text,
+      headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
+      metadata: { replyTo: integration.externalAccountId },
     });
+    if (!recorded) {
+      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
+      if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
+
+      const client = new ServerClient(POSTMARK_API_KEY);
+      await client.sendEmail({
+        From: `${org.name} <${fromEmail}>`,
+        ReplyTo: integration.externalAccountId,
+        To: recipientId,
+        Subject: `Re: Your inquiry`,
+        TextBody: text,
+        Headers: headers,
+      });
+    }
 
   } else if (thread.channelType === CHANNEL_TYPE.SMS) {
-    const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER } = process.env;
-    if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
-      return { ok: false, error: 'SMS not configured' };
+    const recorded = await recordOutboundCall({
+      source: 'dispatch_message',
+      provider: 'twilio',
+      channel: 'sms',
+      organizationId: org.id,
+      threadId: thread.id,
+      to: recipientId,
+      from: process.env.TWILIO_FROM_NUMBER,
+      text,
+    });
+    if (!recorded) {
+      const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER } = process.env;
+      if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
+        return { ok: false, error: 'SMS not configured' };
+      }
+      const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+      await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
     }
-    const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-    await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
 
   } else if (thread.channelType === CHANNEL_TYPE.SHOPIFY) {
-    const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-    if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
-
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
     });
     if (!integration) return { ok: false, error: 'No email integration configured' };
 
-    const client = new ServerClient(POSTMARK_API_KEY);
     const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
     const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
     const fromEmail = integration.fromEmail || integration.externalAccountId;
@@ -115,18 +157,38 @@ export async function dispatchMessage(
     });
     const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
 
-    await client.sendEmail({
-      From: `${org.name} <${fromEmail}>`,
-      ReplyTo: integration.externalAccountId,
-      To: recipientId,
-      Subject: `Re: Your inquiry`,
-      TextBody: text,
-      Headers: [
-        { Name: 'Message-ID', Value: syntheticMessageId },
-        { Name: 'In-Reply-To', Value: inReplyTo },
-        { Name: 'References', Value: inReplyTo },
-      ],
+    const headers = [
+      { Name: 'Message-ID', Value: syntheticMessageId },
+      { Name: 'In-Reply-To', Value: inReplyTo },
+      { Name: 'References', Value: inReplyTo },
+    ];
+    const recorded = await recordOutboundCall({
+      source: 'dispatch_message',
+      provider: 'postmark',
+      channel: 'email',
+      organizationId: org.id,
+      threadId: thread.id,
+      to: recipientId,
+      from: fromEmail,
+      subject: 'Re: Your inquiry',
+      text,
+      headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
+      metadata: { replyTo: integration.externalAccountId, originalChannel: CHANNEL_TYPE.SHOPIFY },
     });
+    if (!recorded) {
+      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
+      if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
+
+      const client = new ServerClient(POSTMARK_API_KEY);
+      await client.sendEmail({
+        From: `${org.name} <${fromEmail}>`,
+        ReplyTo: integration.externalAccountId,
+        To: recipientId,
+        Subject: `Re: Your inquiry`,
+        TextBody: text,
+        Headers: headers,
+      });
+    }
   }
 
   await createMessage(

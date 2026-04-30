@@ -1,6 +1,5 @@
 import { createRequire } from 'node:module';
 import type { Message, Prisma, PrismaClient as PrismaClientType } from '@prisma/client';
-import { PrismaNeon } from '@prisma/adapter-neon';
 
 const require = createRequire(import.meta.url);
 const prismaClient = require('@prisma/client') as typeof import('@prisma/client');
@@ -25,6 +24,7 @@ const globalForPrisma = globalThis as unknown as {
 function createClient(): PrismaClientType {
   const log = (process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error']) as ('query' | 'error' | 'warn')[];
   if (process.env.NEON_SERVERLESS_HTTP === 'true' && process.env.NODE_ENV !== 'test') {
+    const { PrismaNeon } = require('@prisma/adapter-neon') as typeof import('@prisma/adapter-neon');
     const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL! });
     return new PrismaClient({ adapter, log });
   }

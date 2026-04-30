@@ -153,9 +153,13 @@ export default function ConversationView({
       <PresenceBanner presenceCount={presenceCount} />
 
       {/* Messages */}
-      <div className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
-        viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
-      }`}>
+      <div
+        data-testid={viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
+        data-thread-id={ticket.id}
+        className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
+          viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
+        }`}
+      >
         {viewTab === 'notes' ? (
           <NotesTimeline
             agentName={agentName}

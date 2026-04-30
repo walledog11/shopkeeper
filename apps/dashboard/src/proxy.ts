@@ -1,8 +1,13 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
+import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
 import { getPathAccessPolicy } from '@/proxy/path-access-policy'
 
 export default clerkMiddleware(async (auth, req) => {
+  if (isE2EAuthBypassEnabled()) {
+    return
+  }
+
   const pathname = req.nextUrl.pathname
   const policy = getPathAccessPolicy(pathname)
 

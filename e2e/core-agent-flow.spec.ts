@@ -1,58 +1,98 @@
-/**
- * E2E: Core agent flow (requires Clerk auth)
- *
- * Prerequisites:
- *   1. Set CLERK_E2E_EMAIL and CLERK_E2E_PASSWORD in .env.local pointing to a
- *      test Clerk account that belongs to a test organisation.
- *   2. Install @clerk/testing: `npm install --save-dev @clerk/testing -w apps/dashboard`
- *   3. Run `npx playwright install` to download browser binaries.
- *
- * Flow tested:
- *   Receive inbound email → dashboard shows new thread → agent opens thread →
- *   types a reply → reply is dispatched and message appears in conversation.
- *
- * All outbound platform API calls (Postmark, Meta) are intercepted via
- * Playwright route() so no real emails are sent.
- */
-import { test } from '@playwright/test';
+import { clerk } from '@clerk/testing/playwright';
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { requireClerkE2EEnv } from './clerk-env';
+import dbHelpers from './db-helpers.cjs';
+import outboundHelpers from './outbound-helpers.cjs';
 
-// TODO: Uncomment once @clerk/testing is installed and credentials are configured.
-// import { clerk, setupClerkTestingToken } from '@clerk/testing/playwright';
+const {
+  disconnectDb,
+  ensureE2EEmailIntegration,
+  getE2EOrg,
+  waitForAgentMessage,
+  waitForEmailThread,
+} = dbHelpers;
+const { waitForOutboundRecord } = outboundHelpers;
 
-test.skip('receive message → view thread → send reply', async ({ page }) => {
-  // --- Auth ---
-  // await setupClerkTestingToken({ page });
-  // await clerk.signIn({ page, signInParams: {
-  //   strategy: 'password',
-  //   identifier: process.env.CLERK_E2E_EMAIL!,
-  //   password: process.env.CLERK_E2E_PASSWORD!,
-  // }});
+const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://127.0.0.1:8180';
 
-  // --- Intercept outbound Postmark send ---
-  await page.route('https://api.postmarkapp.com/email', async route => {
-    await route.fulfill({ status: 200, body: JSON.stringify({ MessageID: 'mock-id' }) });
+test.afterAll(async () => {
+  await disconnectDb();
+});
+
+test('receive inbound email, view ticket, and send a recorded manual reply', async ({ page, request }) => {
+  const clerkEnv = requireClerkE2EEnv();
+  const org = await getE2EOrg();
+  const emailIntegration = await ensureE2EEmailIntegration(org.id);
+
+  const runId = Date.now();
+  const customerEmail = `core-e2e-${runId}@example.com`;
+  const inboundText = `core browser automated test message ${runId}`;
+  const replyText = `core browser manual reply ${runId}`;
+
+  const inboundResponse = await request.post(`${gatewayUrl}/webhooks/email/inbound`, {
+    form: {
+      From: `Core E2E <${customerEmail}>`,
+      To: emailIntegration.externalAccountId,
+      Subject: `Core browser E2E ${runId}`,
+      TextBody: inboundText,
+      MessageID: `<core-e2e-${runId}@example.com>`,
+    },
+  });
+  const inboundBody = await inboundResponse.text();
+
+  expect(
+    inboundResponse.ok(),
+    `Expected email webhook 2xx, got ${inboundResponse.status()}: ${inboundBody}`,
+  ).toBeTruthy();
+
+  const thread = await waitForEmailThread({
+    orgId: org.id,
+    customerEmail,
+    textIncludes: inboundText,
   });
 
-  // --- Inject an inbound email via gateway ---
-  // const orgId = '...'; // retrieve from Clerk session after sign-in
-  // await request.post('http://localhost:8080/webhooks/email/inbound', { form: { ... } });
+  await page.goto('/');
+  await clerk.signIn({ page, emailAddress: clerkEnv.email });
+  await clerk.loaded({ page });
+  await activateClerkOrganization(page, clerkEnv.orgId);
 
-  // --- Navigate to dashboard ---
-  await page.goto('/dashboard');
-  await page.waitForSelector('[data-testid="thread-list"]');
+  await page.goto(`/dashboard/tickets?thread=${thread.id}`);
 
-  // --- Assert new thread is visible ---
-  // const threadItem = page.locator('[data-testid="thread-item"]').first();
-  // await expect(threadItem).toBeVisible();
+  await expect(page.getByTestId('tickets-list')).toBeVisible();
+  await expect(page.locator(`[data-testid="ticket-row"][data-ticket-id="${thread.id}"]`)).toBeVisible();
+  await expect(page.getByTestId('chat-message').filter({ hasText: inboundText })).toBeVisible();
 
-  // --- Open thread and send reply ---
-  // await threadItem.click();
-  // await page.fill('[data-testid="reply-input"]', 'Thanks for reaching out!');
-  // await page.click('[data-testid="send-reply"]');
+  await page.getByTestId('reply-composer-textarea').fill(replyText);
+  await page.getByTestId('reply-composer-send').click();
 
-  // --- Assert message appears in conversation ---
-  // await expect(page.locator('[data-testid="message-bubble"]').last()).toContainText('Thanks for reaching out!');
+  await waitForOutboundRecord((record: { threadId?: string; channel?: string; text?: string }) =>
+    record.threadId === thread.id &&
+    record.channel === 'email' &&
+    typeof record.text === 'string' &&
+    record.text.includes(replyText),
+  );
 
-  // --- Assert Postmark was called ---
-  // expect(postmarkPayload).toMatchObject({ TextBody: 'Thanks for reaching out!' });
+  await waitForAgentMessage({
+    threadId: thread.id,
+    textIncludes: replyText,
+  });
+  await expect(page.getByTestId('chat-message').filter({ hasText: replyText })).toBeVisible();
 });
+
+async function activateClerkOrganization(page: Page, organizationId: string) {
+  await page.evaluate(async (orgId) => {
+    const clerkInstance = (window as Window & {
+      Clerk?: {
+        loaded?: boolean;
+        setActive: (params: { organization: string }) => Promise<void>;
+      };
+    }).Clerk;
+
+    if (!clerkInstance?.loaded) {
+      throw new Error('Clerk did not finish loading before organization activation');
+    }
+
+    await clerkInstance.setActive({ organization: orgId });
+  }, organizationId);
+}

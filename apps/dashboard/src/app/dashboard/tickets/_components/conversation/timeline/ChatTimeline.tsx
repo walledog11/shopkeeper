@@ -48,12 +48,23 @@ export default function ChatTimeline({
   return (
     <>
       {messages.map((msg) => (
-        <div key={msg.id} className={`flex flex-col gap-1 ${msg.sender === "agent" || msg.sender === "ai" ? "items-end" : "items-start"}`}>
-          <div className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
-            msg.sender === "agent" || msg.sender === "ai"
-              ? "bg-white/[0.14] text-white rounded-md rounded-tr-sm"
-              : "bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm"
-          }`}>
+        <div
+          key={msg.id}
+          data-testid="chat-message"
+          data-message-id={msg.id}
+          data-sender={msg.sender}
+          className={`flex flex-col gap-1 ${msg.sender === "agent" || msg.sender === "ai" ? "items-end" : "items-start"}`}
+        >
+          <div
+            data-testid="chat-message-bubble"
+            data-message-id={msg.id}
+            data-sender={msg.sender}
+            className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
+              msg.sender === "agent" || msg.sender === "ai"
+                ? "bg-white/[0.14] text-white rounded-md rounded-tr-sm"
+                : "bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm"
+            }`}
+          >
             {msg.text}
             <AttachmentList attachments={msg.attachments ?? []} />
           </div>
@@ -62,8 +73,17 @@ export default function ChatTimeline({
       ))}
 
       {failedMessages.map(failedMessage => (
-        <div key={failedMessage.id} className="flex flex-col gap-1 items-end">
-          <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm">
+        <div
+          key={failedMessage.id}
+          data-testid="failed-chat-message"
+          data-message-id={failedMessage.id}
+          className="flex flex-col gap-1 items-end"
+        >
+          <div
+            data-testid="failed-chat-message-bubble"
+            data-message-id={failedMessage.id}
+            className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm"
+          >
             {failedMessage.text}
           </div>
           <div className="flex items-center gap-1.5 mx-1">

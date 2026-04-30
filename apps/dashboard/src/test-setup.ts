@@ -13,6 +13,8 @@ for (const [key, value] of Object.entries(TEST_DEFAULTS)) {
   if (!process.env[key]) process.env[key] = value;
 }
 
+process.env.E2E_OUTBOUND_MODE = 'live';
+
 // Bypass rate limiting in tests — no Redis available in CI
 vi.mock('@/lib/server/rate-limit', () => ({
   rateLimit: vi.fn().mockResolvedValue({ success: true, remaining: 100, reset: 9999999999 }),

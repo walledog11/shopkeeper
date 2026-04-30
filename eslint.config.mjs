@@ -21,6 +21,7 @@ const repoNodeTsFiles = [
   "e2e/**/*.ts",
   "packages/db/index.ts",
   "packages/db/test-helpers.ts",
+  "playwright.browser.config.ts",
   "playwright.config.ts",
 ];
 

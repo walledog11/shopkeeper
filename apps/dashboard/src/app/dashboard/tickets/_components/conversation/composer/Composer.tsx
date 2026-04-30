@@ -223,6 +223,7 @@ export default function Composer({
             </span>
           )}
           <textarea
+            data-testid="reply-composer-textarea"
             ref={textareaRef}
             value={value}
             onChange={e => handleTextChange(e.target.value)}
@@ -277,6 +278,7 @@ export default function Composer({
               </span>
             )}
             <button
+              data-testid="reply-composer-send"
               disabled={sendDisabled}
               onClick={() => onSend(isNoteTab)}
               className={`flex items-center gap-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed h-8 pl-3 pr-2 rounded-md transition-colors ${

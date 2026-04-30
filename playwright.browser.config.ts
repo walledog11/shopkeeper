@@ -2,7 +2,6 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: /core-agent-flow\.spec\.ts/,
   globalSetup: './scripts/playwright-global-setup.mjs',
   globalTeardown: './scripts/playwright-global-teardown.mjs',
   timeout: 60_000,
@@ -14,7 +13,13 @@ export default defineConfig({
   },
   projects: [
     {
+      name: 'clerk setup',
+      testMatch: /clerk\.setup\.ts/,
+    },
+    {
       name: 'chromium',
+      testMatch: /core-agent-flow\.spec\.ts/,
+      dependencies: ['clerk setup'],
       use: { ...devices['Desktop Chrome'], channel: 'chromium' },
     },
   ],

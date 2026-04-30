@@ -21,23 +21,30 @@ export interface PendingPlan {
   rawToolCalls: ToolCall[];
 }
 
+export interface PendingDigest {
+  threadIds: string[];
+  sentAt: string;
+}
+
 export interface SmsContext {
   lastOrderNumber: string | null;
   lastThreadId: string | null;
   history: { role: string; content: string }[];
   pendingPlan: PendingPlan | null;
+  pendingDigest: PendingDigest | null;
 }
 
 export async function getContext(organizationId: string, phone: string): Promise<SmsContext> {
   const row = await db.smsContext.findUnique({
     where: { organizationId_phoneNumber: { organizationId, phoneNumber: phone } },
   });
-  if (!row) return { lastOrderNumber: null, lastThreadId: null, history: [], pendingPlan: null };
+  if (!row) return { lastOrderNumber: null, lastThreadId: null, history: [], pendingPlan: null, pendingDigest: null };
   return {
     lastOrderNumber: row.lastOrderNumber ?? null,
     lastThreadId: row.lastThreadId ?? null,
     history: Array.isArray(row.history) ? (row.history as { role: string; content: string }[]) : [],
     pendingPlan: row.pendingPlan ? (row.pendingPlan as unknown as PendingPlan) : null,
+    pendingDigest: row.pendingDigest ? (row.pendingDigest as unknown as PendingDigest) : null,
   };
 }
 
@@ -56,6 +63,7 @@ export async function updateContext(organizationId: string, phone: string, updat
       lastThreadId: next.lastThreadId ?? null,
       history: next.history,
       pendingPlan: next.pendingPlan ? (next.pendingPlan as object) : Prisma.DbNull,
+      pendingDigest: next.pendingDigest ? (next.pendingDigest as object) : Prisma.DbNull,
     },
     create: {
       organizationId,
@@ -64,6 +72,7 @@ export async function updateContext(organizationId: string, phone: string, updat
       lastThreadId: next.lastThreadId ?? null,
       history: next.history,
       pendingPlan: next.pendingPlan ? (next.pendingPlan as object) : Prisma.DbNull,
+      pendingDigest: next.pendingDigest ? (next.pendingDigest as object) : Prisma.DbNull,
     },
   });
 }

@@ -6,6 +6,7 @@
   "scripts": {
     "tunnel": "ngrok http 8080 --url=darren-unalloyed-reina.ngrok-free.dev",
     "dev": "concurrently --kill-others-on-fail --names \"server,worker,tunnel\" --prefix-colors \"bgBlue.bold,bgMagenta.bold,bgGreen.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\" \"killall ngrok 2>/dev/null; sleep 1; ngrok http 8080 --url=darren-unalloyed-reina.ngrok-free.dev\"",
+    "dev:e2e": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx src/index.ts\" \"tsx src/worker.ts\"",
     "build": "tsc",
     "lint": "cd ../.. && eslint apps/gateway/src apps/gateway/vitest.config.ts",
     "start": "node dist/start.js",

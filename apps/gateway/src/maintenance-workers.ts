@@ -1,9 +1,10 @@
 import { Worker, Queue, type WorkerOptions } from 'bullmq';
-import { db } from '@clerk/db';
+import { db, ThreadFilterStatus, ThreadFilterFeedback, type DbThreadFilterStatus } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { CHANNEL, QUEUE, JOB } from './constants.js';
 import { getTwilio } from './message-handlers.js';
+import { updateContext } from './sms-context.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -11,6 +12,113 @@ const CONCURRENCY = 5;
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 const ARCHIVE_AFTER_DAYS = 90;
 const PURGE_AFTER_DAYS = 90;
+export const FILTERED_PURGE_AFTER_DAYS = 7;
+
+const DIGEST_QUESTIONABLE_LIMIT = 10;
+const DIGEST_SUMMARY_TRUNC = 90;
+
+interface DigestThreadRow {
+  id: string;
+  updatedAt: Date;
+  tag: string | null;
+  filterStatus: DbThreadFilterStatus;
+  aiSummary: string | null;
+  filterReason: string | null;
+  customer: { name: string | null };
+}
+
+interface DigestBuckets {
+  genuine: DigestThreadRow[];
+  questionable: DigestThreadRow[];
+  filteredCount: number;
+  urgent: number;
+  stale: number;
+  fresh: number;
+  topTags: string;
+}
+
+export function bucketDigestThreads(threads: DigestThreadRow[], now: Date): DigestBuckets {
+  const genuine: DigestThreadRow[] = [];
+  const questionable: DigestThreadRow[] = [];
+  let filteredCount = 0;
+
+  for (const t of threads) {
+    if (t.filterStatus === ThreadFilterStatus.questionable) questionable.push(t);
+    else if (t.filterStatus === ThreadFilterStatus.filtered) filteredCount++;
+    else genuine.push(t);
+  }
+
+  const nowMs = now.getTime();
+  let urgent = 0, stale = 0, fresh = 0;
+  for (const t of genuine) {
+    const age = nowMs - t.updatedAt.getTime();
+    if (age > 24 * 3_600_000)      urgent++;
+    else if (age > 4 * 3_600_000)  stale++;
+    else                           fresh++;
+  }
+
+  const tagCounts: Record<string, number> = {};
+  for (const t of genuine) {
+    if (t.tag) tagCounts[t.tag] = (tagCounts[t.tag] ?? 0) + 1;
+  }
+  const topTags = Object.entries(tagCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([tag, count]) => `${tag} (${count})`)
+    .join(' · ');
+
+  return { genuine, questionable, filteredCount, urgent, stale, fresh, topTags };
+}
+
+export function formatDigestMessage(buckets: DigestBuckets): string {
+  const { genuine, questionable, filteredCount, urgent, stale, fresh, topTags } = buckets;
+  const lines: string[] = [`Here's your support inbox:`, ``, `Open tickets: ${genuine.length}`];
+
+  if (urgent > 0) lines.push(`  No reply >24h: ${urgent}`);
+  if (stale > 0)  lines.push(`  Needs attention (4-24h): ${stale}`);
+  if (fresh > 0)  lines.push(`  Recent (<4h): ${fresh}`);
+
+  if (questionable.length > 0) {
+    lines.push(``, `Flagged (review needed): ${questionable.length}`);
+    const shown = questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT);
+    shown.forEach((t, i) => {
+      const name = t.customer.name ?? 'Unknown';
+      const blurb = (t.aiSummary ?? t.filterReason ?? '').trim();
+      const truncated = blurb.length > DIGEST_SUMMARY_TRUNC ? `${blurb.slice(0, DIGEST_SUMMARY_TRUNC)}…` : blurb;
+      lines.push(`${i + 1}. ${name}${truncated ? ` — ${truncated}` : ''}`);
+    });
+    if (questionable.length > shown.length) {
+      lines.push(`  …and ${questionable.length - shown.length} more`);
+    }
+  }
+
+  if (filteredCount > 0) {
+    lines.push(``, `Filtered: ${filteredCount} (auto-removed in 7d)`);
+  }
+
+  if (topTags) lines.push(``, `Topics: ${topTags}`);
+
+  lines.push(``);
+  if (questionable.length > 0) {
+    lines.push(`Reply OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to relist`);
+  }
+  lines.push(`Or send an order number (e.g. #1234) for ticket details.`);
+
+  return lines.join('\n');
+}
+export async function purgeFilteredThreads(now: Date): Promise<number> {
+  const cutoff = new Date(now.getTime() - FILTERED_PURGE_AFTER_DAYS * ONE_DAY_MS);
+  const result = await db.thread.deleteMany({
+    where: {
+      filterStatus: ThreadFilterStatus.filtered,
+      filterFeedback: ThreadFilterFeedback.none,
+      filterDecidedAt: { lt: cutoff },
+      messages: { none: { senderType: 'agent' } },
+    },
+  });
+  return result.count;
+}
+
 type SharedWorkerOptions = Pick<WorkerOptions, 'drainDelay' | 'stalledInterval'>;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -160,6 +268,12 @@ export async function createMaintenanceWorkers(
       { messages: deletedMessages.count, threads: deletedThreads.count, customers: deletedCustomers.count, cutoffDays: PURGE_AFTER_DAYS },
       '[Purge] Hard-deleted expired soft-deleted records'
     );
+
+    const filteredPurged = await purgeFilteredThreads(new Date());
+    logger.info(
+      { count: filteredPurged, cutoffDays: FILTERED_PURGE_AFTER_DAYS },
+      '[Purge] Hard-deleted aged filtered threads'
+    );
   }, { connection: workerConn, ...workerOptions });
 
   purgeWorker.on('failed', (job, err) => {
@@ -240,14 +354,26 @@ export async function createMaintenanceWorkers(
 
     if (eligibleOrgs.length === 0) return;
 
-    // Single query for all eligible orgs instead of one per org
+    // Single query for all eligible orgs. We fetch every open thread regardless
+    // of filterStatus so the bucketing happens in memory.
     const now = new Date();
     const allOpenThreads = await db.thread.findMany({
       where: { organizationId: { in: eligibleOrgs.map(o => o.id) }, status: 'open', deletedAt: null },
-      select: { organizationId: true, updatedAt: true, tag: true },
+      select: {
+        id: true,
+        organizationId: true,
+        updatedAt: true,
+        tag: true,
+        filterStatus: true,
+        aiSummary: true,
+        filterReason: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
     });
 
-    const threadsByOrg = new Map<string, typeof allOpenThreads>();
+    type DigestThread = typeof allOpenThreads[number];
+    const threadsByOrg = new Map<string, DigestThread[]>();
     for (const t of allOpenThreads) {
       if (!threadsByOrg.has(t.organizationId)) threadsByOrg.set(t.organizationId, []);
       threadsByOrg.get(t.organizationId)!.push(t);
@@ -257,32 +383,13 @@ export async function createMaintenanceWorkers(
       const openThreads = threadsByOrg.get(org.id) ?? [];
       if (openThreads.length === 0) continue;
 
-      const urgent = openThreads.filter(t => now.getTime() - t.updatedAt.getTime() > 24 * 3_600_000).length;
-      const stale  = openThreads.filter(t => { const age = now.getTime() - t.updatedAt.getTime(); return age > 4 * 3_600_000 && age <= 24 * 3_600_000; }).length;
-      const fresh  = openThreads.length - urgent - stale;
+      const buckets = bucketDigestThreads(openThreads, now);
+      const message = formatDigestMessage(buckets);
 
-      const tagCounts: Record<string, number> = {};
-      for (const t of openThreads) {
-        if (t.tag) tagCounts[t.tag] = (tagCounts[t.tag] ?? 0) + 1;
-      }
-      const topTags = Object.entries(tagCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 3)
-        .map(([tag, count]) => `${tag} (${count})`)
-        .join(' · ');
-
-      const lines: string[] = [
-        `Here's your support inbox:`,
-        ``,
-        `Open tickets: ${openThreads.length}`,
-      ];
-      if (urgent > 0) lines.push(`  No reply >24h: ${urgent}`);
-      if (stale > 0)  lines.push(`  Needs attention (4-24h): ${stale}`);
-      if (fresh > 0)  lines.push(`  Recent (<4h): ${fresh}`);
-      if (topTags)    lines.push(``, `Topics: ${topTags}`);
-      lines.push(``, `Reply with an order number (e.g. #1234) to get ticket details.`);
-
-      const message = lines.join('\n');
+      const pendingDigest = {
+        threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map(t => t.id),
+        sentAt: now.toISOString(),
+      };
 
       for (const member of org.members) {
         try {
@@ -291,7 +398,9 @@ export async function createMaintenanceWorkers(
             to: `whatsapp:${member.phoneNumber}`,
             body: message,
           });
-          logger.info({ organizationId: org.id, phone: member.phoneNumber }, '[Digest] Sent digest');
+          // Persist the numbered list so OPEN/SPAM/REPLY <n> can resolve to a thread id.
+          await updateContext(org.id, member.phoneNumber!, { pendingDigest });
+          logger.info({ organizationId: org.id, phone: member.phoneNumber, flagged: buckets.questionable.length }, '[Digest] Sent digest');
         } catch (e) {
           logger.error({ err: (e as Error).message, phone: member.phoneNumber }, '[Digest] Failed to send digest');
         }

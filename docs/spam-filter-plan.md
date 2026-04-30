@@ -178,9 +178,15 @@ Each phase is a coherent unit that can be shipped, reviewed, and merged on its o
 - [x] Settings page: add "Filter spam emails" toggle bound to `Organization.settings.spamFilterEnabled`.
 - [x] Tests: feedback writes on reply / close / mark-spam / recover; threads API filter param.
 
-### Phase 4 — Daily digest (gateway)
+### Phase 4 — Daily digest (gateway) ✅
 
-- [ ] Tests: aggregator math, formatter output, each inbound command branch.
+- [x] Add `pendingDigest` JSON column to `sms_contexts` (migration `20260429000000_add_sms_pending_digest`).
+- [x] Extend `SmsContext` interface with `pendingDigest` field; thread through `getContext` / `updateContext`.
+- [x] Extend digest worker (`maintenance-workers.ts`) to bucket open threads by `filterStatus` (genuine count + urgency, questionable list with summaries, filtered count); per-org scheduling kept intact.
+- [x] Persist `pendingDigest = { threadIds, sentAt }` per recipient phone after each digest send.
+- [x] Twilio webhook (`routes/webhooks.ts`) recognizes `REVIEW` / `OPEN <n>` / `SPAM <n>` / `REPLY <n> <text>` against `ctx.pendingDigest`.
+- [x] Internal endpoint `apps/dashboard/src/app/api/messages/internal/route.ts` for REPLY dispatch (with implicit `confirmed_genuine` feedback).
+- [x] Tests: aggregator math, formatter output, each inbound command branch.
 
 ### Phase 5 — Purge sweep
 

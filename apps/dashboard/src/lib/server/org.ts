@@ -1,12 +1,16 @@
 import { db } from '@clerk/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
+import { getE2EBypassOrg } from './e2e-org';
 
 /**
  * Looks up the Organization for the currently active Clerk organization.
  * Creates one on first use if it doesn't exist yet.
  */
 export async function getOrCreateOrg() {
+  const e2eOrg = await getE2EBypassOrg();
+  if (e2eOrg) return e2eOrg;
+
   const { userId, orgId } = await auth();
 
   if (!userId) throw new UnauthorizedError();

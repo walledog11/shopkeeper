@@ -81,7 +81,10 @@ export default function ThreadList({
         onTabChange={onTabChange}
       />
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/[0.1]">
+      <div
+        data-testid="tickets-list"
+        className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/[0.1]"
+      >
         {tickets.map(ticket => (
           <TicketRow
             key={ticket.id}

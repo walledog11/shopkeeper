@@ -185,6 +185,7 @@ model SmsContext {
   lastThreadId    String?  @map("last_thread_id") @db.Uuid
   history         Json     @default("[]") @db.JsonB
   pendingPlan     Json?    @map("pending_plan") @db.JsonB
+  pendingDigest   Json?    @map("pending_digest") @db.JsonB
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
