@@ -15,7 +15,7 @@ import { fetcher } from '@/lib/api/fetcher'
 import ThreadList from './thread-list/ThreadList'
 import ConversationView from './conversation/ConversationView'
 import ContextPanel from './context-panel/ContextPanel'
-import { readAgentPlanCachePlan } from '@/lib/agent/plan-cache-shape'
+import { getCurrentPlanForThread } from '@/lib/agent/plan-cache-shape'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
 interface Props {
@@ -78,14 +78,18 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const allThreads = isSearchMode ? searchThreads : dbThreads
   const activeThread = allThreads.find(t => t.id === activeTicketId)
 
-  const lastCustomerMessageId = activeThread?.messages
-    .filter(m => m.senderType === 'customer')
-    .at(-1)?.id ?? null
-  const cachedPlan = activeThread
-    && activeThread.cachedPlanMessageId
-    && activeThread.cachedPlanMessageId === lastCustomerMessageId
-    ? readAgentPlanCachePlan(activeThread.cachedPlan)
-    : null
+  const lastCustomerMessageId = useMemo(
+    () => activeThread?.messages.filter(m => m.senderType === 'customer').at(-1)?.id ?? null,
+    [activeThread?.messages],
+  )
+  const cachedPlanMessageId = activeThread?.cachedPlanMessageId ?? null
+  // Key memo on cachedPlanMessageId (content fingerprint) rather than the cachedPlan
+  // ref, which churns on every SWR poll and would re-fire downstream effects.
+  const cachedPlan = useMemo(
+    () => activeThread ? getCurrentPlanForThread(activeThread, lastCustomerMessageId) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeThread?.id, cachedPlanMessageId, lastCustomerMessageId],
+  )
 
   const { selectedIds, setSelectedIds, handleToggleSelect, handleClearSelection } = useTicketSelection()
 

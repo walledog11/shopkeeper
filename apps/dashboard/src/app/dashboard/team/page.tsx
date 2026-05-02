@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import TeamPageClient from './_components/TeamPageClient';
@@ -31,10 +32,12 @@ export default async function TeamPage() {
   }));
 
   return (
-    <TeamPageClient
-      initialMembers={members}
-      initialInvitations={pendingInvitations}
-      currentUserId={userId}
-    />
+    <Suspense fallback={null}>
+      <TeamPageClient
+        initialMembers={members}
+        initialInvitations={pendingInvitations}
+        currentUserId={userId}
+      />
+    </Suspense>
   );
 }

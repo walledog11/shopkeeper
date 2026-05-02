@@ -74,3 +74,12 @@ export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRec
 export function readAgentPlanCachePlan(value: unknown): AgentPlan | null {
   return readAgentPlanCacheRecordShape(value)?.plan ?? null
 }
+
+export function getCurrentPlanForThread(
+  thread: { cachedPlan: unknown; cachedPlanMessageId: string | null },
+  lastCustomerMessageId: string | null,
+): AgentPlan | null {
+  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== lastCustomerMessageId) return null
+  const plan = readAgentPlanCachePlan(thread.cachedPlan)
+  return plan && plan.steps.length > 0 ? plan : null
+}

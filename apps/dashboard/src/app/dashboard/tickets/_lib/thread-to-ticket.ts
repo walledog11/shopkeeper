@@ -2,17 +2,15 @@ import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
 import { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
+import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape";
 import { AGENT_NOTE_PREFIX, SENDER_TYPE } from "@/lib/messaging/thread-constants";
 import type { Thread, Ticket } from "@/types";
 
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {
   const channel = getChannelInfo(thread.channelType);
   const lastMsg = thread.messages.filter((message) => message.senderType !== SENDER_TYPE.NOTE).at(-1);
-  const planIsForLastMessage =
-    !!thread.cachedPlan &&
-    !!thread.cachedPlanMessageId &&
-    lastMsg?.senderType === SENDER_TYPE.CUSTOMER &&
-    lastMsg.id === thread.cachedPlanMessageId;
+  const lastCustomerMessageId = lastMsg?.senderType === SENDER_TYPE.CUSTOMER ? lastMsg.id : null;
+  const planIsForLastMessage = getCurrentPlanForThread(thread, lastCustomerMessageId) !== null;
 
   return {
     id: thread.id,

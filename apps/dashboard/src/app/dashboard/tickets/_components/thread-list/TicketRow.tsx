@@ -1,7 +1,15 @@
 "use client"
 
+import { useRef, useState } from "react"
 import Image from "next/image"
-import { Ban, CheckSquare, Flag, RotateCcw, Sparkle, Sparkles, Square } from "lucide-react"
+import { Ban, CheckSquare, Flag, MoreHorizontal, RotateCcw, Sparkles, Square } from "lucide-react"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { getSlaInfo } from "./sla"
 import { getAvatarGradient, getInitials, getTagStyle, type TicketListTab } from "./constants"
 import type { Ticket } from "@/types"
@@ -18,6 +26,10 @@ interface TicketRowProps {
   onMarkAsSpam?: (id: string) => void
   onRecover?: (id: string) => void
 }
+
+const SWIPE_DETECT_PX = 8
+const SWIPE_COMMIT_PX = 120
+const CLICK_SUPPRESS_PX = 6
 
 export function TicketRow({
   activeTab,
@@ -39,108 +51,209 @@ export function TicketRow({
   const gradient = getAvatarGradient(ticket.customer)
   const initials = getInitials(ticket.customer)
   const closed = ticket.status === "closed" || activeTab === "closed"
-
   const overdue = sla?.dot === "bg-red-400"
+
+  const isHoverCapable = useMediaQuery("(hover: hover) and (pointer: fine)")
+  const useSwipe = isHoverCapable === false
+
+  const recoverable = activeTab === "filtered" && !!onRecover
+  const spammable = !closed && ticket.filterStatus !== "filtered" && !!onMarkAsSpam
+  const rowAction = !hasSelection && !isSearchMode
+    ? recoverable
+      ? { kind: "recover" as const, run: () => onRecover!(ticket.id) }
+      : spammable
+        ? { kind: "spam" as const, run: () => onMarkAsSpam!(ticket.id) }
+        : null
+    : null
+
+  const [tx, setTx] = useState(0)
+  const [animating, setAnimating] = useState(false)
+  const swipe = useRef({ startX: 0, startY: 0, dx: 0, active: false, locked: false, width: 0 })
+
+  const canSwipe = useSwipe && rowAction !== null
+
+  function onPointerDown(event: React.PointerEvent) {
+    if (!canSwipe) return
+    swipe.current = {
+      startX: event.clientX, startY: event.clientY,
+      dx: 0, active: true, locked: false,
+      width: event.currentTarget.getBoundingClientRect().width,
+    }
+    setAnimating(false)
+  }
+
+  function onPointerMove(event: React.PointerEvent) {
+    const s = swipe.current
+    if (!s.active) return
+    const dx = event.clientX - s.startX
+    const dy = event.clientY - s.startY
+    if (!s.locked) {
+      if (Math.abs(dx) < SWIPE_DETECT_PX && Math.abs(dy) < SWIPE_DETECT_PX) return
+      if (Math.abs(dy) > Math.abs(dx)) { s.active = false; return }
+      s.locked = true
+    }
+    s.dx = Math.min(0, dx)
+    setTx(s.dx)
+  }
+
+  function onPointerUp() {
+    const s = swipe.current
+    if (!s.active) return
+    s.active = false
+    const commit = Math.min(SWIPE_COMMIT_PX, s.width * 0.4)
+    setAnimating(true)
+    if (s.dx <= -commit && rowAction) {
+      setTx(-s.width)
+      window.setTimeout(() => rowAction.run(), 180)
+    } else {
+      setTx(0)
+    }
+  }
+
+  function onPointerCancel() {
+    swipe.current.active = false
+    setAnimating(true)
+    setTx(0)
+  }
+
+  function handleClick() {
+    if (Math.abs(swipe.current.dx) > CLICK_SUPPRESS_PX) return
+    onSelectTicket(ticket.id)
+  }
 
   return (
     <div
       data-testid="ticket-row"
       data-ticket-id={ticket.id}
       data-ticket-channel={ticket.channelType}
-      className={`cursor-pointer relative px-4 py-2 mt-0.5 transition-colors group ${
-        isActive ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
-      }`}
+      className="relative overflow-hidden"
     >
-      <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
-        isActive ? "bg-green-400" : "bg-transparent"
-      }`} />
-
-      <button
-        onClick={event => { event.stopPropagation(); onToggleSelect(ticket.id) }}
-        className={`absolute left-3 top-1/2 -translate-y-1/2 transition-opacity z-10 ${
-          hasSelection || isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-        }`}
-      >
-        {isSelected
-          ? <CheckSquare className="w-3.5 h-3.5 text-white/70" />
-          : <Square className="w-3.5 h-3.5 text-white/20" />
-        }
-      </button>
+      {canSwipe && tx < 0 && rowAction && (
+        <div
+          className={`absolute inset-y-0 right-0 left-0 flex items-center justify-end gap-2 pr-5 text-white text-sm font-semibold pointer-events-none ${
+            rowAction.kind === "spam" ? "bg-red-500/90" : "bg-emerald-500/90"
+          }`}
+        >
+          {rowAction.kind === "spam"
+            ? <><Ban className="w-4 h-4" /> Spam</>
+            : <><RotateCcw className="w-4 h-4" /> Recover</>
+          }
+        </div>
+      )}
 
       <div
-        data-testid="ticket-row-open"
-        data-ticket-id={ticket.id}
-        onClick={() => onSelectTicket(ticket.id)}
-        className={`flex items-start gap-3 transition-all ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        style={canSwipe ? {
+          transform: `translateX(${tx}px)`,
+          transition: animating ? "transform 180ms ease" : "none",
+          touchAction: "pan-y",
+        } : undefined}
+        className={`relative ${canSwipe ? "bg-background" : ""}`}
       >
-        <div className="relative w-9 h-9 shrink-0">
-          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
-            {initials}
-          </div>
-          <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-            <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
-          </div>
-        </div>
+        <div
+          className={`cursor-pointer relative px-4 py-2 mt-0.5 transition-colors group ${
+            isActive ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+          }`}
+        >
+          <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
+            isActive ? "bg-green-400" : "bg-transparent"
+          }`} />
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2 mb-0.5">
-            <span className="text-sm font-semibold text-white/90 truncate">{ticket.customer}</span>
-            <span className={`text-[10px] shrink-0 ${overdue ? "text-red-400 font-semibold" : "text-white/30"}`}>{ticket.time}</span>
+          <button
+            onClick={event => { event.stopPropagation(); onToggleSelect(ticket.id) }}
+            className={`absolute left-3 top-1/2 -translate-y-1/2 transition-opacity z-10 ${
+              hasSelection || isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            {isSelected
+              ? <CheckSquare className="w-3.5 h-3.5 text-white/70" />
+              : <Square className="w-3.5 h-3.5 text-white/20" />
+            }
+          </button>
+
+          <div
+            data-testid="ticket-row-open"
+            data-ticket-id={ticket.id}
+            onClick={handleClick}
+            className={`flex items-start gap-3 transition-all ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
+          >
+            <div className="relative w-9 h-9 shrink-0">
+              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+                {initials}
+              </div>
+              <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
+              </div>
+            </div>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                <span className="text-sm font-semibold text-white/90 truncate">{ticket.customer}</span>
+                <span className={`text-[10px] shrink-0 ${overdue ? "text-red-400 font-semibold" : "text-white/30"}`}>{ticket.time}</span>
+              </div>
+
+              <p className="text-[13px] font-medium text-white/80 truncate mb-0.5">{ticket.subject}</p>
+              <p className="text-xs text-white/40 line-clamp-1 mb-2">{ticket.preview}</p>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${tagStyle.className}`}>
+                  {tagStyle.label}
+                </span>
+                {ticket.hasPlan && !closed && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400">
+                    <Sparkles className="w-2.5 h-2.5 mr-1"/> Plan ready
+                  </span>
+                )}
+                {ticket.filterStatus === "questionable" && !closed && (
+                  <span
+                    title={ticket.filterReason ?? undefined}
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400"
+                  >
+                    <Flag className="w-2.5 h-2.5 mr-1" /> Flagged
+                  </span>
+                )}
+                {closed && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-400/10 text-green-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                    Closed
+                  </span>
+                )}
+                {!sla && isSearchMode && ticket.status && !closed && (
+                  <span className="text-[10px] text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
+                )}
+              </div>
+            </div>
           </div>
 
-          <p className="text-[13px] font-medium text-white/80 truncate mb-0.5">{ticket.subject}</p>
-          <p className="text-xs text-white/40 line-clamp-1 mb-2">{ticket.preview}</p>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${tagStyle.className}`}>
-              {tagStyle.label}
-            </span>
-            {ticket.hasPlan && !closed && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400">
-                <Sparkles className="w-2.5 h-2.5 mr-1"/> Plan ready
-              </span>
-            )}
-            {ticket.filterStatus === "questionable" && !closed && (
-              <span
-                title={ticket.filterReason ?? undefined}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400"
-              >
-                <Flag className="w-2.5 h-2.5 mr-1" /> Flagged
-              </span>
-            )}
-            {closed && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-400/10 text-green-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                Closed
-              </span>
-            )}
-            {!sla && isSearchMode && ticket.status && !closed && (
-              <span className="text-[10px] text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
-            )}
-          </div>
+          {!useSwipe && rowAction && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  onClick={event => event.stopPropagation()}
+                  title="More actions"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-white/[0.08] text-white/40 hover:text-white/80"
+                >
+                  <MoreHorizontal className="w-3.5 h-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {rowAction.kind === "spam" ? (
+                  <DropdownMenuItem variant="destructive" onSelect={() => rowAction.run()}>
+                    <Ban /> Mark as spam
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem onSelect={() => rowAction.run()}>
+                    <RotateCcw /> Recover to inbox
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
-
-      {!hasSelection && !isSearchMode && (activeTab === "filtered"
-        ? onRecover && (
-            <button
-              onClick={event => { event.stopPropagation(); onRecover(ticket.id) }}
-              title="Recover to inbox"
-              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-white/[0.08] text-white/40 hover:text-emerald-400"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          )
-        : !closed && ticket.filterStatus !== "filtered" && onMarkAsSpam && (
-            <button
-              onClick={event => { event.stopPropagation(); onMarkAsSpam(ticket.id) }}
-              title="Mark as spam"
-              className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-md hover:bg-white/[0.08] text-white/40 hover:text-red-400"
-            >
-              <Ban className="w-3.5 h-3.5" />
-            </button>
-          )
-      )}
     </div>
   )
 }

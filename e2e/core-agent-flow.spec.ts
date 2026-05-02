@@ -56,6 +56,7 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   await clerk.signIn({ page, emailAddress: clerkEnv.email });
   await clerk.loaded({ page });
   await activateClerkOrganization(page, clerkEnv.orgId);
+  await expectDashboardOrg(page, org.id);
 
   await page.goto(`/dashboard/tickets?thread=${thread.id}`);
 
@@ -63,8 +64,26 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   await expect(page.locator(`[data-testid="ticket-row"][data-ticket-id="${thread.id}"]`)).toBeVisible();
   await expect(page.getByTestId('chat-message').filter({ hasText: inboundText })).toBeVisible();
 
-  await page.getByTestId('reply-composer-textarea').fill(replyText);
-  await page.getByTestId('reply-composer-send').click();
+  const composerTextarea = page.getByTestId('reply-composer-textarea');
+  const sendButton = page.getByTestId('reply-composer-send');
+
+  await expect(page.getByTestId('chat-timeline')).toHaveAttribute('data-thread-id', thread.id);
+  await composerTextarea.fill(replyText);
+  await expect(composerTextarea).toHaveValue(replyText);
+  await expect(sendButton).toBeEnabled();
+
+  const sendResponsePromise = page.waitForResponse((response) =>
+    response.url().includes('/api/messages') && response.request().method() === 'POST',
+    { timeout: 30_000 },
+  );
+  await sendButton.click();
+  const sendResponse = await sendResponsePromise;
+  const sendResponseBody = await sendResponse.text();
+
+  expect(
+    sendResponse.ok(),
+    `Expected manual reply POST 2xx, got ${sendResponse.status()}: ${sendResponseBody}`,
+  ).toBeTruthy();
 
   await waitForOutboundRecord((record: { threadId?: string; channel?: string; text?: string }) =>
     record.threadId === thread.id &&
@@ -95,4 +114,21 @@ async function activateClerkOrganization(page: Page, organizationId: string) {
 
     await clerkInstance.setActive({ organization: orgId });
   }, organizationId);
+}
+
+async function expectDashboardOrg(page: Page, expectedOrgId: string) {
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get('/api/org');
+        if (!response.ok()) return null;
+        const body = await response.json() as { id?: string };
+        return body.id ?? null;
+      },
+      {
+        message: 'Expected Clerk active organization to map to the seeded E2E database organization',
+        timeout: 10_000,
+      },
+    )
+    .toBe(expectedOrgId);
 }

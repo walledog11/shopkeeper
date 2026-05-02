@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
 import SettingsPageClient from "./_components/SettingsPageClient"
@@ -8,9 +9,11 @@ export default async function SettingsPage() {
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
 
   return (
-    <SettingsPageClient
-      orgName={org.name}
-      settings={settings}
-    />
+    <Suspense fallback={null}>
+      <SettingsPageClient
+        orgName={org.name}
+        settings={settings}
+      />
+    </Suspense>
   )
 }

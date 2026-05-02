@@ -1,3 +1,4 @@
+import { Suspense } from "react"
 import { db } from "@clerk/db"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
@@ -25,10 +26,12 @@ export default async function TicketsPage() {
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
 
   return (
-    <TicketsPageClient
-      initialOpenThreads={initialOpenThreads}
-      hasShopify={hasShopify}
-      agentName={settings.agentName}
-    />
+    <Suspense fallback={null}>
+      <TicketsPageClient
+        initialOpenThreads={initialOpenThreads}
+        hasShopify={hasShopify}
+        agentName={settings.agentName}
+      />
+    </Suspense>
   )
 }

@@ -25,10 +25,10 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'node ./scripts/with-test-env.mjs npm run dev:e2e -w apps/dashboard',
+      command: 'node ./scripts/with-test-env.mjs npm run serve:e2e -w apps/dashboard',
       url: 'http://localhost:3100/login',
       reuseExistingServer: false,
-      timeout: 60_000,
+      timeout: 180_000,
     },
     {
       command: 'node ./scripts/with-test-env.mjs npm run dev:e2e -w apps/gateway',

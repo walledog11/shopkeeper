@@ -24,6 +24,10 @@ export async function generateText(
   messages: AIMessage[],
   options?: { maxTokens?: number; temperature?: number }
 ): Promise<string> {
+  if (isDeterministicE2EAIEnabled()) {
+    return deterministicE2EText(systemPrompt, messages);
+  }
+
   const response = await anthropic.messages.create({
     model: AI_MODEL,
     max_tokens: options?.maxTokens ?? 1024,
@@ -36,4 +40,16 @@ export async function generateText(
     (b): b is Anthropic.TextBlock => b.type === "text"
   );
   return textBlock?.text ?? "";
+}
+
+export function isDeterministicE2EAIEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV !== "production" && env.E2E_TEST_RUN === "true" && env.E2E_AI_MODE === "deterministic";
+}
+
+function deterministicE2EText(systemPrompt: string, messages: AIMessage[]): string {
+  const lastUserMessage = [...messages].reverse().find(message => message.role === "user")?.content.trim();
+  if (systemPrompt.toLowerCase().includes("summarizing")) {
+    return lastUserMessage ? `Customer needs help with: ${lastUserMessage.slice(0, 80)}` : "Customer needs help.";
+  }
+  return lastUserMessage ? `E2E deterministic response: ${lastUserMessage.slice(0, 160)}` : "E2E deterministic response.";
 }

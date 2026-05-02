@@ -7,7 +7,7 @@ import { getChannelInfo } from "@/lib/messaging/channels"
 import { fetcher } from "@/lib/api/fetcher"
 import { CHANNEL_TYPE, SENDER_TYPE } from "@/lib/messaging/thread-constants"
 import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
-import { readAgentPlanCachePlan } from "@/lib/agent/plan-cache-shape"
+import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape"
 import { buildPlanPreview, classifyHomePlan } from "@/lib/agent/plan-preview"
 import type { Thread, Integration, OrgSettings, KnowledgeBase, AgentPlan } from "@/types"
 
@@ -97,9 +97,7 @@ function lastNDays(n: number): string[] {
 function currentPlanForThread(thread: Thread): AgentPlan | null {
   const latestMessage = thread.messages[0]
   if (latestMessage?.senderType !== SENDER_TYPE.CUSTOMER) return null
-  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== latestMessage.id) return null
-  const plan = readAgentPlanCachePlan(thread.cachedPlan)
-  return plan && plan.steps.length > 0 ? plan : null
+  return getCurrentPlanForThread(thread, latestMessage.id)
 }
 
 function initialsOf(name: string): string {

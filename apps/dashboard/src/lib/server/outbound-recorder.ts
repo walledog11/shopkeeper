@@ -26,7 +26,8 @@ export interface OutboundRecord extends OutboundRecordInput {
 }
 
 export function isOutboundRecordingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.NODE_ENV === 'test' && env.E2E_OUTBOUND_MODE === 'record';
+  const isE2ERuntime = env.NODE_ENV === 'test' || env.E2E_TEST_RUN === 'true';
+  return isE2ERuntime && env.E2E_OUTBOUND_MODE === 'record';
 }
 
 export function getOutboundRecordPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -52,7 +53,7 @@ export async function recordOutboundCall(input: OutboundRecordInput): Promise<Ou
 }
 
 export async function readOutboundRecords(): Promise<OutboundRecord[]> {
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.NODE_ENV !== 'test' && process.env.E2E_TEST_RUN !== 'true') {
     return [];
   }
 
@@ -69,7 +70,7 @@ export async function readOutboundRecords(): Promise<OutboundRecord[]> {
 }
 
 export async function clearOutboundRecords(): Promise<void> {
-  if (process.env.NODE_ENV !== 'test') {
+  if (process.env.NODE_ENV !== 'test' && process.env.E2E_TEST_RUN !== 'true') {
     return;
   }
 

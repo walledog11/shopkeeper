@@ -19,6 +19,7 @@ export function getTestEnv(baseEnv = process.env) {
     GATEWAY_INTERNAL_URL: baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',
     GATEWAY_PUBLIC_URL: baseEnv.GATEWAY_PUBLIC_URL || baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',
     PORT: baseEnv.PORT || '8180',
+    E2E_TEST_RUN: baseEnv.E2E_TEST_RUN || 'true',
     CLERK_SECRET_KEY: baseEnv.CLERK_SECRET_KEY || 'sk_test_clerk',
     CLERK_PUBLISHABLE_KEY: baseEnv.CLERK_PUBLISHABLE_KEY || baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     ANTHROPIC_API_KEY: baseEnv.ANTHROPIC_API_KEY || 'test-anthropic-key',
@@ -26,6 +27,7 @@ export function getTestEnv(baseEnv = process.env) {
     INTERNAL_API_SECRET_PREV: baseEnv.INTERNAL_API_SECRET_PREV || 'test-internal-secret-prev',
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: baseEnv.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || baseEnv.CLERK_PUBLISHABLE_KEY || 'pk_test_Y2xlcmsuZXhhbXBsZS5jb20k', // gitleaks:allow
     E2E_AUTH_BYPASS: baseEnv.E2E_AUTH_BYPASS || 'false',
+    E2E_AI_MODE: baseEnv.E2E_AI_MODE || 'deterministic',
     E2E_CLERK_ORG_ID: baseEnv.E2E_CLERK_ORG_ID || 'org_e2e_test',
     E2E_CLERK_USER_ID: baseEnv.E2E_CLERK_USER_ID || 'user_e2e_test',
     E2E_OUTBOUND_MODE: baseEnv.E2E_OUTBOUND_MODE || 'record',

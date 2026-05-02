@@ -21,6 +21,10 @@ export async function rateLimit(
   const windowKey = `rl:${key}:${windowStart}`;
   const reset = (windowStart + 1) * windowSecs;
 
+  if (isE2ERateLimitBypassEnabled()) {
+    return { success: true, remaining: limit, reset };
+  }
+
   try {
     const client = getRedis();
     const count = await client.incr(windowKey);
@@ -36,6 +40,10 @@ export async function rateLimit(
     }
     return { success: true, remaining: limit, reset };
   }
+}
+
+export function isE2ERateLimitBypassEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV !== 'production' && env.E2E_TEST_RUN === 'true';
 }
 
 /** Returns a 429 response with standard rate-limit headers */

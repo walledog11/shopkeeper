@@ -12,6 +12,7 @@ import {
 let tempDir: string | null = null;
 const originalEnv = {
   NODE_ENV: process.env.NODE_ENV,
+  E2E_TEST_RUN: process.env.E2E_TEST_RUN,
   E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
   E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
 };
@@ -23,6 +24,7 @@ async function useTempRecordPath() {
 
 afterEach(async () => {
   process.env.NODE_ENV = originalEnv.NODE_ENV;
+  process.env.E2E_TEST_RUN = originalEnv.E2E_TEST_RUN;
   process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
   process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
 
@@ -33,8 +35,9 @@ afterEach(async () => {
 });
 
 describe('outbound recorder', () => {
-  it('is enabled only for explicit E2E recording in test mode', () => {
+  it('is enabled only for explicit E2E recording in a test runtime', () => {
     expect(isOutboundRecordingEnabled({ NODE_ENV: 'production', E2E_OUTBOUND_MODE: 'record' })).toBe(false);
+    expect(isOutboundRecordingEnabled({ NODE_ENV: 'development', E2E_TEST_RUN: 'true', E2E_OUTBOUND_MODE: 'record' })).toBe(true);
     expect(isOutboundRecordingEnabled({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'live' })).toBe(false);
     expect(isOutboundRecordingEnabled({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'record' })).toBe(true);
   });

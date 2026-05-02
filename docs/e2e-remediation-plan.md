@@ -1,189 +1,187 @@
 # E2E Remediation Plan
 
-This plan covers the work needed to make the end-to-end test suite reliable enough to support a production launch decision.
+This document is the single source of truth for making the E2E suite reliable enough to support a production launch decision.
 
-## Current State
+## Goal
 
-- The main browser E2E in `e2e/core-agent-flow.spec.ts` is skipped and mostly commented out.
-- The existing webhook E2E covers part of inbound ingestion, but not the full merchant workflow.
-- Integration and E2E tests depend on local Postgres and Redis being available before Playwright starts.
-- Server-side provider calls, such as Postmark, Twilio, Meta, Anthropic, and Shopify, are not cleanly intercepted by browser-level `page.route()`.
-- Clerk auth is not fully wired for E2E.
+Prove at least one complete support workflow in CI:
 
-## Goals
+```text
+provider webhook -> gateway queue -> worker -> dashboard ticket -> merchant action -> outbound send recorded -> DB persisted
+```
 
-- Prove the core product flow in CI:
-  inbound message -> worker processing -> dashboard ticket visible -> reply or approved plan -> outbound provider call recorded -> DB state persisted.
-- Keep E2E deterministic without real provider credentials.
-- Make failures actionable with Playwright traces and clear setup errors.
-- Avoid test-only behavior in production by guarding any bypasses with `NODE_ENV=test` and explicit E2E env flags.
+The suite must stay deterministic, avoid real provider sends, fail with actionable setup errors, and keep test-only behavior guarded by `NODE_ENV=test` plus explicit E2E flags.
 
-## Plan
+## Current Status
 
-### 1. Stabilize Test Infrastructure
+- Request-level E2E smoke tests pass with the guarded auth bypass.
+- The core browser E2E in `e2e/core-agent-flow.spec.ts` passes locally with real Clerk E2E credentials.
+- Local E2E infrastructure now prepares Postgres, Redis, migrations, seed data, and outbound recording before tests run.
+- Server-side provider calls are tested through test-only outbound recording, not browser `page.route()`.
+- Clerk browser auth uses `@clerk/testing`, with active organization selection verified against the seeded DB organization.
+- Browser E2E runs the dashboard through `next build` + `next start`, not `next dev`.
+- E2E is not launch-ready until `npm run test:e2e` passes in CI.
 
-- [x] Update `docker-compose.test.yml` to avoid common local port conflicts by mapping Postgres and Redis to non-default host ports: `55432:5432` and `56379:6379`.
-- [x] Update `scripts/with-test-env.mjs` defaults to match the test service ports.
-- [x] Add a Playwright `globalSetup` that:
-  - builds `packages/db`
-  - waits for Postgres and Redis
-  - runs `prisma migrate deploy`
-  - seeds the E2E organization/test data
-- [x] Make test data cleanup deterministic by truncating app tables.
-- [x] Keep `npm run test:e2e` as the supported entrypoint.
-- [x] Split auth modes so request-level smoke tests can run with the guarded bypass while browser E2E runs through Clerk's supported test auth path.
+## Commands
 
-### 2. Correct Playwright Server Startup
+```bash
+npm run test:services:up
+npm run test:e2e:smoke
+npm run test:e2e:browser
+npm run test:e2e
+```
 
-- [x] Update `playwright.config.ts` with global setup so DB/Redis preparation completes before tests execute.
-- [x] Increase web server startup timeouts to tolerate cold Next.js and gateway starts.
-- [x] Pass explicit test env to both web servers:
-  - `DATABASE_URL`
-  - `REDIS_URL`
-  - `INTERNAL_API_SECRET`
-  - fake provider keys
-  - `E2E_OUTBOUND_MODE=record`
-- [x] Use dedicated E2E ports (`3100` dashboard, `8180` gateway) and disable Playwright server reuse so local dev servers cannot contaminate E2E.
-- [x] Start the gateway with an E2E-only server + worker command and no ngrok tunnel.
-- [x] Wait for `/health/deep` so Playwright does not start tests until DB, Redis, queue diagnostics, and worker heartbeat are healthy.
-- [x] Add a dedicated browser E2E Playwright config for the Clerk-authenticated core flow.
+- `test:e2e:smoke`: request-level dashboard/gateway smoke tests with `E2E_AUTH_BYPASS=true`.
+- `test:e2e:browser`: real browser flow with `@clerk/testing` and `E2E_AUTH_BYPASS=false`.
+- `test:e2e`: runs smoke first, then browser.
 
-### 3. Solve Clerk Auth
+## Required Browser E2E Env
 
-Preferred path:
-
-- [x] Install and configure `@clerk/testing`.
-- Use a real Clerk test user and test organization.
-- Require these env vars in E2E:
-  - `CLERK_E2E_EMAIL`
-  - `E2E_CLERK_ORG_ID`
-  - test Clerk keys
-- Sign in, select the test org, and ensure the Clerk org maps to the seeded DB organization.
-
-Fallback path:
-
-- [x] Add an explicit auth bypass guarded by `NODE_ENV=test && E2E_AUTH_BYPASS=true`.
-- [x] Keep the bypass narrow and unavailable in production builds.
-- [x] Add an E2E smoke test proving the dashboard can load with the bypass and no Clerk browser session.
-
-### 4. Add Test-Only Outbound Recording
-
-- [x] Do not rely on `page.route()` for server-side provider calls.
-- [x] Add a test-only outbound recording layer used only when `NODE_ENV=test && E2E_OUTBOUND_MODE=record`.
-- [x] Record intended sends for:
-  - email
-  - Instagram DM
-  - SMS/WhatsApp
-  - agent replies
-- [x] Expose a test-only way to inspect recorded outbound calls.
-- [x] Ensure production code paths still call real providers by default.
-
-### 5. Replace The Skipped Core E2E
-
-Replace `e2e/core-agent-flow.spec.ts` with a real browser test:
-
-- [x] Add stable `data-testid` selectors for the ticket list, ticket rows, chat messages, composer textarea, and send button.
-- [x] Add E2E DB and outbound-record helpers for the manual inbound-email-to-reply flow.
-- [x] Install and configure `@clerk/testing` for the core browser flow.
-- [x] Replace the skipped placeholder in `e2e/core-agent-flow.spec.ts` with a real Clerk-authenticated browser test implementation.
-
-Runtime proof still required:
-
-- [ ] Verify `e2e/core-agent-flow.spec.ts` passes in a browser-capable local or CI environment.
-- [ ] Seed/verify the real Clerk test user and organization.
-- [x] Seed the matching DB organization and email integration.
-- [ ] Sign in through Clerk testing.
-- [ ] POST inbound email to `${GATEWAY_INTERNAL_URL}/webhooks/email/inbound`.
-- [ ] Wait for the worker to create `Customer`, `Thread`, and `Message`.
-- [ ] Open `/dashboard/tickets`.
-- [ ] Assert the ticket appears.
-- [ ] Open the ticket.
-- [ ] Assert customer message and composer render.
-- [ ] Send a manual reply.
-- [ ] Assert outbound recording captured the email send.
-- [ ] Assert the agent message is persisted in DB and visible in the UI.
-
-Verification note: a browser-flow implementation that relied on the server-side E2E auth bypass was removed because it was the wrong abstraction. The bypass is acceptable for request-level smoke tests, but the full browser flow now uses Clerk's supported testing package so dashboard client components run under real Clerk context.
-
-Current command split:
-
-- `npm run test:e2e:smoke`: request-level gateway/dashboard smoke tests with `E2E_AUTH_BYPASS=true`.
-- `npm run test:e2e:browser`: real browser flow with `@clerk/testing` and `E2E_AUTH_BYPASS=false`.
-- `npm run test:e2e`: runs smoke first, then browser. This should be the CI launch gate once Clerk E2E credentials are configured.
-
-Required browser E2E env:
+Set these to real Clerk development-instance values before running `npm run test:e2e:browser`:
 
 - `CLERK_SECRET_KEY`
 - `CLERK_PUBLISHABLE_KEY` or `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_E2E_EMAIL`
 - `E2E_CLERK_ORG_ID`
 
-The Clerk user identified by `CLERK_E2E_EMAIL` must already belong to the Clerk organization identified by `E2E_CLERK_ORG_ID`. The DB seed uses that same `E2E_CLERK_ORG_ID` as `Organization.clerkOrgId`.
+The user identified by `CLERK_E2E_EMAIL` must already belong to the Clerk organization identified by `E2E_CLERK_ORG_ID`. The DB seed uses `E2E_CLERK_ORG_ID` as `Organization.clerkOrgId`.
 
-### 6. Add AI Plan Approval E2E
+## Completed Work
 
-- Seed or deterministically generate a thread with a customer message.
-- Avoid real Anthropic calls in E2E by using deterministic test-mode AI behavior.
-- Generate or seed `Thread.cachedPlan`.
-- Open the ticket in the dashboard.
-- Assert the action plan card appears.
-- Approve the plan.
-- Assert approved tool calls execute.
-- Assert outbound recording captured the customer reply.
-- Assert action/audit notes are persisted.
+### Infrastructure
 
-### 7. Strengthen Webhook E2E Coverage
+- [x] Map test Postgres and Redis to non-default host ports: `55432:5432` and `56379:6379`.
+- [x] Default E2E env to the test service ports.
+- [x] Add Playwright global setup and teardown.
+- [x] Build `packages/db` before E2E.
+- [x] Wait for Postgres and Redis before running migrations.
+- [x] Run `prisma migrate deploy`.
+- [x] Reset app tables deterministically.
+- [x] Seed the E2E organization, membership, and email integration.
+- [x] Clear outbound recording before/after runs.
 
-Extend `e2e/webhook-ingest.spec.ts` to cover:
+### Playwright Startup
+
+- [x] Use dedicated dashboard and gateway E2E ports: `3100` and `8180`.
+- [x] Disable Playwright server reuse to avoid contaminated local dev state.
+- [x] Start the gateway with an E2E-only command that runs server and worker without ngrok.
+- [x] Wait for gateway `/health/deep`.
+- [x] Use a public dashboard route for dashboard readiness.
+- [x] Add a dedicated browser E2E config for the Clerk-authenticated core flow.
+- [x] Run dashboard browser E2E against `next build` + `next start` instead of `next dev`.
+
+### Auth
+
+- [x] Add `@clerk/testing`.
+- [x] Add a Clerk setup project for browser E2E.
+- [x] Implement Clerk sign-in and active organization selection in the browser E2E.
+- [x] Validate required Clerk E2E env and fail clearly when missing.
+- [x] Keep the server-side auth bypass narrow and guarded by `NODE_ENV=test && E2E_AUTH_BYPASS=true`.
+- [x] Add a request-level smoke test proving the dashboard can load with the bypass and no Clerk browser session.
+
+### Outbound Recording
+
+- [x] Add test-only outbound recording gated by `NODE_ENV=test && E2E_OUTBOUND_MODE=record`.
+- [x] Record intended email, Instagram DM, SMS/WhatsApp, and agent reply sends.
+- [x] Add helpers to inspect recorded outbound calls from E2E.
+- [x] Keep production code paths using real providers by default.
+- [x] Add a guarded deterministic E2E AI mode so browser E2E does not call real Anthropic.
+
+### Core Browser Flow Implementation
+
+- [x] Add stable `data-testid` hooks for tickets list, ticket rows, chat messages, composer textarea, and send button.
+- [x] Add DB helpers for the manual inbound-email-to-reply flow.
+- [x] Add outbound-record helpers for browser E2E assertions.
+- [x] Replace the skipped/commented core browser spec with a real implementation.
+
+### Existing E2E Coverage
 
 - [x] Email inbound creates customer/thread/message.
-- [x] Instagram webhook verifies HMAC and enqueues.
-- [ ] Shopify webhook verifies HMAC and enqueues.
-- [ ] Duplicate inbound message does not create a duplicate message.
-- [ ] Invalid signatures return 401/403.
-- [ ] Unknown integrations return 200 and create no thread.
+- [x] Instagram webhook accepts a valid HMAC request and returns `EVENT_RECEIVED`.
+- [x] Request-level dashboard auth-bypass smoke test passes.
 
-### 8. Add Safety Regression E2Es
+## Remaining Work
 
-Minimum safety tests:
+### Priority 1: Runtime-Prove The Core Browser E2E
 
-- Cross-org isolation: a user from Org A cannot access Org B thread API/UI.
-- Unsupported channel dispatch returns an error and does not persist a fake sent message.
-- Filtered spam email does not auto-plan or notify.
-- High-cost agent endpoint rate limiting behaves as expected.
+- [x] Create or choose a real Clerk development-instance test organization.
+- [x] Create or choose a Clerk test user and add that user to the test organization.
+- [x] Configure local env with the required Clerk browser E2E values.
+- [x] Run `npm run test:e2e:browser`.
+- [x] Verify Clerk testing token setup succeeds.
+- [x] Verify `clerk.signIn()` succeeds.
+- [x] Verify active organization selection succeeds.
+- [x] Verify the Clerk organization maps to the seeded DB organization.
+- [x] Verify the inbound email POST succeeds.
+- [x] Verify the worker creates `Customer`, `Thread`, and customer `Message`.
+- [x] Verify `/dashboard/tickets` opens in the authenticated browser session.
+- [x] Verify the ticket appears and opens.
+- [x] Verify the customer message and composer render.
+- [x] Verify a manual reply can be sent.
+- [x] Verify outbound recording captures the email send.
+- [x] Verify the agent message is persisted in DB and visible in the UI.
+- [x] Once passing locally, run through `npm run test:e2e`.
+- [ ] Configure CI env with the required Clerk browser E2E values.
 
-### 9. CI Requirements
+Expected failure order to debug:
 
-The CI launch gate should run:
+1. Clerk setup/sign-in.
+2. Active organization selection.
+3. DB org mapping.
+4. Inbound email processing.
+5. Dashboard rendering/selectors.
+6. Manual reply/outbound recording.
 
-```bash
-npm run lint
-npm run test:unit
-npm run test:integration
-npm run test:e2e
-```
+### Priority 2: Strengthen Webhook Coverage
 
-CI should:
+- [ ] Add Shopify webhook HMAC success coverage.
+- [ ] Add invalid signature coverage for Meta.
+- [ ] Add invalid signature coverage for Shopify.
+- [ ] Add duplicate email inbound idempotency coverage.
+- [ ] Add duplicate Meta inbound idempotency coverage.
+- [ ] Add unknown integration coverage that returns safely and creates no thread.
+- [ ] Tighten the Instagram test so it proves queue enqueue or downstream processing, not just `EVENT_RECEIVED`.
 
-- Start Docker test services before integration/E2E tests.
-- Upload Playwright traces and screenshots on failure.
-- Avoid real Postmark, Twilio, Meta, Anthropic, Shopify, or Stripe credentials.
-- Fail clearly if Postgres, Redis, Clerk test credentials, or browser binaries are missing.
+### Priority 3: Add AI Plan Approval E2E
 
-## Priority Order
+- [ ] Seed a deterministic email thread with a customer message.
+- [x] Avoid real Anthropic calls by seeding `Thread.cachedPlan` or adding a tightly guarded deterministic E2E AI mode.
+- [ ] Open the ticket in a Clerk-authenticated browser session.
+- [ ] Assert the action plan card renders.
+- [ ] Approve the plan.
+- [ ] Assert approved tool calls execute through outbound recording.
+- [ ] Assert action/audit state is persisted.
 
-1. [x] Infrastructure/global setup and DB/Redis reliability.
-2. [x] Auth strategy.
-3. [x] Test-only outbound provider recording.
-4. [ ] Manual inbound-email-to-reply E2E.
-5. [ ] AI plan approval E2E.
-6. [ ] Webhook/signature/idempotency E2Es.
-7. [ ] Cross-org and safety regressions.
+### Priority 4: Add Safety Regression E2Es
+
+- [ ] Cross-org isolation: Org A cannot access Org B thread API.
+- [ ] Cross-org isolation: Org A cannot access Org B thread UI.
+- [ ] Unsupported channel dispatch returns an error.
+- [ ] Unsupported channel dispatch does not persist a fake sent message.
+- [ ] Filtered spam email does not auto-plan.
+- [ ] Filtered spam email does not notify/send outbound messages.
+- [ ] High-cost agent endpoint rate limiting behaves as expected.
+
+### Priority 5: CI Launch Gate
+
+- [ ] Start Docker test services before integration/E2E tests.
+- [ ] Configure Clerk E2E values as CI secrets.
+- [ ] Run `npm run lint`.
+- [ ] Run `npm run test:unit`.
+- [ ] Run `npm run test:integration`.
+- [ ] Run `npm run test:e2e`.
+- [ ] Upload Playwright traces/screenshots on failure.
+- [ ] Keep fake Postmark, Twilio, Meta, Anthropic, Shopify, and Stripe provider credentials in CI.
+- [ ] Rely on outbound recording for provider assertions.
+- [ ] Fail clearly if Postgres, Redis, Clerk credentials, or browser binaries are missing.
 
 ## Launch Gate
 
-Do not treat E2E as launch-ready until CI proves at least one complete support flow:
+Do not call E2E launch-ready until CI proves:
 
-```text
-provider webhook -> gateway queue -> worker -> dashboard ticket -> merchant action -> outbound send recorded -> DB persisted
-```
+- `npm run lint` passes.
+- `npm run test:unit` passes.
+- `npm run test:integration` passes.
+- `npm run test:e2e` passes.
+- The core browser E2E proves a complete inbound-email-to-manual-reply workflow.
+- Provider sends are asserted through outbound recording, not real provider calls.
