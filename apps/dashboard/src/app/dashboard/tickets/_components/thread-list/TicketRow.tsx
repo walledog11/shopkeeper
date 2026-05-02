@@ -62,16 +62,19 @@ export function TicketRow({
     : null
 
   const surfaceRef = useRef<HTMLDivElement>(null)
+  const bannerRef = useRef<HTMLDivElement>(null)
   const swipe = useRef({
     pointerId: -1, startX: 0, startY: 0, dx: 0,
     locked: false, width: 0, suppressClick: false, committed: false,
   })
   const commitTimeout = useRef<number | null>(null)
+  const settleTimeout = useRef<number | null>(null)
 
   const canSwipe = useSwipe && rowAction !== null
 
   useEffect(() => () => {
     if (commitTimeout.current !== null) window.clearTimeout(commitTimeout.current)
+    if (settleTimeout.current !== null) window.clearTimeout(settleTimeout.current)
   }, [])
 
   function applyTransform(tx: number, animate: boolean) {
@@ -81,11 +84,27 @@ export function TicketRow({
     el.style.transform = tx === 0 ? "" : `translate3d(${tx}px,0,0)`
   }
 
+  function setBannerVisible(visible: boolean) {
+    const el = bannerRef.current
+    if (!el) return
+    el.style.visibility = visible ? "visible" : "hidden"
+  }
+
+  function setSurfacePromoted(promoted: boolean) {
+    const el = surfaceRef.current
+    if (!el) return
+    el.style.willChange = promoted ? "transform" : ""
+  }
+
   function onPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!canSwipe) return
     if (event.pointerType === "mouse" && event.button !== 0) return
     if (swipe.current.pointerId !== -1) return
     if (swipe.current.committed) return
+    if (settleTimeout.current !== null) {
+      window.clearTimeout(settleTimeout.current)
+      settleTimeout.current = null
+    }
     swipe.current = {
       pointerId: event.pointerId,
       startX: event.clientX, startY: event.clientY,
@@ -93,6 +112,7 @@ export function TicketRow({
       width: event.currentTarget.getBoundingClientRect().width,
       suppressClick: false, committed: false,
     }
+    setSurfacePromoted(true)
     event.currentTarget.setPointerCapture(event.pointerId)
   }
 
@@ -105,9 +125,11 @@ export function TicketRow({
       if (Math.abs(dx) < SWIPE_DETECT_PX && Math.abs(dy) < SWIPE_DETECT_PX) return
       if (Math.abs(dy) > Math.abs(dx)) {
         s.pointerId = -1
+        setSurfacePromoted(false)
         return
       }
       s.locked = true
+      setBannerVisible(true)
     }
     s.dx = Math.min(0, dx)
     if (Math.abs(s.dx) > CLICK_SUPPRESS_PX) s.suppressClick = true
@@ -129,7 +151,14 @@ export function TicketRow({
       }, 180)
     } else {
       applyTransform(0, true)
+      const wasLocked = s.locked
       s.locked = false
+      settleTimeout.current = window.setTimeout(() => {
+        settleTimeout.current = null
+        if (swipe.current.pointerId !== -1 || swipe.current.committed) return
+        if (wasLocked) setBannerVisible(false)
+        setSurfacePromoted(false)
+      }, 200)
     }
   }
 
@@ -152,7 +181,9 @@ export function TicketRow({
     >
       {canSwipe && rowAction && (
         <div
+          ref={bannerRef}
           aria-hidden="true"
+          style={{ visibility: "hidden" }}
           className={`absolute inset-0 flex items-center justify-end gap-2 pr-5 text-white text-sm font-semibold pointer-events-none ${
             rowAction.kind === "spam" ? "bg-red-500/90" : "bg-emerald-500/90"
           }`}
@@ -170,7 +201,7 @@ export function TicketRow({
         onPointerMove={onPointerMove}
         onPointerUp={event => finish(event, false)}
         onPointerCancel={event => finish(event, true)}
-        style={canSwipe ? { touchAction: "pan-y", willChange: "transform" } : undefined}
+        style={canSwipe ? { touchAction: "pan-y" } : undefined}
         className={`relative pt-0.5 ${canSwipe ? "bg-background select-none" : ""}`}
       >
         <div
