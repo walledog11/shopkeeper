@@ -611,6 +611,16 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  useEffect(() => {
+    const update = () => {
+      const h = window.visualViewport?.height ?? window.innerHeight;
+      document.documentElement.style.setProperty("--visual-viewport-height", `${h}px`);
+    };
+    update();
+    window.visualViewport?.addEventListener("resize", update);
+    return () => window.visualViewport?.removeEventListener("resize", update);
+  }, []);
+
   return (
     <OpenThreadCountContext.Provider value={openCount}>
       {isSwitching && (

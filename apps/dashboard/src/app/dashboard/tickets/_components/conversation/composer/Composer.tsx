@@ -8,6 +8,7 @@ import { fetcher } from "@/lib/api/fetcher"
 import { buildShopifyCustomerKey } from "@/lib/shopify/customer-key"
 import type { CannedResponse } from "@/types"
 import type { ShopifyData } from "@/types/shopify"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
 
 interface IntegrationRow {
   platform: string
@@ -138,12 +139,13 @@ export default function Composer({
     fetch(`/api/canned-responses/${r.id}/use`, { method: 'POST' }).catch(() => {})
   }
 
+  const isMobile = useMediaQuery('(max-width: 767px)')
   const placeholderParts = isNoteTab
-    ? ['Add a private note for your team', '⌘↵ to send']
+    ? ['Add a private note for your team', ...(isMobile ? [] : ['⌘↵ to send'])]
     : [
         `Reply to ${customerName}…`,
         `type @${agentName.toLowerCase()} to invoke ${agentName}`,
-        '⌘↵ to send',
+        ...(isMobile ? [] : ['⌘↵ to send']),
       ]
   const placeholder = placeholderParts.join('  ·  ')
 
