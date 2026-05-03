@@ -75,7 +75,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <HelpProvider>
       <AgentPanelProvider>
       <CommandPaletteProvider>
-      <div className="dark flex flex-col h-screen bg-background font-sans overflow-hidden">
+      <div className="dark flex flex-col h-dvh bg-background font-sans overflow-hidden">
         <NotificationBar notifications={notifications} />
         <NavProgressBar />
         <DashboardSidebar>

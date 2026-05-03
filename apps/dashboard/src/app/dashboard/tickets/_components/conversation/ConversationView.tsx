@@ -119,7 +119,7 @@ export default function ConversationView({
   const { presenceCount } = useThreadPresence(ticket.id)
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-background">
+    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background">
       <ConversationHeader
         activeTab={activeTab}
         customer={ticket.customer}

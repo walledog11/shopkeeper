@@ -328,7 +328,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
       </div>
 
       {/* ── Col 2+3: Conversation + Context panel ──────────────────────────── */}
-      <div className={`flex-1 flex min-w-0 ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
+      <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
         {activeTicket && activeThread ? (
           <>
             <ConversationView
