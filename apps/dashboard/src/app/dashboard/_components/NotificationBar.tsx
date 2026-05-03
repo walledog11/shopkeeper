@@ -105,6 +105,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
       {n && (
         <motion.div
           ref={barRef}
+          data-dashboard-notification-bar
           key="bar"
           initial={{ height: 0, opacity: 0 }}
           animate={{ height: "auto", opacity: 1 }}

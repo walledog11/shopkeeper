@@ -97,6 +97,22 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
     textIncludes: replyText,
   });
   await expect(page.getByTestId('chat-message').filter({ hasText: replyText })).toBeVisible();
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`/dashboard/tickets?thread=${thread.id}`);
+
+  const mobileConversation = page.getByTestId('ticket-conversation');
+  const mobileComposer = page.getByTestId('reply-composer-textarea');
+
+  await expect(mobileConversation).toBeVisible();
+  await expect(page.getByTestId('chat-timeline')).toHaveAttribute('data-thread-id', thread.id);
+  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeVisible();
+
+  await mobileComposer.focus();
+  await expect(mobileConversation).toHaveAttribute('data-keyboard-open', 'true');
+  await expect(page.locator('html')).toHaveAttribute('data-mobile-ticket-editing', 'true');
+  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeHidden();
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
 });
 
 async function activateClerkOrganization(page: Page, organizationId: string) {

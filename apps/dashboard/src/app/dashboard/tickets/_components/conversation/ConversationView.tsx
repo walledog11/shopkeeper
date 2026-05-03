@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type RefObject } from "react"
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
@@ -12,6 +12,7 @@ import NotesTimeline from "./timeline/NotesTimeline"
 import ConversationComposerArea from "./composer/ConversationComposerArea"
 import ConversationTabs from "./ConversationTabs"
 import { partitionConversationMessages } from "./utils/conversationViewUtils"
+import { useVisualKeyboard } from "./useVisualKeyboard"
 import type { Ticket, AgentTurn, AgentPlan, FailedMessage } from "@/types"
 
 interface Props {
@@ -72,6 +73,11 @@ export default function ConversationView({
   onRetry,
 }: Props) {
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
+  const conversationRef = useRef<HTMLDivElement>(null)
+  const timelineRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
+  const [composerHeight, setComposerHeight] = useState(0)
+  const { keyboardInset, keyboardOpen, visualViewportHeight } = useVisualKeyboard(conversationRef, activeTab === 'open')
 
   const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
   const {
@@ -117,9 +123,93 @@ export default function ConversationView({
   ], isAgentRunning)
 
   const { presenceCount } = useThreadPresence(ticket.id)
+  const conversationStyle = {
+    "--ticket-composer-height": `${composerHeight}px`,
+    "--ticket-visual-viewport-height": `${visualViewportHeight}px`,
+  } as CSSProperties
+
+  const scrollTimelineToEnd = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const timeline = timelineRef.current
+    if (timeline) {
+      timeline.scrollTo({ top: timeline.scrollHeight, behavior })
+      return
+    }
+    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" })
+  }, [messagesEndRef])
+
+  useEffect(() => {
+    if (activeTab !== 'open') {
+      setComposerHeight(0)
+      return
+    }
+
+    const element = composerRef.current
+    if (!element) return
+
+    const updateHeight = () => {
+      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
+    }
+
+    updateHeight()
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", updateHeight)
+      return () => window.removeEventListener("resize", updateHeight)
+    }
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [activeTab])
+
+  useEffect(() => {
+    if (!keyboardOpen) return
+
+    const settleScroll = () => scrollTimelineToEnd("smooth")
+    const first = window.setTimeout(settleScroll, 50)
+    const second = window.setTimeout(settleScroll, 300)
+
+    return () => {
+      window.clearTimeout(first)
+      window.clearTimeout(second)
+    }
+  }, [
+    composerHeight,
+    displayMessages.length,
+    failedMessages.length,
+    keyboardInset,
+    keyboardOpen,
+    replyText,
+    scrollTimelineToEnd,
+    viewTab,
+    visualViewportHeight,
+  ])
+
+  useEffect(() => {
+    const root = document.documentElement
+
+    if (keyboardOpen) {
+      root.dataset.mobileTicketEditing = "true"
+    } else if (root.dataset.mobileTicketEditing === "true") {
+      delete root.dataset.mobileTicketEditing
+    }
+
+    return () => {
+      if (root.dataset.mobileTicketEditing === "true") {
+        delete root.dataset.mobileTicketEditing
+      }
+    }
+  }, [keyboardOpen])
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-background">
+    <div
+      ref={conversationRef}
+      data-keyboard-open={keyboardOpen ? "true" : "false"}
+      data-testid="ticket-conversation"
+      className="mobile-ticket-conversation flex-1 flex flex-col min-w-0 min-h-0 bg-background"
+      style={conversationStyle}
+    >
       <ConversationHeader
         activeTab={activeTab}
         customer={ticket.customer}
@@ -142,9 +232,10 @@ export default function ConversationView({
 
       {/* Messages */}
       <div
+        ref={timelineRef}
         data-testid={viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
         data-thread-id={ticket.id}
-        className={`flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
+        className={`mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
           viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
         }`}
       >
@@ -172,6 +263,7 @@ export default function ConversationView({
 
       {activeTab === 'open' && (
         <ConversationComposerArea
+          containerRef={composerRef}
           agentName={agentName}
           clerkInstruction={clerkInstruction}
           isClerkMode={isClerkMode}

@@ -38,7 +38,7 @@ export default function NavProgressBar() {
   }, [pathname]);
 
   return (
-    <div className="relative z-20 h-[2px] shrink-0 bg-transparent">
+    <div data-dashboard-nav-progress className="relative z-20 h-[2px] shrink-0 bg-transparent">
       {navBar && (
         <div
           className="absolute inset-y-0 left-0 bg-green-500 pointer-events-none"

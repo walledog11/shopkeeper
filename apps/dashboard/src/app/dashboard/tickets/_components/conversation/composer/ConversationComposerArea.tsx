@@ -1,5 +1,6 @@
 "use client"
 
+import type { Ref } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
@@ -7,6 +8,7 @@ import type { AgentPlan, RawToolCall, Ticket } from "@/types"
 
 interface Props {
   agentName: string
+  containerRef?: Ref<HTMLDivElement>
   clerkInstruction: string
   isClerkMode: boolean
   isPlanExecuting: boolean
@@ -34,6 +36,7 @@ interface Props {
 
 export default function ConversationComposerArea({
   agentName,
+  containerRef,
   clerkInstruction,
   isClerkMode,
   isPlanExecuting,
@@ -51,7 +54,7 @@ export default function ConversationComposerArea({
   viewTab,
 }: Props) {
   return (
-    <div className="relative shrink-0 flex flex-col">
+    <div ref={containerRef} className="mobile-ticket-composer-row relative z-20 shrink-0 flex flex-col">
       <AnimatePresence initial={false}>
         {pendingPlan && viewTab === "chat" && (
           <motion.div

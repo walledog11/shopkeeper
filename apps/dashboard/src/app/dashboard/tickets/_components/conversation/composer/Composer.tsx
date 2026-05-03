@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { Bot, Loader2 } from "lucide-react"
@@ -57,6 +57,7 @@ export default function Composer({
   const [selectedIdx, setSelectedIdx] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const shouldRestoreTextareaFocusRef = useRef(false)
 
   const isNoteTab = viewTab === "notes"
   const isEmailLike = channelType === "email" || channelType === "shopify"
@@ -101,13 +102,28 @@ export default function Composer({
     item?.scrollIntoView({ block: 'nearest' })
   }, [selectedIdx])
 
-  useEffect(() => {
+  const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
     if (!ta) return
     ta.style.height = '0px'
-    const cap = Math.min(window.innerHeight * 0.4, 320)
+    const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+    const cap = Math.min(viewportHeight * 0.4, 320)
     ta.style.height = `${Math.min(ta.scrollHeight, cap)}px`
-  }, [value])
+  }, [])
+
+  useEffect(() => {
+    resizeTextarea()
+  }, [resizeTextarea, value])
+
+  useEffect(() => {
+    window.visualViewport?.addEventListener("resize", resizeTextarea)
+    window.addEventListener("resize", resizeTextarea)
+
+    return () => {
+      window.visualViewport?.removeEventListener("resize", resizeTextarea)
+      window.removeEventListener("resize", resizeTextarea)
+    }
+  }, [resizeTextarea])
 
   const handleTextChange = (newValue: string) => {
     onChange(newValue)
@@ -158,6 +174,18 @@ export default function Composer({
   const placeholder = placeholderParts.join('  ·  ')
 
   const sendDisabled = !value.trim() || isSending
+  const rememberTextareaFocus = () => {
+    shouldRestoreTextareaFocusRef.current = document.activeElement === textareaRef.current
+  }
+  const handleViewTabSelect = (tab: "chat" | "notes") => {
+    onViewTabChange(tab)
+
+    if (shouldRestoreTextareaFocusRef.current) {
+      requestAnimationFrame(() => textareaRef.current?.focus({ preventScroll: true }))
+    }
+
+    shouldRestoreTextareaFocusRef.current = false
+  }
 
   return (
     <div className="bg-background border-t border-border shrink-0 pb-[max(0rem,env(safe-area-inset-bottom))]">
@@ -165,13 +193,15 @@ export default function Composer({
       <div className="flex items-center gap-1 px-5 border-b border-border">
         <TabButton
           active={!isNoteTab}
-          onClick={() => onViewTabChange('chat')}
+          onClick={() => handleViewTabSelect('chat')}
+          onPointerDown={rememberTextareaFocus}
         >
           Reply
         </TabButton>
         <TabButton
           active={isNoteTab}
-          onClick={() => onViewTabChange('notes')}
+          onClick={() => handleViewTabSelect('notes')}
+          onPointerDown={rememberTextareaFocus}
         >
           Internal note
           {noteCount > 0 && (
@@ -303,7 +333,7 @@ export default function Composer({
                     <span className="text-sm leading-none">↑</span>
                     {isClerkMode ? `Ask ${agentName}` : isNoteTab ? 'Save note' : 'Send'}
                   </span>
-                  <kbd className="bg-black/25 text-white/80 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none">
+                  <kbd className="hidden md:inline bg-black/25 text-white/80 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none">
                     ⌘↵
                   </kbd>
                 </>
@@ -322,13 +352,15 @@ export default function Composer({
 interface TabButtonProps {
   active: boolean
   onClick: () => void
+  onPointerDown?: () => void
   children: React.ReactNode
 }
 
-function TabButton({ active, onClick, children }: TabButtonProps) {
+function TabButton({ active, onClick, onPointerDown, children }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
+      onPointerDown={onPointerDown}
       className={`relative inline-flex items-center text-sm font-semibold px-3 py-2 transition-colors ${
         active ? 'text-white' : 'text-white/35 hover:text-white/60'
       }`}

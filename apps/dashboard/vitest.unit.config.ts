@@ -16,6 +16,7 @@ export default defineConfig({
       'src/app/dashboard/tickets/_hooks/useConversationAgentFlow.test.ts',
       'src/app/dashboard/tickets/_hooks/useTicketActions.test.ts',
       'src/app/dashboard/tickets/_components/conversation/utils/conversationViewUtils.test.ts',
+      'src/app/dashboard/tickets/_components/conversation/useVisualKeyboard.test.ts',
     ],
   },
   resolve: {

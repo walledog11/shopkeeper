@@ -10,7 +10,6 @@ import { useOpenThreadCountQuery } from "@/hooks/useThreads";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 
 import { footerNavItems, navGroups } from "./nav-items";
-import { useAgentPanel } from "./agent-panel/AgentPanelContext";
 import { useCommandPalette } from "./CommandPaletteContext";
 import { fetcher } from "@/lib/api/fetcher";
 import { formatRole } from "@/lib/format/role";
@@ -566,7 +565,10 @@ function MobileBottomBar({ openCount }: { openCount: number }) {
   const pathname = usePathname();
 
   return (
-    <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-black border-t border-white/[0.08] flex items-stretch">
+    <div
+      data-dashboard-mobile-bottom-bar
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-black border-t border-white/[0.08] flex items-stretch"
+    >
       {mobileTabs.map((tab) => {
         const isActive = isRouteActive(pathname, tab.href);
 
@@ -607,26 +609,14 @@ function MobileBottomBar({ openCount }: { openCount: number }) {
 export default function DashboardSidebar({ children }: { children: React.ReactNode }) {
   const { count: openCount } = useOpenThreadCountQuery();
   const navAuth = useNavAuth();
-  const { isOpen: isAgentOpen, toggle: toggleAgent } = useAgentPanel();
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
-    const update = () => {
-      const vv = window.visualViewport;
-      const h = vv?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty("--vvh", `${h}px`);
-      setKeyboardOpen(vv ? window.innerHeight - vv.height > 150 : false);
-    };
-    update();
-    window.visualViewport?.addEventListener("resize", update);
-
     document.documentElement.classList.add("dashboard-locked");
     document.body.classList.add("dashboard-locked");
 
     return () => {
-      window.visualViewport?.removeEventListener("resize", update);
       document.documentElement.classList.remove("dashboard-locked");
       document.body.classList.remove("dashboard-locked");
     };
@@ -649,7 +639,10 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
         </Sidebar>
 
         <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-black flex flex-col">
-          <div className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar">
+          <div
+            data-dashboard-mobile-header
+            className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar"
+          >
             <Logo />
             <div className="flex items-center gap-1">
               <button
@@ -663,7 +656,14 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
             </div>
           </div>
 
-          <div className={cn("flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0", keyboardOpen ? "pb-0" : "pb-16")}>{children}</div>
+          <div
+            className={cn(
+              "dashboard-content flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0",
+              "pb-16",
+            )}
+          >
+            {children}
+          </div>
         </SidebarInset>
       </SidebarProvider>
 
@@ -675,7 +675,7 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
         navAuth={navAuth}
       />
 
-      {!keyboardOpen && <MobileBottomBar openCount={openCount} />}
+      <MobileBottomBar openCount={openCount} />
     </OpenThreadCountContext.Provider>
   );
 }
