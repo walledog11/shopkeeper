@@ -154,8 +154,7 @@ jobs:
       - name: Run E2E smoke tests
         run: npm run test:e2e:smoke
 
-      - name: Resolve Clerk browser E2E availability
-        id: clerk_e2e_env
+      - name: Run E2E browser tests (when Clerk env is available)
         shell: bash
         run: |
           missing=()
@@ -176,27 +175,15 @@ jobs:
             missing+=("CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
           fi
 
-          if [[ ${#missing[@]} -eq 0 ]]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-            echo "missing=" >> "$GITHUB_OUTPUT"
-            echo "Browser E2E env check passed."
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
+          if [[ ${#missing[@]} -gt 0 ]]; then
             missing_joined="$(IFS=', '; echo "${missing[*]}")"
-            echo "missing=$missing_joined" >> "$GITHUB_OUTPUT"
-            echo "Browser E2E env check failed; missing: $missing_joined"
+            echo "Skipping browser E2E tests because required Clerk secrets are missing."
+            echo "Missing: $missing_joined"
+            echo "Required: CLERK_E2E_EMAIL, E2E_CLERK_ORG_ID, CLERK_SECRET_KEY, and CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY."
+            exit 0
           fi
 
-      - name: Run E2E browser tests
-        if: ${{ steps.clerk_e2e_env.outputs.ready == 'true' }}
-        run: npm run test:e2e:browser
-
-      - name: Skip E2E browser tests (missing Clerk secrets)
-        if: ${{ steps.clerk_e2e_env.outputs.ready != 'true' }}
-        run: |
-          echo "Skipping browser E2E tests because required Clerk secrets are missing."
-          echo "Missing: ${{ steps.clerk_e2e_env.outputs.missing }}"
-          echo "Required: CLERK_E2E_EMAIL, E2E_CLERK_ORG_ID, CLERK_SECRET_KEY, and CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY."
+          npm run test:e2e:browser
       - name: Upload Playwright artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
