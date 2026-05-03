@@ -101,6 +101,13 @@ export default function Composer({
     item?.scrollIntoView({ block: 'nearest' })
   }, [selectedIdx])
 
+  useEffect(() => {
+    const ta = textareaRef.current
+    if (!ta) return
+    ta.style.height = '0px'
+    ta.style.height = `${Math.min(ta.scrollHeight, 180)}px`
+  }, [value])
+
   const handleTextChange = (newValue: string) => {
     onChange(newValue)
     const match = newValue.match(/(^|\s)\/(\S*)$/)
@@ -261,8 +268,8 @@ export default function Composer({
               }
             }}
             disabled={isSending}
-            rows={4}
-            className="flex-1 w-0 min-h-[60px] bg-transparent resize-none outline-none text-base md:text-sm text-white/80 placeholder:text-white/30 disabled:opacity-50"
+            rows={2}
+            className="flex-1 w-0 min-h-[44px] max-h-[180px] overflow-y-auto bg-transparent resize-none outline-none text-base md:text-sm text-white/80 placeholder:text-white/30 disabled:opacity-50"
             placeholder={placeholder}
           />
         </div>

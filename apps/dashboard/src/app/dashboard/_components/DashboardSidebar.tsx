@@ -616,17 +616,13 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
     const update = () => {
       const vv = window.visualViewport;
       const h = vv?.height ?? window.innerHeight;
-      const t = vv?.offsetTop ?? 0;
       document.documentElement.style.setProperty("--vvh", `${h}px`);
-      document.documentElement.style.setProperty("--vvt", `${t}px`);
       setKeyboardOpen(vv ? window.innerHeight - vv.height > 150 : false);
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("scroll", update);
     return () => {
       window.visualViewport?.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("scroll", update);
     };
   }, []);
 
