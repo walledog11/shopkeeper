@@ -24,7 +24,7 @@ export default function ConversationHeader({
   onOpenContext,
 }: Props) {
   return (
-    <div className="h-12 py-6 border-b border-border flex items-center justify-between px-3 md:px-6 shrink-0">
+    <div className="h-14 border-b border-border flex items-center justify-between px-3 md:px-6 shrink-0">
       <div className="flex items-center gap-3 min-w-0">
         <Button
           variant="ghost"

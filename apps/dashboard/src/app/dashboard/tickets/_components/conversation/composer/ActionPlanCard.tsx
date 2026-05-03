@@ -52,6 +52,12 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
     setSteps(plan.steps)
   }, [plan])
 
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+      setCollapsed(true)
+    }
+  }, [])
+
   const toggleStep = (id: string) => {
     setSteps(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s))
   }
@@ -69,7 +75,7 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
 
   return (
     <div className="w-full">
-      <AnimatePresence initial={false}>
+      <AnimatePresence initial={false} mode="popLayout">
         {collapsed ? (
           <motion.button
             key="bubble"

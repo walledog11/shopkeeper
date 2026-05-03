@@ -110,9 +110,9 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
           animate={{ height: "auto", opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.25, ease: "easeInOut" }}
-          className={`relative z-20 flex items-center justify-center px-10 text-sm shrink-0 border-b overflow-hidden ${styles.bar}`}
+          className={`relative z-20 flex items-center justify-center pl-3 pr-10 md:px-10 text-xs md:text-sm shrink-0 border-b overflow-hidden ${styles.bar}`}
         >
-          <div className="py-3 md:py-3 flex items-center gap-2.5">
+          <div className="py-2 md:py-3 flex items-center gap-2 md:gap-2.5">
             <AnimatePresence mode="wait" custom={directionRef.current}>
               <motion.div
                 key={n.id}
