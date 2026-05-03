@@ -119,11 +119,11 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/clerk_test?schema=public
       TEST_REDIS_URL: redis://127.0.0.1:6379/0
-      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
-      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
-      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.CLERK_PUBLISHABLE_KEY }}
-      CLERK_E2E_EMAIL: ${{ secrets.CLERK_E2E_EMAIL }}
-      E2E_CLERK_ORG_ID: ${{ secrets.E2E_CLERK_ORG_ID }}
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || vars.CLERK_SECRET_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY }}
+      CLERK_E2E_EMAIL: ${{ secrets.CLERK_E2E_EMAIL || vars.CLERK_E2E_EMAIL }}
+      E2E_CLERK_ORG_ID: ${{ secrets.E2E_CLERK_ORG_ID || vars.E2E_CLERK_ORG_ID }}
       ANTHROPIC_API_KEY: test-anthropic-key
       INTERNAL_API_SECRET: test-internal-secret
       INTERNAL_API_SECRET_PREV: test-internal-secret-prev
@@ -154,14 +154,48 @@ jobs:
       - name: Run E2E smoke tests
         run: npm run test:e2e:smoke
 
+      - name: Resolve Clerk browser E2E availability
+        id: clerk_e2e_env
+        shell: bash
+        run: |
+          missing=()
+
+          if [[ -z "${CLERK_E2E_EMAIL:-}" ]]; then
+            missing+=("CLERK_E2E_EMAIL")
+          fi
+
+          if [[ -z "${E2E_CLERK_ORG_ID:-}" ]]; then
+            missing+=("E2E_CLERK_ORG_ID")
+          fi
+
+          if [[ -z "${CLERK_SECRET_KEY:-}" ]]; then
+            missing+=("CLERK_SECRET_KEY")
+          fi
+
+          if [[ -z "${CLERK_PUBLISHABLE_KEY:-}" && -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ]]; then
+            missing+=("CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
+          fi
+
+          if [[ ${#missing[@]} -eq 0 ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "missing=" >> "$GITHUB_OUTPUT"
+            echo "Browser E2E env check passed."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            missing_joined="$(IFS=', '; echo "${missing[*]}")"
+            echo "missing=$missing_joined" >> "$GITHUB_OUTPUT"
+            echo "Browser E2E env check failed; missing: $missing_joined"
+          fi
+
       - name: Run E2E browser tests
-        if: ${{ env.CLERK_E2E_EMAIL != '' && env.E2E_CLERK_ORG_ID != '' && env.CLERK_SECRET_KEY != '' && (env.CLERK_PUBLISHABLE_KEY != '' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '') }}
+        if: ${{ steps.clerk_e2e_env.outputs.ready == 'true' }}
         run: npm run test:e2e:browser
 
       - name: Skip E2E browser tests (missing Clerk secrets)
-        if: ${{ !(env.CLERK_E2E_EMAIL != '' && env.E2E_CLERK_ORG_ID != '' && env.CLERK_SECRET_KEY != '' && (env.CLERK_PUBLISHABLE_KEY != '' || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '')) }}
+        if: ${{ steps.clerk_e2e_env.outputs.ready != 'true' }}
         run: |
           echo "Skipping browser E2E tests because required Clerk secrets are missing."
+          echo "Missing: ${{ steps.clerk_e2e_env.outputs.missing }}"
           echo "Required: CLERK_E2E_EMAIL, E2E_CLERK_ORG_ID, CLERK_SECRET_KEY, and CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY."
       - name: Upload Playwright artifacts
         if: ${{ failure() }}
