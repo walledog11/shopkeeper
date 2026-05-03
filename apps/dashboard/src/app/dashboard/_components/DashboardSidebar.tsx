@@ -621,8 +621,14 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
+
+    document.documentElement.classList.add("dashboard-locked");
+    document.body.classList.add("dashboard-locked");
+
     return () => {
       window.visualViewport?.removeEventListener("resize", update);
+      document.documentElement.classList.remove("dashboard-locked");
+      document.body.classList.remove("dashboard-locked");
     };
   }, []);
 
