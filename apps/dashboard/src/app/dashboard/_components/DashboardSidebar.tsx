@@ -614,7 +614,7 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
   useEffect(() => {
     const update = () => {
       const h = window.visualViewport?.height ?? window.innerHeight;
-      document.documentElement.style.setProperty("--visual-viewport-height", `${h}px`);
+      document.documentElement.style.setProperty("--vvh", `${h}px`);
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
