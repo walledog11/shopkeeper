@@ -610,15 +610,24 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
   const { isOpen: isAgentOpen, toggle: toggleAgent } = useAgentPanel();
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   useEffect(() => {
     const update = () => {
-      const h = window.visualViewport?.height ?? window.innerHeight;
+      const vv = window.visualViewport;
+      const h = vv?.height ?? window.innerHeight;
+      const t = vv?.offsetTop ?? 0;
       document.documentElement.style.setProperty("--vvh", `${h}px`);
+      document.documentElement.style.setProperty("--vvt", `${t}px`);
+      setKeyboardOpen(vv ? window.innerHeight - vv.height > 150 : false);
     };
     update();
     window.visualViewport?.addEventListener("resize", update);
-    return () => window.visualViewport?.removeEventListener("resize", update);
+    window.visualViewport?.addEventListener("scroll", update);
+    return () => {
+      window.visualViewport?.removeEventListener("resize", update);
+      window.visualViewport?.removeEventListener("scroll", update);
+    };
   }, []);
 
   return (
@@ -652,7 +661,7 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0 pb-16">{children}</div>
+          <div className={cn("flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0", keyboardOpen ? "pb-0" : "pb-16")}>{children}</div>
         </SidebarInset>
       </SidebarProvider>
 
@@ -664,7 +673,7 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
         navAuth={navAuth}
       />
 
-      <MobileBottomBar openCount={openCount} />
+      {!keyboardOpen && <MobileBottomBar openCount={openCount} />}
     </OpenThreadCountContext.Provider>
   );
 }
