@@ -51,17 +51,17 @@ export default function ConversationComposerArea({
   viewTab,
 }: Props) {
   return (
-    <div className="relative shrink-0">
-      <AnimatePresence>
+    <div className="relative shrink-0 flex flex-col">
+      <AnimatePresence initial={false}>
         {pendingPlan && viewTab === "chat" && (
           <motion.div
-            className="absolute bottom-full left-0 right-0 px-5 pb-2 pointer-events-none"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6, transition: { duration: 0.18 } }}
-            transition={{ duration: 0.22, ease: "easeOut" }}
+            className="overflow-hidden"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.2 } }}
+            transition={{ duration: 0.3, ease: "easeOut" }}
           >
-            <div className="pointer-events-auto">
+            <div className="px-5 pb-2 pt-1 pointer-events-auto">
               <ActionPlanCard
                 plan={pendingPlan}
                 isExecuting={isPlanExecuting}

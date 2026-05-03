@@ -161,7 +161,7 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
               )}
 
               {/* Steps */}
-              <div className="divide-y divide-white/[0.06]">
+              <div className="divide-y divide-white/[0.06] max-h-[30vh] overflow-y-auto custom-scrollbar">
                 {steps.map((step) => {
                   const styles = CATEGORY_STYLES[step.category]
                   const Icon = CATEGORY_ICONS[step.category]
