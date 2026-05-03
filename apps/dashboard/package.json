@@ -7,7 +7,7 @@
     "dev:e2e": "NEXT_DIST_DIR=.next-e2e next dev -p 3100",
     "build:e2e": "node ../../scripts/dashboard-e2e-build.mjs",
     "start:e2e": "NEXT_DIST_DIR=.next-e2e next start -p 3100",
-    "serve:e2e": "npm run build:e2e && npm run start:e2e",
+    "serve:e2e": "node ../../scripts/test-bootstrap.mjs && npm run build:e2e && npm run start:e2e",
     "build": "next build",
     "lint": "cd ../.. && eslint apps/dashboard/src apps/dashboard/next.config.js apps/dashboard/postcss.config.mjs apps/dashboard/vitest.config.ts apps/dashboard/vitest.integration.config.ts apps/dashboard/vitest.unit.config.ts",
     "start": "next start",
