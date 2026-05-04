@@ -52,6 +52,10 @@ The user identified by `CLERK_E2E_EMAIL` must already belong to the Clerk organi
 
 Current local env note: `.env.e2e.local` provides the required Clerk browser E2E values, and `npm run test:e2e` passes locally with that file present.
 
+Current CI env note: GitHub repository secrets include the required Clerk browser E2E values. The E2E workflow now runs `npm run test:e2e` directly, so browser E2E can no longer be skipped when Clerk env is missing.
+
+Latest local launch-gate verification: `npm run lint`, `npm run test:unit`, `npm run test:integration`, and `npm run test:e2e` passed in this workspace. CI proof is still pending until the workflow runs on GitHub.
+
 ## Completed Work
 
 ### Infrastructure
@@ -131,7 +135,7 @@ Current local env note: `.env.e2e.local` provides the required Clerk browser E2E
 - [x] Verify the agent message is persisted in DB and visible in the UI.
 - [x] Once passing locally, run through `npm run test:e2e`.
 - [x] Add `CLERK_E2E_EMAIL` and a real non-placeholder `E2E_CLERK_ORG_ID` to env visible to Playwright in this workspace.
-- [ ] Configure CI env with the required Clerk browser E2E values.
+- [x] Configure CI env with the required Clerk browser E2E values.
 
 Expected failure order to debug:
 
@@ -174,8 +178,8 @@ Expected failure order to debug:
 
 ### Priority 5: CI Launch Gate
 
-- [ ] Start Docker test services before integration/E2E tests.
-- [ ] Configure Clerk E2E values as CI secrets.
+- [x] Start Docker test services before integration/E2E tests.
+- [x] Configure Clerk E2E values as CI secrets.
 - [ ] Run `npm run lint`.
 - [ ] Run `npm run test:unit`.
 - [ ] Run `npm run test:integration`.

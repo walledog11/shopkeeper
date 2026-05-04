@@ -151,39 +151,8 @@ jobs:
         run: npm ci
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Run E2E smoke tests
-        run: npm run test:e2e:smoke
-
-      - name: Run E2E browser tests (when Clerk env is available)
-        shell: bash
-        run: |
-          missing=()
-
-          if [[ -z "${CLERK_E2E_EMAIL:-}" ]]; then
-            missing+=("CLERK_E2E_EMAIL")
-          fi
-
-          if [[ -z "${E2E_CLERK_ORG_ID:-}" ]]; then
-            missing+=("E2E_CLERK_ORG_ID")
-          fi
-
-          if [[ -z "${CLERK_SECRET_KEY:-}" ]]; then
-            missing+=("CLERK_SECRET_KEY")
-          fi
-
-          if [[ -z "${CLERK_PUBLISHABLE_KEY:-}" && -z "${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}" ]]; then
-            missing+=("CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
-          fi
-
-          if [[ ${#missing[@]} -gt 0 ]]; then
-            missing_joined="$(IFS=', '; echo "${missing[*]}")"
-            echo "Skipping browser E2E tests because required Clerk secrets are missing."
-            echo "Missing: $missing_joined"
-            echo "Required: CLERK_E2E_EMAIL, E2E_CLERK_ORG_ID, CLERK_SECRET_KEY, and CLERK_PUBLISHABLE_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY."
-            exit 0
-          fi
-
-          npm run test:e2e:browser
+      - name: Run E2E tests
+        run: npm run test:e2e
       - name: Upload Playwright artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
