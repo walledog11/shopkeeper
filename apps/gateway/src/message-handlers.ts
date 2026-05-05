@@ -2,6 +2,7 @@ import type { Job, Queue } from 'bullmq';
 import { db, SenderType, Prisma, ThreadFilterStatus, createMessage, type DbChannelType, type DbThreadFilterStatus } from '@clerk/db';
 import Anthropic from '@anthropic-ai/sdk';
 import twilio from 'twilio';
+import * as Sentry from '@sentry/node';
 import { updateContext } from './sms-context.js';
 import { getGatewayDashboardUrl } from './env.js';
 import logger from './logger.js';
@@ -204,6 +205,7 @@ interface ProcessMessageOptions {
   customerName?: string | null;
   profilePicUrl?: string | null;
   initialTag?: string | null;
+  subject?: string | null;
   externalMessageId?: string | null;
   traceId?: string | null;
   attachments?: string[];
@@ -223,7 +225,7 @@ async function processInboundMessage(
   channelType: DbChannelType,
   messageText: string,
   aiSummaryQueue: Queue,
-  { customerName = null, profilePicUrl = null, initialTag = null, externalMessageId = null, traceId = null, attachments = [], precomputed = null, lockAsGenuine = false }: ProcessMessageOptions = {}
+  { customerName = null, profilePicUrl = null, initialTag = null, subject = null, externalMessageId = null, traceId = null, attachments = [], precomputed = null, lockAsGenuine = false }: ProcessMessageOptions = {}
 ): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
 
@@ -263,6 +265,7 @@ async function processInboundMessage(
           customerId: customer.id,
           channelType,
           status: STATUS.OPEN,
+          ...(subject && { subject }),
           ...(initialTag && { tag: initialTag }),
           ...(precomputed && {
             aiSummary: precomputed.summary,
@@ -417,7 +420,7 @@ export async function precomputeThreadPlan(
   settings: Record<string, unknown>,
 ): Promise<{ plan: AgentPlan; instruction: string } | null> {
   if (settings.autoPlanOnOpen === false) {
-    logger.info({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — skipping plan precompute');
+    logger.warn({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — no plan will be generated for this thread');
     return null;
   }
 
@@ -440,9 +443,12 @@ export async function precomputeThreadPlan(
     });
 
     if (!planRes.ok) {
-      const errMsg = `plan-internal returned ${planRes.status}`;
-      logger.warn({ status: planRes.status, threadId }, '[Worker] plan-internal failed during precompute');
-      throw new Error(errMsg);
+      const responseBody = await planRes.text().catch(() => '');
+      logger.warn(
+        { status: planRes.status, threadId, organizationId, responseBody: responseBody.slice(0, 500) },
+        '[Worker] plan-internal failed during precompute',
+      );
+      throw new Error(`plan-internal returned ${planRes.status}: ${responseBody.slice(0, 200)}`);
     }
 
     const { plan, instruction } = await planRes.json() as { plan: AgentPlan | null; instruction: string };
@@ -451,7 +457,11 @@ export async function precomputeThreadPlan(
     }
     return { plan, instruction };
   } catch (err) {
-    logger.error({ err: (err as Error).message, threadId }, '[Worker] precomputeThreadPlan error');
+    logger.error({ err: (err as Error).message, threadId, organizationId }, '[Worker] precomputeThreadPlan error');
+    Sentry.captureException(err, {
+      tags: { path: 'plan-precompute' },
+      extra: { threadId, organizationId },
+    });
     throw err;
   }
 }
@@ -733,7 +743,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
 
     const result = await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
       customerName: resolvedName,
-      initialTag: subject!.substring(0, 50),
+      subject: subject?.trim() || null,
       externalMessageId: job.data.inboundMessageId,
       traceId,
       precomputed,

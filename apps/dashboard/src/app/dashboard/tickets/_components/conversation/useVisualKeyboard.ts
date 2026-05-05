@@ -3,6 +3,7 @@
 import { useEffect, useState, type RefObject } from "react"
 
 const MOBILE_QUERY = "(max-width: 767px)"
+const COARSE_POINTER_QUERY = "(pointer: coarse)"
 const KEYBOARD_DELTA_THRESHOLD = 80
 const EDITABLE_SELECTOR = [
   "textarea",
@@ -22,6 +23,7 @@ interface VisualKeyboardSnapshotInput {
   focusedEditable: boolean
   innerHeight: number
   isMobile: boolean
+  isCoarsePointer?: boolean
   visualViewport?: {
     height: number
     offsetTop: number
@@ -43,12 +45,15 @@ export function getVisualKeyboardState({
   focusedEditable,
   innerHeight,
   isMobile,
+  isCoarsePointer = false,
   visualViewport,
 }: VisualKeyboardSnapshotInput): VisualKeyboardState {
+  const hasVisualViewport = !!visualViewport
   const visualViewportHeight = visualViewport?.height ?? innerHeight
-  const viewportDelta = visualViewport ? innerHeight - visualViewport.height : 0
+  const viewportDelta = hasVisualViewport ? innerHeight - visualViewportHeight : 0
   const viewportWasReduced = viewportDelta > KEYBOARD_DELTA_THRESHOLD
-  const keyboardOpen = isMobile && (focusedEditable || viewportWasReduced)
+  const focusFallback = !hasVisualViewport && focusedEditable && isCoarsePointer
+  const keyboardOpen = isMobile && (viewportWasReduced || focusFallback)
   const keyboardInset = keyboardOpen && visualViewport
     ? Math.max(0, innerHeight - visualViewport.height - visualViewport.offsetTop)
     : 0
@@ -79,6 +84,8 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
     let settleTimer: ReturnType<typeof setTimeout> | null = null
     const mobileQuery = window.matchMedia(MOBILE_QUERY)
     const legacyMobileQuery = mobileQuery as MediaQueryListWithLegacyListeners
+    const coarsePointerQuery = window.matchMedia(COARSE_POINTER_QUERY)
+    const legacyCoarsePointerQuery = coarsePointerQuery as MediaQueryListWithLegacyListeners
 
     const hasFocusedEditable = () => {
       const activeElement = document.activeElement
@@ -94,6 +101,7 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
       focusedEditable: hasFocusedEditable(),
       innerHeight: window.innerHeight,
       isMobile: mobileQuery.matches,
+      isCoarsePointer: coarsePointerQuery.matches,
       visualViewport: window.visualViewport
         ? {
             height: window.visualViewport.height,
@@ -125,6 +133,11 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
     } else {
       legacyMobileQuery.addListener?.(scheduleUpdate)
     }
+    if (typeof coarsePointerQuery.addEventListener === "function") {
+      coarsePointerQuery.addEventListener("change", scheduleUpdate)
+    } else {
+      legacyCoarsePointerQuery.addListener?.(scheduleUpdate)
+    }
 
     return () => {
       if (settleTimer) clearTimeout(settleTimer)
@@ -137,6 +150,11 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
         mobileQuery.removeEventListener("change", scheduleUpdate)
       } else {
         legacyMobileQuery.removeListener?.(scheduleUpdate)
+      }
+      if (typeof coarsePointerQuery.removeEventListener === "function") {
+        coarsePointerQuery.removeEventListener("change", scheduleUpdate)
+      } else {
+        legacyCoarsePointerQuery.removeListener?.(scheduleUpdate)
       }
     }
   }, [enabled, rootRef])

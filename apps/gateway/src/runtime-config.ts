@@ -62,6 +62,17 @@ export interface GatewayWorkerRedisConfig {
   maintenanceWorkersEnabled: boolean;
 }
 
+export interface GatewayOpsAlertConfig {
+  enabled: boolean;
+  windowSecs: number;
+  queueFailedThreshold: number;
+  queueWaitingThreshold: number;
+  queueActiveStuckMs: number;
+  webhookSignatureThreshold: number;
+  providerSendThreshold: number;
+  agentFailureThreshold: number;
+}
+
 export function getGatewayWorkerRedisConfig(): GatewayWorkerRedisConfig {
   const isProduction = process.env.NODE_ENV === 'production';
   const heartbeatIntervalMs = parsePositiveIntEnv(
@@ -97,5 +108,18 @@ export function getGatewayWorkerRedisConfig(): GatewayWorkerRedisConfig {
       isProduction ? 30_000 : 5_000,
     ),
     maintenanceWorkersEnabled: parseBooleanEnv('GATEWAY_ENABLE_MAINTENANCE_WORKERS', true),
+  };
+}
+
+export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
+  return {
+    enabled: parseBooleanEnv('OPS_ALERTS_ENABLED', true),
+    windowSecs: parsePositiveIntEnv('OPS_ALERT_WINDOW_SECS', 300),
+    queueFailedThreshold: parsePositiveIntEnv('QUEUE_ALERT_FAILED_THRESHOLD', 10),
+    queueWaitingThreshold: parsePositiveIntEnv('QUEUE_ALERT_WAITING_THRESHOLD', 100),
+    queueActiveStuckMs: parsePositiveIntEnv('QUEUE_ALERT_ACTIVE_STUCK_MS', 900_000),
+    webhookSignatureThreshold: parsePositiveIntEnv('WEBHOOK_SIGNATURE_ALERT_THRESHOLD', 5),
+    providerSendThreshold: parsePositiveIntEnv('PROVIDER_SEND_ALERT_THRESHOLD', 3),
+    agentFailureThreshold: parsePositiveIntEnv('AGENT_FAILURE_ALERT_THRESHOLD', 3),
   };
 }

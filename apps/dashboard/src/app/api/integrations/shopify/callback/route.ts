@@ -4,6 +4,8 @@ import { db } from '@clerk/db';
 import crypto from 'crypto';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
+import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
+import { getRedis } from '@/lib/server/redis';
 
 export async function GET(request: Request) {
   const appUrl = process.env.APP_URL;
@@ -138,6 +140,7 @@ export async function GET(request: Request) {
             if (!r.ok) {
               const err = await r.json().catch(() => ({}));
               logger.warn({ topic, shop, err }, '[Shopify OAuth] Webhook registration failed');
+              void recordProviderSendFailure('shopify', 'webhook_registration', org.id, { counterClient: getRedis() });
             } else {
               logger.info({ topic, shop }, '[Shopify OAuth] Webhook registered');
             }

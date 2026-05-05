@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { AlertCircle, CheckCircle2, Inbox, Loader2 } from "lucide-react"
+import { AlertCircle, CheckCircle2, Inbox } from "lucide-react"
 import useSWR from 'swr'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -22,6 +22,28 @@ interface Props {
   initialOpenThreads: Thread[]
   hasShopify: boolean
   agentName: string
+}
+
+function createLoadingTicket(threadId: string): Ticket {
+  return {
+    id: threadId,
+    channelType: 'email',
+    platform: 'Conversation',
+    logo: '',
+    customer: 'Loading conversation',
+    time: 'Now',
+    subject: 'Loading conversation',
+    preview: '',
+    tag: 'Support',
+    tagColor: 'text-slate-500 bg-slate-100 border-slate-200',
+    aiSummary: '',
+    status: 'open',
+    lastCustomerMessageAt: null,
+    hasPlan: false,
+    filterStatus: 'genuine',
+    filterReason: null,
+    messages: [],
+  }
 }
 
 export default function TicketsPageClient({ initialOpenThreads, hasShopify, agentName }: Props) {
@@ -65,7 +87,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const {
     data: activeThreadData,
     error: activeThreadError,
-    isLoading: isActiveThreadLoading,
     mutate: mutateActiveThread,
   } = useSWR<{ thread: Thread }>(activeThreadKey, fetcher)
 
@@ -88,6 +109,29 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   const activeThread = activeThreadData?.thread
   const activeTicket = activeThread ? threadToTicket(activeThread, agentName) : undefined
+  const activeThreadPreview = useMemo(
+    () => {
+      if (!activeTicketId) return undefined
+      return openThreads.find(t => t.id === activeTicketId)
+        ?? closedThreads.find(t => t.id === activeTicketId)
+        ?? filteredThreads.find(t => t.id === activeTicketId)
+        ?? searchThreads.find(t => t.id === activeTicketId)
+    },
+    [activeTicketId, closedThreads, filteredThreads, openThreads, searchThreads],
+  )
+  const activeTicketPreview = useMemo(
+    () => activeThreadPreview ? threadToTicket(activeThreadPreview, agentName) : undefined,
+    [activeThreadPreview, agentName],
+  )
+  const isConversationLoading = Boolean(activeTicketId && !activeThread && !activeThreadError)
+  const conversationTicket = useMemo(
+    () => {
+      if (activeTicket) return activeTicket
+      if (!isConversationLoading || !activeTicketId) return undefined
+      return activeTicketPreview ?? createLoadingTicket(activeTicketId)
+    },
+    [activeTicket, activeTicketId, activeTicketPreview, isConversationLoading],
+  )
 
   const lastCustomerMessageId = useMemo(
     () => activeThread?.messages.filter(m => m.senderType === 'customer').at(-1)?.id ?? null,
@@ -329,26 +373,31 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
       {/* ── Col 2+3: Conversation + Context panel ──────────────────────────── */}
       <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
-        {activeTicket && activeThread ? (
+        {conversationTicket ? (
           <>
             <ConversationView
-              key={activeTicket.id}
-              ticket={activeTicket}
+              key={conversationTicket.id}
+              ticket={conversationTicket}
+              isThreadLoading={isConversationLoading}
               agentName={agentName}
-              shopifyCustomerId={activeThread.shopifyCustomerId}
-              customerPlatformId={activeThread.customer?.platformId}
+              shopifyCustomerId={activeThread?.shopifyCustomerId}
+              customerPlatformId={activeThread?.customer?.platformId}
               agentTurns={activeAgentTurns}
               isAgentRunning={isAgentRunning}
               onAgentTurnAdd={handleAgentTurnAdd}
               onAgentRunningChange={handleAgentRunningChange}
               onAgentComplete={handleAgentComplete}
               activeTab={isSearchMode || activeTab === 'filtered'
-                ? (activeThread.status === 'closed' ? 'closed' : 'open')
+                ? ((activeThread?.status ?? activeThreadPreview?.status) === 'closed' ? 'closed' : 'open')
                 : activeTab}
               initialPlan={cachedPlan}
-              aiSummary={activeThread.aiSummary}
-              isSummaryRefreshing={refreshingSummaryId === activeThread.id}
-              onRefreshSummary={() => handleRefreshSummary(activeThread.id)}
+              aiSummary={activeThread?.aiSummary ?? null}
+              isSummaryRefreshing={activeThread ? refreshingSummaryId === activeThread.id : false}
+              onRefreshSummary={() => {
+                if (activeThread) {
+                  handleRefreshSummary(activeThread.id)
+                }
+              }}
               replyText={replyText}
               isSending={isSending}
               sendError={sendError}
@@ -363,7 +412,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onSend={handleSendMessage}
             />
             {/* Desktop context panel */}
-            {isDesktopContext && (
+            {isDesktopContext && activeThread && !isConversationLoading && (
               <div className="hidden xl:flex">
                 <ContextPanel
                   thread={activeThread}
@@ -374,23 +423,25 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
             )}
 
             {/* Mobile/tablet context sheet */}
-            <Sheet open={showContextDrawer} onOpenChange={setShowContextDrawer}>
-              <SheetContent
-                side="bottom"
-                className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
-              >
-                <SheetHeader className="px-5 py-3 border-b border-border shrink-0">
-                  <SheetTitle className="text-sm font-semibold text-white/70 text-left">Customer Details</SheetTitle>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto">
-                  <ContextPanel
-                    thread={activeThread}
-                    hasShopify={hasShopify}
-                    onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
+            {activeThread && !isConversationLoading && (
+              <Sheet open={showContextDrawer} onOpenChange={setShowContextDrawer}>
+                <SheetContent
+                  side="bottom"
+                  className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
+                >
+                  <SheetHeader className="px-5 py-3 border-b border-border shrink-0">
+                    <SheetTitle className="text-sm font-semibold text-white/70 text-left">Customer Details</SheetTitle>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto">
+                    <ContextPanel
+                      thread={activeThread}
+                      hasShopify={hasShopify}
+                      onLinkShopifyCustomer={handleLinkShopifyCustomer}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            )}
           </>
         ) : activeTicketId ? (
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
@@ -402,14 +453,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
                   <p className="text-xs text-white/30 mt-1">The thread may have been archived or is no longer available.</p>
                 </div>
               </>
-            ) : (
-              <>
-                <Loader2 className="w-5 h-5 text-white/30 animate-spin" />
-                <p className="text-sm font-semibold text-white/50">
-                  {isActiveThreadLoading ? 'Loading conversation…' : 'Preparing conversation…'}
-                </p>
-              </>
-            )}
+            ) : null}
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-4">

@@ -5,6 +5,13 @@ import logger from './logger.js';
 import { CHANNEL, QUEUE, JOB } from './constants.js';
 import { getTwilio } from './message-handlers.js';
 import { updateContext } from './sms-context.js';
+import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from './runtime-config.js';
+import {
+  emitOpsAlert,
+  incrementOpsAlertWindow,
+  type IncrementOpsAlertWindowResult,
+  type OpsAlertCounterClient,
+} from './ops-alerts.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -16,6 +23,87 @@ export const FILTERED_PURGE_AFTER_DAYS = 7;
 
 const DIGEST_QUESTIONABLE_LIMIT = 10;
 const DIGEST_SUMMARY_TRUNC = 90;
+export const QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT = 20;
+
+type QueueHealthQueueLabel = 'inbound' | 'aiSummary';
+type QueueHealthMetric = 'failed' | 'waiting' | 'active_stuck';
+
+export interface QueueHealthCounts {
+  waiting: number;
+  active: number;
+  failed: number;
+  [key: string]: number;
+}
+
+export interface QueueHealthActiveJob {
+  id?: string | number;
+  name?: string;
+  attemptsMade?: number;
+  timestamp?: number;
+  processedOn?: number;
+  data?: unknown;
+}
+
+export interface QueueHealthActiveJobSnapshot {
+  id: string | null;
+  name: string | null;
+  attemptsMade: number | null;
+  ageMs: number;
+  startedAt: string;
+  timestamp: string | null;
+  processedOn: string | null;
+  platform: string | null;
+  channel: string | null;
+  organizationId: string | null;
+  traceId: string | null;
+}
+
+export interface QueueHealthInspectableQueue {
+  getJobCounts: (...types: Array<'waiting' | 'active' | 'failed'>) => Promise<Record<string, number | undefined>>;
+  getJobs: (
+    types: Array<'active'>,
+    start: number,
+    end: number,
+    asc: boolean,
+  ) => Promise<QueueHealthActiveJob[]>;
+}
+
+export interface QueueHealthMonitoredQueue {
+  label: QueueHealthQueueLabel;
+  queueName: string;
+  queue: QueueHealthInspectableQueue;
+}
+
+export interface QueueHealthSnapshot {
+  label: QueueHealthQueueLabel;
+  queueName: string;
+  counts: QueueHealthCounts;
+  activeJobSampleSize: number;
+  oldestActiveJob: QueueHealthActiveJobSnapshot | null;
+}
+
+export interface QueueHealthAlertDecision {
+  queue: QueueHealthQueueLabel;
+  metric: QueueHealthMetric;
+  value: number;
+  threshold: number;
+  emitted: boolean;
+  window: IncrementOpsAlertWindowResult;
+}
+
+export interface QueueHealthCheckResult {
+  snapshots: QueueHealthSnapshot[];
+  alerts: QueueHealthAlertDecision[];
+}
+
+export interface QueueHealthCheckDependencies {
+  counterClient: OpsAlertCounterClient;
+  config?: GatewayOpsAlertConfig;
+  nowMs?: number;
+  activeSampleLimit?: number;
+  emitAlert?: typeof emitOpsAlert;
+  incrementWindow?: typeof incrementOpsAlertWindow;
+}
 
 interface DigestThreadRow {
   id: string;
@@ -117,6 +205,263 @@ export async function purgeFilteredThreads(now: Date): Promise<number> {
     },
   });
   return result.count;
+}
+
+export async function checkGatewayQueueHealth(
+  monitoredQueues: QueueHealthMonitoredQueue[],
+  dependencies: QueueHealthCheckDependencies,
+): Promise<QueueHealthCheckResult> {
+  const config = dependencies.config ?? getGatewayOpsAlertConfig();
+  const nowMs = dependencies.nowMs ?? Date.now();
+  const activeSampleLimit = normalizeSampleLimit(dependencies.activeSampleLimit);
+  const emitAlert = dependencies.emitAlert ?? emitOpsAlert;
+  const incrementWindow = dependencies.incrementWindow ?? incrementOpsAlertWindow;
+
+  const snapshots = await Promise.all(
+    monitoredQueues.map((monitoredQueue) =>
+      readQueueHealthSnapshot(monitoredQueue, { nowMs, activeSampleLimit }),
+    ),
+  );
+
+  const alerts: QueueHealthAlertDecision[] = [];
+  for (const snapshot of snapshots) {
+    if (snapshot.counts.failed > config.queueFailedThreshold) {
+      alerts.push(await emitQueueHealthAlert({
+        snapshot,
+        metric: 'failed',
+        value: snapshot.counts.failed,
+        threshold: config.queueFailedThreshold,
+        config,
+        nowMs,
+        counterClient: dependencies.counterClient,
+        emitAlert,
+        incrementWindow,
+      }));
+    }
+
+    if (snapshot.counts.waiting > config.queueWaitingThreshold) {
+      alerts.push(await emitQueueHealthAlert({
+        snapshot,
+        metric: 'waiting',
+        value: snapshot.counts.waiting,
+        threshold: config.queueWaitingThreshold,
+        config,
+        nowMs,
+        counterClient: dependencies.counterClient,
+        emitAlert,
+        incrementWindow,
+      }));
+    }
+
+    if (
+      snapshot.oldestActiveJob
+      && snapshot.oldestActiveJob.ageMs > config.queueActiveStuckMs
+    ) {
+      alerts.push(await emitQueueHealthAlert({
+        snapshot,
+        metric: 'active_stuck',
+        value: snapshot.oldestActiveJob.ageMs,
+        threshold: config.queueActiveStuckMs,
+        config,
+        nowMs,
+        counterClient: dependencies.counterClient,
+        emitAlert,
+        incrementWindow,
+      }));
+    }
+  }
+
+  return { snapshots, alerts };
+}
+
+export async function readQueueHealthSnapshot(
+  monitoredQueue: QueueHealthMonitoredQueue,
+  options: { nowMs: number; activeSampleLimit?: number },
+): Promise<QueueHealthSnapshot> {
+  const activeSampleLimit = normalizeSampleLimit(options.activeSampleLimit);
+  const [rawCounts, activeJobs] = await Promise.all([
+    monitoredQueue.queue.getJobCounts('waiting', 'active', 'failed'),
+    monitoredQueue.queue.getJobs(['active'], 0, activeSampleLimit - 1, true),
+  ]);
+
+  return {
+    label: monitoredQueue.label,
+    queueName: monitoredQueue.queueName,
+    counts: normalizeQueueCounts(rawCounts),
+    activeJobSampleSize: activeJobs.length,
+    oldestActiveJob: getOldestActiveJobSnapshot(activeJobs, options.nowMs),
+  };
+}
+
+export function getOldestActiveJobSnapshot(
+  activeJobs: QueueHealthActiveJob[],
+  nowMs: number,
+): QueueHealthActiveJobSnapshot | null {
+  let oldest: QueueHealthActiveJobSnapshot | null = null;
+
+  for (const job of activeJobs) {
+    const startedAtMs = readTimestampMs(job.processedOn) ?? readTimestampMs(job.timestamp);
+    if (startedAtMs === null) continue;
+
+    const data = isRecord(job.data) ? job.data : {};
+    const platform = readString(data.platform);
+    const channel = readString(data.channelType) ?? platform;
+    const snapshot: QueueHealthActiveJobSnapshot = {
+      id: job.id === undefined ? null : String(job.id),
+      name: readString(job.name),
+      attemptsMade: Number.isInteger(job.attemptsMade) ? job.attemptsMade! : null,
+      ageMs: Math.max(0, nowMs - startedAtMs),
+      startedAt: new Date(startedAtMs).toISOString(),
+      timestamp: formatTimestamp(job.timestamp),
+      processedOn: formatTimestamp(job.processedOn),
+      platform,
+      channel,
+      organizationId: readString(data.organizationId),
+      traceId: readString(data.traceId),
+    };
+
+    if (!oldest || snapshot.ageMs > oldest.ageMs) {
+      oldest = snapshot;
+    }
+  }
+
+  return oldest;
+}
+
+async function emitQueueHealthAlert(input: {
+  snapshot: QueueHealthSnapshot;
+  metric: QueueHealthMetric;
+  value: number;
+  threshold: number;
+  config: GatewayOpsAlertConfig;
+  nowMs: number;
+  counterClient: OpsAlertCounterClient;
+  emitAlert: typeof emitOpsAlert;
+  incrementWindow: typeof incrementOpsAlertWindow;
+}): Promise<QueueHealthAlertDecision> {
+  const window = await input.incrementWindow(input.counterClient, {
+    keyParts: ['queue_health', input.snapshot.label, input.metric],
+    threshold: 1,
+    windowSecs: input.config.windowSecs,
+    nowMs: input.nowMs,
+  });
+
+  if (window.thresholdCrossed) {
+    const oldestActiveJob = input.snapshot.oldestActiveJob;
+    const activeJobTags = input.metric === 'active_stuck'
+      ? {
+          platform: oldestActiveJob?.platform,
+          channel: oldestActiveJob?.channel,
+          orgId: oldestActiveJob?.organizationId,
+        }
+      : {};
+
+    input.emitAlert({
+      category: 'queue_health',
+      message: formatQueueHealthAlertMessage(input.metric, input.snapshot.label, input.value, input.threshold),
+      level: 'warning',
+      tags: {
+        queue: input.snapshot.label,
+        ...activeJobTags,
+      },
+      fingerprint: buildQueueHealthFingerprint(
+        input.snapshot.label,
+        input.metric,
+        oldestActiveJob?.channel,
+      ),
+      extra: {
+        metric: input.metric,
+        queue: input.snapshot.label,
+        queueName: input.snapshot.queueName,
+        value: input.value,
+        threshold: input.threshold,
+        counts: input.snapshot.counts,
+        activeJobSampleSize: input.snapshot.activeJobSampleSize,
+        oldestActiveJob,
+        alertWindow: window,
+      },
+    }, { config: input.config });
+  }
+
+  return {
+    queue: input.snapshot.label,
+    metric: input.metric,
+    value: input.value,
+    threshold: input.threshold,
+    emitted: window.thresholdCrossed,
+    window,
+  };
+}
+
+function formatQueueHealthAlertMessage(
+  metric: QueueHealthMetric,
+  queue: QueueHealthQueueLabel,
+  value: number,
+  threshold: number,
+): string {
+  if (metric === 'active_stuck') {
+    return `Queue alert: ${queue} active job age (${value}ms) exceeded threshold (${threshold}ms)`;
+  }
+
+  const metricLabel = metric === 'failed' ? 'failed jobs' : 'waiting jobs';
+  return `Queue alert: ${queue} ${metricLabel} (${value}) exceeded threshold (${threshold})`;
+}
+
+function buildQueueHealthFingerprint(
+  queue: QueueHealthQueueLabel,
+  metric: QueueHealthMetric,
+  channel: string | null | undefined,
+): string[] {
+  const fingerprint = ['ops-alert', 'queue_health', 'gateway', `queue:${queue}`, `metric:${metric}`];
+  if (metric === 'active_stuck' && channel) {
+    fingerprint.push(`channel:${channel}`);
+  }
+  return fingerprint;
+}
+
+function normalizeQueueCounts(rawCounts: Record<string, number | undefined>): QueueHealthCounts {
+  return {
+    ...Object.fromEntries(
+      Object.entries(rawCounts).map(([key, value]) => [key, normalizeCount(value)]),
+    ),
+    waiting: normalizeCount(rawCounts.waiting),
+    active: normalizeCount(rawCounts.active),
+    failed: normalizeCount(rawCounts.failed),
+  };
+}
+
+function normalizeCount(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.floor(value);
+}
+
+function normalizeSampleLimit(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT;
+  }
+  return Math.max(1, Math.floor(value));
+}
+
+function readTimestampMs(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function formatTimestamp(value: unknown): string | null {
+  const timestampMs = readTimestampMs(value);
+  return timestampMs === null ? null : new Date(timestampMs).toISOString();
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 type SharedWorkerOptions = Pick<WorkerOptions, 'drainDelay' | 'stalledInterval'>;
@@ -416,8 +761,6 @@ export async function createMaintenanceWorkers(
   // ─── Queue Health Monitor ─────────────────────────────────────────────────────
 
   const FIVE_MINUTES_MS = 5 * 60 * 1000;
-  const QUEUE_ALERT_FAILED_THRESHOLD = parseInt(process.env.QUEUE_ALERT_FAILED_THRESHOLD ?? '10', 10);
-  const QUEUE_ALERT_WAITING_THRESHOLD = parseInt(process.env.QUEUE_ALERT_WAITING_THRESHOLD ?? '100', 10);
 
   const queueHealthQueue = new Queue(QUEUE.QUEUE_HEALTH, { connection: producerConn });
 
@@ -434,25 +777,12 @@ export async function createMaintenanceWorkers(
     const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection: conn });
 
     try {
-      const [inboundCounts, summaryCounts] = await Promise.all([
-        inboundQueue.getJobCounts('waiting', 'failed'),
-        summaryQueue.getJobCounts('waiting', 'failed'),
-      ]);
-
-      if (inboundCounts.failed > QUEUE_ALERT_FAILED_THRESHOLD) {
-        logger.warn({ failed: inboundCounts.failed, threshold: QUEUE_ALERT_FAILED_THRESHOLD }, '[QueueHealth] Inbound failed jobs exceeded threshold');
-        Sentry.captureMessage(`Queue alert: inbound failed jobs (${inboundCounts.failed}) exceeded threshold (${QUEUE_ALERT_FAILED_THRESHOLD})`, 'warning');
-      }
-
-      if (summaryCounts.failed > QUEUE_ALERT_FAILED_THRESHOLD) {
-        logger.warn({ failed: summaryCounts.failed, threshold: QUEUE_ALERT_FAILED_THRESHOLD }, '[QueueHealth] AI summary failed jobs exceeded threshold');
-        Sentry.captureMessage(`Queue alert: aiSummary failed jobs (${summaryCounts.failed}) exceeded threshold (${QUEUE_ALERT_FAILED_THRESHOLD})`, 'warning');
-      }
-
-      if (inboundCounts.waiting > QUEUE_ALERT_WAITING_THRESHOLD) {
-        logger.warn({ waiting: inboundCounts.waiting, threshold: QUEUE_ALERT_WAITING_THRESHOLD }, '[QueueHealth] Inbound backlog is high');
-        Sentry.captureMessage(`Queue alert: inbound backlog (${inboundCounts.waiting}) exceeded threshold (${QUEUE_ALERT_WAITING_THRESHOLD})`, 'warning');
-      }
+      await checkGatewayQueueHealth([
+        { label: 'inbound', queueName: QUEUE.INBOUND, queue: inboundQueue },
+        { label: 'aiSummary', queueName: QUEUE.AI_SUMMARY, queue: summaryQueue },
+      ], {
+        counterClient: producerConn as OpsAlertCounterClient,
+      });
     } finally {
       await Promise.all([inboundQueue.close(), summaryQueue.close()]);
     }

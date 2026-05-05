@@ -37,7 +37,6 @@ Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concier
 - `runner.ts` — barrel re-export for the above
 - `prompt.ts` — system prompt builder
 - `intent.ts` — operator-channel intent classification + tool subset selection
-- `composer-ask.ts` — read-only "ask the agent about this thread" mode
 - `order-status-fast-path.ts` — bypasses LLM for "where is X's order?" in operator channels
 - `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
 - `tools/registry.ts` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
@@ -49,7 +48,7 @@ Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concier
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in Internal tab.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and WhatsApp via `sms_agent`.
-- **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Filters tools to `read` category; never mutates anything.
+- **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 
@@ -59,15 +58,22 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 - `agent/route.ts` — execute run on a ticket
 - `agent/plan/route.ts` — generate plan, no side effects
 - `agent/plan-internal/route.ts` — gateway-only, requires `INTERNAL_API_SECRET`
+- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from WhatsApp)
 - `agent/chat/route.ts` — Concierge sessions
+- `agent/sessions/route.ts`, `agent/sessions/[id]/route.ts` — Concierge session list/detail
+- `agent/ask/route.ts` — composer read-only Q&A (`runAgent` with `readOnly: true`)
+- `agent/quick-approve/route.ts` — one-tap approval of a cached plan
+- `agent/actions/route.ts` — agent action audit log feed
 - `messages/route.ts` — outbound dispatch
 - `threads/route.ts`, `threads/shopify/route.ts` (create thread from Shopify customer)
 - `integrations/shopify/{auth,callback}/route.ts`
 - `billing/route.ts`, `billing/webhook/route.ts`
 
 ## Other entry points
+- `apps/gateway/src/start.ts` — gateway process bootstrap (role-aware: `server`, `worker`, or both)
 - `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
-- `apps/gateway/src/maintenance-workers.ts` — daily IG token health, 90-day archive + purge
+- `apps/gateway/src/maintenance-workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
+- `apps/gateway/src/health.ts` — `/health` and `/health/queues` diagnostic endpoints
 - `apps/dashboard/src/lib/redis.ts` — Upstash REST client + rate limiting
 - `apps/dashboard/src/instrumentation.ts` — env validation + Sentry init
 
@@ -75,9 +81,9 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 `/dashboard/{tickets, canned-responses, agent, kb, playbooks, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
 
 ## Env (names only — values in Vercel/Railway)
-**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`
+**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `SENTRY_DSN`
 
-**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `SENTRY_DSN`
+**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `SENTRY_DSN`
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`.
 

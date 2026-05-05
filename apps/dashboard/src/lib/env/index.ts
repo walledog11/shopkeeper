@@ -86,3 +86,58 @@ export function getDashboardRedisEnv(): { url: string; token: string } {
 
   return { url, token };
 }
+
+export interface DashboardOpsAlertConfig {
+  enabled: boolean;
+  windowSecs: number;
+  queueFailedThreshold: number;
+  queueWaitingThreshold: number;
+  queueActiveStuckMs: number;
+  webhookSignatureThreshold: number;
+  providerSendThreshold: number;
+  agentFailureThreshold: number;
+}
+
+function parsePositiveIntEnv(name: string, fallback: number): number {
+  const rawValue = readEnv(name);
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const parsedValue = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    throw new Error(`[Dashboard] ${name} must be a positive integer`);
+  }
+
+  return parsedValue;
+}
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const rawValue = readEnv(name);
+  if (!rawValue) {
+    return fallback;
+  }
+
+  const normalizedValue = rawValue.toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalizedValue)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalizedValue)) {
+    return false;
+  }
+
+  throw new Error(`[Dashboard] ${name} must be a boolean`);
+}
+
+export function getDashboardOpsAlertConfig(): DashboardOpsAlertConfig {
+  return {
+    enabled: parseBooleanEnv("OPS_ALERTS_ENABLED", true),
+    windowSecs: parsePositiveIntEnv("OPS_ALERT_WINDOW_SECS", 300),
+    queueFailedThreshold: parsePositiveIntEnv("QUEUE_ALERT_FAILED_THRESHOLD", 10),
+    queueWaitingThreshold: parsePositiveIntEnv("QUEUE_ALERT_WAITING_THRESHOLD", 100),
+    queueActiveStuckMs: parsePositiveIntEnv("QUEUE_ALERT_ACTIVE_STUCK_MS", 900_000),
+    webhookSignatureThreshold: parsePositiveIntEnv("WEBHOOK_SIGNATURE_ALERT_THRESHOLD", 5),
+    providerSendThreshold: parsePositiveIntEnv("PROVIDER_SEND_ALERT_THRESHOLD", 3),
+    agentFailureThreshold: parsePositiveIntEnv("AGENT_FAILURE_ALERT_THRESHOLD", 3),
+  };
+}

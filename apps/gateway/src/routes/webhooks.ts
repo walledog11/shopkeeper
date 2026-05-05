@@ -10,6 +10,13 @@ import logger from '../logger.js';
 import { CHANNEL, QUEUE, JOB, READ_TOOLS, STATUS } from '../constants.js';
 import { getTwilio } from '../message-handlers.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import {
+  emitOpsAlert,
+  incrementOpsAlertWindow,
+  type OpsAlertCounterClient,
+  type IncrementOpsAlertWindowResult,
+} from '../ops-alerts.js';
+import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from '../runtime-config.js';
 
 const router = express.Router();
 
@@ -52,6 +59,60 @@ async function resolveOrganizationId(platform: DbChannelType, externalAccountId:
   return integration?.organizationId ?? null;
 }
 
+export type WebhookSignatureProvider = 'meta' | 'shopify' | 'twilio';
+export type WebhookSignatureFailureReason =
+  | 'missing_signature'
+  | 'missing_raw_body'
+  | 'signature_mismatch'
+  | 'validation_failed';
+
+export interface WebhookSignatureAlertDependencies {
+  counterClient: OpsAlertCounterClient;
+  config?: GatewayOpsAlertConfig;
+  emitAlert?: typeof emitOpsAlert;
+  incrementWindow?: typeof incrementOpsAlertWindow;
+  nowMs?: number;
+}
+
+export interface WebhookSignatureAlertResult {
+  window: IncrementOpsAlertWindowResult;
+  emitted: boolean;
+}
+
+export async function recordWebhookSignatureFailure(
+  provider: WebhookSignatureProvider,
+  reason: WebhookSignatureFailureReason,
+  deps: WebhookSignatureAlertDependencies,
+): Promise<WebhookSignatureAlertResult> {
+  const config = deps.config ?? getGatewayOpsAlertConfig();
+  const emit = deps.emitAlert ?? emitOpsAlert;
+  const incr = deps.incrementWindow ?? incrementOpsAlertWindow;
+
+  const window = await incr(deps.counterClient, {
+    keyParts: ['webhook_signature', provider, reason],
+    threshold: config.webhookSignatureThreshold,
+    windowSecs: config.windowSecs,
+    nowMs: deps.nowMs,
+  });
+
+  if (window.thresholdCrossed) {
+    emit({
+      category: 'webhook_signature',
+      message: `Repeated webhook signature failure: provider=${provider} reason=${reason} count=${window.count}`,
+      level: 'warning',
+      tags: { provider, reason },
+      extra: {
+        count: window.count,
+        threshold: window.threshold,
+        windowSecs: config.windowSecs,
+        resetAt: window.resetAt,
+      },
+    });
+  }
+
+  return { window, emitted: window.thresholdCrossed };
+}
+
 // -----------------------------------------------------------------------------
 // GET: Meta Verification Handshake
 // -----------------------------------------------------------------------------
@@ -87,6 +148,11 @@ router.post('/meta', async (req: Request, res: Response) => {
   }
   if (!signature || !req.rawBody) {
     logger.warn('[Webhook] Missing signature or raw body — rejecting.');
+    recordWebhookSignatureFailure(
+      'meta',
+      !signature ? 'missing_signature' : 'missing_raw_body',
+      { counterClient: getRateLimitRedis() },
+    ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
     return res.sendStatus(401);
   }
   const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
@@ -94,6 +160,11 @@ router.post('/meta', async (req: Request, res: Response) => {
   const received = Buffer.from(signature, 'utf8');
   if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
     logger.warn('[Webhook] Signature mismatch — rejecting request.');
+    recordWebhookSignatureFailure(
+      'meta',
+      'signature_mismatch',
+      { counterClient: getRateLimitRedis() },
+    ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
     return res.sendStatus(401);
   }
 
@@ -258,6 +329,11 @@ router.post('/twilio', async (req: Request, res: Response) => {
     const webhookUrl = process.env.TWILIO_WEBHOOK_URL;
     if (!twilioSignature) {
       logger.warn('[Twilio] Missing signature — rejecting.');
+      recordWebhookSignatureFailure(
+        'twilio',
+        'missing_signature',
+        { counterClient: getRateLimitRedis() },
+      ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
       return res.status(403).send('Forbidden');
     }
     if (!webhookUrl) {
@@ -267,6 +343,11 @@ router.post('/twilio', async (req: Request, res: Response) => {
     const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body as Record<string, string>);
     if (!isValid) {
       logger.warn('[Twilio] Signature validation failed — rejecting request.');
+      recordWebhookSignatureFailure(
+        'twilio',
+        'validation_failed',
+        { counterClient: getRateLimitRedis() },
+      ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
       return res.status(403).send('Forbidden');
     }
   }
@@ -641,6 +722,11 @@ router.post('/shopify', async (req: Request, res: Response) => {
   }
   if (!signature || !req.rawBody) {
     logger.warn('[Webhook] Shopify missing signature or raw body — rejecting.');
+    recordWebhookSignatureFailure(
+      'shopify',
+      !signature ? 'missing_signature' : 'missing_raw_body',
+      { counterClient: getRateLimitRedis() },
+    ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
     return res.sendStatus(401);
   }
   const expected = createHmac('sha256', APP_SECRET).update(req.rawBody).digest('base64');
@@ -648,6 +734,11 @@ router.post('/shopify', async (req: Request, res: Response) => {
   const received = Buffer.from(signature, 'utf8');
   if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
     logger.warn('[Webhook] Shopify signature mismatch — rejecting.');
+    recordWebhookSignatureFailure(
+      'shopify',
+      'signature_mismatch',
+      { counterClient: getRateLimitRedis() },
+    ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
     return res.sendStatus(401);
   }
 

@@ -19,7 +19,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     logo: channel.logo,
     customer: getCustomerName(thread.customer),
     time: formatTicketAge(thread.lastMessageAt),
-    subject: thread.tag || "New Inquiry",
+    subject: thread.subject || "New Inquiry",
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",

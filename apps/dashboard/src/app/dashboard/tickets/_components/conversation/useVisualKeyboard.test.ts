@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest"
 import { getVisualKeyboardState } from "./useVisualKeyboard"
 
 describe("getVisualKeyboardState", () => {
-  it("opens on mobile focus before the visual viewport has resized", () => {
+  it("does not open from focus alone when the visual viewport has not shrunk", () => {
     expect(getVisualKeyboardState({
       focusedEditable: true,
       innerHeight: 800,
       isMobile: true,
+      isCoarsePointer: true,
       visualViewport: { height: 800, offsetTop: 0 },
     })).toEqual({
       keyboardInset: 0,
-      keyboardOpen: true,
+      keyboardOpen: false,
       visualViewportHeight: 800,
     })
   })
@@ -25,6 +26,20 @@ describe("getVisualKeyboardState", () => {
       keyboardInset: 300,
       keyboardOpen: true,
       visualViewportHeight: 500,
+    })
+  })
+
+  it("falls back to focus on touch devices when visualViewport is unavailable", () => {
+    expect(getVisualKeyboardState({
+      focusedEditable: true,
+      innerHeight: 800,
+      isMobile: true,
+      isCoarsePointer: true,
+      visualViewport: null,
+    })).toEqual({
+      keyboardInset: 0,
+      keyboardOpen: true,
+      visualViewportHeight: 800,
     })
   })
 

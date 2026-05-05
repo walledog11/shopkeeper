@@ -28,7 +28,7 @@ Repo audit status as of April 21, 2026:
 - [x] Pin critical runtime dependencies instead of using `latest` for production deploys, especially `next`, `react`, `openai`, `@anthropic-ai/sdk`, `express`, `bullmq`, `ioredis`, `postmark`, and Sentry SDKs. [Repo audit: done]
 
 ### Observability, Health Checks & Abuse Protection
-- [ ] Add alerting for stuck queues, repeated webhook signature failures, repeated provider send failures, and repeated agent execution/tool failures. [Repo audit: partial]
+- [ ] Add alerting for stuck queues, repeated webhook signature failures, repeated provider send failures, and repeated agent execution/tool failures. See [`operational-guardrails.md`](operational-guardrails.md). [Repo audit: partial]
 - [ ] Expand abuse protection beyond dashboard APIs: add replay/idempotency and rate limits around webhook ingress, internal endpoints, and other high-cost AI/action paths. [Repo audit: partial]
 
 ### Testing & CI

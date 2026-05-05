@@ -129,6 +129,7 @@ model Thread {
   updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   lastMessageAt  DateTime     @default(now()) @map("last_message_at") @db.Timestamptz
   aiSummary            String?  @map("ai_summary")
+  subject              String?
   tag                  String?  @default("Support")
   shopifyCustomerId    String?  @map("shopify_customer_id") @db.VarChar(255)
   cachedPlanMessageId  String?  @map("cached_plan_message_id") @db.Uuid

@@ -4,6 +4,8 @@ import twilio from 'twilio';
 import logger from '@/lib/server/logger';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { recordOutboundCall } from '@/lib/server/outbound-recorder';
+import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
+import { getRedis } from '@/lib/server/redis';
 
 interface DispatchThread {
   id: string;
@@ -66,6 +68,7 @@ export async function dispatchMessage(
         const errBody = await metaRes.json().catch(() => ({})) as { error?: { code?: number } };
         const isExpired = errBody.error?.code === 190;
         logger.error({ err: errBody }, '[dispatchMessage] Meta API failed');
+        await recordProviderSendFailure('meta', 'ig_dm', org.id, { counterClient: getRedis() });
         return { ok: false, error: isExpired ? 'Instagram token expired' : 'Failed to send via Instagram' };
       }
     }
@@ -110,14 +113,21 @@ export async function dispatchMessage(
       if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
 
       const client = new ServerClient(POSTMARK_API_KEY);
-      await client.sendEmail({
-        From: `${org.name} <${fromEmail}>`,
-        ReplyTo: integration.externalAccountId,
-        To: recipientId,
-        Subject: `Re: Your inquiry`,
-        TextBody: text,
-        Headers: headers,
-      });
+      try {
+        await client.sendEmail({
+          From: `${org.name} <${fromEmail}>`,
+          ReplyTo: integration.externalAccountId,
+          To: recipientId,
+          Subject: `Re: Your inquiry`,
+          TextBody: text,
+          Headers: headers,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ err: msg }, '[dispatchMessage] Postmark error');
+        await recordProviderSendFailure('postmark', 'email', org.id, { counterClient: getRedis() });
+        return { ok: false, error: 'Email dispatch failed' };
+      }
     }
 
   } else if (thread.channelType === CHANNEL_TYPE.SMS) {
@@ -137,7 +147,14 @@ export async function dispatchMessage(
         return { ok: false, error: 'SMS not configured' };
       }
       const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-      await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
+      try {
+        await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ err: msg }, '[dispatchMessage] Twilio error');
+        await recordProviderSendFailure('twilio', 'sms', org.id, { counterClient: getRedis() });
+        return { ok: false, error: 'SMS dispatch failed' };
+      }
     }
 
   } else if (thread.channelType === CHANNEL_TYPE.SHOPIFY) {
@@ -180,14 +197,21 @@ export async function dispatchMessage(
       if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
 
       const client = new ServerClient(POSTMARK_API_KEY);
-      await client.sendEmail({
-        From: `${org.name} <${fromEmail}>`,
-        ReplyTo: integration.externalAccountId,
-        To: recipientId,
-        Subject: `Re: Your inquiry`,
-        TextBody: text,
-        Headers: headers,
-      });
+      try {
+        await client.sendEmail({
+          From: `${org.name} <${fromEmail}>`,
+          ReplyTo: integration.externalAccountId,
+          To: recipientId,
+          Subject: `Re: Your inquiry`,
+          TextBody: text,
+          Headers: headers,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error({ err: msg }, '[dispatchMessage] Postmark error (shopify channel)');
+        await recordProviderSendFailure('postmark', 'email', org.id, { counterClient: getRedis() });
+        return { ok: false, error: 'Email dispatch failed' };
+      }
     }
   } else {
     return { ok: false, error: 'Unsupported channel' };

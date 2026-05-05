@@ -161,6 +161,7 @@ export interface Thread {
   updatedAt: string;
   lastMessageAt: string;
   aiSummary: string | null;
+  subject: string | null;
   tag: string | null;
   shopifyCustomerId: string | null;
   cachedPlanMessageId: string | null;

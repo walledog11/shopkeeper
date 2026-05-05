@@ -4,6 +4,8 @@ import twilio from "twilio";
 import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@/lib/messaging/thread-constants";
 import { isOutboundRecordingEnabled, recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
+import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
+import { getRedis } from "@/lib/server/redis";
 import type {
   AddInternalNoteInput,
   SendReplyInput,
@@ -86,6 +88,7 @@ export async function sendReply(
       if (!igRes.ok) {
         const errBody = await igRes.text().catch(() => "");
         logger.error({ status: igRes.status, body: errBody }, '[sendReply] Instagram dispatch error');
+        void recordProviderSendFailure('meta', 'ig_dm', ctx.orgId, { counterClient: getRedis() });
         return `Error: Instagram dispatch failed (${igRes.status}).`;
       }
     }
@@ -147,6 +150,7 @@ export async function sendReply(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, '[sendReply] Postmark error');
+      void recordProviderSendFailure('postmark', 'email', ctx.orgId, { counterClient: getRedis() });
       return `Error: email dispatch failed — ${msg}`;
     }
     await createMessage({
@@ -187,6 +191,7 @@ export async function sendReply(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, '[sendReply] Twilio error');
+      void recordProviderSendFailure('twilio', 'sms', ctx.orgId, { counterClient: getRedis() });
       return `Error: SMS dispatch failed — ${msg}`;
     }
     await createMessage({
@@ -303,6 +308,7 @@ export async function sendEmail(
     }
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, threadId: targetThreadId }, '[sendEmail] Postmark error');
+    void recordProviderSendFailure('postmark', 'email', ctx.orgId, { counterClient: getRedis() });
     return `Error: email dispatch failed — ${msg}`;
   }
 

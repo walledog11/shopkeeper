@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getDashboardAppUrl, validateDashboardEnv } from './index';
+import { getDashboardAppUrl, getDashboardOpsAlertConfig, validateDashboardEnv } from './index';
 
 function stubBaseDashboardEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/clerk?pgbouncer=true&connection_limit=1');
@@ -114,5 +114,51 @@ describe('getDashboardAppUrl', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
 
     expect(getDashboardAppUrl()).toBe('http://localhost:3000');
+  });
+});
+
+describe('getDashboardOpsAlertConfig', () => {
+  it('uses launch guardrail defaults', () => {
+    expect(getDashboardOpsAlertConfig()).toEqual({
+      enabled: true,
+      windowSecs: 300,
+      queueFailedThreshold: 10,
+      queueWaitingThreshold: 100,
+      queueActiveStuckMs: 900_000,
+      webhookSignatureThreshold: 5,
+      providerSendThreshold: 3,
+      agentFailureThreshold: 3,
+    });
+  });
+
+  it('respects explicit overrides', () => {
+    vi.stubEnv('OPS_ALERTS_ENABLED', 'off');
+    vi.stubEnv('OPS_ALERT_WINDOW_SECS', '120');
+    vi.stubEnv('QUEUE_ALERT_FAILED_THRESHOLD', '7');
+    vi.stubEnv('QUEUE_ALERT_WAITING_THRESHOLD', '70');
+    vi.stubEnv('QUEUE_ALERT_ACTIVE_STUCK_MS', '600000');
+    vi.stubEnv('WEBHOOK_SIGNATURE_ALERT_THRESHOLD', '9');
+    vi.stubEnv('PROVIDER_SEND_ALERT_THRESHOLD', '4');
+    vi.stubEnv('AGENT_FAILURE_ALERT_THRESHOLD', '6');
+
+    expect(getDashboardOpsAlertConfig()).toEqual({
+      enabled: false,
+      windowSecs: 120,
+      queueFailedThreshold: 7,
+      queueWaitingThreshold: 70,
+      queueActiveStuckMs: 600_000,
+      webhookSignatureThreshold: 9,
+      providerSendThreshold: 4,
+      agentFailureThreshold: 6,
+    });
+  });
+
+  it('rejects invalid alert env values', () => {
+    vi.stubEnv('OPS_ALERTS_ENABLED', 'maybe');
+    expect(() => getDashboardOpsAlertConfig()).toThrow(/OPS_ALERTS_ENABLED/);
+
+    vi.stubEnv('OPS_ALERTS_ENABLED', 'true');
+    vi.stubEnv('OPS_ALERT_WINDOW_SECS', '0');
+    expect(() => getDashboardOpsAlertConfig()).toThrow(/OPS_ALERT_WINDOW_SECS/);
   });
 });

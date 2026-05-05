@@ -257,7 +257,6 @@ body,
   }
 
   .mobile-ticket-conversation[data-keyboard-open="true"] {
-    flex: 0 0 var(--ticket-visual-viewport-height, 100dvh);
     height: var(--ticket-visual-viewport-height, 100dvh);
     max-height: var(--ticket-visual-viewport-height, 100dvh);
     overflow: hidden;
