@@ -1,0 +1,79 @@
+import { db, SenderType } from '@clerk/db';
+import logger from '../logger.js';
+import { CHANNEL, MODEL } from '../constants.js';
+import {
+  CLASSIFIER_SYSTEM_PROMPT,
+  getAnthropic,
+  parseClassifierJson,
+  triggerPlaybooks,
+} from './shared.js';
+
+export async function generateThreadIntelligence(
+  threadId: string,
+  opts?: { triggerPlaybooks?: boolean; skipSummary?: boolean },
+) {
+  try {
+    // skipSummary path: email worker already classified pre-persistence; the
+    // thread row is fully populated. Return it as-is so downstream plan
+    // precompute + WhatsApp notify can still run.
+    if (opts?.skipSummary) {
+      return db.thread.findUnique({ where: { id: threadId } });
+    }
+
+    logger.info({ threadId }, '[Worker] Generating AI Summary');
+    const fullThread = await db.thread.findUnique({
+      where: { id: threadId },
+      include: { messages: { where: { senderType: { not: SenderType.note } }, orderBy: { sentAt: 'asc' } } },
+    });
+
+    if (!fullThread) return null;
+
+    const conversationText = fullThread.messages
+      .map((m) => `${m.senderType.toUpperCase()}: ${m.contentText}`)
+      .join('\n');
+
+    const aiResponse = await getAnthropic().messages.create({
+      model: MODEL.CLAUDE,
+      max_tokens: 256,
+      system: CLASSIFIER_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: conversationText }],
+    });
+
+    const block = aiResponse.content[0];
+    if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
+    const aiData = parseClassifierJson(block.text);
+
+    // filterDecidedAt is the lock: once any path commits a decision, subsequent
+    // summaries refresh aiSummary/tag but don't reclassify.
+    // Spam filter scope is email only — IG/Shopify/SMS threads stay genuine
+    // regardless of what the classifier says (Shopify order events read like
+    // "automated system alerts" and would be wrongly purged otherwise).
+    const shouldSetFilter = fullThread.filterDecidedAt === null && fullThread.channelType === CHANNEL.EMAIL;
+
+    const updated = await db.thread.update({
+      where: { id: threadId },
+      data: {
+        aiSummary: aiData.summary,
+        tag: aiData.tag,
+        ...(shouldSetFilter && {
+          filterStatus: aiData.filterStatus,
+          filterReason: aiData.filterReason,
+          filterDecidedAt: new Date(),
+        }),
+      },
+    });
+
+    logger.info({ tag: aiData.tag, summary: aiData.summary, classification: updated.filterStatus, threadId }, '[Worker] AI Summary saved');
+
+    // Skip on backfills (don't re-run automation on historical tickets) and on
+    // filtered threads (no automation on spam).
+    if (opts?.triggerPlaybooks !== false && updated.filterStatus !== 'filtered') {
+      void triggerPlaybooks(updated.organizationId, threadId, { type: 'tag_applied', tag: aiData.tag });
+    }
+
+    return updated;
+  } catch (aiError) {
+    logger.error({ err: aiError, threadId }, '[Worker] Failed to generate AI summary');
+    throw aiError;
+  }
+}

@@ -24,6 +24,8 @@ import {
 } from "@/lib/agent/api/sessions";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 
@@ -294,6 +296,8 @@ async function planDashboardApproval(params: {
 }
 
 export async function POST(request: Request) {
+  let orgId: string | null = null;
+
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -301,6 +305,7 @@ export async function POST(request: Request) {
     }
 
     const org = await getOrCreateOrg();
+    orgId = org.id;
 
     const rl = await rateLimit(`agent:chat:${org.id}`, 10, 60);
     if (!rl.success) return tooManyRequests(rl.reset);
@@ -330,6 +335,7 @@ export async function POST(request: Request) {
           orgId: org.id,
           threadId: resolvedSessionId,
           instruction,
+          failureRoute: "/api/agent/chat",
           orgSettings: settings,
           approvedToolCalls: getDashboardActionCalls(pendingApproval.plan),
           persistUserMessage: true,
@@ -403,6 +409,7 @@ export async function POST(request: Request) {
       orgId: org.id,
       threadId: resolvedSessionId,
       instruction,
+      failureRoute: "/api/agent/chat",
       orgSettings: settings,
       persistUserMessage: true,
       persistAgentMessage: true,
@@ -417,6 +424,18 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logger.error({ err: error }, "[agent/chat] error");
+
+    recordAgentRouteFailureInBackground({
+      route: "/api/agent/chat",
+      orgId,
+      error,
+    }, {
+      getCounterClient: getRedis,
+      onError: (alertError) => {
+        logger.error({ err: alertError }, "[agent/chat] failure alert error");
+      },
+    });
+
     return handleApiError(error, "Agent chat POST", "Failed to run agent");
   }
 }

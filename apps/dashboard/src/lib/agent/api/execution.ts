@@ -2,12 +2,16 @@ import { createMessage } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
+import { getRedis } from "@/lib/server/redis";
+import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
+import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings, RawToolCall } from "@/types";
 
 interface ExecuteAgentTurnParams {
   orgId: string;
   threadId: string;
   instruction: string;
+  failureRoute?: AgentFailureAlertRoute;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
   persistUserMessage?: boolean;
@@ -22,6 +26,15 @@ interface ExecuteAgentTurnParams {
 
 export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
   const settings = resolveAgentSettings(params.orgSettings ?? null);
+  let failureCounterClient: OpsAlertCounterClient | undefined;
+
+  if (params.failureRoute) {
+    try {
+      failureCounterClient = getRedis();
+    } catch {
+      failureCounterClient = undefined;
+    }
+  }
 
   if (params.persistUserMessage) {
     await createMessage({
@@ -36,7 +49,11 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
     ctx,
     params.instruction,
     params.approvedToolCalls,
-    settings
+    settings,
+    {
+      failureRoute: params.failureRoute,
+      failureCounterClient,
+    }
   );
 
   if (params.persistAgentMessage) {

@@ -85,6 +85,7 @@ describe("POST /api/agent/internal", () => {
       orgId: org.id,
       threadId: "thread_internal",
       instruction: "Handle this request",
+      failureRoute: "/api/agent/internal",
       approvedToolCalls: undefined,
       persistAuditNote: true,
       auditMetadata: {

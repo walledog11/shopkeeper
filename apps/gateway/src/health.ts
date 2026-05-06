@@ -1,7 +1,7 @@
 import type { Redis as IORedis } from 'ioredis';
 import { Queue } from 'bullmq';
 import { QUEUE } from './constants.js';
-import { getGatewayWorkerRedisConfig } from './runtime-config.js';
+import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
 

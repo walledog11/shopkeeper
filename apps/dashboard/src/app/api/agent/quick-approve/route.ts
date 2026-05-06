@@ -10,14 +10,21 @@ import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { classifyHomePlan } from "@/lib/agent/plan-preview";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import {
+  recordAgentFailureInBackground,
+  recordAgentRouteFailureInBackground,
+} from "@/lib/server/agent-failure-alerts";
+import { getRedis } from "@/lib/server/redis";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
+  let orgId: string | null = null;
 
   try {
     const org = await getOrCreateOrg();
+    orgId = org.id;
 
     const rl = await rateLimit(`agent:quick-approve:${org.id}`, 20, 60);
     if (!rl.success) return tooManyRequests(rl.reset);
@@ -53,6 +60,7 @@ export async function POST(request: Request) {
       orgId: org.id,
       threadId,
       instruction,
+      failureRoute: "/api/agent/quick-approve",
       orgSettings: settings,
       approvedToolCalls: [classification.sendReplyToolCall],
       persistAuditNote: true,
@@ -66,6 +74,21 @@ export async function POST(request: Request) {
         durationMs: Date.now() - startedAt,
         instructionHash,
       }, "[agent:quick-approve] send failed");
+
+      recordAgentFailureInBackground({
+        kind: "route_failure",
+        route: "/api/agent/quick-approve",
+        orgId: org.id,
+        tool: "send_reply",
+        statusCode: 502,
+        detail: sendReplyResult || "Reply was not sent.",
+      }, {
+        getCounterClient: getRedis,
+        onError: (alertError) => {
+          logger.error({ err: alertError }, "[agent:quick-approve] failure alert error");
+        },
+      });
+
       return NextResponse.json({ ...result, error: sendReplyResult || "Reply was not sent." }, { status: 502 });
     }
 
@@ -87,6 +110,18 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     logger.error({ err: error }, "[agent:quick-approve] error");
+
+    recordAgentRouteFailureInBackground({
+      route: "/api/agent/quick-approve",
+      orgId,
+      error,
+    }, {
+      getCounterClient: getRedis,
+      onError: (alertError) => {
+        logger.error({ err: alertError }, "[agent:quick-approve] failure alert error");
+      },
+    });
+
     return handleApiError(error, "Agent quick approve POST", "Failed to approve reply");
   }
 }

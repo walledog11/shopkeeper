@@ -145,15 +145,15 @@ Completion gate:
 
 Instrument API-level agent failures and tool-level error results.
 
-- [ ] Add route-level alerting for `/api/agent`, `/api/agent/internal`, `/api/agent/chat`, and `/api/agent/quick-approve` failures.
-- [ ] Record repeated `actionsPerformed` results beginning with `Error:` after `executeAgentTurn` or `runAgent` returns.
-- [ ] Keep thrown tool exceptions captured at the tool execution boundary and counted by tool name.
-- [ ] Group by org and tool where available; use `unknown` where a route fails before org/tool resolution.
-- [ ] Preserve the current JSON error shapes, summaries, audit-note behavior, and quick-approve `502` behavior.
+- [x] Add route-level alerting for `/api/agent`, `/api/agent/internal`, `/api/agent/chat`, and `/api/agent/quick-approve` failures.
+- [x] Record repeated `actionsPerformed` results beginning with `Error:` after `executeAgentTurn` or `runAgent` returns.
+- [x] Keep thrown tool exceptions captured at the tool execution boundary and counted by tool name.
+- [x] Group by org and tool where available; use `unknown` where a route fails before org/tool resolution.
+- [x] Preserve the current JSON error shapes, summaries, audit-note behavior, and quick-approve `502` behavior.
 
 Completion gate:
 
-- [ ] Repeated agent route failures and repeated tool `Error:` results alert after `AGENT_FAILURE_ALERT_THRESHOLD`; successful agent flows remain unchanged.
+- [x] Repeated agent route failures and repeated tool `Error:` results alert after `AGENT_FAILURE_ALERT_THRESHOLD`; successful agent flows remain unchanged.
 
 ### Phase 5: Production rollout and Sentry rules
 
@@ -188,7 +188,7 @@ Add targeted tests for:
 - [x] Meta, Shopify, and Twilio signature failures incrementing counters and alerting only after threshold
 - [x] alert helper respecting `OPS_ALERTS_ENABLED=false`
 - [x] `/api/messages` provider failures recording operational alerts without saving successful outbound messages
-- [ ] agent route failures and tool `Error:` results alerting after threshold
+- [x] agent route failures and tool `Error:` results alerting after threshold
 - [ ] existing successful agent, tool, webhook, and dispatch flows remaining unchanged
 
 ## Production Setup

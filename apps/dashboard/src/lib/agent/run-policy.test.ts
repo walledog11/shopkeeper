@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings";
 import type { AgentContext } from "./runner";
+import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 
-const { mockCreate, mockSendReply, mockUpdateThreadStatus } = vi.hoisted(() => ({
+const { mockCreate, mockSendReply, mockUpdateThreadStatus, mockRecordAgentFailure } = vi.hoisted(() => ({
   mockCreate: vi.fn(),
   mockSendReply: vi.fn(),
   mockUpdateThreadStatus: vi.fn(),
+  mockRecordAgentFailure: vi.fn().mockResolvedValue({ emitted: false }),
 }));
 
 vi.mock("@/lib/ai/anthropic", () => ({
@@ -17,6 +19,10 @@ vi.mock("@/lib/server/logger", () => ({
     info: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+vi.mock("@/lib/server/agent-failure-alerts", () => ({
+  recordAgentFailure: mockRecordAgentFailure,
 }));
 
 vi.mock("@/lib/agent/tools/thread", () => ({
@@ -70,6 +76,21 @@ function endTurn(text = "Done.") {
   };
 }
 
+function singleToolUse(name: string, input: Record<string, unknown>) {
+  return {
+    stop_reason: "tool_use",
+    content: [{ type: "tool_use", id: "tu_1", name, input }],
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
+}
+
+function makeFailureCounterClient(): OpsAlertCounterClient {
+  return {
+    incr: async () => 1,
+    expire: async () => undefined,
+  };
+}
+
 describe("runAgent policy enforcement", () => {
   it("blocks pre-approved cancellations when cancellations are disabled", async () => {
     const result = await runAgent(
@@ -108,5 +129,58 @@ describe("runAgent policy enforcement", () => {
       "Reply sent.",
       "Status updated after reply.",
     ]);
+  });
+
+  it("records tool_result failures for Error: tool results", async () => {
+    mockRecordAgentFailure.mockClear();
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
+      .mockResolvedValueOnce(endTurn("All done."));
+    mockSendReply.mockResolvedValueOnce("Error: provider send failed.");
+
+    await runAgent(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
+      "Reply",
+      undefined,
+      AGENT_SETTINGS_DEFAULTS,
+      {
+        failureRoute: "/api/agent",
+        failureCounterClient: makeFailureCounterClient(),
+      }
+    );
+
+    expect(mockRecordAgentFailure).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "tool_result",
+      route: "/api/agent",
+      orgId: "org_1",
+      tool: "send_reply",
+    }), expect.any(Object));
+  });
+
+  it("records tool_exception failures when a tool throws", async () => {
+    mockRecordAgentFailure.mockClear();
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
+      .mockResolvedValueOnce(endTurn("All done."));
+    mockSendReply.mockRejectedValueOnce(new Error("provider timeout"));
+
+    await runAgent(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
+      "Reply",
+      undefined,
+      AGENT_SETTINGS_DEFAULTS,
+      {
+        failureRoute: "/api/agent",
+        failureCounterClient: makeFailureCounterClient(),
+      }
+    );
+
+    expect(mockRecordAgentFailure).toHaveBeenCalledTimes(1);
+    expect(mockRecordAgentFailure).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "tool_exception",
+      route: "/api/agent",
+      orgId: "org_1",
+      tool: "send_reply",
+    }), expect.any(Object));
   });
 });

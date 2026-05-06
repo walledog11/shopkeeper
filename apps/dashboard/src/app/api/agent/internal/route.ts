@@ -17,9 +17,13 @@ import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { resolveInternalAgentThread } from "@/lib/agent/api/internal";
 import { parseAgentInternalBody } from "@/lib/agent/api/validation";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
+import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
+  let orgId: string | null = null;
+
   try {
     // Authenticate via shared secret (supports rotation via INTERNAL_API_SECRET_PREV)
     const secret = request.headers.get("x-internal-secret");
@@ -27,12 +31,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { orgId, instruction, orderNumber, senderPhone, clerkUserId, threadId, approvedToolCalls } =
+    const { orgId: parsedOrgId, instruction, orderNumber, senderPhone, clerkUserId, threadId, approvedToolCalls } =
       parseAgentInternalBody(await request.json());
+    orgId = parsedOrgId;
 
     const resolvedThreadId = (
       await resolveInternalAgentThread({
-        orgId,
+        orgId: parsedOrgId,
         threadId,
         orderNumber,
         senderPhone,
@@ -40,9 +45,10 @@ export async function POST(request: Request) {
     ).id;
 
     const result = await executeAgentTurn({
-      orgId,
+      orgId: parsedOrgId,
       threadId: resolvedThreadId,
       instruction,
+      failureRoute: "/api/agent/internal",
       approvedToolCalls,
       persistAuditNote: true,
       auditMetadata: {
@@ -58,6 +64,18 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     logger.error({ err: error }, "[agent/internal] error");
+
+    recordAgentRouteFailureInBackground({
+      route: "/api/agent/internal",
+      orgId,
+      error,
+    }, {
+      getCounterClient: getRedis,
+      onError: (alertError) => {
+        logger.error({ err: alertError }, "[agent/internal] failure alert error");
+      },
+    });
+
     return handleApiError(error, "Agent internal POST", "Failed to run agent");
   }
 }

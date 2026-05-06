@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { getGatewayRuntimeRole, shouldRunGatewayServer, shouldRunGatewayWorker } from './runtime-config.js';
+import { getGatewayRuntimeRole, shouldRunGatewayServer, shouldRunGatewayWorker } from './config/runtime-config.js';
 
 const distDir = dirname(fileURLToPath(import.meta.url));
 const children = new Map<string, ChildProcess>();

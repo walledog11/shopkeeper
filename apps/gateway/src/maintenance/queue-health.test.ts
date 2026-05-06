@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GatewayOpsAlertConfig } from './runtime-config.js';
-import type { EmitOpsAlertResult, OpsAlertCounterClient } from './ops-alerts.js';
+import type { GatewayOpsAlertConfig } from '../config/runtime-config.js';
+import type { EmitOpsAlertResult, OpsAlertCounterClient } from '../ops-alerts.js';
 import {
   checkGatewayQueueHealth,
   type QueueHealthActiveJob,
   type QueueHealthCheckDependencies,
   type QueueHealthInspectableQueue,
-} from './maintenance-workers.js';
+} from './queue-health.js';
 
 const CONFIG: GatewayOpsAlertConfig = {
   enabled: true,
@@ -61,6 +61,8 @@ describe('checkGatewayQueueHealth', () => {
     ]);
     expect(second.alerts.every((alert) => !alert.emitted)).toBe(true);
     expect(emitAlert).toHaveBeenCalledTimes(4);
+    expect(inboundQueue.getJobs).not.toHaveBeenCalled();
+    expect(summaryQueue.getJobs).not.toHaveBeenCalled();
   });
 
   it('stays quiet when queue counts and active job age are not above thresholds', async () => {

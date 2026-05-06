@@ -1,6 +1,6 @@
 import { db } from '@clerk/db';
-import { loadGatewayEnv } from '../load-env.js';
-import { generateThreadIntelligence } from '../message-handlers.js';
+import { loadGatewayEnv } from '../config/load-env.js';
+import { generateThreadIntelligence } from '../message-handlers/intelligence.js';
 
 loadGatewayEnv();
 

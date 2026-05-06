@@ -1,13 +1,12 @@
 import express from 'express';
-import { Redis as IORedis } from 'ioredis';
 import * as Sentry from '@sentry/node';
-import { pathToFileURL } from 'node:url';
 import { db } from '@clerk/db';
 import webhookRoutes from './routes/webhooks.js';
-import { getGatewayDashboardUrl, validateGatewayEnv } from './env.js';
+import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
 import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
-import { loadGatewayEnv } from './load-env.js';
 import logger from './logger.js';
+import { createGatewayRedisClient } from './clients/redis-client.js';
+import { runGatewayEntry } from './bootstrap.js';
 
 export function createGatewayApp() {
   const app = express();
@@ -39,9 +38,7 @@ export async function startGatewayServer() {
 
   const app = createGatewayApp();
   const PORT = process.env.PORT || 8080;
-  const redisUrl = new URL(process.env.REDIS_URL!);
-  redisUrl.pathname = '/0';
-  const healthRedis = new IORedis(redisUrl.toString());
+  const healthRedis = createGatewayRedisClient();
 
   healthRedis.on('error', (err: Error) => {
     logger.error({ err: err.message }, '[Health] Redis connection error');
@@ -166,17 +163,4 @@ export async function startGatewayServer() {
   return { app, server, shutdown };
 }
 
-function isMainModule(): boolean {
-  if (!process.argv[1]) return false;
-  return import.meta.url === pathToFileURL(process.argv[1]).href;
-}
-
-if (isMainModule()) {
-  try {
-    loadGatewayEnv();
-    await startGatewayServer();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : '[Gateway] Failed startup env validation');
-    process.exit(1);
-  }
-}
+await runGatewayEntry(import.meta.url, '[Gateway] Failed startup env validation', startGatewayServer);

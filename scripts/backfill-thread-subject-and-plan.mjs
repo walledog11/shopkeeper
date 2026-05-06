@@ -180,6 +180,10 @@ async function main() {
 
 main().catch(async (err) => {
   console.error('[backfill] fatal', err);
-  try { await db.$disconnect(); } catch {}
+  try {
+    await db.$disconnect();
+  } catch (disconnectErr) {
+    console.error('[backfill] disconnect after fatal failed', disconnectErr);
+  }
   process.exit(1);
 });

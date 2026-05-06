@@ -1,18 +1,25 @@
 import { Worker, Queue } from 'bullmq';
-import { Redis as IORedis } from 'ioredis';
-import { pathToFileURL } from 'node:url';
 import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { QUEUE } from './constants.js';
 import { CHANNEL } from './constants.js';
 import type { InboundJobData, AiSummaryJobData } from './types.js';
-import { validateGatewayEnv } from './env.js';
+import { validateGatewayEnv } from './config/env.js';
 import { writeWorkerHeartbeat } from './health.js';
-import { handleIgDmJob, handleEmailJob, handleShopifyJob, generateThreadIntelligence, sendWhatsAppPlanNotification, precomputeThreadPlan, isWithinBusinessHours, sendAutoAck, resolveBusinessHoursSettings } from './message-handlers.js';
-import { createMaintenanceWorkers } from './maintenance-workers.js';
-import { loadGatewayEnv } from './load-env.js';
-import { getGatewayWorkerRedisConfig } from './runtime-config.js';
+import { handleIgDmJob, handleEmailJob, handleShopifyJob } from './message-handlers/channels.js';
+import { generateThreadIntelligence } from './message-handlers/intelligence.js';
+import {
+  sendWhatsAppPlanNotification,
+  precomputeThreadPlan,
+  isWithinBusinessHours,
+  sendAutoAck,
+  resolveBusinessHoursSettings,
+} from './message-handlers/planning.js';
+import { createMaintenanceWorkers } from './maintenance/workers.js';
+import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
+import { createGatewayRedisClient } from './clients/redis-client.js';
+import { runGatewayEntry } from './bootstrap.js';
 
 export async function startWorkerRuntime() {
   validateGatewayEnv();
@@ -21,18 +28,15 @@ export async function startWorkerRuntime() {
     Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
   }
 
-  const redisUrl = new URL(process.env.REDIS_URL!);
-  redisUrl.pathname = '/0';
-  const redisUrlStr = redisUrl.toString();
   const workerRedisConfig = getGatewayWorkerRedisConfig();
 
   /* eslint-disable @typescript-eslint/no-explicit-any */
   // Queues (producers) use non-blocking commands — maxRetriesPerRequest left at default (20) so
   // enqueue calls fail fast rather than hanging indefinitely if Redis is unavailable.
-  const sharedProducerConn = new IORedis(redisUrlStr) as any;
+  const sharedProducerConn = createGatewayRedisClient() as any;
   // Workers use maxRetriesPerRequest: null so they wait for Redis to recover instead of erroring.
   // setMaxListeners raised to accommodate one listener per Worker (5) plus our own error handler.
-  const sharedWorkerConn = new IORedis(redisUrlStr, { maxRetriesPerRequest: null }) as any;
+  const sharedWorkerConn = createGatewayRedisClient({ maxRetriesPerRequest: null }) as any;
   /* eslint-enable @typescript-eslint/no-explicit-any */
   sharedProducerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis producer error'));
   sharedWorkerConn.setMaxListeners(20);
@@ -191,17 +195,4 @@ export async function startWorkerRuntime() {
   };
 }
 
-function isMainModule(): boolean {
-  if (!process.argv[1]) return false;
-  return import.meta.url === pathToFileURL(process.argv[1]).href;
-}
-
-if (isMainModule()) {
-  try {
-    loadGatewayEnv();
-    await startWorkerRuntime();
-  } catch (error) {
-    console.error(error instanceof Error ? error.message : '[Worker] Failed startup env validation');
-    process.exit(1);
-  }
-}
+await runGatewayEntry(import.meta.url, '[Worker] Failed startup env validation', startWorkerRuntime);

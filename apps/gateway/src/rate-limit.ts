@@ -1,5 +1,6 @@
 import type { Redis as IORedis } from 'ioredis';
 import type { Response } from 'express';
+import { getFixedWindowPeriod, incrementFixedWindowCounter } from './fixed-window-counter.js';
 
 /**
  * Fixed-window rate limiter backed by Redis INCR.
@@ -18,22 +19,17 @@ export async function rateLimit(
   limit = 60,
   windowSecs = 60,
 ): Promise<{ success: boolean; remaining: number; reset: number }> {
-  const now = Math.floor(Date.now() / 1000);
-  const windowStart = Math.floor(now / windowSecs);
+  const { windowStart, resetAt } = getFixedWindowPeriod(windowSecs);
   const windowKey = `rl:${key}:${windowStart}`;
-  const reset = (windowStart + 1) * windowSecs;
 
   try {
-    const count = await redis.incr(windowKey);
-    if (count === 1) {
-      await redis.expire(windowKey, windowSecs);
-    }
-    return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
+    const count = await incrementFixedWindowCounter(redis, windowKey, windowSecs);
+    return { success: count <= limit, remaining: Math.max(0, limit - count), reset: resetAt };
   } catch {
     if (process.env.NODE_ENV === 'production') {
-      return { success: false, remaining: 0, reset };
+      return { success: false, remaining: 0, reset: resetAt };
     }
-    return { success: true, remaining: limit, reset };
+    return { success: true, remaining: limit, reset: resetAt };
   }
 }
 

@@ -24,7 +24,7 @@ It is intentionally narrower than [`checklist.md`](checklist.md). This document 
 - Start config: [railway.json](../../railway.json)
 - Supervisor entrypoint: [apps/gateway/src/start.ts](../../apps/gateway/src/start.ts)
 - Health endpoints: [apps/gateway/src/index.ts](../../apps/gateway/src/index.ts)
-- Env validation: [apps/gateway/src/env.ts](../../apps/gateway/src/env.ts)
+- Env validation: [apps/gateway/src/config/env.ts](../../apps/gateway/src/config/env.ts)
 
 ### Verification Tooling
 

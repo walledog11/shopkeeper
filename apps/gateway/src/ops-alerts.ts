@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
-import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from './runtime-config.js';
+import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from './config/runtime-config.js';
+import { getFixedWindowPeriod, incrementFixedWindowCounter } from './fixed-window-counter.js';
 
 export const OPS_ALERT_CATEGORIES = [
   'queue_health',
@@ -145,15 +146,9 @@ export async function incrementOpsAlertWindow(
   assertPositiveInteger('threshold', options.threshold);
   assertPositiveInteger('windowSecs', options.windowSecs);
 
-  const now = Math.floor((options.nowMs ?? Date.now()) / 1000);
-  const windowStart = Math.floor(now / options.windowSecs);
-  const resetAt = (windowStart + 1) * options.windowSecs;
+  const { windowStart, resetAt } = getFixedWindowPeriod(options.windowSecs, options.nowMs ?? Date.now());
   const key = buildOpsAlertWindowKey(options.keyParts, windowStart, options.prefix);
-  const count = await client.incr(key);
-
-  if (count === 1) {
-    await client.expire(key, options.windowSecs);
-  }
+  const count = await incrementFixedWindowCounter(client, key, options.windowSecs);
 
   return {
     key,

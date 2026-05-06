@@ -1,0 +1,83 @@
+import type { Request, Response, Router } from 'express';
+import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
+import logger from '../logger.js';
+import { CHANNEL, JOB } from '../constants.js';
+import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
+import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
+import { recordWebhookSignatureFailure } from './webhooks-signature-alerts.js';
+
+const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
+
+export function registerShopifyWebhookRoutes(router: Router): void {
+  router.post('/shopify', async (req: Request, res: Response) => {
+    const APP_SECRET = process.env.SHOPIFY_APP_SECRET;
+    const signature = req.headers['x-shopify-hmac-sha256'] as string | undefined;
+
+    if (!APP_SECRET) {
+      logger.error('[Webhook] SHOPIFY_APP_SECRET is not configured — rejecting.');
+      return res.sendStatus(500);
+    }
+    if (!signature || !req.rawBody) {
+      logger.warn('[Webhook] Shopify missing signature or raw body — rejecting.');
+      recordWebhookSignatureFailure(
+        'shopify',
+        !signature ? 'missing_signature' : 'missing_raw_body',
+        { counterClient: getRateLimitRedis() },
+      ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
+      return res.sendStatus(401);
+    }
+    const expected = createHmac('sha256', APP_SECRET).update(req.rawBody).digest('base64');
+    const trusted = Buffer.from(expected, 'utf8');
+    const received = Buffer.from(signature, 'utf8');
+    if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
+      logger.warn('[Webhook] Shopify signature mismatch — rejecting.');
+      recordWebhookSignatureFailure(
+        'shopify',
+        'signature_mismatch',
+        { counterClient: getRateLimitRedis() },
+      ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
+      return res.sendStatus(401);
+    }
+
+    const topic = req.headers['x-shopify-topic'] as string | undefined;
+    const shopDomain = req.headers['x-shopify-shop-domain'] as string | undefined;
+
+    if (!topic || !SHOPIFY_SUPPORTED_TOPICS.has(topic)) {
+      return res.status(200).send('OK');
+    }
+
+    if (!shopDomain) {
+      logger.warn('[Webhook] Shopify missing shop domain header — dropping.');
+      return res.sendStatus(400);
+    }
+
+    try {
+      const organizationId = await resolveOrganizationId(CHANNEL.SHOPIFY, shopDomain);
+      if (!organizationId) {
+        logger.warn({ shopDomain }, '[Webhook] No Shopify integration found — dropping.');
+        return res.status(200).send('OK');
+      }
+
+      const shopifyRateLimit = await rateLimit(getRateLimitRedis(), `webhook:shopify:${organizationId}`);
+      if (!shopifyRateLimit.success) {
+        logger.warn({ organizationId }, '[Webhook] Shopify rate limit exceeded');
+        return sendTooManyRequests(res, shopifyRateLimit.reset);
+      }
+
+      const traceId = randomUUID();
+      await getMessageQueue().add(JOB.SHOPIFY, {
+        platform: CHANNEL.SHOPIFY,
+        organizationId,
+        topic,
+        rawPayload: req.body,
+        traceId,
+      });
+
+      logger.info({ organizationId, topic, traceId }, '[Webhook] Shopify order event queued');
+      return res.status(200).send('OK');
+    } catch (error) {
+      logger.error({ err: error }, '[Webhook] Failed to queue Shopify event');
+      return res.sendStatus(500);
+    }
+  });
+}

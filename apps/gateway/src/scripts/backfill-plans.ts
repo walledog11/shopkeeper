@@ -11,11 +11,11 @@
  *   DATABASE_URL, INTERNAL_API_SECRET, DASHBOARD_URL or DASHBOARD_INTERNAL_URL
  */
 
-import { loadGatewayEnv } from '../load-env.js';
+import { loadGatewayEnv } from '../config/load-env.js';
 loadGatewayEnv();
 
 import { PrismaClient } from '@prisma/client';
-import { getGatewayDashboardUrl } from '../env.js';
+import { getGatewayDashboardUrl } from '../config/env.js';
 
 const db = new PrismaClient();
 

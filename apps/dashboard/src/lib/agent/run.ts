@@ -12,6 +12,11 @@ import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentContext, AgentResult } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
+import {
+  recordAgentFailure,
+  type AgentFailureAlertRoute,
+} from "@/lib/server/agent-failure-alerts";
+import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 
 const DEFAULT_MAX_ITERATIONS = 10;
 const READ_ONLY_MAX_ITERATIONS = 4;
@@ -23,6 +28,8 @@ const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES)
 
 export interface RunAgentOptions {
   readOnly?: boolean;
+  failureRoute?: AgentFailureAlertRoute;
+  failureCounterClient?: OpsAlertCounterClient;
 }
 
 function inputKeys(input: unknown): string[] {
@@ -57,6 +64,8 @@ export async function runAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const s = resolveAgentSettings(settings);
   const readOnly = options?.readOnly ?? false;
+  const failureRoute = options?.failureRoute ?? "unknown";
+  const failureCounterClient = options?.failureCounterClient;
   const maxIterations = readOnly
     ? READ_ONLY_MAX_ITERATIONS
     : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
@@ -83,6 +92,34 @@ export async function runAgent(
     return result;
   };
 
+  const recordAgentFailureSafely = (
+    kind: "tool_result" | "tool_exception",
+    tool: string,
+    detail: string,
+  ) => {
+    if (readOnly || !failureCounterClient) {
+      return;
+    }
+
+    void recordAgentFailure({
+      kind,
+      route: failureRoute,
+      orgId: ctx.orgId,
+      tool,
+      detail,
+    }, {
+      counterClient: failureCounterClient,
+    }).catch((error) => {
+      logger.error({
+        err: error,
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        tool,
+        route: failureRoute,
+      }, "[agent] failure alert error");
+    });
+  };
+
   const executeToolCall = async (toolCall: { id: string; name: string; input: unknown }) => {
     logger.info({
       orgId: ctx.orgId,
@@ -93,6 +130,7 @@ export async function runAgent(
     }, "[agent] tool call");
 
     let result: string;
+    let threw = false;
     if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
       result = `Error: ${toolCall.name} is not available in private ask mode.`;
     } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
@@ -101,9 +139,16 @@ export async function runAgent(
       try {
         result = await executeTool(toolCall.name, toolCall.input, ctx, settings);
       } catch (err) {
+        threw = true;
+        const errorMessage = err instanceof Error ? err.message : String(err);
         result = `Error: tool "${toolCall.name}" threw - ${err instanceof Error ? err.message : String(err)}`;
         logger.error({ err, tool: toolCall.name }, "[agent] tool error");
+        recordAgentFailureSafely("tool_exception", toolCall.name, errorMessage);
       }
+    }
+
+    if (!threw && result.toLowerCase().startsWith("error:")) {
+      recordAgentFailureSafely("tool_result", toolCall.name, result);
     }
 
     logger.info({

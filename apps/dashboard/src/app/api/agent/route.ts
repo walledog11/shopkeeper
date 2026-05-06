@@ -8,6 +8,8 @@ import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { getRedis } from "@/lib/server/redis";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -17,8 +19,11 @@ function serializeToolInput(input: unknown): string {
 
 export async function POST(request: Request) {
   const startedAt = Date.now();
+  let orgId: string | null = null;
+
   try {
     const org = await getOrCreateOrg();
+    orgId = org.id;
 
     const rl = await rateLimit(`agent:${org.id}`, 10, 60, {
       forceForE2E: request.headers.get("x-e2e-rate-limit") === "enforce",
@@ -69,6 +74,7 @@ export async function POST(request: Request) {
       orgId: org.id,
       threadId,
       instruction,
+      failureRoute: "/api/agent",
       orgSettings: settings,
       approvedToolCalls,
       persistAuditNote: true,
@@ -85,6 +91,18 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     logger.error({ err: error }, '[agent] error');
+
+    recordAgentRouteFailureInBackground({
+      route: "/api/agent",
+      orgId,
+      error,
+    }, {
+      getCounterClient: getRedis,
+      onError: (alertError) => {
+        logger.error({ err: alertError }, "[agent] failure alert error");
+      },
+    });
+
     return handleApiError(error, "Agent POST", "Failed to run agent");
   }
 }

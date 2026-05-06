@@ -12,7 +12,7 @@ Solo merchants and small teams. Multi-channel support inbox + AI agent that read
 - Sentry inits in both apps if `SENTRY_DSN` is set.
 
 ## Inbound flow
-External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers.ts` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → WhatsApp notify verified org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
+External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → WhatsApp notify verified org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
 
 ## Database (`packages/db/prisma/schema.prisma`)
 - `Organization` — Stripe subscription fields + `settings` JSON (agent config)
@@ -72,7 +72,7 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 ## Other entry points
 - `apps/gateway/src/start.ts` — gateway process bootstrap (role-aware: `server`, `worker`, or both)
 - `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
-- `apps/gateway/src/maintenance-workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
+- `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
 - `apps/gateway/src/health.ts` — `/health` and `/health/queues` diagnostic endpoints
 - `apps/dashboard/src/lib/redis.ts` — Upstash REST client + rate limiting
 - `apps/dashboard/src/instrumentation.ts` — env validation + Sentry init

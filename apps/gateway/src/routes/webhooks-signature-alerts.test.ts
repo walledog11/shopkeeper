@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GatewayOpsAlertConfig } from '../runtime-config.js';
+import type { GatewayOpsAlertConfig } from '../config/runtime-config.js';
 import {
   emitOpsAlert,
   type EmitOpsAlertResult,

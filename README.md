@@ -218,8 +218,8 @@ Configurable per org via Settings → Agent tab:
 ## Key Files
 - `apps/gateway/src/routes/webhooks.ts` — webhook handlers (Meta/Instagram, Email, Twilio, Shopify)
 - `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
-- `apps/gateway/src/message-handlers.ts` — per-channel job handlers, AI summary generation, WhatsApp plan notification
-- `apps/gateway/src/maintenance-workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
+- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), WhatsApp plan notification (`planning.ts`)
+- `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
 - `apps/dashboard/src/lib/agent/runner.ts` — core agent: `buildContext()`, `planAgent()`, `runAgent()`
 - `apps/dashboard/src/lib/agent/tools.ts` — all tool definitions + TOOL_CATEGORIES + PLAN_STEP_LABELS
 - `apps/dashboard/src/lib/agent/shopify-tools.ts` — Shopify API implementations for each tool
