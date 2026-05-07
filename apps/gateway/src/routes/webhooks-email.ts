@@ -86,10 +86,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
         ...(attachments.length > 0 && { attachments }),
       });
 
-      logger.info(
-        { fromAddress, organizationId, traceId, attachmentCount: attachments.length, rawAttachmentCount: rawAttachments.length },
-        '[Webhook] Inbound email queued',
-      );
+      logger.info({ fromAddress, organizationId, traceId }, '[Webhook] Inbound email queued');
       return res.status(200).send('OK');
     } catch (error) {
       logger.error({ err: error }, '[Webhook] Failed to queue email');

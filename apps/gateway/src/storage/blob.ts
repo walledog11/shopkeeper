@@ -55,14 +55,6 @@ export async function uploadInboundAttachment(
     return null;
   }
 
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    logger.error(
-      { organizationId, filename: safeName },
-      '[Blob] BLOB_READ_WRITE_TOKEN not set — cannot upload attachment',
-    );
-    return null;
-  }
-
   const key = `attachments/${organizationId}/${randomUUID()}/${safeName}`;
   try {
     const result = await put(key, buffer, {
@@ -70,10 +62,6 @@ export async function uploadInboundAttachment(
       contentType: contentType || 'application/octet-stream',
       addRandomSuffix: false,
     });
-    logger.info(
-      { organizationId, filename: safeName, byteLength: buffer.byteLength, url: result.url },
-      '[Blob] Uploaded attachment',
-    );
     return result.url;
   } catch (err) {
     logger.error({ err, organizationId, filename: safeName }, '[Blob] Upload failed');

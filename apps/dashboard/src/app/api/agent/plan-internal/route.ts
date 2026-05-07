@@ -26,6 +26,15 @@ export async function POST(request: Request) {
   try {
     const secret = request.headers.get("x-internal-secret");
     if (!secret || !timingSafeIncludes(getValidInternalSecrets(), secret)) {
+      const envSecrets = getValidInternalSecrets();
+      console.warn("[plan-internal] 401 secret mismatch", {
+        headerPresent: Boolean(secret),
+        headerLength: secret?.length ?? 0,
+        headerPrefix: secret ? secret.slice(0, 4) : null,
+        envCount: envSecrets.length,
+        envLengths: envSecrets.map((s) => s.length),
+        envPrefixes: envSecrets.map((s) => s.slice(0, 4)),
+      });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
