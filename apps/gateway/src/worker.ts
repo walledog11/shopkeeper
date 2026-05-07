@@ -24,6 +24,16 @@ import { runGatewayEntry } from './bootstrap.js';
 export async function startWorkerRuntime() {
   validateGatewayEnv();
 
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
+  logger.info(
+    {
+      blobTokenSet: Boolean(blobToken),
+      blobTokenLength: blobToken?.length ?? 0,
+      blobTokenPrefix: blobToken ? blobToken.slice(0, 14) : null,
+    },
+    '[Worker] BLOB_READ_WRITE_TOKEN status at startup',
+  );
+
   if (process.env.SENTRY_DSN) {
     Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
   }
