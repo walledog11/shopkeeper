@@ -11,15 +11,17 @@ import { runGatewayEntry } from './bootstrap.js';
 export function createGatewayApp() {
   const app = express();
 
-  // Middleware to parse incoming JSON payloads and capture raw body for signature verification
+  // Middleware to parse incoming JSON payloads and capture raw body for signature verification.
+  // Postmark inbound emails can be up to 35MB with attachments — keep headroom above that.
   app.use(express.json({
+    limit: '50mb',
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }));
 
   // Twilio sends webhooks as application/x-www-form-urlencoded
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
   // A simple health-check route to prove the server is alive
   app.get('/', (_req, res) => {

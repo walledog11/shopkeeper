@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, SenderType, db, createMessage } from '@clerk/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -170,6 +170,23 @@ describe('GET /api/threads', () => {
     const body = await res.json() as { threads: { id: string }[] };
 
     expect(body.threads.map(t => t.id).sort()).toEqual([openSpam.id, closedSpam.id].sort());
+  });
+
+  it('returns only threads where the customer sent the last message when ?needsReply=true', async () => {
+    const waiting = await createTestCustomer(org.id, 'waiting@test.com', { name: 'Waiting' });
+    const waitingThread = await createTestThread(org.id, waiting.id, ChannelType.email);
+    await createMessage({ threadId: waitingThread.id, contentText: 'help', senderType: SenderType.customer });
+
+    const replied = await createTestCustomer(org.id, 'replied@test.com', { name: 'Replied' });
+    const repliedThread = await createTestThread(org.id, replied.id, ChannelType.email);
+    await createMessage({ threadId: repliedThread.id, contentText: 'hi', senderType: SenderType.customer });
+    await createMessage({ threadId: repliedThread.id, contentText: 'on it', senderType: SenderType.agent });
+
+    const req = new Request('http://localhost:3000/api/threads?needsReply=true');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads.map(t => t.id)).toEqual([waitingThread.id]);
   });
 
   it('returns 403 when the user has no active organization', async () => {

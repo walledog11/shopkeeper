@@ -160,11 +160,11 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       resolvedName = emailLocal;
     }
 
-    const attachmentUrls: string[] = [];
-    for (const att of job.data.attachments ?? []) {
-      const url = await uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64);
-      if (url) attachmentUrls.push(url);
-    }
+    const attachmentUrls = (await Promise.all(
+      (job.data.attachments ?? []).map((att) =>
+        uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64),
+      ),
+    )).filter((url): url is string => url !== null);
 
     const result = await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
       customerName: resolvedName,

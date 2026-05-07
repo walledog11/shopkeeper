@@ -53,6 +53,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
+  const [needsReply, setNeedsReply] = useState(false)
   const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showContextDrawer, setShowContextDrawer] = useState(false)
@@ -63,7 +64,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true)
+  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply)
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true)
   const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered')
   const isSearchMode = searchQuery.length >= 2
@@ -286,6 +287,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     setReplyText('')
     setSendError(null)
     setSelectedIds([])
+    if (tab !== 'open') setNeedsReply(false)
   }
 
   const handleSearchChange = (q: string) => {
@@ -355,6 +357,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           isSearchMode={isSearchMode}
           isSearchLoading={isSearchLoading}
           selectedIds={selectedIds}
+          needsReply={needsReply}
+          onNeedsReplyChange={setNeedsReply}
           onSearchChange={handleSearchChange}
           onTabChange={handleTabChange}
           onFilterChange={setActiveFilter}

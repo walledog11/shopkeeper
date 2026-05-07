@@ -14,8 +14,8 @@ const BLOCKED_CONTENT_TYPES = new Set([
 ]);
 
 function isBlocked(filename: string, contentType: string): boolean {
-  const ext = filename.toLowerCase().split('.').pop() ?? '';
-  if (BLOCKED_EXTENSIONS.has(ext)) return true;
+  const segments = filename.toLowerCase().split('.').slice(1);
+  if (segments.some((seg) => BLOCKED_EXTENSIONS.has(seg))) return true;
   if (BLOCKED_CONTENT_TYPES.has(contentType.toLowerCase())) return true;
   return false;
 }
@@ -30,6 +30,15 @@ export async function uploadInboundAttachment(
 
   if (isBlocked(safeName, contentType)) {
     logger.warn({ organizationId, filename: safeName, contentType }, '[Blob] Skipping blocked attachment');
+    return null;
+  }
+
+  const approxBytes = Math.floor(base64Content.length * 3 / 4);
+  if (approxBytes > MAX_ATTACHMENT_BYTES) {
+    logger.warn(
+      { organizationId, filename: safeName, approxBytes },
+      '[Blob] Skipping oversized attachment',
+    );
     return null;
   }
 

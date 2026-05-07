@@ -26,6 +26,7 @@ export function usePaginatedThreads(
   initialData?: Thread[],
   preview = false,
   filterStatus?: "filtered",
+  needsReply = false,
 ) {
   const isVisible = useIsDocumentVisible();
   const baseInterval = status === "open" ? 15000 : 60000;
@@ -33,12 +34,13 @@ export function usePaginatedThreads(
   const getKey = (pageIndex: number, previousPageData: ThreadsPage | null) => {
     if (previousPageData && !previousPageData.nextCursor) return null;
     const filterParam = filterStatus ? `&filterStatus=${filterStatus}` : "";
-    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}`;
+    const needsReplyParam = needsReply ? "&needsReply=true" : "";
+    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}${needsReplyParam}`;
     if (pageIndex === 0) return base;
     return `${base}&cursor=${previousPageData!.nextCursor}`;
   };
 
-  const fbData: ThreadsPage[] | undefined = initialData
+  const fbData: ThreadsPage[] | undefined = initialData && !needsReply
     ? [{ threads: initialData, nextCursor: null }]
     : undefined;
 

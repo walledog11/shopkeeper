@@ -51,6 +51,8 @@ describe('uploadInboundAttachment', () => {
     ['exploit.js', 'application/javascript'],
     ['runme.jar', 'application/java-archive'],
     ['something', 'application/x-msdownload'],
+    ['evil.exe.txt', 'text/plain'],
+    ['photo.jpg.scr', 'image/jpeg'],
   ])('skips blocked attachment %s (%s)', async (name, contentType) => {
     const url = await uploadInboundAttachment(
       ORG_ID,

@@ -128,6 +128,7 @@ model Thread {
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
   lastMessageAt  DateTime     @default(now()) @map("last_message_at") @db.Timestamptz
+  lastMessageSenderType SenderType? @map("last_message_sender_type")
   aiSummary            String?  @map("ai_summary")
   subject              String?
   tag                  String?  @default("Support")
@@ -150,6 +151,7 @@ model Thread {
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
   @@index([organizationId, status, lastMessageAt(sort: Desc)])
+  @@index([organizationId, status, lastMessageSenderType])
   @@index([customerId])
   @@index([organizationId, archivedAt, status])
   @@index([deletedAt])

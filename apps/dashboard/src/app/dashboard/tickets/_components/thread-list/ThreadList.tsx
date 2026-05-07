@@ -19,6 +19,8 @@ interface Props {
   isSearchMode?: boolean
   isSearchLoading?: boolean
   selectedIds: string[]
+  needsReply: boolean
+  onNeedsReplyChange: (value: boolean) => void
   onSearchChange: (q: string) => void
   onTabChange: (tab: TicketListTab) => void
   onFilterChange: (id: ChannelType | null) => void
@@ -48,6 +50,8 @@ export default function ThreadList({
   isSearchMode,
   isSearchLoading,
   selectedIds,
+  needsReply,
+  onNeedsReplyChange,
   onSearchChange,
   onTabChange,
   onFilterChange,
@@ -78,6 +82,8 @@ export default function ThreadList({
         spamCount={spamCount}
         searchQuery={searchQuery}
         selectedCount={selectedIds.length}
+        needsReply={needsReply}
+        onNeedsReplyChange={onNeedsReplyChange}
         onBulkArchive={onBulkArchive}
         onBulkClose={onBulkClose}
         onBulkTag={onBulkTag}

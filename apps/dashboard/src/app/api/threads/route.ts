@@ -22,6 +22,7 @@ export async function GET(request: Request) {
     const parsedLimit = limitParam ? parseInt(limitParam, 10) : NaN;
     const limit = !isNaN(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : undefined;
     const wantsFiltered = filterStatusParam === ThreadFilterStatus.filtered;
+    const needsReply = searchParams.get('needsReply') === 'true';
     const where = {
       organizationId: org.id,
       channelType: { notIn: [CHANNEL_TYPE.SMS_AGENT, CHANNEL_TYPE.DASHBOARD_AGENT] },
@@ -30,6 +31,7 @@ export async function GET(request: Request) {
       ...(wantsFiltered
         ? { filterStatus: ThreadFilterStatus.filtered }
         : { status, filterStatus: { not: ThreadFilterStatus.filtered } }),
+      ...(needsReply ? { lastMessageSenderType: SenderType.customer } : {}),
     };
 
     if (countOnly) {

@@ -60,7 +60,7 @@ export async function createMessage(
       where: { id: message.threadId },
       data: {
         ...(threadPatch ?? {}),
-        ...(isConversation ? { lastMessageAt: message.sentAt } : {}),
+        ...(isConversation ? { lastMessageAt: message.sentAt, lastMessageSenderType: message.senderType } : {}),
       },
     });
     return message;

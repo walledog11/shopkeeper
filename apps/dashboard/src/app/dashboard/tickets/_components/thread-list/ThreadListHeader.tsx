@@ -18,6 +18,8 @@ interface ThreadListHeaderProps {
   spamCount: number
   searchQuery: string
   selectedCount: number
+  needsReply: boolean
+  onNeedsReplyChange: (value: boolean) => void
   onBulkArchive: () => void
   onBulkClose: () => void
   onBulkTag: (tag: string) => void
@@ -38,6 +40,8 @@ export function ThreadListHeader({
   spamCount,
   searchQuery,
   selectedCount,
+  needsReply,
+  onNeedsReplyChange,
   onBulkArchive,
   onBulkClose,
   onBulkTag,
@@ -122,6 +126,21 @@ export function ThreadListHeader({
             Clear
           </button>
         </div>
+      )}
+
+      {!isSearchMode && activeTab === "open" && (
+        <button
+          type="button"
+          onClick={() => onNeedsReplyChange(!needsReply)}
+          title="Show only threads where the customer sent the last message"
+          className={`w-full h-8 rounded-md border text-[11px] font-semibold transition-all ${
+            needsReply
+              ? "bg-white/[0.15] text-white border-white/[0.35]"
+              : "bg-transparent border-border text-white/40 hover:border-white/[0.18] hover:text-white/60"
+          }`}
+        >
+          Needs my reply
+        </button>
       )}
 
       {!isSearchMode && (
