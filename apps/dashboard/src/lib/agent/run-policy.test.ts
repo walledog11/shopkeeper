@@ -183,4 +183,37 @@ describe("runAgent policy enforcement", () => {
       tool: "send_reply",
     }), expect.any(Object));
   });
+
+  it("records fast-path Error: tool results", async () => {
+    mockRecordAgentFailure.mockClear();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ errors: "Shopify unavailable" }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      await runAgent(
+        makeCtx(),
+        "What is the status on John's order?",
+        undefined,
+        AGENT_SETTINGS_DEFAULTS,
+        {
+          failureRoute: "/api/agent/chat",
+          failureCounterClient: makeFailureCounterClient(),
+        }
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+
+    expect(mockRecordAgentFailure).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "tool_result",
+      route: "/api/agent/chat",
+      orgId: "org_1",
+      tool: "search_shopify_customers",
+    }), expect.any(Object));
+  });
 });

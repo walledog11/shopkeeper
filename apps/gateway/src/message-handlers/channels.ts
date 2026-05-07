@@ -3,6 +3,7 @@ import { db } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import type { InboundJobData, ShopifyOrderPayload } from '../types.js';
+import { uploadInboundAttachment } from '../storage/blob.js';
 import {
   classifyAndSummarizeNewEmail,
   lookupShopifyCustomerName,
@@ -159,11 +160,18 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       resolvedName = emailLocal;
     }
 
+    const attachmentUrls: string[] = [];
+    for (const att of job.data.attachments ?? []) {
+      const url = await uploadInboundAttachment(organizationId, att.name, att.contentType, att.contentBase64);
+      if (url) attachmentUrls.push(url);
+    }
+
     const result = await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
       customerName: resolvedName,
       subject: subject?.trim() || null,
       externalMessageId: job.data.inboundMessageId,
       traceId,
+      attachments: attachmentUrls,
       precomputed,
       lockAsGenuine: !spamFilterEnabled,
     });

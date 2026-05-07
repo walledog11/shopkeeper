@@ -42,6 +42,7 @@ export interface InboundJobData {
   subject?: string;
   body?: string;
   inboundMessageId?: string | null;
+  attachments?: Array<{ name: string; contentType: string; contentBase64: string }>;
 }
 
 export interface AiSummaryJobData {

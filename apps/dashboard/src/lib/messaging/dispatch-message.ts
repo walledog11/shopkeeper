@@ -68,7 +68,12 @@ export async function dispatchMessage(
         const errBody = await metaRes.json().catch(() => ({})) as { error?: { code?: number } };
         const isExpired = errBody.error?.code === 190;
         logger.error({ err: errBody }, '[dispatchMessage] Meta API failed');
-        await recordProviderSendFailure('meta', 'ig_dm', org.id, { counterClient: getRedis() });
+        await recordProviderSendFailure('meta', 'ig_dm', org.id, {
+          counterClient: getRedis(),
+          threadId: thread.id,
+          integrationId: igIntegration?.id ?? null,
+          detail: isExpired ? 'Instagram token expired' : 'Meta Graph API returned non-OK',
+        });
         return { ok: false, error: isExpired ? 'Instagram token expired' : 'Failed to send via Instagram' };
       }
     }
@@ -125,7 +130,12 @@ export async function dispatchMessage(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error({ err: msg }, '[dispatchMessage] Postmark error');
-        await recordProviderSendFailure('postmark', 'email', org.id, { counterClient: getRedis() });
+        await recordProviderSendFailure('postmark', 'email', org.id, {
+          counterClient: getRedis(),
+          threadId: thread.id,
+          integrationId: integration.id,
+          detail: msg,
+        });
         return { ok: false, error: 'Email dispatch failed' };
       }
     }
@@ -152,7 +162,11 @@ export async function dispatchMessage(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error({ err: msg }, '[dispatchMessage] Twilio error');
-        await recordProviderSendFailure('twilio', 'sms', org.id, { counterClient: getRedis() });
+        await recordProviderSendFailure('twilio', 'sms', org.id, {
+          counterClient: getRedis(),
+          threadId: thread.id,
+          detail: msg,
+        });
         return { ok: false, error: 'SMS dispatch failed' };
       }
     }
@@ -209,7 +223,13 @@ export async function dispatchMessage(
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         logger.error({ err: msg }, '[dispatchMessage] Postmark error (shopify channel)');
-        await recordProviderSendFailure('postmark', 'email', org.id, { counterClient: getRedis() });
+        await recordProviderSendFailure('postmark', 'email', org.id, {
+          counterClient: getRedis(),
+          threadId: thread.id,
+          integrationId: integration.id,
+          detail: msg,
+          extra: { originalChannel: CHANNEL_TYPE.SHOPIFY },
+        });
         return { ok: false, error: 'Email dispatch failed' };
       }
     }

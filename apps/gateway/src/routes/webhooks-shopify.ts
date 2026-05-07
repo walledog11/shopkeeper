@@ -4,7 +4,10 @@ import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
-import { recordWebhookSignatureFailure } from './webhooks-signature-alerts.js';
+import {
+  buildWebhookSignatureRequestMetadata,
+  recordWebhookSignatureFailure,
+} from './webhooks-signature-alerts.js';
 
 const SHOPIFY_SUPPORTED_TOPICS = new Set(['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled']);
 
@@ -22,7 +25,11 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       recordWebhookSignatureFailure(
         'shopify',
         !signature ? 'missing_signature' : 'missing_raw_body',
-        { counterClient: getRateLimitRedis() },
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/shopify',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
       ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
       return res.sendStatus(401);
     }
@@ -34,7 +41,11 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       recordWebhookSignatureFailure(
         'shopify',
         'signature_mismatch',
-        { counterClient: getRateLimitRedis() },
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/shopify',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
       ).catch((err) => logger.error({ err }, '[Webhook] Shopify signature alert error'));
       return res.sendStatus(401);
     }

@@ -88,7 +88,12 @@ export async function sendReply(
       if (!igRes.ok) {
         const errBody = await igRes.text().catch(() => "");
         logger.error({ status: igRes.status, body: errBody }, '[sendReply] Instagram dispatch error');
-        void recordProviderSendFailure('meta', 'ig_dm', ctx.orgId, { counterClient: getRedis() });
+        void recordProviderSendFailure('meta', 'ig_dm', ctx.orgId, {
+          counterClient: getRedis(),
+          threadId: ctx.threadId,
+          integrationId: igIntegration.id,
+          detail: `Instagram dispatch failed (${igRes.status})`,
+        });
         return `Error: Instagram dispatch failed (${igRes.status}).`;
       }
     }
@@ -150,7 +155,12 @@ export async function sendReply(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, '[sendReply] Postmark error');
-      void recordProviderSendFailure('postmark', 'email', ctx.orgId, { counterClient: getRedis() });
+      void recordProviderSendFailure('postmark', 'email', ctx.orgId, {
+        counterClient: getRedis(),
+        threadId: ctx.threadId,
+        integrationId: emailIntegration.id,
+        detail: msg,
+      });
       return `Error: email dispatch failed — ${msg}`;
     }
     await createMessage({
@@ -191,7 +201,11 @@ export async function sendReply(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg }, '[sendReply] Twilio error');
-      void recordProviderSendFailure('twilio', 'sms', ctx.orgId, { counterClient: getRedis() });
+      void recordProviderSendFailure('twilio', 'sms', ctx.orgId, {
+        counterClient: getRedis(),
+        threadId: ctx.threadId,
+        detail: msg,
+      });
       return `Error: SMS dispatch failed — ${msg}`;
     }
     await createMessage({
@@ -308,7 +322,12 @@ export async function sendEmail(
     }
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, threadId: targetThreadId }, '[sendEmail] Postmark error');
-    void recordProviderSendFailure('postmark', 'email', ctx.orgId, { counterClient: getRedis() });
+    void recordProviderSendFailure('postmark', 'email', ctx.orgId, {
+      counterClient: getRedis(),
+      threadId: targetThreadId,
+      integrationId: emailIntegration.id,
+      detail: msg,
+    });
     return `Error: email dispatch failed — ${msg}`;
   }
 

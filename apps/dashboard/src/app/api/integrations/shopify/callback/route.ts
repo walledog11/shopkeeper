@@ -105,15 +105,18 @@ export async function GET(request: Request) {
     }
     const shopifyKey = { organizationId: org.id, platform: 'shopify' as const, externalAccountId: shop };
     const existingShopify = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } });
+    let shopifyIntegrationId: string | null = existingShopify?.id ?? null;
     if (existingShopify) {
       await db.integration.update({ where: { id: existingShopify.id }, data: { accessToken, fromEmail: shopName } });
     } else {
       try {
-        await db.integration.create({ data: { organizationId: org.id, platform: 'shopify', externalAccountId: shop, accessToken, fromEmail: shopName } });
+        const created = await db.integration.create({ data: { organizationId: org.id, platform: 'shopify', externalAccountId: shop, accessToken, fromEmail: shopName } });
+        shopifyIntegrationId = created.id;
       } catch (err) {
         if ((err as { code?: string }).code !== 'P2002') throw err;
         const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } }))!;
         await db.integration.update({ where: { id: race.id }, data: { accessToken, fromEmail: shopName } });
+        shopifyIntegrationId = race.id;
       }
     }
 
@@ -140,7 +143,12 @@ export async function GET(request: Request) {
             if (!r.ok) {
               const err = await r.json().catch(() => ({}));
               logger.warn({ topic, shop, err }, '[Shopify OAuth] Webhook registration failed');
-              void recordProviderSendFailure('shopify', 'webhook_registration', org.id, { counterClient: getRedis() });
+              void recordProviderSendFailure('shopify', 'webhook_registration', org.id, {
+                counterClient: getRedis(),
+                integrationId: shopifyIntegrationId,
+                detail: `Shopify webhook registration failed for ${topic}`,
+                extra: { topic, shop },
+              });
             } else {
               logger.info({ topic, shop }, '[Shopify OAuth] Webhook registered');
             }

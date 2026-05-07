@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
 import stripe from '@/lib/billing/stripe'
+import { getRedis } from '@/lib/server/redis'
 import type Stripe from 'stripe'
+
+const STRIPE_EVENT_TTL_SECONDS = 60 * 60 * 24 * 7
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -16,6 +19,18 @@ export async function POST(request: Request) {
     event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET)
   } catch {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  }
+
+  try {
+    const claimed = await getRedis().set(`stripe:event:${event.id}`, '1', {
+      nx: true,
+      ex: STRIPE_EVENT_TTL_SECONDS,
+    })
+    if (claimed === null) {
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+  } catch {
+    // Redis unavailable — fall through. Subscription updates below are idempotent.
   }
 
   const sub = event.data.object as Stripe.Subscription

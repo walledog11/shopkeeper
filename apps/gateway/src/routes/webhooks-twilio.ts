@@ -8,7 +8,10 @@ import logger from '../logger.js';
 import { CHANNEL, READ_TOOLS, STATUS } from '../constants.js';
 import { getTwilio } from '../clients/twilio-client.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
-import { recordWebhookSignatureFailure } from './webhooks-signature-alerts.js';
+import {
+  buildWebhookSignatureRequestMetadata,
+  recordWebhookSignatureFailure,
+} from './webhooks-signature-alerts.js';
 
 const FILLER_PHRASES = [
   'On it…',
@@ -44,7 +47,11 @@ export function registerTwilioWebhookRoutes(router: Router): void {
         recordWebhookSignatureFailure(
           'twilio',
           'missing_signature',
-          { counterClient: getRateLimitRedis() },
+          {
+            counterClient: getRateLimitRedis(),
+            route: '/webhooks/twilio',
+            request: buildWebhookSignatureRequestMetadata(req),
+          },
         ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
         return res.status(403).send('Forbidden');
       }
@@ -58,7 +65,11 @@ export function registerTwilioWebhookRoutes(router: Router): void {
         recordWebhookSignatureFailure(
           'twilio',
           'validation_failed',
-          { counterClient: getRateLimitRedis() },
+          {
+            counterClient: getRateLimitRedis(),
+            route: '/webhooks/twilio',
+            request: buildWebhookSignatureRequestMetadata(req),
+          },
         ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
         return res.status(403).send('Forbidden');
       }

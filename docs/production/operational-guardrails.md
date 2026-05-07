@@ -159,7 +159,7 @@ Completion gate:
 
 Roll out after targeted tests pass.
 
-- [ ] Run `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e:smoke`, and `npm run build`.
+- [x] Run `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e:smoke`, and `npm run build`.
 - [ ] Deploy with default thresholds first, then tune only after observing real traffic.
 - [ ] Configure Sentry alert rules for the four categories before marking the checklist item complete.
 - [ ] Trigger one controlled alert per category in staging or a safe production smoke window and confirm grouping, owner routing, and payload quality.
@@ -189,7 +189,7 @@ Add targeted tests for:
 - [x] alert helper respecting `OPS_ALERTS_ENABLED=false`
 - [x] `/api/messages` provider failures recording operational alerts without saving successful outbound messages
 - [x] agent route failures and tool `Error:` results alerting after threshold
-- [ ] existing successful agent, tool, webhook, and dispatch flows remaining unchanged
+- [x] existing successful agent, tool, webhook, and dispatch flows remaining unchanged
 
 ## Production Setup
 

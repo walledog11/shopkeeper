@@ -10,7 +10,7 @@ import { OrderList } from "./OrderList"
 import { SectionHeader } from "./SectionHeader"
 import { ShopifyCustomerCreate, type CreateCustomerDraft } from "./ShopifyCustomerCreate"
 import { ShopifyCustomerSearch } from "./ShopifyCustomerSearch"
-import { Skeleton } from "./Skeleton"
+import { ShopifyCustomerSkeleton } from "./ShopifyCustomerSkeleton"
 import { panelSectionClass } from "./constants"
 import type { ShopifyCustomerState } from "./useShopifyCustomer"
 import type { ReactNode } from "react"
@@ -178,7 +178,7 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
   let orderList: ReactNode = null
 
   if (canLoadCustomer && isLoading) {
-    body = <Skeleton />
+    body = <ShopifyCustomerSkeleton />
   } else if (canLoadCustomer && customerError) {
     body = <p className="text-xs text-red-400">Unable to load Shopify customer.</p>
   } else if (mode === 'search') {

@@ -4,7 +4,10 @@ import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
-import { recordWebhookSignatureFailure } from './webhooks-signature-alerts.js';
+import {
+  buildWebhookSignatureRequestMetadata,
+  recordWebhookSignatureFailure,
+} from './webhooks-signature-alerts.js';
 
 export function registerMetaWebhookRoutes(router: Router): void {
   router.get('/meta', (req: Request, res: Response) => {
@@ -39,7 +42,11 @@ export function registerMetaWebhookRoutes(router: Router): void {
       recordWebhookSignatureFailure(
         'meta',
         !signature ? 'missing_signature' : 'missing_raw_body',
-        { counterClient: getRateLimitRedis() },
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/meta',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
       ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
       return res.sendStatus(401);
     }
@@ -51,7 +58,11 @@ export function registerMetaWebhookRoutes(router: Router): void {
       recordWebhookSignatureFailure(
         'meta',
         'signature_mismatch',
-        { counterClient: getRateLimitRedis() },
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/meta',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
       ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
       return res.sendStatus(401);
     }

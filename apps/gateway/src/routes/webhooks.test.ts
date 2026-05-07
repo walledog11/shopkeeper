@@ -25,6 +25,8 @@ vi.mock('ioredis', () => ({
     this.disconnect = vi.fn();
     this.quit = vi.fn().mockResolvedValue('OK');
     this.status = 'ready';
+    this.incr = vi.fn().mockResolvedValue(1);
+    this.expire = vi.fn().mockResolvedValue(1);
   }),
 }));
 
@@ -286,6 +288,54 @@ describe('POST /webhooks/email/inbound', () => {
       .send({ To: `${org.id}@inbound.clerk.delivery` });
 
     expect(res.status).toBe(400);
+  });
+
+  it('forwards Postmark Attachments through to the queued job', async () => {
+    const payload = {
+      From: 'Alice <alice@example.com>',
+      To: `${org.id}@inbound.clerk.delivery`,
+      Subject: 'See attached',
+      TextBody: 'Here is the photo.',
+      Attachments: [
+        {
+          Name: 'photo.png',
+          Content: Buffer.from('fake-png-bytes').toString('base64'),
+          ContentType: 'image/png',
+          ContentLength: 14,
+        },
+      ],
+    };
+
+    const res = await request(app)
+      .post('/webhooks/email/inbound')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(queueAddSpy).toHaveBeenCalledOnce();
+    const [, jobData] = queueAddSpy.mock.calls[0];
+    expect(jobData.attachments).toHaveLength(1);
+    expect(jobData.attachments[0]).toMatchObject({
+      name: 'photo.png',
+      contentType: 'image/png',
+    });
+    expect(jobData.attachments[0].contentBase64).toBe(payload.Attachments[0].Content);
+  });
+
+  it('omits attachments from the queued job when Postmark sends none', async () => {
+    const payload = {
+      From: 'Alice <alice@example.com>',
+      To: `${org.id}@inbound.clerk.delivery`,
+      Subject: 'No attachments',
+      TextBody: 'Just text.',
+    };
+
+    const res = await request(app)
+      .post('/webhooks/email/inbound')
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    const [, jobData] = queueAddSpy.mock.calls[0];
+    expect(jobData.attachments).toBeUndefined();
   });
 });
 

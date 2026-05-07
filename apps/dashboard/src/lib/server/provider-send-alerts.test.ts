@@ -111,7 +111,12 @@ describe('recordProviderSendFailure', () => {
       const emitAlert = createEmitAlert();
 
       for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
-        await recordProviderSendFailure('postmark', 'email', 'org_xyz', makeDeps(client, { emitAlert }));
+        await recordProviderSendFailure('postmark', 'email', 'org_xyz', makeDeps(client, {
+          emitAlert,
+          threadId: 'thread_123',
+          integrationId: 'integration_123',
+          detail: 'Postmark timeout',
+        }));
       }
 
       expect(emitAlert).toHaveBeenCalledTimes(1);
@@ -120,7 +125,12 @@ describe('recordProviderSendFailure', () => {
         category: 'provider_send',
         level: 'error',
         tags: { provider: 'postmark', channel: 'email' },
-        extra: { orgId: 'org_xyz' },
+        extra: {
+          orgId: 'org_xyz',
+          threadId: 'thread_123',
+          integrationId: 'integration_123',
+          detail: 'Postmark timeout',
+        },
       });
     });
   });

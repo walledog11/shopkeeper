@@ -15,6 +15,10 @@ export interface ProviderSendAlertDependencies {
   emitAlert?: typeof emitOpsAlert;
   incrementWindow?: typeof incrementOpsAlertWindow;
   nowMs?: number;
+  threadId?: string | null;
+  integrationId?: string | null;
+  detail?: string | null;
+  extra?: Record<string, unknown>;
 }
 
 export interface ProviderSendAlertResult {
@@ -47,10 +51,14 @@ export async function recordProviderSendFailure(
       tags: { provider, channel },
       extra: {
         orgId,
+        threadId: deps.threadId ?? null,
+        integrationId: deps.integrationId ?? null,
+        detail: deps.detail ?? null,
         count: window.count,
         threshold: window.threshold,
         windowSecs: config.windowSecs,
         resetAt: window.resetAt,
+        ...(deps.extra ?? {}),
       },
     });
   }

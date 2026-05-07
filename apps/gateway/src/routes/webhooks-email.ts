@@ -17,6 +17,16 @@ export function registerEmailWebhookRoutes(router: Router): void {
       const msgIdHeader = emailHeaders.find(h => h.Name === 'Message-ID');
       const inboundMessageId: string | null = msgIdHeader?.Value || null;
 
+      const rawAttachments: Array<{ Name?: string; Content?: string; ContentType?: string }> =
+        Array.isArray(req.body.Attachments) ? req.body.Attachments : [];
+      const attachments = rawAttachments
+        .filter((a) => typeof a.Content === 'string' && a.Content.length > 0)
+        .map((a) => ({
+          name: typeof a.Name === 'string' && a.Name.length > 0 ? a.Name : 'attachment',
+          contentType: typeof a.ContentType === 'string' ? a.ContentType : 'application/octet-stream',
+          contentBase64: a.Content as string,
+        }));
+
       if (!rawFrom || !text) {
         return res.sendStatus(400);
       }
@@ -73,6 +83,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
         body: text,
         inboundMessageId,
         traceId,
+        ...(attachments.length > 0 && { attachments }),
       });
 
       logger.info({ fromAddress, organizationId, traceId }, '[Webhook] Inbound email queued');

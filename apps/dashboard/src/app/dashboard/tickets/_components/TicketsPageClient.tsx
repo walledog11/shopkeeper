@@ -15,6 +15,7 @@ import { fetcher } from '@/lib/api/fetcher'
 import ThreadList from './thread-list/ThreadList'
 import ConversationView from './conversation/ConversationView'
 import ContextPanel from './context-panel/ContextPanel'
+import ContextPanelSkeleton from './context-panel/ContextPanelSkeleton'
 import { getCurrentPlanForThread } from '@/lib/agent/plan-cache-shape'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
@@ -391,7 +392,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
                 ? ((activeThread?.status ?? activeThreadPreview?.status) === 'closed' ? 'closed' : 'open')
                 : activeTab}
               initialPlan={cachedPlan}
-              aiSummary={activeThread?.aiSummary ?? null}
+              aiSummary={activeThread?.aiSummary ?? activeThreadPreview?.aiSummary ?? null}
               isSummaryRefreshing={activeThread ? refreshingSummaryId === activeThread.id : false}
               onRefreshSummary={() => {
                 if (activeThread) {
@@ -412,13 +413,17 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
               onSend={handleSendMessage}
             />
             {/* Desktop context panel */}
-            {isDesktopContext && activeThread && !isConversationLoading && (
+            {isDesktopContext && (
               <div className="hidden xl:flex">
-                <ContextPanel
-                  thread={activeThread}
-                  hasShopify={hasShopify}
-                  onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                />
+                {activeThread && !isConversationLoading ? (
+                  <ContextPanel
+                    thread={activeThread}
+                    hasShopify={hasShopify}
+                    onLinkShopifyCustomer={handleLinkShopifyCustomer}
+                  />
+                ) : (
+                  <ContextPanelSkeleton hasShopify={hasShopify} />
+                )}
               </div>
             )}
 

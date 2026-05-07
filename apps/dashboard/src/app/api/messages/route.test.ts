@@ -32,10 +32,19 @@ vi.mock('twilio', () => ({
 }));
 
 // Mock global fetch for Meta Graph API calls in the IG dispatch branch
-const { mockFetch } = vi.hoisted(() => ({
+const { mockFetch, mockRecordProviderSendFailure } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
+  mockRecordProviderSendFailure: vi.fn().mockResolvedValue({ emitted: false }),
 }));
 vi.stubGlobal('fetch', mockFetch);
+
+vi.mock('@/lib/server/redis', () => ({
+  getRedis: vi.fn(() => ({ incr: vi.fn(), expire: vi.fn() })),
+}));
+
+vi.mock('@/lib/server/provider-send-alerts', () => ({
+  recordProviderSendFailure: mockRecordProviderSendFailure,
+}));
 
 import { POST } from './route';
 import { auth } from '@clerk/nextjs/server';
@@ -353,5 +362,41 @@ describe('POST /api/messages', () => {
     } finally {
       if (original !== undefined) process.env.POSTMARK_API_KEY = original;
     }
+  });
+
+  it('records provider send failures without saving a successful agent message', async () => {
+    vi.mocked(ServerClient).mockImplementationOnce(function (this: Record<string, unknown>) {
+      this.sendEmail = vi.fn().mockRejectedValue(new Error('postmark down'));
+    });
+
+    const emailAddress = `support_fail_${org.id.slice(0, 8)}@acme.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const customer = await createTestCustomer(org.id, 'dispatch-fail@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'This should fail before persistence.' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(502);
+
+    expect(mockRecordProviderSendFailure).toHaveBeenCalledWith('postmark', 'email', org.id, expect.objectContaining({
+      threadId: thread.id,
+      integrationId: integration.id,
+      detail: 'postmark down',
+    }));
+
+    const agentMessageCount = await db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(agentMessageCount).toBe(0);
   });
 });

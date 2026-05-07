@@ -182,6 +182,11 @@ export async function runAgent(
   if (!readOnly && !approvedToolCalls?.length) {
     const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
     if (fastResult) {
+      for (const action of fastResult.actionsPerformed) {
+        if (action.result.toLowerCase().startsWith("error:")) {
+          recordAgentFailureSafely("tool_result", action.tool, action.result);
+        }
+      }
       logger.info({ actionCount: fastResult.actionsPerformed.length }, "[agent] fast order-status result");
       executedToolCalls.push(...fastResult.actionsPerformed.map(action => action.tool));
       return finish(fastResult, "fast_order_status");

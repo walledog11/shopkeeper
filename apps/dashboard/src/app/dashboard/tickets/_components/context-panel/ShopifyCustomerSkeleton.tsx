@@ -1,4 +1,4 @@
-export function Skeleton() {
+export function ShopifyCustomerSkeleton() {
   return (
     <div className="space-y-2 animate-pulse">
       <div className="rounded-md border border-white/[0.07] bg-white/[0.03] p-2.5 space-y-1.5">
