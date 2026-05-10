@@ -4,7 +4,8 @@ import { db } from '@clerk/db'
 import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers'
 import { POST } from './route'
 
-const CLERK_WEBHOOK_SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'
+const WEBHOOK_SIGNING_BYTES = Buffer.from('clerk webhook test fixture')
+const CLERK_WEBHOOK_SECRET = WEBHOOK_SIGNING_BYTES.toString('base64')
 const WEBHOOK_URL = 'http://localhost:3000/api/webhooks/clerk'
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null
