@@ -47,14 +47,16 @@ export interface OrgSettings {
   digestHour: number;           // 0–23 local time — first (or only) send time
   digestSecondHour: number;     // 0–23 local time — second send time, only used for twice_daily
   digestDays: 'every_day' | 'weekdays';
-  digestTimezoneOffset: number; // integer UTC offset, e.g. -5 for New York
+  digestTimezone?: string;      // IANA tz, e.g. "America/New_York". Preferred.
+  digestTimezoneOffset: number; // integer UTC offset (legacy fallback for orgs that haven't migrated)
 
   // Business hours
   businessHoursEnabled: boolean;
   businessHoursStart: number;          // 0–23 local hour open (inclusive)
   businessHoursEnd: number;            // 0–23 local hour close (exclusive)
   businessHoursDays: string[];         // e.g. ['mon','tue','wed','thu','fri']
-  businessHoursTimezoneOffset: number; // integer UTC offset
+  businessHoursTimezone?: string;      // IANA tz. Preferred.
+  businessHoursTimezoneOffset: number; // integer UTC offset (legacy fallback)
   autoAckMessage: string;
 
   // Spam filter

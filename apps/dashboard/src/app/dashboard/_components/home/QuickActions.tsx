@@ -25,7 +25,7 @@ export default function QuickActions({ openCount, oldestOpenThreadId, channelCon
 
     // Slot 3: setup action if pending, else canned responses
     if (!channelConnected) {
-      list.push({ href: "/dashboard/settings?tab=integrations", icon: Cable, label: "Connect channel" })
+      list.push({ href: "/dashboard/integrations", icon: Cable, label: "Connect channel" })
     } else {
       list.push({ href: "/dashboard/settings?tab=workspace", icon: MessageSquareText, label: "Canned responses" })
     }

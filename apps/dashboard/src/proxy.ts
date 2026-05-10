@@ -1,7 +1,7 @@
 import { clerkMiddleware } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { isE2EAuthBypassEnabled } from '@/lib/e2e-auth'
-import { getPathAccessPolicy } from '@/proxy/path-access-policy'
+import { getPathAccessPolicy, isApiPath } from '@/proxy/path-access-policy'
 
 export default clerkMiddleware(async (auth, req) => {
   if (isE2EAuthBypassEnabled()) {
@@ -11,12 +11,17 @@ export default clerkMiddleware(async (auth, req) => {
   const pathname = req.nextUrl.pathname
   const policy = getPathAccessPolicy(pathname)
 
-  if (policy.requiresAuth) {
+  const { userId, orgId } = await auth()
+
+  if (policy.requiresAuth && !userId) {
+    if (isApiPath(pathname)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     await auth.protect()
+    return
   }
 
-  const { userId, orgId } = await auth()
-  if (!userId || orgId || !policy.requiresOrganization) {
+  if (!policy.requiresOrganization || orgId) {
     return
   }
 

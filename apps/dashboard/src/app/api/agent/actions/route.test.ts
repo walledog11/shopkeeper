@@ -78,6 +78,13 @@ describe("GET /api/agent/actions", () => {
     expect(mockListEntries).toHaveBeenCalledWith({
       orgId: "org_db_1",
       cursor: null,
+      filters: {
+        channels: undefined,
+        tools: undefined,
+        errorsOnly: undefined,
+        from: undefined,
+        to: undefined,
+      },
     });
     expect(mockListAllEntries).not.toHaveBeenCalled();
   });
@@ -105,7 +112,16 @@ describe("GET /api/agent/actions", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/csv");
     expect(await res.text()).toContain("timestamp,customer");
-    expect(mockListAllEntries).toHaveBeenCalledWith({ orgId: "org_db_1" });
+    expect(mockListAllEntries).toHaveBeenCalledWith({
+      orgId: "org_db_1",
+      filters: {
+        channels: undefined,
+        tools: undefined,
+        errorsOnly: undefined,
+        from: undefined,
+        to: undefined,
+      },
+    });
     expect(mockSerializeCsv).toHaveBeenCalledOnce();
     expect(mockListEntries).not.toHaveBeenCalled();
   });

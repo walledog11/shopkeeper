@@ -53,7 +53,7 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
           </p>
         </div>
         <Link
-          href="/dashboard/settings?tab=integrations"
+          href="/dashboard/integrations"
           className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-green-400 text-black text-xs font-semibold hover:bg-green-300 transition-colors"
         >
           Connect a channel <ArrowRight className="w-3.5 h-3.5" />
@@ -107,7 +107,7 @@ function EmptyState({ activeView, openCount, resolvedCount, setActiveView, hasCh
       <div className="space-y-1.5">
         <p className="text-xs text-white/40">Suggested next steps</p>
         {[
-          { icon: Zap, label: "Connect a channel to start receiving messages", href: "/dashboard/settings?tab=integrations" },
+          { icon: Zap, label: "Connect a channel to start receiving messages", href: "/dashboard/integrations" },
           { icon: Settings, label: "Configure your AI agent", href: "/dashboard/settings" },
           { icon: BarChart2, label: "View your analytics dashboard", href: "/dashboard/analytics" },
         ].map(({ icon: Icon, label, href }) => (

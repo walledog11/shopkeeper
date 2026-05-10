@@ -13,6 +13,7 @@ export default async function SettingsPage() {
       <SettingsPageClient
         orgName={org.name}
         settings={settings}
+        version={org.updatedAt.toISOString()}
       />
     </Suspense>
   )

@@ -93,13 +93,33 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
     textareaRef.current?.focus()
   }, [])
 
-  // Restore session from localStorage on mount
+  // Restore session on mount: deep-link `?session=ID` wins over localStorage.
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const deepLinked = params.get("session")
     const stored = localStorage.getItem(SESSION_KEY)
-    if (!stored) return
-    setSessionId(stored)
-    void fetchSessionDetail(stored).then((session) => {
-      if (!session) return
+    const target = deepLinked ?? stored
+    if (!target) return
+
+    void fetchSessionDetail(target).then((session) => {
+      if (!session) {
+        if (deepLinked && stored && stored !== deepLinked) {
+          void fetchSessionDetail(stored).then((fallback) => {
+            if (!fallback) return
+            setSessionId(fallback.id)
+            setMessages(
+              fallback.messages.map((m) =>
+                m.role === "user"
+                  ? { role: "user" as const, text: m.text, timestamp: new Date(fallback.createdAt) }
+                  : { role: "agent" as const, summary: m.text, actions: [], timestamp: new Date(fallback.createdAt) }
+              )
+            )
+          })
+        }
+        return
+      }
+      setSessionId(session.id)
+      localStorage.setItem(SESSION_KEY, session.id)
       setMessages(
         session.messages.map((m) =>
           m.role === "user"
@@ -108,6 +128,13 @@ export default function AgentChatClient({ agentName, compact, embedded, hideHead
         )
       )
     })
+
+    if (deepLinked) {
+      params.delete("session")
+      const search = params.toString()
+      const newUrl = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+      window.history.replaceState(null, "", newUrl)
+    }
   }, [fetchSessionDetail])
 
   // Trigger new session when parent increments sessionResetKey

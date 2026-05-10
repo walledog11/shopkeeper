@@ -49,6 +49,15 @@ describe('validateGatewayEnv', () => {
     expect(() => validateGatewayEnv()).not.toThrow();
   });
 
+  it('does not require Meta secrets for the v1 email and Shopify launch path', () => {
+    stubBaseGatewayEnv();
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('DASHBOARD_URL', 'https://app.example.com');
+    vi.stubEnv('META_APP_SECRET', '');
+
+    expect(() => validateGatewayEnv()).not.toThrow();
+  });
+
   it('rejects whitespace-only DASHBOARD_URL in production', () => {
     stubBaseGatewayEnv();
     vi.stubEnv('NODE_ENV', 'production');

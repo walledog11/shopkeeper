@@ -2,28 +2,84 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { useState } from "react"
-import { AlertCircle, Check, Download, ExternalLink, Loader2 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X } from "lucide-react"
 import useSWRInfinite from "swr/infinite"
-import { TOOL_LABELS } from "@/lib/agent/tools"
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { fetcher } from "@/lib/api/fetcher"
 import { formatDate, timeAgo } from "@/lib/format/date"
-import type { ActionLogEntry, ChannelType } from "@/types"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Input } from "@/components/ui/input"
+import type { ActionLogEntry, ChannelType, ToolCategory } from "@/types"
 
 interface Page {
   entries: ActionLogEntry[]
   nextCursor: string | null
 }
 
+interface Filters {
+  channels: string[]
+  tools: string[]
+  errorsOnly: boolean
+  from: string
+  to: string
+}
+
+const EMPTY_FILTERS: Filters = { channels: [], tools: [], errorsOnly: false, from: "", to: "" }
+
 const OPERATOR_CHANNELS = new Set(["dashboard_agent", "sms_agent"])
 
-function getKey(_pageIndex: number, previousPage: Page | null): string | null {
-  if (previousPage && !previousPage.nextCursor) return null
-  const cursor = previousPage?.nextCursor
-  return cursor
-    ? `/api/agent/actions?cursor=${encodeURIComponent(cursor)}`
-    : "/api/agent/actions"
+interface OptionGroup {
+  label: string
+  options: { id: string; label: string }[]
+}
+
+const CHANNEL_OPTIONS: { id: ChannelType; label: string }[] = [
+  { id: "email", label: "Email" },
+  { id: "ig_dm", label: "Instagram" },
+  { id: "sms", label: "SMS" },
+  { id: "shopify", label: "Shopify" },
+  { id: "tiktok", label: "TikTok" },
+  { id: "dashboard_agent", label: "Concierge" },
+  { id: "sms_agent", label: "WhatsApp ops" },
+]
+
+const CATEGORY_LABELS: Record<ToolCategory, string> = {
+  action: "Actions",
+  communication: "Communication",
+  internal: "Internal",
+  read: "Read",
+}
+
+const CHANNEL_GROUPS: OptionGroup[] = [{ label: "Channels", options: CHANNEL_OPTIONS }]
+
+const TOOL_GROUPS: OptionGroup[] = (Object.keys(CATEGORY_LABELS) as ToolCategory[]).map((cat) => ({
+  label: CATEGORY_LABELS[cat],
+  options: Object.entries(TOOL_LABELS)
+    .filter(([id]) => TOOL_CATEGORIES[id] === cat)
+    .map(([id, label]) => ({ id, label })),
+}))
+
+function buildFilterParams(filters: Filters): URLSearchParams {
+  const params = new URLSearchParams()
+  if (filters.channels.length) params.set("channel", filters.channels.join(","))
+  if (filters.tools.length) params.set("tool", filters.tools.join(","))
+  if (filters.errorsOnly) params.set("errorsOnly", "true")
+  if (filters.from) params.set("from", new Date(filters.from).toISOString())
+  if (filters.to) params.set("to", new Date(`${filters.to}T23:59:59.999Z`).toISOString())
+  return params
+}
+
+function buildKey(filters: Filters): (pageIndex: number, previousPage: Page | null) => string | null {
+  const baseParams = buildFilterParams(filters)
+  return (_pageIndex, previousPage) => {
+    if (previousPage && !previousPage.nextCursor) return null
+    const params = new URLSearchParams(baseParams)
+    if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor)
+    const qs = params.toString()
+    return qs ? `/api/agent/actions?${qs}` : "/api/agent/actions"
+  }
 }
 
 function ActionPill({ tool, result }: { tool: string; result: string }) {
@@ -50,7 +106,9 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
 function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
   const channel = getChannelInfo(entry.channelType as ChannelType)
   const isOperator = OPERATOR_CHANNELS.has(entry.channelType)
-  const href = isOperator ? "/dashboard/agent" : `/dashboard/tickets?thread=${entry.threadId}`
+  const href = isOperator
+    ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}`
+    : `/dashboard/tickets?thread=${entry.threadId}`
   const linkLabel = isOperator ? "View Concierge" : "View thread"
 
   return (
@@ -109,17 +167,103 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
   )
 }
 
+function MultiSelectPopover({
+  label,
+  selected,
+  onToggle,
+  onClear,
+  groups,
+}: {
+  label: string
+  selected: string[]
+  onToggle: (id: string) => void
+  onClear: () => void
+  groups: OptionGroup[]
+}) {
+  const count = selected.length
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 h-8 text-xs font-semibold transition-colors ${
+            count > 0
+              ? "border-amber-400/30 bg-amber-400/[0.08] text-amber-200 hover:bg-amber-400/[0.12]"
+              : "border-white/[0.10] bg-white/[0.04] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+          }`}
+        >
+          {label}
+          {count > 0 && (
+            <span className="rounded-full bg-amber-400 text-black px-1.5 py-px text-[10px] font-bold">{count}</span>
+          )}
+          <ChevronDown className="h-3 w-3 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 p-1.5 max-h-80 overflow-y-auto">
+        {count > 0 && (
+          <div className="flex items-center justify-between border-b border-white/[0.07] px-2 py-1.5 mb-1">
+            <span className="text-[11px] font-semibold text-white/40 uppercase tracking-wide">{count} selected</span>
+            <button onClick={onClear} className="text-[11px] font-semibold text-white/50 hover:text-white/80">
+              Clear
+            </button>
+          </div>
+        )}
+        {groups.map((group) => (
+          <div key={group.label} className="mb-1 last:mb-0">
+            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.05em] text-white/30">{group.label}</div>
+            {group.options.map((opt) => {
+              const active = selected.includes(opt.id)
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => onToggle(opt.id)}
+                  className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white/70 transition-colors hover:bg-white/[0.06]"
+                >
+                  <span className="truncate">{opt.label}</span>
+                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-amber-300" />}
+                </button>
+              )
+            })}
+          </div>
+        ))}
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 export default function AuditLogTab() {
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
+  const getKey = useMemo(() => buildKey(filters), [filters])
   const { data, isLoading, size, setSize } = useSWRInfinite<Page>(getKey, fetcher)
   const [isExporting, setIsExporting] = useState(false)
 
+  // Reset pagination when filters change so we don't fetch N pages of the new filter set.
+  useEffect(() => {
+    setSize(1)
+  }, [filters, setSize])
+
   const allEntries = data?.flatMap((page) => page.entries) ?? []
   const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
+  const hasActiveFilters: boolean =
+    filters.channels.length > 0 ||
+    filters.tools.length > 0 ||
+    filters.errorsOnly ||
+    filters.from !== "" ||
+    filters.to !== ""
+
+  const toggleInList = (key: "channels" | "tools", id: string) =>
+    setFilters((f) => ({
+      ...f,
+      [key]: f[key].includes(id) ? f[key].filter((x) => x !== id) : [...f[key], id],
+    }))
 
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      const res = await fetch("/api/agent/actions?format=csv")
+      const params = buildFilterParams(filters)
+      params.set("format", "csv")
+      const res = await fetch(`/api/agent/actions?${params}`)
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -156,6 +300,62 @@ export default function AuditLogTab() {
         </button>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <MultiSelectPopover
+          label="Channel"
+          selected={filters.channels}
+          onToggle={(id) => toggleInList("channels", id)}
+          onClear={() => setFilters((f) => ({ ...f, channels: [] }))}
+          groups={CHANNEL_GROUPS}
+        />
+        <MultiSelectPopover
+          label="Tool"
+          selected={filters.tools}
+          onToggle={(id) => toggleInList("tools", id)}
+          onClear={() => setFilters((f) => ({ ...f, tools: [] }))}
+          groups={TOOL_GROUPS}
+        />
+        <button
+          type="button"
+          onClick={() => setFilters((f) => ({ ...f, errorsOnly: !f.errorsOnly }))}
+          className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 h-8 text-xs font-semibold transition-colors ${
+            filters.errorsOnly
+              ? "border-red-400/30 bg-red-400/10 text-red-300 hover:bg-red-400/15"
+              : "border-white/[0.10] bg-white/[0.04] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
+          }`}
+        >
+          <AlertCircle className="h-3 w-3" />
+          Errors only
+        </button>
+        <div className="flex items-center gap-1">
+          <Input
+            type="date"
+            value={filters.from}
+            max={filters.to || undefined}
+            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
+            className="h-8 w-36 text-xs bg-white/[0.04] border-white/[0.10] text-white/70"
+          />
+          <span className="text-xs text-white/30">→</span>
+          <Input
+            type="date"
+            value={filters.to}
+            min={filters.from || undefined}
+            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+            className="h-8 w-36 text-xs bg-white/[0.04] border-white/[0.10] text-white/70"
+          />
+        </div>
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+            className="inline-flex items-center gap-1 px-2 h-8 text-xs font-semibold text-white/45 hover:text-white/80 transition-colors"
+          >
+            <X className="h-3 w-3" />
+            Clear filters
+          </button>
+        )}
+      </div>
+
       {isLoading && allEntries.length === 0 ? (
         <div className="space-y-2 animate-pulse">
           {Array.from({ length: 8 }).map((_, index) => (
@@ -164,9 +364,13 @@ export default function AuditLogTab() {
         </div>
       ) : allEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-sm font-semibold text-white/40">No structured agent actions yet</p>
+          <p className="text-sm font-semibold text-white/40">
+            {hasActiveFilters ? "No actions match these filters" : "No structured agent actions yet"}
+          </p>
           <p className="mt-1 text-xs text-white/25">
-            Executed replies, refunds, order updates, and other agent actions will appear here.
+            {hasActiveFilters
+              ? "Try clearing a filter or widening the date range."
+              : "Executed replies, refunds, order updates, and other agent actions will appear here."}
           </p>
         </div>
       ) : (

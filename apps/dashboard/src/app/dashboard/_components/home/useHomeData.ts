@@ -338,14 +338,14 @@ export function useHomeData({ initialOpenThreads }: Options) {
   }, [orgData])
 
   const workflowSteps = useMemo(() => [
-    { label: "Connect a channel", href: "/dashboard/settings?tab=integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
+    { label: "Connect a channel", href: "/dashboard/integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
     { label: "Configure agent", href: "/dashboard/settings?tab=agent", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
     { label: "Add knowledge base content", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
     { label: "Send your first reply", href: "/dashboard/tickets", status: (hasSentReply ? "done" : "pending") as "done" | "pending" },
     { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
     { label: "Verify phone for notifications", href: "/dashboard/team", status: (hasVerifiedPhone ? "done" : "pending") as "done" | "pending" },
-    { label: "Add more channels", href: "/dashboard/settings?tab=integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
+    { label: "Add more channels", href: "/dashboard/integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
   ], [channelConnected, hasShopify, hasConfiguredAgent, hasKbArticle, hasSentReply, hasInvitedTeam, hasVerifiedPhone, hasMultipleChannels])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 

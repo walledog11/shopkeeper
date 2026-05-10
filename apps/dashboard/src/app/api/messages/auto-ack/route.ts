@@ -14,6 +14,7 @@ import { resolveAgentSettings } from '@/lib/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { handleApiError } from '@/lib/api/errors';
 import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/server/auth-utils';
+import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 
 export async function POST(request: Request) {
   try {
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
       where: { id: threadId },
       include: {
         customer: true,
-        organization: { select: { id: true, name: true, settings: true } },
+        organization: { select: { id: true, name: true, settings: true, stripeStatus: true } },
       },
     });
     if (!thread) {
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     }
 
     const org = thread.organization;
+    assertBillingWriteAllowed(org);
     const settings = resolveAgentSettings(org.settings as Parameters<typeof resolveAgentSettings>[0]);
 
     // Guard: empty message means misconfiguration — the gateway decides when to call this endpoint.

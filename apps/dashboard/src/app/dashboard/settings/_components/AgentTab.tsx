@@ -1,124 +1,292 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useReducer, useRef, useState } from "react"
+import { Check, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { SaveButton, ToggleRow, SectionCard } from "./shared"
-import type { OrgSettings, AgentToolPermissions } from "@/types"
-
-const TIMEZONE_OPTIONS = [
-  { value: '-12', label: 'UTC−12' },
-  { value: '-11', label: 'UTC−11' },
-  { value: '-10', label: 'UTC−10 (Honolulu)' },
-  { value: '-9',  label: 'UTC−9 (Anchorage)' },
-  { value: '-8',  label: 'UTC−8 (Los Angeles)' },
-  { value: '-7',  label: 'UTC−7 (Denver)' },
-  { value: '-6',  label: 'UTC−6 (Chicago)' },
-  { value: '-5',  label: 'UTC−5 (New York)' },
-  { value: '-4',  label: 'UTC−4 (Halifax / Atlantic)' },
-  { value: '-3',  label: 'UTC−3 (São Paulo)' },
-  { value: '-2',  label: 'UTC−2' },
-  { value: '-1',  label: 'UTC−1' },
-  { value: '0',   label: 'UTC+0 (London)' },
-  { value: '1',   label: 'UTC+1 (Paris / Amsterdam)' },
-  { value: '2',   label: 'UTC+2 (Athens / Cairo)' },
-  { value: '3',   label: 'UTC+3 (Dubai / Nairobi)' },
-  { value: '4',   label: 'UTC+4 (Abu Dhabi)' },
-  { value: '5',   label: 'UTC+5 (Karachi)' },
-  { value: '6',   label: 'UTC+6 (Dhaka)' },
-  { value: '7',   label: 'UTC+7 (Bangkok)' },
-  { value: '8',   label: 'UTC+8 (Singapore / Beijing)' },
-  { value: '9',   label: 'UTC+9 (Tokyo / Seoul)' },
-  { value: '10',  label: 'UTC+10 (Sydney)' },
-  { value: '11',  label: 'UTC+11 (Solomon Islands)' },
-  { value: '12',  label: 'UTC+12 (Auckland)' },
-  { value: '13',  label: 'UTC+13' },
-  { value: '14',  label: 'UTC+14' },
-] as const
+import { Button } from "@/components/ui/button"
+import { ToggleRow, SectionCard } from "./shared"
+import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
+import type { OrgSettings } from "@/types"
 
 interface Props {
   settings: OrgSettings
+  version: string
 }
 
-export default function AgentTab({ settings }: Props) {
-  const [agentName, setAgentName] = useState(settings.agentName ?? "Clerk")
-  const [aiContext, setAiContext] = useState(settings.aiContext ?? "")
-  const [brandVoice, setBrandVoice] = useState(settings.brandVoice ?? "")
-  const [autoPlanOnOpen, setAutoPlanOnOpen] = useState(settings.autoPlanOnOpen ?? true)
-  const [alwaysDraftReply, setAlwaysDraftReply] = useState(settings.alwaysDraftReply ?? false)
-  const [defaultInstruction, setDefaultInstruction] = useState(settings.defaultInstruction ?? "")
-  const [requireApprovalForActions, setRequireApprovalForActions] = useState(settings.requireApprovalForActions ?? true)
-  const [toolsEnabled, setToolsEnabled] = useState<AgentToolPermissions>(settings.toolsEnabled ?? { action: true, communication: true, internal: true, read: true })
-  const [maxRefundAmount, setMaxRefundAmount] = useState<string>(settings.maxRefundAmount != null ? String(settings.maxRefundAmount) : "")
-  const [blockCancellations, setBlockCancellations] = useState(settings.blockCancellations ?? false)
-  const [blockCustomLineItems, setBlockCustomLineItems] = useState(settings.blockCustomLineItems ?? false)
-  const [maxIterations, setMaxIterations] = useState<string>(String(settings.maxIterations ?? 10))
-  const [replyLanguage, setReplyLanguage] = useState(settings.replyLanguage ?? "auto")
-  const [digestEnabled, setDigestEnabled] = useState(settings.digestEnabled ?? false)
-  const [digestFrequency, setDigestFrequency] = useState(settings.digestFrequency ?? 'daily')
-  const [digestHour, setDigestHour] = useState<string>(String(settings.digestHour ?? 8))
-  const [digestSecondHour, setDigestSecondHour] = useState<string>(String(settings.digestSecondHour ?? 17))
-  const [digestDays, setDigestDays] = useState(settings.digestDays ?? 'every_day')
-  const [digestTimezoneOffset, setDigestTimezoneOffset] = useState<string>(String(settings.digestTimezoneOffset ?? 0))
-  const [businessHoursEnabled, setBusinessHoursEnabled] = useState(settings.businessHoursEnabled)
-  const [businessHoursStart, setBusinessHoursStart] = useState<string>(String(settings.businessHoursStart))
-  const [businessHoursEnd, setBusinessHoursEnd] = useState<string>(String(settings.businessHoursEnd))
-  const [businessHoursDays, setBusinessHoursDays] = useState<string[]>(settings.businessHoursDays)
-  const [businessHoursTimezoneOffset, setBusinessHoursTimezoneOffset] = useState<string>(String(settings.businessHoursTimezoneOffset))
-  const [autoAckMessage, setAutoAckMessage] = useState(settings.autoAckMessage)
-  const [spamFilterEnabled, setSpamFilterEnabled] = useState(settings.spamFilterEnabled ?? true)
+type Action =
+  | { type: 'set'; patch: Partial<OrgSettings> }
+  | { type: 'reset'; payload: OrgSettings }
+
+function reducer(state: OrgSettings, action: Action): OrgSettings {
+  if (action.type === 'reset') return action.payload
+  return { ...state, ...action.patch }
+}
+
+// Map legacy integer UTC offsets to curated IANA zones so users never see
+// "Etc/GMT+5" in the dropdown. Picks the most populous merchant region per
+// offset; users can always change to their actual zone after.
+const OFFSET_TO_CURATED_ZONE: Record<number, string> = {
+  [-10]: 'Pacific/Honolulu',
+  [-9]:  'America/Anchorage',
+  [-8]:  'America/Los_Angeles',
+  [-7]:  'America/Denver',
+  [-6]:  'America/Chicago',
+  [-5]:  'America/New_York',
+  [-4]:  'America/Halifax',
+  [-3]:  'America/Sao_Paulo',
+  [0]:   'Europe/London',
+  [1]:   'Europe/Paris',
+  [2]:   'Europe/Athens',
+  [3]:   'Europe/Moscow',
+  [4]:   'Asia/Dubai',
+  [5]:   'Asia/Karachi',
+  [6]:   'Asia/Dhaka',
+  [7]:   'Asia/Bangkok',
+  [8]:   'Asia/Singapore',
+  [9]:   'Asia/Tokyo',
+  [10]:  'Australia/Sydney',
+  [12]:  'Pacific/Auckland',
+  [13]:  'Pacific/Fiji',
+}
+
+function browserTz(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
+  } catch {
+    return 'America/New_York'
+  }
+}
+
+function hydrateTz(existing: string | undefined, legacyOffset: number | undefined): string {
+  if (existing && existing.trim() !== '' && !existing.startsWith('Etc/')) return existing
+  if (typeof legacyOffset === 'number') {
+    const mapped = OFFSET_TO_CURATED_ZONE[Math.round(legacyOffset)]
+    if (mapped) return mapped
+  }
+  return browserTz()
+}
+
+function hydrate(settings: OrgSettings): OrgSettings {
+  return {
+    ...settings,
+    digestTimezone: hydrateTz(settings.digestTimezone, settings.digestTimezoneOffset),
+    businessHoursTimezone: hydrateTz(settings.businessHoursTimezone, settings.businessHoursTimezoneOffset),
+  }
+}
+
+// Curated list of ~30 zones grouped by region. One entry per DST region —
+// e.g. "Europe/Paris" covers Berlin / Madrid / Rome / Amsterdam.
+// All entries are real IANA ids, so DST is handled by Intl automatically.
+const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: string }[] }[] = [
+  {
+    label: 'Americas',
+    zones: [
+      { id: 'Pacific/Honolulu',     label: 'Hawaii — Honolulu' },
+      { id: 'America/Anchorage',    label: 'Alaska — Anchorage' },
+      { id: 'America/Los_Angeles',  label: 'Pacific Time — Los Angeles, Vancouver' },
+      { id: 'America/Phoenix',      label: 'Arizona — Phoenix' },
+      { id: 'America/Denver',       label: 'Mountain Time — Denver, Edmonton' },
+      { id: 'America/Chicago',      label: 'Central Time — Chicago, Mexico City' },
+      { id: 'America/New_York',     label: 'Eastern Time — New York, Toronto' },
+      { id: 'America/Halifax',      label: 'Atlantic Time — Halifax' },
+      { id: 'America/Sao_Paulo',    label: 'São Paulo' },
+      { id: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires' },
+    ],
+  },
+  {
+    label: 'Europe',
+    zones: [
+      { id: 'Europe/London',        label: 'London, Dublin, Lisbon' },
+      { id: 'Europe/Paris',         label: 'Central European Time — Paris, Berlin, Madrid, Rome' },
+      { id: 'Europe/Athens',        label: 'Eastern European Time — Athens, Helsinki, Bucharest' },
+      { id: 'Europe/Istanbul',      label: 'Istanbul' },
+      { id: 'Europe/Moscow',        label: 'Moscow' },
+    ],
+  },
+  {
+    label: 'Africa & Middle East',
+    zones: [
+      { id: 'Africa/Lagos',         label: 'Lagos' },
+      { id: 'Africa/Cairo',         label: 'Cairo' },
+      { id: 'Africa/Johannesburg',  label: 'Johannesburg' },
+      { id: 'Asia/Jerusalem',       label: 'Jerusalem' },
+      { id: 'Asia/Dubai',           label: 'Dubai' },
+      { id: 'Asia/Tehran',          label: 'Tehran' },
+    ],
+  },
+  {
+    label: 'Asia',
+    zones: [
+      { id: 'Asia/Karachi',         label: 'Karachi' },
+      { id: 'Asia/Kolkata',         label: 'India — Mumbai, Delhi' },
+      { id: 'Asia/Dhaka',           label: 'Dhaka' },
+      { id: 'Asia/Bangkok',         label: 'Bangkok, Jakarta' },
+      { id: 'Asia/Singapore',       label: 'Singapore, Hong Kong, Manila' },
+      { id: 'Asia/Shanghai',        label: 'Shanghai, Beijing' },
+      { id: 'Asia/Tokyo',           label: 'Tokyo, Seoul' },
+    ],
+  },
+  {
+    label: 'Oceania',
+    zones: [
+      { id: 'Australia/Perth',      label: 'Perth' },
+      { id: 'Australia/Adelaide',   label: 'Adelaide' },
+      { id: 'Australia/Sydney',     label: 'Sydney, Melbourne, Brisbane' },
+      { id: 'Pacific/Auckland',     label: 'Auckland' },
+      { id: 'Pacific/Fiji',         label: 'Fiji' },
+    ],
+  },
+]
+
+const KNOWN_TIMEZONE_IDS = new Set(TIMEZONE_GROUPS.flatMap(g => g.zones.map(z => z.id)))
+
+function TimezoneSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  // Show a passthrough only for legitimate IANA values outside our curated list
+  // (e.g. America/Tijuana). Never surface Etc/GMT* — those are legacy garbage.
+  const isUnknown = value !== '' && !KNOWN_TIMEZONE_IDS.has(value) && !value.startsWith('Etc/')
+  return (
+    <select
+      value={KNOWN_TIMEZONE_IDS.has(value) || isUnknown ? value : ''}
+      onChange={e => onChange(e.target.value)}
+      className={className}
+    >
+      {isUnknown && <option value={value}>{value}</option>}
+      {TIMEZONE_GROUPS.map(group => (
+        <optgroup key={group.label} label={group.label}>
+          {group.zones.map(z => (
+            <option key={z.id} value={z.id}>{z.label}</option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
+const DAY_OPTIONS = [['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun']] as const
+const DIGEST_DAYS_OPTIONS = [['every_day', 'Every day'], ['weekdays', 'Weekdays only']] as const
+
+interface RawInputs {
+  maxRefund: string
+  maxIter: string
+  digestHour: string
+  digestSecondHour: string
+  bhStart: string
+  bhEnd: string
+}
+
+function clampHour(s: string, fallback: number): number {
+  const n = s.trim() === '' ? fallback : parseInt(s, 10)
+  return Math.min(23, Math.max(0, isNaN(n) ? fallback : n))
+}
+
+function buildPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
+  const parsedMax = raw.maxRefund.trim() === '' ? null : Number(raw.maxRefund)
+  const parsedIter = Number(raw.maxIter)
+  return {
+    ...state,
+    agentName: state.agentName.trim() || 'Clerk',
+    maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
+    maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
+    digestHour: clampHour(raw.digestHour, 8),
+    digestSecondHour: clampHour(raw.digestSecondHour, 17),
+    businessHoursStart: clampHour(raw.bhStart, 9),
+    businessHoursEnd: clampHour(raw.bhEnd, 17),
+  }
+}
+
+function rawInputsFor(s: OrgSettings): RawInputs {
+  return {
+    maxRefund: s.maxRefundAmount != null ? String(s.maxRefundAmount) : '',
+    maxIter: String(s.maxIterations ?? 10),
+    digestHour: String(s.digestHour ?? 8),
+    digestSecondHour: String(s.digestSecondHour ?? 17),
+    bhStart: String(s.businessHoursStart),
+    bhEnd: String(s.businessHoursEnd),
+  }
+}
+
+export default function AgentTab({ settings, version }: Props) {
+  const [state, dispatch] = useReducer(reducer, settings, hydrate)
+  const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
+  const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
+  const [maxIterationsInput, setMaxIterationsInput] = useState<string>(initialRaw.maxIter)
+  const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
+  const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
+  const [businessHoursStartInput, setBusinessHoursStartInput] = useState<string>(initialRaw.bhStart)
+  const [businessHoursEndInput, setBusinessHoursEndInput] = useState<string>(initialRaw.bhEnd)
+  const [currentVersion, setCurrentVersion] = useState(version)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [staleVersion, setStaleVersion] = useState(false)
+
+  const payload = useMemo(
+    () => buildPayload(state, {
+      maxRefund: maxRefundInput,
+      maxIter: maxIterationsInput,
+      digestHour: digestHourInput,
+      digestSecondHour: digestSecondHourInput,
+      bhStart: businessHoursStartInput,
+      bhEnd: businessHoursEndInput,
+    }),
+    [state, maxRefundInput, maxIterationsInput, digestHourInput, digestSecondHourInput, businessHoursStartInput, businessHoursEndInput],
+  )
+
+  const initialPayloadRef = useRef<string>(JSON.stringify(payload))
+  const freshBaselineRef = useRef<OrgSettings | null>(null)
+  const isDirty = JSON.stringify(payload) !== initialPayloadRef.current
+
+  const businessHoursInvalid = payload.businessHoursEnabled && payload.businessHoursEnd <= payload.businessHoursStart
+
+  function applyBaseline(target: OrgSettings) {
+    const hydrated = hydrate(target)
+    const raw = rawInputsFor(target)
+    dispatch({ type: 'reset', payload: hydrated })
+    setMaxRefundInput(raw.maxRefund)
+    setMaxIterationsInput(raw.maxIter)
+    setDigestHourInput(raw.digestHour)
+    setDigestSecondHourInput(raw.digestSecondHour)
+    setBusinessHoursStartInput(raw.bhStart)
+    setBusinessHoursEndInput(raw.bhEnd)
+    initialPayloadRef.current = JSON.stringify(buildPayload(hydrated, raw))
+  }
+
+  function reset() {
+    applyBaseline(freshBaselineRef.current ?? settings)
+    freshBaselineRef.current = null
+    setError(null)
+    setStaleVersion(false)
+  }
 
   async function save() {
+    setError(null)
+    setStaleVersion(false)
     setSaving(true)
     setSaved(false)
-    setError(null)
-    const parsedMax = maxRefundAmount.trim() === "" ? null : Number(maxRefundAmount)
-    const parsedIter = Number(maxIterations)
-    const parsedStart = Math.min(23, Math.max(0, businessHoursStart.trim() === '' ? 9 : parseInt(businessHoursStart, 10)))
-    const parsedEnd = Math.min(23, Math.max(0, businessHoursEnd.trim() === '' ? 17 : parseInt(businessHoursEnd, 10)))
-    if (businessHoursEnabled && parsedEnd <= parsedStart) {
-      setError('Closing time must be later than opening time.')
-      return
-    }
     try {
       const res = await fetch('/api/org', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          settings: {
-            agentName: agentName.trim() || "Clerk",
-            aiContext,
-            brandVoice,
-            autoPlanOnOpen,
-            alwaysDraftReply,
-            defaultInstruction,
-            requireApprovalForActions,
-            toolsEnabled,
-            maxRefundAmount: isNaN(parsedMax as number) ? null : parsedMax,
-            blockCancellations,
-            blockCustomLineItems,
-            maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
-            replyLanguage,
-            digestEnabled,
-            digestFrequency,
-            digestHour: Math.min(23, Math.max(0, digestHour.trim() === '' ? 8 : parseInt(digestHour, 10))),
-            digestSecondHour: Math.min(23, Math.max(0, digestSecondHour.trim() === '' ? 17 : parseInt(digestSecondHour, 10))),
-            digestDays,
-            digestTimezoneOffset: Math.min(14, Math.max(-12, digestTimezoneOffset.trim() === '' ? 0 : parseInt(digestTimezoneOffset, 10))),
-            businessHoursEnabled,
-            businessHoursStart: parsedStart,
-            businessHoursEnd: parsedEnd,
-            businessHoursDays,
-            businessHoursTimezoneOffset: Math.min(14, Math.max(-12, businessHoursTimezoneOffset.trim() === '' ? 0 : parseInt(businessHoursTimezoneOffset, 10))),
-            autoAckMessage,
-            spamFilterEnabled,
-          },
-        }),
+        body: JSON.stringify({ settings: payload, version: currentVersion }),
       })
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({})) as {
+          current?: { version?: string; settings?: Partial<OrgSettings> }
+        }
+        if (body.current?.version) setCurrentVersion(body.current.version)
+        if (body.current?.settings) {
+          // Capture fresh server state so Reset jumps to it instead of the stale prop.
+          freshBaselineRef.current = { ...AGENT_SETTINGS_DEFAULTS, ...body.current.settings } as OrgSettings
+        }
+        setStaleVersion(true)
+        return
+      }
       if (!res.ok) throw new Error('Failed')
+      const body = await res.json().catch(() => ({})) as { version?: string }
+      if (body.version) setCurrentVersion(body.version)
+      initialPayloadRef.current = JSON.stringify(payload)
+      freshBaselineRef.current = null
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {
@@ -142,14 +310,14 @@ export default function AgentTab({ settings }: Props) {
               Agent name
               <span className="ml-1.5 font-normal text-white/30">· shown in the notes panel and used as the @mention trigger</span>
             </label>
-            <Input value={agentName} onChange={e => setAgentName(e.target.value)} placeholder="Clerk" className="h-9 text-sm bg-white" />
+            <Input value={state.agentName} onChange={e => dispatch({ type: 'set', patch: { agentName: e.target.value } })} placeholder="Clerk" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
               Brand name
               <span className="ml-1.5 font-normal text-white/30">· used in AI draft prompts</span>
             </label>
-            <Input value={aiContext} onChange={e => setAiContext(e.target.value)} placeholder="e.g. Acme Store" className="h-9 text-sm bg-white" />
+            <Input value={state.aiContext} onChange={e => dispatch({ type: 'set', patch: { aiContext: e.target.value } })} placeholder="e.g. Acme Store" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
           </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
@@ -157,13 +325,13 @@ export default function AgentTab({ settings }: Props) {
               <span className="ml-1.5 font-normal text-white/30">· max 200 characters</span>
             </label>
             <Textarea
-              value={brandVoice}
-              onChange={e => setBrandVoice(e.target.value)}
+              value={state.brandVoice}
+              onChange={e => dispatch({ type: 'set', patch: { brandVoice: e.target.value } })}
               placeholder="e.g. Friendly and direct. Never over-apologise. Use plain language."
               maxLength={200}
               rows={3}
             />
-            <p className="text-[11px] text-white/30 text-right">{brandVoice.length}/200</p>
+            <p className="text-[11px] text-white/30 text-right">{state.brandVoice.length}/200</p>
           </div>
         </div>
       </SectionCard>
@@ -173,14 +341,14 @@ export default function AgentTab({ settings }: Props) {
           <ToggleRow
             label="Auto-plan on ticket open"
             description="Automatically generate an action plan when you open a ticket with an unread customer message."
-            checked={autoPlanOnOpen}
-            onChange={setAutoPlanOnOpen}
+            checked={state.autoPlanOnOpen}
+            onChange={v => dispatch({ type: 'set', patch: { autoPlanOnOpen: v } })}
           />
           <ToggleRow
             label="Always draft a customer reply"
             description="Include a draft reply in every plan, even when no actions are needed."
-            checked={alwaysDraftReply}
-            onChange={setAlwaysDraftReply}
+            checked={state.alwaysDraftReply}
+            onChange={v => dispatch({ type: 'set', patch: { alwaysDraftReply: v } })}
           />
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
@@ -188,10 +356,10 @@ export default function AgentTab({ settings }: Props) {
               <span className="ml-1.5 font-normal text-white/30">· pre-filled in the plan prompt</span>
             </label>
             <Input
-              value={defaultInstruction}
-              onChange={e => setDefaultInstruction(e.target.value)}
+              value={state.defaultInstruction}
+              onChange={e => dispatch({ type: 'set', patch: { defaultInstruction: e.target.value } })}
               placeholder="e.g. Resolve the customer's issue and draft a reply"
-              className="h-9 text-sm bg-white"
+              className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
             />
           </div>
         </div>
@@ -201,8 +369,8 @@ export default function AgentTab({ settings }: Props) {
         <ToggleRow
           label="Require approval before executing actions"
           description="Show a plan card and wait for your confirmation before the agent runs any Shopify or communication actions."
-          checked={requireApprovalForActions}
-          onChange={setRequireApprovalForActions}
+          checked={state.requireApprovalForActions}
+          onChange={v => dispatch({ type: 'set', patch: { requireApprovalForActions: v } })}
         />
       </SectionCard>
 
@@ -211,32 +379,32 @@ export default function AgentTab({ settings }: Props) {
           <ToggleRow
             label="Actions"
             description="Shopify write operations: issue refunds, cancel orders, update shipping addresses, add Shopify notes."
-            checked={toolsEnabled.action}
-            onChange={v => setToolsEnabled(p => ({ ...p, action: v }))}
+            checked={state.toolsEnabled.action}
+            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, action: v } } })}
             badge="High impact"
-            badgeColor="text-orange-600 bg-orange-50 border-orange-200"
+            badgeColor="text-orange-300 bg-orange-400/10 border-orange-400/25"
           />
           <ToggleRow
             label="Communication"
             description="Send replies to customers on their channel (email, Instagram DM, etc.)."
-            checked={toolsEnabled.communication}
-            onChange={v => setToolsEnabled(p => ({ ...p, communication: v }))}
+            checked={state.toolsEnabled.communication}
+            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, communication: v } } })}
             badge="Customer-facing"
-            badgeColor="text-blue-600 bg-blue-50 border-blue-200"
+            badgeColor="text-blue-300 bg-blue-400/10 border-blue-400/25"
           />
           <ToggleRow
             label="Internal"
             description="Add internal notes, update ticket status, and update ticket tags."
-            checked={toolsEnabled.internal}
-            onChange={v => setToolsEnabled(p => ({ ...p, internal: v }))}
+            checked={state.toolsEnabled.internal}
+            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, internal: v } } })}
             badge="Internal"
-            badgeColor="text-violet-600 bg-violet-50 border-violet-200"
+            badgeColor="text-violet-300 bg-violet-400/10 border-violet-400/25"
           />
           <ToggleRow
             label="Read"
             description="Fetch Shopify customer profiles and order history. Read-only — no changes are made."
-            checked={toolsEnabled.read}
-            onChange={v => setToolsEnabled(p => ({ ...p, read: v }))}
+            checked={state.toolsEnabled.read}
+            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, read: v } } })}
             badge="Read-only"
             badgeColor="text-white/50 bg-white/[0.05] border-white/[0.10]"
           />
@@ -253,10 +421,10 @@ export default function AgentTab({ settings }: Props) {
             <div className="relative w-48">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
               <Input
-                value={maxRefundAmount}
-                onChange={e => setMaxRefundAmount(e.target.value.replace(/[^0-9.]/g, ''))}
+                value={maxRefundInput}
+                onChange={e => setMaxRefundInput(e.target.value.replace(/[^0-9.]/g, ''))}
                 placeholder="e.g. 50"
-                className="h-9 text-sm bg-white pl-7"
+                className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
               />
             </div>
             <p className="text-[11px] text-white/30">Refunds above this amount will require manual approval.</p>
@@ -264,14 +432,14 @@ export default function AgentTab({ settings }: Props) {
           <ToggleRow
             label="Block order cancellations"
             description="Prevent the agent from cancelling orders entirely. Cancellations will require manual handling."
-            checked={blockCancellations}
-            onChange={setBlockCancellations}
+            checked={state.blockCancellations}
+            onChange={v => dispatch({ type: 'set', patch: { blockCancellations: v } })}
           />
           <ToggleRow
             label="Block custom line items"
             description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
-            checked={blockCustomLineItems}
-            onChange={setBlockCustomLineItems}
+            checked={state.blockCustomLineItems}
+            onChange={v => dispatch({ type: 'set', patch: { blockCustomLineItems: v } })}
           />
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
@@ -280,10 +448,10 @@ export default function AgentTab({ settings }: Props) {
             </label>
             <div className="w-32">
               <Input
-                value={maxIterations}
-                onChange={e => setMaxIterations(e.target.value.replace(/[^0-9]/g, ''))}
+                value={maxIterationsInput}
+                onChange={e => setMaxIterationsInput(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="10"
-                className="h-9 text-sm bg-white"
+                className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
               />
             </div>
             <p className="text-[11px] text-white/30">Maximum number of tool-calling steps per agent run.</p>
@@ -295,8 +463,8 @@ export default function AgentTab({ settings }: Props) {
         <div className="space-y-1.5">
           <label className="block text-xs font-semibold text-white/60">Reply language</label>
           <select
-            value={replyLanguage}
-            onChange={e => setReplyLanguage(e.target.value)}
+            value={state.replyLanguage}
+            onChange={e => dispatch({ type: 'set', patch: { replyLanguage: e.target.value } })}
             className="h-9 w-56 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
           >
             <option value="auto">Auto-detect</option>
@@ -320,18 +488,17 @@ export default function AgentTab({ settings }: Props) {
           <ToggleRow
             label="Enable digest"
             description="Only sent when there are open tickets. Requires a verified WhatsApp number in Team settings."
-            checked={digestEnabled}
-            onChange={setDigestEnabled}
+            checked={state.digestEnabled}
+            onChange={v => dispatch({ type: 'set', patch: { digestEnabled: v } })}
           />
 
-          {digestEnabled && (
+          {state.digestEnabled && (
             <>
-              {/* Frequency */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/60">Frequency</label>
                 <select
-                  value={digestFrequency}
-                  onChange={e => setDigestFrequency(e.target.value as OrgSettings['digestFrequency'])}
+                  value={state.digestFrequency}
+                  onChange={e => dispatch({ type: 'set', patch: { digestFrequency: e.target.value as OrgSettings['digestFrequency'] } })}
                   className="h-9 w-56 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
                 >
                   <option value="daily">Once a day</option>
@@ -343,13 +510,12 @@ export default function AgentTab({ settings }: Props) {
                 </select>
               </div>
 
-              {/* Send times */}
               <div className="space-y-3">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-white/60">
-                    {digestFrequency === 'twice_daily' ? 'First send time' : 'Send time'}
+                    {state.digestFrequency === 'twice_daily' ? 'First send time' : 'Send time'}
                     <span className="ml-1.5 font-normal text-white/30">
-                      {digestFrequency.startsWith('every_') ? '· starting hour — repeats from here' : '· local hour (0–23)'}
+                      {state.digestFrequency.startsWith('every_') ? '· starting hour — repeats from here' : '· local hour (0–23)'}
                     </span>
                   </label>
                   <div className="w-32">
@@ -357,15 +523,15 @@ export default function AgentTab({ settings }: Props) {
                       type="number"
                       min={0}
                       max={23}
-                      value={digestHour}
-                      onChange={e => setDigestHour(e.target.value.replace(/[^0-9]/g, ''))}
+                      value={digestHourInput}
+                      onChange={e => setDigestHourInput(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="8"
-                      className="h-9 text-sm bg-white"
+                      className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
                     />
                   </div>
                 </div>
 
-                {digestFrequency === 'twice_daily' && (
+                {state.digestFrequency === 'twice_daily' && (
                   <div className="space-y-1.5">
                     <label className="block text-xs font-semibold text-white/60">
                       Second send time
@@ -376,27 +542,26 @@ export default function AgentTab({ settings }: Props) {
                         type="number"
                         min={0}
                         max={23}
-                        value={digestSecondHour}
-                        onChange={e => setDigestSecondHour(e.target.value.replace(/[^0-9]/g, ''))}
+                        value={digestSecondHourInput}
+                        onChange={e => setDigestSecondHourInput(e.target.value.replace(/[^0-9]/g, ''))}
                         placeholder="17"
-                        className="h-9 text-sm bg-white"
+                        className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
                       />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Days */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/60">Days</label>
                 <div className="flex gap-2">
-                  {([['every_day', 'Every day'], ['weekdays', 'Weekdays only']] as const).map(([val, label]) => (
+                  {DIGEST_DAYS_OPTIONS.map(([val, label]) => (
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setDigestDays(val)}
+                      onClick={() => dispatch({ type: 'set', patch: { digestDays: val } })}
                       className={`h-8 px-3 rounded-md border text-xs font-semibold transition-all ${
-                        digestDays === val
+                        state.digestDays === val
                           ? 'bg-white/[0.15] text-white border-white/[0.35]'
                           : 'bg-transparent border-white/[0.12] text-white/40 hover:border-white/[0.22] hover:text-white/60'
                       }`}
@@ -407,18 +572,14 @@ export default function AgentTab({ settings }: Props) {
                 </div>
               </div>
 
-              {/* Timezone */}
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/60">Timezone</label>
-                <select
-                  value={digestTimezoneOffset}
-                  onChange={e => setDigestTimezoneOffset(e.target.value)}
-                  className="h-9 w-64 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
-                >
-                  {TIMEZONE_OPTIONS.map(tz => (
-                    <option key={tz.value} value={tz.value}>{tz.label}</option>
-                  ))}
-                </select>
+                <TimezoneSelect
+                  value={state.digestTimezone ?? ''}
+                  onChange={v => dispatch({ type: 'set', patch: { digestTimezone: v } })}
+                  className="h-9 w-80 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
+                />
+                <p className="text-[11px] text-white/30">Daylight Saving Time is handled automatically.</p>
               </div>
             </>
           )}
@@ -430,24 +591,29 @@ export default function AgentTab({ settings }: Props) {
           <ToggleRow
             label="Enable business hours"
             description="When a message arrives outside your set hours, the auto-acknowledgment is sent to the customer instead of running a plan."
-            checked={businessHoursEnabled}
-            onChange={setBusinessHoursEnabled}
+            checked={state.businessHoursEnabled}
+            onChange={v => dispatch({ type: 'set', patch: { businessHoursEnabled: v } })}
           />
 
-          {businessHoursEnabled && (
+          {state.businessHoursEnabled && (
             <>
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/60">Days open</label>
                 <div className="flex gap-1.5 flex-wrap">
-                  {([['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun']] as const).map(([val, label]) => (
+                  {DAY_OPTIONS.map(([val, label]) => (
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setBusinessHoursDays(prev =>
-                        prev.includes(val) ? prev.filter(d => d !== val) : [...prev, val]
-                      )}
+                      onClick={() => dispatch({
+                        type: 'set',
+                        patch: {
+                          businessHoursDays: state.businessHoursDays.includes(val)
+                            ? state.businessHoursDays.filter(d => d !== val)
+                            : [...state.businessHoursDays, val],
+                        },
+                      })}
                       className={`h-8 w-12 rounded-md border text-xs font-semibold transition-all ${
-                        businessHoursDays.includes(val)
+                        state.businessHoursDays.includes(val)
                           ? 'bg-white/[0.15] text-white border-white/[0.35]'
                           : 'bg-transparent border-white/[0.12] text-white/40 hover:border-white/[0.22] hover:text-white/60'
                       }`}
@@ -469,10 +635,10 @@ export default function AgentTab({ settings }: Props) {
                       type="number"
                       min={0}
                       max={23}
-                      value={businessHoursStart}
-                      onChange={e => setBusinessHoursStart(e.target.value.replace(/[^0-9]/g, ''))}
+                      value={businessHoursStartInput}
+                      onChange={e => setBusinessHoursStartInput(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="9"
-                      className="h-9 text-sm bg-white"
+                      className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
                     />
                   </div>
                 </div>
@@ -486,26 +652,28 @@ export default function AgentTab({ settings }: Props) {
                       type="number"
                       min={0}
                       max={23}
-                      value={businessHoursEnd}
-                      onChange={e => setBusinessHoursEnd(e.target.value.replace(/[^0-9]/g, ''))}
+                      value={businessHoursEndInput}
+                      onChange={e => setBusinessHoursEndInput(e.target.value.replace(/[^0-9]/g, ''))}
                       placeholder="17"
-                      className="h-9 text-sm bg-white"
+                      className={`h-9 text-sm bg-white/[0.06] text-white/80 placeholder:text-white/25 ${
+                        businessHoursInvalid ? 'border-red-400/60' : 'border-white/[0.12]'
+                      }`}
                     />
                   </div>
                 </div>
               </div>
+              {businessHoursInvalid && (
+                <p className="text-[11px] text-red-400">Closing time must be later than opening time.</p>
+              )}
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-white/60">Timezone</label>
-                <select
-                  value={businessHoursTimezoneOffset}
-                  onChange={e => setBusinessHoursTimezoneOffset(e.target.value)}
-                  className="h-9 w-64 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
-                >
-                  {TIMEZONE_OPTIONS.map(tz => (
-                    <option key={tz.value} value={tz.value}>{tz.label}</option>
-                  ))}
-                </select>
+                <TimezoneSelect
+                  value={state.businessHoursTimezone ?? ''}
+                  onChange={v => dispatch({ type: 'set', patch: { businessHoursTimezone: v } })}
+                  className="h-9 w-80 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
+                />
+                <p className="text-[11px] text-white/30">Daylight Saving Time is handled automatically.</p>
               </div>
 
               <div className="space-y-1.5">
@@ -514,13 +682,13 @@ export default function AgentTab({ settings }: Props) {
                   <span className="ml-1.5 font-normal text-white/30">· max 500 characters</span>
                 </label>
                 <Textarea
-                  value={autoAckMessage}
-                  onChange={e => setAutoAckMessage(e.target.value)}
+                  value={state.autoAckMessage}
+                  onChange={e => dispatch({ type: 'set', patch: { autoAckMessage: e.target.value } })}
                   placeholder="Thanks for reaching out! We're currently outside business hours and will get back to you soon."
                   maxLength={500}
                   rows={3}
                 />
-                <p className="text-[11px] text-white/30 text-right">{autoAckMessage.length}/500</p>
+                <p className="text-[11px] text-white/30 text-right">{state.autoAckMessage.length}/500</p>
               </div>
             </>
           )}
@@ -531,15 +699,51 @@ export default function AgentTab({ settings }: Props) {
         <ToggleRow
           label="Filter spam emails"
           description="When off, every email lands in your inbox as a normal ticket."
-          checked={spamFilterEnabled}
-          onChange={setSpamFilterEnabled}
+          checked={state.spamFilterEnabled ?? true}
+          onChange={v => dispatch({ type: 'set', patch: { spamFilterEnabled: v } })}
         />
       </SectionCard>
 
-      <div className="flex items-center justify-end gap-3 pt-1">
-        {error && <p className="text-xs text-red-400">{error}</p>}
-        <SaveButton saving={saving} saved={saved} onClick={save} />
-      </div>
+      {(isDirty || saved || error || staleVersion) && (
+        <div className="sticky bottom-0 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-3 pb-4 z-10">
+          <div className="rounded-md border border-white/[0.10] bg-[#0c0c0c]/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {staleVersion ? (
+                <p className="text-xs text-amber-300 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
+              ) : error ? (
+                <p className="text-xs text-red-400 truncate">{error}</p>
+              ) : saved && !isDirty ? (
+                <p className="text-xs text-emerald-400 inline-flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5" /> Saved
+                </p>
+              ) : (
+                <>
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
+                  <p className="text-xs text-white/70">Unsaved changes</p>
+                </>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={reset}
+                disabled={saving || (!isDirty && !staleVersion)}
+                className="text-xs font-semibold text-white/50 hover:text-white/80 disabled:opacity-30 disabled:hover:text-white/50 transition-colors px-2 py-1.5"
+              >
+                Reset
+              </button>
+              <Button
+                size="sm"
+                onClick={save}
+                disabled={saving || !isDirty || businessHoursInvalid}
+                className="h-8 px-4 bg-amber-400 text-black hover:bg-amber-300 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
+              >
+                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

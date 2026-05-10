@@ -1,6 +1,6 @@
 import { BadRequestError, type ApiErrorDetail } from "@/lib/api/errors";
 import { requireTrimmedInstruction } from "@/lib/agent/api/auth";
-import { decodeActionLogCursor } from "@/lib/agent/api/turns";
+import { decodeActionLogCursor, type ActionLogCursor } from "@/lib/agent/api/turns";
 import type { RawToolCall } from "@/types";
 
 function invalidField(field: string, message: string, code = "invalid"): never {
@@ -155,7 +155,30 @@ export function parseAgentPlanInternalBody(body: unknown) {
   };
 }
 
-export function parseActionLogCursorQuery(request: Request) {
+export interface ActionLogFilters {
+  channels?: string[];
+  tools?: string[];
+  errorsOnly?: boolean;
+  from?: Date;
+  to?: Date;
+}
+
+function parseCsvList(value: string | null): string[] | undefined {
+  if (!value) return undefined;
+  const list = value.split(",").map((s) => s.trim()).filter(Boolean);
+  return list.length === 0 ? undefined : list;
+}
+
+function parseDateParam(value: string | null, field: "from" | "to"): Date | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    invalidField(field, `${field} must be a valid ISO date`);
+  }
+  return date;
+}
+
+export function parseActionLogCursorQuery(request: Request): { cursor: ActionLogCursor | null; filters: ActionLogFilters } {
   const { searchParams } = new URL(request.url);
   const rawCursor = searchParams.get("cursor");
   const cursor = rawCursor ? decodeActionLogCursor(rawCursor) : null;
@@ -166,5 +189,19 @@ export function parseActionLogCursorQuery(request: Request) {
     ]);
   }
 
-  return { cursor };
+  const from = parseDateParam(searchParams.get("from"), "from");
+  const to = parseDateParam(searchParams.get("to"), "to");
+  if (from && to && from.getTime() > to.getTime()) {
+    invalidField("to", "to must be after from");
+  }
+
+  const filters: ActionLogFilters = {
+    channels: parseCsvList(searchParams.get("channel")),
+    tools: parseCsvList(searchParams.get("tool")),
+    errorsOnly: searchParams.get("errorsOnly") === "true" ? true : undefined,
+    from,
+    to,
+  };
+
+  return { cursor, filters };
 }

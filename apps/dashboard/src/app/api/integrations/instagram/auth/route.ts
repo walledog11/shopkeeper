@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { auth } from '@clerk/nextjs/server';
 import crypto from 'crypto';
+import { safeReturnTo } from '@/lib/security/safe-return-to';
 
 export async function GET(request: Request) {
   const { userId, orgId } = await auth();
@@ -21,34 +22,22 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const returnTo = searchParams.get('returnTo');
+  const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
-  // CSRF state token
   const state = crypto.randomBytes(16).toString('hex');
+  const cookieOpts = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax' as const,
+    maxAge: 600,
+    path: '/',
+  };
   const cookieStore = await cookies();
-  cookieStore.set('ig_oauth_state', state, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  });
-  // Store orgId so the callback can identify the org without a Clerk session
-  cookieStore.set('ig_oauth_org', orgId, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 600,
-    path: '/',
-  });
+  cookieStore.set('ig_oauth_state', state, cookieOpts);
+  cookieStore.set('ig_oauth_org', orgId, cookieOpts);
+  cookieStore.set('ig_oauth_user', userId, cookieOpts);
   if (returnTo) {
-    cookieStore.set('ig_oauth_return', returnTo, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 600,
-      path: '/',
-    });
+    cookieStore.set('ig_oauth_return', returnTo, cookieOpts);
   }
 
   const redirectUri = `${appUrl}/api/integrations/instagram/callback`;

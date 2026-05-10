@@ -26,6 +26,7 @@ import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 
@@ -305,6 +306,7 @@ export async function POST(request: Request) {
     }
 
     const org = await getOrCreateOrg();
+    assertBillingWriteAllowed(org);
     orgId = org.id;
 
     const rl = await rateLimit(`agent:chat:${org.id}`, 10, 60);

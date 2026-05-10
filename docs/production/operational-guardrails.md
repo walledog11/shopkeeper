@@ -193,7 +193,7 @@ Add targeted tests for:
 
 ## Production Setup
 
-Set `SENTRY_DSN` for both dashboard and gateway if operational alerts are expected to leave the process.
+Set `SENTRY_DSN` for both dashboard and gateway. The production checklist tracks live alerting readiness, not only code instrumentation, so do not mark the checklist item done until Sentry rules and controlled-alert validation are complete.
 
 Optional env vars:
 

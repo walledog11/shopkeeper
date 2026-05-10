@@ -70,12 +70,12 @@ npm run build -w apps/gateway
 - `DATABASE_URL`
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
-- `OPENAI_API_KEY`
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
 - `APP_URL`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
+- `SENTRY_DSN`
 
 Rules:
 
@@ -89,17 +89,9 @@ Rules:
   Used for Shopify webhook registration during OAuth and for local webhook proxy routes. In production this should be the public Railway gateway URL even though the name says `internal`.
 - `POSTMARK_API_KEY`
 - `INBOUND_EMAIL_DOMAIN`
-- `META_APP_ID`
-- `META_APP_SECRET`
-- `META_CONFIG_ID`
-  Required for Instagram OAuth initiation.
 - `SHOPIFY_CLIENT_ID`
 - `SHOPIFY_CLIENT_SECRET`
 - `SHOPIFY_APP_SECRET`
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_FROM_NUMBER`
-- `TWILIO_WEBHOOK_URL`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `PRICE_ID_STARTER`
@@ -107,7 +99,9 @@ Rules:
 
 Optional:
 
-- `SENTRY_DSN`
+- `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` for Instagram DM after v1.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL` for WhatsApp/SMS after v1.
+- `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` if direct USPS tracking is ever reintroduced.
 
 ### Gateway Required At Production Boot
 
@@ -116,7 +110,7 @@ Optional:
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
 - `DASHBOARD_URL`
-- `META_APP_SECRET`
+- `SENTRY_DSN`
 
 Rules:
 
@@ -127,20 +121,16 @@ Rules:
 
 ### Gateway Required For Launch Scope Features
 
-- `META_VERIFY_TOKEN`
-- `META_APP_ID`
-  Needed for the Instagram token-health maintenance job.
-- `TWILIO_ACCOUNT_SID`
-- `TWILIO_AUTH_TOKEN`
-- `TWILIO_WHATSAPP_NUMBER`
-- `TWILIO_WEBHOOK_URL`
 - `SHOPIFY_APP_SECRET`
+- `BLOB_READ_WRITE_TOKEN`
+  Required for inbound email attachments.
 
 Optional:
 
-- `SENTRY_DSN`
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
+- `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` for Instagram DM after v1.
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL` for WhatsApp/SMS after v1.
 
 ## Deploy Sequence
 
@@ -206,7 +196,7 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 4. Confirm a new thread appears in the dashboard with an AI summary and cached plan.
 5. Approve a response and confirm the outbound email sends successfully.
 
-### Instagram DM
+### Instagram DM (Deferred After V1)
 
 1. Verify the Meta webhook handshake succeeds on `GET /webhooks/meta`.
 2. Send a real DM to the connected Instagram account.
@@ -214,7 +204,7 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 4. Confirm the dashboard shows the thread and plan.
 5. Approve a reply and confirm the DM is delivered.
 
-### WhatsApp / SMS
+### WhatsApp / SMS (Deferred After V1)
 
 1. Point Twilio at `POST /webhooks/twilio` on the gateway, not the dashboard proxy route.
 2. Send a real inbound WhatsApp message to the live number.
@@ -245,6 +235,62 @@ Relevant proxy routes:
 - [apps/dashboard/src/app/api/webhooks/twilio/route.ts](../../apps/dashboard/src/app/api/webhooks/twilio/route.ts)
 - [apps/dashboard/src/app/api/webhooks/email/route.ts](../../apps/dashboard/src/app/api/webhooks/email/route.ts)
 
+## Operational Guardrails
+
+The guardrail code is implemented, but the production checklist item is not complete until Sentry alert rules are configured and validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
+
+### Sentry Alert Rules
+
+Create issue or metric alert rules for events with the following tags:
+
+- `category=queue_health`
+- `category=webhook_signature`
+- `category=provider_send`
+- `category=agent_failure`
+
+Route both dashboard and gateway alerts to the same launch owner until ownership is split. Keep `service`, `queue`, `provider`, `channel`, and `tool` visible in notifications, and avoid routing by `orgId` because that fragments platform incidents.
+
+Before sign-off:
+
+1. Set `SENTRY_DSN` for both dashboard and gateway.
+2. Confirm `OPS_ALERTS_ENABLED` is unset or set to `true`.
+3. In staging or a safe production window, temporarily set the relevant threshold to `1` and `OPS_ALERT_WINDOW_SECS=60`.
+4. Trigger one controlled event per category.
+5. Confirm the event lands in Sentry with the expected `category` and `service` tags.
+6. Confirm the alert routes to the launch owner.
+7. Restore the default threshold after validation.
+8. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing structured logs.
+
+### BullMQ Failed Jobs
+
+Retry-exhausted BullMQ jobs land in the queue's `failed` set after all configured attempts are used. The launch queues most likely to need inspection are:
+
+- `inbound-messages` for inbound email, Shopify order events, and deferred Instagram DM jobs.
+- `ai-summary` for summary, plan precompute, auto-ack, and notification work.
+
+Inspect failed jobs from a shell with production `REDIS_URL` loaded:
+
+```bash
+cd apps/gateway
+npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; import { QUEUE } from './src/constants.ts'; const conn = createGatewayRedisClient(); const q = new Queue(QUEUE.INBOUND, { connection: conn }); const jobs = await q.getJobs(['failed'], 0, 20, false); for (const job of jobs) console.log(JSON.stringify({ id: job.id, name: job.name, failedReason: job.failedReason, attemptsMade: job.attemptsMade, data: job.data }, null, 2)); await q.close(); await conn.quit();"
+```
+
+For the summary queue, change `QUEUE.INBOUND` to `QUEUE.AI_SUMMARY`.
+
+Replay a failed job only after the root cause is understood and fixed:
+
+```bash
+cd apps/gateway
+JOB_ID='the-failed-job-id' npx tsx -e "import { Queue } from 'bullmq'; import { createGatewayRedisClient } from './src/clients/redis-client.ts'; import { QUEUE } from './src/constants.ts'; const conn = createGatewayRedisClient(); const q = new Queue(QUEUE.INBOUND, { connection: conn }); const job = await q.getJob(process.env.JOB_ID); if (!job) throw new Error('Job not found'); await job.retry('failed'); console.log('Retried job', job.id); await q.close(); await conn.quit();"
+```
+
+Before replaying:
+
+- Check `failedReason`, `attemptsMade`, `traceId`, `organizationId`, and provider response details in Railway logs.
+- Confirm Redis, Postgres, and provider credentials are healthy.
+- Check whether the job may have already created customer-visible side effects.
+- Prefer replaying one job first, then watch `/health/queues` before replaying a batch.
+
 ## Sign-Off Evidence
 
 Do not mark the deploy track done until you have all of the following:
@@ -253,6 +299,7 @@ Do not mark the deploy track done until you have all of the following:
 - dashboard `/api/health` returned `200`
 - gateway `/health/deep` returned `200`
 - gateway `/health/queues` showed a healthy worker heartbeat
+- Sentry alert rules are configured and one controlled alert per guardrail category has routed correctly
 - `npm run verify:production` passed against the live URLs
 - at least one real inbound message completed the full path:
   webhook accepted -> queue job created -> worker processed -> dashboard thread visible -> plan generated -> outbound reply sent

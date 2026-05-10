@@ -5,7 +5,6 @@ const REQUIRED_ENV = [
   'REDIS_URL',
   'ANTHROPIC_API_KEY',
   'INTERNAL_API_SECRET',
-  'META_APP_SECRET',
 ] as const;
 
 function hasEnv(name: string): boolean {

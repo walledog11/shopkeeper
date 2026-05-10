@@ -10,6 +10,8 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - Gateway `REDIS_URL` uses the TLS form: `rediss://...`.
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
+- V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
+- `SENTRY_DSN` is set for both apps, and gateway `BLOB_READ_WRITE_TOKEN` is set for inbound email attachments.
 
 ## Deploy Order
 
@@ -76,9 +78,9 @@ npm run verify:production
 
 ## Manual Completion Checks
 
-After the automated checks pass, confirm the actual support flow in production:
+After the automated checks pass, confirm the v1 support flow in production:
 
-1. Send a smoke-test inbound message to a real connected production channel.
+1. Send a smoke-test inbound email to the production inbound address.
 2. Confirm the gateway accepts the webhook.
 3. Confirm `/health/deep` reports `checks.worker.status = ok`.
 4. Confirm the thread appears in the dashboard inbox.

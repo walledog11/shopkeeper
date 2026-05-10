@@ -113,22 +113,56 @@ function normalizeHour(value: unknown, fallback: number): number {
   return ((Math.round(value) % 24) + 24) % 24;
 }
 
-export function shouldSendDigest(
-  settings: Record<string, unknown>,
-  currentHourUtc: number,
-  nowMs: number,
-): boolean {
+function offsetToIanaFallback(offset: number): string {
+  const rounded = Math.max(-12, Math.min(14, Math.round(offset)));
+  if (rounded === 0) return 'UTC';
+  return `Etc/GMT${rounded > 0 ? '-' : '+'}${Math.abs(rounded)}`;
+}
+
+function resolveTz(settings: Record<string, unknown>): string {
+  const tz = settings.digestTimezone;
+  if (typeof tz === 'string' && tz.trim() !== '') return tz;
   const offset = typeof settings.digestTimezoneOffset === 'number'
     ? Math.round(settings.digestTimezoneOffset)
     : 0;
+  return offsetToIanaFallback(offset);
+}
+
+const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+function localHourAndDay(timeZone: string, now: Date): { hour: number; day: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      hour: 'numeric',
+      weekday: 'short',
+      hour12: false,
+    }).formatToParts(now);
+    const hourStr = parts.find((p) => p.type === 'hour')?.value ?? '0';
+    const weekday = parts.find((p) => p.type === 'weekday')?.value ?? 'Sun';
+    return {
+      hour: ((parseInt(hourStr, 10) % 24) + 24) % 24,
+      day: WEEKDAY_INDEX[weekday] ?? 0,
+    };
+  } catch {
+    // Invalid timeZone — fall back to UTC.
+    return { hour: now.getUTCHours(), day: now.getUTCDay() };
+  }
+}
+
+export function shouldSendDigest(
+  settings: Record<string, unknown>,
+  _currentHourUtc: number,
+  nowMs: number,
+): boolean {
   const frequency = typeof settings.digestFrequency === 'string' ? settings.digestFrequency : 'daily';
   const firstHour = normalizeHour(settings.digestHour, 8);
   const secondHour = normalizeHour(settings.digestSecondHour, 17);
   const days = typeof settings.digestDays === 'string' ? settings.digestDays : 'every_day';
 
-  const localHour = (currentHourUtc + offset + 24) % 24;
+  const tz = resolveTz(settings);
+  const { hour: localHour, day: localDay } = localHourAndDay(tz, new Date(nowMs));
 
-  const localDay = new Date(nowMs + offset * ONE_HOUR_MS).getUTCDay();
   if (days === 'weekdays' && (localDay === 0 || localDay === 6)) return false;
 
   if (frequency === 'daily') return localHour === firstHour;

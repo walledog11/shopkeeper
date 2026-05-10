@@ -9,6 +9,7 @@ import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
+import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   try {
     const org = await getOrCreateOrg();
+    assertBillingWriteAllowed(org);
 
     const rl = await rateLimit(`agent:plan:${org.id}`, 20, 60);
     if (!rl.success) return tooManyRequests(rl.reset);

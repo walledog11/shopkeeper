@@ -4,10 +4,12 @@ import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError } from '@/lib/api/errors';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
+import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 
 export async function POST(request: Request) {
   try {
     const org = await getOrCreateOrg();
+    assertBillingWriteAllowed(org);
 
     // 60 outbound messages per minute per org — prevents accidental or malicious message floods
     const rl = await rateLimit(`messages:send:${org.id}`, 60, 60);

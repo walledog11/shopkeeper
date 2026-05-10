@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
+import { safeReturnTo } from '@/lib/security/safe-return-to';
 
 export async function GET(request: Request) {
   const { userId, orgId } = await auth();
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const shop = searchParams.get('shop')?.trim().toLowerCase();
-  const returnTo = searchParams.get('returnTo');
+  const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   if (!shop) {
     return NextResponse.json({ error: 'Missing shop parameter' }, { status: 400 });
@@ -35,9 +36,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid shop domain' }, { status: 400 });
   }
 
-  // CSRF state token — encode shopDomain so callback can reconstruct it
-  const nonce = crypto.randomBytes(16).toString('hex');
-  const state = `${nonce}.${shopDomain}`;
+  const state = crypto.randomBytes(16).toString('hex');
 
   const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
   const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_products,read_content';
@@ -59,6 +58,7 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   cookieStore.set('shopify_oauth_state', state, cookieOpts);
   cookieStore.set('shopify_oauth_org', orgId, cookieOpts);
+  cookieStore.set('shopify_oauth_user', userId, cookieOpts);
   if (returnTo) {
     cookieStore.set('shopify_oauth_return', returnTo, cookieOpts);
   }

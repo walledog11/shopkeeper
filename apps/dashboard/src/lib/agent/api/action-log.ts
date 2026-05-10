@@ -1,4 +1,4 @@
-import { db } from "@clerk/db";
+import { db, type DbChannelType as ChannelType } from "@clerk/db";
 import { AGENT_TURN_PREFIX } from "@/lib/agent/tools/turn-content";
 import { TOOL_LABELS } from "@/lib/agent/tools";
 import {
@@ -9,6 +9,7 @@ import {
   extractAgentTurnsFromMessages,
   type ActionLogCursor,
 } from "@/lib/agent/api/turns";
+import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry, AgentTurn } from "@/types";
 
 export { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
@@ -23,14 +24,28 @@ export const agentTurnMessageFilter = {
   contentText: { startsWith: AGENT_TURN_PREFIX },
 };
 
+function entryMatchesFilters(entry: ActionLogEntry, filters: ActionLogFilters | undefined): boolean {
+  if (!filters) return true;
+  if (filters.tools?.length) {
+    const want = new Set(filters.tools);
+    if (!entry.actions.some((a) => want.has(a.tool))) return false;
+  }
+  if (filters.errorsOnly && !entry.actions.some((a) => a.result.startsWith("Error"))) {
+    return false;
+  }
+  return true;
+}
+
 export async function listAgentActionLogEntries(params: {
   orgId: string;
   cursor?: ActionLogCursor | null;
+  filters?: ActionLogFilters;
   pageSize?: number;
   batchSize?: number;
 }): Promise<{ entries: ActionLogEntry[]; nextCursor: string | null }> {
   const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
   const batchSize = params.batchSize ?? DEFAULT_BATCH_SIZE;
+  const filters = params.filters;
 
   const entries: ActionLogEntry[] = [];
   let nextQueryCursor = params.cursor ?? null;
@@ -41,7 +56,17 @@ export async function listAgentActionLogEntries(params: {
       where: {
         ...agentTurnMessageFilter,
         deletedAt: null,
-        thread: { organizationId: params.orgId },
+        thread: filters?.channels?.length
+          ? { organizationId: params.orgId, channelType: { in: filters.channels as ChannelType[] } }
+          : { organizationId: params.orgId },
+        ...(filters?.from || filters?.to
+          ? {
+              sentAt: {
+                ...(filters.from ? { gte: filters.from } : {}),
+                ...(filters.to ? { lte: filters.to } : {}),
+              },
+            }
+          : {}),
         ...(nextQueryCursor ? {
           OR: [
             { sentAt: { lt: new Date(nextQueryCursor.sentAt) } },
@@ -90,6 +115,10 @@ export async function listAgentActionLogEntries(params: {
         continue;
       }
 
+      if (!entryMatchesFilters(entry, filters)) {
+        continue;
+      }
+
       entries.push(entry);
       if (entries.length === pageSize) {
         break;
@@ -110,6 +139,7 @@ export async function listAgentActionLogEntries(params: {
 
 export async function listAllAgentActionLogEntries(params: {
   orgId: string;
+  filters?: ActionLogFilters;
   pageSize?: number;
   batchSize?: number;
 }): Promise<ActionLogEntry[]> {
@@ -125,6 +155,7 @@ export async function listAllAgentActionLogEntries(params: {
     const page = await listAgentActionLogEntries({
       orgId: params.orgId,
       cursor,
+      filters: params.filters,
       pageSize,
       batchSize,
     });

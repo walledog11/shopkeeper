@@ -15,6 +15,7 @@ import {
   recordAgentRouteFailureInBackground,
 } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
 
   try {
     const org = await getOrCreateOrg();
+    assertBillingWriteAllowed(org);
     orgId = org.id;
 
     const rl = await rateLimit(`agent:quick-approve:${org.id}`, 20, 60);

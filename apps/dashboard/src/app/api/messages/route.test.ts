@@ -111,6 +111,30 @@ describe('POST /api/messages', () => {
     }
   });
 
+  it('blocks outbound writes when billing is past due', async () => {
+    await db.organization.update({
+      where: { id: org.id },
+      data: { stripeStatus: 'past_due' },
+    });
+    const customer = await createTestCustomer(org.id, 'past_due_customer@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, text: 'This should not send' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(402);
+    const body = await res.json() as { error: string };
+    expect(body.error).toContain('Billing status past_due blocks write actions');
+
+    const savedMessageCount = await db.message.count({ where: { threadId: thread.id } });
+    expect(savedMessageCount).toBe(0);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('saves a note without calling any dispatch API', async () => {
     const customer = await createTestCustomer(org.id, 'note_cust@test.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);

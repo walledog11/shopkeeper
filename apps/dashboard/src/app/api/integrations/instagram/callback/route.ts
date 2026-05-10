@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { auth } from '@clerk/nextjs/server';
 import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
+import { timingSafeIncludes } from '@/lib/auth-utils';
+import { safeReturnTo } from '@/lib/security/safe-return-to';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -22,25 +25,32 @@ export async function GET(request: Request) {
 
   if (error) {
     logger.warn({ error }, '[IG OAuth] User denied access');
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=access_denied`);
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=access_denied`);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=invalid_callback`);
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
   }
 
-  // Verify CSRF state
   const cookieStore = await cookies();
   const savedState = cookieStore.get('ig_oauth_state')?.value;
   const clerkOrgId = cookieStore.get('ig_oauth_org')?.value;
-  const returnTo = cookieStore.get('ig_oauth_return')?.value;
+  const savedUserId = cookieStore.get('ig_oauth_user')?.value;
+  const returnTo = safeReturnTo(cookieStore.get('ig_oauth_return')?.value);
   cookieStore.delete('ig_oauth_state');
   cookieStore.delete('ig_oauth_org');
+  cookieStore.delete('ig_oauth_user');
   cookieStore.delete('ig_oauth_return');
 
-  if (!savedState || savedState !== state) {
+  if (!savedState || !state || !timingSafeIncludes([savedState], state)) {
     logger.error('[IG OAuth] State mismatch — possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=state_mismatch`);
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
+  }
+
+  const { userId: currentUserId } = await auth();
+  if (!currentUserId || currentUserId !== savedUserId) {
+    logger.error({ savedUserId, currentUserId }, '[IG OAuth] User session mismatch — possible CSRF attempt');
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
   }
 
   try {
@@ -54,7 +64,7 @@ export async function GET(request: Request) {
 
     if (!tokenData.access_token) {
       logger.error({ tokenData }, '[IG OAuth] Token exchange failed');
-      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=token_exchange_failed`);
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
     }
     const shortLivedToken: string = tokenData.access_token;
 
@@ -89,7 +99,7 @@ export async function GET(request: Request) {
 
     if (!igPage?.instagram_business_account) {
       logger.error('[IG OAuth] No Instagram Business account found');
-      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=no_ig_account`);
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=no_ig_account`);
     }
 
     const pageToken = igPage.access_token;
@@ -122,12 +132,12 @@ export async function GET(request: Request) {
     // ---------------------------------------------------------------
     if (!clerkOrgId) {
       logger.error('[IG OAuth] Missing org cookie — session likely interrupted');
-      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });
     if (!org) {
       logger.error({ clerkOrgId }, '[IG OAuth] Org not found');
-      return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
     const igCbKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
@@ -148,11 +158,11 @@ export async function GET(request: Request) {
     logger.info({ igUsername, igAccountId, orgId: org.id }, '[IG OAuth] Integration saved');
     const successUrl = returnTo
       ? `${appUrl}${returnTo}`
-      : `${appUrl}/dashboard/settings?tab=integrations&connected=instagram`;
+      : `${appUrl}/dashboard/integrations?connected=instagram`;
     return NextResponse.redirect(successUrl);
 
   } catch (err) {
     logger.error({ err }, '[IG OAuth] Unexpected error');
-    return NextResponse.redirect(`${appUrl}/dashboard/settings?tab=integrations&error=server_error`);
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
   }
 }

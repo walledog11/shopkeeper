@@ -1,9 +1,7 @@
 "use client"
 
-import { useState } from "react"
 import { useClerk, useUser } from "@clerk/nextjs"
 import { Button } from "@/components/ui/button"
-import { Loader2 } from "lucide-react"
 
 export default function AccountTab() {
   const { openUserProfile } = useClerk()
@@ -12,27 +10,6 @@ export default function AccountTab() {
   const userEmail = user?.primaryEmailAddress?.emailAddress ?? ""
   const userImageUrl = user?.imageUrl ?? null
   const initials = userName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)
-
-  const [confirmClear, setConfirmClear] = useState(false)
-  const [clearing, setClearing] = useState(false)
-  const [clearError, setClearError] = useState<string | null>(null)
-  const [clearSuccess, setClearSuccess] = useState(false)
-
-  async function clearTickets() {
-    setClearing(true)
-    setClearError(null)
-    try {
-      const res = await fetch('/api/org/data?action=clear_tickets', { method: 'DELETE' })
-      if (!res.ok) throw new Error('Failed')
-      setConfirmClear(false)
-      setClearSuccess(true)
-      setTimeout(() => setClearSuccess(false), 3000)
-    } catch {
-      setClearError('Failed to clear tickets. Please try again.')
-    } finally {
-      setClearing(false)
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -67,51 +44,6 @@ export default function AccountTab() {
             >
               Edit profile
             </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="rounded-md border border-red-500/20 overflow-hidden">
-        <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
-          <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
-          <p className="text-xs text-white/35 mt-0.5">These actions are permanent and cannot be undone.</p>
-        </div>
-        <div className="p-5 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-            <div>
-              <p className="text-sm font-semibold text-white/70">Clear all ticket history</p>
-              <p className="text-xs text-white/35 mt-0.5">Permanently deletes all threads and messages for this workspace.</p>
-              {clearError && <p className="text-xs text-red-400 mt-1">{clearError}</p>}
-              {clearSuccess && <p className="text-xs text-green-400 mt-1">All ticket history has been cleared.</p>}
-            </div>
-            {confirmClear ? (
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-white/35">Are you sure?</span>
-                <Button
-                  size="sm"
-                  onClick={clearTickets}
-                  disabled={clearing}
-                  className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
-                >
-                  {clearing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes, clear"}
-                </Button>
-                <button
-                  onClick={() => setConfirmClear(false)}
-                  className="text-xs text-white/30 hover:text-white/70 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setConfirmClear(true)}
-                className="h-7 px-3 text-xs font-semibold text-red-600 border-red-200 hover:bg-red-50 self-start shrink-0"
-              >
-                Clear history
-              </Button>
-            )}
           </div>
         </div>
       </div>

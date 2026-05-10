@@ -37,17 +37,17 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "globals": "^16.4.0",
-    "prisma": "6.19.2",
+    "prisma": "6.19.3",
     "turbo": "^2.9.5",
     "typescript": "^5",
     "typescript-eslint": "^8.46.0"
   },
   "dependencies": {
-    "@prisma/client": "6.19.2"
+    "@prisma/client": "6.19.3"
   },
   "packageManager": "npm@10.9.3",
   "overrides": {
-    "prisma": "6.19.2",
-    "@prisma/client": "6.19.2"
+    "prisma": "6.19.3",
+    "@prisma/client": "6.19.3"
   }
 }

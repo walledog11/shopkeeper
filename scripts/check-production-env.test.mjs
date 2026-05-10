@@ -16,19 +16,13 @@ function createDashboardLaunchEnv(overrides = {}) {
     NEXT_PUBLIC_APP_URL: 'https://app.example.com',
     UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
     UPSTASH_REDIS_REST_TOKEN: 'redis-token',
+    SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
     GATEWAY_INTERNAL_URL: 'https://gateway.example.com',
     POSTMARK_API_KEY: 'postmark-key',
     INBOUND_EMAIL_DOMAIN: 'mail.example.com',
-    META_APP_ID: 'meta-app-id',
-    META_APP_SECRET: 'meta-app-secret',
-    META_CONFIG_ID: 'meta-config-id',
     SHOPIFY_CLIENT_ID: 'shopify-client-id',
     SHOPIFY_CLIENT_SECRET: 'shopify-client-secret',
     SHOPIFY_APP_SECRET: 'shopify-app-secret',
-    TWILIO_ACCOUNT_SID: 'AC123',
-    TWILIO_AUTH_TOKEN: 'twilio-token',
-    TWILIO_FROM_NUMBER: '+15555550123',
-    TWILIO_WEBHOOK_URL: 'https://gateway.example.com/webhooks/twilio',
     STRIPE_SECRET_KEY: 'sk_live_stripe',
     STRIPE_WEBHOOK_SECRET: 'whsec_live_stripe',
     PRICE_ID_STARTER: 'price_starter',
@@ -44,14 +38,9 @@ function createGatewayLaunchEnv(overrides = {}) {
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     INTERNAL_API_SECRET: 'test-internal-secret',
     DASHBOARD_URL: 'https://app.example.com',
-    META_APP_SECRET: 'meta-app-secret',
-    META_VERIFY_TOKEN: 'verify-token',
-    META_APP_ID: 'meta-app-id',
-    TWILIO_ACCOUNT_SID: 'AC123',
-    TWILIO_AUTH_TOKEN: 'twilio-token',
-    TWILIO_WHATSAPP_NUMBER: 'whatsapp:+15555550123',
-    TWILIO_WEBHOOK_URL: 'https://gateway.example.com/webhooks/twilio',
+    SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
     SHOPIFY_APP_SECRET: 'shopify-app-secret',
+    BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     ...overrides,
   };
 }
@@ -104,6 +93,20 @@ test('dashboard launch contract warns on deprecated GATEWAY_PUBLIC_URL usage', (
   );
 });
 
+test('dashboard launch contract requires Sentry for production observability', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      SENTRY_DSN: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: SENTRY_DSN'),
+    true
+  );
+});
+
 test('gateway launch contract requires the Twilio webhook path to match the gateway route', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -113,6 +116,20 @@ test('gateway launch contract requires the Twilio webhook path to match the gate
   });
 
   assert.equal(result.errors.includes('TWILIO_WEBHOOK_URL must point to /webhooks/twilio'), true);
+});
+
+test('gateway launch contract requires Blob storage for inbound attachments', () => {
+  const result = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      BLOB_READ_WRITE_TOKEN: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: BLOB_READ_WRITE_TOKEN'),
+    true
+  );
 });
 
 test('gateway launch contract warns when Redis is not configured with TLS', () => {
@@ -140,14 +157,9 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'ANTHROPIC_API_KEY=test-anthropic-key',
       'INTERNAL_API_SECRET=test-internal-secret',
       'DASHBOARD_URL=https://app.example.com',
-      'META_APP_SECRET=meta-app-secret',
-      'META_VERIFY_TOKEN=verify-token',
-      'META_APP_ID=meta-app-id',
-      'TWILIO_ACCOUNT_SID=AC123',
-      'TWILIO_AUTH_TOKEN=twilio-token',
-      'TWILIO_WHATSAPP_NUMBER=whatsapp:+15555550123   # live number',
-      'TWILIO_WEBHOOK_URL=https://gateway.example.com/webhooks/twilio',
+      'SENTRY_DSN=https://public@example.ingest.sentry.io/1',
       'SHOPIFY_APP_SECRET=shopify-app-secret',
+      'BLOB_READ_WRITE_TOKEN=vercel-blob-token   # attachment storage',
       '',
     ].join('\n')
   );

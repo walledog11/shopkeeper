@@ -13,6 +13,7 @@ import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { handleApiError } from '@/lib/api/errors';
 import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/server/auth-utils';
+import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 
 export async function POST(request: Request) {
   try {
@@ -31,12 +32,13 @@ export async function POST(request: Request) {
       where: { id: threadId },
       include: {
         customer: true,
-        organization: { select: { id: true, name: true } },
+        organization: { select: { id: true, name: true, stripeStatus: true } },
       },
     });
     if (!thread) {
       return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
     }
+    assertBillingWriteAllowed(thread.organization);
 
     const result = await dispatchMessage(thread, thread.organization, text);
     if (!result.ok) {

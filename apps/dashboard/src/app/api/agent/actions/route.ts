@@ -42,8 +42,10 @@ export async function GET(request: Request) {
       return tooManyRequests(rl.reset);
     }
 
+    const { cursor, filters } = parseActionLogCursorQuery(request);
+
     if (format === "csv") {
-      const entries = await listAllAgentActionLogEntries({ orgId: org.id });
+      const entries = await listAllAgentActionLogEntries({ orgId: org.id, filters });
       const csv = serializeAgentActionLogCsv(entries);
       return new NextResponse(csv, {
         status: 200,
@@ -54,10 +56,10 @@ export async function GET(request: Request) {
       });
     }
 
-    const { cursor } = parseActionLogCursorQuery(request);
     const { entries, nextCursor } = await listAgentActionLogEntries({
       orgId: org.id,
       cursor,
+      filters,
     });
 
     return NextResponse.json({ entries, nextCursor });

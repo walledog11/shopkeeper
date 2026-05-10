@@ -19,6 +19,7 @@ import { parseAgentInternalBody } from "@/lib/agent/api/validation";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
 import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
 import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
@@ -34,6 +35,7 @@ export async function POST(request: Request) {
     const { orgId: parsedOrgId, instruction, orderNumber, senderPhone, clerkUserId, threadId, approvedToolCalls } =
       parseAgentInternalBody(await request.json());
     orgId = parsedOrgId;
+    await assertBillingWriteAllowedForOrgId(parsedOrgId);
 
     const resolvedThreadId = (
       await resolveInternalAgentThread({
