@@ -24,7 +24,7 @@ import {
 } from "@/lib/agent/api/sessions";
 import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
-import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
 import logger from "@/lib/server/logger";
@@ -427,7 +427,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error({ err: error }, "[agent/chat] error");
 
-    recordAgentRouteFailureInBackground({
+    await recordAgentRouteFailure({
       route: "/api/agent/chat",
       orgId,
       error,

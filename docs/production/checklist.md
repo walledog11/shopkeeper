@@ -15,41 +15,26 @@ Status legend: `[x]` done, `[ ]` pending, `(external)` depends on third-party se
 
 ### Deployment
 
-- [ ] Run `prisma migrate deploy` against the production Neon DB before first deploy.
-- [ ] Deploy dashboard to Vercel.
-- [ ] Deploy gateway to Railway with the corrected production start command.
-- [ ] Verify end-to-end after deploy: inbound email → BullMQ job → worker → dashboard reflects the result → outbound reply lands in the customer's inbox.
+- [x] Run `prisma migrate deploy` against the production Neon DB before first deploy.
+- [x] Deploy dashboard to Vercel.
+- [x] Deploy gateway to Railway with the corrected production start command.
+- [x] Verify end-to-end after deploy: inbound email → BullMQ job → worker → dashboard reflects the result → outbound reply lands in the customer's inbox.
 
 ### Configuration & secrets
 
 - [ ] Rotate `INTERNAL_API_SECRET` to a new production-only value; remove any dev/shared reuse.
 - [x] Pin critical runtime deps (`next`, `react`, `openai`, `@anthropic-ai/sdk`, `express`, `bullmq`, `ioredis`, `postmark`, Sentry SDKs) instead of `latest`.
 - [ ] Confirm Vercel and Railway env vars are scoped to production only (no preview/dev reuse) and that no secrets are committed to the repo.
-- [ ] Set `SENTRY_DSN` for both apps — `instrumentation.ts` already wires it up.
+- [x] Set `SENTRY_DSN` for both apps — production health passed after the Vercel/Railway env update, and gateway Sentry capture + email alert were verified with a controlled `webhook_signature` event.
 
 ### Reliability
 
 - [ ] Alerting instrumentation is implemented for stuck queues, repeated webhook signature failures, repeated provider send failures, and repeated agent/tool failures, but production sign-off still requires Sentry rules and one controlled alert per category. See [`operational-guardrails.md`](operational-guardrails.md).
 - [x] Stripe webhook idempotency (dedupe by Stripe `event.id` via Upstash Redis with 7-day TTL). Other webhook ingress (Postmark/Meta/Shopify) already dedupes by `externalMessageId` and is per-org rate limited.
 - [ ] Confirm Neon production branch has point-in-time recovery enabled and record the retention window in [`runbook.md`](runbook.md).
-- [ ] External uptime check (Better Stack / Pingdom / similar) hitting the gateway `/health` endpoint and the dashboard homepage. Same alert channel as Sentry.
+- [ ] External uptime checks in Better Stack hitting dashboard `/api/health`, gateway `/health/deep`, and gateway `/health/queues` with the same alert owner as Sentry.
 - [x] Document the BullMQ failure recovery path in the runbook: where retry-exhausted jobs land, how to inspect them, how to replay.
 
-### Security
-
-- [x] Clerk lifecycle webhook is wired at `POST /api/webhooks/clerk` using Clerk's signed webhook verifier. It handles `organization.deleted` by deleting the local organization and relying on Prisma cascades, `user.deleted` by removing local `OrgMember` rows for that Clerk user, and `organizationMembership.deleted` by removing the matching org-member row. Covered by `src/app/api/webhooks/clerk/route.test.ts`.
-- [x] Audit every dashboard API route for `getOrCreateOrg()` (or equivalent org scoping). All 67 dashboard API routes verified: 52 use `getOrCreateOrg()` / `auth()`, 6 use `x-internal-secret`, 6 use signed inbound/callback validation (Stripe HMAC, Clerk verifier, Shopify HMAC, OAuth state cookies), 2 are public proxies to the gateway, 1 is `/api/health`. All `[id]`-style routes verify `organizationId` in the WHERE clause or post-fetch. Cross-org regression guard at `src/lib/security/cross-org-isolation.test.ts` (12 cases: canned responses, KB articles, KB bases, playbooks, integrations, AI summary). Per-route 404 tests already cover threads, messages, and agent plan.
-- [x] Verify OAuth callback routes (Shopify, Meta) bind the `state` param to the originating user's session, not just check it for presence. Both auth routes now persist `userId` alongside the state nonce; both callbacks call `auth()` and reject if the current Clerk userId doesn't match. State compares run through `timingSafeIncludes`. `returnTo` validated via shared `safeReturnTo()` to block protocol-relative open redirects.
-- [x] Add a CI step that runs `npm audit --audit-level=high` and fails on high/critical findings.
-- [x] Confirm dashboard API routes that mutate state (`/api/messages`, `/api/agent/*`, `/api/threads/*`) reject unauthenticated requests with 401 — not 500 or HTML redirect. All 16 mutating handlers already returned 401 via `handleApiError` / explicit checks; the gap was at the middleware layer (`src/proxy.ts`), where `auth.protect()` was returning Next.js `notFound()` (404) for unauthenticated API requests. Fixed: middleware now returns JSON 401 for unauthenticated API paths and only calls `auth.protect()` for page paths. Covered by `src/proxy.test.ts` (7 cases: API 401 / org-optional 401 / public passthrough / API 403 no-org / page redirect to sign-in / page redirect to /select-org / fully authenticated passthrough).
-
-### Testing & CI
-
-- [x] `npm test` passes reliably (46 unit + 205 dashboard integration + 120 gateway integration after Clerk webhook coverage). Test-only `ioredis` mock gap that was silently swallowing alert-path TypeErrors is fixed.
-- [x] True end-to-end launch flow test: inbound message → thread → plan → approval → outbound reply (`e2e/core-agent-flow.spec.ts`).
-- [x] Browser E2E for the main support flow with Clerk auth and outbound provider interception.
-- [x] Critical-path route test checklist documented for auth, org scope, validation, provider failure, billing gates, and webhook idempotency. See [`critical-path-test-checklist.md`](critical-path-test-checklist.md).
-- [x] Dashboard and gateway integration coverage reports are generated in CI artifacts without enforcing global thresholds.
 
 ### Billing (external)
 
@@ -117,4 +102,4 @@ Items previously on the checklist that the ICP does not need. Revisit only if a 
 ## Notes
 
 - Repo-side deploy support exists via `scripts/check-production-env.mjs`, `scripts/verify-production.mjs`, and [`runbook.md`](runbook.md), but those scripts don't substitute for the live deployment, migration, webhook console, or provider account steps.
-- Launch is gated on: deploy infra, secrets rotation + Sentry, the reliability audit items, Stripe + Postmark production accounts, and the two open "Before first customers" gaps (onboarding polish, past-due UX).
+- Launch is gated on: secrets rotation + Sentry, the reliability audit items, Stripe + Postmark production accounts, and the two open "Before first customers" gaps (onboarding polish, past-due UX).

@@ -11,8 +11,8 @@ import { resolveAgentSettings } from "@/lib/agent/settings";
 import { classifyHomePlan } from "@/lib/agent/plan-preview";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import {
-  recordAgentFailureInBackground,
-  recordAgentRouteFailureInBackground,
+  recordAgentFailure,
+  recordAgentRouteFailure,
 } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
@@ -77,19 +77,20 @@ export async function POST(request: Request) {
         instructionHash,
       }, "[agent:quick-approve] send failed");
 
-      recordAgentFailureInBackground({
-        kind: "route_failure",
-        route: "/api/agent/quick-approve",
-        orgId: org.id,
-        tool: "send_reply",
-        statusCode: 502,
-        detail: sendReplyResult || "Reply was not sent.",
-      }, {
-        getCounterClient: getRedis,
-        onError: (alertError) => {
-          logger.error({ err: alertError }, "[agent:quick-approve] failure alert error");
-        },
-      });
+      try {
+        await recordAgentFailure({
+          kind: "route_failure",
+          route: "/api/agent/quick-approve",
+          orgId: org.id,
+          tool: "send_reply",
+          statusCode: 502,
+          detail: sendReplyResult || "Reply was not sent.",
+        }, {
+          counterClient: getRedis(),
+        });
+      } catch (alertError) {
+        logger.error({ err: alertError }, "[agent:quick-approve] failure alert error");
+      }
 
       return NextResponse.json({ ...result, error: sendReplyResult || "Reply was not sent." }, { status: 502 });
     }
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error({ err: error }, "[agent:quick-approve] error");
 
-    recordAgentRouteFailureInBackground({
+    await recordAgentRouteFailure({
       route: "/api/agent/quick-approve",
       orgId,
       error,

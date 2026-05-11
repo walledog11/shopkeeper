@@ -1,6 +1,8 @@
 import {
   emitOpsAlert,
+  flushOpsAlertDelivery,
   incrementOpsAlertWindow,
+  type EmitOpsAlertDependencies,
   type OpsAlertCounterClient,
   type IncrementOpsAlertWindowResult,
 } from '@/lib/server/ops-alerts';
@@ -13,6 +15,7 @@ export interface ProviderSendAlertDependencies {
   counterClient: OpsAlertCounterClient;
   config?: DashboardOpsAlertConfig;
   emitAlert?: typeof emitOpsAlert;
+  flushAlertDelivery?: (dependencies?: EmitOpsAlertDependencies) => Promise<boolean>;
   incrementWindow?: typeof incrementOpsAlertWindow;
   nowMs?: number;
   threadId?: string | null;
@@ -44,7 +47,7 @@ export async function recordProviderSendFailure(
   });
 
   if (window.thresholdCrossed) {
-    emit({
+    const alert = emit({
       category: 'provider_send',
       message: `Repeated provider send failure: provider=${provider} channel=${channel} count=${window.count}`,
       level: 'error',
@@ -61,6 +64,10 @@ export async function recordProviderSendFailure(
         ...(deps.extra ?? {}),
       },
     });
+
+    if (alert.captured) {
+      await (deps.flushAlertDelivery ?? flushOpsAlertDelivery)({ config });
+    }
   }
 
   return { window, emitted: window.thresholdCrossed };

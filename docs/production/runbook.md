@@ -257,6 +257,31 @@ Relevant signed dashboard webhook route:
 
 The guardrail code is implemented, but the production checklist item is not complete until Sentry alert rules are configured and validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
 
+### External Monitors
+
+Configure Better Stack HTTP checks before sign-off. Route these monitors to the same launch owner or escalation policy used for the Sentry guardrail rules.
+
+- Dashboard: `GET https://<dashboard>/api/health`, expect HTTP `200` and `status=ok`.
+- Gateway deep health: `GET https://<gateway>/health/deep`, expect HTTP `200` and `status=ok`.
+- Gateway queue health: `GET https://<gateway>/health/queues`, expect HTTP `200` and `worker.healthy=true`.
+
+Record the Better Stack monitor ids, notification policy, and the first passing check time in the sign-off evidence section before checking off the uptime item.
+
+### Neon PITR
+
+Confirm point-in-time recovery on the production Neon branch before sign-off. Record the exact retention window from Neon, not an assumed plan default.
+
+Evidence to record:
+
+- Neon project:
+- Production branch:
+- PITR status:
+- Retention window:
+- Confirmed by:
+- Confirmed at:
+
+Do not check off the PITR item until the retention window is recorded here or in the launch evidence tracker.
+
 ### Sentry Alert Rules
 
 Create issue or metric alert rules for events with the following tags:
@@ -272,12 +297,57 @@ Before sign-off:
 
 1. Set `SENTRY_DSN` for both dashboard and gateway.
 2. Confirm `OPS_ALERTS_ENABLED` is unset or set to `true`.
-3. In staging or a safe production window, temporarily set the relevant threshold to `1` and `OPS_ALERT_WINDOW_SECS=60`.
-4. Trigger one controlled event per category.
-5. Confirm the event lands in Sentry with the expected `category` and `service` tags.
-6. Confirm the alert routes to the launch owner.
-7. Restore the default threshold after validation.
-8. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing structured logs.
+3. In staging or a safe production window, record the current alert env values.
+4. Temporarily set `OPS_ALERT_WINDOW_SECS=60` and set only the threshold under test to `1`.
+5. Trigger one controlled event per category.
+6. Confirm the event lands in Sentry with the expected `category` and `service` tags.
+7. Confirm the alert routes to the launch owner.
+8. Confirm the issue grouping, notification tags, extras, and absence of customer-facing side effects.
+9. Restore the default thresholds after validation.
+10. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing structured logs.
+
+Default thresholds to restore:
+
+- `OPS_ALERT_WINDOW_SECS=300`
+- `QUEUE_ALERT_FAILED_THRESHOLD=10`
+- `QUEUE_ALERT_WAITING_THRESHOLD=100`
+- `QUEUE_ALERT_ACTIVE_STUCK_MS=900000`
+- `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=5`
+- `PROVIDER_SEND_ALERT_THRESHOLD=3`
+- `AGENT_FAILURE_ALERT_THRESHOLD=3`
+
+### Controlled Alert Validation
+
+Run these in a safe production window with test org/user data only.
+
+`webhook_signature`:
+
+1. Set `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the gateway.
+2. Send one intentionally unsigned or bad-signature request to `POST https://<gateway>/webhooks/shopify` or `POST https://<gateway>/webhooks/meta`.
+3. Confirm the app returns the existing rejection response, normally `401`.
+4. Confirm Sentry receives an event tagged `category=webhook_signature` and `service=gateway`.
+
+`agent_failure`:
+
+1. Set `AGENT_FAILURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
+2. As an authenticated launch-test user in a test organization, call `POST https://<dashboard>/api/agent` with a valid test `threadId` but no approved plan.
+3. Confirm the route returns the controlled `400`.
+4. Confirm Sentry receives an event tagged `category=agent_failure`, `service=dashboard`, and `route=/api/agent`.
+
+`provider_send`:
+
+1. Set `PROVIDER_SEND_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
+2. Do not break live provider credentials. Trigger one controlled dashboard-side provider alert using the existing alert helper against production Sentry and Redis with test metadata: `provider=postmark`, `channel=email`, and `orgId=<test-org-id>`.
+3. Confirm Sentry receives an event tagged `category=provider_send`, `service=dashboard`, `provider=postmark`, and `channel=email`.
+
+`queue_health`:
+
+1. Check `GET https://<gateway>/health/queues` first.
+2. If there is already a failed, waiting, or active-stuck condition, lower only the matching queue threshold and let the maintenance worker emit naturally.
+3. If queues are clean, trigger one controlled gateway-side queue alert through the existing alert helper with `category=queue_health`, `queue=inbound`, and test metadata.
+4. Confirm Sentry receives an event tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
+
+After each category, record the Sentry issue URL, event id, alert recipient, tags/extras checked, and any side-effect notes in the sign-off evidence section.
 
 ### BullMQ Failed Jobs
 
@@ -319,5 +389,18 @@ Do not mark the deploy track done until you have all of the following:
 - gateway `/health/queues` showed a healthy worker heartbeat
 - Sentry alert rules are configured and one controlled alert per guardrail category has routed correctly
 - `npm run verify:production` passed against the live URLs
+- Better Stack checks are passing for dashboard health, gateway deep health, and gateway queue health
+- Neon production PITR is enabled and the retention window is recorded
 - at least one real inbound message completed the full path:
   webhook accepted -> queue job created -> worker processed -> dashboard thread visible -> plan generated -> outbound reply sent
+
+Reliability evidence to record before updating [`checklist.md`](checklist.md):
+
+- Sentry `queue_health`: issue URL, event id, routed owner, validation time
+- Sentry `webhook_signature`: issue URL, event id, routed owner, validation time
+- Sentry `provider_send`: issue URL, event id, routed owner, validation time
+- Sentry `agent_failure`: issue URL, event id, routed owner, validation time
+- Better Stack dashboard monitor: monitor id, last passing check time
+- Better Stack gateway deep monitor: monitor id, last passing check time
+- Better Stack gateway queue monitor: monitor id, last passing check time
+- Neon PITR: branch, status, retention window, confirmation time

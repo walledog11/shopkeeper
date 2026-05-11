@@ -1,7 +1,9 @@
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 import {
   emitOpsAlert,
+  flushOpsAlertDelivery,
   incrementOpsAlertWindow,
+  type EmitOpsAlertDependencies,
   type IncrementOpsAlertWindowResult,
   type OpsAlertCounterClient,
 } from '@/lib/server/ops-alerts';
@@ -30,6 +32,7 @@ export interface AgentFailureAlertDependencies {
   counterClient: OpsAlertCounterClient;
   config?: DashboardOpsAlertConfig;
   emitAlert?: typeof emitOpsAlert;
+  flushAlertDelivery?: (dependencies?: EmitOpsAlertDependencies) => Promise<boolean>;
   incrementWindow?: typeof incrementOpsAlertWindow;
   nowMs?: number;
 }
@@ -77,7 +80,7 @@ export async function recordAgentFailure(
   });
 
   if (window.thresholdCrossed) {
-    emit({
+    const alert = emit({
       category: 'agent_failure',
       message: formatFailureMessage(input.kind, route, tool, window.count),
       level: 'error',
@@ -106,9 +109,40 @@ export async function recordAgentFailure(
         resetAt: window.resetAt,
       },
     }, { config });
+
+    if (alert.captured) {
+      await (deps.flushAlertDelivery ?? flushOpsAlertDelivery)({ config });
+    }
   }
 
   return { window, emitted: window.thresholdCrossed };
+}
+
+export async function recordAgentRouteFailure(
+  input: AgentRouteFailureInput,
+  options: AgentFailureBackgroundOptions,
+): Promise<AgentFailureAlertResult | null> {
+  let counterClient: OpsAlertCounterClient;
+  try {
+    counterClient = options.getCounterClient();
+  } catch (error) {
+    options.onError?.(error);
+    return null;
+  }
+
+  try {
+    return await recordAgentFailure({
+      kind: 'route_failure',
+      route: input.route,
+      orgId: input.orgId,
+      tool: input.tool ?? null,
+      statusCode: input.statusCode ?? readStatusCode(input.error),
+      detail: input.detail ?? readErrorDetail(input.error),
+    }, { counterClient });
+  } catch (error) {
+    options.onError?.(error);
+    return null;
+  }
 }
 
 export function recordAgentFailureInBackground(
@@ -136,14 +170,9 @@ export function recordAgentRouteFailureInBackground(
   input: AgentRouteFailureInput,
   options: AgentFailureBackgroundOptions,
 ): void {
-  recordAgentFailureInBackground({
-    kind: 'route_failure',
-    route: input.route,
-    orgId: input.orgId,
-    tool: input.tool ?? null,
-    statusCode: input.statusCode ?? readStatusCode(input.error),
-    detail: input.detail ?? readErrorDetail(input.error),
-  }, options);
+  void recordAgentRouteFailure(input, options).catch((error) => {
+    options.onError?.(error);
+  });
 }
 
 function normalizeRoute(route: string | null | undefined): AgentFailureAlertRoute {

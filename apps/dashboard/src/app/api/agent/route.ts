@@ -8,7 +8,7 @@ import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
-import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowed } from "@/lib/billing/write-gate";
 import type { OrgSettings } from "@/types";
@@ -94,7 +94,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error({ err: error }, '[agent] error');
 
-    recordAgentRouteFailureInBackground({
+    await recordAgentRouteFailure({
       route: "/api/agent",
       orgId,
       error,

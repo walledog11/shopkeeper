@@ -17,7 +17,7 @@ import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { resolveInternalAgentThread } from "@/lib/agent/api/internal";
 import { parseAgentInternalBody } from "@/lib/agent/api/validation";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
-import { recordAgentRouteFailureInBackground } from "@/lib/server/agent-failure-alerts";
+import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
 import logger from "@/lib/server/logger";
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   } catch (error) {
     logger.error({ err: error }, "[agent/internal] error");
 
-    recordAgentRouteFailureInBackground({
+    await recordAgentRouteFailure({
       route: "/api/agent/internal",
       orgId,
       error,

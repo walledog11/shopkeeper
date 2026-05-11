@@ -71,8 +71,13 @@ export async function runAgent(
     : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
   const actionsPerformed: ActionEntry[] = [];
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
+  const failureAlertPromises: Promise<unknown>[] = [];
 
-  const finish = (result: AgentResult, outcome: string): AgentResult => {
+  const finish = async (result: AgentResult, outcome: string): Promise<AgentResult> => {
+    if (failureAlertPromises.length > 0) {
+      await Promise.allSettled(failureAlertPromises);
+    }
+
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
@@ -101,7 +106,7 @@ export async function runAgent(
       return;
     }
 
-    void recordAgentFailure({
+    const alertPromise = recordAgentFailure({
       kind,
       route: failureRoute,
       orgId: ctx.orgId,
@@ -118,6 +123,7 @@ export async function runAgent(
         route: failureRoute,
       }, "[agent] failure alert error");
     });
+    failureAlertPromises.push(alertPromise);
   };
 
   const executeToolCall = async (toolCall: { id: string; name: string; input: unknown }) => {

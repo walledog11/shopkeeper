@@ -36,6 +36,7 @@ export interface OpsAlertSentryClient {
   captureMessage: (message: string, context?: OpsAlertCaptureContext) => string;
   captureException: (error: unknown, context?: OpsAlertCaptureContext) => string;
   isEnabled?: () => boolean;
+  flush?: (timeout?: number) => Promise<boolean>;
 }
 
 export interface OpsAlertLogger {
@@ -57,6 +58,8 @@ export interface EmitOpsAlertResult {
   eventId: string | null;
   reason: 'captured' | 'disabled' | 'missing_dsn' | 'sentry_disabled';
 }
+
+const SENTRY_FLUSH_TIMEOUT_MS = 2_000;
 
 export interface OpsAlertCounterClient {
   incr: (key: string) => Promise<number>;
@@ -136,6 +139,32 @@ export function emitOpsAlert(input: OpsAlertInput, dependencies: EmitOpsAlertDep
     : sentry.captureException(input.error, scope);
 
   return { logged: true, captured: true, eventId, reason: 'captured' };
+}
+
+export async function flushOpsAlertDelivery(
+  dependencies: EmitOpsAlertDependencies = {},
+): Promise<boolean> {
+  const config = dependencies.config ?? getDashboardOpsAlertConfig();
+  const env = dependencies.env ?? process.env;
+  const sentry = dependencies.sentry ?? (Sentry as OpsAlertSentryClient);
+
+  if (!config.enabled || !hasSentryDsn(env)) {
+    return false;
+  }
+
+  if (sentry.isEnabled && !sentry.isEnabled()) {
+    return false;
+  }
+
+  if (!sentry.flush) {
+    return false;
+  }
+
+  try {
+    return await sentry.flush(SENTRY_FLUSH_TIMEOUT_MS);
+  } catch {
+    return false;
+  }
 }
 
 export async function incrementOpsAlertWindow(
