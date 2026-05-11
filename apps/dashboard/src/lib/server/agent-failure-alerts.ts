@@ -122,6 +122,10 @@ export async function recordAgentRouteFailure(
   input: AgentRouteFailureInput,
   options: AgentFailureBackgroundOptions,
 ): Promise<AgentFailureAlertResult | null> {
+  if (shouldSkipInTest(options)) {
+    return null;
+  }
+
   let counterClient: OpsAlertCounterClient;
   try {
     counterClient = options.getCounterClient();
@@ -149,7 +153,7 @@ export function recordAgentFailureInBackground(
   input: AgentFailureAlertInput,
   options: AgentFailureBackgroundOptions,
 ): void {
-  if ((options.skipInTest ?? true) && process.env.NODE_ENV === 'test') {
+  if (shouldSkipInTest(options)) {
     return;
   }
 
@@ -173,6 +177,14 @@ export function recordAgentRouteFailureInBackground(
   void recordAgentRouteFailure(input, options).catch((error) => {
     options.onError?.(error);
   });
+}
+
+function shouldSkipInTest(options: AgentFailureBackgroundOptions): boolean {
+  if (options.skipInTest === false) {
+    return false;
+  }
+
+  return process.env.NODE_ENV === 'test' || process.env.E2E_TEST_RUN === 'true';
 }
 
 function normalizeRoute(route: string | null | undefined): AgentFailureAlertRoute {

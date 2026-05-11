@@ -3,6 +3,7 @@ import type { DashboardOpsAlertConfig } from '@/lib/env';
 import type { EmitOpsAlertResult, OpsAlertCounterClient } from '@/lib/server/ops-alerts';
 import {
   recordAgentFailure,
+  recordAgentRouteFailure,
   type AgentFailureAlertDependencies,
 } from './agent-failure-alerts';
 
@@ -168,5 +169,36 @@ describe('recordAgentFailure', () => {
     }
 
     expect(emitAlert).not.toHaveBeenCalled();
+  });
+});
+
+describe('recordAgentRouteFailure', () => {
+  it('skips route alert plumbing in test runtime by default', async () => {
+    const { client } = createCounterClient();
+    const getCounterClient = vi.fn(() => client);
+
+    const result = await recordAgentRouteFailure({
+      route: '/api/agent',
+      orgId: 'org_123',
+      error: new Error('Agent execution requires an approved plan'),
+    }, { getCounterClient });
+
+    expect(result).toBeNull();
+    expect(getCounterClient).not.toHaveBeenCalled();
+  });
+
+  it('allows route alert plumbing in tests when explicitly requested', async () => {
+    const { client } = createCounterClient();
+    const getCounterClient = vi.fn(() => client);
+
+    const result = await recordAgentRouteFailure({
+      route: '/api/agent',
+      orgId: 'org_123',
+      statusCode: 400,
+      detail: 'Agent execution requires an approved plan',
+    }, { getCounterClient, skipInTest: false });
+
+    expect(result?.window.count).toBe(1);
+    expect(getCounterClient).toHaveBeenCalledTimes(1);
   });
 });
