@@ -259,13 +259,52 @@ The guardrail code is implemented, but the production checklist item is not comp
 
 ### External Monitors
 
-Configure Better Stack HTTP checks before sign-off. Route these monitors to the same launch owner or escalation policy used for the Sentry guardrail rules.
+Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for the Sentry guardrail rules.
 
-- Dashboard: `GET https://<dashboard>/api/health`, expect HTTP `200` and `status=ok`.
-- Gateway deep health: `GET https://<gateway>/health/deep`, expect HTTP `200` and `status=ok`.
-- Gateway queue health: `GET https://<gateway>/health/queues`, expect HTTP `200` and `worker.healthy=true`.
+Before creating monitors, verify the live production health endpoints from a trusted shell:
 
-Record the Better Stack monitor ids, notification policy, and the first passing check time in the sign-off evidence section before checking off the uptime item.
+```bash
+DASHBOARD_URL='https://<dashboard-production-url>' \
+GATEWAY_URL='https://<gateway-production-url>' \
+npm run verify:production
+```
+
+Create a Better Stack monitor group named `Clerk Production`, then create these monitors:
+
+| Monitor | URL | Required keyword |
+| --- | --- | --- |
+| `Clerk Dashboard Health` | `https://<dashboard-production-url>/api/health` | `"status":"ok"` |
+| `Clerk Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `"status":"ok"` |
+| `Clerk Gateway Queue Health` | `https://<gateway-production-url>/health/queues` | `"healthy":true` |
+
+Use the same settings for all three monitors:
+
+- Monitor type: `keyword`
+- HTTP method: `GET`
+- Check frequency: `60` seconds
+- Confirmation period: `60` seconds
+- Request timeout: `10` seconds
+- Verify SSL: enabled
+- Follow redirects: enabled
+- Region: `us`
+- Escalation policy: same launch owner or policy used by Sentry
+
+After creation, wait for all three monitors to show `up`, confirm each has a first passing check timestamp, and use Better Stack's built-in test notification for the selected escalation policy. Do not validate alert routing by intentionally taking production down.
+
+Expected failure behavior:
+
+- Dashboard DB, Redis, or env failure should make `/api/health` return degraded/non-`200` behavior and lose the dashboard monitor's passing condition.
+- Gateway DB, Redis, worker heartbeat, or queue diagnostics failure should make `/health/deep` return degraded/non-`200` behavior and alert after the confirmation period.
+- Missing or stale worker heartbeat should make `/health/queues` return `"healthy":false`, causing the queue keyword monitor to fail even though the diagnostics endpoint can still return `200`.
+
+Record this evidence before checking off the uptime item:
+
+- Monitor group:
+- Escalation policy or owner:
+- Dashboard monitor id, URL, required keyword, first passing check time:
+- Gateway deep monitor id, URL, required keyword, first passing check time:
+- Gateway queue monitor id, URL, required keyword, first passing check time:
+- Better Stack test notification recipient and time:
 
 ### Neon PITR
 
@@ -400,7 +439,7 @@ Reliability evidence to record before updating [`checklist.md`](checklist.md):
 - Sentry `webhook_signature`: issue URL, event id, routed owner, validation time
 - Sentry `provider_send`: issue URL, event id, routed owner, validation time
 - Sentry `agent_failure`: issue URL, event id, routed owner, validation time
-- Better Stack dashboard monitor: monitor id, last passing check time
-- Better Stack gateway deep monitor: monitor id, last passing check time
-- Better Stack gateway queue monitor: monitor id, last passing check time
+- Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
+- Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
+- Better Stack gateway queue monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Neon PITR: branch, status, retention window, confirmation time
