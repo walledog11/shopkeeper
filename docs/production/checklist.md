@@ -12,27 +12,26 @@ The current Postmark flow asks the merchant to type their support address into a
 
 ### 1a. Switch the primary email integration to Gmail / Outlook OAuth
 
-This is the single biggest unlock. Help Scout, Gorgias, Front, Missive, Tidio — every successful SMB helpdesk does this. Why:
+Outbound OAuth is shipped. See `docs/email-integration-overhaul.md` for the full surface — provider abstraction, Gmail + Outlook OAuth callbacks, single-active-email-row invariant, sanitized `/api/integrations` response, and the "Auth expiring" UI gate keyed off `tokenExpiresAt = new Date(0)`. Postmark forwarding is preserved as an advanced fallback.
+
+Why this matters:
 
 - No DNS to configure. Merchant clicks "Connect Gmail," authorizes via Google, done.
 - Outbound goes from the merchant's real address with their real DKIM. Inbox placement is solved by default.
 - Sent items appear in their Gmail "Sent" folder, so they can still use Gmail directly on days they want to.
 - No DKIM/SPF/Return-Path mystery for the merchant to debug.
 
-Implementation:
-- Gmail API with `gmail.modify` scope.
-- Pub/Sub watch for inbound (or polling fallback).
-- `users.messages.send` for outbound; carry the original `Subject`, `In-Reply-To`, `References`.
-- Outlook later — same pattern via Microsoft Graph.
-
-Keep Postmark in the codebase as a fallback for merchants who can't OAuth, but make OAuth the default.
+Still deferred (intentionally — see overhaul doc):
+- Gmail/Outlook inbound polling or webhook ingestion (today inbound only arrives through the Postmark/forwarding path).
+- Gmail `users.watch` / Pub/Sub renewal.
+- Outlook inbound read scopes (`Mail.ReadWrite`).
 
 ### 1b. If Postmark stays as a path, fix the gaps before exposing it
 
 - [ ] Display the inbound Postmark address in the UI with copy buttons and per-provider forwarding instructions (Google Workspace, Outlook 365, cPanel, Cloudflare Email Routing).
 - [ ] Add Postmark Sender Signature verification flow — without it, outbound from `support@merchant.com` will either be rejected by Postmark or land in spam.
-- [ ] Stop hardcoding `Re: Your inquiry` as the outbound subject (`apps/dashboard/src/lib/messaging/dispatch-message.ts:126`). Carry the thread's original subject through.
-- [ ] Replace the instant "Connected" state in the integrations row with an inline "we haven't received any mail at this address yet — send a test from your own inbox to verify" until the first inbound arrives.
+- [x] Stop hardcoding `Re: Your inquiry` as the outbound subject (`apps/dashboard/src/lib/messaging/dispatch-message.ts:126`). Carry the thread's original subject through.
+- [x] Replace the instant "Connected" state in the integrations row with an inline "we haven't received any mail at this address yet — send a test from your own inbox to verify" until the first inbound arrives.
 
 ---
 

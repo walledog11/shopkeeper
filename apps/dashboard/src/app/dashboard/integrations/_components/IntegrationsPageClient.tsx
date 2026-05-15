@@ -7,6 +7,7 @@ import { CheckCircle2, AlertCircle, AlertTriangle, X, Zap } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
+import { isEmailAuthReauthorizationRequired } from "@/lib/messaging/email/providers"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import SmsCard from "@/components/integrations/SmsCard"
 import type { Integration } from "@/types"
@@ -23,6 +24,8 @@ export default function IntegrationsPageClient() {
     const error = searchParams.get('error')
     if (connected === 'instagram') setBanner({ type: 'success', message: 'Instagram connected successfully.' })
     else if (connected === 'shopify') setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
+    else if (connected === 'gmail') setBanner({ type: 'success', message: 'Gmail connected successfully.' })
+    else if (connected === 'outlook') setBanner({ type: 'success', message: 'Outlook connected successfully.' })
     else if (error) setBanner({ type: 'error', message: OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.' })
   }, [searchParams])
 
@@ -60,6 +63,7 @@ export default function IntegrationsPageClient() {
   const activePlatforms = PLATFORM_CONFIG.filter(p => p.connectType !== 'coming-soon')
   const connectedCount = activePlatforms.filter(p => p.platform && getConnected(p.platform).length > 0).length
   const alertCount = integrations.filter(i => {
+    if (i.platform === 'email') return isEmailAuthReauthorizationRequired(i)
     const expired = !!i.tokenExpiresAt && new Date(i.tokenExpiresAt).getTime() < Date.now()
     const expiringSoon = !expired && !!i.tokenExpiresAt && (new Date(i.tokenExpiresAt).getTime() - Date.now()) / 86_400_000 < 10
     return expired || expiringSoon

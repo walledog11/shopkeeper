@@ -1,13 +1,45 @@
 import type { Request, Response, Router } from 'express';
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { db } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8');
+  const bb = Buffer.from(b, 'utf8');
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+function hasValidPostmarkAuth(req: Request): boolean {
+  const expectedUser = process.env.POSTMARK_INBOUND_USERNAME;
+  const expectedPass = process.env.POSTMARK_INBOUND_PASSWORD;
+  if (!expectedUser || !expectedPass) return true;
+
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith('Basic ')) return false;
+  let decoded: string;
+  try {
+    decoded = Buffer.from(header.slice(6), 'base64').toString('utf8');
+  } catch {
+    return false;
+  }
+  const sep = decoded.indexOf(':');
+  if (sep < 0) return false;
+  const user = decoded.slice(0, sep);
+  const pass = decoded.slice(sep + 1);
+  return safeEqual(user, expectedUser) && safeEqual(pass, expectedPass);
+}
+
 export function registerEmailWebhookRoutes(router: Router): void {
   router.post('/email/inbound', async (req: Request, res: Response) => {
+    if (!hasValidPostmarkAuth(req)) {
+      logger.warn('[Webhook] Inbound email rejected — invalid or missing basic auth');
+      res.set('WWW-Authenticate', 'Basic realm="postmark-inbound"');
+      return res.sendStatus(401);
+    }
     try {
       const rawFrom: string | undefined = req.body.From || req.body.from;
       const to: string | undefined = req.body.To || req.body.to;

@@ -10,10 +10,14 @@ import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+    const authorization = request.headers.get('authorization');
 
     const response = await fetch(`${getGatewayBaseUrl({ required: true })}/webhooks/email/inbound`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authorization && { Authorization: authorization }),
+      },
       body: JSON.stringify(body),
     });
 

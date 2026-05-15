@@ -1,6 +1,6 @@
 import { db, type DbChannelType } from '@clerk/db';
 import * as Sentry from '@sentry/node';
-import { updateContext } from '../sms-context.js';
+import { updateContext } from '../operator-context.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
@@ -126,7 +126,7 @@ export async function sendWhatsAppPlanNotification(
           body: message,
         });
 
-        await updateContext(organizationId, member.phoneNumber!, {
+        await updateContext(organizationId, 'whatsapp', member.phoneNumber!, {
           pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
         });
 

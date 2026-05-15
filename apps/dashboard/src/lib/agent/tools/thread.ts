@@ -1,11 +1,11 @@
 import { db, SenderType, createMessage } from "@clerk/db";
-import { ServerClient } from "postmark";
 import twilio from "twilio";
 import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@/lib/messaging/thread-constants";
-import { isOutboundRecordingEnabled, recordOutboundCall } from "@/lib/server/outbound-recorder";
+import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
 import type {
   AddInternalNoteInput,
   SendReplyInput,
@@ -18,6 +18,16 @@ interface ThreadContext {
   threadId: string;
   orgId: string;
   orgName: string;
+}
+
+function replySubject(subject: string | null | undefined, fallback = "Your inquiry"): string {
+  const raw = subject?.trim() || fallback;
+  return /^re:\s/i.test(raw) ? raw : `Re: ${raw}`;
+}
+
+function threadMessageId(threadId: string): string {
+  const inboundDomain = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
+  return `<thread-${threadId}@${inboundDomain}>`;
 }
 
 // ── add_internal_note ─────────────────────────────────────────────────────────
@@ -111,9 +121,8 @@ export async function sendReply(
       where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.EMAIL },
     });
     if (!emailIntegration) return "Error: no email integration configured.";
-    const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
     const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
-    const syntheticMessageId = `<thread-${ctx.threadId}@${INBOUND_DOMAIN}>`;
+    const syntheticMessageId = threadMessageId(ctx.threadId);
     const lastCustomerMsg = await db.message.findFirst({
       where: { threadId: ctx.threadId, senderType: SenderType.customer, externalMessageId: { not: null } },
       orderBy: { sentAt: "desc" },
@@ -121,41 +130,42 @@ export async function sendReply(
     });
     const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
     const headers = [
-      { Name: "Message-ID", Value: syntheticMessageId },
-      { Name: "In-Reply-To", Value: inReplyTo },
-      { Name: "References", Value: inReplyTo },
+      { name: "Message-ID", value: syntheticMessageId },
+      { name: "In-Reply-To", value: inReplyTo },
+      { name: "References", value: inReplyTo },
     ];
+    const provider = getEmailProvider(emailIntegration);
+    const subject = replySubject(thread.subject, thread.tag || "Your inquiry");
     const recorded = await recordOutboundCall({
       source: "agent_send_reply",
-      provider: "postmark",
+      provider,
       channel: "email",
       organizationId: ctx.orgId,
       threadId: ctx.threadId,
       to: recipientId,
       from: fromEmail,
-      subject: `Re: ${thread.tag || "Your inquiry"}`,
+      subject,
       text: input.text,
-      headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
+      headers,
       metadata: { replyTo: emailIntegration.externalAccountId },
     });
     try {
       if (!recorded) {
-        const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-        if (!POSTMARK_API_KEY) return "Error: email not configured (missing POSTMARK_API_KEY).";
-        const client = new ServerClient(POSTMARK_API_KEY);
-        await client.sendEmail({
-          From: `${ctx.orgName} <${fromEmail}>`,
-          ReplyTo: emailIntegration.externalAccountId,
-          To: recipientId,
-          Subject: `Re: ${thread.tag || "Your inquiry"}`,
-          TextBody: input.text,
-          Headers: headers,
+        await getEmailSender(emailIntegration).send({
+          to: recipientId,
+          fromAddress: fromEmail,
+          fromName: ctx.orgName,
+          replyTo: emailIntegration.externalAccountId,
+          subject,
+          text: input.text,
+          headers,
         });
       }
     } catch (err) {
+      if (err instanceof EmailNotConfiguredError) return `Error: email not configured — ${err.message}`;
       const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg }, '[sendReply] Postmark error');
-      void recordProviderSendFailure('postmark', 'email', ctx.orgId, {
+      logger.error({ err: msg, provider }, '[sendReply] Email dispatch error');
+      void recordProviderSendFailure(provider, 'email', ctx.orgId, {
         counterClient: getRedis(),
         threadId: ctx.threadId,
         integrationId: emailIntegration.id,
@@ -225,10 +235,6 @@ export async function sendEmail(
   input: SendEmailInput,
   ctx: ThreadContext
 ): Promise<string> {
-  if (!isOutboundRecordingEnabled() && !process.env.POSTMARK_API_KEY) {
-    return "Error: email not configured (missing POSTMARK_API_KEY).";
-  }
-
   // Fetch email integration; simultaneously search for an existing open email thread
   // for this recipient directly via relation filter (avoids a separate customer lookup
   // that can miss if the address casing differs from the stored platformId).
@@ -247,10 +253,10 @@ export async function sendEmail(
   ]);
   if (!emailIntegration) return "Error: no email integration connected.";
 
-  const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
   const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
+  const provider = getEmailProvider(emailIntegration);
 
-  // For a new thread we need the ID for email headers before calling Postmark.
+  // For a new thread we need the ID for email headers before calling the provider.
   // Create the thread shell now (no message) so we can roll back if send fails.
   let targetThreadId: string;
   if (existingThread) {
@@ -279,15 +285,16 @@ export async function sendEmail(
     targetThreadId = newThread.id;
   }
 
-  const subject = existingThread ? `Re: ${input.subject}` : input.subject;
+  const subject = existingThread ? replySubject(input.subject) : input.subject;
+  const syntheticMessageId = threadMessageId(targetThreadId);
   const headers = [
-    { Name: "Message-ID", Value: `<thread-${targetThreadId}@${INBOUND_DOMAIN}>` },
-    { Name: "In-Reply-To", Value: `<thread-${targetThreadId}@${INBOUND_DOMAIN}>` },
-    { Name: "References", Value: `<thread-${targetThreadId}@${INBOUND_DOMAIN}>` },
+    { name: "Message-ID", value: syntheticMessageId },
+    { name: "In-Reply-To", value: syntheticMessageId },
+    { name: "References", value: syntheticMessageId },
   ];
   const recorded = await recordOutboundCall({
     source: "agent_send_email",
-    provider: "postmark",
+    provider,
     channel: "email",
     organizationId: ctx.orgId,
     threadId: targetThreadId,
@@ -295,34 +302,33 @@ export async function sendEmail(
     from: fromEmail,
     subject,
     text: input.body,
-    headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
+    headers,
     metadata: { replyTo: emailIntegration.externalAccountId },
   });
 
   logger.info({ to: input.to, existingThreadId: existingThread?.id ?? null, targetThreadId }, '[sendEmail]');
   try {
     if (!recorded) {
-      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-      if (!POSTMARK_API_KEY) return "Error: email not configured (missing POSTMARK_API_KEY).";
-      const client = new ServerClient(POSTMARK_API_KEY);
-      await client.sendEmail({
-        From: `${ctx.orgName} <${fromEmail}>`,
-        ReplyTo: emailIntegration.externalAccountId,
-        To: input.to,
-        Subject: subject,
-        TextBody: input.body,
-        Headers: headers,
+      await getEmailSender(emailIntegration).send({
+        to: input.to,
+        fromAddress: fromEmail,
+        fromName: ctx.orgName,
+        replyTo: emailIntegration.externalAccountId,
+        subject,
+        text: input.body,
+        headers,
       });
     }
-    logger.info({ threadId: targetThreadId }, '[sendEmail] Postmark accepted');
+    logger.info({ threadId: targetThreadId, provider }, '[sendEmail] Provider accepted');
   } catch (err) {
-    // Postmark failed — delete the thread shell if we just created it
+    // Provider failed — archive the thread shell if we just created it.
     if (!existingThread) {
       await db.thread.update({ where: { id: targetThreadId }, data: { archivedAt: new Date() } }).catch(() => {});
     }
+    if (err instanceof EmailNotConfiguredError) return `Error: email not configured — ${err.message}`;
     const msg = err instanceof Error ? err.message : String(err);
-    logger.error({ err: msg, threadId: targetThreadId }, '[sendEmail] Postmark error');
-    void recordProviderSendFailure('postmark', 'email', ctx.orgId, {
+    logger.error({ err: msg, threadId: targetThreadId, provider }, '[sendEmail] Email dispatch error');
+    void recordProviderSendFailure(provider, 'email', ctx.orgId, {
       counterClient: getRedis(),
       threadId: targetThreadId,
       integrationId: emailIntegration.id,

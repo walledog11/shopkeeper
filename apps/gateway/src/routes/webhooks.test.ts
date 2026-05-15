@@ -11,7 +11,7 @@ import {
   createTestMessage,
   cleanupTestData,
 } from '@clerk/db/test-helpers';
-import { updateContext } from '../sms-context.js';
+import { updateContext } from '../operator-context.js';
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
@@ -321,6 +321,57 @@ describe('POST /webhooks/email/inbound', () => {
     expect(jobData.attachments[0].contentBase64).toBe(payload.Attachments[0].Content);
   });
 
+  describe('basic auth', () => {
+    afterEach(() => {
+      delete process.env.POSTMARK_INBOUND_USERNAME;
+      delete process.env.POSTMARK_INBOUND_PASSWORD;
+    });
+
+    it('returns 401 when credentials are configured and the request has no Authorization header', async () => {
+      process.env.POSTMARK_INBOUND_USERNAME = 'postmark';
+      process.env.POSTMARK_INBOUND_PASSWORD = 'secret';
+
+      const res = await request(app)
+        .post('/webhooks/email/inbound')
+        .send({ From: 'a@x.com', To: `${org.id}@inbound.clerk.delivery`, TextBody: 'hi' });
+
+      expect(res.status).toBe(401);
+      expect(res.headers['www-authenticate']).toMatch(/^Basic/);
+      expect(queueAddSpy).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when credentials are configured and the Authorization header is wrong', async () => {
+      process.env.POSTMARK_INBOUND_USERNAME = 'postmark';
+      process.env.POSTMARK_INBOUND_PASSWORD = 'secret';
+
+      const res = await request(app)
+        .post('/webhooks/email/inbound')
+        .set('Authorization', `Basic ${Buffer.from('postmark:wrong').toString('base64')}`)
+        .send({ From: 'a@x.com', To: `${org.id}@inbound.clerk.delivery`, TextBody: 'hi' });
+
+      expect(res.status).toBe(401);
+      expect(queueAddSpy).not.toHaveBeenCalled();
+    });
+
+    it('accepts requests with the correct credentials', async () => {
+      process.env.POSTMARK_INBOUND_USERNAME = 'postmark';
+      process.env.POSTMARK_INBOUND_PASSWORD = 'secret';
+
+      const res = await request(app)
+        .post('/webhooks/email/inbound')
+        .set('Authorization', `Basic ${Buffer.from('postmark:secret').toString('base64')}`)
+        .send({
+          From: 'Alice <a@x.com>',
+          To: `${org.id}@inbound.clerk.delivery`,
+          Subject: 'Hi',
+          TextBody: 'hi',
+        });
+
+      expect(res.status).toBe(200);
+      expect(queueAddSpy).toHaveBeenCalledOnce();
+    });
+  });
+
   it('omits attachments from the queued job when Postmark sends none', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
@@ -389,7 +440,7 @@ describe('POST /webhooks/twilio (digest commands)', () => {
       where: { id: thread.id },
       data: { filterStatus: 'questionable', filterReason: 'No order context', aiSummary: opts.aiSummary ?? null },
     });
-    await updateContext(org.id, fromNumber, { pendingDigest: { threadIds: [thread.id], sentAt: new Date().toISOString() } });
+    await updateContext(org.id, 'whatsapp', fromNumber, { pendingDigest: { threadIds: [thread.id], sentAt: new Date().toISOString() } });
     return { toNumber, fromNumber, threadId: thread.id, customer };
   }
 
@@ -485,7 +536,7 @@ describe('POST /webhooks/twilio (digest commands)', () => {
     });
 
     // Without pendingDigest, REVIEW falls through to the free-form agent path which calls fetch.
-    // threadId must be a valid UUID — it gets persisted to SmsContext.lastThreadId (Uuid column).
+    // threadId must be a valid UUID — it gets persisted to OperatorContext.lastThreadId (Uuid column).
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ summary: 'ok', threadId: '00000000-0000-4000-8000-000000000001' }), { status: 200 }));
 
     try {

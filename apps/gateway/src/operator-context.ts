@@ -1,13 +1,17 @@
 /**
- * SMS Conversation Context Manager
+ * Operator-channel conversation context.
  *
- * Persists per-sender state in the DB (sms_contexts table) scoped to the org.
- * Replaces the Redis-based implementation that lost context on Redis restart.
+ * Persists per-(org, channel, chatId) state in the operator_contexts table.
+ * Generalizes the older SMS-only sms-context.ts; keyed by `(organizationId, channel, chatId)`
+ * where channel is "whatsapp" or "telegram" and chatId is the provider-side identifier
+ * (E.164 phone for whatsapp, Telegram chat id as string for telegram).
  */
 
 import { db, Prisma } from '@clerk/db';
 
 const MAX_HISTORY_TURNS = 20;
+
+export type OperatorChannel = 'whatsapp' | 'telegram';
 
 export interface ToolCall {
   id: string;
@@ -26,7 +30,7 @@ export interface PendingDigest {
   sentAt: string;
 }
 
-export interface SmsContext {
+export interface OperatorContext {
   lastOrderNumber: string | null;
   lastThreadId: string | null;
   history: { role: string; content: string }[];
@@ -34,9 +38,13 @@ export interface SmsContext {
   pendingDigest: PendingDigest | null;
 }
 
-export async function getContext(organizationId: string, phone: string): Promise<SmsContext> {
-  const row = await db.smsContext.findUnique({
-    where: { organizationId_phoneNumber: { organizationId, phoneNumber: phone } },
+export async function getContext(
+  organizationId: string,
+  channel: OperatorChannel,
+  chatId: string,
+): Promise<OperatorContext> {
+  const row = await db.operatorContext.findUnique({
+    where: { organizationId_channel_chatId: { organizationId, channel, chatId } },
   });
   if (!row) return { lastOrderNumber: null, lastThreadId: null, history: [], pendingPlan: null, pendingDigest: null };
   return {
@@ -48,16 +56,21 @@ export async function getContext(organizationId: string, phone: string): Promise
   };
 }
 
-export async function updateContext(organizationId: string, phone: string, updates: Partial<SmsContext>): Promise<void> {
-  const current = await getContext(organizationId, phone);
+export async function updateContext(
+  organizationId: string,
+  channel: OperatorChannel,
+  chatId: string,
+  updates: Partial<OperatorContext>,
+): Promise<void> {
+  const current = await getContext(organizationId, channel, chatId);
   const next = { ...current, ...updates };
 
   if (next.history && next.history.length > MAX_HISTORY_TURNS) {
     next.history = next.history.slice(-MAX_HISTORY_TURNS);
   }
 
-  await db.smsContext.upsert({
-    where: { organizationId_phoneNumber: { organizationId, phoneNumber: phone } },
+  await db.operatorContext.upsert({
+    where: { organizationId_channel_chatId: { organizationId, channel, chatId } },
     update: {
       lastOrderNumber: next.lastOrderNumber ?? null,
       lastThreadId: next.lastThreadId ?? null,
@@ -67,7 +80,8 @@ export async function updateContext(organizationId: string, phone: string, updat
     },
     create: {
       organizationId,
-      phoneNumber: phone,
+      channel,
+      chatId,
       lastOrderNumber: next.lastOrderNumber ?? null,
       lastThreadId: next.lastThreadId ?? null,
       history: next.history,
@@ -77,9 +91,13 @@ export async function updateContext(organizationId: string, phone: string, updat
   });
 }
 
-export async function clearContext(organizationId: string, phone: string): Promise<void> {
-  await db.smsContext.deleteMany({
-    where: { organizationId, phoneNumber: phone },
+export async function clearContext(
+  organizationId: string,
+  channel: OperatorChannel,
+  chatId: string,
+): Promise<void> {
+  await db.operatorContext.deleteMany({
+    where: { organizationId, channel, chatId },
   });
 }
 

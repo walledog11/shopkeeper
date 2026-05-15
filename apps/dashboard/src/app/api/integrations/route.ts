@@ -5,6 +5,24 @@ import { handleApiError } from '@/lib/api/errors';
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
 
+function serializeIntegration<T extends {
+  accessToken?: string | null;
+  refreshToken?: string | null;
+  createdAt?: Date;
+  tokenExpiresAt?: Date | null;
+}>(integration: T, lastActivity?: string | null) {
+  const safe = { ...integration } as Omit<T, 'accessToken' | 'refreshToken'> & {
+    accessToken?: string | null;
+    refreshToken?: string | null;
+  };
+  delete safe.accessToken;
+  delete safe.refreshToken;
+  return {
+    ...safe,
+    ...(lastActivity !== undefined && { lastActivity }),
+  };
+}
+
 export async function GET() {
   try {
     const org = await getOrCreateOrg();
@@ -26,10 +44,7 @@ export async function GET() {
       lastActivityByChannel[row.channelType] = row._max.updatedAt?.toISOString() ?? null;
     }
 
-    const result = integrations.map(i => ({
-      ...i,
-      lastActivity: lastActivityByChannel[i.platform] ?? null,
-    }));
+    const result = integrations.map(i => serializeIntegration(i, lastActivityByChannel[i.platform] ?? null));
 
     return NextResponse.json(result);
   } catch (error) {
@@ -50,6 +65,74 @@ export async function POST(request: Request) {
 
     if (!Object.values(CHANNEL_TYPE).includes(platform)) {
       return NextResponse.json({ error: 'Invalid platform' }, { status: 400 });
+    }
+
+    if (platform === CHANNEL_TYPE.EMAIL) {
+      const normalizedEmail = String(externalAccountId).trim().toLowerCase();
+      if (!normalizedEmail) {
+        return NextResponse.json({ error: 'Missing platform or externalAccountId' }, { status: 400 });
+      }
+      const normalizedFromEmail = fromEmail === undefined || fromEmail === null
+        ? normalizedEmail
+        : String(fromEmail).trim().toLowerCase() || normalizedEmail;
+
+      const emailRows = await db.integration.findMany({
+        where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+        orderBy: { createdAt: 'asc' },
+      });
+      const keeper = emailRows.find(row => row.externalAccountId.toLowerCase() === normalizedEmail) ?? emailRows[0];
+
+      let integration;
+      if (keeper) {
+        await db.integration.deleteMany({
+          where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL, id: { not: keeper.id } },
+        });
+        integration = await db.integration.update({
+          where: { id: keeper.id },
+          data: {
+            externalAccountId: normalizedEmail,
+            fromEmail: normalizedFromEmail,
+            accessToken: null,
+            refreshToken: null,
+            tokenExpiresAt: null,
+            metadata: { provider: 'postmark' },
+          },
+        });
+      } else {
+        try {
+          integration = await db.integration.create({
+            data: {
+              organizationId: org.id,
+              platform: CHANNEL_TYPE.EMAIL,
+              externalAccountId: normalizedEmail,
+              fromEmail: normalizedFromEmail,
+              metadata: { provider: 'postmark' },
+            },
+          });
+        } catch (err) {
+          if ((err as { code?: string }).code !== 'P2002') throw err;
+          const race = (await db.integration.findFirst({
+            where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+            orderBy: { createdAt: 'asc' },
+          }))!;
+          await db.integration.deleteMany({
+            where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL, id: { not: race.id } },
+          });
+          integration = await db.integration.update({
+            where: { id: race.id },
+            data: {
+              externalAccountId: normalizedEmail,
+              fromEmail: normalizedFromEmail,
+              accessToken: null,
+              refreshToken: null,
+              tokenExpiresAt: null,
+              metadata: { provider: 'postmark' },
+            },
+          });
+        }
+      }
+
+      return NextResponse.json(serializeIntegration(integration), { status: 201 });
     }
 
     const uniqueKey = { organizationId: org.id, platform, externalAccountId };
@@ -74,7 +157,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json(integration, { status: 201 });
+    return NextResponse.json(serializeIntegration(integration), { status: 201 });
   } catch (error) {
     return handleApiError(error, 'Integrations POST', 'Failed to create integration');
   }

@@ -6,10 +6,16 @@ import Link from "next/link"
 import useSWR from "swr"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen } from "lucide-react"
+import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen, Mail } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import { resolveAgentSettings } from "@/lib/agent/settings"
+import {
+  getEmailProvider,
+  getEmailProviderLabel,
+  getEmailReauthorizePath,
+  isEmailAuthReauthorizationRequired,
+} from "@/lib/messaging/email/providers"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration, OrgSettings } from "@/types"
 
@@ -75,7 +81,7 @@ function formatLastActivity(iso: string): string {
 
 // ── Status pill ────────────────────────────────────────────────────────────────
 
-type PillState = 'connected' | 'not-connected' | 'action-needed' | 'auth-expiring' | 'coming-soon'
+type PillState = 'connected' | 'not-connected' | 'action-needed' | 'auth-expiring' | 'waiting-for-inbound' | 'coming-soon'
 
 function StatusPill({ state }: { state: PillState }) {
   switch (state) {
@@ -84,6 +90,13 @@ function StatusPill({ state }: { state: PillState }) {
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
           Connected
+        </span>
+      )
+    case 'waiting-for-inbound':
+      return (
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/55 bg-white/[0.05] border border-white/[0.12] rounded-full px-2 py-0.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+          Waiting for first inbound
         </span>
       )
     case 'action-needed':
@@ -146,6 +159,78 @@ function PermissionToggleRow({
         )}
       </div>
       <GreenToggle checked={checked} onChange={onChange} disabled={required} />
+    </div>
+  )
+}
+
+function EmailForwardingDisclosure({
+  isConnected,
+  email,
+  setEmail,
+  loading,
+  onSave,
+}: {
+  isConnected: boolean
+  email: string
+  setEmail: (v: string) => void
+  loading: boolean
+  onSave: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const { data: org } = useSWR<{ id: string; inboundEmailDomain: string }>(open ? '/api/org' : null, fetcher)
+  const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
+
+  return (
+    <div className="rounded-md border border-white/[0.06] bg-white/[0.015]">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
+      >
+        <span className="text-xs font-medium text-white/55">Use email forwarding (advanced)</span>
+        <ChevronDown className={cn("w-3.5 h-3.5 text-white/30 transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="px-3.5 pb-3.5 space-y-3 border-t border-white/[0.05]">
+          <div className="space-y-1.5 pt-3">
+            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Forward incoming mail to</p>
+            <div className="flex items-center gap-2 rounded-md bg-black/30 border border-white/[0.07] px-3 py-2">
+              {inboundAddress ? (
+                <>
+                  <p className="text-xs font-mono text-white/65 truncate flex-1">{inboundAddress}</p>
+                  <CopyButton text={inboundAddress} />
+                </>
+              ) : (
+                <p className="text-xs text-white/30">Loading…</p>
+              )}
+            </div>
+            <p className="text-[11px] text-white/30 leading-relaxed">
+              In your mail provider, add a forwarding rule pointing to the address above. Then enter your real support address below so replies go out under it.
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Your support address</p>
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                placeholder="support@yourstore.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') onSave() }}
+                className="h-9 text-sm"
+              />
+              <Button
+                size="sm"
+                disabled={!email || loading}
+                onClick={onSave}
+                className="shrink-0 h-9 px-4 font-medium"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Replace' : 'Save'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -227,11 +312,13 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
 
   const isTokenExpired = (integration: Integration) => {
     if (!integration.tokenExpiresAt) return false
+    if (integration.platform === 'email') return isEmailAuthReauthorizationRequired(integration)
     return new Date(integration.tokenExpiresAt).getTime() < Date.now()
   }
 
   const isTokenExpiringSoon = (integration: Integration) => {
     if (!integration.tokenExpiresAt) return false
+    if (integration.platform === 'email') return false
     const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()
     return msLeft > 0 && msLeft / 86_400_000 < 10
   }
@@ -240,12 +327,24 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   const hasExpiringSoon = isConnected && !hasExpired && connected.some(isTokenExpiringSoon)
   const needsReauth = hasExpired || hasExpiringSoon
 
+  const isPostmarkEmail = (integration: Integration): boolean => {
+    if (integration.platform !== 'email') return false
+    return getEmailProvider(integration) === 'postmark'
+  }
+  const isAwaitingFirstInbound =
+    isConnected &&
+    !lastActivity &&
+    config.connectType === 'email' &&
+    connected.every(isPostmarkEmail)
+
   const pillState: PillState = isComingSoon
     ? 'coming-soon'
     : hasExpired
     ? 'action-needed'
     : hasExpiringSoon
     ? 'auth-expiring'
+    : isAwaitingFirstInbound
+    ? 'waiting-for-inbound'
     : isConnected
     ? 'connected'
     : 'not-connected'
@@ -279,6 +378,9 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
       window.location.href = '/api/integrations/instagram/auth'
     } else if (config.connectType === 'shopify' && connected[0]) {
       window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(connected[0].externalAccountId)}`
+    } else if (config.connectType === 'email' && connected[0]) {
+      const path = getEmailReauthorizePath(connected[0])
+      if (path) window.location.href = path
     }
   }
 
@@ -390,9 +492,14 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                         ) : null}
                       </div>
                     ) : (
-                      <div className="flex items-center">
+                      <div className="flex items-center gap-2">
                         <p className="text-xs font-mono text-white/50 truncate">{integration.externalAccountId}</p>
                         <CopyButton text={integration.externalAccountId} />
+                        {config.connectType === 'email' && (
+                          <span className="inline-flex items-center text-[10px] font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
+                            {getEmailProviderLabel(integration)}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -411,34 +518,35 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           {config.connectType === 'email' && (
             <div className="space-y-3">
               {!isConnected && (
-                <div className="space-y-2">
-                  <p className="text-xs text-white/40 leading-relaxed">
-                    Enter the email address your customers write to. Clerk will receive those emails and convert them into support tickets.
-                  </p>
-                  <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
-                    <li>Set your inbound email routing to forward to Clerk&apos;s inbound address</li>
-                    <li>Enter your support address below and save</li>
-                  </ol>
+                <p className="text-xs text-white/40 leading-relaxed">
+                  Connect your support inbox. Replies will be sent from your real address.
+                </p>
+              )}
+              {!isConnected && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <a
+                    href="/api/integrations/gmail/auth"
+                    className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
+                  >
+                    <Image src="/logos/gmail.png" alt="" width={16} height={16} className="object-contain" />
+                    Connect Gmail
+                  </a>
+                  <a
+                    href="/api/integrations/outlook/auth"
+                    className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
+                  >
+                    <Mail className="w-4 h-4 text-white/65" />
+                    Connect Outlook
+                  </a>
                 </div>
               )}
-              <div className="flex gap-2">
-                <Input
-                  type="email"
-                  placeholder="support@yourstore.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleEmailConnect() }}
-                  className="h-9 text-sm"
-                />
-                <Button
-                  size="sm"
-                  disabled={!email || loading}
-                  onClick={handleEmailConnect}
-                  className="shrink-0 h-9 px-4 font-medium"
-                >
-                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Add another' : 'Save'}
-                </Button>
-              </div>
+              <EmailForwardingDisclosure
+                isConnected={isConnected}
+                email={email}
+                setEmail={setEmail}
+                loading={loading}
+                onSave={handleEmailConnect}
+              />
             </div>
           )}
 

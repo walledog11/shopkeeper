@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/node';
 import logger from '../logger.js';
 import { CHANNEL, QUEUE, JOB } from '../constants.js';
 import { getTwilio } from '../clients/twilio-client.js';
-import { updateContext } from '../sms-context.js';
+import { updateContext } from '../operator-context.js';
 import {
   DIGEST_QUESTIONABLE_LIMIT,
   bucketDigestThreads,
@@ -250,7 +250,7 @@ export async function createMaintenanceWorkers(
             to: `whatsapp:${phoneNumber}`,
             body: message,
           });
-          await updateContext(org.id, phoneNumber, { pendingDigest });
+          await updateContext(org.id, 'whatsapp', phoneNumber, { pendingDigest });
           logger.info({ organizationId: org.id, phone: phoneNumber, flagged: buckets.questionable.length }, '[Digest] Sent digest');
         } catch (e) {
           logger.error({ err: (e as Error).message, phone: phoneNumber }, '[Digest] Failed to send digest');

@@ -1,12 +1,11 @@
 import type { Request, Response, Router } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { db } from '@clerk/db';
-import twilio from 'twilio';
 import { getContext, updateContext, extractOrderNumber, type ToolCall } from '../operator-context.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
-import { CHANNEL, READ_TOOLS, STATUS } from '../constants.js';
-import { getTwilio } from '../clients/twilio-client.js';
+import { READ_TOOLS, STATUS } from '../constants.js';
+import { isTelegramConfigured, sendMessage } from '../clients/telegram-client.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
@@ -22,123 +21,126 @@ const FILLER_PHRASES = [
 ];
 const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
 
-export function registerTwilioWebhookRoutes(router: Router): void {
-  router.post('/twilio', async (req: Request, res: Response) => {
-    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+interface TelegramChat {
+  id: number;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+}
 
-    const incomingSecret = req.headers['x-internal-secret'] as string | undefined;
-    const validInternalSecrets = (
-      [process.env.INTERNAL_API_SECRET, process.env.INTERNAL_API_SECRET_PREV] as (string | undefined)[]
-    ).filter((s): s is string => typeof s === 'string' && s.length > 0);
-    const isInternalProxy = !!incomingSecret && validInternalSecrets.some((candidate) => {
-      try { return timingSafeEqual(Buffer.from(candidate, 'utf8'), Buffer.from(incomingSecret, 'utf8')); }
-      catch { return false; }
-    });
+interface TelegramMessage {
+  text?: string;
+  chat: TelegramChat;
+  from?: { id: number };
+}
 
-    if (!isInternalProxy) {
-      if (!twilioAuthToken) {
-        logger.error('[Twilio] TWILIO_AUTH_TOKEN is not configured — rejecting.');
-        return res.status(500).send('Internal Server Error');
-      }
-      const twilioSignature = req.headers['x-twilio-signature'] as string | undefined;
-      const webhookUrl = process.env.TWILIO_WEBHOOK_URL;
-      if (!twilioSignature) {
-        logger.warn('[Twilio] Missing signature — rejecting.');
-        recordWebhookSignatureFailure(
-          'twilio',
-          'missing_signature',
-          {
-            counterClient: getRateLimitRedis(),
-            route: '/webhooks/twilio',
-            request: buildWebhookSignatureRequestMetadata(req),
-          },
-        ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
-        return res.status(403).send('Forbidden');
-      }
-      if (!webhookUrl) {
-        logger.error('[Twilio] TWILIO_WEBHOOK_URL is not configured — rejecting.');
-        return res.status(500).send('Internal Server Error');
-      }
-      const isValid = twilio.validateRequest(twilioAuthToken, twilioSignature, webhookUrl, req.body as Record<string, string>);
-      if (!isValid) {
-        logger.warn('[Twilio] Signature validation failed — rejecting request.');
-        recordWebhookSignatureFailure(
-          'twilio',
-          'validation_failed',
-          {
-            counterClient: getRateLimitRedis(),
-            route: '/webhooks/twilio',
-            request: buildWebhookSignatureRequestMetadata(req),
-          },
-        ).catch((err) => logger.error({ err }, '[Twilio] Signature alert error'));
-        return res.status(403).send('Forbidden');
-      }
+interface TelegramUpdate {
+  message?: TelegramMessage;
+}
+
+export function registerTelegramWebhookRoutes(router: Router): void {
+  router.post('/telegram', async (req: Request, res: Response) => {
+    if (!isTelegramConfigured()) {
+      return res.status(404).send('Not Found');
     }
 
-    const toRaw: string = req.body.To || '';
-    const fromRaw: string = req.body.From || '';
-    const body: string = (req.body.Body || '').trim();
-
-    const toNumber = toRaw.replace(/^whatsapp:/, '');
-    const fromNumber = fromRaw.replace(/^whatsapp:/, '');
-
-    if (!toNumber || !fromNumber || !body) {
-      return res.status(400).send('Bad Request');
+    const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (!expectedSecret) {
+      logger.error('[Telegram] TELEGRAM_WEBHOOK_SECRET is not configured — rejecting.');
+      return res.status(500).send('Internal Server Error');
     }
 
-    const twimlReply = (text: string) => {
-      res.type('text/xml');
-      return res.send(`<Response><Message>${text}</Message></Response>`);
-    };
+    const incomingSecret = req.headers['x-telegram-bot-api-secret-token'] as string | undefined;
+    if (!incomingSecret) {
+      logger.warn('[Telegram] Missing secret token header — rejecting.');
+      recordWebhookSignatureFailure(
+        'telegram',
+        'missing_signature',
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/telegram',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
+      ).catch((err) => logger.error({ err }, '[Telegram] Signature alert error'));
+      return res.status(403).send('Forbidden');
+    }
 
-    const proactiveSend = async (text: string) => {
-      const tw = getTwilio();
-      if (!tw) return;
+    const expectedBuf = Buffer.from(expectedSecret, 'utf8');
+    const incomingBuf = Buffer.from(incomingSecret, 'utf8');
+    const matches = expectedBuf.length === incomingBuf.length && timingSafeEqual(expectedBuf, incomingBuf);
+    if (!matches) {
+      logger.warn('[Telegram] Secret token mismatch — rejecting request.');
+      recordWebhookSignatureFailure(
+        'telegram',
+        'signature_mismatch',
+        {
+          counterClient: getRateLimitRedis(),
+          route: '/webhooks/telegram',
+          request: buildWebhookSignatureRequestMetadata(req),
+        },
+      ).catch((err) => logger.error({ err }, '[Telegram] Signature alert error'));
+      return res.status(403).send('Forbidden');
+    }
+
+    const update = req.body as TelegramUpdate;
+    const message = update.message;
+
+    if (!message || !message.text || !message.chat) {
+      return res.status(200).send('OK');
+    }
+
+    if (message.chat.type !== 'private') {
+      logger.info({ chatType: message.chat.type }, '[Telegram] Ignoring non-private chat');
+      res.status(200).send('OK');
+      await sendMessage(
+        String(message.chat.id),
+        'Clerk only works in 1:1 chats. Open a direct message with the bot.',
+      );
+      return;
+    }
+
+    const chatId = String(message.chat.id);
+    const body = message.text.trim();
+    if (!body) {
+      return res.status(200).send('OK');
+    }
+
+    const reply = async (text: string) => {
       try {
-        await tw.client.messages.create({ from: toRaw, to: fromRaw, body: text });
+        await sendMessage(chatId, text);
       } catch (e) {
-        logger.warn({ err: (e as Error).message }, '[Twilio] Failed to send proactive message');
+        logger.warn({ err: (e as Error).message }, '[Telegram] Failed to send message');
       }
     };
+
+    res.status(200).send('OK');
 
     try {
-      let organizationId: string;
-
-      const integration = await db.integration.findFirst({
-        where: { platform: CHANNEL.SMS, externalAccountId: toNumber },
-        select: { organizationId: true },
-      });
-
-      if (integration) {
-        organizationId = integration.organizationId;
-      } else {
-        const memberByPhone = await db.orgMember.findFirst({
-          where: { phoneNumber: fromNumber, phoneVerified: true },
-          select: { organizationId: true },
-        });
-        if (!memberByPhone) {
-          logger.warn({ toNumber, fromNumber }, '[Twilio] No integration found and no verified member — dropping.');
-          return res.status(200).send('OK');
-        }
-        organizationId = memberByPhone.organizationId;
-        logger.info({ organizationId, fromNumber }, '[Twilio] Sandbox fallback — resolved org via sender phone');
+      if (body.toLowerCase().startsWith('/start')) {
+        // Phase 3 implements binding via /start <token>. For now, surface a hint.
+        await reply(
+          "This Telegram chat isn't linked to a Clerk workspace yet. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+        );
+        return;
       }
 
       const member = await db.orgMember.findFirst({
-        where: { organizationId, phoneNumber: fromNumber, phoneVerified: true },
+        where: { telegramChatId: chatId },
       });
 
       if (!member) {
-        logger.warn({ fromNumber, organizationId }, '[Twilio] Unregistered sender');
-        return twimlReply("Your number isn't registered. Add it in your Clerk dashboard under Settings > Phone.");
+        logger.warn({ chatId }, '[Telegram] Unbound sender');
+        await reply(
+          "This chat isn't connected to a Clerk workspace. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+        );
+        return;
       }
 
-      const ctx = await getContext(organizationId, 'whatsapp', fromNumber);
+      const organizationId = member.organizationId;
+      const ctx = await getContext(organizationId, 'telegram', chatId);
 
       const dashboardUrl = getGatewayDashboardUrl();
       const internalSecret = process.env.INTERNAL_API_SECRET;
 
-      const normalised = body.toLowerCase().trim();
+      const normalised = body.toLowerCase();
       const isRun = normalised === 'run' || normalised === 'yes';
       const isDismiss = normalised === 'dismiss' || normalised === 'no';
       const skipMatch = normalised.match(/^skip\s+(\d+)$/);
@@ -153,7 +155,8 @@ export function registerTwilioWebhookRoutes(router: Router): void {
 
         if (isReview) {
           if (threadIds.length === 0) {
-            return twimlReply('No flagged tickets in your last digest.');
+            await reply('No flagged tickets in your last digest.');
+            return;
           }
           const rows = await db.thread.findMany({
             where: { id: { in: threadIds }, organizationId },
@@ -169,13 +172,15 @@ export function registerTwilioWebhookRoutes(router: Router): void {
             lines.push(`${i + 1}. ${t.customer.name ?? 'Unknown'}${truncated ? ` — ${truncated}` : ''}`);
           });
           lines.push('', 'OPEN <n> · SPAM <n> · REPLY <n> <text>');
-          return twimlReply(lines.join('\n'));
+          await reply(lines.join('\n'));
+          return;
         }
 
         const idxMatch = openMatch ?? spamMatch ?? replyMatch;
         const idx = parseInt(idxMatch![1], 10) - 1;
         if (idx < 0 || idx >= threadIds.length) {
-          return twimlReply(`No flagged ticket ${idx + 1}. Reply REVIEW to see the list.`);
+          await reply(`No flagged ticket ${idx + 1}. Reply REVIEW to see the list.`);
+          return;
         }
         const targetId = threadIds[idx];
 
@@ -195,7 +200,10 @@ export function registerTwilioWebhookRoutes(router: Router): void {
               },
             },
           });
-          if (!t) return twimlReply('Ticket not found.');
+          if (!t) {
+            await reply('Ticket not found.');
+            return;
+          }
           const last = t.messages[0];
           const ageMs = last ? Date.now() - new Date(last.sentAt).getTime() : null;
           const ageStr = ageMs == null ? ''
@@ -210,7 +218,8 @@ export function registerTwilioWebhookRoutes(router: Router): void {
             '',
             `Reply SPAM ${idx + 1} or REPLY ${idx + 1} <text>.`,
           ].filter((l): l is string => l !== null);
-          return twimlReply(lines.join('\n'));
+          await reply(lines.join('\n'));
+          return;
         }
 
         if (spamMatch) {
@@ -222,13 +231,13 @@ export function registerTwilioWebhookRoutes(router: Router): void {
               filterDecidedAt: new Date(),
             },
           });
-          return twimlReply(`Marked ${idx + 1} as spam.`);
+          await reply(`Marked ${idx + 1} as spam.`);
+          return;
         }
 
         if (replyMatch) {
           const text = replyMatch[2].trim();
-          await proactiveSend(filler());
-          res.type('text/xml').send('<Response/>');
+          await reply(filler());
 
           const apiRes = await fetch(`${dashboardUrl}/api/messages/internal`, {
             method: 'POST',
@@ -237,11 +246,11 @@ export function registerTwilioWebhookRoutes(router: Router): void {
           });
           if (!apiRes.ok) {
             const err = await apiRes.text();
-            logger.error({ status: apiRes.status, err, threadId: targetId }, '[Twilio] Digest REPLY failed');
-            await proactiveSend('Reply failed to send. Please try again from the dashboard.');
+            logger.error({ status: apiRes.status, err, threadId: targetId }, '[Telegram] Digest REPLY failed');
+            await reply('Reply failed to send. Please try again from the dashboard.');
             return;
           }
-          await proactiveSend(`Reply sent on ticket ${idx + 1}.`);
+          await reply(`Reply sent on ticket ${idx + 1}.`);
           return;
         }
       }
@@ -250,8 +259,9 @@ export function registerTwilioWebhookRoutes(router: Router): void {
         const { threadId, instruction, rawToolCalls } = ctx.pendingPlan;
 
         if (isDismiss) {
-          await updateContext(organizationId, 'whatsapp', fromNumber, { pendingPlan: null });
-          return twimlReply('Plan dismissed.');
+          await updateContext(organizationId, 'telegram', chatId, { pendingPlan: null });
+          await reply('Plan dismissed.');
+          return;
         }
 
         let approvedToolCalls: ToolCall[] = rawToolCalls;
@@ -264,10 +274,9 @@ export function registerTwilioWebhookRoutes(router: Router): void {
             : rawToolCalls;
         }
 
-        logger.info({ fromNumber, threadId, toolCallCount: approvedToolCalls.length }, '[Twilio] Approving plan');
+        logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Telegram] Approving plan');
 
-        await proactiveSend(filler());
-        res.type('text/xml').send('<Response/>');
+        await reply(filler());
 
         const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
           method: 'POST',
@@ -280,21 +289,21 @@ export function registerTwilioWebhookRoutes(router: Router): void {
             threadId,
             instruction,
             approvedToolCalls,
-            senderPhone: fromNumber,
+            telegramChatId: chatId,
             clerkUserId: member.clerkUserId,
           }),
         });
 
         if (!agentRes.ok) {
           const err = await agentRes.text();
-          logger.error({ status: agentRes.status, err }, '[Twilio] Internal agent API error');
-          await proactiveSend('Something went wrong running the plan. Please try again.');
+          logger.error({ status: agentRes.status, err }, '[Telegram] Internal agent API error');
+          await reply('Something went wrong running the plan. Please try again.');
           return;
         }
 
         const { summary } = await agentRes.json() as { summary: string };
 
-        await updateContext(organizationId, 'whatsapp', fromNumber, {
+        await updateContext(organizationId, 'telegram', chatId, {
           pendingPlan: null,
           lastThreadId: threadId,
           history: [
@@ -304,11 +313,11 @@ export function registerTwilioWebhookRoutes(router: Router): void {
           ],
         });
 
-        await proactiveSend(summary || 'Done.');
+        await reply(summary || 'Done.');
         return;
       }
 
-      const lookupMatch = body.trim().match(/^#(\d+)$|^order[- #]*(\d+)$/i);
+      const lookupMatch = body.match(/^#(\d+)$|^order[- #]*(\d+)$/i);
       if (lookupMatch) {
         const num = lookupMatch[1] ?? lookupMatch[2];
         const orderRef = `#${num}`;
@@ -354,22 +363,22 @@ export function registerTwilioWebhookRoutes(router: Router): void {
             'Reply yes to execute the last plan, or type an instruction.',
           ].filter((l): l is string => l !== null);
 
-          await updateContext(organizationId, 'whatsapp', fromNumber, {
+          await updateContext(organizationId, 'telegram', chatId, {
             lastOrderNumber: orderRef,
             lastThreadId: thread.id,
           });
 
-          return twimlReply(lines.join('\n'));
+          await reply(lines.join('\n'));
+          return;
         }
       }
 
       const mentionedOrder = extractOrderNumber(body);
       const orderNumber = mentionedOrder || ctx.lastOrderNumber;
 
-      logger.info({ fromNumber, organizationId, orderNumber: orderNumber || null }, '[Twilio] Free-form agent instruction');
+      logger.info({ chatId, organizationId, orderNumber: orderNumber || null }, '[Telegram] Free-form agent instruction');
 
-      await proactiveSend(filler());
-      res.type('text/xml').send('<Response/>');
+      await reply(filler());
 
       const agentRes = await fetch(`${dashboardUrl}/api/agent/internal`, {
         method: 'POST',
@@ -382,21 +391,21 @@ export function registerTwilioWebhookRoutes(router: Router): void {
           instruction: body,
           ...(orderNumber ? { orderNumber } : {}),
           ...(ctx.lastThreadId ? { threadId: ctx.lastThreadId } : {}),
-          senderPhone: fromNumber,
+          telegramChatId: chatId,
           clerkUserId: member.clerkUserId,
         }),
       });
 
       if (!agentRes.ok) {
         const err = await agentRes.text();
-        logger.error({ status: agentRes.status, err }, '[Twilio] Internal agent API error (free-form)');
-        await proactiveSend('Something went wrong running the agent. Please try again.');
+        logger.error({ status: agentRes.status, err }, '[Telegram] Internal agent API error (free-form)');
+        await reply('Something went wrong running the agent. Please try again.');
         return;
       }
 
       const { summary, threadId } = await agentRes.json() as { summary: string; threadId: string };
 
-      await updateContext(organizationId, 'whatsapp', fromNumber, {
+      await updateContext(organizationId, 'telegram', chatId, {
         ...(orderNumber ? { lastOrderNumber: orderNumber } : {}),
         lastThreadId: threadId,
         history: [
@@ -406,14 +415,11 @@ export function registerTwilioWebhookRoutes(router: Router): void {
         ],
       });
 
-      await proactiveSend(summary || 'Done.');
+      await reply(summary || 'Done.');
 
     } catch (error) {
-      logger.error({ err: error }, '[Twilio] Webhook error');
-      if (!res.headersSent) {
-        return twimlReply('An unexpected error occurred. Please try again.');
-      }
-      await proactiveSend('An unexpected error occurred. Please try again.');
+      logger.error({ err: error }, '[Telegram] Webhook error');
+      await reply('An unexpected error occurred. Please try again.');
     }
   });
 }

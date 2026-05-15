@@ -23,6 +23,7 @@ export async function GET() {
       version: org.updatedAt.toISOString(),
       planName: resolvePlanName(org.stripePriceId),
       stripeStatus: org.stripeStatus,
+      inboundEmailDomain: process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com',
     });
   } catch (error) {
     return handleApiError(error, 'Org GET', 'Failed to fetch org');

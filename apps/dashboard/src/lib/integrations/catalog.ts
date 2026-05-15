@@ -55,7 +55,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
 ]
 
 export const OAUTH_ERROR_MESSAGES: Record<string, string> = {
-  access_denied: 'You cancelled the Instagram connection.',
+  access_denied: 'Connection cancelled.',
   no_ig_account: 'No Instagram Business account was found on your Facebook account.',
   token_exchange_failed: 'Authentication failed. Please try again.',
   state_mismatch: 'Security check failed. Please try again.',

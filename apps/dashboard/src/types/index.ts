@@ -78,8 +78,8 @@ export interface Integration {
   platform: ChannelType;
   externalAccountId: string;
   fromEmail: string | null;
-  accessToken: string | null;
   tokenExpiresAt: string | null;
+  metadata?: unknown;
   createdAt: string;
   lastActivity?: string | null;
 }

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Check, ChevronRight, Loader2, AlertCircle, Mail } from "lucide-react";
+import { Check, ChevronRight, Loader2, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
@@ -15,59 +15,29 @@ type ChannelId = "email" | "instagram" | "shopify";
 
 // ── Inline connect forms ───────────────────────────────────────────────────────
 
-function EmailForm({ onSuccess }: { onSuccess: () => void }) {
-  const [email,   setEmail]   = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState<string | null>(null);
-
-  async function handleSubmit() {
-    if (!email.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/integrations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: "email", externalAccountId: email.trim() }),
-      });
-      if (!res.ok) throw new Error();
-      onSuccess();
-    } catch {
-      setError("Failed to connect. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
+function EmailConnect() {
+  const returnTo = encodeURIComponent(NEXT_STEP);
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4 space-y-3">
       <p className="text-xs text-slate-500">
-        The email address your customers send support requests to. Emails here will appear as tickets.
+        Connect your support inbox via OAuth. Replies will go out from your real address.
       </p>
-      <div className="flex gap-2">
-        <Input
-          type="email"
-          placeholder="support@yourstore.com"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") handleSubmit(); }}
-          className="text-sm bg-white h-9"
-          autoFocus
-        />
-        <Button
-          size="sm"
-          disabled={!email.trim() || loading}
-          onClick={handleSubmit}
-          className="shrink-0 h-9 bg-slate-900 text-white hover:bg-slate-700 font-semibold"
+      <div className="grid grid-cols-2 gap-2">
+        <a
+          href={`/api/integrations/gmail/auth?returnTo=${returnTo}`}
+          className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white border border-slate-200 hover:border-slate-300 text-sm font-semibold text-slate-800 transition-colors"
         >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Connect"}
-        </Button>
+          <Image src="/logos/gmail.png" alt="" width={16} height={16} className="object-contain" />
+          Gmail
+        </a>
+        <a
+          href={`/api/integrations/outlook/auth?returnTo=${returnTo}`}
+          className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white border border-slate-200 hover:border-slate-300 text-sm font-semibold text-slate-800 transition-colors"
+        >
+          <Mail className="w-4 h-4 text-slate-600" />
+          Outlook
+        </a>
       </div>
-      {error && (
-        <p className="text-xs text-red-500 flex items-center gap-1.5">
-          <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {error}
-        </p>
-      )}
     </div>
   );
 }
@@ -119,10 +89,9 @@ interface ChannelCardProps {
   connected: boolean;
   expanded: boolean;
   onExpand: () => void;
-  onSuccess: () => void;
 }
 
-function ChannelCard({ id, logo, name, description, connected, expanded, onExpand, onSuccess }: ChannelCardProps) {
+function ChannelCard({ id, logo, name, description, connected, expanded, onExpand }: ChannelCardProps) {
   return (
     <div className={cn(
       "rounded-xl border transition-all duration-200 overflow-hidden",
@@ -168,7 +137,7 @@ function ChannelCard({ id, logo, name, description, connected, expanded, onExpan
 
       {!connected && expanded && (
         <div className="px-4 pb-4">
-          {id === "email" && <EmailForm onSuccess={onSuccess} />}
+          {id === "email" && <EmailConnect />}
           {id === "instagram" && (
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
               <p className="text-xs text-slate-500 mb-3">
@@ -198,15 +167,7 @@ const CHANNELS: Array<{ id: ChannelId; logo: string; name: string; description: 
 
 export default function ConnectPage() {
   const router = useRouter();
-  const [expanded,  setExpanded]  = useState<ChannelId | null>(null);
-  const [connected, setConnected] = useState<Set<ChannelId>>(new Set());
-
-  const hasConnected = connected.size > 0;
-
-  function handleSuccess(id: ChannelId) {
-    setConnected(prev => new Set(prev).add(id));
-    setExpanded(null);
-  }
+  const [expanded, setExpanded] = useState<ChannelId | null>(null);
 
   return (
     <OnboardingShell
@@ -219,10 +180,9 @@ export default function ConnectPage() {
           <ChannelCard
             key={ch.id}
             {...ch}
-            connected={connected.has(ch.id)}
+            connected={false}
             expanded={expanded === ch.id}
             onExpand={() => setExpanded(expanded === ch.id ? null : ch.id)}
-            onSuccess={() => handleSuccess(ch.id)}
           />
         ))}
       </div>
@@ -230,21 +190,11 @@ export default function ConnectPage() {
       <div className="mt-8 flex flex-col items-center gap-3">
         <Button
           onClick={() => router.push(NEXT_STEP)}
-          className={cn(
-            "h-11 px-8 rounded-full text-sm font-bold transition-all gap-2",
-            hasConnected
-              ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md"
-              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
-          )}
+          className="h-11 px-8 rounded-full text-sm font-bold transition-all gap-2 bg-slate-100 text-slate-500 hover:bg-slate-200"
         >
-          {hasConnected
-            ? <>Continue <ChevronRight className="w-4 h-4" /></>
-            : <><Mail className="w-4 h-4" /> Skip for now</>
-          }
+          <Mail className="w-4 h-4" /> Skip for now
         </Button>
-        {!hasConnected && (
-          <p className="text-xs text-slate-400">You can always connect channels later in Settings.</p>
-        )}
+        <p className="text-xs text-slate-400">You can always connect channels later in Settings.</p>
       </div>
     </OnboardingShell>
   );

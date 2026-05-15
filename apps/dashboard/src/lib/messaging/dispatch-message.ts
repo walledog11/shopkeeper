@@ -1,11 +1,12 @@
 import { db, SenderType, createMessage } from '@clerk/db';
-import { ServerClient } from 'postmark';
 import twilio from 'twilio';
 import logger from '@/lib/server/logger';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { recordOutboundCall } from '@/lib/server/outbound-recorder';
 import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
+import { getEmailSender, getEmailProvider, EmailNotConfiguredError } from '@/lib/messaging/email';
+import type { OutboundProvider } from '@/lib/server/outbound-recorder';
 
 interface DispatchThread {
   id: string;
@@ -79,66 +80,8 @@ export async function dispatchMessage(
     }
 
   } else if (thread.channelType === CHANNEL_TYPE.EMAIL) {
-    const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-    });
-    if (!integration) return { ok: false, error: 'No email integration configured' };
-
-    const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
-    const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
-    const fromEmail = integration.fromEmail || integration.externalAccountId;
-
-    const lastCustomerMsg = await db.message.findFirst({
-      where: { threadId: thread.id, senderType: SenderType.customer, externalMessageId: { not: null } },
-      orderBy: { sentAt: 'desc' },
-      select: { externalMessageId: true },
-    });
-    const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
-
-    const headers = [
-      { Name: 'Message-ID', Value: syntheticMessageId },
-      { Name: 'In-Reply-To', Value: inReplyTo },
-      { Name: 'References', Value: inReplyTo },
-    ];
-    const recorded = await recordOutboundCall({
-      source: 'dispatch_message',
-      provider: 'postmark',
-      channel: 'email',
-      organizationId: org.id,
-      threadId: thread.id,
-      to: recipientId,
-      from: fromEmail,
-      subject: 'Re: Your inquiry',
-      text,
-      headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
-      metadata: { replyTo: integration.externalAccountId },
-    });
-    if (!recorded) {
-      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-      if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
-
-      const client = new ServerClient(POSTMARK_API_KEY);
-      try {
-        await client.sendEmail({
-          From: `${org.name} <${fromEmail}>`,
-          ReplyTo: integration.externalAccountId,
-          To: recipientId,
-          Subject: `Re: Your inquiry`,
-          TextBody: text,
-          Headers: headers,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ err: msg }, '[dispatchMessage] Postmark error');
-        await recordProviderSendFailure('postmark', 'email', org.id, {
-          counterClient: getRedis(),
-          threadId: thread.id,
-          integrationId: integration.id,
-          detail: msg,
-        });
-        return { ok: false, error: 'Email dispatch failed' };
-      }
-    }
+    const r = await sendEmail(thread, org, text);
+    if (!r.ok) return r;
 
   } else if (thread.channelType === CHANNEL_TYPE.SMS) {
     const recorded = await recordOutboundCall({
@@ -172,67 +115,8 @@ export async function dispatchMessage(
     }
 
   } else if (thread.channelType === CHANNEL_TYPE.SHOPIFY) {
-    const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-    });
-    if (!integration) return { ok: false, error: 'No email integration configured' };
-
-    const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
-    const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
-    const fromEmail = integration.fromEmail || integration.externalAccountId;
-
-    const lastCustomerMsg = await db.message.findFirst({
-      where: { threadId: thread.id, senderType: SenderType.customer, externalMessageId: { not: null } },
-      orderBy: { sentAt: 'desc' },
-      select: { externalMessageId: true },
-    });
-    const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
-
-    const headers = [
-      { Name: 'Message-ID', Value: syntheticMessageId },
-      { Name: 'In-Reply-To', Value: inReplyTo },
-      { Name: 'References', Value: inReplyTo },
-    ];
-    const recorded = await recordOutboundCall({
-      source: 'dispatch_message',
-      provider: 'postmark',
-      channel: 'email',
-      organizationId: org.id,
-      threadId: thread.id,
-      to: recipientId,
-      from: fromEmail,
-      subject: 'Re: Your inquiry',
-      text,
-      headers: headers.map((header) => ({ name: header.Name, value: header.Value })),
-      metadata: { replyTo: integration.externalAccountId, originalChannel: CHANNEL_TYPE.SHOPIFY },
-    });
-    if (!recorded) {
-      const POSTMARK_API_KEY = process.env.POSTMARK_API_KEY;
-      if (!POSTMARK_API_KEY) return { ok: false, error: 'Email not configured' };
-
-      const client = new ServerClient(POSTMARK_API_KEY);
-      try {
-        await client.sendEmail({
-          From: `${org.name} <${fromEmail}>`,
-          ReplyTo: integration.externalAccountId,
-          To: recipientId,
-          Subject: `Re: Your inquiry`,
-          TextBody: text,
-          Headers: headers,
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ err: msg }, '[dispatchMessage] Postmark error (shopify channel)');
-        await recordProviderSendFailure('postmark', 'email', org.id, {
-          counterClient: getRedis(),
-          threadId: thread.id,
-          integrationId: integration.id,
-          detail: msg,
-          extra: { originalChannel: CHANNEL_TYPE.SHOPIFY },
-        });
-        return { ok: false, error: 'Email dispatch failed' };
-      }
-    }
+    const r = await sendEmail(thread, org, text, { originalChannel: CHANNEL_TYPE.SHOPIFY });
+    if (!r.ok) return r;
   } else {
     return { ok: false, error: 'Unsupported channel' };
   }
@@ -241,6 +125,97 @@ export async function dispatchMessage(
     { threadId: thread.id, senderType: SenderType.agent, contentText: text },
     { status: THREAD_STATUS.OPEN },
   );
+
+  return { ok: true };
+}
+
+async function sendEmail(
+  thread: DispatchThread,
+  org: DispatchOrg,
+  text: string,
+  opts: { originalChannel?: string } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+  });
+  if (!integration) return { ok: false, error: 'No email integration configured' };
+
+  const threadCtx = await db.thread.findUnique({
+    where: { id: thread.id },
+    select: {
+      subject: true,
+      messages: {
+        where: { senderType: SenderType.customer, externalMessageId: { not: null } },
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { externalMessageId: true },
+      },
+    },
+  });
+
+  const INBOUND_DOMAIN = process.env.INBOUND_EMAIL_DOMAIN || 'mail.clerkapp.com';
+  const syntheticMessageId = `<thread-${thread.id}@${INBOUND_DOMAIN}>`;
+  const fromEmail = integration.fromEmail || integration.externalAccountId;
+  const inReplyTo = threadCtx?.messages[0]?.externalMessageId ?? syntheticMessageId;
+
+  const rawSubject = threadCtx?.subject?.trim();
+  const subject = rawSubject
+    ? (/^re:\s/i.test(rawSubject) ? rawSubject : `Re: ${rawSubject}`)
+    : 'Re: Your inquiry';
+
+  const headers = [
+    { name: 'Message-ID', value: syntheticMessageId },
+    { name: 'In-Reply-To', value: inReplyTo },
+    { name: 'References', value: inReplyTo },
+  ];
+
+  const provider: OutboundProvider = getEmailProvider(integration);
+  const recorded = await recordOutboundCall({
+    source: 'dispatch_message',
+    provider,
+    channel: 'email',
+    organizationId: org.id,
+    threadId: thread.id,
+    to: thread.customer.platformId,
+    from: fromEmail,
+    subject,
+    text,
+    headers,
+    metadata: {
+      replyTo: integration.externalAccountId,
+      ...(opts.originalChannel && { originalChannel: opts.originalChannel }),
+    },
+  });
+  if (recorded) return { ok: true };
+
+  try {
+    await getEmailSender(integration).send({
+      to: thread.customer.platformId,
+      fromAddress: fromEmail,
+      fromName: org.name,
+      replyTo: integration.externalAccountId,
+      subject,
+      text,
+      headers,
+    });
+  } catch (err) {
+    if (err instanceof EmailNotConfiguredError) {
+      return { ok: false, error: 'Email not configured' };
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.error(
+      { err: msg, originalChannel: opts.originalChannel },
+      '[dispatchMessage] Email send failed',
+    );
+    await recordProviderSendFailure(provider, 'email', org.id, {
+      counterClient: getRedis(),
+      threadId: thread.id,
+      integrationId: integration.id,
+      detail: msg,
+      ...(opts.originalChannel && { extra: { originalChannel: opts.originalChannel } }),
+    });
+    return { ok: false, error: 'Email dispatch failed' };
+  }
 
   return { ok: true };
 }

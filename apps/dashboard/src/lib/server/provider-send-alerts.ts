@@ -8,7 +8,7 @@ import {
 } from '@/lib/server/ops-alerts';
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 
-export type ProviderSendAlertProvider = 'meta' | 'postmark' | 'twilio' | 'shopify';
+export type ProviderSendAlertProvider = 'meta' | 'postmark' | 'twilio' | 'shopify' | 'gmail' | 'outlook';
 export type ProviderSendAlertChannel = 'ig_dm' | 'email' | 'sms' | 'webhook_registration';
 
 export interface ProviderSendAlertDependencies {
