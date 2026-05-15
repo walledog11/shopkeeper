@@ -9,8 +9,6 @@ const TEST_DEFAULTS: Record<string, string> = {
   ANTHROPIC_API_KEY: 'test-anthropic-key',
   DASHBOARD_URL: 'http://localhost:3000',
   DASHBOARD_INTERNAL_URL: 'http://localhost:3000',
-  TWILIO_AUTH_TOKEN: 'test-twilio-token',
-  TWILIO_ACCOUNT_SID: 'ACtest',
   SHOPIFY_APP_SECRET: 'test-shopify-secret',
   TELEGRAM_BOT_TOKEN: 'test-telegram-token',
   TELEGRAM_WEBHOOK_SECRET: 'test-telegram-webhook-secret',

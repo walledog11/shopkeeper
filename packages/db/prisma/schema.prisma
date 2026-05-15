@@ -68,7 +68,6 @@ model Organization {
   threads      Thread[]
   integrations Integration[]
   members      OrgMember[]
-  smsContexts  SmsContext[]
   operatorContexts OperatorContext[]
   cannedResponses  CannedResponse[]
   knowledgeBases   KnowledgeBase[]
@@ -179,33 +178,11 @@ model Message {
   @@map("messages")
 }
 
-// Persists per-sender SMS/WhatsApp conversation context in the DB.
-// Replaces the Redis-based sms-context.js which lost state on Redis restart.
-model SmsContext {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @map("organization_id") @db.Uuid
-  phoneNumber     String   @map("phone_number") @db.VarChar(20)
-  lastOrderNumber String?  @map("last_order_number") @db.VarChar(50)
-  lastThreadId    String?  @map("last_thread_id") @db.Uuid
-  history         Json     @default("[]") @db.JsonB
-  pendingPlan     Json?    @map("pending_plan") @db.JsonB
-  pendingDigest   Json?    @map("pending_digest") @db.JsonB
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@unique([organizationId, phoneNumber])
-  @@index([organizationId])
-  @@map("sms_contexts")
-}
-
-// Per-(org, channel, chatId) operator-channel state — generalization of SmsContext.
-// `channel` is one of: "whatsapp" | "telegram". `chatId` is the provider-side
-// identifier (E.164 phone for whatsapp, Telegram chat id as string).
+// Per-(org, chatId) operator-channel state. `chatId` is the Telegram chat id
+// (string-encoded int64).
 model OperatorContext {
   id              String   @id @default(uuid()) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
-  channel         String   @db.VarChar(20)
   chatId          String   @map("chat_id") @db.VarChar(64)
   lastOrderNumber String?  @map("last_order_number") @db.VarChar(50)
   lastThreadId    String?  @map("last_thread_id") @db.Uuid
@@ -216,19 +193,17 @@ model OperatorContext {
 
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, channel, chatId])
+  @@unique([organizationId, chatId])
   @@index([organizationId])
   @@map("operator_contexts")
 }
 
-// Extends Clerk.com org membership with a verified phone number so
-// team members can interact with the AI agent via SMS / WhatsApp / Telegram.
+// Extends Clerk.com org membership with a bound Telegram chat so team members
+// can interact with the AI agent over Telegram.
 model OrgMember {
   id              String      @id @default(uuid()) @db.Uuid
   organizationId  String      @map("organization_id") @db.Uuid
   clerkUserId     String      @map("clerk_user_id") @db.VarChar(255)
-  phoneNumber     String?     @map("phone_number") @db.VarChar(20)
-  phoneVerified   Boolean     @default(false) @map("phone_verified")
   telegramChatId  String?     @unique @map("telegram_chat_id") @db.VarChar(64)
   createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
@@ -236,9 +211,7 @@ model OrgMember {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, clerkUserId])
-  @@unique([organizationId, phoneNumber])
   @@index([organizationId])
-  @@index([phoneNumber])
   @@map("org_members")
 }
 

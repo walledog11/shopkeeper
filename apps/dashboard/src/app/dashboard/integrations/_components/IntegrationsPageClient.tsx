@@ -9,7 +9,6 @@ import { cn } from "@/lib/ui/cn"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
 import { isEmailAuthReauthorizationRequired } from "@/lib/messaging/email/providers"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
-import SmsCard from "@/components/integrations/SmsCard"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import type { Integration } from "@/types"
 
@@ -174,7 +173,6 @@ export default function IntegrationsPageClient() {
             />
           ))}
           <TelegramCard />
-          <SmsCard />
           {PLATFORM_CONFIG.filter(p => p.id === 'tiktok').map(def => (
             <IntegrationCard
               key={def.id}

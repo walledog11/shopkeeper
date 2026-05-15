@@ -1,5 +1,4 @@
 import { db, SenderType, createMessage } from "@clerk/db";
-import twilio from "twilio";
 import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@/lib/messaging/thread-constants";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
@@ -179,51 +178,6 @@ export async function sendReply(
       contentText: input.text,
     });
     return `Reply sent to customer via email.`;
-  }
-
-  // ── SMS dispatch ──
-  if (thread.channelType === CHANNEL_TYPE.SMS) {
-    const recorded = await recordOutboundCall({
-      source: "agent_send_reply",
-      provider: "twilio",
-      channel: "sms",
-      organizationId: ctx.orgId,
-      threadId: ctx.threadId,
-      to: recipientId,
-      from: process.env.TWILIO_FROM_NUMBER,
-      text: input.text,
-    });
-    try {
-      if (!recorded) {
-        const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
-        const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN;
-        const TWILIO_FROM_NUMBER = process.env.TWILIO_FROM_NUMBER;
-        if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
-          return "Error: SMS not configured (missing Twilio env vars).";
-        }
-        const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-        await twilioClient.messages.create({
-          body: input.text,
-          from: TWILIO_FROM_NUMBER,
-          to: recipientId,
-        });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg }, '[sendReply] Twilio error');
-      void recordProviderSendFailure('twilio', 'sms', ctx.orgId, {
-        counterClient: getRedis(),
-        threadId: ctx.threadId,
-        detail: msg,
-      });
-      return `Error: SMS dispatch failed — ${msg}`;
-    }
-    await createMessage({
-      threadId: ctx.threadId,
-      senderType: SenderType.agent,
-      contentText: input.text,
-    });
-    return `Reply sent to customer via SMS.`;
   }
 
   return `Error: channel dispatch not implemented for ${thread.channelType}.`;

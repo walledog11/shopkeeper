@@ -1,4 +1,4 @@
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'twilio' | 'coming-soon'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'coming-soon'
 
 export interface PlatformConfig {
   id: string

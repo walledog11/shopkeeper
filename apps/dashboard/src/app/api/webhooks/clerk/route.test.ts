@@ -75,8 +75,6 @@ describe('POST /api/webhooks/clerk', () => {
       data: {
         organizationId: testOrg.id,
         clerkUserId: 'user_deleted',
-        phoneNumber: '+15551234567',
-        phoneVerified: true,
       },
     })
 

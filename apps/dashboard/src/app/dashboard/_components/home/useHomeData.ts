@@ -112,7 +112,7 @@ export function useHomeData({ initialOpenThreads }: Options) {
   const { data: integrations = [] } = useSWR<Integration[]>('/api/integrations', fetcher)
   const { data: orgData } = useSWR<{ settings: Partial<OrgSettings> }>('/api/org', fetcher)
   const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>('/api/kb', fetcher, { revalidateOnFocus: false })
-  const { data: phoneData } = useSWR<{ phoneNumber: string | null; phoneVerified: boolean }>('/api/phone', fetcher, { revalidateOnFocus: false })
+  const { data: telegramData } = useSWR<{ connected: boolean }>('/api/integrations/telegram', fetcher, { revalidateOnFocus: false })
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const { data: analyticsData } = useSWR<AnalyticsSnapshot>(
@@ -322,7 +322,7 @@ export function useHomeData({ initialOpenThreads }: Options) {
 
   // ── Workflow setup ─────────────────────────────────────────────────────────
   const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
-  const hasVerifiedPhone = phoneData?.phoneVerified ?? false
+  const hasTelegramBound = telegramData?.connected ?? false
   const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
   const hasMultipleChannels = integrations.length > 1
   const hasSentReply =
@@ -344,9 +344,9 @@ export function useHomeData({ initialOpenThreads }: Options) {
     { label: "Add knowledge base content", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
     { label: "Send your first reply", href: "/dashboard/tickets", status: (hasSentReply ? "done" : "pending") as "done" | "pending" },
     { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
-    { label: "Verify phone for notifications", href: "/dashboard/team", status: (hasVerifiedPhone ? "done" : "pending") as "done" | "pending" },
+    { label: "Connect Telegram for notifications", href: "/dashboard/integrations", status: (hasTelegramBound ? "done" : "pending") as "done" | "pending" },
     { label: "Add more channels", href: "/dashboard/integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
-  ], [channelConnected, hasShopify, hasConfiguredAgent, hasKbArticle, hasSentReply, hasInvitedTeam, hasVerifiedPhone, hasMultipleChannels])
+  ], [channelConnected, hasShopify, hasConfiguredAgent, hasKbArticle, hasSentReply, hasInvitedTeam, hasTelegramBound, hasMultipleChannels])
   const workflowDoneCount = workflowSteps.filter(s => s.status === "done").length
 
   const agentName = (orgData?.settings?.agentName ?? AGENT_SETTINGS_DEFAULTS.agentName) as string

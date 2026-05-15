@@ -2,8 +2,8 @@ import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-export type OutboundChannel = 'email' | 'ig_dm' | 'sms' | 'whatsapp';
-export type OutboundProvider = 'postmark' | 'meta' | 'twilio' | 'gmail' | 'outlook';
+export type OutboundChannel = 'email' | 'ig_dm';
+export type OutboundProvider = 'postmark' | 'meta' | 'gmail' | 'outlook';
 export type OutboundSource = 'dispatch_message' | 'agent_send_reply' | 'agent_send_email';
 
 export interface OutboundRecordInput {

@@ -23,14 +23,6 @@ vi.mock('postmark', () => ({
   }),
 }));
 
-vi.mock('twilio', () => ({
-  default: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.messages = {
-      create: vi.fn().mockResolvedValue({ sid: 'SM_mock' }),
-    };
-  }),
-}));
-
 // Mock global fetch for Meta Graph API calls in the IG dispatch branch
 const { mockFetch, mockRecordProviderSendFailure } = vi.hoisted(() => ({
   mockFetch: vi.fn(),

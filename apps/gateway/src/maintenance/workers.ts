@@ -177,27 +177,13 @@ export async function createMaintenanceWorkers(
     const currentHourUtc = now.getUTCHours();
 
     const orgs = await db.organization.findMany({
-      where: {
-        members: {
-          some: {
-            OR: [
-              { telegramChatId: { not: null } },
-              { phoneVerified: true, phoneNumber: { not: null } },
-            ],
-          },
-        },
-      },
+      where: { members: { some: { telegramChatId: { not: null } } } },
       select: {
         id: true,
         settings: true,
         members: {
-          where: {
-            OR: [
-              { telegramChatId: { not: null } },
-              { phoneVerified: true, phoneNumber: { not: null } },
-            ],
-          },
-          select: { phoneNumber: true, phoneVerified: true, telegramChatId: true },
+          where: { telegramChatId: { not: null } },
+          select: { telegramChatId: true },
         },
       },
     });
@@ -251,7 +237,7 @@ export async function createMaintenanceWorkers(
         const result = await notifyOperator(org.id, member, message, { pendingDigest });
         if (result) {
           logger.info(
-            { organizationId: org.id, channel: result.channel, chatId: result.chatId, flagged: buckets.questionable.length },
+            { organizationId: org.id, chatId: result.chatId, flagged: buckets.questionable.length },
             '[Digest] Sent digest',
           );
         }

@@ -20,7 +20,6 @@ export function createGatewayApp() {
     },
   }));
 
-  // Twilio sends webhooks as application/x-www-form-urlencoded
   app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
   // A simple health-check route to prove the server is alive

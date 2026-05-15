@@ -1,5 +1,4 @@
 import { db, SenderType, createMessage } from '@clerk/db';
-import twilio from 'twilio';
 import logger from '@/lib/server/logger';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { recordOutboundCall } from '@/lib/server/outbound-recorder';
@@ -82,37 +81,6 @@ export async function dispatchMessage(
   } else if (thread.channelType === CHANNEL_TYPE.EMAIL) {
     const r = await sendEmail(thread, org, text);
     if (!r.ok) return r;
-
-  } else if (thread.channelType === CHANNEL_TYPE.SMS) {
-    const recorded = await recordOutboundCall({
-      source: 'dispatch_message',
-      provider: 'twilio',
-      channel: 'sms',
-      organizationId: org.id,
-      threadId: thread.id,
-      to: recipientId,
-      from: process.env.TWILIO_FROM_NUMBER,
-      text,
-    });
-    if (!recorded) {
-      const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER } = process.env;
-      if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_FROM_NUMBER) {
-        return { ok: false, error: 'SMS not configured' };
-      }
-      const twilioClient = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-      try {
-        await twilioClient.messages.create({ body: text, from: TWILIO_FROM_NUMBER, to: recipientId });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        logger.error({ err: msg }, '[dispatchMessage] Twilio error');
-        await recordProviderSendFailure('twilio', 'sms', org.id, {
-          counterClient: getRedis(),
-          threadId: thread.id,
-          detail: msg,
-        });
-        return { ok: false, error: 'SMS dispatch failed' };
-      }
-    }
 
   } else if (thread.channelType === CHANNEL_TYPE.SHOPIFY) {
     const r = await sendEmail(thread, org, text, { originalChannel: CHANNEL_TYPE.SHOPIFY });

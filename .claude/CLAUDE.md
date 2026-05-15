@@ -12,7 +12,7 @@ Solo merchants and small teams. Multi-channel support inbox + AI agent that read
 - Sentry inits in both apps if `SENTRY_DSN` is set.
 
 ## Inbound flow
-External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → WhatsApp notify verified org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
+External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
 
 ## Database (`packages/db/prisma/schema.prisma`)
 - `Organization` — Stripe subscription fields + `settings` JSON (agent config)
@@ -20,15 +20,15 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Customer` — unique `(organizationId, platformId)`; `platformId` = email / IG sender ID / phone
 - `Thread` — `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan`, soft-delete + archive
 - `Message` — `senderType`: customer/agent/ai/note. **Agent action logs are `note` rows prefixed `__clerk_agent__`.**
-- `SmsContext` — WhatsApp/SMS state per (org, phone): history, pendingPlan, lastOrderNumber. **DB-backed, not Redis.**
-- `OrgMember` — extends Clerk org membership with verified phone (WhatsApp)
+- `OperatorContext` — Telegram operator state per (org, chatId): history, pendingPlan, pendingDigest, lastOrderNumber. **DB-backed, not Redis.**
+- `OrgMember` — extends Clerk org membership with a bound Telegram chat
 - `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering)
 - `CannedResponse`, `Feedback`
 
 ## Channels
-Email (Postmark), Instagram DM (Meta OAuth), WhatsApp/SMS (Twilio), Shopify (OAuth + webhooks). TikTok: stubs only.
+Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Clerk bot), Shopify (OAuth + webhooks). TikTok: stubs only.
 
-Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (team-via-WhatsApp).
+Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 
 ## Agent (`apps/dashboard/src/lib/agent/`)
 - `context.ts` — `buildContext()` (loads thread, customer, recent messages, KB, recent orders)
@@ -47,7 +47,7 @@ Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concier
 
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in Internal tab.
-- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and WhatsApp via `sms_agent`.
+- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram via `sms_agent`.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `tools/registry.ts` — do not infer.
@@ -58,7 +58,7 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 - `agent/route.ts` — execute run on a ticket
 - `agent/plan/route.ts` — generate plan, no side effects
 - `agent/plan-internal/route.ts` — gateway-only, requires `INTERNAL_API_SECRET`
-- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from WhatsApp)
+- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from Telegram)
 - `agent/chat/route.ts` — Concierge sessions
 - `agent/sessions/route.ts`, `agent/sessions/[id]/route.ts` — Concierge session list/detail
 - `agent/ask/route.ts` — composer read-only Q&A (`runAgent` with `readOnly: true`)
@@ -81,9 +81,9 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 `/dashboard/{tickets, canned-responses, agent, kb, playbooks, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
 
 ## Env (names only — values in Vercel/Railway)
-**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `SENTRY_DSN`
+**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `SENTRY_DSN`
 
-**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `SENTRY_DSN`
+**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `SENTRY_DSN`
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`.
 

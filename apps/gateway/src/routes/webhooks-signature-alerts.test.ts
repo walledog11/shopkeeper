@@ -45,8 +45,8 @@ const SIGNATURE_CASES: SignatureCase[] = [
   { provider: 'meta', reason: 'signature_mismatch' },
   { provider: 'shopify', reason: 'missing_signature' },
   { provider: 'shopify', reason: 'signature_mismatch' },
-  { provider: 'twilio', reason: 'missing_signature' },
-  { provider: 'twilio', reason: 'validation_failed' },
+  { provider: 'telegram', reason: 'missing_signature' },
+  { provider: 'telegram', reason: 'signature_mismatch' },
 ];
 
 describe('recordWebhookSignatureFailure', () => {

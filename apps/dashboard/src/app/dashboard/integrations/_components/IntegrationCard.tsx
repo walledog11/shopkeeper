@@ -8,7 +8,7 @@ import { Check, Copy, ChevronDown, AlertTriangle, Loader2, BookOpen } from "luci
 import { cn } from "@/lib/ui/cn"
 import type { Integration } from "@/types"
 
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'twilio' | 'coming-soon'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'coming-soon'
 
 export interface PlatformConfig {
   id: string

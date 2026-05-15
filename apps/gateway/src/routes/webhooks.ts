@@ -1,7 +1,6 @@
 import express from 'express';
 import { registerMetaWebhookRoutes } from './webhooks-meta.js';
 import { registerEmailWebhookRoutes } from './webhooks-email.js';
-import { registerTwilioWebhookRoutes } from './webhooks-twilio.js';
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 import { registerShopifyWebhookRoutes } from './webhooks-shopify.js';
 
@@ -19,7 +18,6 @@ const router = express.Router();
 
 registerMetaWebhookRoutes(router);
 registerEmailWebhookRoutes(router);
-registerTwilioWebhookRoutes(router);
 registerTelegramWebhookRoutes(router);
 registerShopifyWebhookRoutes(router);
 

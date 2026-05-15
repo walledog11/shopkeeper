@@ -50,7 +50,6 @@ const PROVIDER_CASES: ProviderCase[] = [
       detail: 'Postmark timeout',
     },
   },
-  { provider: 'twilio', channel: 'sms', orgId: 'org_twilio' },
   { provider: 'shopify', channel: 'webhook_registration', orgId: 'org_shopify' },
 ];
 

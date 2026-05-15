@@ -41,7 +41,7 @@ export interface OrgSettings {
   // Response
   replyLanguage: string; // "auto" | ISO language name e.g. "English"
 
-  // WhatsApp digest
+  // Operator digest (Telegram)
   digestEnabled: boolean;
   digestFrequency: 'daily' | 'twice_daily' | 'every_4h' | 'every_6h' | 'every_8h' | 'every_12h';
   digestHour: number;           // 0–23 local time — first (or only) send time

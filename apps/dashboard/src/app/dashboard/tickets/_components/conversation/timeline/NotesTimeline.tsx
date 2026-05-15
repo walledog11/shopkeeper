@@ -80,7 +80,7 @@ export default function NotesTimeline({
             {turn.senderPhone && (
               <div className="flex items-center gap-1 text-[10px] text-white/30 mr-1">
                 <Smartphone className="w-3 h-3" />
-                Via SMS · {turn.senderPhone}
+                Via Telegram
               </div>
             )}
             <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-white/[0.08] text-white/70 rounded-md rounded-tr-sm">

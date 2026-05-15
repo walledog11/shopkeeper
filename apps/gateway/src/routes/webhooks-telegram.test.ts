@@ -238,7 +238,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     const chatId = '5555001';
     await bindMember(chatId);
     const threadId = '00000000-0000-4000-8000-000000000001';
-    await updateContext(org.id, 'telegram', chatId, {
+    await updateContext(org.id, chatId, {
       pendingPlan: {
         threadId,
         instruction: 'refund #1',
@@ -264,10 +264,10 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       const body = JSON.parse(init.body as string);
       expect(body.threadId).toBe(threadId);
       expect(body.approvedToolCalls).toEqual([{ id: 'tc1', name: 'refundOrder', amount: 5 }]);
-      expect(body.telegramChatId).toBe(chatId);
+      expect(body.clerkUserId).toBe(`usr_${chatId}`);
       expect(lastReplyText()).toBe('Refunded.');
 
-      const ctx = await getContext(org.id, 'telegram', chatId);
+      const ctx = await getContext(org.id, chatId);
       expect(ctx.pendingPlan).toBeNull();
       expect(ctx.lastThreadId).toBe(threadId);
     } finally {
@@ -279,7 +279,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     const chatId = '5555002';
     await bindMember(chatId);
     const threadId = '00000000-0000-4000-8000-000000000002';
-    await updateContext(org.id, 'telegram', chatId, {
+    await updateContext(org.id, chatId, {
       pendingPlan: {
         threadId,
         instruction: 'do things',
@@ -313,7 +313,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
   it('"no" clears pendingPlan without calling the agent', async () => {
     const chatId = '5555003';
     await bindMember(chatId);
-    await updateContext(org.id, 'telegram', chatId, {
+    await updateContext(org.id, chatId, {
       pendingPlan: { threadId: 't', instruction: 'i', rawToolCalls: [] },
     });
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
@@ -327,7 +327,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       await waitForReplies(1);
       expect(lastReplyText()).toMatch(/dismissed/i);
       expect(fetchSpy).not.toHaveBeenCalled();
-      const ctx = await getContext(org.id, 'telegram', chatId);
+      const ctx = await getContext(org.id, chatId);
       expect(ctx.pendingPlan).toBeNull();
     } finally {
       fetchSpy.mockRestore();
@@ -358,7 +358,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
         aiSummary: opts.aiSummary ?? null,
       },
     });
-    await updateContext(org.id, 'telegram', chatId, {
+    await updateContext(org.id, chatId, {
       pendingDigest: { threadIds: [thread.id], sentAt: new Date().toISOString() },
     });
     return { chatId, threadId: thread.id };
@@ -456,7 +456,7 @@ describe('POST /webhooks/telegram — order lookup', () => {
     expect(text).toMatch(/#4242/);
     expect(text).toMatch(/Carol/);
 
-    const ctx = await getContext(org.id, 'telegram', chatId);
+    const ctx = await getContext(org.id, chatId);
     expect(ctx.lastOrderNumber).toBe('#4242');
     expect(ctx.lastThreadId).toBe(thread.id);
   });
@@ -490,10 +490,10 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
       expect(url).toMatch(/\/api\/agent\/internal$/);
       const body = JSON.parse(init.body as string);
       expect(body.instruction).toBe('how many orders today?');
-      expect(body.telegramChatId).toBe(chatId);
+      expect(body.senderPhone).toBe(`telegram:${chatId}`);
       expect(lastReplyText()).toBe('Looked it up.');
 
-      const ctx = await getContext(org.id, 'telegram', chatId);
+      const ctx = await getContext(org.id, chatId);
       expect(ctx.lastThreadId).toBe(newThreadId);
       expect(ctx.history.map((m) => m.content)).toContain('how many orders today?');
       expect(ctx.history.map((m) => m.content)).toContain('Looked it up.');

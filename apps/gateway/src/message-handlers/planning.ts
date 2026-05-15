@@ -99,14 +99,8 @@ export async function sendOperatorPlanNotification(
 ): Promise<void> {
   try {
     const members = await db.orgMember.findMany({
-      where: {
-        organizationId,
-        OR: [
-          { telegramChatId: { not: null } },
-          { phoneVerified: true, phoneNumber: { not: null } },
-        ],
-      },
-      select: { phoneNumber: true, phoneVerified: true, telegramChatId: true },
+      where: { organizationId, telegramChatId: { not: null } },
+      select: { telegramChatId: true },
     });
 
     if (members.length === 0) {
@@ -123,7 +117,7 @@ export async function sendOperatorPlanNotification(
       });
       if (result) {
         logger.info(
-          { organizationId, threadId, channel: result.channel, chatId: result.chatId },
+          { organizationId, threadId, chatId: result.chatId },
           '[Worker] Plan notification sent',
         );
       }
