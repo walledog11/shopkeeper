@@ -58,6 +58,12 @@ export async function POST() {
 
     const org = await getOrCreateOrg();
 
+    await db.orgMember.upsert({
+      where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
+      create: { organizationId: org.id, clerkUserId: userId },
+      update: {},
+    });
+
     const token = randomBytes(24).toString("base64url");
     await getRedis().set(
       `telegram:bind:${token}`,
