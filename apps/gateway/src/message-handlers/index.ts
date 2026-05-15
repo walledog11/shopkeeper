@@ -1,7 +1,7 @@
 export { generateThreadIntelligence } from './intelligence.js';
 export {
   precomputeThreadPlan,
-  sendWhatsAppPlanNotification,
+  sendOperatorPlanNotification,
   resolveBusinessHoursSettings,
   isWithinBusinessHours,
   sendAutoAck,

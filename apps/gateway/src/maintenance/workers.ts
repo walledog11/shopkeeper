@@ -3,8 +3,7 @@ import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from '../logger.js';
 import { CHANNEL, QUEUE, JOB } from '../constants.js';
-import { getTwilio } from '../clients/twilio-client.js';
-import { updateContext } from '../operator-context.js';
+import { notifyOperator } from '../operator-notify.js';
 import {
   DIGEST_QUESTIONABLE_LIMIT,
   bucketDigestThreads,
@@ -178,22 +177,30 @@ export async function createMaintenanceWorkers(
     const currentHourUtc = now.getUTCHours();
 
     const orgs = await db.organization.findMany({
-      where: { members: { some: { phoneVerified: true, phoneNumber: { not: null } } } },
+      where: {
+        members: {
+          some: {
+            OR: [
+              { telegramChatId: { not: null } },
+              { phoneVerified: true, phoneNumber: { not: null } },
+            ],
+          },
+        },
+      },
       select: {
         id: true,
         settings: true,
         members: {
-          where: { phoneVerified: true, phoneNumber: { not: null } },
-          select: { phoneNumber: true },
+          where: {
+            OR: [
+              { telegramChatId: { not: null } },
+              { phoneVerified: true, phoneNumber: { not: null } },
+            ],
+          },
+          select: { phoneNumber: true, phoneVerified: true, telegramChatId: true },
         },
       },
     });
-
-    const twilioInstance = getTwilio();
-    if (!twilioInstance) {
-      logger.warn('[Digest] Twilio not configured — skipping');
-      return;
-    }
 
     const eligibleOrgs = orgs.filter(org => {
       const settings = (org.settings as Record<string, unknown> | null) ?? {};
@@ -241,19 +248,12 @@ export async function createMaintenanceWorkers(
       };
 
       for (const member of org.members) {
-        const phoneNumber = member.phoneNumber;
-        if (!phoneNumber) continue;
-
-        try {
-          await twilioInstance.client.messages.create({
-            from: twilioInstance.from,
-            to: `whatsapp:${phoneNumber}`,
-            body: message,
-          });
-          await updateContext(org.id, 'whatsapp', phoneNumber, { pendingDigest });
-          logger.info({ organizationId: org.id, phone: phoneNumber, flagged: buckets.questionable.length }, '[Digest] Sent digest');
-        } catch (e) {
-          logger.error({ err: (e as Error).message, phone: phoneNumber }, '[Digest] Failed to send digest');
+        const result = await notifyOperator(org.id, member, message, { pendingDigest });
+        if (result) {
+          logger.info(
+            { organizationId: org.id, channel: result.channel, chatId: result.chatId, flagged: buckets.questionable.length },
+            '[Digest] Sent digest',
+          );
         }
       }
     }

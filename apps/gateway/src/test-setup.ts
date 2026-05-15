@@ -12,6 +12,8 @@ const TEST_DEFAULTS: Record<string, string> = {
   TWILIO_AUTH_TOKEN: 'test-twilio-token',
   TWILIO_ACCOUNT_SID: 'ACtest',
   SHOPIFY_APP_SECRET: 'test-shopify-secret',
+  TELEGRAM_BOT_TOKEN: 'test-telegram-token',
+  TELEGRAM_WEBHOOK_SECRET: 'test-telegram-webhook-secret',
 };
 
 for (const [key, value] of Object.entries(TEST_DEFAULTS)) {

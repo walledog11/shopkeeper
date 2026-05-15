@@ -10,7 +10,7 @@ import { writeWorkerHeartbeat } from './health.js';
 import { handleIgDmJob, handleEmailJob, handleShopifyJob } from './message-handlers/channels.js';
 import { generateThreadIntelligence } from './message-handlers/intelligence.js';
 import {
-  sendWhatsAppPlanNotification,
+  sendOperatorPlanNotification,
   precomputeThreadPlan,
   isWithinBusinessHours,
   sendAutoAck,
@@ -126,11 +126,11 @@ export async function startWorkerRuntime() {
 
     const planResult = await planPromise;
     if (!planResult) {
-      logger.info({ threadId, organizationId }, '[AISummary] No plan precomputed — skipping WhatsApp notification');
+      logger.info({ threadId, organizationId }, '[AISummary] No plan precomputed — skipping operator notification');
       return;
     }
 
-    await sendWhatsAppPlanNotification(
+    await sendOperatorPlanNotification(
       organizationId,
       threadId,
       customerName,

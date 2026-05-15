@@ -144,12 +144,15 @@ export default function SmsCard() {
                 Not enabled
               </span>
             )}
+            <span className="inline-flex items-center text-[11px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.20] rounded-full px-2 py-0.5">
+              Legacy
+            </span>
             {isConnected && twilioStatus?.phoneNumber && (
               <span className="text-xs font-mono text-white/35 truncate max-w-[260px]">{twilioStatus.phoneNumber}</span>
             )}
           </div>
           <p className="text-xs text-white/40 leading-relaxed">
-            Let your team interact with the AI agent via text or WhatsApp.
+            Older WhatsApp/SMS path. New setups: use Telegram.
           </p>
         </div>
 

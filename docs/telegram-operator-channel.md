@@ -35,14 +35,14 @@ Out of scope for this doc: WhatsApp Cloud API (§2b), web-push PWA (§2d), custo
 
 ## Phased plan
 
-### Phase 1 — schema + context generalization (no behavior change)
+### Phase 1 — schema + context generalization (no behavior change) [COMPLETED]
 1. Prisma migration: add `OperatorContext` table with the same shape as `SmsContext` plus `channel` (`'whatsapp' | 'telegram'`) and `chatId` (string). Backfill existing rows with `channel = 'whatsapp'`, `chatId = phoneNumber`. Drop `SmsContext` in a follow-up migration once Twilio is deleted (§2c) — not in this PR.
 2. Add `OrgMember.telegramChatId String? @unique` and an index. Keep `phoneNumber` for now.
 3. Rename `apps/gateway/src/sms-context.ts` → `operator-context.ts`. Functions take `(organizationId, channel, chatId)` instead of `(organizationId, phone)`. Update the one call site (`webhooks-twilio.ts`) to pass `'whatsapp'` + `phoneNumber`.
 
 Verify: existing Twilio path still works end-to-end against staging.
 
-### Phase 2 — Telegram bot setup + webhook plumbing
+### Phase 2 — Telegram bot setup + webhook plumbing [COMPLETED]
 1. Create `@ClerkBot` (production) and `@ClerkBotDev` (dev) via @BotFather. Store `TELEGRAM_BOT_TOKEN` (and `_DEV` variant) in Railway/Vercel envs. Add to `.env.example` and the env list in `CLAUDE.md`.
 2. `clients/telegram-client.ts`:
    - `sendMessage(chatId, text, opts?)` → `POST /bot<token>/sendMessage`.
@@ -54,7 +54,7 @@ Verify: existing Twilio path still works end-to-end against staging.
    - Otherwise: same control flow as `webhooks-twilio.ts:140-410` — `yes`/`no`/`skip N`, `review`/`open N`/`spam N`/`reply N`, `#1234` lookup, free-form. The only differences from the Twilio path are the reply transport (Telegram REST instead of TwiML) and that there is no inbound/outbound number — chat ID is symmetric.
 4. Mount the route in `apps/gateway/src/start.ts` (or wherever `registerTwilioWebhookRoutes` is mounted).
 
-### Phase 3 — bind flow (deep-link)
+### Phase 3 — bind flow (deep-link) [COMPLETED]
 1. `POST /api/integrations/telegram` (dashboard, authed): issue a single-use bind token (24h TTL, store in Redis: `telegram:bind:<token>` → `{ orgId, clerkUserId }`). Return `{ url: "https://t.me/ClerkBot?start=<token>" }`.
 2. Settings UI: button + QR code (`qrcode.react` is already a dep, confirm). Show current binding (chat title + "Disconnect").
 3. In `webhooks-telegram.ts`, when the message text starts with `/start <token>`:
@@ -63,18 +63,30 @@ Verify: existing Twilio path still works end-to-end against staging.
    - Reply "Connected. Reply to ticket digests here, or send free-form instructions like 'refund #1234'."
 4. `DELETE /api/integrations/telegram` clears `telegramChatId`.
 
-### Phase 4 — outbound from agent → operator
+### Phase 4 — outbound from agent → operator [COMPLETED]
 1. `dispatch-message.ts`: add a `telegram` branch alongside the Twilio one. Routes by `OrgMember.telegramChatId` (or by an Integration row — see §"Open questions"). Same `recordProviderSendFailure('telegram', ...)` pattern.
 2. Anywhere the gateway proactively notifies the merchant (new ticket digest, plan ready) needs to choose Telegram-over-WhatsApp when both are bound. Simple rule: prefer Telegram if `telegramChatId` is set.
 
-### Phase 5 — surfacing in the integrations page
+### Phase 5 — surfacing in the integrations page [COMPLETED]
 1. Add Telegram card to `apps/dashboard/src/app/dashboard/integrations/_components/IntegrationsPageClient.tsx`. Connected state shows the bound chat title; disconnected state opens the bind flow.
 2. Twilio card stays — gets a "Legacy" badge until §2c removes it. (Doing the removal in this PR violates the doc's "ship operator channel before deleting Twilio" sequencing.)
 
-### Phase 6 — tests
-1. `webhooks-telegram.test.ts`: signature reject, `/start` bind, `yes`/`skip N`/`reply N` against real DB (per CLAUDE.md, no DB mocks). Mirror the structure of `webhooks.test.ts`.
-2. `operator-context.test.ts`: round-trip per channel.
-3. Manual E2E checklist (because nothing in CI talks to a real bot): connect, plan-ready notification, approve, digest review, order lookup, disconnect.
+### Phase 6 — tests [COMPLETED]
+1. `apps/gateway/src/routes/webhooks-telegram.test.ts` — signature reject, `/start` bind, `yes`/`skip N`/`no`, `review`/`spam N`/`reply N`, `#N` order lookup, free-form forwarding. Real DB via `@clerk/db/test-helpers`; ioredis + telegram-client + global `fetch` mocked.
+2. `apps/gateway/src/operator-context.test.ts` — get/update/clear round-trip per channel, history truncation, `extractOrderNumber` table-driven.
+3. Manual E2E checklist below (run once against staging after bot is created).
+
+#### Manual E2E checklist
+
+CI can't talk to a real Telegram bot. Run this once end-to-end against staging after `@ClerkBotDev` is created and `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` are set in Railway, and `TELEGRAM_BOT_USERNAME` is set in Vercel. Run `tsx apps/gateway/src/scripts/set-telegram-webhook.ts <gateway-url>/webhooks/telegram` first.
+
+- [ ] **Connect.** Dashboard → Integrations → Telegram → "Connect Telegram". Tap the deep link, send `/start`. Bot replies "Connected.". Re-open the integrations page; card shows the bound chat.
+- [ ] **Plan-ready ping.** Send a customer inbound (email or IG) that triggers an auto-plan. Telegram receives a digest with the plan + `yes / no / skip N` options.
+- [ ] **Approve.** Reply `yes`. Filler ack arrives within ~1s, then the agent's summary. Verify the action ran in the dashboard ticket (action log row, message sent if applicable).
+- [ ] **Digest review.** Wait for the next daily digest (or trigger manually). Reply `review`. List of flagged tickets arrives. Reply `spam 1` — the thread becomes `filtered` in the dashboard. Reply `reply 1 hello` on another flagged thread — the message is sent to the customer.
+- [ ] **Order lookup.** Reply `#1234` (a real order). Bot returns thread summary + tag + last message.
+- [ ] **Free-form.** Send `refund order #1234 for $5`. Plan arrives; approve to execute.
+- [ ] **Disconnect.** Dashboard → Integrations → Telegram → Disconnect. Send another message — bot replies "isn't connected".
 
 ## Cutover
 

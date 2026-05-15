@@ -1,11 +1,10 @@
 import { db, type DbChannelType } from '@clerk/db';
 import * as Sentry from '@sentry/node';
-import { updateContext } from '../operator-context.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import type { AgentPlan, PlanStep } from '../types.js';
-import { getTwilio } from '../clients/twilio-client.js';
+import { notifyOperator } from '../operator-notify.js';
 import { getInternalApiSecret } from './shared.js';
 
 function formatPlanMessage(customerName: string | null, channelType: DbChannelType, summary: string, steps: PlanStep[]): string {
@@ -89,7 +88,7 @@ export async function precomputeThreadPlan(
   }
 }
 
-export async function sendWhatsAppPlanNotification(
+export async function sendOperatorPlanNotification(
   organizationId: string,
   threadId: string,
   customerName: string | null,
@@ -99,19 +98,19 @@ export async function sendWhatsAppPlanNotification(
   instruction: string,
 ): Promise<void> {
   try {
-    const twilioInstance = getTwilio();
-    if (!twilioInstance) {
-      logger.warn('[Worker] Twilio env vars not set — skipping WhatsApp notification');
-      return;
-    }
-
     const members = await db.orgMember.findMany({
-      where: { organizationId, phoneVerified: true, phoneNumber: { not: null } },
-      select: { phoneNumber: true },
+      where: {
+        organizationId,
+        OR: [
+          { telegramChatId: { not: null } },
+          { phoneVerified: true, phoneNumber: { not: null } },
+        ],
+      },
+      select: { phoneNumber: true, phoneVerified: true, telegramChatId: true },
     });
 
     if (members.length === 0) {
-      logger.info({ organizationId }, '[Worker] No verified members — skipping WhatsApp notification');
+      logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
       return;
     }
 
@@ -119,24 +118,18 @@ export async function sendWhatsAppPlanNotification(
     const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
 
     for (const member of members) {
-      try {
-        await twilioInstance.client.messages.create({
-          from: twilioInstance.from,
-          to: `whatsapp:${member.phoneNumber}`,
-          body: message,
-        });
-
-        await updateContext(organizationId, 'whatsapp', member.phoneNumber!, {
-          pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
-        });
-
-        logger.info({ phoneNumber: member.phoneNumber, threadId }, '[Worker] WhatsApp notification sent');
-      } catch (sendErr) {
-        logger.error({ err: (sendErr as Error).message, phoneNumber: member.phoneNumber }, '[Worker] Failed to send WhatsApp');
+      const result = await notifyOperator(organizationId, member, message, {
+        pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
+      });
+      if (result) {
+        logger.info(
+          { organizationId, threadId, channel: result.channel, chatId: result.chatId },
+          '[Worker] Plan notification sent',
+        );
       }
     }
   } catch (err) {
-    logger.error({ err: (err as Error).message, threadId }, '[Worker] sendWhatsAppPlanNotification error');
+    logger.error({ err: (err as Error).message, threadId }, '[Worker] sendOperatorPlanNotification error');
   }
 }
 

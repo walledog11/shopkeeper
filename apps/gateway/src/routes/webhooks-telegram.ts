@@ -115,9 +115,56 @@ export function registerTelegramWebhookRoutes(router: Router): void {
 
     try {
       if (body.toLowerCase().startsWith('/start')) {
-        // Phase 3 implements binding via /start <token>. For now, surface a hint.
+        const startMatch = body.match(/^\/start\s+(\S+)/i);
+        if (!startMatch) {
+          await reply(
+            "This Telegram chat isn't linked to a Clerk workspace. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+          );
+          return;
+        }
+
+        const token = startMatch[1];
+        const redis = getRateLimitRedis();
+        const key = `telegram:bind:${token}`;
+        const raw = await redis.get(key);
+        if (!raw) {
+          await reply('This link has expired. Generate a new one from your Clerk dashboard under Integrations → Telegram.');
+          return;
+        }
+
+        let payload: { orgId: string; clerkUserId: string };
+        try {
+          payload = JSON.parse(raw) as { orgId: string; clerkUserId: string };
+        } catch {
+          await redis.del(key);
+          await reply('This link is invalid. Generate a new one from your Clerk dashboard under Integrations → Telegram.');
+          return;
+        }
+
+        // Reassign chat id to the new member: clear any other binding first.
+        await db.orgMember.updateMany({
+          where: {
+            telegramChatId: chatId,
+            NOT: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId },
+          },
+          data: { telegramChatId: null },
+        });
+
+        const updated = await db.orgMember.updateMany({
+          where: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId },
+          data: { telegramChatId: chatId },
+        });
+
+        if (updated.count === 0) {
+          logger.warn({ orgId: payload.orgId, clerkUserId: payload.clerkUserId }, '[Telegram] Bind target OrgMember not found');
+          await reply('Could not link this chat — your workspace membership is missing. Open the Clerk dashboard and try again.');
+          return;
+        }
+
+        await redis.del(key);
+
         await reply(
-          "This Telegram chat isn't linked to a Clerk workspace yet. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+          "Connected. Reply to ticket digests here, or send free-form instructions like 'refund #1234'.",
         );
         return;
       }
