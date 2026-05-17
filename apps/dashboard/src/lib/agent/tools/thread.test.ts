@@ -11,7 +11,8 @@ import {
   createTestThread,
 } from '@clerk/db/test-helpers';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
-import { sendEmail, sendReply } from './thread';
+import { escalateToHuman, sendEmail, sendReply, ESCALATION_MARKER } from './thread';
+import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let tempDir: string | null = null;
@@ -157,5 +158,47 @@ describe('sendEmail outbound recording', () => {
       where: { contentText: 'Recorded Outlook email.', senderType: SenderType.agent },
     });
     expect(saved).not.toBeNull();
+  });
+});
+
+describe('escalateToHuman', () => {
+  it('flips the thread to pending, tags it needs_human, and writes an audit note', async () => {
+    const customer = await createTestCustomer(org.id, 'escalation@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await escalateToHuman(
+      { reason: 'Customer is asking about wholesale pricing.' },
+      { threadId: thread.id, orgId: org.id, orgName: org.name },
+    );
+
+    expect(result.startsWith(ESCALATION_MARKER)).toBe(true);
+    expect(result).toContain('Customer is asking about wholesale pricing.');
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.status).toBe(THREAD_STATUS.PENDING);
+    expect(updated?.tag).toBe('needs_human');
+
+    const note = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.note },
+      orderBy: { sentAt: 'desc' },
+    });
+    expect(note?.contentText).toBe(`${AGENT_NOTE_PREFIX}Escalated to merchant: Customer is asking about wholesale pricing.`);
+  });
+
+  it('falls back to "No reason provided" when reason is whitespace', async () => {
+    const customer = await createTestCustomer(org.id, 'escalation-blank@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await escalateToHuman(
+      { reason: '   ' },
+      { threadId: thread.id, orgId: org.id, orgName: org.name },
+    );
+
+    expect(result).toContain('No reason provided');
+
+    const note = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.note },
+    });
+    expect(note?.contentText).toContain('No reason provided');
   });
 });

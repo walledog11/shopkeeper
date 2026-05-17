@@ -259,7 +259,7 @@ describe('tenant data surfaces', () => {
     const res = await getShopifyCustomer(new Request(`http://localhost/api/shopify/customer?email=${encodeURIComponent(email)}&orderLimit=0`));
 
     expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-shop.myshopify.com/admin/api/2024-01/customers/search.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-shop.myshopify.com/admin/api/2026-04/customers/search.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'caller-token' } });
 
     const callerUpdated = await db.customer.findUniqueOrThrow({ where: { id: callerCustomer.id } });
@@ -298,7 +298,7 @@ describe('tenant data surfaces', () => {
     const body = await json<{ shop: string; products: Array<{ title: string; tags: string[] }> }>(res);
 
     expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-products.myshopify.com/admin/api/2024-01/products.json');
+    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-products.myshopify.com/admin/api/2026-04/products.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'caller-product-token' } });
     expect(body.shop).toBe('caller-products.myshopify.com');
     expect(body.products).toEqual([expect.objectContaining({ title: 'Caller Tee', tags: ['summer', 'tee'] })]);

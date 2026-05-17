@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 
     if (customerId) {
       const res = await fetch(
-        `https://${shop}/admin/api/2024-01/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
+        `https://${shop}/admin/api/2026-04/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
         { headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
       customer = data.customer ?? null;
     } else {
       const res = await fetch(
-        `https://${shop}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
+        `https://${shop}/admin/api/2026-04/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
         { headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     let orders: ShopifyOrder[] = [];
     if (orderLimit > 0) {
       const ordersRes = await fetch(
-        `https://${shop}/admin/api/2024-01/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
+        `https://${shop}/admin/api/2026-04/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
         { headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!ordersRes.ok) {
@@ -128,7 +128,7 @@ export async function PATCH(request: Request) {
       }];
     }
 
-    const res = await fetch(`https://${shop}/admin/api/2024-01/customers/${customerId}.json`, {
+    const res = await fetch(`https://${shop}/admin/api/2026-04/customers/${customerId}.json`, {
       method: 'PUT',
       headers: {
         'X-Shopify-Access-Token': token,
@@ -238,7 +238,7 @@ async function addProductImagesToOrders(orders: ShopifyOrder[], shop: string, to
 
   try {
     const productsRes = await fetch(
-      `https://${shop}/admin/api/2024-01/products.json?ids=${productIds.join(',')}&fields=id,images`,
+      `https://${shop}/admin/api/2026-04/products.json?ids=${productIds.join(',')}&fields=id,images`,
       { headers: { 'X-Shopify-Access-Token': token } }
     );
 

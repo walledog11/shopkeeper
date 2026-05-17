@@ -28,10 +28,8 @@ Still deferred (intentionally — see overhaul doc):
 
 ### 1b. If Postmark stays as a path, fix the gaps before exposing it
 
-- [ ] Display the inbound Postmark address in the UI with copy buttons and per-provider forwarding instructions (Google Workspace, Outlook 365, cPanel, Cloudflare Email Routing).
+- [~] Display the inbound Postmark address in the UI with copy buttons and per-provider forwarding instructions (Google Workspace, Outlook 365, cPanel, Cloudflare Email Routing). **Partial:** inbound address + copy button is in `IntegrationCard.tsx` (the `EmailForwardingDisclosure`), but the body is one generic sentence — no per-provider step-by-steps for Google Workspace / Outlook 365 / cPanel / Cloudflare yet.
 - [ ] Add Postmark Sender Signature verification flow — without it, outbound from `support@merchant.com` will either be rejected by Postmark or land in spam.
-- [x] Stop hardcoding `Re: Your inquiry` as the outbound subject (`apps/dashboard/src/lib/messaging/dispatch-message.ts:126`). Carry the thread's original subject through.
-- [x] Replace the instant "Connected" state in the integrations row with an inline "we haven't received any mail at this address yet — send a test from your own inbox to verify" until the first inbound arrives.
 
 ---
 
@@ -39,18 +37,17 @@ Still deferred (intentionally — see overhaul doc):
 
 The intent for Twilio was operator-to-agent chat: the merchant approves / edits agent plans over a messaging app. Twilio is the wrong vehicle for that.
 
-Why Twilio is wrong here:
+Why Twilio was wrong here (kept for context; code path is gone):
 - WhatsApp Business approval is weeks of friction for a feature that should "just work."
 - Per-message billing on top of the subscription — bad surprise for a solo merchant.
-- Sandbox-only until approved, and the code's sandbox-fallback path (`apps/gateway/src/routes/webhooks-twilio.ts:115`) can silently mask a misconfigured production setup.
 - iMessage is not a real option — Apple has no public API and Mac-relay workarounds are against ToS and unreliable. Drop it from the plan entirely.
 
-### 2a. Add Telegram as the primary operator channel
+### 2a. Telegram operator channel — shipped
 
-- [ ] Single Clerk Telegram bot. Merchant scans a QR / clicks a deep-link from the dashboard that opens `t.me/ClerkBot?start=<org-token>`. Bot binds that chat to the merchant's `OrgMember`.
-- [ ] Same plan-approval semantics as today: `yes`, `no`, `skip N`, freeform reply.
-- [ ] Replace the `SmsContext` table or generalize it to `OperatorContext` keyed by `(orgId, chatId, channel)`.
-- [ ] Free, no approval, no per-message cost.
+Telegram is live. `apps/gateway/src/routes/webhooks-telegram.ts` is the receiver, the `OperatorContext` table (`packages/db/prisma/schema.prisma:183`) replaced `SmsContext`, and the dashboard has a Telegram bind flow per `OrgMember`. Same `yes` / `no` / `skip N` / freeform semantics. Twilio code path was deleted in `d718485` and Twilio is gone from the integrations UI.
+
+Residual cleanup (docs only, not code):
+- [x] Strip the `TWILIO_*` references and "WhatsApp/SMS — complete (Twilio…)" line from `README.md` and `docs/production/runbook.md` — done; Telegram replaces the operator-channel callouts.
 
 ### 2b. Add WhatsApp Cloud API (Meta direct, not Twilio) as the second operator option
 
@@ -58,12 +55,7 @@ Why Twilio is wrong here:
 - [ ] Same plan-approval interface as Telegram, behind the same `OperatorContext` abstraction.
 - [ ] Only worth building once a merchant asks for it — Telegram covers most early users.
 
-### 2c. Remove or quarantine the Twilio code path
-
-- [ ] Move `webhooks-twilio.ts`, `dispatch-message.ts` Twilio branch, and `TWILIO_*` env vars behind a feature flag or delete them.
-- [ ] Drop Twilio from the integrations UI.
-
-### 2d. Evaluate web-push to a PWA as the long-term replacement
+### 2c. Evaluate web-push to a PWA as the long-term replacement
 
 - [ ] Eventually the right answer is a push notification with inline "Approve / Skip / Edit" actions to a mobile-friendly dashboard. No messaging-app dependency. Park this until Telegram is shipped.
 
@@ -73,35 +65,35 @@ Why Twilio is wrong here:
 
 Listed as "100% complete" in memory; in practice there are four reasons a real merchant cannot use it.
 
-- [ ] **24-hour window handling.** Meta rejects outbound after 24 hours with `error.code === 10` (subcode 2018278). `dispatch-message.ts:67` only catches `190`. Detect this case, surface "Instagram only allows replies within 24 hours of the customer's last message" in the UI, and gate the composer accordingly.
+- [x] **24-hour window handling.** `dispatch-message.ts` now distinguishes Meta `error.code === 10` / subcode `2018278` from `190`, returning a "Instagram only allows replies within 24 hours of the customer's last message" error. The composer (`Composer.tsx`) gates the send button and shows an inline amber banner for IG threads where the last customer message is older than 24h.
 - [ ] **Confirm Meta App Review status.** `instagram_manage_messages` and friends require Meta App Review before non-dev-user accounts can connect. If review hasn't been submitted/passed, no real merchant can connect IG today. Submit if not already done.
 - [ ] **Verify `entry[0].id` matches `externalAccountId`.** The webhook (`webhooks-meta.ts:81`) routes by `entry[0].id`. The callback stores `igAccountId` (IG Business Account ID). For the Instagram Login flow these match; for the older Page Messenger flow, `entry[0].id` is the Page ID and webhooks will silently drop. Print both side-by-side from a real test event and confirm.
-- [ ] **OAuth error UX.** `no_ig_account` returns a six-word banner. Replace with a remediation guide: IG must be a Business account, linked to a Facebook Page, and the user must have classic "People with Facebook access" admin on the Page (not just Business Portfolio access).
+- [~] **OAuth error UX.** Help-content remediation guide is in place (`apps/dashboard/src/app/dashboard/_components/help/content/troubleshooting.ts:52` and `help/content/integrations.ts:48`) — covers Business account, Facebook Page link, and classic Page admin. **Missing:** that remediation copy is not surfaced at the failure point — the post-callback banner (whatever `no_ig_account` renders to today) needs to link into / inline the help content so the merchant sees it without hunting through Help.
 
 ---
 
 ## 4. Shopify — close, but two real gaps
 
-- [ ] **Handle `app/uninstalled` webhook.** When a merchant uninstalls Clerk from Shopify, the access token is invalidated immediately. The integration row stays "connected" forever and every agent action errors mysteriously. Add a handler in `apps/gateway/src/routes/webhooks-shopify.ts` that marks the integration disconnected and surfaces it in the UI.
-- [ ] **Pin a single API version.** OAuth callback uses `2024-01` (`apps/dashboard/src/app/api/integrations/shopify/callback/route.ts:105, 158`); the agent uses `2026-04` (`apps/dashboard/src/lib/agent/shopify/client.ts:1`). Pick one.
+- [x] **Handle `app/uninstalled` webhook.** Gateway now deletes the matching integration row on `app/uninstalled` (`apps/gateway/src/routes/webhooks-shopify.ts`); the OAuth callback subscribes to the topic alongside the order topics. UI falls back to the standard "not connected" state, so the merchant can reconnect from `/dashboard/integrations`.
+- [x] **Pin a single API version.** All Shopify Admin REST calls (callback, kb-sync, orders, products, customer(s), search, gateway customer lookup) now use `2026-04`, matching the agent client. Tests updated accordingly.
 - [ ] **GDPR webhooks** (`customers/data_request`, `customers/redact`, `shop/redact`) — only needed if Shopify App Store listing is on the table. Defer until you commit to App Store.
 
 ---
 
-## 5. Agent — two safety gaps that will burn a merchant
+## 5. Agent — remaining safety work
 
-- [ ] **Per-thread mutex.** Two browser tabs + auto-plan + manual `@mention` can race in `run.ts`. The agent can issue two refunds, send two replies, or cancel an already-cancelled order. Add a per-`thread.id` lock (Redis SETNX with TTL is fine).
-- [ ] **Daily / weekly spend cap.** `maxRefundAmount` only caps a single call. A malformed prompt could trigger many refunds before anyone notices. Add an org-level daily refund cap and disable the tool when the cap is hit until the next day.
-- [ ] **`escalate_to_human` tool.** If tools fail or the question is out-of-scope, the model hallucinates or falls silent. Add an explicit escalation tool that flags the thread, notifies the merchant via the operator channel, and stops the run.
-- [ ] **Confidence-based autonomy** (longer arc). High-confidence simple cases ("where's my order" with a shipped status, return-policy lookup) should act immediately with a 10-second undo button. That's the actual differentiation over Gorgias. Park until the safety gates above are in.
+Per-thread mutex, daily refund cap, and the `escalate_to_human` tool are all shipped (`apps/dashboard/src/lib/server/agent-lock.ts`, `apps/dashboard/src/lib/server/refund-spend.ts`, `apps/dashboard/src/lib/agent/tools/thread.ts:escalateToHuman`). Mutex fails open on Redis errors so a Redis outage doesn't take the agent offline.
+
+Residual:
+- [~] **Real-time operator push on escalation.** **Partial:** `escalate_to_human` flips the thread to `pending` with a `needs_human` tag and writes an audit note, so escalated threads surface in the next digest tick. **Missing:** an instant Telegram push to bound `OrgMember` chats. The gateway already has `notifyOperator` (`apps/gateway/src/operator-notify.ts:21`); needs a new dashboard→gateway internal endpoint to invoke it.
+- [ ] **Confidence-based autonomy** (longer arc). High-confidence simple cases ("where's my order" with a shipped status, return-policy lookup) should act immediately with a 10-second undo button. That's the actual differentiation over Gorgias. Park until production usage tells us which cases are safe to auto-resolve.
 
 ---
 
 ## 6. Onboarding — the order is wrong
 
 - [ ] **Reverse the onboarding flow.** Today it is `welcome → connect → plan`, which asks for payment before the merchant has seen a real message route through. Move plan selection to *after* the first message has actually been delivered to a connected channel.
-- [ ] **Real-channel test loop.** After the merchant connects email, prompt them to send a test message from their personal inbox and confirm receipt inline. "Connected" should not appear in the integrations row until at least one real inbound has arrived.
-- [ ] **Past-due / cancelled billing UX** — past-due state should produce a clear in-app banner and gate writes, not silently fail mid-action. (Carry-over from the old checklist.)
+- [~] **Real-channel test loop.** **Partial:** the integrations row now uses a `waiting-for-inbound` status pill (`apps/dashboard/src/components/integrations/IntegrationCard.tsx:84,95`) so "Connected" is held back until the first real inbound arrives. **Missing:** the onboarding flow itself (`(onboarding)/connect/page.tsx`) doesn't surface this — it lets the merchant move on to `/plan` the moment OAuth returns. Move the "send a test from your inbox" prompt into the onboarding step and gate progression on the first inbound landing.
 
 ---
 

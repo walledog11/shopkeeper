@@ -7,7 +7,7 @@ import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 export const dynamic = 'force-dynamic';
 
 const PRODUCT_FIELDS = 'id,title,status,vendor,product_type,tags,images,variants';
-const API_VERSION = '2024-01';
+const API_VERSION = '2026-04';
 
 export async function GET(request: Request) {
   try {

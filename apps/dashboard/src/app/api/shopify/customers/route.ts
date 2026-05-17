@@ -6,7 +6,7 @@ import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 import logger from '@/lib/server/logger';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
-const API_VERSION = '2024-01';
+const API_VERSION = '2026-04';
 
 export async function GET(request: Request) {
   try {
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     const shop = integration.externalAccountId;
     const token = integration.accessToken;
 
-    const res = await fetch(`https://${shop}/admin/api/2024-01/customers.json`, {
+    const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/customers.json`, {
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': token,

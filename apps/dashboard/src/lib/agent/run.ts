@@ -8,6 +8,7 @@ import { TOOL_CATEGORIES, selectAgentTools } from "./tools";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeTool } from "./tools/executor";
+import { ESCALATION_MARKER } from "./tools/thread";
 import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentContext, AgentResult } from "./types";
@@ -72,6 +73,7 @@ export async function runAgent(
   const actionsPerformed: ActionEntry[] = [];
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
   const failureAlertPromises: Promise<unknown>[] = [];
+  let escalationReason: string | null = null;
 
   const finish = async (result: AgentResult, outcome: string): Promise<AgentResult> => {
     if (failureAlertPromises.length > 0) {
@@ -166,6 +168,9 @@ export async function runAgent(
     }, "[agent] tool result");
     executedToolCalls.push(toolCall.name);
     actionsPerformed.push({ tool: toolCall.name, result });
+    if (result.startsWith(ESCALATION_MARKER)) {
+      escalationReason = result.slice(ESCALATION_MARKER.length).trim() || "No reason provided";
+    }
     return {
       type: "tool_result" as const,
       tool_use_id: toolCall.id,
@@ -212,6 +217,13 @@ export async function runAgent(
     }
 
     await executeToolCalls(executableToolCalls);
+
+    if (escalationReason) {
+      return finish({
+        summary: `Escalated to merchant: ${escalationReason}`,
+        actionsPerformed,
+      }, "escalated");
+    }
 
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
@@ -284,6 +296,13 @@ export async function runAgent(
 
     const toolResults = await executeToolCalls(toolUseBlocks);
     messages.push({ role: "user", content: toolResults });
+
+    if (escalationReason) {
+      return finish({
+        summary: `Escalated to merchant: ${escalationReason}`,
+        actionsPerformed,
+      }, "escalated");
+    }
   }
 
   return finish({

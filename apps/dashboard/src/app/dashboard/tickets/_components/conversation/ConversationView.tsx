@@ -294,6 +294,7 @@ export default function ConversationView({
               replyText,
               sendError,
               shopifyCustomerId,
+              lastCustomerMessageAt: ticket.lastCustomerMessageAt,
             }}
             viewTab={viewTab}
           />

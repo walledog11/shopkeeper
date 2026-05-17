@@ -74,7 +74,7 @@ describe('POST /api/integrations/shopify/kb-sync', () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ syncedPolicies: 1, syncedPages: 1 });
-    expect(String(mockFetch.mock.calls[0][0])).toBe('https://sync-shop.myshopify.com/admin/api/2024-01/policies.json');
+    expect(String(mockFetch.mock.calls[0][0])).toBe('https://sync-shop.myshopify.com/admin/api/2026-04/policies.json');
     expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'sync-token' } });
 
     const articles = await db.kbArticle.findMany({

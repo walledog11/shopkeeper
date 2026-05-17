@@ -65,16 +65,31 @@ export async function dispatchMessage(
       });
 
       if (!metaRes.ok) {
-        const errBody = await metaRes.json().catch(() => ({})) as { error?: { code?: number } };
-        const isExpired = errBody.error?.code === 190;
+        const errBody = await metaRes.json().catch(() => ({})) as {
+          error?: { code?: number; error_subcode?: number };
+        };
+        const code = errBody.error?.code;
+        const subcode = errBody.error?.error_subcode;
+        const isExpired = code === 190;
+        const isOutsideWindow = code === 10 && subcode === 2018278;
+        const userMessage = isOutsideWindow
+          ? "Instagram only allows replies within 24 hours of the customer's last message"
+          : isExpired
+            ? 'Instagram token expired'
+            : 'Failed to send via Instagram';
+        const detail = isOutsideWindow
+          ? 'Outside Instagram 24-hour messaging window'
+          : isExpired
+            ? 'Instagram token expired'
+            : 'Meta Graph API returned non-OK';
         logger.error({ err: errBody }, '[dispatchMessage] Meta API failed');
         await recordProviderSendFailure('meta', 'ig_dm', org.id, {
           counterClient: getRedis(),
           threadId: thread.id,
           integrationId: igIntegration?.id ?? null,
-          detail: isExpired ? 'Instagram token expired' : 'Meta Graph API returned non-OK',
+          detail,
         });
-        return { ok: false, error: isExpired ? 'Instagram token expired' : 'Failed to send via Instagram' };
+        return { ok: false, error: userMessage };
       }
     }
 

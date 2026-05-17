@@ -53,6 +53,13 @@ export class BadRequestError extends ApiError {
   }
 }
 
+export class ConflictError extends ApiError {
+  constructor(message = 'Conflict') {
+    super(message, 409);
+    this.name = 'ConflictError';
+  }
+}
+
 export function handleApiError(error: unknown, context: string, message: string): NextResponse {
   if (error instanceof ApiError) {
     if (error.status >= 500) {

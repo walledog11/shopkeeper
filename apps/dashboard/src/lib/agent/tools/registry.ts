@@ -23,6 +23,7 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   send_email:                   'communication',
   update_thread_status:         'internal',
   update_thread_tag:            'internal',
+  escalate_to_human:            'internal',
 }
 
 // ── Human-readable labels for executed tool calls (past tense) ───────────────
@@ -46,6 +47,7 @@ export const TOOL_LABELS: Record<string, string> = {
   send_email:                   'Sent email',
   update_thread_status:         'Updated thread status',
   update_thread_tag:            'Updated thread tag',
+  escalate_to_human:            'Escalated to merchant',
 }
 
 // ── Human-readable labels for plan steps ─────────────────────────────────────
@@ -69,6 +71,7 @@ export const PLAN_STEP_LABELS: Record<string, string> = {
   send_email:                   'Send email to customer',
   update_thread_status:         'Update ticket status',
   update_thread_tag:            'Update ticket tag',
+  escalate_to_human:            'Escalate to merchant',
 }
 
 // ── Tool definitions (Anthropic tool-use format) ──────────────────────────────
@@ -385,6 +388,21 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
       required: ["tag"],
     },
   },
+  {
+    name: "escalate_to_human",
+    description:
+      "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Marks the thread as pending with a 'needs_human' tag and logs the reason. Stop after calling this — do not attempt any other tools or send a reply.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reason: {
+          type: "string",
+          description: "A short explanation of why a human needs to take over (e.g. 'Customer is asking about wholesale pricing — out of scope', 'Shopify returned 503 on refund attempt').",
+        },
+      },
+      required: ["reason"],
+    },
+  },
 ];
 
 // ── Input types (mirrors the parameter schemas above) ─────────────────────────
@@ -488,6 +506,10 @@ export interface UpdateThreadStatusInput {
 
 export interface UpdateThreadTagInput {
   tag: string;
+}
+
+export interface EscalateToHumanInput {
+  reason: string;
 }
 
 export interface EditShopifyOrderInput {

@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     const token = integration.accessToken;
 
     const res = await fetch(
-      `https://${shop}/admin/api/2024-01/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
+      `https://${shop}/admin/api/2026-04/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
       { headers: { 'X-Shopify-Access-Token': token } }
     );
     if (!res.ok) {

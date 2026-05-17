@@ -15,6 +15,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
     read: true,
   },
   maxRefundAmount: null,
+  dailyRefundCap: null,
   blockCancellations: false,
   blockCustomLineItems: false,
   maxIterations: 10,

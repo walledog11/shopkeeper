@@ -33,7 +33,8 @@ export interface OrgSettings {
   toolsEnabled: AgentToolPermissions;
 
   // Guardrails
-  maxRefundAmount: number | null;  // null = unlimited
+  maxRefundAmount: number | null;  // per-call cap in USD; null = unlimited
+  dailyRefundCap: number | null;   // cumulative org-wide cap in USD per UTC day; null = unlimited
   blockCancellations: boolean;
   blockCustomLineItems: boolean;
   maxIterations: number;

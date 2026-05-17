@@ -22,8 +22,8 @@ export async function POST() {
     const headers = { 'X-Shopify-Access-Token': accessToken };
 
     const [policiesRes, pagesRes] = await Promise.all([
-      fetch(`https://${shop}/admin/api/2024-01/policies.json`, { headers }),
-      fetch(`https://${shop}/admin/api/2024-01/pages.json?published_status=published&limit=250`, { headers }),
+      fetch(`https://${shop}/admin/api/2026-04/policies.json`, { headers }),
+      fetch(`https://${shop}/admin/api/2026-04/pages.json?published_status=published&limit=250`, { headers }),
     ]);
 
     if (!policiesRes.ok || !pagesRes.ok) {

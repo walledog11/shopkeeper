@@ -11,7 +11,10 @@ import type {
   SendEmailInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
+  EscalateToHumanInput,
 } from "./registry";
+
+export const ESCALATION_MARKER = "__ESCALATED__:";
 
 interface ThreadContext {
   threadId: string;
@@ -327,4 +330,23 @@ export async function updateThreadTag(
     data: { tag: input.tag },
   });
   return `Thread tag updated to "${input.tag}".`;
+}
+
+// ── escalate_to_human ─────────────────────────────────────────────────────────
+
+export async function escalateToHuman(
+  input: EscalateToHumanInput,
+  ctx: ThreadContext
+): Promise<string> {
+  const reason = input.reason.trim() || "No reason provided";
+  await db.thread.update({
+    where: { id: ctx.threadId },
+    data: { status: THREAD_STATUS.PENDING, tag: "needs_human" },
+  });
+  await createMessage({
+    threadId: ctx.threadId,
+    senderType: SenderType.note,
+    contentText: `${AGENT_NOTE_PREFIX}Escalated to merchant: ${reason}`,
+  });
+  return `${ESCALATION_MARKER} ${reason}`;
 }

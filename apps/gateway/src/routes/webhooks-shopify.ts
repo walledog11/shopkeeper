@@ -1,5 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
+import { db } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
@@ -52,6 +53,29 @@ export function registerShopifyWebhookRoutes(router: Router): void {
 
     const topic = req.headers['x-shopify-topic'] as string | undefined;
     const shopDomain = req.headers['x-shopify-shop-domain'] as string | undefined;
+
+    if (topic === 'app/uninstalled') {
+      if (!shopDomain) {
+        logger.warn('[Webhook] Shopify uninstall missing shop domain header — dropping.');
+        return res.sendStatus(400);
+      }
+      try {
+        const result = await db.integration.deleteMany({
+          where: { platform: CHANNEL.SHOPIFY, externalAccountId: shopDomain },
+        });
+        logger.info(
+          { shopDomain, deleted: result.count },
+          '[Webhook] Shopify app uninstalled — integration removed',
+        );
+        return res.status(200).send('OK');
+      } catch (error) {
+        logger.error(
+          { err: error, shopDomain },
+          '[Webhook] Failed to remove Shopify integration on uninstall',
+        );
+        return res.sendStatus(500);
+      }
+    }
 
     if (!topic || !SHOPIFY_SUPPORTED_TOPICS.has(topic)) {
       return res.status(200).send('OK');

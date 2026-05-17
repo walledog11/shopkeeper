@@ -65,7 +65,7 @@ export async function lookupShopifyCustomerName(organizationId: string, email: s
 
   try {
     const res = await fetch(
-      `https://${integration.externalAccountId}/admin/api/2024-01/customers/search.json?query=email:${encodeURIComponent(email)}&limit=1&fields=first_name,last_name`,
+      `https://${integration.externalAccountId}/admin/api/2026-04/customers/search.json?query=email:${encodeURIComponent(email)}&limit=1&fields=first_name,last_name`,
       { headers: { 'X-Shopify-Access-Token': integration.accessToken } },
     );
     if (!res.ok) return null;

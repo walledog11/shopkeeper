@@ -102,7 +102,7 @@ Rules:
 Optional:
 
 - `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` for Instagram DM after v1.
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `TWILIO_WEBHOOK_URL` for WhatsApp/SMS after v1.
+- `TELEGRAM_BOT_USERNAME` for the operator-channel deep link in the dashboard.
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` if direct USPS tracking is ever reintroduced.
 
 ### Gateway Required At Production Boot
@@ -132,7 +132,7 @@ Optional:
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` for Instagram DM after v1.
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER`, `TWILIO_WEBHOOK_URL` for WhatsApp/SMS after v1.
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` for the Telegram operator channel.
 
 ## Deploy Sequence
 
@@ -206,13 +206,13 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 4. Confirm the dashboard shows the thread and plan.
 5. Approve a reply and confirm the DM is delivered.
 
-### WhatsApp / SMS (Deferred After V1)
+### Telegram Operator Channel
 
-1. Point Twilio at `POST /webhooks/twilio` on the gateway, not the dashboard proxy route.
-2. Send a real inbound WhatsApp message to the live number.
-3. Confirm the gateway accepts the webhook, queues the job, and the worker creates the thread.
-4. Confirm the WhatsApp plan notification reaches verified org members.
-5. Approve or respond and confirm the outbound customer message sends.
+1. Point the Telegram bot webhook at `POST /webhooks/telegram` on the gateway, including the `TELEGRAM_WEBHOOK_SECRET` header.
+2. From a bound org member's Telegram chat, send a real inbound message to the bot.
+3. Confirm the gateway accepts the webhook and the worker processes the operator turn.
+4. Confirm a Telegram plan notification reaches bound org members for a new ticket.
+5. Reply `yes` / `no` / freeform and confirm the agent acts (or skips) accordingly.
 
 ### Shopify
 
@@ -235,7 +235,7 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 The dashboard webhook proxy routes are for local development convenience. In production, point provider traffic directly at the gateway:
 
 - Meta -> `https://<gateway>/webhooks/meta`
-- Twilio -> `https://<gateway>/webhooks/twilio`
+- Telegram -> `https://<gateway>/webhooks/telegram`
 - Postmark inbound -> `https://<gateway>/webhooks/email/inbound`
 - Shopify -> `https://<gateway>/webhooks/shopify`
 
@@ -246,7 +246,6 @@ Clerk lifecycle webhooks are the exception because they clean up dashboard-owned
 Relevant proxy routes:
 
 - [apps/dashboard/src/app/api/webhooks/meta/route.ts](../../apps/dashboard/src/app/api/webhooks/meta/route.ts)
-- [apps/dashboard/src/app/api/webhooks/twilio/route.ts](../../apps/dashboard/src/app/api/webhooks/twilio/route.ts)
 - [apps/dashboard/src/app/api/webhooks/email/route.ts](../../apps/dashboard/src/app/api/webhooks/email/route.ts)
 
 Relevant signed dashboard webhook route:

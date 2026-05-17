@@ -7,6 +7,7 @@ import {
   sendEmail,
   updateThreadStatus,
   updateThreadTag,
+  escalateToHuman,
 } from "./thread";
 import {
   searchShopifyProducts,
@@ -24,6 +25,7 @@ import {
   editShopifyOrder,
 } from "./shopify";
 import { TOOL_CATEGORIES } from "./registry";
+import { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@/lib/server/refund-spend";
 import type { AgentContext } from "../types";
 import type {
   SearchShopifyProductsInput,
@@ -44,6 +46,7 @@ import type {
   SendEmailInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
+  EscalateToHumanInput,
   SearchKbInput,
 } from "./registry";
 
@@ -55,7 +58,7 @@ function formatPolicyError(message: string): string {
   return `Error: ${message}`;
 }
 
-function enforceToolPolicy(name: string, args: unknown, settings?: OrgSettings): string | null {
+async function enforceToolPolicy(name: string, args: unknown, orgId: string, settings?: OrgSettings): Promise<string | null> {
   const s = resolveAgentSettings(settings);
   const category = TOOL_CATEGORIES[name];
   if (category && !s.toolsEnabled[category]) {
@@ -66,17 +69,32 @@ function enforceToolPolicy(name: string, args: unknown, settings?: OrgSettings):
     return formatPolicyError("order cancellations are disabled by the workspace owner.");
   }
 
-  if (name === "create_refund" && s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
+  if (name === "create_refund") {
     const input = cast<CreateRefundInput>(args);
-    if (!input.amount) {
-      return formatPolicyError(`refund amount must be specified and cannot exceed $${s.maxRefundAmount}.`);
-    }
-    const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return formatPolicyError("refund amount must be a positive decimal value.");
-    }
-    if (amount > s.maxRefundAmount) {
-      return formatPolicyError(`refund amount $${input.amount} exceeds the workspace limit of $${s.maxRefundAmount}.`);
+    const hasPerCallCap = s.maxRefundAmount !== null && s.maxRefundAmount > 0;
+    const hasDailyCap = s.dailyRefundCap !== null && s.dailyRefundCap > 0;
+
+    if (hasPerCallCap || hasDailyCap) {
+      if (!input.amount) {
+        const limit = hasPerCallCap ? s.maxRefundAmount : s.dailyRefundCap;
+        return formatPolicyError(`refund amount must be specified and cannot exceed $${limit}.`);
+      }
+      const amount = Number(input.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return formatPolicyError("refund amount must be a positive decimal value.");
+      }
+      if (hasPerCallCap && amount > (s.maxRefundAmount as number)) {
+        return formatPolicyError(`refund amount $${input.amount} exceeds the workspace limit of $${s.maxRefundAmount}.`);
+      }
+      if (hasDailyCap) {
+        const capCents = Math.round((s.dailyRefundCap as number) * 100);
+        const requestedCents = Math.round(amount * 100);
+        const spentCents = await getDailyRefundSpendCents(orgId);
+        if (spentCents + requestedCents > capCents) {
+          const remaining = Math.max(0, capCents - spentCents) / 100;
+          return formatPolicyError(`daily refund cap of $${s.dailyRefundCap} reached; $${remaining.toFixed(2)} remaining today.`);
+        }
+      }
     }
   }
 
@@ -91,13 +109,21 @@ function enforceToolPolicy(name: string, args: unknown, settings?: OrgSettings):
   return null;
 }
 
+// The format here is coupled to the success string returned by createRefund in lib/agent/shopify/refunds.ts.
+function parseSuccessfulRefundCents(result: string): number | null {
+  const match = /^Refund of \$(\d+(?:\.\d{1,2})?) issued successfully/.exec(result);
+  if (!match) return null;
+  const cents = Math.round(Number(match[1]) * 100);
+  return Number.isFinite(cents) && cents > 0 ? cents : null;
+}
+
 export async function executeTool(
   name: string,
   args: unknown,
   ctx: AgentContext,
   settings?: OrgSettings
 ): Promise<string> {
-  const policyError = enforceToolPolicy(name, args, settings);
+  const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
   if (policyError) return policyError;
 
   const noShopify = "Error: no Shopify integration connected.";
@@ -132,8 +158,15 @@ export async function executeTool(
     case "get_order_tracking":
       return ctx.shopify ? getOrderTracking(cast<GetOrderTrackingInput>(args), ctx.shopify) : noShopify;
 
-    case "create_refund":
-      return ctx.shopify ? createRefund(cast<CreateRefundInput>(args), ctx.shopify) : noShopify;
+    case "create_refund": {
+      if (!ctx.shopify) return noShopify;
+      const result = await createRefund(cast<CreateRefundInput>(args), ctx.shopify);
+      const refundedCents = parseSuccessfulRefundCents(result);
+      if (refundedCents !== null) {
+        await incrementDailyRefundSpendCents(ctx.orgId, refundedCents);
+      }
+      return result;
+    }
 
     case "cancel_order":
       return ctx.shopify ? cancelOrder(cast<CancelOrderInput>(args), ctx.shopify) : noShopify;
@@ -162,6 +195,9 @@ export async function executeTool(
 
     case "update_thread_tag":
       return updateThreadTag(cast<UpdateThreadTagInput>(args), threadCtx);
+
+    case "escalate_to_human":
+      return escalateToHuman(cast<EscalateToHumanInput>(args), threadCtx);
 
     case "search_kb": {
       const { query } = cast<SearchKbInput>(args);

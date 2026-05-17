@@ -96,7 +96,8 @@ describe('GET /api/integrations/shopify/callback', () => {
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ errors: 'topic disabled' }, { status: 422 }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 3 } }))
-      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 4 } }));
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 4 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 5 } }));
 
     const res = await GET(new Request(signedCallbackUrl({
       code: 'oauth_code',
@@ -114,10 +115,10 @@ describe('GET /api/integrations/shopify/callback', () => {
     expect(integration.accessToken).toBe('shpat_fixture');
     expect(integration.fromEmail).toBe('Fixture Shop');
 
-    expect(mockFetch).toHaveBeenCalledTimes(6);
+    expect(mockFetch).toHaveBeenCalledTimes(7);
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://fixture-shop.myshopify.com/admin/oauth/access_token');
-    expect(String(mockFetch.mock.calls[1][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2024-01/shop.json');
-    expect(String(mockFetch.mock.calls[2][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2024-01/webhooks.json');
+    expect(String(mockFetch.mock.calls[1][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/shop.json');
+    expect(String(mockFetch.mock.calls[2][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/webhooks.json');
     expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
       'shopify',
       'webhook_registration',

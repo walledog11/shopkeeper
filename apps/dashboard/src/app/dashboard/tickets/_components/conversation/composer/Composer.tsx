@@ -22,6 +22,7 @@ interface Props {
   channelType?: string
   shopifyCustomerId?: string | null
   customerPlatformId?: string
+  lastCustomerMessageAt?: string | null
   value: string
   isClerkMode?: boolean
   viewTab: "chat" | "notes"
@@ -40,6 +41,7 @@ export default function Composer({
   channelType,
   shopifyCustomerId,
   customerPlatformId,
+  lastCustomerMessageAt,
   value,
   isClerkMode = false,
   viewTab,
@@ -61,6 +63,13 @@ export default function Composer({
 
   const isNoteTab = viewTab === "notes"
   const isEmailLike = channelType === "email" || channelType === "shopify"
+
+  const igWindowExpired =
+    channelType === "ig_dm" &&
+    !isNoteTab &&
+    !isClerkMode &&
+    (!lastCustomerMessageAt ||
+      Date.now() - new Date(lastCustomerMessageAt).getTime() > 24 * 60 * 60 * 1000)
 
   const { data: cannedData } = useSWR<{ responses: CannedResponse[] }>(
     slashQuery !== null ? '/api/canned-responses' : null,
@@ -173,7 +182,7 @@ export default function Composer({
       ]
   const placeholder = placeholderParts.join('  ·  ')
 
-  const sendDisabled = !value.trim() || isSending
+  const sendDisabled = !value.trim() || isSending || igWindowExpired
   const rememberTextareaFocus = () => {
     shouldRestoreTextareaFocusRef.current = document.activeElement === textareaRef.current
   }
@@ -213,6 +222,13 @@ export default function Composer({
           )}
         </TabButton>
       </div>
+
+      {igWindowExpired && (
+        <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+          Instagram only allows replies within 24 hours of the customer&apos;s last message. Wait
+          for them to message again before you can reply here.
+        </div>
+      )}
 
       <div className="relative px-5 pt-3">
         {/* Canned response popover */}

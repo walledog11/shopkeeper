@@ -3,11 +3,22 @@ import { AGENT_SETTINGS_DEFAULTS } from "./settings";
 import type { AgentContext } from "./runner";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 
-const { mockCreate, mockSendReply, mockUpdateThreadStatus, mockRecordAgentFailure } = vi.hoisted(() => ({
+const {
+  mockCreate,
+  mockSendReply,
+  mockUpdateThreadStatus,
+  mockRecordAgentFailure,
+  mockGetDailyRefundSpendCents,
+  mockIncrementDailyRefundSpendCents,
+  mockEscalateToHuman,
+} = vi.hoisted(() => ({
   mockCreate: vi.fn(),
   mockSendReply: vi.fn(),
   mockUpdateThreadStatus: vi.fn(),
   mockRecordAgentFailure: vi.fn().mockResolvedValue({ emitted: false }),
+  mockGetDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
+  mockIncrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
+  mockEscalateToHuman: vi.fn().mockResolvedValue("__ESCALATED__: ran out of options"),
 }));
 
 vi.mock("@/lib/ai/anthropic", () => ({
@@ -31,6 +42,13 @@ vi.mock("@/lib/agent/tools/thread", () => ({
   sendEmail: vi.fn().mockResolvedValue("Email sent."),
   updateThreadStatus: mockUpdateThreadStatus,
   updateThreadTag: vi.fn().mockResolvedValue("Tag updated."),
+  escalateToHuman: mockEscalateToHuman,
+  ESCALATION_MARKER: "__ESCALATED__:",
+}));
+
+vi.mock("@/lib/server/refund-spend", () => ({
+  getDailyRefundSpendCents: mockGetDailyRefundSpendCents,
+  incrementDailyRefundSpendCents: mockIncrementDailyRefundSpendCents,
 }));
 
 import { runAgent } from "./runner";
@@ -215,5 +233,92 @@ describe("runAgent policy enforcement", () => {
       orgId: "org_1",
       tool: "search_shopify_customers",
     }), expect.any(Object));
+  });
+
+  it("blocks a refund when the daily cap is already exhausted", async () => {
+    mockGetDailyRefundSpendCents.mockResolvedValueOnce(9000); // $90 already spent
+
+    const result = await runAgent(
+      makeCtx(),
+      "Refund the order",
+      [{ id: "pre_1", name: "create_refund", input: { order_id: "123", amount: "20.00" } }],
+      { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 }
+    );
+
+    expect(result.actionsPerformed).toEqual([
+      {
+        tool: "create_refund",
+        result: "Error: daily refund cap of $100 reached; $10.00 remaining today.",
+      },
+    ]);
+    expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
+  });
+
+  it("allows a refund under the daily cap", async () => {
+    mockGetDailyRefundSpendCents.mockResolvedValueOnce(2500); // $25 already spent
+
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        order: { id: 123, name: "#1001", currency: "USD", line_items: [], total_price: "50.00" },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        refund: {
+          currency: "USD",
+          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "20.00", maximum_refundable: "50.00" }],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        refund: { transactions: [{ amount: "20.00" }] },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await runAgent(
+        makeCtx(),
+        "Refund the order",
+        [{ id: "pre_1", name: "create_refund", input: { order_id: "123", amount: "20.00" } }],
+        { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 }
+      );
+
+      expect(result.actionsPerformed[0]?.result).toContain("Refund of $20.00 issued successfully");
+      expect(mockIncrementDailyRefundSpendCents).toHaveBeenCalledWith("org_1", 2000);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("halts the run loop after escalate_to_human and surfaces the reason in the summary", async () => {
+    mockCreate.mockReset();
+    mockEscalateToHuman.mockReset();
+    mockEscalateToHuman.mockResolvedValueOnce("__ESCALATED__: Customer is asking about wholesale pricing.");
+    mockCreate.mockResolvedValueOnce(singleToolUse("escalate_to_human", { reason: "Customer is asking about wholesale pricing." }));
+
+    const result = await runAgent(
+      makeCtx(),
+      "Help me with wholesale pricing",
+      undefined,
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result.summary).toBe("Escalated to merchant: Customer is asking about wholesale pricing.");
+    expect(result.actionsPerformed.at(-1)).toEqual({
+      tool: "escalate_to_human",
+      result: "__ESCALATED__: Customer is asking about wholesale pricing.",
+    });
+  });
+
+  it("halts an approved-plan run when escalate_to_human is in the approved set", async () => {
+    mockEscalateToHuman.mockReset();
+    mockEscalateToHuman.mockResolvedValueOnce("__ESCALATED__: Shopify is down.");
+
+    const result = await runAgent(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
+      "Issue refund",
+      [{ id: "pre_1", name: "escalate_to_human", input: { reason: "Shopify is down." } }],
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(result.summary).toBe("Escalated to merchant: Shopify is down.");
   });
 });

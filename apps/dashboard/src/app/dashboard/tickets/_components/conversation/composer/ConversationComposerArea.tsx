@@ -30,6 +30,7 @@ interface Props {
     replyText: string
     sendError: string | null
     shopifyCustomerId?: string | null
+    lastCustomerMessageAt: string | null
   }
   viewTab: "chat" | "notes"
 }
@@ -84,6 +85,7 @@ export default function ConversationComposerArea({
         channelType={composer.channelType}
         shopifyCustomerId={composer.shopifyCustomerId}
         customerPlatformId={composer.customerPlatformId}
+        lastCustomerMessageAt={composer.lastCustomerMessageAt}
         value={isClerkMode ? clerkInstruction : composer.replyText}
         isClerkMode={isClerkMode}
         viewTab={viewTab}

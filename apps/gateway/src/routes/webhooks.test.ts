@@ -493,4 +493,67 @@ describe('POST /webhooks/shopify', () => {
     expect(res.status).toBe(400);
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
+
+  it('deletes the integration on app/uninstalled', async () => {
+    const shopDomain = `shop-uninst-${org.id.slice(0, 8)}.myshopify.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: shopDomain,
+    });
+
+    const body = JSON.stringify({ id: 12345, name: 'My Shop', domain: shopDomain });
+    const sig = hmacSha256Base64(SHOPIFY_SECRET, body);
+
+    const res = await request(app)
+      .post('/webhooks/shopify')
+      .set('Content-Type', 'application/json')
+      .set('x-shopify-hmac-sha256', sig)
+      .set('x-shopify-topic', 'app/uninstalled')
+      .set('x-shopify-shop-domain', shopDomain)
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('OK');
+    expect(queueAddSpy).not.toHaveBeenCalled();
+    const after = await db.integration.findUnique({ where: { id: integration.id } });
+    expect(after).toBeNull();
+  });
+
+  it('returns 200 (no-op) on app/uninstalled when no integration matches', async () => {
+    const body = JSON.stringify({ id: 99999, name: 'Ghost', domain: 'ghost.myshopify.com' });
+    const sig = hmacSha256Base64(SHOPIFY_SECRET, body);
+
+    const res = await request(app)
+      .post('/webhooks/shopify')
+      .set('Content-Type', 'application/json')
+      .set('x-shopify-hmac-sha256', sig)
+      .set('x-shopify-topic', 'app/uninstalled')
+      .set('x-shopify-shop-domain', 'ghost.myshopify.com')
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(queueAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects app/uninstalled with bad HMAC', async () => {
+    const shopDomain = `shop-bad-${org.id.slice(0, 8)}.myshopify.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.shopify,
+      externalAccountId: shopDomain,
+    });
+
+    const body = JSON.stringify({ id: 1, domain: shopDomain });
+
+    const res = await request(app)
+      .post('/webhooks/shopify')
+      .set('Content-Type', 'application/json')
+      .set('x-shopify-hmac-sha256', 'wrongsig')
+      .set('x-shopify-topic', 'app/uninstalled')
+      .set('x-shopify-shop-domain', shopDomain)
+      .send(body);
+
+    expect(res.status).toBe(401);
+    const still = await db.integration.findUnique({ where: { id: integration.id } });
+    expect(still).not.toBeNull();
+  });
 });

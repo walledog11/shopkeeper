@@ -102,7 +102,7 @@ export async function GET(request: Request) {
     // ---------------------------------------------------------------
     // Step 4: Fetch shop info for display name
     // ---------------------------------------------------------------
-    const shopRes = await fetch(`https://${shopDomain}/admin/api/2024-01/shop.json`, {
+    const shopRes = await fetch(`https://${shopDomain}/admin/api/2026-04/shop.json`, {
       headers: { 'X-Shopify-Access-Token': accessToken },
     });
     const shopData = await shopRes.json();
@@ -142,7 +142,6 @@ export async function GET(request: Request) {
 
     logger.info({ shopName, shop: shopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
 
-    // Register order webhooks so the gateway receives Shopify order events for this store.
     // Soft-fail: a registration error should not break the OAuth flow.
     let gatewayUrl: string | null = null;
     try {
@@ -152,10 +151,10 @@ export async function GET(request: Request) {
     }
 
     if (gatewayUrl) {
-      const webhookTopics = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled'];
+      const webhookTopics = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
       await Promise.allSettled(
         webhookTopics.map((topic) =>
-          fetch(`https://${shopDomain}/admin/api/2024-01/webhooks.json`, {
+          fetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
             body: JSON.stringify({ webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } }),

@@ -28,7 +28,7 @@ clerk/
 2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
 3. Worker upserts customer/thread/message, sanitizes input (prompt injection protection), deduplicates by `externalMessageId`
 4. Worker enqueues AI summary job → Claude generates 1-sentence summary + tag (Shipping/Returns/Order Status/Product Inquiry/General)
-5. After summarizing, worker calls `/api/agent/plan-internal` to generate an agent plan, then sends WhatsApp notification to all verified org members
+5. After summarizing, worker calls `/api/agent/plan-internal` to generate an agent plan, then sends Telegram notification to all bound org members
 6. Dashboard polls `/api/threads?status=open` via SWR every 3s and shows the new thread
 7. Agent opens the ticket → auto-plan is shown → agent approves → `POST /api/agent` executes
 
@@ -40,13 +40,13 @@ clerk/
 ## Channels
 - **Email** — complete (Postmark inbound + outbound, reply threading, email quote stripping, AI spam filter on new senders)
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
-- **WhatsApp/SMS** — complete (Twilio, inbound via `/webhooks/twilio`, outbound plan notifications to verified org members, yes/no/skip plan approval via SMS reply)
+- **Telegram** — complete (operator-only, single Clerk bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
 - **TikTok** — not started (type stubs and UI placeholder only)
 
 ### Internal Channel Types (not user-facing)
 - `dashboard_agent` — thread created for each standalone Concierge chat session on `/dashboard/agent`
-- `sms_agent` — thread created when a team member interacts with the agent via WhatsApp/SMS
+- `sms_agent` — thread created when a team member interacts with the agent via Telegram (legacy name)
 
 ## Dashboard Navigation Structure
 ```
@@ -75,7 +75,7 @@ Footer
 ## AI Agent System
 The agent is the core of the product. It operates in two modes:
 
-### Support Mode (ticket threads: ig_dm, email, shopify, sms)
+### Support Mode (ticket threads: ig_dm, email, shopify)
 Triggered from the tickets page. When a ticket is opened:
 1. **Auto-plan** fires automatically if the last message is from the customer. Calls `/api/agent/plan`, which runs a 2–3 phase Claude tool-use call to generate a `PlanStep[]` without side effects. Plan is cached in `Thread.cachedPlan`.
 2. **ActionPlanCard** is shown floating above the composer. Agent reviews proposed steps, can toggle individual steps, approve, dismiss, or regenerate.
@@ -85,7 +85,7 @@ Triggered from the tickets page. When a ticket is opened:
 ### Operator Mode (dashboard_agent, sms_agent)
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
 - **Dashboard**: `/dashboard/agent` page has a persistent chat interface (session-based, one `dashboard_agent` thread per session).
-- **WhatsApp**: new ticket notification sent to all verified org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
+- **Telegram**: new ticket notification sent to all bound org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
 
 ### Agent Tools
 All tools are defined in `apps/dashboard/src/lib/agent/tools.ts`.
@@ -191,12 +191,12 @@ Configurable per org via Settings → Agent tab:
 
 ### Team
 - Org member management via Clerk.com
-- Verified phone numbers for WhatsApp agent notifications (OTP via Twilio SMS)
+- Bound Telegram chats per org member for agent notifications
 
 ### Settings
 - Workspace tab: org name, branding
 - Agent tab: all agent settings (see above)
-- Integrations tab: connect/disconnect Instagram, Shopify, Twilio/SMS, email
+- Integrations tab: connect/disconnect Instagram, Shopify, Telegram, email
 - Account tab: personal settings
 - Billing tab: Stripe portal
 - Audit log tab
@@ -205,20 +205,20 @@ Configurable per org via Settings → Agent tab:
 
 - **Organization** — one per merchant. Stores Stripe subscription fields + `settings` JSON (agent config).
 - **Integration** — one per connected platform per org. Stores access token, external account ID, token expiry.
-- **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs, phone number for SMS.
+- **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs.
 - **Thread** — belongs to org + customer. Has `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
 - **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__clerk_agent__`.
-- **SmsContext** — persists WhatsApp/SMS conversation state per phone number per org (history, pendingPlan, lastOrderNumber). DB-backed, not Redis.
-- **OrgMember** — extends Clerk org membership with verified phone number for WhatsApp notifications.
+- **OperatorContext** — persists Telegram operator conversation state per (org, chatId) (history, pendingPlan, pendingDigest, lastOrderNumber). DB-backed, not Redis.
+- **OrgMember** — extends Clerk org membership with a bound Telegram chat for operator notifications.
 - **CannedResponse** — org-scoped saved replies with tags.
 - **KnowledgeBase** — named KB container. `source`: "user" | "shopify".
 - **KbArticle** — belongs to org + KB. Has tags for context filtering.
 - **Feedback** — in-app NPS/survey (rating + comment + categories).
 
 ## Key Files
-- `apps/gateway/src/routes/webhooks.ts` — webhook handlers (Meta/Instagram, Email, Twilio, Shopify)
+- `apps/gateway/src/routes/webhooks.ts` — webhook handlers (Meta/Instagram, Email, Telegram, Shopify)
 - `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
-- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), WhatsApp plan notification (`planning.ts`)
+- `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), Telegram plan notification (`planning.ts`)
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
 - `apps/dashboard/src/lib/agent/runner.ts` — core agent: `buildContext()`, `planAgent()`, `runAgent()`
 - `apps/dashboard/src/lib/agent/tools.ts` — all tool definitions + TOOL_CATEGORIES + PLAN_STEP_LABELS
@@ -253,9 +253,7 @@ Configurable per org via Settings → Agent tab:
 - `APP_URL` — production dashboard URL (e.g. `https://app.yourdomain.com`)
 - `INBOUND_EMAIL_DOMAIN` — domain Postmark routes inbound mail to
 - `GATEWAY_INTERNAL_URL` — Railway gateway URL (e.g. `https://gateway.up.railway.app`)
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` — Twilio credentials
-- `TWILIO_FROM_NUMBER` — E.164 number for OTP SMS (phone verification)
-- `TWILIO_WEBHOOK_URL` — production Twilio webhook URL
+- `TELEGRAM_BOT_USERNAME` — Telegram bot username for the operator-channel deep link
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
 - `SHOPIFY_CLIENT_ID` — Shopify OAuth app client ID
 - `SHOPIFY_CLIENT_SECRET` — Shopify OAuth app client secret
@@ -273,9 +271,8 @@ Configurable per org via Settings → Agent tab:
 - `INTERNAL_API_SECRET` — must match dashboard value
 - `META_APP_SECRET` — Instagram webhook signature verification
 - `META_VERIFY_TOKEN` — Instagram webhook setup handshake
-- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` — Twilio credentials
-- `TWILIO_WHATSAPP_NUMBER` — WhatsApp Business number (`whatsapp:+1xxxxxxxxxx`)
-- `TWILIO_WEBHOOK_URL` — production Twilio webhook URL
+- `TELEGRAM_BOT_TOKEN` — Telegram bot token (single Clerk bot for the operator channel)
+- `TELEGRAM_WEBHOOK_SECRET` — shared secret header for `/webhooks/telegram` verification
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
 - `DASHBOARD_URL` — production dashboard URL used by the gateway for internal API calls
 - `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding / local gateway-to-dashboard calls

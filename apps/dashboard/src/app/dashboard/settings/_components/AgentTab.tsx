@@ -168,6 +168,7 @@ const DIGEST_DAYS_OPTIONS = [['every_day', 'Every day'], ['weekdays', 'Weekdays 
 
 interface RawInputs {
   maxRefund: string
+  dailyRefundCap: string
   maxIter: string
   digestHour: string
   digestSecondHour: string
@@ -182,11 +183,13 @@ function clampHour(s: string, fallback: number): number {
 
 function buildPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
   const parsedMax = raw.maxRefund.trim() === '' ? null : Number(raw.maxRefund)
+  const parsedDaily = raw.dailyRefundCap.trim() === '' ? null : Number(raw.dailyRefundCap)
   const parsedIter = Number(raw.maxIter)
   return {
     ...state,
     agentName: state.agentName.trim() || 'Clerk',
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
+    dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
     digestHour: clampHour(raw.digestHour, 8),
     digestSecondHour: clampHour(raw.digestSecondHour, 17),
@@ -198,6 +201,7 @@ function buildPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
 function rawInputsFor(s: OrgSettings): RawInputs {
   return {
     maxRefund: s.maxRefundAmount != null ? String(s.maxRefundAmount) : '',
+    dailyRefundCap: s.dailyRefundCap != null ? String(s.dailyRefundCap) : '',
     maxIter: String(s.maxIterations ?? 10),
     digestHour: String(s.digestHour ?? 8),
     digestSecondHour: String(s.digestSecondHour ?? 17),
@@ -210,6 +214,7 @@ export default function AgentTab({ settings, version }: Props) {
   const [state, dispatch] = useReducer(reducer, settings, hydrate)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
   const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
+  const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
   const [maxIterationsInput, setMaxIterationsInput] = useState<string>(initialRaw.maxIter)
   const [digestHourInput, setDigestHourInput] = useState<string>(initialRaw.digestHour)
   const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
@@ -224,13 +229,14 @@ export default function AgentTab({ settings, version }: Props) {
   const payload = useMemo(
     () => buildPayload(state, {
       maxRefund: maxRefundInput,
+      dailyRefundCap: dailyRefundCapInput,
       maxIter: maxIterationsInput,
       digestHour: digestHourInput,
       digestSecondHour: digestSecondHourInput,
       bhStart: businessHoursStartInput,
       bhEnd: businessHoursEndInput,
     }),
-    [state, maxRefundInput, maxIterationsInput, digestHourInput, digestSecondHourInput, businessHoursStartInput, businessHoursEndInput],
+    [state, maxRefundInput, dailyRefundCapInput, maxIterationsInput, digestHourInput, digestSecondHourInput, businessHoursStartInput, businessHoursEndInput],
   )
 
   const initialPayloadRef = useRef<string>(JSON.stringify(payload))
@@ -244,6 +250,7 @@ export default function AgentTab({ settings, version }: Props) {
     const raw = rawInputsFor(target)
     dispatch({ type: 'reset', payload: hydrated })
     setMaxRefundInput(raw.maxRefund)
+    setDailyRefundCapInput(raw.dailyRefundCap)
     setMaxIterationsInput(raw.maxIter)
     setDigestHourInput(raw.digestHour)
     setDigestSecondHourInput(raw.digestSecondHour)
@@ -428,6 +435,22 @@ export default function AgentTab({ settings, version }: Props) {
               />
             </div>
             <p className="text-[11px] text-white/30">Refunds above this amount will require manual approval.</p>
+          </div>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-semibold text-white/60">
+              Daily refund cap
+              <span className="ml-1.5 font-normal text-white/30">· leave blank for no limit</span>
+            </label>
+            <div className="relative w-48">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
+              <Input
+                value={dailyRefundCapInput}
+                onChange={e => setDailyRefundCapInput(e.target.value.replace(/[^0-9.]/g, ''))}
+                placeholder="e.g. 200"
+                className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
+              />
+            </div>
+            <p className="text-[11px] text-white/30">Total refunds the agent can issue per day across all orders. Resets at UTC midnight.</p>
           </div>
           <ToggleRow
             label="Block order cancellations"
