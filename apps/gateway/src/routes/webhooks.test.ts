@@ -6,7 +6,6 @@ import { ChannelType, db } from '@clerk/db';
 import {
   createTestOrg,
   createTestIntegration,
-  createTestThread,
   cleanupTestData,
 } from '@clerk/db/test-helpers';
 
@@ -64,7 +63,6 @@ function hmacSha256Base64(secret: string, body: Buffer | string) {
 }
 
 const META_SECRET = process.env.META_APP_SECRET!;
-const INTERNAL_SECRET = process.env.INTERNAL_API_SECRET!;
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN!;
 const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
 
