@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
         trial_period_days: 14,
         metadata: { clerkOrgId: org.clerkOrgId },
       },
-      success_url: `${appUrl}/dashboard?onboarding=complete`,
+      success_url: `${appUrl}/connect`,
       cancel_url: `${appUrl}/plan`,
       allow_promotion_codes: true,
     })

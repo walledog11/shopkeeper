@@ -50,7 +50,7 @@ export default function CreateOrgPage() {
       contentClassName="max-w-[30rem]"
     >
       <CreateOrganization
-        afterCreateOrganizationUrl="/connect"
+        afterCreateOrganizationUrl="/plan"
         appearance={getAuthClerkAppearance({
           header: "hidden",
           headerTitle: "hidden",

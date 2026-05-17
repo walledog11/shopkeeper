@@ -99,7 +99,7 @@ describe('POST /api/billing/checkout', () => {
       customer: 'cus_checkout',
       mode: 'subscription',
       line_items: [{ price: 'price_starter_test', quantity: 1 }],
-      success_url: 'http://dashboard.test/dashboard?onboarding=complete',
+      success_url: 'http://dashboard.test/connect',
       cancel_url: 'http://dashboard.test/plan',
     }));
   });

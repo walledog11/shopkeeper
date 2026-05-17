@@ -23,18 +23,24 @@ const TEAM_SIZES = [
   { id: "large", label: "51+" },
 ];
 
+const INPUT_CLASS = "bg-white/[0.04] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-green-400/40 focus-visible:border-green-400/40";
+
 export default function WelcomePage() {
   const router = useRouter();
   const { user } = useUser();
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName,  setLastName]  = useState(user?.lastName  ?? "");
-  const [useCase,   setUseCase]   = useState<string | null>(null);
+  const [useCases,  setUseCases]  = useState<string[]>([]);
   const [teamSize,  setTeamSize]  = useState<string | null>(null);
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
-  const canContinue = firstName.trim().length > 0 && useCase !== null && teamSize !== null;
+  const canContinue = firstName.trim().length > 0 && useCases.length > 0 && teamSize !== null;
+
+  function toggleUseCase(id: string) {
+    setUseCases(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
+  }
 
   async function handleContinue() {
     if (!canContinue || !user) return;
@@ -44,9 +50,9 @@ export default function WelcomePage() {
       await user.update({
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
-        unsafeMetadata: { useCase, teamSize },
+        unsafeMetadata: { useCases, teamSize },
       });
-      router.push("/connect");
+      router.push("/plan");
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);
@@ -63,39 +69,43 @@ export default function WelcomePage() {
 
         {/* Name */}
         <div className="space-y-3">
-          <label className="block text-sm font-bold text-slate-800">Your name</label>
+          <label className="block text-sm font-bold text-white/85">Your name</label>
           <div className="flex gap-3">
-            <Input placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} className="bg-white" />
-            <Input placeholder="Last name"  value={lastName}  onChange={e => setLastName(e.target.value)}  className="bg-white" />
+            <Input placeholder="First name" value={firstName} onChange={e => setFirstName(e.target.value)} className={INPUT_CLASS} />
+            <Input placeholder="Last name"  value={lastName}  onChange={e => setLastName(e.target.value)}  className={INPUT_CLASS} />
           </div>
         </div>
 
         {/* Use case */}
         <div className="space-y-3">
-          <label className="block text-sm font-bold text-slate-800">What will you mainly use Clerk for?</label>
+          <div className="flex items-baseline justify-between">
+            <label className="block text-sm font-bold text-white/85">What will you use Clerk for?</label>
+            <span className="text-xs text-white/40">Select all that apply</span>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {USE_CASES.map(({ id, icon: Icon, label, description }) => {
-              const selected = useCase === id;
+              const selected = useCases.includes(id);
               return (
                 <button
                   key={id}
-                  onClick={() => setUseCase(id)}
+                  type="button"
+                  onClick={() => toggleUseCase(id)}
                   className={cn(
                     "flex items-start gap-3 p-4 rounded-xl border text-left transition-all",
                     selected
-                      ? "border-green-400 bg-green-50 ring-1 ring-green-400"
-                      : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                      ? "border-green-400/50 bg-green-400/[0.08] ring-1 ring-green-400/30"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
                   )}
                 >
                   <div className={cn(
                     "w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border",
-                    selected ? "bg-green-100 border-green-300" : "bg-slate-50 border-slate-200"
+                    selected ? "bg-green-400/15 border-green-400/40" : "bg-white/[0.04] border-white/10"
                   )}>
-                    <Icon className={cn("w-4 h-4", selected ? "text-green-600" : "text-slate-500")} />
+                    <Icon className={cn("w-4 h-4", selected ? "text-green-300" : "text-white/55")} />
                   </div>
                   <div>
-                    <p className={cn("text-sm font-semibold", selected ? "text-slate-900" : "text-slate-700")}>{label}</p>
-                    <p className="text-xs text-slate-400 mt-0.5 leading-snug">{description}</p>
+                    <p className={cn("text-sm font-semibold", selected ? "text-white" : "text-white/85")}>{label}</p>
+                    <p className="text-xs text-white/45 mt-0.5 leading-snug">{description}</p>
                   </div>
                 </button>
               );
@@ -105,7 +115,7 @@ export default function WelcomePage() {
 
         {/* Team size */}
         <div className="space-y-3">
-          <label className="block text-sm font-bold text-slate-800">How big is your support team?</label>
+          <label className="block text-sm font-bold text-white/85">How big is your support team?</label>
           <div className="grid grid-cols-4 gap-2">
             {TEAM_SIZES.map(({ id, label }) => {
               const selected = teamSize === id;
@@ -113,15 +123,16 @@ export default function WelcomePage() {
               return (
                 <button
                   key={id}
+                  type="button"
                   onClick={() => setTeamSize(id)}
                   className={cn(
                     "flex flex-col items-center justify-center py-3 px-2 rounded-xl border text-sm font-semibold transition-all",
                     selected
-                      ? "border-green-400 bg-green-50 text-green-800 ring-1 ring-green-400"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                      ? "border-green-400/50 bg-green-400/[0.08] text-white ring-1 ring-green-400/30"
+                      : "border-white/10 bg-white/[0.03] text-white/70 hover:bg-white/[0.06]"
                   )}
                 >
-                  <Icon className={cn("w-4 h-4 mb-1", selected ? "text-green-600" : "text-slate-400")} />
+                  <Icon className={cn("w-4 h-4 mb-1", selected ? "text-green-300" : "text-white/45")} />
                   {label}
                 </button>
               );
@@ -131,15 +142,15 @@ export default function WelcomePage() {
 
         {/* CTA */}
         <div className="flex flex-col items-center gap-2 pt-2">
-          {error && <p className="text-xs text-red-500">{error}</p>}
+          {error && <p className="text-xs text-red-400">{error}</p>}
           <Button
             onClick={handleContinue}
             disabled={!canContinue || loading}
             className={cn(
               "w-full h-11 rounded-full text-sm font-bold gap-2 transition-all",
               canContinue
-                ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md"
-                : "bg-slate-100 text-slate-400 cursor-not-allowed"
+                ? "bg-green-400 text-green-950 hover:bg-green-300 shadow-[0_8px_24px_-8px_rgba(74,222,128,0.6)]"
+                : "bg-white/[0.05] text-white/35 border border-white/10 cursor-not-allowed"
             )}
           >
             {loading
@@ -147,7 +158,7 @@ export default function WelcomePage() {
               : <>Continue <ChevronRight className="w-4 h-4" /></>
             }
           </Button>
-          <p className="text-xs text-slate-400">Last name is optional</p>
+          <p className="text-xs text-white/40">Last name is optional</p>
         </div>
 
       </div>

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bot, Check, Zap, Shield, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/ui/cn";
 import OnboardingShell from "../_components/OnboardingShell";
 
 const tiers = [
@@ -93,26 +94,28 @@ export default function PlanPage() {
 
   return (
     <OnboardingShell
-      step={3}
+      step={2}
       title="Choose your plan."
       subtitle="All plans include a 14-day free trial. No credit card charged until your trial ends."
       headerWidth="max-w-xl"
     >
       {/* Billing toggle */}
-      <div className="flex items-center gap-4 bg-white border border-slate-200 p-1.5 rounded-full shadow-sm mb-10">
+      <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 p-1.5 rounded-full mb-10">
         <button
           onClick={() => setAnnual(false)}
-          className={`text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
-            !annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
-          }`}
+          className={cn(
+            "text-sm font-bold px-4 py-1.5 rounded-full transition-all",
+            !annual ? "bg-white text-slate-900 shadow-sm" : "text-white/50 hover:text-white/80"
+          )}
         >
           Monthly
         </button>
         <button
           onClick={() => setAnnual(true)}
-          className={`flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full transition-all ${
-            annual ? "bg-slate-900 text-white shadow-sm" : "text-slate-400 hover:text-slate-600"
-          }`}
+          className={cn(
+            "flex items-center gap-2 text-sm font-bold px-4 py-1.5 rounded-full transition-all",
+            annual ? "bg-white text-slate-900 shadow-sm" : "text-white/50 hover:text-white/80"
+          )}
         >
           Annually
           <span className="bg-green-400 text-green-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wide">
@@ -132,15 +135,13 @@ export default function PlanPage() {
           return (
             <div
               key={tier.slug}
-              className={`relative flex flex-col rounded-[2rem] p-8 bg-white transition-all duration-300 ${
+              className={cn(
+                "relative flex flex-col rounded-[2rem] p-8 transition-all duration-300",
                 tier.popular
-                  ? "border-2 border-green-400 shadow-[0_20px_60px_-15px_rgba(74,222,128,0.25)] md:-translate-y-3 z-10"
-                  : "border border-slate-200 shadow-sm hover:shadow-md"
-              }`}
-            >
-              {tier.popular && (
-                <div className="absolute inset-0 bg-gradient-to-b from-green-50/50 to-transparent rounded-[2rem] pointer-events-none" />
+                  ? "border border-green-400/40 bg-gradient-to-b from-green-400/[0.08] to-white/[0.02] shadow-[0_20px_60px_-20px_rgba(74,222,128,0.35)] ring-1 ring-green-400/30 md:-translate-y-3 z-10"
+                  : "border border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
               )}
+            >
               {tier.popular && (
                 <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
                   <span className="bg-green-400 text-green-950 text-[10px] font-extrabold px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm flex items-center gap-1.5">
@@ -149,38 +150,40 @@ export default function PlanPage() {
                 </div>
               )}
 
-              <div className="mb-5 relative z-10">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 border ${
-                  tier.popular ? "bg-white border-green-200 shadow-sm" : "bg-slate-50 border-slate-200"
-                }`}>
-                  <TierIcon className={`w-5 h-5 ${tier.popular ? "text-green-500" : "text-slate-600"}`} />
+              <div className="mb-5">
+                <div className={cn(
+                  "w-11 h-11 rounded-xl flex items-center justify-center mb-4 border",
+                  tier.popular ? "bg-green-400/10 border-green-400/30" : "bg-white/[0.04] border-white/10"
+                )}>
+                  <TierIcon className={cn("w-5 h-5", tier.popular ? "text-green-300" : "text-white/70")} />
                 </div>
-                <h3 className="text-xl font-extrabold tracking-tight text-slate-900 mb-1.5">{tier.name}</h3>
-                <p className="text-sm text-slate-500 leading-relaxed">{tier.description}</p>
+                <h3 className="text-xl font-extrabold tracking-tight text-white mb-1.5">{tier.name}</h3>
+                <p className="text-sm text-white/60 leading-relaxed">{tier.description}</p>
               </div>
 
-              <div className="mb-6 relative z-10">
+              <div className="mb-6">
                 {tier.enterprise ? (
-                  <p className="text-4xl font-extrabold tracking-tighter text-slate-900">Custom</p>
+                  <p className="text-4xl font-extrabold tracking-tighter text-white">Custom</p>
                 ) : (
                   <div className="flex items-end gap-1.5">
-                    <span className="text-4xl font-extrabold tracking-tighter text-slate-900">${price}</span>
-                    <span className="text-sm font-semibold text-slate-500 mb-1">/mo</span>
+                    <span className="text-4xl font-extrabold tracking-tighter text-white">${price}</span>
+                    <span className="text-sm font-semibold text-white/50 mb-1">/mo</span>
                   </div>
                 )}
                 {annual && !tier.enterprise && (
-                  <p className="text-xs text-slate-400 mt-1">Billed annually · ${price * 12}/yr</p>
+                  <p className="text-xs text-white/40 mt-1">Billed annually · ${price * 12}/yr</p>
                 )}
               </div>
 
               <Button
                 onClick={() => selectTier(tier)}
                 disabled={isDisabled || isLoading}
-                className={`w-full rounded-full h-11 text-sm font-bold mb-6 group relative z-10 transition-all ${
+                className={cn(
+                  "w-full rounded-full h-11 text-sm font-bold mb-6 group transition-all",
                   tier.popular
-                    ? "bg-green-400 text-green-950 hover:bg-green-500 shadow-md disabled:opacity-60"
-                    : "bg-white border-2 border-slate-200 text-slate-800 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-60"
-                }`}
+                    ? "bg-green-400 text-green-950 hover:bg-green-300 disabled:opacity-60"
+                    : "bg-white/[0.06] border border-white/10 text-white hover:bg-white/[0.10] disabled:opacity-60"
+                )}
               >
                 {isLoading ? (
                   <span className="flex items-center justify-center gap-2">
@@ -193,22 +196,22 @@ export default function PlanPage() {
                 )}
               </Button>
 
-              <div className="h-px w-full mb-5 bg-slate-100 relative z-10" />
+              <div className="h-px w-full mb-5 bg-white/10" />
 
-              <div className="relative z-10">
-                <p className="text-[10px] font-extrabold tracking-widest uppercase mb-3.5 text-slate-400">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-widest uppercase mb-3.5 text-white/40">
                   {tier.featuresLabel}
                 </p>
                 <ul className="space-y-3">
                   {tier.features.map((f, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm">
-                      <div className={`mt-0.5 shrink-0 ${f.ai ? "text-green-500" : "text-slate-400"}`}>
+                      <div className={cn("mt-0.5 shrink-0", f.ai ? "text-green-400" : "text-white/40")}>
                         {f.ai
-                          ? <Zap className="w-3.5 h-3.5 fill-green-500/20" />
+                          ? <Zap className="w-3.5 h-3.5 fill-green-400/20" />
                           : <Check className="w-3.5 h-3.5" />
                         }
                       </div>
-                      <span className="font-medium text-slate-700">{f.text}</span>
+                      <span className="font-medium text-white/80">{f.text}</span>
                     </li>
                   ))}
                 </ul>
@@ -219,10 +222,10 @@ export default function PlanPage() {
       </div>
 
       <Link
-        href="/dashboard"
-        className="mt-10 text-sm text-slate-400 hover:text-slate-600 transition-colors underline underline-offset-4"
+        href="/connect"
+        className="mt-10 text-sm text-white/45 hover:text-white/70 transition-colors underline underline-offset-4"
       >
-        Skip for now — explore the dashboard
+        Skip for now — connect channels
       </Link>
     </OnboardingShell>
   );
