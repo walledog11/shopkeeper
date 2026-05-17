@@ -21,6 +21,7 @@ const AGENT_SETTINGS_DEFAULTS = {
     read: true,
   },
   maxRefundAmount: null,
+  dailyRefundCap: null,
   blockCancellations: false,
   blockCustomLineItems: false,
   maxIterations: 10,
