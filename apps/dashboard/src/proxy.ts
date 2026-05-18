@@ -13,6 +13,10 @@ export default clerkMiddleware(async (auth, req) => {
 
   const { userId, orgId } = await auth()
 
+  if (userId && (pathname === '/login' || pathname === '/signup')) {
+    return NextResponse.redirect(new URL('/dashboard', req.url))
+  }
+
   if (policy.requiresAuth && !userId) {
     if (isApiPath(pathname)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

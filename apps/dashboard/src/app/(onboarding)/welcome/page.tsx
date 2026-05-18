@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { Zap, ChevronRight, Loader2, Users, User, BarChart2, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ const INPUT_CLASS = "bg-white/[0.04] border-white/10 text-white placeholder:text
 export default function WelcomePage() {
   const router = useRouter();
   const { user } = useUser();
+  const { orgId } = useAuth();
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName,  setLastName]  = useState(user?.lastName  ?? "");
@@ -52,7 +53,7 @@ export default function WelcomePage() {
         lastName: lastName.trim() || undefined,
         unsafeMetadata: { useCases, teamSize },
       });
-      router.push("/plan");
+      router.push(orgId ? "/plan" : "/create-org");
     } catch {
       setError("Something went wrong. Please try again.");
       setLoading(false);

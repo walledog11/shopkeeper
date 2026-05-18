@@ -81,4 +81,18 @@ describe('proxy middleware auth handling', () => {
     const res = await capturedHandler(fn as never, makeReq('/api/threads'));
     expect(res).toBeUndefined();
   });
+
+  it('redirects signed-in users away from /login to /dashboard', async () => {
+    const { fn } = makeAuth('usr_1', null);
+    const res = await capturedHandler(fn as never, makeReq('/login'));
+    expect(res?.status).toBe(307);
+    expect(res?.headers.get('location')).toContain('/dashboard');
+  });
+
+  it('redirects signed-in users away from /signup to /dashboard', async () => {
+    const { fn } = makeAuth('usr_1', null);
+    const res = await capturedHandler(fn as never, makeReq('/signup'));
+    expect(res?.status).toBe(307);
+    expect(res?.headers.get('location')).toContain('/dashboard');
+  });
 });

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Bot, Check, Zap, Shield, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
@@ -71,6 +70,7 @@ export default function PlanPage() {
   const router = useRouter();
   const [annual,  setAnnual]  = useState(true);
   const [loading, setLoading] = useState<string | null>(null);
+  const [error,   setError]   = useState<string | null>(null);
 
   async function selectTier(tier: typeof tiers[number]) {
     if (tier.enterprise) {
@@ -78,16 +78,21 @@ export default function PlanPage() {
       return;
     }
     setLoading(tier.slug);
+    setError(null);
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tier: tier.slug }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "Could not start checkout. Please try again.");
+      }
       const { url } = await res.json();
       router.push(url);
-    } catch {
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start checkout. Please try again.");
       setLoading(null);
     }
   }
@@ -221,12 +226,9 @@ export default function PlanPage() {
         })}
       </div>
 
-      <Link
-        href="/connect"
-        className="mt-10 text-sm text-white/45 hover:text-white/70 transition-colors underline underline-offset-4"
-      >
-        Skip for now — connect channels
-      </Link>
+      {error && (
+        <p className="mt-8 text-sm font-medium text-red-400">{error}</p>
+      )}
     </OnboardingShell>
   );
 }
