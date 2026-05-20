@@ -6,6 +6,7 @@ function stubBaseGatewayEnv() {
   vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379/0');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');
+  vi.stubEnv('TOKEN_ENCRYPTION_KEY', '0'.repeat(64));
 }
 
 afterEach(() => {
