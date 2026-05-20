@@ -19,3 +19,11 @@ export const JOB = {
   QUEUE_HEALTH_ID: 'queue-health-5min',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
+
+// 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
+export const PROCESSING_QUEUE_DEFAULTS = {
+  attempts: 3,
+  backoff: { type: 'exponential', delay: 5000 },
+  removeOnComplete: { age: 60 * 60 * 24, count: 1000 },
+  removeOnFail: { age: 60 * 60 * 24 * 7, count: 5000 },
+} as const;

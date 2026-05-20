@@ -2,8 +2,7 @@ import { Worker, Queue } from 'bullmq';
 import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
-import { QUEUE } from './constants.js';
-import { CHANNEL } from './constants.js';
+import { QUEUE, CHANNEL, PROCESSING_QUEUE_DEFAULTS } from './constants.js';
 import type { InboundJobData, AiSummaryJobData } from './types.js';
 import { validateGatewayEnv } from './config/env.js';
 import { writeWorkerHeartbeat } from './health.js';
@@ -20,12 +19,18 @@ import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { createGatewayRedisClient } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
+import { sentryBeforeSend } from './observability/redaction.js';
 
 export async function startWorkerRuntime() {
   validateGatewayEnv();
 
   if (process.env.SENTRY_DSN) {
-    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'production',
+      sendDefaultPii: false,
+      beforeSend: sentryBeforeSend,
+    });
   }
 
   const workerRedisConfig = getGatewayWorkerRedisConfig();
@@ -60,7 +65,7 @@ export async function startWorkerRuntime() {
 
   const aiSummaryQueue = new Queue(QUEUE.AI_SUMMARY, {
     connection: sharedProducerConn,
-    defaultJobOptions: { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
   });
 
   const messageWorker = new Worker<InboundJobData>(QUEUE.INBOUND, async (job) => {

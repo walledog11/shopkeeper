@@ -148,6 +148,42 @@ describe('POST /api/billing/webhook', () => {
     expect(updated.trialEndsAt).toBeNull();
   });
 
+  it('marks the org past_due on invoice.payment_failed', async () => {
+    await db.organization.update({
+      where: { id: org!.id },
+      data: { stripeStatus: 'active', stripeSubscriptionId: 'sub_active', stripePriceId: 'price_pro' },
+    });
+    mockConstructEvent.mockReturnValueOnce(stripeEvent('evt_payment_failed', 'invoice.payment_failed', {
+      id: 'in_failed',
+      customer: stripeCustomerId,
+    }));
+
+    const res = await POST(signedRequest('{}'));
+
+    expect(res.status).toBe(200);
+    const updated = await db.organization.findUniqueOrThrow({ where: { id: org!.id } });
+    expect(updated.stripeStatus).toBe('past_due');
+    expect(updated.stripeSubscriptionId).toBe('sub_active');
+    expect(updated.stripePriceId).toBe('price_pro');
+  });
+
+  it('does not override a canceled status on invoice.payment_failed', async () => {
+    await db.organization.update({
+      where: { id: org!.id },
+      data: { stripeStatus: 'canceled' },
+    });
+    mockConstructEvent.mockReturnValueOnce(stripeEvent('evt_payment_failed_canceled', 'invoice.payment_failed', {
+      id: 'in_failed_canceled',
+      customer: stripeCustomerId,
+    }));
+
+    const res = await POST(signedRequest('{}'));
+
+    expect(res.status).toBe(200);
+    const unchanged = await db.organization.findUniqueOrThrow({ where: { id: org!.id } });
+    expect(unchanged.stripeStatus).toBe('canceled');
+  });
+
   it('accepts unknown event types without changing subscription fields', async () => {
     mockConstructEvent.mockReturnValueOnce(stripeEvent('evt_unknown', 'invoice.payment_succeeded', {
       id: 'in_123',

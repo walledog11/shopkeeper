@@ -1,10 +1,16 @@
 import * as Sentry from '@sentry/nextjs';
 import { validateDashboardEnv } from '@/lib/env';
+import { sentryBeforeSend } from '@/lib/observability/redaction';
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     if (process.env.SENTRY_DSN) {
-      Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
+      Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        environment: process.env.NODE_ENV || 'production',
+        sendDefaultPii: false,
+        beforeSend: sentryBeforeSend,
+      });
     }
 
     validateDashboardEnv();

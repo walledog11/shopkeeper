@@ -1,131 +1,79 @@
 # Punch List
 
-What needs to be done next, in priority order. Not a launch checklist — a roadmap of the gaps that exist today, surfaced from a real walk through the integrations, agent, and onboarding.
+What still needs to be done before a real production launch. Stale items, already-completed work, scale-only improvements, and parked roadmap ideas have been removed.
 
-ICP: solo Shopify merchant or 2–3 person team. Email is the primary support channel, Instagram is the likely second, and the merchant talks to their own agent over a messaging app (operator channel).
-
----
-
-## 1. Email — the only channel today, and it is not actually production-grade
-
-The current Postmark flow asks the merchant to type their support address into a textbox, manually configure email forwarding, and trust DKIM/SPF will line up. None of that will work for a solo merchant.
-
-### 1a. Switch the primary email integration to Gmail / Outlook OAuth
-
-Outbound OAuth is shipped. See `docs/email-integration-overhaul.md` for the full surface — provider abstraction, Gmail + Outlook OAuth callbacks, single-active-email-row invariant, sanitized `/api/integrations` response, and the "Auth expiring" UI gate keyed off `tokenExpiresAt = new Date(0)`. Postmark forwarding is preserved as an advanced fallback.
-
-Why this matters:
-
-- No DNS to configure. Merchant clicks "Connect Gmail," authorizes via Google, done.
-- Outbound goes from the merchant's real address with their real DKIM. Inbox placement is solved by default.
-- Sent items appear in their Gmail "Sent" folder, so they can still use Gmail directly on days they want to.
-- No DKIM/SPF/Return-Path mystery for the merchant to debug.
-
-Still deferred (intentionally — see overhaul doc):
-- Gmail/Outlook inbound polling or webhook ingestion (today inbound only arrives through the Postmark/forwarding path).
-- Gmail `users.watch` / Pub/Sub renewal.
-- Outlook inbound read scopes (`Mail.ReadWrite`).
-
-### 1b. If Postmark stays as a path, fix the gaps before exposing it
-
-- [~] Display the inbound Postmark address in the UI with copy buttons and per-provider forwarding instructions (Google Workspace, Outlook 365, cPanel, Cloudflare Email Routing). **Partial:** inbound address + copy button is in `IntegrationCard.tsx` (the `EmailForwardingDisclosure`), but the body is one generic sentence — no per-provider step-by-steps for Google Workspace / Outlook 365 / cPanel / Cloudflare yet.
-- [ ] Add Postmark Sender Signature verification flow — without it, outbound from `support@merchant.com` will either be rejected by Postmark or land in spam.
+ICP: solo Shopify merchant or 2-3 person team. Email is primary, Shopify is the core data source, and the merchant talks to their own agent over Telegram.
 
 ---
 
-## 2. Operator channel — kill Twilio, switch to Telegram (then WhatsApp Cloud API)
+## 1. Production Setup
 
-The intent for Twilio was operator-to-agent chat: the merchant approves / edits agent plans over a messaging app. Twilio is the wrong vehicle for that.
-
-Why Twilio was wrong here (kept for context; code path is gone):
-- WhatsApp Business approval is weeks of friction for a feature that should "just work."
-- Per-message billing on top of the subscription — bad surprise for a solo merchant.
-- iMessage is not a real option — Apple has no public API and Mac-relay workarounds are against ToS and unreliable. Drop it from the plan entirely.
-
-### 2a. Telegram operator channel — shipped
-
-Telegram is live. `apps/gateway/src/routes/webhooks-telegram.ts` is the receiver, the `OperatorContext` table (`packages/db/prisma/schema.prisma:183`) replaced `SmsContext`, and the dashboard has a Telegram bind flow per `OrgMember`. Same `yes` / `no` / `skip N` / freeform semantics. Twilio code path was deleted in `d718485` and Twilio is gone from the integrations UI.
-
-Residual cleanup (docs only, not code):
-- [x] Strip the `TWILIO_*` references and "WhatsApp/SMS — complete (Twilio…)" line from `README.md` and `docs/production/runbook.md` — done; Telegram replaces the operator-channel callouts.
-
-### 2b. Add WhatsApp Cloud API (Meta direct, not Twilio) as the second operator option
-
-- [ ] Direct Meta Cloud API integration. Free for the first 1000 conversations/month.
-- [ ] Same plan-approval interface as Telegram, behind the same `OperatorContext` abstraction.
-- [ ] Only worth building once a merchant asks for it — Telegram covers most early users.
-
-### 2c. Evaluate web-push to a PWA as the long-term replacement
-
-- [ ] Eventually the right answer is a push notification with inline "Approve / Skip / Edit" actions to a mobile-friendly dashboard. No messaging-app dependency. Park this until Telegram is shipped.
-
----
-
-## 3. Instagram DM — almost certainly not working today
-
-Listed as "100% complete" in memory; in practice there are four reasons a real merchant cannot use it.
-
-- [x] **24-hour window handling.** `dispatch-message.ts` now distinguishes Meta `error.code === 10` / subcode `2018278` from `190`, returning a "Instagram only allows replies within 24 hours of the customer's last message" error. The composer (`Composer.tsx`) gates the send button and shows an inline amber banner for IG threads where the last customer message is older than 24h.
-- [ ] **Confirm Meta App Review status.** `instagram_manage_messages` and friends require Meta App Review before non-dev-user accounts can connect. If review hasn't been submitted/passed, no real merchant can connect IG today. Submit if not already done.
-- [ ] **Verify `entry[0].id` matches `externalAccountId`.** The webhook (`webhooks-meta.ts:81`) routes by `entry[0].id`. The callback stores `igAccountId` (IG Business Account ID). For the Instagram Login flow these match; for the older Page Messenger flow, `entry[0].id` is the Page ID and webhooks will silently drop. Print both side-by-side from a real test event and confirm.
-- [~] **OAuth error UX.** Help-content remediation guide is in place (`apps/dashboard/src/app/dashboard/_components/help/content/troubleshooting.ts:52` and `help/content/integrations.ts:48`) — covers Business account, Facebook Page link, and classic Page admin. **Missing:** that remediation copy is not surfaced at the failure point — the post-callback banner (whatever `no_ig_account` renders to today) needs to link into / inline the help content so the merchant sees it without hunting through Help.
-
----
-
-## 4. Shopify — close, but two real gaps
-
-- [x] **Handle `app/uninstalled` webhook.** Gateway now deletes the matching integration row on `app/uninstalled` (`apps/gateway/src/routes/webhooks-shopify.ts`); the OAuth callback subscribes to the topic alongside the order topics. UI falls back to the standard "not connected" state, so the merchant can reconnect from `/dashboard/integrations`.
-- [x] **Pin a single API version.** All Shopify Admin REST calls (callback, kb-sync, orders, products, customer(s), search, gateway customer lookup) now use `2026-04`, matching the agent client. Tests updated accordingly.
-- [ ] **GDPR webhooks** (`customers/data_request`, `customers/redact`, `shop/redact`) — only needed if Shopify App Store listing is on the table. Defer until you commit to App Store.
-
----
-
-## 5. Agent — remaining safety work
-
-Per-thread mutex, daily refund cap, and the `escalate_to_human` tool are all shipped (`apps/dashboard/src/lib/server/agent-lock.ts`, `apps/dashboard/src/lib/server/refund-spend.ts`, `apps/dashboard/src/lib/agent/tools/thread.ts:escalateToHuman`). Mutex fails open on Redis errors so a Redis outage doesn't take the agent offline.
-
-Residual:
-- [~] **Real-time operator push on escalation.** **Partial:** `escalate_to_human` flips the thread to `pending` with a `needs_human` tag and writes an audit note, so escalated threads surface in the next digest tick. **Missing:** an instant Telegram push to bound `OrgMember` chats. The gateway already has `notifyOperator` (`apps/gateway/src/operator-notify.ts:21`); needs a new dashboard→gateway internal endpoint to invoke it.
-- [ ] **Confidence-based autonomy** (longer arc). High-confidence simple cases ("where's my order" with a shipped status, return-policy lookup) should act immediately with a 10-second undo button. That's the actual differentiation over Gorgias. Park until production usage tells us which cases are safe to auto-resolve.
-
----
-
-## 6. Onboarding — the order is wrong
-
-- [ ] **Reverse the onboarding flow.** Today it is `welcome → connect → plan`, which asks for payment before the merchant has seen a real message route through. Move plan selection to *after* the first message has actually been delivered to a connected channel.
-- [~] **Real-channel test loop.** **Partial:** the integrations row now uses a `waiting-for-inbound` status pill (`apps/dashboard/src/components/integrations/IntegrationCard.tsx:84,95`) so "Connected" is held back until the first real inbound arrives. **Missing:** the onboarding flow itself (`(onboarding)/connect/page.tsx`) doesn't surface this — it lets the merchant move on to `/plan` the moment OAuth returns. Move the "send a test from your inbox" prompt into the onboarding step and gate progression on the first inbound landing.
-
----
-
-## 7. Real-time, not polling
-
-- [ ] Replace SWR polling (`usePaginatedThreads.ts:32` — 15s open / 60s closed) with push from the gateway when a new message lands. SSE or a hosted pubsub (Pusher / Ably / Liveblocks) is fine. The current setup is constant Neon CPU churn that scales linearly with concurrent users × open threads, and the UX latency is worse than it needs to be.
-
----
-
-## 8. Carry-over operational items from the old checklist
-
-Items from the previous checklist that are still genuinely pending and worth doing soon.
+External/provider setup and live smoke evidence. These are launch work, not product features.
 
 - [ ] Rotate `INTERNAL_API_SECRET` to a new production-only value; remove any dev/shared reuse.
-- [ ] Confirm Vercel and Railway env vars are scoped to production only (no preview/dev reuse) and that no secrets are committed to the repo.
-- [ ] Confirm Neon production branch has point-in-time recovery enabled; record the retention window in `runbook.md`.
+- [ ] Confirm Vercel and Railway env vars are scoped to production only, with no preview/dev reuse.
+- [ ] Confirm no real secrets are committed to the repo.
+- [ ] Confirm Neon production PITR is enabled; record the retention window in `docs/production/runbook.md`.
 - [ ] Stripe: production account, restricted `STRIPE_SECRET_KEY`, Starter + Pro products/prices.
-- [ ] Manually walk the failed-payment path: Stripe `invoice.payment_failed` → app reflects past-due state → user-visible banner → write-gating kicks in.
+- [ ] Run a failed-payment smoke: Stripe failed invoice event -> app reflects `past_due` -> dashboard banner appears -> write-gating blocks customer-visible writes.
+- [ ] Configure DNS for `INBOUND_EMAIL_DOMAIN`: SPF, DKIM, DMARC, and MX to Postmark. Record the verified production values.
+- [ ] Confirm `GATEWAY_RUNTIME_ROLE` is unset/`all`, or that a split Railway deploy includes a `worker` process.
+- [ ] Configure Sentry alert rules for `queue_health`, `webhook_signature`, `provider_send`, and `agent_failure`; run the controlled-alert validation in `runbook.md`.
+- [ ] Configure Better Stack checks for dashboard health, gateway deep health, and gateway queue health; record first passing checks.
+- [ ] Confirm Vercel Blob retention/loss expectations for inbound attachments and document the operator response.
+- [ ] Complete one live production support-path smoke: inbound email accepted -> queue job processed -> dashboard thread visible -> plan generated -> outbound reply delivered.
 
 ---
 
-## Explicitly out of scope
+## 2. Security Hardening
 
-- **iMessage** — no public API, no reliable path. Don't build.
-- **Twilio SMS / WhatsApp** — superseded by Telegram + WhatsApp Cloud API for the operator channel. Customer-facing SMS isn't on the ICP path.
-- **TikTok DMs** — open beta, narrow merchant overlap, large code surface. Don't pre-build.
-- **Facebook Messenger** — declining channel; Instagram covers the same audience.
-- **USPS Tracking API** — Shopify already exposes `fulfillment.tracking_url`.
-- **Ticket assignment, per-org outbound signatures, customer notes** — defer until a multi-seat customer asks.
+These are the remaining repo-side items that materially reduce launch risk.
+
+- [x] **Encrypt integration tokens at rest.** AES-256-GCM with a single `TOKEN_ENCRYPTION_KEY` (`packages/db/crypto.ts`); applied transparently via a Prisma `$extends` query extension on `Integration`. Set `TOKEN_ENCRYPTION_KEY` (32 raw bytes, hex64, or base64) in dashboard + gateway prod env; required in production by `validateDashboardEnv` / `validateGatewayEnv`. Run `node --import tsx packages/db/scripts/encrypt-integration-tokens.ts` against prod once to backfill existing rows (idempotent).
+- [ ] **Add a Content-Security-Policy header.** `apps/dashboard/next.config.js` has the other basic security headers but no CSP. Start with report-only.
+- [ ] **Upload Sentry source maps.** `beforeSend` PII scrubber is wired up (see below); source-map upload to Sentry is still pending.
+- [x] **Add a Sentry `beforeSend` PII scrubber.** `sentryBeforeSend` in `apps/dashboard/src/lib/observability/redaction.ts` and `apps/gateway/src/observability/redaction.ts` strips request bodies/cookies, redacts auth headers and known sensitive keys (token/secret/password/cookie/email/message/body), and scrubs emails from messages, breadcrumbs, and exception values. Wired into all three Sentry inits (`instrumentation.ts`, `gateway/src/index.ts`, `gateway/src/worker.ts`) with `sendDefaultPii: false`.
+- [x] **Add Pino logger redaction.** `PINO_REDACT_PATHS` in `apps/dashboard/src/lib/observability/redaction.ts` and `apps/gateway/src/observability/redaction.ts` applied to all three Pino instances (`apps/gateway/src/logger.ts`, `apps/dashboard/src/lib/logger.ts`, `apps/dashboard/src/lib/server/logger.ts`). Covers tokens, auth headers, cookies, passwords, emails, and response/raw bodies.
+- [ ] **Add an AI spend backstop.** Either set provider workspace/project limits or track per-org usage in Redis with a daily cap. The code has per-run token budgets, but no org-level spend ceiling.
+- [ ] **Finish dashboard noindex coverage.** `apps/dashboard/public/robots.txt` blocks `/dashboard/` and `/api/`, but auth, onboarding, and callback routes should also get `noindex`/`X-Robots-Tag`.
+- [ ] **Add Telegram per-`chatId` flood limiting.** The webhook validates the secret but does not rate-limit a bound operator chat.
 
 ---
 
-## How to use this list
+## 3. Billing And Queue Hardening
 
-The order is intentional. Email OAuth (1a) and the operator channel switch (2a) are the two changes that turn the app from "the founder uses it in dev" into "a real merchant can use it without you babysitting." Everything below those is real but doesn't matter if the first two aren't done.
+Small code changes that close real silent-failure modes.
+
+- [x] **Handle `invoice.payment_failed` explicitly in the Stripe webhook.** `apps/dashboard/src/app/api/billing/webhook/route.ts` now sets `stripeStatus: 'past_due'` directly on the invoice event (skipping orgs already `canceled`), independent of the `customer.subscription.updated` path.
+- [x] **Set BullMQ retention/defaults for production queues.** `PROCESSING_QUEUE_DEFAULTS` in `apps/gateway/src/constants.ts` (attempts 3, exponential backoff, 1d/1k completed, 7d/5k failed) applied to both `INBOUND` (`routes/webhooks-shared.ts`) and `AI_SUMMARY` (`worker.ts`).
+
+---
+
+## 4. Email Setup UX
+
+OAuth is the default outbound path. Postmark forwarding is still the inbound path and an advanced fallback, so the setup path needs to be clear.
+
+- [ ] **Add per-provider forwarding instructions in `IntegrationCard.tsx`.** The `EmailForwardingDisclosure` currently shows one generic sentence. Add Google Workspace, Outlook 365, cPanel, and Cloudflare Email Routing steps.
+- [ ] **Decide Postmark outbound stance.** If Postmark remains supported for outbound from `support@merchant.com`, add Sender Signature verification before exposing it. If OAuth is the only supported outbound path, remove or clearly label Postmark outbound as unsupported.
+
+---
+
+## 5. Instagram, Only If Exposed To Real Merchants
+
+Do not treat Instagram as a launch blocker unless it is actually available to non-dev merchants. Before exposing it:
+
+- [ ] Confirm Meta App Review has passed for the required Instagram messaging permissions.
+- [ ] Verify a real webhook event's `entry[0].id` matches the stored `externalAccountId`. The current OAuth callback stores the Instagram Business Account ID while webhook routing uses `entry[0].id`; this must be proven against the active Meta flow.
+- [ ] Surface `no_ig_account` remediation directly in the OAuth failure banner: Business account, linked Facebook Page, and classic Page admin access.
+
+---
+
+## Explicitly Out Of Scope
+
+- iMessage.
+- Twilio SMS or Twilio WhatsApp.
+- TikTok DMs before a merchant asks.
+- Facebook Messenger as a separate channel.
+- Direct USPS Tracking API.
+- Ticket assignment, per-org outbound signatures, and customer notes before a multi-seat customer asks.
+- Shopify GDPR webhooks before committing to a Shopify App Store listing.

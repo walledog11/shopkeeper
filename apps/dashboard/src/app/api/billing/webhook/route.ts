@@ -30,15 +30,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, duplicate: true })
     }
   } catch {
-    // Redis unavailable — fall through. Subscription updates below are idempotent.
+    // Redis unavailable — fall through. All event handlers below are idempotent.
   }
-
-  const sub = event.data.object as Stripe.Subscription
 
   switch (event.type) {
     case 'customer.subscription.created':
     case 'customer.subscription.updated':
     case 'customer.subscription.trial_will_end': {
+      const sub = event.data.object as Stripe.Subscription
       const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
       await db.organization.updateMany({
         where: { stripeCustomerId: customerId },
@@ -52,6 +51,7 @@ export async function POST(request: Request) {
       break
     }
     case 'customer.subscription.deleted': {
+      const sub = event.data.object as Stripe.Subscription
       const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
       await db.organization.updateMany({
         where: { stripeCustomerId: customerId },
@@ -61,6 +61,16 @@ export async function POST(request: Request) {
           stripePriceId: null,
           trialEndsAt: null,
         },
+      })
+      break
+    }
+    case 'invoice.payment_failed': {
+      const invoice = event.data.object as Stripe.Invoice
+      const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+      if (!customerId) break
+      await db.organization.updateMany({
+        where: { stripeCustomerId: customerId, stripeStatus: { not: 'canceled' } },
+        data: { stripeStatus: 'past_due' },
       })
       break
     }

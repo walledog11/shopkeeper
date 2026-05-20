@@ -2,11 +2,13 @@ import express from 'express';
 import * as Sentry from '@sentry/node';
 import { db } from '@clerk/db';
 import webhookRoutes from './routes/webhooks.js';
+import internalOperatorRoutes from './routes/internal-operator.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
 import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { createGatewayRedisClient } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
+import { sentryBeforeSend } from './observability/redaction.js';
 
 export function createGatewayApp() {
   const app = express();
@@ -32,7 +34,12 @@ export function createGatewayApp() {
 
 export async function startGatewayServer() {
   if (process.env.SENTRY_DSN) {
-    Sentry.init({ dsn: process.env.SENTRY_DSN, environment: process.env.NODE_ENV || 'production' });
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      environment: process.env.NODE_ENV || 'production',
+      sendDefaultPii: false,
+      beforeSend: sentryBeforeSend,
+    });
   }
 
   validateGatewayEnv();
@@ -117,6 +124,7 @@ export async function startGatewayServer() {
   });
 
   app.use('/webhooks', webhookRoutes);
+  app.use('/internal', internalOperatorRoutes);
 
   // During local dev, ngrok points to this gateway (port 8080) but dashboard OAuth
   // callbacks arrive here. Forward them to the dashboard so the OAuth flow completes.
