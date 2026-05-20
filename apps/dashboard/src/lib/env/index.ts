@@ -40,6 +40,7 @@ export function validateDashboardEnv(): void {
     const productionRequired = [
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       'APP_URL',
+      'TOKEN_ENCRYPTION_KEY',
     ] as const;
     const missingProduction = productionRequired.filter((name) => !hasEnv(name));
     if (missingProduction.length > 0) {

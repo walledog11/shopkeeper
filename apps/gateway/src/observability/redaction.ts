@@ -1,4 +1,4 @@
-import type { ErrorEvent, EventHint } from '@sentry/node';
+import type { ErrorEvent } from '@sentry/node';
 
 export const REDACTED = '[REDACTED]';
 export const REDACTED_EMAIL = '[email]';
@@ -60,7 +60,7 @@ function scrubValue(value: unknown, key?: string, depth = 0): unknown {
   return value;
 }
 
-export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEvent | null {
+export function sentryBeforeSend(event: ErrorEvent): ErrorEvent | null {
   if (event.request) {
     delete event.request.data;
     delete event.request.cookies;

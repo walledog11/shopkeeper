@@ -4,11 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import useSWR from "swr";
-import { Check, ChevronRight, Loader2, Mail, ArrowRight } from "lucide-react";
+import { Check, ChevronRight, Loader2, Mail, ArrowRight, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/ui/cn";
 import { fetcher } from "@/lib/api/fetcher";
+import { getEmailProvider } from "@/lib/messaging/email/providers";
 import OnboardingShell from "../_components/OnboardingShell";
 
 const RETURN_TO = "/connect";
@@ -16,13 +17,41 @@ const INPUT_CLASS = "bg-white/[0.04] border-white/10 text-white placeholder:text
 
 type ChannelId = "email" | "instagram" | "shopify";
 
-type IntegrationRow = { platform: string };
+type IntegrationRow = {
+  platform: string;
+  externalAccountId: string;
+  fromEmail: string | null;
+  metadata?: unknown;
+  lastActivity?: string | null;
+};
 
 const PLATFORM_TO_CHANNEL: Record<string, ChannelId> = {
   email: "email",
   ig_dm: "instagram",
   shopify: "shopify",
 };
+
+function isInboundCapable(row: IntegrationRow): boolean {
+  if (row.platform === "ig_dm") return true;
+  if (row.platform === "email") return getEmailProvider(row) === "postmark";
+  return false;
+}
+
+function describeTestTarget(row: IntegrationRow): { channel: string; target: string; instructions: string } {
+  if (row.platform === "ig_dm") {
+    const handle = row.externalAccountId.startsWith("@") ? row.externalAccountId : `@${row.externalAccountId}`;
+    return {
+      channel: "Instagram",
+      target: row.fromEmail || handle,
+      instructions: "DM your Instagram account from another account to confirm messages route in.",
+    };
+  }
+  return {
+    channel: "Email",
+    target: row.externalAccountId,
+    instructions: "Send an email to your support address from another inbox to confirm messages route in.",
+  };
+}
 
 // ── Inline connect forms ───────────────────────────────────────────────────────
 
@@ -180,14 +209,17 @@ export default function ConnectPage() {
   const router = useRouter();
   const [expanded, setExpanded] = useState<ChannelId | null>(null);
 
-  const { data } = useSWR<IntegrationRow[]>("/api/integrations", fetcher);
+  const rows = (useSWR<IntegrationRow[]>("/api/integrations", fetcher, { refreshInterval: 5000 }).data) ?? [];
 
   const connectedSet = new Set<ChannelId>(
-    (data ?? [])
-      .map(r => PLATFORM_TO_CHANNEL[r.platform])
-      .filter((c): c is ChannelId => !!c)
+    rows.map(r => PLATFORM_TO_CHANNEL[r.platform]).filter((c): c is ChannelId => !!c)
   );
   const hasAny = connectedSet.size > 0;
+
+  const inboundCapableRows = rows.filter(isInboundCapable);
+  const inboundLanded = inboundCapableRows.some(r => !!r.lastActivity);
+  const waitingForInbound = hasAny && inboundCapableRows.length > 0 && !inboundLanded;
+  const canContinue = hasAny && !waitingForInbound;
 
   return (
     <OnboardingShell
@@ -210,13 +242,50 @@ export default function ConnectPage() {
         })}
       </div>
 
+      {waitingForInbound && (
+        <div className="w-full max-w-lg mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center shrink-0">
+              <Loader2 className="w-4 h-4 text-white/55 animate-spin" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-white">Send a test message</p>
+              <p className="text-xs text-white/55 mt-0.5 leading-snug">
+                We&apos;re listening for your first inbound. This proves the connection works before you move on.
+              </p>
+              <div className="mt-3 space-y-2">
+                {inboundCapableRows.map(row => {
+                  const t = describeTestTarget(row);
+                  return (
+                    <div key={`${row.platform}:${row.externalAccountId}`} className="rounded-md bg-black/30 border border-white/[0.07] px-3 py-2">
+                      <p className="text-[10px] font-semibold text-white/35 uppercase tracking-wider">{t.channel}</p>
+                      <p className="text-xs font-mono text-white/75 truncate mt-0.5">{t.target}</p>
+                      <p className="text-[11px] text-white/40 leading-relaxed mt-1">{t.instructions}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasAny && !waitingForInbound && inboundCapableRows.length > 0 && (
+        <div className="w-full max-w-lg mt-5 rounded-xl border border-green-400/30 bg-green-400/[0.06] p-4 flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-green-400/15 border border-green-400/40 flex items-center justify-center shrink-0">
+            <Inbox className="w-4 h-4 text-green-300" />
+          </div>
+          <p className="text-sm font-semibold text-white">First message received — you&apos;re live.</p>
+        </div>
+      )}
+
       <div className="mt-8 flex flex-col items-center gap-3">
         <Button
           onClick={() => router.push("/dashboard")}
-          disabled={!hasAny}
+          disabled={!canContinue}
           className={cn(
             "h-11 px-8 rounded-full text-sm font-bold transition-all gap-2",
-            hasAny
+            canContinue
               ? "bg-green-400 text-green-950 hover:bg-green-300 shadow-[0_8px_24px_-8px_rgba(74,222,128,0.6)]"
               : "bg-white/[0.05] text-white/35 border border-white/10 cursor-not-allowed"
           )}

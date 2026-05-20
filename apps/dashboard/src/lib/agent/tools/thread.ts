@@ -4,6 +4,7 @@ import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
 import type {
   AddInternalNoteInput,
@@ -334,6 +335,45 @@ export async function updateThreadTag(
 
 // ── escalate_to_human ─────────────────────────────────────────────────────────
 
+async function notifyGatewayOfEscalation(args: {
+  organizationId: string;
+  threadId: string;
+  reason: string;
+}): Promise<void> {
+  const base = getGatewayBaseUrl();
+  if (!base) {
+    logger.warn({ threadId: args.threadId }, '[escalateToHuman] No gateway base URL — skipping operator push');
+    return;
+  }
+  const secret = process.env.INTERNAL_API_SECRET;
+  if (!secret) {
+    logger.warn({ threadId: args.threadId }, '[escalateToHuman] INTERNAL_API_SECRET unset — skipping operator push');
+    return;
+  }
+  try {
+    const res = await fetch(`${base}/internal/operator/escalate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': secret,
+      },
+      body: JSON.stringify(args),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      logger.warn(
+        { status: res.status, threadId: args.threadId, body: body.slice(0, 300) },
+        '[escalateToHuman] Gateway escalation push failed',
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      { err: (err as Error).message, threadId: args.threadId },
+      '[escalateToHuman] Gateway escalation push errored',
+    );
+  }
+}
+
 export async function escalateToHuman(
   input: EscalateToHumanInput,
   ctx: ThreadContext
@@ -347,6 +387,11 @@ export async function escalateToHuman(
     threadId: ctx.threadId,
     senderType: SenderType.note,
     contentText: `${AGENT_NOTE_PREFIX}Escalated to merchant: ${reason}`,
+  });
+  void notifyGatewayOfEscalation({
+    organizationId: ctx.orgId,
+    threadId: ctx.threadId,
+    reason,
   });
   return `${ESCALATION_MARKER} ${reason}`;
 }

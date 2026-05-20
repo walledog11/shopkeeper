@@ -63,16 +63,14 @@ export async function getOrCreateOrg() {
 
   // First time this Clerk org is seen — provision it in our DB
   const client = await clerkClient();
-  const clerkOrg = await client.organizations.getOrganization({ organizationId: orgId });
-
-  let aiContext = '';
-  try {
-    const clerkUser = await client.users.getUser(userId);
-    const meta = (clerkUser.unsafeMetadata ?? {}) as Record<string, unknown>;
-    aiContext = composeAiContext(meta.useCases, meta.teamSize);
-  } catch {
+  const [clerkOrg, clerkUser] = await Promise.all([
+    client.organizations.getOrganization({ organizationId: orgId }),
     // Welcome metadata is best-effort; never block org creation on it.
-  }
+    client.users.getUser(userId).catch(() => null),
+  ]);
+
+  const meta = (clerkUser?.unsafeMetadata ?? {}) as Record<string, unknown>;
+  const aiContext = composeAiContext(meta.useCases, meta.teamSize);
 
   const settings = aiContext
     ? { ...AGENT_SETTINGS_DEFAULTS, aiContext }

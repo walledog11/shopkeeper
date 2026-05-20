@@ -55,6 +55,10 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: DASHBOARD_URL');
   }
 
+  if (process.env.NODE_ENV === 'production' && !hasEnv('TOKEN_ENCRYPTION_KEY')) {
+    throw new Error('[Gateway] Missing required environment variable: TOKEN_ENCRYPTION_KEY');
+  }
+
   const dbUrl = requireEnv('DATABASE_URL');
   if (!dbUrl.includes('pgbouncer=true')) {
     logger.warn('[Gateway] DATABASE_URL is missing pgbouncer=true — add it to avoid connection exhaustion in production');

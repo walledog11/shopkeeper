@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, SenderType, db } from '@clerk/db';
 import {
   cleanupTestData,
@@ -200,5 +200,62 @@ describe('escalateToHuman', () => {
       where: { threadId: thread.id, senderType: SenderType.note },
     });
     expect(note?.contentText).toContain('No reason provided');
+  });
+
+  it('fires a fire-and-forget POST to the gateway escalation endpoint', async () => {
+    const customer = await createTestCustomer(org.id, 'escalation-push@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const prevSecret = process.env.INTERNAL_API_SECRET;
+    const prevGateway = process.env.GATEWAY_INTERNAL_URL;
+    const prevPublic = process.env.GATEWAY_PUBLIC_URL;
+    process.env.INTERNAL_API_SECRET = 'test-internal-secret';
+    process.env.GATEWAY_INTERNAL_URL = 'http://gateway.test';
+    delete process.env.GATEWAY_PUBLIC_URL;
+
+    let resolveSeen: (() => void) | undefined;
+    const seen = new Promise<void>((resolve) => {
+      resolveSeen = resolve;
+    });
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (url, init) => {
+        calls.push({ url: String(url), init });
+        resolveSeen?.();
+        return new Response(JSON.stringify({ notified: 1 }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+    try {
+      await escalateToHuman(
+        { reason: 'Wholesale pricing.' },
+        { threadId: thread.id, orgId: org.id, orgName: org.name },
+      );
+
+      await seen;
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toBe('http://gateway.test/internal/operator/escalate');
+      expect(calls[0]?.init?.method).toBe('POST');
+      const headers = calls[0]?.init?.headers as Record<string, string>;
+      expect(headers['x-internal-secret']).toBe('test-internal-secret');
+      const parsed = JSON.parse(calls[0]?.init?.body as string);
+      expect(parsed).toEqual({
+        organizationId: org.id,
+        threadId: thread.id,
+        reason: 'Wholesale pricing.',
+      });
+    } finally {
+      fetchSpy.mockRestore();
+      if (prevSecret === undefined) delete process.env.INTERNAL_API_SECRET;
+      else process.env.INTERNAL_API_SECRET = prevSecret;
+      if (prevGateway === undefined) delete process.env.GATEWAY_INTERNAL_URL;
+      else process.env.GATEWAY_INTERNAL_URL = prevGateway;
+      if (prevPublic === undefined) delete process.env.GATEWAY_PUBLIC_URL;
+      else process.env.GATEWAY_PUBLIC_URL = prevPublic;
+    }
   });
 });
