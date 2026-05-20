@@ -39,7 +39,7 @@ function createApp() {
   return app;
 }
 
-const SECRET = 'test-internal-secret-abc123';
+const SECRET = 'test-internal-secret-abc123'; // gitleaks:allow
 const app = createApp();
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const originalSecret = process.env.INTERNAL_API_SECRET;
