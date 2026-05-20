@@ -6,6 +6,7 @@ function stubBaseDashboardEnv() {
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');
+  vi.stubEnv('TOKEN_ENCRYPTION_KEY', '0'.repeat(64));
 }
 
 afterEach(() => {
