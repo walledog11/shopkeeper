@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 
-export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute<{ id: string }>(
+  { context: 'Canned Responses USE', errorMessage: 'Failed to track usage' },
+  async ({ org, params }) => {
+    const { id } = params;
 
     const existing = await db.cannedResponse.findUnique({ where: { id } });
-    if (!existing || existing.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    }
+    assertEntityInOrg(existing, org.id);
 
     await db.cannedResponse.update({
       where: { id },
@@ -22,7 +19,5 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     });
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Canned Responses USE', 'Failed to track usage');
-  }
-}
+  },
+);

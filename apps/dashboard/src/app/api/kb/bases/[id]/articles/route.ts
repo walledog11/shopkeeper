@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { BadRequestError, ForbiddenError, handleApiError, NotFoundError } from '@/lib/api/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
@@ -11,10 +11,10 @@ function normalizeTags(tags: unknown): string[] {
     .filter(Boolean);
 }
 
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id: knowledgeBaseId } = await params;
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute<{ id: string }>(
+  { context: 'KB article POST', errorMessage: 'Failed to create article' },
+  async ({ org, request, params }) => {
+    const { id: knowledgeBaseId } = params;
 
     const kb = await db.knowledgeBase.findFirst({
       where: { id: knowledgeBaseId, organizationId: org.id },
@@ -47,7 +47,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     });
     return NextResponse.json({ article }, { status: 201 });
-  } catch (error) {
-    return handleApiError(error, 'KB article POST', 'Failed to create article');
-  }
-}
+  },
+);

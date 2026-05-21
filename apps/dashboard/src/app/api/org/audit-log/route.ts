@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 import {
   listAgentActionLogEntries,
   listAllAgentActionLogEntries,
@@ -12,9 +11,9 @@ import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
 export const dynamic = 'force-dynamic';
 
 // Legacy alias for the Settings audit log. The canonical structured source is /api/agent/actions.
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Audit log GET', errorMessage: 'Failed to fetch audit log' },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const format = searchParams.get('format');
 
@@ -43,7 +42,5 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ entries, nextCursor });
-  } catch (error) {
-    return handleApiError(error, 'Audit log GET', 'Failed to fetch audit log');
-  }
-}
+  },
+);

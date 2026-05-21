@@ -1,27 +1,25 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Canned Responses GET', errorMessage: 'Failed to fetch canned responses' },
+  async ({ org }) => {
     const responses = await db.cannedResponse.findMany({
       where: { organizationId: org.id },
       orderBy: { createdAt: 'asc' },
     });
     return NextResponse.json({ responses });
-  } catch (error) {
-    return handleApiError(error, 'Canned Responses GET', 'Failed to fetch canned responses');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute(
+  { context: 'Canned Responses POST', errorMessage: 'Failed to create canned response' },
+  async ({ org, request }) => {
     const { title, body, tags, channels } = await request.json();
     if (!title?.trim() || !body?.trim()) {
-      return NextResponse.json({ error: 'title and body are required' }, { status: 400 });
+      throw new BadRequestError('title and body are required');
     }
     const response = await db.cannedResponse.create({
       data: {
@@ -33,7 +31,5 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json({ response }, { status: 201 });
-  } catch (error) {
-    return handleApiError(error, 'Canned Responses POST', 'Failed to create canned response');
-  }
-}
+  },
+);

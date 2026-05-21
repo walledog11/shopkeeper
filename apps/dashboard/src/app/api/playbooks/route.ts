@@ -1,31 +1,29 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Playbooks GET', errorMessage: 'Failed to fetch playbooks' },
+  async ({ org }) => {
     const playbooks = await db.playbook.findMany({
       where: { organizationId: org.id },
       orderBy: { createdAt: 'asc' },
     });
     return NextResponse.json({ playbooks });
-  } catch (error) {
-    return handleApiError(error, 'Playbooks GET', 'Failed to fetch playbooks');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute(
+  { context: 'Playbooks POST', errorMessage: 'Failed to create playbook' },
+  async ({ org, request }) => {
     const { name, trigger, actions } = await request.json();
 
     if (!name?.trim()) {
-      return NextResponse.json({ error: 'name is required' }, { status: 400 });
+      throw new BadRequestError('name is required');
     }
     if (!trigger?.type) {
-      return NextResponse.json({ error: 'trigger is required' }, { status: 400 });
+      throw new BadRequestError('trigger is required');
     }
 
     const playbook = await db.playbook.create({
@@ -38,7 +36,5 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({ playbook }, { status: 201 });
-  } catch (error) {
-    return handleApiError(error, 'Playbooks POST', 'Failed to create playbook');
-  }
-}
+  },
+);

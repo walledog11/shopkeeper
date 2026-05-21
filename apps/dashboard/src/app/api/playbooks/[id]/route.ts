@@ -1,21 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const org = await getOrCreateOrg();
-    const { id } = await params;
+export const PATCH = withOrgRoute<{ id: string }>(
+  { context: 'Playbooks PATCH', errorMessage: 'Failed to update playbook' },
+  async ({ org, request, params }) => {
+    const { id } = params;
     const { name, enabled, trigger, actions } = await request.json();
 
     const existing = await db.playbook.findUnique({ where: { id }, select: { organizationId: true } });
-    if (!existing || existing.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Playbook not found' }, { status: 404 });
-    }
+    assertEntityInOrg(existing, org.id, 'Playbook not found');
 
     const updated = await db.playbook.update({
       where: { id },
@@ -28,27 +22,18 @@ export async function PATCH(
     });
 
     return NextResponse.json({ playbook: updated });
-  } catch (error) {
-    return handleApiError(error, 'Playbooks PATCH', 'Failed to update playbook');
-  }
-}
+  },
+);
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const org = await getOrCreateOrg();
-    const { id } = await params;
+export const DELETE = withOrgRoute<{ id: string }>(
+  { context: 'Playbooks DELETE', errorMessage: 'Failed to delete playbook' },
+  async ({ org, params }) => {
+    const { id } = params;
 
     const existing = await db.playbook.findUnique({ where: { id }, select: { organizationId: true } });
-    if (!existing || existing.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Playbook not found' }, { status: 404 });
-    }
+    assertEntityInOrg(existing, org.id, 'Playbook not found');
 
     await db.playbook.delete({ where: { id } });
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Playbooks DELETE', 'Failed to delete playbook');
-  }
-}
+  },
+);

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'KB GET', errorMessage: 'Failed to fetch knowledge bases' },
+  async ({ org }) => {
     const knowledgeBases = await db.knowledgeBase.findMany({
       where: { organizationId: org.id },
       include: { articles: { orderBy: { updatedAt: 'desc' } } },
@@ -41,7 +40,5 @@ export async function GET() {
     }));
 
     return NextResponse.json({ knowledgeBases: enriched });
-  } catch (error) {
-    return handleApiError(error, 'KB GET', 'Failed to fetch knowledge bases');
-  }
-}
+  },
+);

@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { BadRequestError, handleApiError } from '@/lib/api/errors';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute(
+  { context: 'KB bases POST', errorMessage: 'Failed to create knowledge base' },
+  async ({ org, request }) => {
     const { name } = await request.json() as { name?: unknown };
     if (typeof name !== 'string' || !name.trim()) {
       throw new BadRequestError('name is required');
@@ -15,7 +15,5 @@ export async function POST(request: Request) {
       include: { articles: true },
     });
     return NextResponse.json({ knowledgeBase: kb }, { status: 201 });
-  } catch (error) {
-    return handleApiError(error, 'KB bases POST', 'Failed to create knowledge base');
-  }
-}
+  },
+);

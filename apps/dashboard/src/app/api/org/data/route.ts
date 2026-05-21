@@ -1,22 +1,21 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 // GET /api/org/data?action=export
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-
-    const rl = await rateLimit(`org:data:export:${org.id}`, 4, 3600);
-    if (!rl.success) return tooManyRequests(rl.reset);
-
+export const GET = withOrgRoute(
+  {
+    context: 'Org Data GET',
+    errorMessage: 'Failed to export data',
+    rateLimit: { key: 'org:data:export', limit: 4, windowSecs: 3600 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 
     if (action !== 'export') {
-      return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+      throw new BadRequestError('Unknown action');
     }
 
     const [customers, threads, kbArticles, cannedResponses] = await Promise.all([
@@ -76,18 +75,17 @@ export async function GET(request: Request) {
         'Cache-Control': 'no-store',
       },
     });
-  } catch (error) {
-    return handleApiError(error, 'Org Data GET', 'Failed to export data');
-  }
-}
+  },
+);
 
 // DELETE /api/org/data?action=clear_tickets
-export async function DELETE(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-
-    const rl = await rateLimit(`org:data:delete:${org.id}`, 2, 3600);
-    if (!rl.success) return tooManyRequests(rl.reset);
+export const DELETE = withOrgRoute(
+  {
+    context: 'Org Data DELETE',
+    errorMessage: 'Failed to perform action',
+    rateLimit: { key: 'org:data:delete', limit: 2, windowSecs: 3600 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
 
@@ -96,8 +94,6 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
-    return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
-  } catch (error) {
-    return handleApiError(error, 'Org Data DELETE', 'Failed to perform action');
-  }
-}
+    throw new BadRequestError('Unknown action');
+  },
+);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { BadRequestError, ForbiddenError, handleApiError, NotFoundError } from '@/lib/api/errors';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
@@ -11,10 +11,10 @@ function normalizeTags(tags: unknown): string[] {
     .filter(Boolean);
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const org = await getOrCreateOrg();
+export const PATCH = withOrgRoute<{ id: string }>(
+  { context: 'KB PATCH', errorMessage: 'Failed to update article' },
+  async ({ org, request, params }) => {
+    const { id } = params;
     const { title, body, tags } = await request.json() as {
       title?: unknown;
       body?: unknown;
@@ -42,21 +42,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updated = await db.kbArticle.update({
       where: { id },
       data: {
-        ...(title !== undefined && { title: title.trim() }),
-        ...(body !== undefined && { body: body.trim() }),
+        ...(title !== undefined && { title: (title as string).trim() }),
+        ...(body !== undefined && { body: (body as string).trim() }),
         ...(tags !== undefined && { tags: normalizeTags(tags) }),
       },
     });
     return NextResponse.json({ article: updated });
-  } catch (error) {
-    return handleApiError(error, 'KB PATCH', 'Failed to update article');
-  }
-}
+  },
+);
 
-export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params;
-    const org = await getOrCreateOrg();
+export const DELETE = withOrgRoute<{ id: string }>(
+  { context: 'KB DELETE', errorMessage: 'Failed to delete article' },
+  async ({ org, params }) => {
+    const { id } = params;
     const existing = await db.kbArticle.findFirst({
       where: { id, organizationId: org.id },
       select: { id: true, knowledgeBase: { select: { source: true } } },
@@ -67,7 +65,5 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     }
     await db.kbArticle.delete({ where: { id } });
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'KB DELETE', 'Failed to delete article');
-  }
-}
+  },
+);
