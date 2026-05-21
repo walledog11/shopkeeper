@@ -41,11 +41,19 @@ const SECURITY_HEADERS = [
   { key: 'Content-Security-Policy-Report-Only', value: CSP_HEADER_VALUE },
 ];
 
+const NOINDEX_HEADERS = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
+const NOINDEX_PATH_GROUP =
+  '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|api)';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   async headers() {
-    return [{ source: '/(.*)', headers: SECURITY_HEADERS }];
+    return [
+      { source: '/(.*)', headers: SECURITY_HEADERS },
+      { source: `/:path${NOINDEX_PATH_GROUP}`, headers: NOINDEX_HEADERS },
+      { source: `/:path${NOINDEX_PATH_GROUP}/:rest*`, headers: NOINDEX_HEADERS },
+    ];
   },
   turbopack: {
     root: path.resolve(__dirname, '../..'),

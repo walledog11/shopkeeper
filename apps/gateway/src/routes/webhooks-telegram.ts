@@ -6,11 +6,15 @@ import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { READ_TOOLS, STATUS } from '../constants.js';
 import { isTelegramConfigured, sendMessage } from '../clients/telegram-client.js';
+import { rateLimit } from '../rate-limit.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
 } from './webhooks-signature-alerts.js';
+
+const TELEGRAM_PER_CHAT_LIMIT = 30;
+const TELEGRAM_PER_CHAT_WINDOW_SECS = 60;
 
 const FILLER_PHRASES = [
   'On it…',
@@ -77,6 +81,17 @@ export function registerTelegramWebhookRoutes(router: Router): void {
     }
 
     const chatId = String(message.chat.id);
+
+    const chatRateLimit = await rateLimit(
+      getRateLimitRedis(),
+      `webhook:telegram:${chatId}`,
+      TELEGRAM_PER_CHAT_LIMIT,
+      TELEGRAM_PER_CHAT_WINDOW_SECS,
+    );
+    if (!chatRateLimit.success) {
+      logger.warn({ chatId }, '[Telegram] Per-chat rate limit exceeded — dropping');
+      return res.status(200).send('OK');
+    }
 
     if (message.chat.type !== 'private') {
       logger.info({ chatType: message.chat.type }, '[Telegram] Ignoring non-private chat');

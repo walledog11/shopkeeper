@@ -163,6 +163,51 @@ function PermissionToggleRow({
   )
 }
 
+const FORWARDING_GUIDES = [
+  {
+    id: 'google',
+    label: 'Google Workspace',
+    steps: [
+      'Gmail → Settings (gear) → See all settings → Forwarding and POP/IMAP.',
+      'Click "Add a forwarding address" and paste the address above.',
+      'Gmail sends a verification code to that address — it will appear as a new ticket in Clerk. Paste the code back into Gmail.',
+      'Select "Forward a copy of incoming mail to…" and choose to keep Gmail\'s copy in the inbox.',
+    ],
+  },
+  {
+    id: 'outlook',
+    label: 'Outlook 365',
+    steps: [
+      'Outlook on the web → Settings → Mail → Forwarding.',
+      'Enable forwarding and paste the address above.',
+      'Tick "Keep a copy of forwarded messages" so your archive stays intact.',
+      'Save.',
+    ],
+  },
+  {
+    id: 'cpanel',
+    label: 'cPanel',
+    steps: [
+      'cPanel → Email → Forwarders → Add Forwarder.',
+      'Address to Forward: your support address (e.g. support@yourstore.com).',
+      'Destination: Forward to email address — paste the address above.',
+      'Add Forwarder.',
+    ],
+  },
+  {
+    id: 'cloudflare',
+    label: 'Cloudflare',
+    steps: [
+      'Cloudflare Dashboard → your domain → Email → Email Routing → Destination addresses.',
+      'Add the address above as a destination. Cloudflare sends a verification email — it will appear as a new ticket in Clerk. Click the link inside.',
+      'Routes → create a custom address (e.g. support@yourdomain.com) routed to that destination.',
+      'Save.',
+    ],
+  },
+] as const
+
+type ForwardingProviderId = typeof FORWARDING_GUIDES[number]['id']
+
 function EmailForwardingDisclosure({
   isConnected,
   email,
@@ -177,8 +222,10 @@ function EmailForwardingDisclosure({
   onSave: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [provider, setProvider] = useState<ForwardingProviderId>('google')
   const { data: org } = useSWR<{ id: string; inboundEmailDomain: string }>(open ? '/api/org' : null, fetcher)
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
+  const guide = FORWARDING_GUIDES.find(g => g.id === provider) ?? FORWARDING_GUIDES[0]
 
   return (
     <div className="rounded-md border border-white/[0.06] bg-white/[0.015]">
@@ -204,9 +251,29 @@ function EmailForwardingDisclosure({
                 <p className="text-xs text-white/30">Loading…</p>
               )}
             </div>
-            <p className="text-[11px] text-white/30 leading-relaxed">
-              In your mail provider, add a forwarding rule pointing to the address above. Then enter your real support address below so replies go out under it.
-            </p>
+          </div>
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Set up forwarding</p>
+            <div className="flex flex-wrap gap-1">
+              {FORWARDING_GUIDES.map(g => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => setProvider(g.id)}
+                  className={cn(
+                    "text-[11px] font-medium rounded-md px-2.5 py-1 border transition-colors",
+                    provider === g.id
+                      ? "bg-white/[0.08] border-white/[0.15] text-white/85"
+                      : "bg-transparent border-white/[0.08] text-white/40 hover:text-white/65 hover:border-white/[0.12]",
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <ol className="text-[11px] text-white/40 space-y-1 list-decimal list-inside leading-relaxed pt-0.5">
+              {guide.steps.map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
           </div>
           <div className="space-y-1.5">
             <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Your support address</p>
@@ -228,6 +295,9 @@ function EmailForwardingDisclosure({
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Replace' : 'Save'}
               </Button>
             </div>
+            <p className="text-[11px] text-white/30 leading-relaxed">
+              Replies go out under this address.
+            </p>
           </div>
         </div>
       )}

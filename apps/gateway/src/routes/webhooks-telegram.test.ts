@@ -14,8 +14,9 @@ import { updateContext, getContext } from '../operator-context.js';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 // In-memory backing store for the ioredis mock so the /start bind flow can
 // round-trip telegram:bind:<token> values.
-const { redisStore, sendMessageSpy } = vi.hoisted(() => ({
+const { redisStore, incrStore, sendMessageSpy } = vi.hoisted(() => ({
   redisStore: new Map<string, string>(),
+  incrStore: new Map<string, number>(),
   sendMessageSpy: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -25,7 +26,11 @@ vi.mock('ioredis', () => ({
     this.disconnect = vi.fn();
     this.quit = vi.fn().mockResolvedValue('OK');
     this.status = 'ready';
-    this.incr = vi.fn().mockResolvedValue(1);
+    this.incr = vi.fn(async (key: string) => {
+      const next = (incrStore.get(key) ?? 0) + 1;
+      incrStore.set(key, next);
+      return next;
+    });
     this.expire = vi.fn().mockResolvedValue(1);
     this.get = vi.fn(async (key: string) => redisStore.get(key) ?? null);
     this.set = vi.fn(async (key: string, value: string) => {
@@ -102,6 +107,7 @@ function lastReplyText(): string {
 beforeEach(async () => {
   org = await createTestOrg();
   redisStore.clear();
+  incrStore.clear();
   sendMessageSpy.mockClear();
 });
 
@@ -500,5 +506,71 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+});
+
+// ── Per-chatId rate limit ────────────────────────────────────────────────────
+describe('POST /webhooks/telegram — per-chatId rate limit', () => {
+  function primeCounter(chatId: string, count: number) {
+    const now = Math.floor(Date.now() / 1000);
+    const windowStart = Math.floor(now / 60);
+    incrStore.set(`rl:webhook:telegram:${chatId}:${windowStart}`, count);
+  }
+
+  it('drops the request silently when the per-chat limit is exceeded', async () => {
+    const chatId = '9100001';
+    await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}`, telegramChatId: chatId },
+    });
+    primeCounter(chatId, 30);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    try {
+      const res = await request(app)
+        .post('/webhooks/telegram')
+        .set('x-telegram-bot-api-secret-token', SECRET)
+        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hi' } });
+
+      expect(res.status).toBe(200);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(sendMessageSpy).not.toHaveBeenCalled();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('allows requests under the limit', async () => {
+    const chatId = '9100002';
+    primeCounter(chatId, 29);
+
+    const res = await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hello' } });
+
+    expect(res.status).toBe(200);
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/isn't connected/i);
+  });
+
+  it('rate-limits chatIds independently', async () => {
+    const blockedChat = '9100003';
+    const freeChat = '9100004';
+    primeCounter(blockedChat, 30);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(blockedChat), type: 'private' }, text: 'hi' } });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(freeChat), type: 'private' }, text: 'hi' } });
+
+    await waitForReplies(1);
+    expect(sendMessageSpy.mock.calls.length).toBe(1);
+    expect(sendMessageSpy.mock.calls[0][0]).toBe(freeChat);
   });
 });
