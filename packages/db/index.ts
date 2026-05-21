@@ -169,3 +169,17 @@ export {
 };
 export type { PrismaClientType as PrismaClient, DbChannelType, DbSenderType, DbThreadFilterStatus, DbThreadFilterFeedback };
 export { encryptToken, decryptToken, isEncrypted } from './crypto.js';
+export {
+  DEFAULT_DAILY_LLM_SPEND_CAP_USD,
+  LLM_PRICING,
+  NANO_DOLLARS_PER_USD,
+  SPEND_KEY_TTL_SECONDS,
+  SpendCapError,
+  isSpendCapError,
+  nanoDollarsToUsd,
+  spendKey,
+  usageToNanoDollars,
+  usdToNanoDollars,
+  utcDayString,
+} from './llm-spend.js';
+export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';

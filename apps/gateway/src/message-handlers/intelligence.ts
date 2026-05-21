@@ -1,6 +1,7 @@
-import { db, SenderType } from '@clerk/db';
+import { db, isSpendCapError, SenderType } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, MODEL } from '../constants.js';
+import { enforceSpendCap, readUsageFromAnthropic, recordSpend } from '../llm-spend.js';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
   getAnthropic,
@@ -32,12 +33,15 @@ export async function generateThreadIntelligence(
       .map((m) => `${m.senderType.toUpperCase()}: ${m.contentText}`)
       .join('\n');
 
+    await enforceSpendCap(fullThread.organizationId, null);
+
     const aiResponse = await getAnthropic().messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 256,
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: conversationText }],
     });
+    await recordSpend(fullThread.organizationId, readUsageFromAnthropic(aiResponse), MODEL.CLAUDE);
 
     const block = aiResponse.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
@@ -73,6 +77,12 @@ export async function generateThreadIntelligence(
 
     return updated;
   } catch (aiError) {
+    if (isSpendCapError(aiError)) {
+      // Daily cap reached — leave the thread without a fresh aiSummary/tag.
+      // The next call after midnight UTC will refresh it.
+      logger.warn({ threadId }, '[Worker] AI summary skipped — daily LLM spend cap reached');
+      return db.thread.findUnique({ where: { id: threadId } });
+    }
     logger.error({ err: aiError, threadId }, '[Worker] Failed to generate AI summary');
     throw aiError;
   }

@@ -1,5 +1,9 @@
 import { anthropic } from "./anthropic";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { OrgSettings } from "@/types";
+import { enforceSpendCap, recordSpend } from "@/lib/agent/spend";
+import { resolveAgentSettings } from "@/lib/agent/settings";
+import { readModelUsage } from "@/lib/agent/usage";
 
 // Single source of truth for the AI model used across the dashboard.
 // Change this one constant to upgrade or swap models everywhere.
@@ -19,13 +23,27 @@ export interface AIMessage {
  * @param options.maxTokens  Max tokens in the response (default 1024)
  * @param options.temperature  0–1, higher = more creative (default 0.5)
  */
+export interface GenerateTextOptions {
+  maxTokens?: number;
+  temperature?: number;
+  // When provided, the call is gated by the org's daily LLM spend cap and the
+  // token usage is recorded against the org. Omit only for tests / paths that
+  // genuinely have no org context.
+  orgId?: string;
+  settings?: Partial<OrgSettings> | null;
+}
+
 export async function generateText(
   systemPrompt: string,
   messages: AIMessage[],
-  options?: { maxTokens?: number; temperature?: number }
+  options?: GenerateTextOptions,
 ): Promise<string> {
   if (isDeterministicE2EAIEnabled()) {
     return deterministicE2EText(systemPrompt, messages);
+  }
+
+  if (options?.orgId) {
+    await enforceSpendCap(options.orgId, resolveAgentSettings(options.settings ?? null));
   }
 
   const response = await anthropic.messages.create({
@@ -35,6 +53,10 @@ export async function generateText(
     system: systemPrompt,
     messages,
   });
+
+  if (options?.orgId) {
+    await recordSpend(options.orgId, readModelUsage(response), AI_MODEL);
+  }
 
   const textBlock = response.content.find(
     (b): b is Anthropic.TextBlock => b.type === "text"

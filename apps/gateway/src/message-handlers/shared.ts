@@ -9,9 +9,11 @@ import {
   type DbThreadFilterStatus,
 } from '@clerk/db';
 import Anthropic from '@anthropic-ai/sdk';
+import { isSpendCapError } from '@clerk/db';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { JOB, MODEL, STATUS } from '../constants.js';
+import { enforceSpendCap, readUsageFromAnthropic, recordSpend } from '../llm-spend.js';
 
 const MAX_INPUT_LENGTH = 4000;
 
@@ -160,27 +162,41 @@ function deterministicE2EClassification(subject: string, body: string): Classifi
 }
 
 // Fails open to 'genuine' so a classifier outage never drops legitimate mail.
-export async function classifyAndSummarizeNewEmail(subject: string, body: string): Promise<ClassificationResult> {
+// orgId is passed so the call counts against the org's daily LLM spend cap;
+// if the org has hit its cap, we skip the classifier (still fail open).
+export async function classifyAndSummarizeNewEmail(
+  organizationId: string,
+  subject: string,
+  body: string,
+): Promise<ClassificationResult> {
   const deterministic = deterministicE2EClassification(subject, body);
   if (deterministic) return deterministic;
 
   try {
+    // Gateway uses default cap (per-org override applies on dashboard agent runs).
+    await enforceSpendCap(organizationId, null);
+
     const response = await getAnthropic().messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 256,
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: `Subject: ${subject}\n\nBody: ${body}` }],
     });
+    await recordSpend(organizationId, readUsageFromAnthropic(response), MODEL.CLAUDE);
     const block = response.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     return parseClassifierJson(block.text);
   } catch (error) {
-    logger.error({ err: error }, '[Worker] Classifier failed — failing open as genuine');
+    if (isSpendCapError(error)) {
+      logger.warn({ organizationId }, '[Worker] Classifier skipped — daily LLM spend cap reached');
+    } else {
+      logger.error({ err: error }, '[Worker] Classifier failed — failing open as genuine');
+    }
     return {
       summary: subject?.slice(0, 200) || 'New email',
       tag: 'General',
       filterStatus: 'genuine',
-      filterReason: 'Classifier unavailable',
+      filterReason: isSpendCapError(error) ? 'Daily AI spend cap reached' : 'Classifier unavailable',
     };
   }
 }

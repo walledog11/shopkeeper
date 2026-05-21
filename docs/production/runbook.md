@@ -77,6 +77,8 @@ npm run build -w apps/gateway
 - `UPSTASH_REDIS_REST_TOKEN`
 - `SENTRY_DSN`
 
+> Dashboard `UPSTASH_REDIS_REST_URL` (REST) and gateway `REDIS_URL` (Redis protocol) must point at the **same** Upstash database. Counters for the daily LLM spend cap (`llm:spend:{orgId}:{YYYY-MM-DD}`) are read/written from both apps and depend on a shared key namespace. If they point at different instances, the cap is enforced per-app, not per-org.
+
 Rules:
 
 - `APP_URL` must be a valid absolute `http` or `https` URL.

@@ -35,7 +35,11 @@ export async function POST(request: Request) {
       content: msg.contentText || "",
     }));
 
-    const newSummary = await generateText(systemPrompt, messages, { temperature: 0.5 });
+    const newSummary = await generateText(systemPrompt, messages, {
+      temperature: 0.5,
+      orgId: org.id,
+      settings: (org.settings ?? null) as Partial<import('@/types').OrgSettings> | null,
+    });
 
     if (!newSummary) {
       return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });

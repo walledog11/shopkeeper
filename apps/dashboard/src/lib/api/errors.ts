@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isSpendCapError, nanoDollarsToUsd } from '@clerk/db';
 import logger from '@/lib/server/logger';
 
 export interface ApiErrorDetail {
@@ -61,6 +62,18 @@ export class ConflictError extends ApiError {
 }
 
 export function handleApiError(error: unknown, context: string, message: string): NextResponse {
+  if (isSpendCapError(error)) {
+    logger.warn({ context }, '[api] spend cap reached');
+    return NextResponse.json(
+      {
+        error: 'AI spend cap reached for today. Increase the daily limit in Settings or wait until midnight UTC.',
+        code: 'spend_cap_reached',
+        currentUsd: nanoDollarsToUsd(error.currentNanoUsd),
+        capUsd: nanoDollarsToUsd(error.capNanoUsd),
+      },
+      { status: 429 },
+    );
+  }
   if (error instanceof ApiError) {
     if (error.status >= 500) {
       logger.error({ err: error }, `[${context}]`);

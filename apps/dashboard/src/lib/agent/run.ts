@@ -13,6 +13,7 @@ import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentContext, AgentResult } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
+import { enforceSpendCap, recordSpend } from "./spend";
 import {
   recordAgentFailure,
   type AgentFailureAlertRoute,
@@ -246,6 +247,8 @@ export async function runAgent(
   for (let i = 0; i < maxIterations; i += 1) {
     logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
 
+    await enforceSpendCap(ctx.orgId, s);
+
     const response = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: readOnly ? 2048 : 4096,
@@ -259,6 +262,7 @@ export async function runAgent(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
     const usage = recordModelUsage(usageTotals, response);
+    await recordSpend(ctx.orgId, usage, AI_MODEL);
     logger.info({
       iteration: i,
       stopReason: response.stop_reason,

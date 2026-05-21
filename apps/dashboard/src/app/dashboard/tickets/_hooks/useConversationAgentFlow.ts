@@ -183,7 +183,8 @@ export function useConversationAgentFlow({
           body: JSON.stringify({ threadId: ticket.id, instruction }),
         })
         if (!response.ok) {
-          throw new Error("Plan request failed")
+          const errData = await response.json().catch(() => null) as { error?: string } | null
+          throw new Error(errData?.error ?? "Plan request failed")
         }
 
         const plan: AgentPlan = await response.json()
@@ -198,14 +199,14 @@ export function useConversationAgentFlow({
           setPendingInstruction(null)
           setPendingPlan(resolvePendingPlan(plan, instruction))
         }
-      } catch {
+      } catch (err) {
         setIsPlanLoading(false)
         setPendingInstruction(null)
         onAgentTurnAdd(createAgentTurn({
           instruction,
           actions: [],
           summary: null,
-          error: "Failed to generate plan — please try again.",
+          error: err instanceof Error ? err.message : "Failed to generate plan — please try again.",
         }))
       }
 

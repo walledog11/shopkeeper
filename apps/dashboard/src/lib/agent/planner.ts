@@ -10,6 +10,8 @@ import { executeTool } from "./tools/executor";
 import { buildMessageHistory } from "./message-history";
 import type { AgentContext } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
+import { enforceSpendCap, recordSpend } from "./spend";
+import { resolveAgentSettings } from "./settings";
 
 function describeTool(name: string, input: unknown): string {
   const a = input as Record<string, unknown>;
@@ -81,6 +83,9 @@ export async function planAgent(
   const baseMessages = buildMessageHistory(historyWindow, instruction);
   const systemPrompt = buildSystemPrompt(ctx, settings);
   const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
+  const resolvedSettings = resolveAgentSettings(settings);
+
+  await enforceSpendCap(ctx.orgId, resolvedSettings);
 
   logger.info({
     orgId: ctx.orgId,
@@ -103,6 +108,7 @@ export async function planAgent(
 
   const blocks1 = response1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   const usage1 = recordModelUsage(usageTotals, response1);
+  await recordSpend(ctx.orgId, usage1, AI_MODEL);
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
@@ -191,6 +197,7 @@ export async function planAgent(
       },
     ];
 
+    await enforceSpendCap(ctx.orgId, resolvedSettings);
     const response15 = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 2048,
@@ -200,6 +207,7 @@ export async function planAgent(
     });
     lastBlocks = response15.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const usage15 = recordModelUsage(usageTotals, response15);
+    await recordSpend(ctx.orgId, usage15, AI_MODEL);
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
@@ -231,6 +239,7 @@ export async function planAgent(
       ),
     ];
 
+    await enforceSpendCap(ctx.orgId, resolvedSettings);
     const response2 = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 512,
@@ -244,6 +253,7 @@ export async function planAgent(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply"
     );
     const usage2 = recordModelUsage(usageTotals, response2);
+    await recordSpend(ctx.orgId, usage2, AI_MODEL);
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,

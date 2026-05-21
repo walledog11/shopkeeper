@@ -144,7 +144,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             filterStatus: 'genuine',
             filterReason: 'Existing customer with prior genuine thread',
           }
-        : await classifyAndSummarizeNewEmail(subject!, body!);
+        : await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
     }
 
     const emailLocal = senderEmail!.split('@')[0];
