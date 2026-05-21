@@ -28,7 +28,9 @@ vi.mock("@/lib/ai/anthropic", () => ({
 vi.mock("@/lib/server/logger", () => ({
   default: {
     info: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
+    debug: vi.fn(),
   },
 }));
 
@@ -49,6 +51,12 @@ vi.mock("@/lib/agent/tools/thread", () => ({
 vi.mock("@/lib/server/refund-spend", () => ({
   getDailyRefundSpendCents: mockGetDailyRefundSpendCents,
   incrementDailyRefundSpendCents: mockIncrementDailyRefundSpendCents,
+}));
+
+vi.mock("@/lib/agent/spend", () => ({
+  enforceSpendCap: vi.fn().mockResolvedValue(undefined),
+  recordSpend: vi.fn().mockResolvedValue(undefined),
+  getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
 import { runAgent } from "./runner";
