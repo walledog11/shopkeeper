@@ -22,6 +22,7 @@ const AGENT_SETTINGS_DEFAULTS = {
   },
   maxRefundAmount: null,
   dailyRefundCap: null,
+  dailyLLMSpendCapUsd: null,
   blockCancellations: false,
   blockCustomLineItems: false,
   maxIterations: 10,
