@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
 
 function serializeIntegration<T extends {
@@ -23,10 +22,9 @@ function serializeIntegration<T extends {
   };
 }
 
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
-
+export const GET = withOrgRoute(
+  { context: 'Integrations GET', errorMessage: 'Failed to fetch integrations' },
+  async ({ org }) => {
     const [integrations, activityRows] = await Promise.all([
       db.integration.findMany({
         where: { organizationId: org.id },
@@ -47,30 +45,30 @@ export async function GET() {
     const result = integrations.map(i => serializeIntegration(i, lastActivityByChannel[i.platform] ?? null));
 
     return NextResponse.json(result);
-  } catch (error) {
-    return handleApiError(error, 'Integrations GET', 'Failed to fetch integrations');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    const rl = await rateLimit(`integrations:create:${org.id}`, 20, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
+export const POST = withOrgRoute(
+  {
+    context: 'Integrations POST',
+    errorMessage: 'Failed to create integration',
+    rateLimit: { key: 'integrations:create', limit: 20, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { platform, externalAccountId, fromEmail } = await request.json();
 
     if (!platform || !externalAccountId) {
-      return NextResponse.json({ error: 'Missing platform or externalAccountId' }, { status: 400 });
+      throw new BadRequestError('Missing platform or externalAccountId');
     }
 
     if (!Object.values(CHANNEL_TYPE).includes(platform)) {
-      return NextResponse.json({ error: 'Invalid platform' }, { status: 400 });
+      throw new BadRequestError('Invalid platform');
     }
 
     if (platform === CHANNEL_TYPE.EMAIL) {
       const normalizedEmail = String(externalAccountId).trim().toLowerCase();
       if (!normalizedEmail) {
-        return NextResponse.json({ error: 'Missing platform or externalAccountId' }, { status: 400 });
+        throw new BadRequestError('Missing platform or externalAccountId');
       }
       const normalizedFromEmail = fromEmail === undefined || fromEmail === null
         ? normalizedEmail
@@ -158,7 +156,5 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(serializeIntegration(integration), { status: 201 });
-  } catch (error) {
-    return handleApiError(error, 'Integrations POST', 'Failed to create integration');
-  }
-}
+  },
+);
