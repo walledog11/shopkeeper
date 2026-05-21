@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import logger from '@/lib/server/logger';
+import { NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Shopify Customer Search', errorMessage: 'server_error' },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim();
 
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -35,9 +35,5 @@ export async function GET(request: Request) {
     const data = await res.json();
 
     return NextResponse.json({ customers: data.customers ?? [] });
-
-  } catch (err) {
-    logger.error({ err }, '[Shopify Customer Search] Error');
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
-  }
-}
+  },
+);

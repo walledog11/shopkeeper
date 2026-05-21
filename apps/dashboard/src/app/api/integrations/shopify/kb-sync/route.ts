@@ -1,21 +1,20 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { ApiError, BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
 }
 
-export async function POST() {
-  try {
-    const org = await getOrCreateOrg();
-
+export const POST = withOrgRoute(
+  { context: 'Shopify KB sync POST', errorMessage: 'Failed to sync Shopify KB' },
+  async ({ org }) => {
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
     });
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'No Shopify integration connected' }, { status: 400 });
+      throw new BadRequestError('No Shopify integration connected');
     }
 
     const { externalAccountId: shop, accessToken } = integration;
@@ -27,7 +26,7 @@ export async function POST() {
     ]);
 
     if (!policiesRes.ok || !pagesRes.ok) {
-      return NextResponse.json({ error: 'Failed to fetch data from Shopify' }, { status: 502 });
+      throw new ApiError('Failed to fetch data from Shopify', 502);
     }
 
     const [{ policies }, { pages }] = await Promise.all([
@@ -89,7 +88,5 @@ export async function POST() {
     await Promise.all([...policyOps, ...pageOps]);
 
     return NextResponse.json({ syncedPolicies: filteredPolicies.length, syncedPages: filteredPages.length });
-  } catch (error) {
-    return handleApiError(error, 'Shopify KB sync POST', 'Failed to sync Shopify KB');
-  }
-}
+  },
+);

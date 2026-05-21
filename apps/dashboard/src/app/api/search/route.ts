@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    const rl = await rateLimit(`search:${org.id}`, 30, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
-
+export const GET = withOrgRoute(
+  {
+    context: 'Search GET',
+    errorMessage: 'Failed to perform search',
+    rateLimit: { key: 'search', limit: 30, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim() ?? '';
 
     if (q.length < 2) {
-      return NextResponse.json({ error: 'Query must be at least 2 characters' }, { status: 400 });
+      throw new BadRequestError('Query must be at least 2 characters');
     }
 
     const threads = await db.thread.findMany({
@@ -53,7 +53,5 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({ threads });
-  } catch (error) {
-    return handleApiError(error, 'Search GET', 'Failed to perform search');
-  }
-}
+  },
+);

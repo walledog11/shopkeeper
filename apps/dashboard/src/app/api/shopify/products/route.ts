@@ -1,26 +1,26 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 export const dynamic = 'force-dynamic';
 
 const PRODUCT_FIELDS = 'id,title,status,vendor,product_type,tags,images,variants';
 const API_VERSION = '2026-04';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    const rl = await rateLimit(`products:get:${org.id}`, 30, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
-
+export const GET = withOrgRoute(
+  {
+    context: 'Products GET',
+    errorMessage: 'Failed to fetch products',
+    rateLimit: { key: 'products:get', limit: 30, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -61,10 +61,8 @@ export async function GET(request: Request) {
     const nextPageInfo = nextMatch ? nextMatch[1] : null;
 
     return NextResponse.json({ products: products.map(normalizeProduct), nextPageInfo, shop });
-  } catch (error) {
-    return handleApiError(error, 'Products GET', 'Failed to fetch products');
-  }
-}
+  },
+);
 
 // ── Types & normalization ─────────────────────────────────────────────────────
 

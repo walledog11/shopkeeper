@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 import logger from '@/lib/server/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Shopify Customer GET', errorMessage: 'server_error' },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const email = searchParams.get('email');
     const customerId = searchParams.get('customerId');
@@ -17,7 +18,7 @@ export async function GET(request: Request) {
       : 5;
 
     if (!email && !customerId) {
-      return NextResponse.json({ error: 'Missing email or customerId' }, { status: 400 });
+      throw new BadRequestError('Missing email or customerId');
     }
 
     const integration = await db.integration.findFirst({
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -79,20 +80,16 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ customer, orders, shop });
+  },
+);
 
-  } catch (err) {
-    logger.error({ err }, '[Shopify Customer GET] Error');
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
-  }
-}
-
-export async function PATCH(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const PATCH = withOrgRoute(
+  { context: 'Shopify Customer PATCH', errorMessage: 'server_error' },
+  async ({ org, request }) => {
     const { customerId, updates } = await request.json();
 
     if (!customerId || !updates) {
-      return NextResponse.json({ error: 'Missing customerId or updates' }, { status: 400 });
+      throw new BadRequestError('Missing customerId or updates');
     }
 
     const integration = await db.integration.findFirst({
@@ -100,7 +97,7 @@ export async function PATCH(request: Request) {
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -145,12 +142,8 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ customer: data.customer });
-
-  } catch (err) {
-    logger.error({ err }, '[Shopify Customer PATCH] Error');
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
-  }
-}
+  },
+);
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

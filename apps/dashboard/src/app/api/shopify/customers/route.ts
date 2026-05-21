@@ -1,25 +1,24 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
-import logger from '@/lib/server/logger';
+import { NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 const API_VERSION = '2026-04';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    const rl = await rateLimit(`customers:get:${org.id}`, 30, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
-
+export const GET = withOrgRoute(
+  {
+    context: 'Customers GET',
+    errorMessage: 'Failed to fetch customers',
+    rateLimit: { key: 'customers:get', limit: 30, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -57,14 +56,12 @@ export async function GET(request: Request) {
     const nextPageInfo = nextMatch ? nextMatch[1] : null;
 
     return NextResponse.json({ customers, nextPageInfo, shop });
-  } catch (error) {
-    return handleApiError(error, 'Customers GET', 'Failed to fetch customers');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute(
+  { context: 'Shopify Customer POST', errorMessage: 'server_error' },
+  async ({ org, request }) => {
     const { first_name, last_name, email } = await request.json();
 
     const integration = await db.integration.findFirst({
@@ -72,7 +69,7 @@ export async function POST(request: Request) {
     });
 
     if (!integration?.accessToken) {
-      return NextResponse.json({ error: 'no_integration' }, { status: 404 });
+      throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
@@ -100,9 +97,5 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ customer: data.customer });
-
-  } catch (err) {
-    logger.error({ err }, '[Shopify Customer POST] Error');
-    return NextResponse.json({ error: 'server_error' }, { status: 500 });
-  }
-}
+  },
+);
