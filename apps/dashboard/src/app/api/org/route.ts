@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { clerkClient, auth } from '@clerk/nextjs/server';
+import type { Prisma } from '@prisma/client';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError } from '@/lib/api/errors';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
@@ -11,6 +12,10 @@ function resolvePlanName(priceId: string | null): string {
   if (priceId === process.env.PRICE_ID_STARTER) return 'Starter';
   if (priceId === process.env.PRICE_ID_PRO || priceId === process.env.PRICE_ID) return 'Pro';
   return 'Paid';
+}
+
+function toPrismaJsonObject(value: Partial<OrgSettings>): Prisma.InputJsonObject {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonObject;
 }
 
 export async function GET() {
@@ -61,15 +66,14 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const currentSettings = (org.settings as OrgSettings | null) ?? {};
+    const currentSettings = (org.settings as Partial<OrgSettings> | null) ?? {};
 
     const updated = await db.organization.update({
       where: { id: org.id },
       data: {
         ...(name !== undefined && { name }),
         ...(newSettings !== undefined && {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          settings: JSON.parse(JSON.stringify({ ...currentSettings, ...newSettings })) as any,
+          settings: toPrismaJsonObject({ ...currentSettings, ...newSettings }),
         }),
       },
     });

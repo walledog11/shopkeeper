@@ -1,4 +1,4 @@
-import { Worker, Queue, type WorkerOptions } from 'bullmq';
+import { Worker, Queue, type ConnectionOptions, type WorkerOptions } from 'bullmq';
 import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from '../logger.js';
@@ -15,6 +15,7 @@ import {
   purgeFilteredThreads,
 } from './purge.js';
 import { checkGatewayQueueHealth } from './queue-health.js';
+import type { OpsAlertCounterClient } from '../ops-alerts.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
@@ -41,15 +42,13 @@ function registerWorkerFailure(worker: Worker, label: string, sentryQueue: strin
 }
 
 type SharedWorkerOptions = Pick<WorkerOptions, 'drainDelay' | 'stalledInterval'>;
+type ProducerConnection = ConnectionOptions & OpsAlertCounterClient;
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export async function createMaintenanceWorkers(
-  workerConn: any,
-  producerConn: any,
+  workerConn: ConnectionOptions,
+  producerConn: ProducerConnection,
   workerOptions: SharedWorkerOptions,
 ) {
-/* eslint-enable @typescript-eslint/no-explicit-any */
-
   const tokenHealthQueue = new Queue(QUEUE.TOKEN_HEALTH, { connection: producerConn });
   await scheduleRepeatableJob(tokenHealthQueue, JOB.TOKEN_HEALTH_CHECK, JOB.TOKEN_HEALTH_ID, ONE_DAY_MS);
 

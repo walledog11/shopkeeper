@@ -8,14 +8,19 @@ const StripeClient = require("stripe") as typeof import("stripe").default
 // when STRIPE_SECRET_KEY is absent from the build environment.
 let _stripe: Stripe | null = null
 
+function getStripeClient(): Stripe {
+  if (!_stripe) {
+    _stripe = new StripeClient(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2026-03-25.dahlia",
+    })
+  }
+
+  return _stripe
+}
+
 const stripe = new Proxy({} as Stripe, {
-  get(_, prop: string | symbol) {
-    if (!_stripe) {
-      _stripe = new StripeClient(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2026-03-25.dahlia",
-      })
-    }
-    return (_stripe as any)[prop]
+  get(_, prop, receiver) {
+    return Reflect.get(getStripeClient(), prop, receiver)
   },
 })
 

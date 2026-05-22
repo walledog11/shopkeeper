@@ -16,6 +16,11 @@ clerk/
 └── packages/db/        # Prisma schema + shared @clerk/db client (Neon PostgreSQL)
 ```
 
+## Maintenance Commands
+- `npm run clean` — removes ignored build/test artifacts from the repo root and workspaces: `.turbo/`, `.next/`, `.next-e2e/`, `coverage/`, `dist/`, `playwright-report/`, `test-results/`, `.nyc_output/`, and `*.tsbuildinfo`.
+- `npm run clean:deps` — removes `node_modules/` from the repo root and workspaces. Use this only when you intentionally want to reinstall dependencies.
+- Preview either cleanup without deleting files by running the underlying script with `--dry-run`, for example `node ./scripts/clean.mjs artifacts --dry-run`.
+
 ## Hosting (Production)
 - **Dashboard** — Vercel (Next.js 15 serverless)
 - **Gateway** — Railway (Express + BullMQ worker, single service)

@@ -9,6 +9,8 @@
     "predev": "npm run db:generate -w packages/db && npm run build -w packages/db",
     "dev": "npx turbo run dev",
     "build": "npx turbo run build",
+    "clean": "node ./scripts/clean.mjs artifacts",
+    "clean:deps": "node ./scripts/clean.mjs deps",
     "lint": "npm run lint:structure && npm run lint:repo && npx turbo run lint",
     "lint:structure": "node ./scripts/check-module-structure.mjs && node ./scripts/check-test-config-overlap.mjs",
     "lint:repo": "eslint e2e scripts playwright.config.ts playwright.browser.config.ts eslint.config.mjs",
