@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
-import { getOrCreateOrg } from '@/lib/server/org'
-import { handleApiError } from '@/lib/api/errors'
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
+import { BadRequestError, NotFoundError } from '@/lib/api/errors'
+import { withOrgRoute } from '@/lib/api/route'
 import { agentTurnMessageFilter } from '@/lib/agent/api/action-log'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg()
-
-    const rl = await rateLimit(`reports-gdpr:${org.id}`, 5, 60)
-    if (!rl.success) return tooManyRequests(rl.reset)
-
+export const GET = withOrgRoute(
+  {
+    context: 'Reports GDPR GET',
+    errorMessage: 'Failed to export customer data',
+    rateLimit: { key: 'reports-gdpr', limit: 5, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url)
     const email = searchParams.get('email')?.trim().toLowerCase()
 
     if (!email) {
-      return NextResponse.json({ error: 'email is required' }, { status: 400 })
+      throw new BadRequestError('email is required')
     }
 
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return NextResponse.json({ error: 'Invalid email address' }, { status: 400 })
+      throw new BadRequestError('Invalid email address')
     }
 
     const customer = await db.customer.findFirst({
@@ -30,7 +29,7 @@ export async function GET(request: Request) {
     })
 
     if (!customer) {
-      return NextResponse.json({ error: 'No customer found with that email' }, { status: 404 })
+      throw new NotFoundError('No customer found with that email')
     }
 
     const threads = await db.thread.findMany({
@@ -78,7 +77,5 @@ export async function GET(request: Request) {
         'Content-Disposition': `attachment; filename="customer-data-${email.replace(/[^a-z0-9]/g, '-')}.json"`,
       },
     })
-  } catch (error) {
-    return handleApiError(error, 'Reports GDPR GET', 'Failed to export customer data')
-  }
-}
+  },
+)

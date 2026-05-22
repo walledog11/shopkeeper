@@ -1,19 +1,18 @@
 import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
-import { getOrCreateOrg } from '@/lib/server/org'
-import { handleApiError } from '@/lib/api/errors'
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
+import { BadRequestError } from '@/lib/api/errors'
+import { withOrgRoute } from '@/lib/api/route'
 import { listAgentTurnsForOrgInRange } from '@/lib/agent/api/action-log'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg()
-
-    const rl = await rateLimit(`reports:${org.id}`, 10, 60)
-    if (!rl.success) return tooManyRequests(rl.reset)
-
+export const GET = withOrgRoute(
+  {
+    context: 'Reports GET',
+    errorMessage: 'Failed to fetch reports',
+    rateLimit: { key: 'reports', limit: 10, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url)
     const to = searchParams.get('to') ? new Date(searchParams.get('to')!) : new Date()
     const from = searchParams.get('from')
@@ -21,7 +20,7 @@ export async function GET(request: Request) {
       : new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000)
 
     if (isNaN(to.getTime()) || isNaN(from.getTime())) {
-      return NextResponse.json({ error: 'Invalid date range' }, { status: 400 })
+      throw new BadRequestError('Invalid date range')
     }
 
     const [
@@ -169,7 +168,5 @@ export async function GET(request: Request) {
         })),
       },
     })
-  } catch (error) {
-    return handleApiError(error, 'Reports GET', 'Failed to fetch reports')
-  }
-}
+  },
+)

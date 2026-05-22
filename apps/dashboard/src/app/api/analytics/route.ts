@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { BadRequestError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,12 +11,13 @@ const RANGE_TO_DAYS = {
   '90d': 90,
 } as const;
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-
-    const rl = await rateLimit(`analytics:${org.id}`, 10, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
+export const GET = withOrgRoute(
+  {
+    context: 'Analytics GET',
+    errorMessage: 'Failed to fetch analytics',
+    rateLimit: { key: 'analytics', limit: 10, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
 
     const range = searchParams.get('range');
@@ -35,11 +35,11 @@ export async function GET(request: Request) {
     }
 
     if (isNaN(to.getTime()) || isNaN(from.getTime())) {
-      return NextResponse.json({ error: 'Invalid date range' }, { status: 400 });
+      throw new BadRequestError('Invalid date range');
     }
 
     if (range && !(range in RANGE_TO_DAYS) && !hasExplicitBounds) {
-      return NextResponse.json({ error: 'Invalid range' }, { status: 400 });
+      throw new BadRequestError('Invalid range');
     }
 
     const [
@@ -183,7 +183,5 @@ export async function GET(request: Request) {
         aiReplyPct: totalReplies > 0 ? Math.round((aiReplies / totalReplies) * 100) : null,
       },
     });
-  } catch (error) {
-    return handleApiError(error, 'Analytics GET', 'Failed to fetch analytics');
-  }
-}
+  },
+);

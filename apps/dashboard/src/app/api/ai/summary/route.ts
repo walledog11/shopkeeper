@@ -1,32 +1,29 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
 import { generateText } from '@/lib/ai';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { ApiError, BadRequestError } from '@/lib/api/errors';
+import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-
-    const rl = await rateLimit(`ai-summary:${org.id}`, 10, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
+export const POST = withOrgRoute(
+  {
+    context: 'AI Summary',
+    errorMessage: 'Failed to generate summary',
+    rateLimit: { key: 'ai-summary', limit: 10, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { threadId } = await request.json();
 
     if (!threadId) {
-      return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
+      throw new BadRequestError('Missing threadId');
     }
 
     const thread = await db.thread.findUnique({
       where: { id: threadId },
       include: {
         messages: { orderBy: { sentAt: 'asc' } },
-      }
+      },
     });
-
-    if (!thread || thread.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
-    }
+    assertEntityInOrg(thread, org.id, 'Thread not found');
 
     const systemPrompt = `You are an AI assistant summarizing a customer support thread. Write a single short sentence (max 20 words) describing what the customer needs. No labels, no formatting, no status — just the core issue.`;
 
@@ -42,17 +39,14 @@ export async function POST(request: Request) {
     });
 
     if (!newSummary) {
-      return NextResponse.json({ error: 'AI returned an empty response' }, { status: 502 });
+      throw new ApiError('AI returned an empty response', 502);
     }
 
     const updatedThread = await db.thread.update({
       where: { id: threadId },
-      data: { aiSummary: newSummary }
+      data: { aiSummary: newSummary },
     });
 
     return NextResponse.json({ summary: updatedThread.aiSummary });
-
-  } catch (error) {
-    return handleApiError(error, 'AI Summary', 'Failed to generate summary');
-  }
-}
+  },
+);
