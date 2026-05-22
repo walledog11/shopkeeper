@@ -11,7 +11,7 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
-- `SENTRY_DSN` is set for both apps, and gateway `BLOB_READ_WRITE_TOKEN` is set for inbound email attachments.
+- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `BLOB_READ_WRITE_TOKEN` is set for inbound email attachments, and Sentry source-map upload vars are available in the build environment.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
 
 ## Deploy Order

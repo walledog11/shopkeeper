@@ -73,6 +73,7 @@ npm run build -w apps/gateway
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
 - `APP_URL`
+- `TOKEN_ENCRYPTION_KEY`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
 - `SENTRY_DSN`
@@ -100,6 +101,8 @@ Rules:
   Used by `POST /api/webhooks/clerk` to verify Clerk lifecycle webhooks.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
+  Used by `scripts/sentry-upload-sourcemaps.mjs` for source-map upload.
 
 Optional:
 
@@ -114,6 +117,7 @@ Optional:
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
 - `DASHBOARD_URL`
+- `TOKEN_ENCRYPTION_KEY`
 - `SENTRY_DSN`
 
 Rules:
@@ -128,6 +132,8 @@ Rules:
 - `SHOPIFY_APP_SECRET`
 - `BLOB_READ_WRITE_TOKEN`
   Required for inbound email attachments.
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
+  Used by `scripts/sentry-upload-sourcemaps.mjs` for source-map upload.
 
 Optional:
 

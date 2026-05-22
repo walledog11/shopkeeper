@@ -79,16 +79,16 @@ Cleanup:
 - [x] Migrated 35+ org-scoped routes onto the helper: canned-responses, playbooks, kb, org/data, org/audit-log, shopify/{customer,customers,customers/search,products}, integrations/shopify/kb-sync, search, integrations CRUD, threads (list, [id], bulk, customer/[customerId], shopify), agent (run, plan, ask, quick-approve, chat, sessions, sessions/[id], actions), messages, ai/summary, analytics, orders, reports, reports/gdpr, integrations/telegram.
 - Intentionally skipped (different shape): webhooks (HMAC verify), internal-secret routes (`messages/internal`, `messages/auto-ack`, `agent/internal`, `agent/plan-internal`, `playbooks/trigger`), OAuth auth/callback flows, billing/* (Stripe-specific shapes), feedback + health (no org), team (Clerk-org-only), threads/[id]/presence (clerkOrgId-keyed Redis), instagram/connect (redirect flow).
 
-## 6. Refresh Docs And Env Contracts
+## 6. Refresh Docs And Env Contracts (Complete)
 
 Docs and env examples have drifted from the current code.
 
 Cleanup:
 
-- [ ] Update `README.md` references from Next.js 15 to the current Next.js 16 setup.
-- [ ] Update README key-file paths that now point to moved or deleted files.
-- [ ] Add production-required variables missing from example env files, including `TOKEN_ENCRYPTION_KEY`, `CLERK_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`, and Sentry source-map upload vars.
-- [ ] Document optional integration variables used by code paths, including Google, Microsoft, USPS, Postmark inbound auth, and `INTERNAL_API_SECRET_PREV`.
+- [x] Update `README.md` references from Next.js 15 to the current Next.js 16 setup.
+- [x] Update README key-file paths that now point to moved or deleted files.
+- [x] Add production-required variables missing from example env files, including `TOKEN_ENCRYPTION_KEY`, `CLERK_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`, and Sentry source-map upload vars.
+- [x] Document optional integration variables used by code paths, including Google, Microsoft, USPS, Postmark inbound auth, and `INTERNAL_API_SECRET_PREV`.
 
 ## 7. Tighten Type Escapes (Complete)
 

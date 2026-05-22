@@ -24,6 +24,7 @@ vi.mock("@/lib/agent/api/action-log", () => ({
 import { GET } from "./route";
 import { auth } from "@clerk/nextjs/server";
 import { getOrCreateOrg } from "@/lib/server/org";
+import { UnauthorizedError } from "@/lib/api/errors";
 
 describe("GET /api/agent/actions", () => {
   beforeEach(() => {
@@ -131,6 +132,7 @@ describe("GET /api/agent/actions", () => {
       userId: null,
       orgId: null,
     } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+    vi.mocked(getOrCreateOrg).mockRejectedValueOnce(new UnauthorizedError());
 
     const res = await GET(new Request("http://localhost:3000/api/agent/actions"));
     expect(res.status).toBe(401);

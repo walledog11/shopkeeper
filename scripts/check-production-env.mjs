@@ -4,6 +4,11 @@ import { pathToFileURL } from 'node:url';
 
 const VALID_TARGETS = ['dashboard', 'gateway', 'all'];
 const VALID_SCOPES = ['boot', 'launch'];
+const SENTRY_SOURCE_MAP_REQUIRED = [
+  'SENTRY_AUTH_TOKEN',
+  'SENTRY_ORG',
+  'SENTRY_PROJECT',
+];
 
 const CONTRACTS = {
   dashboard: {
@@ -15,6 +20,7 @@ const CONTRACTS = {
       'ANTHROPIC_API_KEY',
       'INTERNAL_API_SECRET',
       'APP_URL',
+      'TOKEN_ENCRYPTION_KEY',
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
       'SENTRY_DSN',
@@ -31,6 +37,7 @@ const CONTRACTS = {
       'CLERK_WEBHOOK_SECRET',
       'PRICE_ID_STARTER',
       'PRICE_ID_PRO',
+      ...SENTRY_SOURCE_MAP_REQUIRED,
     ],
     absoluteUrlVars: ['APP_URL', 'NEXT_PUBLIC_APP_URL', 'GATEWAY_INTERNAL_URL', 'TWILIO_WEBHOOK_URL'],
     equalPairs: [['APP_URL', 'NEXT_PUBLIC_APP_URL']],
@@ -43,11 +50,13 @@ const CONTRACTS = {
       'ANTHROPIC_API_KEY',
       'INTERNAL_API_SECRET',
       'DASHBOARD_URL',
+      'TOKEN_ENCRYPTION_KEY',
       'SENTRY_DSN',
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
       'BLOB_READ_WRITE_TOKEN',
+      ...SENTRY_SOURCE_MAP_REQUIRED,
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL'],
     expectedPathSuffixes: {

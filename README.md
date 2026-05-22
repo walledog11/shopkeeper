@@ -11,7 +11,7 @@ A SaaS helpdesk platform built for Shopify merchants — solo owners and small t
 ## Repo Layout
 ```
 clerk/
-├── apps/dashboard/     # Next.js 15 — UI + API routes (Clerk.com auth, SWR, Tailwind)
+├── apps/dashboard/     # Next.js 16 — UI + API routes (Clerk.com auth, SWR, Tailwind)
 ├── apps/gateway/       # Express — webhook receiver + BullMQ worker
 └── packages/db/        # Prisma schema + shared @clerk/db client (Neon PostgreSQL)
 ```
@@ -22,11 +22,11 @@ clerk/
 - Preview either cleanup without deleting files by running the underlying script with `--dry-run`, for example `node ./scripts/clean.mjs artifacts --dry-run`.
 
 ## Hosting (Production)
-- **Dashboard** — Vercel (Next.js 15 serverless)
+- **Dashboard** — Vercel (Next.js 16 serverless)
 - **Gateway** — Railway (Express + BullMQ worker, single service)
 - **Database** — Neon PostgreSQL (pooled via pgbouncer)
 - **Redis** — Upstash (dashboard uses `@upstash/redis` REST client; gateway uses `ioredis` with `REDIS_URL`)
-- **Error tracking** — Sentry (optional, both apps init if `SENTRY_DSN` is set)
+- **Error tracking** — Sentry (required for production observability; apps init when `SENTRY_DSN` is set)
 
 ## Request Flow (Inbound Message)
 1. External platform POSTs to gateway webhook (Railway URL)
@@ -93,7 +93,7 @@ Direct interface for the merchant/team. No customer in context — the agent tak
 - **Telegram**: new ticket notification sent to all bound org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
 
 ### Agent Tools
-All tools are defined in `apps/dashboard/src/lib/agent/tools.ts`.
+Tool registry and execution live under `apps/dashboard/src/lib/agent/tools/`.
 
 **Read tools** (no side effects, executed in plan phase 1.5 to inform dependent writes):
 - `search_kb` — full-text search of knowledge base articles
@@ -226,9 +226,11 @@ Configurable per org via Settings → Agent tab:
 - `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), Telegram plan notification (`planning.ts`)
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
 - `apps/dashboard/src/lib/agent/runner.ts` — core agent: `buildContext()`, `planAgent()`, `runAgent()`
-- `apps/dashboard/src/lib/agent/tools.ts` — all tool definitions + TOOL_CATEGORIES + PLAN_STEP_LABELS
-- `apps/dashboard/src/lib/agent/shopify-tools.ts` — Shopify API implementations for each tool
-- `apps/dashboard/src/lib/agent/thread-tools.ts` — thread/message tool implementations
+- `apps/dashboard/src/lib/agent/tools/index.ts` — tool exports + public tool metadata
+- `apps/dashboard/src/lib/agent/tools/registry.ts` — tool registry, categories, and plan-step labels
+- `apps/dashboard/src/lib/agent/tools/shopify.ts` — Shopify-facing agent tool wrappers
+- `apps/dashboard/src/lib/agent/tools/thread.ts` — thread/message tool implementations
+- `apps/dashboard/src/lib/agent/shopify/` — Shopify API clients, serializers, and validators
 - `apps/dashboard/src/lib/agent/settings.ts` — agent settings defaults + resolver
 - `apps/dashboard/src/app/api/agent/route.ts` — POST: execute agent run on a ticket thread
 - `apps/dashboard/src/app/api/agent/plan/route.ts` — POST: generate plan (no side effects)
@@ -248,40 +250,60 @@ Configurable per org via Settings → Agent tab:
 ## Environment Variables
 
 ### Dashboard (Vercel)
+Required at production boot:
 - `DATABASE_URL` — Neon connection string with `?pgbouncer=true&connection_limit=1`
-- `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` — Clerk.com app keys
-- `OPENAI_API_KEY` — OpenAI (used for embeddings/AI drafts)
-- `ANTHROPIC_API_KEY` — Claude (used for agent tool-use loop and AI plan generation)
-- `INTERNAL_API_SECRET` — shared secret with gateway for internal API calls (e.g. plan-internal)
-- `POSTMARK_API_KEY` — outbound email dispatch
-- `META_APP_ID`, `META_APP_SECRET` — Instagram OAuth + webhook verification
-- `APP_URL` — production dashboard URL (e.g. `https://app.yourdomain.com`)
-- `INBOUND_EMAIL_DOMAIN` — domain Postmark routes inbound mail to
-- `GATEWAY_INTERNAL_URL` — Railway gateway URL (e.g. `https://gateway.up.railway.app`)
-- `TELEGRAM_BOT_USERNAME` — Telegram bot username for the operator-channel deep link
-- `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
-- `SHOPIFY_CLIENT_ID` — Shopify OAuth app client ID
-- `SHOPIFY_CLIENT_SECRET` — Shopify OAuth app client secret
-- `STRIPE_SECRET_KEY` — Stripe secret key
-- `STRIPE_WEBHOOK_SECRET` — Stripe webhook signing secret
-- `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe price IDs per plan tier
+- `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — Clerk.com app keys
+- `ANTHROPIC_API_KEY` — Claude, used for the agent tool-use loop and AI plan generation
+- `INTERNAL_API_SECRET` — shared secret with gateway for internal API calls
+- `APP_URL` — production dashboard URL, for example `https://app.yourdomain.com`
+- `TOKEN_ENCRYPTION_KEY` — 32-byte integration token encryption key, encoded as 64 hex chars, base64, or 32 raw chars
 - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Upstash Redis REST credentials
-- `SENTRY_DSN` — (optional) Sentry error tracking
+- `SENTRY_DSN` — Sentry production error tracking
+
+Required for launch-scope features:
+- `GATEWAY_INTERNAL_URL` — Railway gateway URL, for example `https://gateway.up.railway.app`
+- `POSTMARK_API_KEY`, `INBOUND_EMAIL_DOMAIN` — outbound email and inbound email domain
+- `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET` — Shopify OAuth and webhook verification
+- `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
+- `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
+
+Optional dashboard variables:
+- `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
+- `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL` — Clerk route overrides
+- `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
+- `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
+- `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` — Instagram OAuth and webhook setup
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth
+- `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` — Outlook OAuth
+- `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
+- `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
+- `SENTRY_RELEASE` — explicit Sentry release; otherwise deploy commit env vars are used when available
 
 ### Gateway (Railway)
+Required at production boot:
 - `DATABASE_URL` — Neon connection string with `?pgbouncer=true&connection_limit=1`
-- `REDIS_URL` — Upstash Redis URL (ioredis-compatible, e.g. `rediss://...`)
-- `PORT` — Railway sets this automatically
-- `ANTHROPIC_API_KEY` — Claude (used for AI summary + spam filter in worker)
-- `INTERNAL_API_SECRET` — must match dashboard value
-- `META_APP_SECRET` — Instagram webhook signature verification
-- `META_VERIFY_TOKEN` — Instagram webhook setup handshake
-- `TELEGRAM_BOT_TOKEN` — Telegram bot token (single Clerk bot for the operator channel)
-- `TELEGRAM_WEBHOOK_SECRET` — shared secret header for `/webhooks/telegram` verification
+- `REDIS_URL` — Upstash Redis URL using TLS, for example `rediss://...`
+- `ANTHROPIC_API_KEY` — Claude, used for AI summary and spam filtering in the worker
+- `INTERNAL_API_SECRET` — must match the dashboard value
+- `DASHBOARD_URL` — production dashboard URL used for internal API calls
+- `TOKEN_ENCRYPTION_KEY` — same 32-byte integration token encryption key used by the dashboard
+- `SENTRY_DSN` — Sentry production error tracking
+
+Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
-- `DASHBOARD_URL` — production dashboard URL used by the gateway for internal API calls
-- `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding / local gateway-to-dashboard calls
-- `SENTRY_DSN` — (optional) Sentry error tracking
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachments
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
+
+Optional gateway variables:
+- `PORT` — Railway sets this automatically
+- `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
+- `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
+- `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` — Instagram webhook setup
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
+- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — optional basic auth for Postmark inbound webhooks
+- `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls
+- `SENTRY_RELEASE` — explicit Sentry release; otherwise deploy commit env vars are used when available
 
 ## Coding Guidelines
 - Don't add features, comments, error handling, or abstractions beyond what's asked
