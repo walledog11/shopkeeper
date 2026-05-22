@@ -14,9 +14,9 @@ Validation at audit time:
 
 Cleanup:
 
-- Remove the hardwired demo trial notification.
-- Remove the hardwired demo integration notification.
-- If demo notifications are still useful, gate them behind an explicit fixture/demo mode.
+- [ ] Remove the hardwired demo trial notification.
+- [ ] Remove the hardwired demo integration notification.
+- [ ] If demo notifications are still useful, gate them behind an explicit fixture/demo mode.
 
 ## 2. Consolidate Duplicated Modules (Complete)
 
@@ -68,15 +68,16 @@ Cleanup:
 - [x] Keep the route focused on auth, rate limit, request parsing, and response mapping.
 - [x] Add focused tests for approval/dismiss/revision behavior outside the route.
 
-## 5. Normalize API Route Plumbing
+## 5. Normalize API Route Plumbing (Complete)
 
-Dashboard API routes repeat the same ceremony: `getOrCreateOrg`, billing checks, rate limits, request parsing, `NextResponse.json({ error })`, and `handleApiError`.
+Dashboard API routes repeated the same ceremony: `getOrCreateOrg`, billing checks, rate limits, request parsing, `NextResponse.json({ error })`, and `handleApiError`.
 
 Cleanup:
 
-- Add a small route helper for authenticated org routes.
-- Standardize bad request, unauthorized, not found, and rate-limit response shapes.
-- Keep route-specific logic in handlers, not repeated wrapper code.
+- [x] Added `withOrgRoute` + `assertEntityInOrg` in `apps/dashboard/src/lib/api/route.ts` (org auth, optional billing write-gate, optional rate limit, awaited dynamic params, `ApiError` mapping, optional `onError` hook for failure side effects).
+- [x] Standardized response shapes via the `ApiError` hierarchy in `apps/dashboard/src/lib/api/errors.ts` (`BadRequestError`, `UnauthorizedError`, `ForbiddenError`, `NotFoundError`, `ConflictError`, `NoActiveOrganizationError`).
+- [x] Migrated 35+ org-scoped routes onto the helper: canned-responses, playbooks, kb, org/data, org/audit-log, shopify/{customer,customers,customers/search,products}, integrations/shopify/kb-sync, search, integrations CRUD, threads (list, [id], bulk, customer/[customerId], shopify), agent (run, plan, ask, quick-approve, chat, sessions, sessions/[id], actions), messages, ai/summary, analytics, orders, reports, reports/gdpr, integrations/telegram.
+- Intentionally skipped (different shape): webhooks (HMAC verify), internal-secret routes (`messages/internal`, `messages/auto-ack`, `agent/internal`, `agent/plan-internal`, `playbooks/trigger`), OAuth auth/callback flows, billing/* (Stripe-specific shapes), feedback + health (no org), team (Clerk-org-only), threads/[id]/presence (clerkOrgId-keyed Redis), instagram/connect (redirect flow).
 
 ## 6. Refresh Docs And Env Contracts
 
@@ -84,28 +85,28 @@ Docs and env examples have drifted from the current code.
 
 Cleanup:
 
-- Update `README.md` references from Next.js 15 to the current Next.js 16 setup.
-- Update README key-file paths that now point to moved or deleted files.
-- Add production-required variables missing from example env files, including `TOKEN_ENCRYPTION_KEY`, `CLERK_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`, and Sentry source-map upload vars.
-- Document optional integration variables used by code paths, including Google, Microsoft, USPS, Postmark inbound auth, and `INTERNAL_API_SECRET_PREV`.
+- [ ] Update `README.md` references from Next.js 15 to the current Next.js 16 setup.
+- [ ] Update README key-file paths that now point to moved or deleted files.
+- [ ] Add production-required variables missing from example env files, including `TOKEN_ENCRYPTION_KEY`, `CLERK_WEBHOOK_SECRET`, `BLOB_READ_WRITE_TOKEN`, and Sentry source-map upload vars.
+- [ ] Document optional integration variables used by code paths, including Google, Microsoft, USPS, Postmark inbound auth, and `INTERNAL_API_SECRET_PREV`.
 
-## 7. Tighten Type Escapes
+## 7. Tighten Type Escapes (Complete)
 
-Explicit `any` remains in a few contained places.
+The remaining explicit `any` escapes found during audit have been removed.
 
 Cleanup:
 
-- Replace Redis/BullMQ connection casts in `apps/gateway/src/worker.ts`.
-- Replace Redis/BullMQ connection parameter `any` types in `apps/gateway/src/maintenance/workers.ts`.
-- Remove the Stripe proxy `any` escape in `apps/dashboard/src/lib/billing/stripe.ts` if a typed lazy wrapper can preserve behavior.
-- Replace the settings JSON `as any` in `apps/dashboard/src/app/api/org/route.ts` with a typed Prisma JSON cast or helper.
+- [x] Replace Redis/BullMQ connection casts in `apps/gateway/src/worker.ts`.
+- [x] Replace Redis/BullMQ connection parameter `any` types in `apps/gateway/src/maintenance/workers.ts`.
+- [x] Remove the Stripe proxy `any` escape in `apps/dashboard/src/lib/billing/stripe.ts` if a typed lazy wrapper can preserve behavior.
+- [x] Replace the settings JSON `as any` in `apps/dashboard/src/app/api/org/route.ts` with a typed Prisma JSON cast or helper.
 
-## 8. Add A Safe Repo Clean Script
+## 8. Add A Safe Repo Clean Script (Complete)
 
 Ignored local artifacts are large and easy to leave behind. During audit, `.turbo`, `.next`, `.next-e2e`, coverage, dist, and workspace-local `node_modules` directories accounted for significant local disk usage.
 
 Cleanup:
 
-- Add a non-destructive `clean` script that removes ignored build/cache artifacts.
-- Keep dependency removal separate, for example `clean:deps`, so normal cleanup does not delete installed packages unexpectedly.
-- Document what each clean command deletes before running it.
+- [x] Add a non-destructive `clean` script that removes ignored build/cache artifacts.
+- [x] Keep dependency removal separate, for example `clean:deps`, so normal cleanup does not delete installed packages unexpectedly.
+- [x] Document what each clean command deletes before running it.
