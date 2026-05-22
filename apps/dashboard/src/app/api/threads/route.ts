@@ -1,17 +1,17 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType, ThreadFilterStatus } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
-import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit';
+import { withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    const rl = await rateLimit(`threads:get:${org.id}`, 60, 60);
-    if (!rl.success) return tooManyRequests(rl.reset);
+export const GET = withOrgRoute(
+  {
+    context: 'Threads GET',
+    errorMessage: 'Failed to fetch threads',
+    rateLimit: { key: 'threads:get', limit: 60, windowSecs: 60 },
+  },
+  async ({ org, request }) => {
     const { searchParams } = new URL(request.url);
     const status = (searchParams.get('status') || 'open') as 'open' | 'closed';
     const filterStatusParam = searchParams.get('filterStatus');
@@ -64,8 +64,5 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({ threads, nextCursor });
-
-  } catch (error) {
-    return handleApiError(error, 'Threads GET', 'Failed to fetch threads');
-  }
-}
+  },
+);

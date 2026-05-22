@@ -1,21 +1,21 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 
-export async function PATCH(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const PATCH = withOrgRoute(
+  { context: 'Threads Bulk PATCH', errorMessage: 'Failed to bulk update threads' },
+  async ({ org, request }) => {
     const { ids, action, tag } = await request.json();
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ error: 'Missing ids' }, { status: 400 });
+      throw new BadRequestError('Missing ids');
     }
     if (ids.length > 100) {
-      return NextResponse.json({ error: 'Too many ids — max 100 per request' }, { status: 400 });
+      throw new BadRequestError('Too many ids — max 100 per request');
     }
     if (!['close', 'open', 'tag', 'archive'].includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      throw new BadRequestError('Invalid action');
     }
 
     // Verify all threads belong to this org
@@ -25,7 +25,7 @@ export async function PATCH(request: Request) {
     });
 
     if (threads.length === 0) {
-      return NextResponse.json({ error: 'No threads found' }, { status: 404 });
+      throw new NotFoundError('No threads found');
     }
 
     const verifiedIds = threads.map(t => t.id);
@@ -42,7 +42,5 @@ export async function PATCH(request: Request) {
     });
 
     return NextResponse.json({ updated: verifiedIds.length });
-  } catch (error) {
-    return handleApiError(error, 'Threads Bulk PATCH', 'Failed to bulk update threads');
-  }
-}
+  },
+);

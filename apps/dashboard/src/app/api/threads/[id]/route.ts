@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const org = await getOrCreateOrg();
-    const { id } = await params;
+export const GET = withOrgRoute<{ id: string }>(
+  { context: 'Threads GET by id', errorMessage: 'Failed to fetch thread' },
+  async ({ org, params }) => {
+    const { id } = params;
 
     const thread = await db.thread.findFirst({
       where: {
@@ -30,50 +27,40 @@ export async function GET(
       },
     });
 
-    if (!thread) {
-      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
-    }
+    if (!thread) throw new NotFoundError('Thread not found');
 
     return NextResponse.json({ thread });
-  } catch (error) {
-    return handleApiError(error, 'Threads GET by id', 'Failed to fetch thread');
-  }
-}
+  },
+);
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const org = await getOrCreateOrg();
-    const { id } = await params;
+export const PATCH = withOrgRoute<{ id: string }>(
+  { context: 'Threads PATCH', errorMessage: 'Failed to update thread' },
+  async ({ org, request, params }) => {
+    const { id } = params;
     const body = await request.json();
     const { status, tag, shopifyCustomerId, filterStatus, filterFeedback } = body;
 
     if (!status && tag === undefined && shopifyCustomerId === undefined && filterStatus === undefined && filterFeedback === undefined) {
-      return NextResponse.json({ error: 'Missing status, tag, shopifyCustomerId, filterStatus, or filterFeedback' }, { status: 400 });
+      throw new BadRequestError('Missing status, tag, shopifyCustomerId, filterStatus, or filterFeedback');
     }
 
     if (status && !Object.values(THREAD_STATUS).includes(status)) {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+      throw new BadRequestError('Invalid status');
     }
 
     if (filterStatus !== undefined && !Object.values(ThreadFilterStatus).includes(filterStatus)) {
-      return NextResponse.json({ error: 'Invalid filterStatus' }, { status: 400 });
+      throw new BadRequestError('Invalid filterStatus');
     }
 
     if (filterFeedback !== undefined && !Object.values(ThreadFilterFeedback).includes(filterFeedback)) {
-      return NextResponse.json({ error: 'Invalid filterFeedback' }, { status: 400 });
+      throw new BadRequestError('Invalid filterFeedback');
     }
 
     const thread = await db.thread.findUnique({
       where: { id },
       select: { organizationId: true, filterStatus: true },
     });
-
-    if (!thread || thread.organizationId !== org.id) {
-      return NextResponse.json({ error: 'Thread not found' }, { status: 404 });
-    }
+    assertEntityInOrg(thread, org.id, 'Thread not found');
 
     // Closing a questionable thread implies the merchant treated it as legit.
     const resolvedFeedback = filterFeedback
@@ -100,7 +87,5 @@ export async function PATCH(
     }
 
     return NextResponse.json(updated);
-  } catch (error) {
-    return handleApiError(error, 'Threads PATCH', 'Failed to update thread');
-  }
-}
+  },
+);
