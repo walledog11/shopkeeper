@@ -51,6 +51,7 @@
   "packageManager": "npm@10.9.3",
   "overrides": {
     "prisma": "6.19.3",
-    "@prisma/client": "6.19.3"
+    "@prisma/client": "6.19.3",
+    "js-cookie": "^3.0.6"
   }
 }
