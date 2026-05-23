@@ -26,6 +26,12 @@ vi.mock('@/lib/agent/tools/thread', async (importOriginal) => {
   return { ...actual, sendReply: mockSendReply };
 });
 
+vi.mock('@/lib/agent/spend', () => ({
+  enforceSpendCap: vi.fn().mockResolvedValue(undefined),
+  recordSpend: vi.fn().mockResolvedValue(undefined),
+  getDailySpendNano: vi.fn().mockResolvedValue(0),
+}));
+
 import { runAgent } from './runner';
 import type { AgentContext } from './runner';
 

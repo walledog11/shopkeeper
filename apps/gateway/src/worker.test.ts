@@ -22,6 +22,9 @@ vi.mock('ioredis', () => ({
   Redis: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.on = vi.fn().mockReturnThis();
     this.set = vi.fn().mockResolvedValue('OK');
+    this.get = vi.fn().mockResolvedValue(null);
+    this.incrby = vi.fn(async (_key: string, delta: number) => delta);
+    this.expire = vi.fn().mockResolvedValue(1);
     this.setMaxListeners = vi.fn();
     this.disconnect = vi.fn();
     this.quit = vi.fn().mockResolvedValue('OK');
