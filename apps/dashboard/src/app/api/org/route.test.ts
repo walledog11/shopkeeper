@@ -7,21 +7,33 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
-import { GET, PATCH } from './route';
+import { GET, PATCH, DELETE } from './route';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 const mockUpdateOrganization = vi.fn();
+const mockDeleteOrganization = vi.fn();
+const mockGetOrganizationMembershipList = vi.fn();
 
-beforeEach(async () => {
-  org = await createTestOrg();
+function setAuth(overrides: Partial<{ userId: string | null; orgId: string | null; orgRole: string | null }> = {}) {
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_test',
     orgId: org.clerkOrgId,
+    orgRole: 'org:admin',
+    ...overrides,
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
+}
+
+beforeEach(async () => {
+  org = await createTestOrg();
+  setAuth();
   vi.mocked(clerkClient).mockResolvedValue({
-    organizations: { updateOrganization: mockUpdateOrganization },
-  } as Awaited<ReturnType<typeof clerkClient>>);
+    organizations: {
+      updateOrganization: mockUpdateOrganization,
+      deleteOrganization: mockDeleteOrganization,
+    },
+    users: { getOrganizationMembershipList: mockGetOrganizationMembershipList },
+  } as unknown as Awaited<ReturnType<typeof clerkClient>>);
 });
 
 afterEach(async () => {
@@ -62,5 +74,64 @@ describe('/api/org billing access', () => {
     const unchanged = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
     expect(unchanged.name).toBe(org.name);
     expect(mockUpdateOrganization).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/org DELETE', () => {
+  function deleteReq(confirmName: string) {
+    return new Request('http://localhost:3000/api/org', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmName }),
+    });
+  }
+
+  it('refuses to delete when this is the user\'s only workspace', async () => {
+    mockGetOrganizationMembershipList.mockResolvedValueOnce({
+      data: [{ organization: { id: org.clerkOrgId } }],
+    });
+
+    const res = await DELETE(deleteReq(org.name));
+
+    expect(res.status).toBe(409);
+    const body = await res.json() as { error: string };
+    expect(body.error).toBe('last_workspace');
+    expect(mockDeleteOrganization).not.toHaveBeenCalled();
+    const stillThere = await db.organization.findUnique({ where: { id: org.id } });
+    expect(stillThere).not.toBeNull();
+  });
+
+  it('deletes the workspace when the user has another workspace', async () => {
+    mockGetOrganizationMembershipList.mockResolvedValueOnce({
+      data: [
+        { organization: { id: org.clerkOrgId } },
+        { organization: { id: 'org_other' } },
+      ],
+    });
+
+    const res = await DELETE(deleteReq(org.name));
+
+    expect(res.status).toBe(204);
+    expect(mockDeleteOrganization).toHaveBeenCalledWith(org.clerkOrgId);
+    const gone = await db.organization.findUnique({ where: { id: org.id } });
+    expect(gone).toBeNull();
+  });
+
+  it('rejects non-admin callers before touching memberships', async () => {
+    setAuth({ orgRole: 'org:member' });
+
+    const res = await DELETE(deleteReq(org.name));
+
+    expect(res.status).toBe(403);
+    expect(mockGetOrganizationMembershipList).not.toHaveBeenCalled();
+    expect(mockDeleteOrganization).not.toHaveBeenCalled();
+  });
+
+  it('rejects mismatched confirmation name before touching memberships', async () => {
+    const res = await DELETE(deleteReq('wrong-name'));
+
+    expect(res.status).toBe(400);
+    expect(mockGetOrganizationMembershipList).not.toHaveBeenCalled();
+    expect(mockDeleteOrganization).not.toHaveBeenCalled();
   });
 });

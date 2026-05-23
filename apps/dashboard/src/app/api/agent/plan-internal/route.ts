@@ -17,7 +17,7 @@ import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } fr
 import { parseAgentPlanInternalBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
-import { handleApiError } from "@/lib/api/errors";
+import { BadRequestError, handleApiError } from "@/lib/api/errors";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
 import type { OrgSettings } from "@/types";
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { orgId, threadId } = parseAgentPlanInternalBody(await request.json());
+    const { orgId, threadId } = parseAgentPlanInternalBody(await readJsonBody(request));
 
     const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
     if (!rl.success) {
@@ -80,5 +80,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan, instruction });
   } catch (error) {
     return handleApiError(error, "Agent plan-internal POST", "Failed to generate plan");
+  }
+}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    throw new BadRequestError("Validation failed", [
+      { code: "invalid_body", message: "Request body must be a JSON object" },
+    ]);
   }
 }

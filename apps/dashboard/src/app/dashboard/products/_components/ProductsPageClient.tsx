@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useCallback, useEffect } from "react"
+import Image from "next/image"
 import {
   Search, X, Package, ExternalLink, ChevronRight, ShoppingBag,
 } from "lucide-react"
@@ -132,9 +133,12 @@ function ProductImage({ src, title }: { src: string | null; title: string }) {
     )
   }
   return (
-    <img
+    <Image
       src={src}
       alt={title}
+      width={36}
+      height={36}
+      unoptimized
       onError={() => setFailedSrc(src)}
       className="w-9 h-9 rounded-md object-cover border border-white/[0.08] shrink-0"
     />

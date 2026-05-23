@@ -4,6 +4,7 @@ import {
   emitOpsAlert,
   type EmitOpsAlertResult,
   type OpsAlertCounterClient,
+  type OpsAlertLogger,
   type OpsAlertSentryClient,
 } from './ops-alerts';
 import {
@@ -131,6 +132,7 @@ describe('recordProviderSendFailure', () => {
   it('does not capture to Sentry when alerts are disabled', async () => {
     const { client } = createCounterClient();
     const sentryCalls: string[] = [];
+    const mockLogger = createTestLogger();
     const mockSentry: OpsAlertSentryClient = {
       captureMessage: vi.fn((msg: string) => { sentryCalls.push(msg); return 'event-id'; }),
       captureException: vi.fn(),
@@ -140,6 +142,7 @@ describe('recordProviderSendFailure', () => {
       emitOpsAlert(input, {
         config: DISABLED_CONFIG,
         env: { ...process.env, SENTRY_DSN: 'https://example.invalid/1' },
+        logger: mockLogger,
         sentry: mockSentry,
       });
 
@@ -154,6 +157,10 @@ describe('recordProviderSendFailure', () => {
 
     expect(sentryCalls).toHaveLength(0);
     expect(mockSentry.captureMessage).not.toHaveBeenCalled();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ category: 'provider_send' }),
+      expect.stringContaining('Repeated provider send failure'),
+    );
   });
 
   it('re-alerts in a new window after the previous window expires', async () => {
@@ -198,6 +205,14 @@ function createCounterClient(): { client: OpsAlertCounterClient } {
 
 function createEmitAlert() {
   return vi.fn<NonNullable<ProviderSendAlertDependencies['emitAlert']>>(() => LOG_ONLY_RESULT);
+}
+
+function createTestLogger(): OpsAlertLogger {
+  return {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
 }
 
 function makeDeps(

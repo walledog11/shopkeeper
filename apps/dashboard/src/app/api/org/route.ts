@@ -118,6 +118,19 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: 'Confirmation name does not match' }, { status: 400 });
     }
 
+    const client = await clerkClient();
+    const memberships = await client.users.getOrganizationMembershipList({ userId });
+    const hasOtherWorkspace = memberships.data.some(m => m.organization.id !== org.clerkOrgId);
+    if (!hasOtherWorkspace) {
+      return NextResponse.json(
+        {
+          error: 'last_workspace',
+          message: 'This is your only workspace. Create another workspace first, or delete your account from Settings → Account to leave Clerk.',
+        },
+        { status: 409 },
+      );
+    }
+
     if (org.stripeSubscriptionId) {
       try {
         await stripe.subscriptions.cancel(org.stripeSubscriptionId);
@@ -130,7 +143,6 @@ export async function DELETE(request: Request) {
       }
     }
 
-    const client = await clerkClient();
     await client.organizations.deleteOrganization(org.clerkOrgId);
 
     await db.organization.deleteMany({ where: { id: org.id } });

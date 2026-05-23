@@ -3,6 +3,24 @@ import { db } from '@clerk/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 
+function requireNonEmptyString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new BadRequestError(`${field} is required`);
+  }
+  return value.trim();
+}
+
+function normalizeStringArray(value: unknown, field: string): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new BadRequestError(`${field} must be an array`);
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
+
 export const GET = withOrgRoute(
   { context: 'Canned Responses GET', errorMessage: 'Failed to fetch canned responses' },
   async ({ org }) => {
@@ -18,16 +36,13 @@ export const POST = withOrgRoute(
   { context: 'Canned Responses POST', errorMessage: 'Failed to create canned response' },
   async ({ org, request }) => {
     const { title, body, tags, channels } = await request.json();
-    if (!title?.trim() || !body?.trim()) {
-      throw new BadRequestError('title and body are required');
-    }
     const response = await db.cannedResponse.create({
       data: {
         organizationId: org.id,
-        title: title.trim(),
-        body: body.trim(),
-        tags: Array.isArray(tags) ? tags.map((t: string) => t.trim()).filter(Boolean) : [],
-        channels: Array.isArray(channels) ? channels.map((c: string) => c.trim()).filter(Boolean) : [],
+        title: requireNonEmptyString(title, 'title'),
+        body: requireNonEmptyString(body, 'body'),
+        tags: normalizeStringArray(tags, 'tags'),
+        channels: normalizeStringArray(channels, 'channels'),
       },
     });
     return NextResponse.json({ response }, { status: 201 });

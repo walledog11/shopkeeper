@@ -10,10 +10,16 @@ import {
 // These must be declared with vi.hoisted so they are available inside vi.mock
 // factory functions, which are hoisted above all imports.
 
-const { capturedHandlers, mockAnthropicCreate, mockFetch } = vi.hoisted(() => ({
+const { capturedHandlers, mockAnthropicCreate, mockFetch, mockLogger } = vi.hoisted(() => ({
   capturedHandlers: new Map<string, (job: unknown) => Promise<void>>(),
   mockAnthropicCreate: vi.fn(),
   mockFetch: vi.fn(),
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 // ─── Module mocks ────────────────────────────────────────────────────────────
@@ -57,6 +63,10 @@ vi.mock('@anthropic-ai/sdk', () => ({
 vi.mock('@sentry/node', () => ({
   init: vi.fn(),
   captureException: vi.fn(),
+}));
+
+vi.mock('./logger.js', () => ({
+  default: mockLogger,
 }));
 
 vi.stubGlobal('fetch', mockFetch);
@@ -154,6 +164,10 @@ beforeEach(async () => {
   org = await createTestOrg();
   mockAnthropicCreate.mockReset();
   mockFetch.mockReset();
+  vi.mocked(mockLogger.debug).mockClear();
+  vi.mocked(mockLogger.error).mockClear();
+  vi.mocked(mockLogger.info).mockClear();
+  vi.mocked(mockLogger.warn).mockClear();
   // Default fetch mock: IG profile lookup returns no profile (graceful skip)
   mockFetch.mockResolvedValue({ ok: false, json: vi.fn(), text: vi.fn().mockResolvedValue('') });
 });
@@ -654,6 +668,10 @@ describe('Message worker — shopify branch', () => {
       where: { organizationId: org.id, channelType: ChannelType.shopify },
     });
     expect(threads).toHaveLength(0);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { traceId: 'trace-shopify-test' },
+      '[Worker] Shopify order missing customer identity — dropping',
+    );
   });
 
   it('adds a new message to the existing thread for a returning customer', async () => {

@@ -11,7 +11,13 @@ import {
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
-const { queueAddSpy } = vi.hoisted(() => ({
+const { mockLogger, queueAddSpy } = vi.hoisted(() => ({
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
 }));
 
@@ -35,6 +41,10 @@ vi.mock('bullmq', () => ({
     this.on = vi.fn();
     this.close = vi.fn();
   }),
+}));
+
+vi.mock('../logger.js', () => ({
+  default: mockLogger,
 }));
 
 // Import the router after mocks are hoisted
@@ -72,6 +82,10 @@ const app = createApp();
 beforeEach(async () => {
   org = await createTestOrg();
   queueAddSpy.mockClear();
+  mockLogger.debug.mockClear();
+  mockLogger.error.mockClear();
+  mockLogger.info.mockClear();
+  mockLogger.warn.mockClear();
 });
 
 afterEach(async () => {
@@ -97,6 +111,7 @@ describe('GET /webhooks/meta', () => {
       .query({ 'hub.mode': 'subscribe', 'hub.verify_token': 'wrong-token', 'hub.challenge': 'abc123' });
 
     expect(res.status).toBe(403);
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Meta handshake failed: token mismatch');
   });
 
   it('returns 400 when mode or token are missing', async () => {
@@ -157,6 +172,7 @@ describe('POST /webhooks/meta', () => {
 
     expect(res.status).toBe(401);
     expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Signature mismatch — rejecting request.');
   });
 
   it('drops (200) when no integration is found for the page id', async () => {
@@ -333,6 +349,9 @@ describe('POST /webhooks/email/inbound', () => {
       expect(res.status).toBe(401);
       expect(res.headers['www-authenticate']).toMatch(/^Basic/);
       expect(queueAddSpy).not.toHaveBeenCalled();
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        '[Webhook] Inbound email rejected — invalid or missing basic auth',
+      );
     });
 
     it('returns 401 when credentials are configured and the Authorization header is wrong', async () => {
@@ -428,6 +447,9 @@ describe('POST /webhooks/shopify', () => {
 
     expect(res.status).toBe(401);
     expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      '[Webhook] Shopify missing signature or raw body — rejecting.',
+    );
   });
 
   it('returns 401 when signature is invalid', async () => {
@@ -443,6 +465,7 @@ describe('POST /webhooks/shopify', () => {
 
     expect(res.status).toBe(401);
     expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Shopify signature mismatch — rejecting.');
   });
 
   it('silently drops (200) unsupported topics', async () => {
@@ -553,5 +576,6 @@ describe('POST /webhooks/shopify', () => {
     expect(res.status).toBe(401);
     const still = await db.integration.findUnique({ where: { id: integration.id } });
     expect(still).not.toBeNull();
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Shopify signature mismatch — rejecting.');
   });
 });

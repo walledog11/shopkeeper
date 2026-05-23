@@ -32,6 +32,8 @@ jobs:
         run: npm ci
       - name: Run unit tests
         run: npm run test:unit
+      - name: Run node script tests
+        run: npm run test:node
 
   lint:
     name: Lint and Audit
@@ -51,8 +53,8 @@ jobs:
         run: npm run lint
 
   integration:
-    name: Integration Tests
-    needs: secret-scan
+    name: Integration Tests and Coverage
+    needs: [secret-scan, lint, unit]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -88,9 +90,7 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Run integration tests
-        run: npm run test:integration
-      - name: Generate coverage reports
+      - name: Run integration tests with coverage
         run: npm run test:coverage
       - name: Upload coverage reports
         if: ${{ always() }}
@@ -102,9 +102,24 @@ jobs:
             apps/gateway/coverage/
           retention-days: 7
 
+  build:
+    name: Build
+    needs: [secret-scan, lint, unit]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run production build
+        run: npm run build
+
   e2e:
     name: E2E Tests
-    needs: [secret-scan, lint, unit, integration]
+    needs: [secret-scan, lint, unit, integration, build]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -164,8 +179,8 @@ jobs:
         run: npm ci
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Run E2E tests
-        run: npm run test:e2e
+      - name: Run smoke E2E tests
+        run: npm run test:e2e:smoke
       - name: Upload Playwright artifacts
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4

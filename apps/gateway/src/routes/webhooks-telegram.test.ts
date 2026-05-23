@@ -14,7 +14,13 @@ import { updateContext, getContext } from '../operator-context.js';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 // In-memory backing store for the ioredis mock so the /start bind flow can
 // round-trip telegram:bind:<token> values.
-const { redisStore, incrStore, sendMessageSpy } = vi.hoisted(() => ({
+const { mockLogger, redisStore, incrStore, sendMessageSpy } = vi.hoisted(() => ({
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
   redisStore: new Map<string, string>(),
   incrStore: new Map<string, number>(),
   sendMessageSpy: vi.fn().mockResolvedValue(undefined),
@@ -65,6 +71,10 @@ vi.mock('../clients/telegram-client.js', () => ({
   setWebhook: vi.fn(),
 }));
 
+vi.mock('../logger.js', () => ({
+  default: mockLogger,
+}));
+
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 
 function createApp() {
@@ -109,6 +119,10 @@ beforeEach(async () => {
   redisStore.clear();
   incrStore.clear();
   sendMessageSpy.mockClear();
+  mockLogger.debug.mockClear();
+  mockLogger.error.mockClear();
+  mockLogger.info.mockClear();
+  mockLogger.warn.mockClear();
 });
 
 afterEach(async () => {
@@ -138,6 +152,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
       .post('/webhooks/telegram')
       .send({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } });
     expect(res.status).toBe(403);
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Telegram] Missing secret token header — rejecting.');
   });
 
   it('returns 403 when secret token does not match', async () => {
@@ -146,6 +161,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
       .set('x-telegram-bot-api-secret-token', 'wrong-secret')
       .send({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } });
     expect(res.status).toBe(403);
+    expect(mockLogger.warn).toHaveBeenCalledWith('[Telegram] Secret token mismatch — rejecting request.');
   });
 
   it('returns 200 silently when message is missing', async () => {

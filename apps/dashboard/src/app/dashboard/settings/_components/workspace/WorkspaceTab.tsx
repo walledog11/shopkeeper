@@ -1,7 +1,6 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { Download, Loader2, Trash2, Upload } from "lucide-react"
 import { useOrganization, useOrganizationList } from "@clerk/nextjs"
 import { Input } from "@/components/ui/input"
@@ -25,10 +24,13 @@ interface Props {
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
 export default function WorkspaceTab({ orgName, version }: Props) {
-  const router = useRouter()
   const { organization, membership } = useOrganization()
-  const { setActive } = useOrganizationList()
+  const { setActive, userMemberships } = useOrganizationList({
+    userMemberships: { infinite: false },
+  })
   const isAdmin = membership?.role === "org:admin"
+  const nextOrgId = userMemberships?.data?.find(m => m.organization.id !== organization?.id)?.organization.id ?? null
+  const isOnlyWorkspace = userMemberships?.data !== undefined && nextOrgId === null
 
   const [workspaceName, setWorkspaceName] = useState(orgName)
   const [currentVersion, setCurrentVersion] = useState(version)
@@ -156,7 +158,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
   }
 
   async function deleteWorkspace() {
-    if (deleteConfirmName !== orgName) return
+    if (deleteConfirmName !== orgName || !nextOrgId || !setActive) return
     setDeleting(true)
     setDeleteError(null)
     try {
@@ -166,11 +168,11 @@ export default function WorkspaceTab({ orgName, version }: Props) {
         body: JSON.stringify({ confirmName: deleteConfirmName }),
       })
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(body.error ?? 'Failed')
+        const body = await res.json().catch(() => ({})) as { error?: string; message?: string }
+        throw new Error(body.message ?? body.error ?? 'Failed')
       }
-      if (setActive) await setActive({ organization: null })
-      router.replace('/select-org')
+      await setActive({ organization: nextOrgId })
+      window.location.assign('/dashboard')
     } catch (err) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete workspace.')
       setDeleting(false)
@@ -324,6 +326,11 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                 <p className="text-xs text-white/35 mt-0.5">
                   Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data — conversations, customers, integrations, knowledge base, and billing. Every member will lose access.
                 </p>
+                {isOnlyWorkspace && (
+                  <p className="text-xs text-amber-400/80 mt-1.5">
+                    This is your only workspace. Create another workspace first, or delete your account in Settings → Account to leave Clerk.
+                  </p>
+                )}
               </div>
               <Button
                 variant="outline"
@@ -333,6 +340,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                   setDeleteError(null)
                   setDeleteOpen(true)
                 }}
+                disabled={isOnlyWorkspace}
                 className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
               >
                 <Trash2 className="w-3 h-3" />

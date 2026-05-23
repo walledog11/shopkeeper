@@ -18,11 +18,13 @@ const SORT_OPTIONS: { id: SortId; label: string }[] = [
   { id: "az",        label: "A – Z"     },
 ]
 
+const EMPTY_RESPONSES: CannedResponse[] = []
+
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function CannedResponsesPage() {
   const { data, isLoading, mutate } = useSWR<{ responses: CannedResponse[] }>("/api/canned-responses", fetcher)
-  const responses = data?.responses ?? []
+  const responses = data?.responses ?? EMPTY_RESPONSES
 
   const [search, setSearch]       = useState("")
   const [activeTag, setActiveTag] = useState<string | null>(null)

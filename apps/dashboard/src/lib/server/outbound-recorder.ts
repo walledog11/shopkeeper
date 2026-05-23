@@ -1,7 +1,3 @@
-import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
-import path from 'node:path';
-import { randomUUID } from 'node:crypto';
-
 export type OutboundChannel = 'email' | 'ig_dm';
 export type OutboundProvider = 'postmark' | 'meta' | 'gmail' | 'outlook';
 export type OutboundSource = 'dispatch_message' | 'agent_send_reply' | 'agent_send_email';
@@ -26,12 +22,11 @@ export interface OutboundRecord extends OutboundRecordInput {
 }
 
 export function isOutboundRecordingEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
-  const isE2ERuntime = env.NODE_ENV === 'test' || env.E2E_TEST_RUN === 'true';
-  return isE2ERuntime && env.E2E_OUTBOUND_MODE === 'record';
+  return isOutboundTestRuntime(env) && env.E2E_OUTBOUND_MODE === 'record';
 }
 
 export function getOutboundRecordPath(env: NodeJS.ProcessEnv = process.env): string {
-  return env.E2E_OUTBOUND_RECORD_PATH || path.join(process.cwd(), 'test-results', 'e2e-outbound.jsonl');
+  return env.E2E_OUTBOUND_RECORD_PATH || `${process.cwd()}/test-results/e2e-outbound.jsonl`;
 }
 
 export async function recordOutboundCall(input: OutboundRecordInput): Promise<OutboundRecord | null> {
@@ -39,40 +34,28 @@ export async function recordOutboundCall(input: OutboundRecordInput): Promise<Ou
     return null;
   }
 
-  const record: OutboundRecord = {
-    id: randomUUID(),
-    recordedAt: new Date().toISOString(),
-    ...input,
-  };
-  const recordPath = getOutboundRecordPath();
-
-  await mkdir(path.dirname(recordPath), { recursive: true });
-  await appendFile(recordPath, `${JSON.stringify(record)}\n`, 'utf8');
-
-  return record;
+  const runtime = await import('./outbound-recorder-runtime');
+  return runtime.recordOutboundCallToFile(input, getOutboundRecordPath());
 }
 
 export async function readOutboundRecords(): Promise<OutboundRecord[]> {
-  if (process.env.NODE_ENV !== 'test' && process.env.E2E_TEST_RUN !== 'true') {
+  if (!isOutboundTestRuntime()) {
     return [];
   }
 
-  const recordPath = getOutboundRecordPath();
-  const content = await readFile(recordPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT') return '';
-    throw error;
-  });
-
-  return content
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as OutboundRecord);
+  const runtime = await import('./outbound-recorder-runtime');
+  return runtime.readOutboundRecordsFromFile(getOutboundRecordPath());
 }
 
 export async function clearOutboundRecords(): Promise<void> {
-  if (process.env.NODE_ENV !== 'test' && process.env.E2E_TEST_RUN !== 'true') {
+  if (!isOutboundTestRuntime()) {
     return;
   }
 
-  await rm(getOutboundRecordPath(), { force: true });
+  const runtime = await import('./outbound-recorder-runtime');
+  await runtime.clearOutboundRecordsFile(getOutboundRecordPath());
+}
+
+function isOutboundTestRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'test' || env.E2E_TEST_RUN === 'true';
 }

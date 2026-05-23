@@ -1,6 +1,45 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
+
+function normalizeOptionalName(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new BadRequestError('name must be a non-empty string');
+  }
+  return value.trim();
+}
+
+function normalizeOptionalBoolean(value: unknown, field: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'boolean') {
+    throw new BadRequestError(`${field} must be a boolean`);
+  }
+  return value;
+}
+
+function normalizeOptionalTrigger(value: unknown): object | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    typeof (value as { type?: unknown }).type !== 'string' ||
+    !(value as { type: string }).type.trim()
+  ) {
+    throw new BadRequestError('trigger must include a type');
+  }
+  return value;
+}
+
+function normalizeOptionalActions(value: unknown): unknown[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new BadRequestError('actions must be an array');
+  }
+  return value;
+}
 
 export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Playbooks PATCH', errorMessage: 'Failed to update playbook' },
@@ -14,10 +53,10 @@ export const PATCH = withOrgRoute<{ id: string }>(
     const updated = await db.playbook.update({
       where: { id },
       data: {
-        ...(name !== undefined && { name: name.trim() }),
-        ...(enabled !== undefined && { enabled }),
-        ...(trigger !== undefined && { trigger }),
-        ...(actions !== undefined && { actions }),
+        ...(name !== undefined && { name: normalizeOptionalName(name) }),
+        ...(enabled !== undefined && { enabled: normalizeOptionalBoolean(enabled, 'enabled') }),
+        ...(trigger !== undefined && { trigger: normalizeOptionalTrigger(trigger) }),
+        ...(actions !== undefined && { actions: normalizeOptionalActions(actions) }),
       },
     });
 

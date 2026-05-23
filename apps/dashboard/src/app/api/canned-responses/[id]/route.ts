@@ -1,6 +1,26 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
+
+function normalizeOptionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new BadRequestError(`${field} must be a non-empty string`);
+  }
+  return value.trim();
+}
+
+function normalizeOptionalStringArray(value: unknown, field: string): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) {
+    throw new BadRequestError(`${field} must be an array`);
+  }
+  return value
+    .filter((item): item is string => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean);
+}
 
 export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Canned Responses PATCH', errorMessage: 'Failed to update canned response' },
@@ -14,10 +34,10 @@ export const PATCH = withOrgRoute<{ id: string }>(
     const updated = await db.cannedResponse.update({
       where: { id },
       data: {
-        ...(title !== undefined && { title: title.trim() }),
-        ...(body !== undefined && { body: body.trim() }),
-        ...(tags !== undefined && { tags: tags.map((t: string) => t.trim()).filter(Boolean) }),
-        ...(channels !== undefined && { channels: channels.map((c: string) => c.trim()).filter(Boolean) }),
+        ...(title !== undefined && { title: normalizeOptionalString(title, 'title') }),
+        ...(body !== undefined && { body: normalizeOptionalString(body, 'body') }),
+        ...(tags !== undefined && { tags: normalizeOptionalStringArray(tags, 'tags') }),
+        ...(channels !== undefined && { channels: normalizeOptionalStringArray(channels, 'channels') }),
       },
     });
     return NextResponse.json({ response: updated });

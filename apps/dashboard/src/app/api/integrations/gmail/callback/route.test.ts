@@ -6,10 +6,17 @@ const {
   mockCookieDelete,
   mockCookieGet,
   mockFetch,
+  mockLogger,
 } = vi.hoisted(() => ({
   mockCookieDelete: vi.fn(),
   mockCookieGet: vi.fn(),
   mockFetch: vi.fn(),
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -21,6 +28,10 @@ vi.mock('next/headers', () => ({
     get: mockCookieGet,
     delete: mockCookieDelete,
   })),
+}));
+
+vi.mock('@/lib/server/logger', () => ({
+  default: mockLogger,
 }));
 
 vi.stubGlobal('fetch', mockFetch);
@@ -61,6 +72,7 @@ describe('GET /api/integrations/gmail/callback', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockLogger.error).toHaveBeenCalledWith('[Gmail OAuth] State mismatch — possible CSRF attempt');
   });
 
   it('rejects user session mismatch', async () => {
@@ -75,6 +87,10 @@ describe('GET /api/integrations/gmail/callback', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { savedUserId: 'someone_else', currentUserId: 'usr_oauth' },
+      '[Gmail OAuth] User session mismatch — possible CSRF attempt',
+    );
   });
 
   it('persists gmail integration and removes any other email rows for the org', async () => {
@@ -129,6 +145,10 @@ describe('GET /api/integrations/gmail/callback', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=access_denied');
     expect(mockFetch).not.toHaveBeenCalled();
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { error: 'access_denied' },
+      '[Gmail OAuth] User denied access',
+    );
   });
 });
 

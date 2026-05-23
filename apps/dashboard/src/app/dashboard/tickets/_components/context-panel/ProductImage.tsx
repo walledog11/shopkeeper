@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import { Package } from "lucide-react"
 
 interface ProductImageProps {
@@ -19,10 +20,12 @@ export function ProductImage({ src, title }: ProductImageProps) {
     )
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
+    <Image
       src={src}
       alt={title}
+      width={28}
+      height={28}
+      unoptimized
       onError={() => setFailedSrc(src)}
       className="w-7 h-7 rounded object-cover border border-white/[0.08] shrink-0"
     />

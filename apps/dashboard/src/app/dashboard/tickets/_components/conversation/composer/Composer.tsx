@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
 import { Bot, Loader2 } from "lucide-react"
@@ -9,6 +9,8 @@ import { buildShopifyCustomerKey } from "@/lib/shopify/customer-key"
 import type { CannedResponse } from "@/types"
 import type { ShopifyData } from "@/types/shopify"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
+
+const EMPTY_CANNED_RESPONSES: CannedResponse[] = []
 
 interface IntegrationRow {
   platform: string
@@ -94,14 +96,17 @@ export default function Composer({
     revalidateOnFocus: false,
   })
 
-  const filteredCanned = slashQuery !== null
-    ? (cannedData?.responses ?? []).filter(r => {
+  const cannedResponses = cannedData?.responses ?? EMPTY_CANNED_RESPONSES
+  const filteredCanned = useMemo(() => (
+    slashQuery !== null
+      ? cannedResponses.filter(r => {
         const q = slashQuery.toLowerCase()
         const matchesQuery = !q || r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q)
         const matchesChannel = r.channels.length === 0 || !channelType || r.channels.includes(channelType)
         return matchesQuery && matchesChannel
       })
-    : []
+      : EMPTY_CANNED_RESPONSES
+  ), [cannedResponses, channelType, slashQuery])
 
   useEffect(() => { setSelectedIdx(0) }, [slashQuery, filteredCanned.length])
 

@@ -7,11 +7,18 @@ const {
   mockCookieDelete,
   mockCookieGet,
   mockFetch,
+  mockLogger,
   mockRecordProviderSendFailure,
 } = vi.hoisted(() => ({
   mockCookieDelete: vi.fn(),
   mockCookieGet: vi.fn(),
   mockFetch: vi.fn(),
+  mockLogger: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
   mockRecordProviderSendFailure: vi.fn(),
 }));
 
@@ -28,6 +35,10 @@ vi.mock('next/headers', () => ({
 
 vi.mock('@/lib/server/provider-send-alerts', () => ({
   recordProviderSendFailure: mockRecordProviderSendFailure,
+}));
+
+vi.mock('@/lib/server/logger', () => ({
+  default: mockLogger,
 }));
 
 vi.mock('@/lib/server/redis', () => ({
@@ -80,6 +91,10 @@ describe('GET /api/integrations/shopify/callback', () => {
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=shopify_shop_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockCookieDelete).toHaveBeenCalledWith('shopify_oauth_shop');
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      { shop: 'evil-shop.myshopify.com', savedShop: 'fixture-shop.myshopify.com' },
+      '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
+    );
   });
 
   it('persists the active org integration and soft-fails webhook registration errors', async () => {
@@ -119,6 +134,10 @@ describe('GET /api/integrations/shopify/callback', () => {
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://fixture-shop.myshopify.com/admin/oauth/access_token');
     expect(String(mockFetch.mock.calls[1][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/shop.json');
     expect(String(mockFetch.mock.calls[2][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/webhooks.json');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      { topic: 'orders/fulfilled', shop: 'fixture-shop.myshopify.com', err: { errors: 'topic disabled' } },
+      '[Shopify OAuth] Webhook registration failed',
+    );
     expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
       'shopify',
       'webhook_registration',

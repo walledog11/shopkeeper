@@ -1,6 +1,7 @@
 "use client"
 
 import { useClerk, useUser } from "@clerk/nextjs"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 
 export default function AccountTab() {
@@ -27,7 +28,14 @@ export default function AccountTab() {
           <div className="flex items-center gap-4 p-4 bg-white/[0.04] rounded-md border border-white/[0.07]">
             <div className="w-10 h-10 rounded-full bg-white/[0.10] flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
               {userImageUrl ? (
-                <img src={userImageUrl} alt={userName} className="w-full h-full object-cover" />
+                <Image
+                  src={userImageUrl}
+                  alt={userName}
+                  width={40}
+                  height={40}
+                  unoptimized
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 initials
               )}

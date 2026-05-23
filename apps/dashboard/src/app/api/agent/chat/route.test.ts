@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, db } from "@clerk/db";
+import { ChannelType, SpendCapError, db, usdToNanoDollars } from "@clerk/db";
 import {
   cleanupTestData,
   createTestCustomer,
@@ -12,10 +12,23 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-const { mockBuildContext, mockHashInstructionForLog, mockPlanAgent, mockResolveAgentSettings, mockRunAgent } = vi.hoisted(() => ({
+const {
+  mockBuildContext,
+  mockExecuteAgentTurn,
+  mockHashInstructionForLog,
+  mockPlanAgent,
+  mockRecordAgentRouteFailure,
+  mockResolveAgentSettings,
+  mockRunAgent,
+} = vi.hoisted(() => ({
   mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
+  mockExecuteAgentTurn: vi.fn().mockResolvedValue({
+    summary: "Done",
+    actionsPerformed: [],
+  }),
   mockHashInstructionForLog: vi.fn().mockReturnValue("hash_test"),
   mockPlanAgent: vi.fn(),
+  mockRecordAgentRouteFailure: vi.fn().mockResolvedValue(null),
   mockResolveAgentSettings: vi.fn().mockReturnValue({ requireApprovalForActions: false }),
   mockRunAgent: vi.fn().mockResolvedValue({
     summary: "Done",
@@ -30,8 +43,16 @@ vi.mock("@/lib/agent/runner", () => ({
   runAgent: mockRunAgent,
 }));
 
+vi.mock("@/lib/agent/api/execution", () => ({
+  executeAgentTurn: mockExecuteAgentTurn,
+}));
+
 vi.mock("@/lib/agent/settings", () => ({
   resolveAgentSettings: mockResolveAgentSettings,
+}));
+
+vi.mock("@/lib/server/agent-failure-alerts", () => ({
+  recordAgentRouteFailure: mockRecordAgentRouteFailure,
 }));
 
 import { auth } from "@clerk/nextjs/server";
@@ -50,6 +71,10 @@ beforeEach(async () => {
 afterEach(async () => {
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
+  mockExecuteAgentTurn.mockResolvedValue({
+    summary: "Done",
+    actionsPerformed: [],
+  });
   mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: false });
   mockHashInstructionForLog.mockReturnValue("hash_test");
 });
@@ -85,5 +110,90 @@ describe("POST /api/agent/chat", () => {
 
     const thread = await db.thread.findUnique({ where: { id: body.sessionId } });
     expect(thread?.channelType).toBe("dashboard_agent");
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: org.id,
+      threadId: body.sessionId,
+      instruction: "Help me",
+      failureRoute: "/api/agent/chat",
+    }));
+  });
+
+  it("returns an approval prompt and stores the pending action plan when action approval is required", async () => {
+    mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: true });
+    mockPlanAgent.mockResolvedValueOnce({
+      instruction: "Create an order for Jane",
+      steps: [{
+        id: "act_1",
+        tool: "create_shopify_order",
+        label: "Create order",
+        description: "Create a Shopify order",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "act_1",
+        name: "create_shopify_order",
+        input: {
+          first_name: "Jane",
+          email: "jane@example.com",
+          line_items: [{ variant_id: "gid://shopify/ProductVariant/1", quantity: 1 }],
+        },
+      }],
+    });
+
+    const res = await POST(jsonReq({ instruction: "Create an order for Jane" }));
+    const body = await res.json() as { sessionId: string; awaitingApproval?: boolean; summary: string };
+
+    expect(res.status).toBe(200);
+    expect(body.awaitingApproval).toBe(true);
+    expect(body.summary).toContain("Reply yes to create it");
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+
+    const thread = await db.thread.findUniqueOrThrow({
+      where: { id: body.sessionId },
+      select: { cachedPlan: true, messages: { select: { senderType: true, contentText: true }, orderBy: { sentAt: "asc" } } },
+    });
+    expect(thread.cachedPlan).toMatchObject({
+      kind: "dashboard_pending_approval",
+      instruction: "Create an order for Jane",
+      instructionHash: "hash_test",
+    });
+    expect(thread.messages.map((message) => message.senderType)).toEqual(["customer", "agent"]);
+  });
+
+  it("maps spend-cap failures to the public 429 response", async () => {
+    mockExecuteAgentTurn.mockRejectedValueOnce(
+      new SpendCapError(usdToNanoDollars(25), usdToNanoDollars(25)),
+    );
+
+    const res = await POST(jsonReq({ instruction: "Summarize today's tickets" }));
+    const body = await res.json() as { code?: string; currentUsd?: number; capUsd?: number };
+
+    expect(res.status).toBe(429);
+    expect(body).toMatchObject({ code: "spend_cap_reached", currentUsd: 25, capUsd: 25 });
+  });
+
+  it("records route failures for AI execution errors", async () => {
+    mockExecuteAgentTurn.mockRejectedValueOnce(new Error("Anthropic unavailable"));
+
+    const res = await POST(jsonReq({ instruction: "Draft a response" }));
+
+    expect(res.status).toBe(500);
+    expect(mockRecordAgentRouteFailure).toHaveBeenCalledWith(expect.objectContaining({
+      route: "/api/agent/chat",
+      orgId: org.id,
+      error: expect.any(Error),
+    }), expect.objectContaining({
+      getCounterClient: expect.any(Function),
+      onError: expect.any(Function),
+    }));
   });
 });
+
+function jsonReq(body: unknown) {
+  return new Request("http://localhost:3000/api/agent/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
