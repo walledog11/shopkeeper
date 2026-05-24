@@ -16,23 +16,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const org = await getOrCreateOrg();
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
 
-  // TODO (pre-launch): remove these hardwired demo notifications before shipping
-  const notifications: Notification[] = [
-    {
-      id: "demo-trial",
-      type: "warning",
-      title: "Your free trial ends in 3 days.",
-      message: "Upgrade to keep your team running smoothly.",
-      action: { label: "Upgrade now", href: "/dashboard/settings?tab=billing" },
-    },
-    {
-      id: "demo-integration",
-      type: "info",
-      title: "Connect your first channel",
-      message: "Start receiving support tickets from email, Instagram, SMS, and more.",
-      action: { label: "Add integration", href: "/dashboard/integrations" },
-    },
-  ];
+  const notifications: Notification[] = [];
 
   // No channel connected yet
   const integrationCount = await db.integration.count({ where: { organizationId: org.id } });

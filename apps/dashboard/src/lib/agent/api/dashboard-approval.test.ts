@@ -1,31 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChannelType, SenderType, db } from "@clerk/db";
+import {
+  createTestOrg,
+  createTestCustomer,
+  createTestThread,
+  cleanupTestData,
+} from "@clerk/db/test-helpers";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 const {
   mockBuildContext,
-  mockCreateMessage,
   mockHashInstructionForLog,
   mockPlanAgent,
-  mockThreadUpdate,
 } = vi.hoisted(() => ({
-  mockBuildContext: vi.fn().mockResolvedValue({ messages: [] }),
-  mockCreateMessage: vi.fn().mockResolvedValue({ id: "msg_1" }),
-  mockHashInstructionForLog: vi.fn().mockReturnValue("hash_test"),
+  mockBuildContext: vi.fn(),
+  mockHashInstructionForLog: vi.fn(),
   mockPlanAgent: vi.fn(),
-  mockThreadUpdate: vi.fn().mockResolvedValue({ id: "thread_1" }),
-}));
-
-vi.mock("@clerk/db", () => ({
-  createMessage: mockCreateMessage,
-  db: {
-    thread: {
-      findUnique: vi.fn(),
-      update: mockThreadUpdate,
-    },
-  },
-  Prisma: {
-    DbNull: "DbNull",
-  },
 }));
 
 vi.mock("@/lib/agent/runner", () => ({
@@ -35,10 +25,7 @@ vi.mock("@/lib/agent/runner", () => ({
 }));
 
 vi.mock("@/lib/server/logger", () => ({
-  default: {
-    info: vi.fn(),
-    error: vi.fn(),
-  },
+  default: { info: vi.fn(), error: vi.fn() },
 }));
 
 import {
@@ -127,13 +114,18 @@ function pendingApproval(overrides: Partial<DashboardPendingApproval> = {}): Das
   };
 }
 
+let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockBuildContext.mockResolvedValue({ messages: [] });
-  mockCreateMessage.mockResolvedValue({ id: "msg_1" });
   mockHashInstructionForLog.mockReturnValue("hash_test");
   mockPlanAgent.mockResolvedValue(createOrderPlan);
-  mockThreadUpdate.mockResolvedValue({ id: "thread_1" });
+});
+
+afterEach(async () => {
+  await cleanupTestData(org?.id);
+  org = null;
 });
 
 describe("dashboard approval helpers", () => {
@@ -187,61 +179,66 @@ describe("dashboard approval helpers", () => {
   });
 
   it("clears and records dashboard dismissals", async () => {
-    await expect(dismissDashboardPendingApproval("thread_1", "cancel")).resolves.toBe(DASHBOARD_APPROVAL_DISMISS_SUMMARY);
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.dashboard_agent);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: pendingApproval() as object },
+    });
 
-    expect(mockThreadUpdate).toHaveBeenCalledWith({
-      where: { id: "thread_1" },
-      data: {
-        cachedPlanMessageId: null,
-        cachedPlan: "DbNull",
-      },
+    await expect(dismissDashboardPendingApproval(thread.id, "cancel"))
+      .resolves.toBe(DASHBOARD_APPROVAL_DISMISS_SUMMARY);
+
+    const refreshed = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(refreshed.cachedPlan).toBeNull();
+    expect(refreshed.cachedPlanMessageId).toBeNull();
+
+    const messages = await db.message.findMany({
+      where: { threadId: thread.id },
+      orderBy: { sentAt: "asc" },
     });
-    expect(mockCreateMessage).toHaveBeenNthCalledWith(1, {
-      threadId: "thread_1",
-      senderType: "customer",
-      contentText: "cancel",
-    });
-    expect(mockCreateMessage).toHaveBeenNthCalledWith(2, {
-      threadId: "thread_1",
-      senderType: "agent",
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ senderType: SenderType.customer, contentText: "cancel" });
+    expect(messages[1]).toMatchObject({
+      senderType: SenderType.agent,
       contentText: DASHBOARD_APPROVAL_DISMISS_SUMMARY,
     });
   });
 
   it("plans, stores, and records pending approvals", async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.dashboard_agent);
     mockHashInstructionForLog.mockReturnValue("hash_planned");
 
     const planned = await planDashboardApproval({
-      orgId: "org_1",
-      threadId: "thread_1",
+      orgId: org.id,
+      threadId: thread.id,
       instruction: "Create an order",
       settings,
     });
 
     expect(planned?.approval.instructionHash).toBe("hash_planned");
     expect(planned?.approval.summary).toContain("Reply yes to create it");
-    expect(mockBuildContext).toHaveBeenCalledWith("thread_1", "org_1");
+    expect(mockBuildContext).toHaveBeenCalledWith(thread.id, org.id);
     expect(mockPlanAgent).toHaveBeenCalledWith({ messages: [] }, "Create an order", settings);
-    expect(mockThreadUpdate).toHaveBeenCalledWith({
-      where: { id: "thread_1" },
-      data: {
-        cachedPlanMessageId: null,
-        cachedPlan: expect.objectContaining({
-          kind: "dashboard_pending_approval",
-          instruction: "Create an order",
-          instructionHash: "hash_planned",
-        }),
-      },
+
+    const refreshed = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(refreshed.cachedPlanMessageId).toBeNull();
+    expect(refreshed.cachedPlan).toMatchObject({
+      kind: "dashboard_pending_approval",
+      instruction: "Create an order",
+      instructionHash: "hash_planned",
     });
-    expect(mockCreateMessage).toHaveBeenCalledWith({
-      threadId: "thread_1",
-      senderType: "customer",
-      contentText: "Create an order",
+
+    const messages = await db.message.findMany({
+      where: { threadId: thread.id },
+      orderBy: { sentAt: "asc" },
     });
-    expect(mockCreateMessage).toHaveBeenCalledWith({
-      threadId: "thread_1",
-      senderType: "agent",
-      contentText: expect.stringContaining("Reply yes to create it"),
-    });
+    expect(messages).toHaveLength(2);
+    expect(messages[0]).toMatchObject({ senderType: SenderType.customer, contentText: "Create an order" });
+    expect(messages[1].senderType).toBe(SenderType.agent);
+    expect(messages[1].contentText).toContain("Reply yes to create it");
   });
 });
