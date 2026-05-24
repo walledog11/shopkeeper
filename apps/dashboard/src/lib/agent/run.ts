@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "@/lib/ai/anthropic";
+import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { OrgSettings, RawToolCall } from "@/types";
@@ -243,6 +243,7 @@ export async function runAgent(
   const systemPrompt = readOnly
     ? buildComposerAskPrompt(ctx, settings)
     : buildSystemPrompt(ctx, settings);
+  const systemPromptBlocks = buildCachedSystemPrompt(systemPrompt);
 
   for (let i = 0; i < maxIterations; i += 1) {
     logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
@@ -252,7 +253,7 @@ export async function runAgent(
     const response = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: readOnly ? 2048 : 4096,
-      system: systemPrompt,
+      system: systemPromptBlocks,
       messages,
       tools,
       ...(operatorMode && !readOnly && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {}),

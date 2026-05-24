@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic } from "@/lib/ai/anthropic";
+import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types";
@@ -82,6 +82,7 @@ export async function planAgent(
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
   const baseMessages = buildMessageHistory(historyWindow, instruction);
   const systemPrompt = buildSystemPrompt(ctx, settings);
+  const systemPromptBlocks = buildCachedSystemPrompt(systemPrompt);
   const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
   const resolvedSettings = resolveAgentSettings(settings);
 
@@ -101,7 +102,7 @@ export async function planAgent(
   const response1 = await anthropic.messages.create({
     model: AI_MODEL,
     max_tokens: 2048,
-    system: systemPrompt,
+    system: systemPromptBlocks,
     messages: baseMessages,
     tools,
   });
@@ -201,7 +202,7 @@ export async function planAgent(
     const response15 = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 2048,
-      system: systemPrompt,
+      system: systemPromptBlocks,
       messages: planMessages,
       tools,
     });
@@ -243,7 +244,7 @@ export async function planAgent(
     const response2 = await anthropic.messages.create({
       model: AI_MODEL,
       max_tokens: 512,
-      system: systemPrompt,
+      system: systemPromptBlocks,
       messages: phase2Messages,
       tools: [sendReplyTool],
       tool_choice: { type: "any" },

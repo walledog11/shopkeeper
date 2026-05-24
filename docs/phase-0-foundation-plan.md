@@ -8,7 +8,7 @@ Each step lists: what lands, file-level work, dependencies, effort (S = <2 days,
 
 ---
 
-## Step 0 — Housekeeping (S, no dependencies)
+## Step 0 — Housekeeping (S, no dependencies) [COMPLETED]
 
 Small wins that should land first because they clear noise and unblock CI signal.
 
@@ -28,7 +28,15 @@ Small wins that should land first because they clear noise and unblock CI signal
 
 Land this first. Every subsequent step in Phase 0 modifies the prompt or the planner; without the harness you cannot tell whether you regressed.
 
-**Layout decision.** Eval files sit next to the runtime — wherever the runtime lives, the evals live. Today the runtime is in `apps/dashboard/src/lib/agent/`. So evals go in `apps/dashboard/src/lib/agent/__evals__/`. When the runtime moves to `packages/agent` in Phase 1, the evals move with it.
+Broken into 5 sub-steps, each independently shippable as its own PR. Total scope unchanged: ~5 working days. Sub-step order matters — the pilot fixture in 1.1 validates the runner before you invest in writing 20+ more, prompt caching in 1.2 lands cheaply once you have a way to observe the cache, and CI in 1.5 waits until the corpus is broad enough to be a meaningful signal.
+
+**Layout decision (applies to all sub-steps).** Eval files sit next to the runtime — wherever the runtime lives, the evals live. Today the runtime is in `apps/dashboard/src/lib/agent/`. So evals go in `apps/dashboard/src/lib/agent/__evals__/`. When the runtime moves to `packages/agent` in Phase 1, the evals move with it.
+
+---
+
+### Step 1.1 — Harness scaffolding + pilot fixture (~1 day) [COMPLETED]
+
+Goal: `npm run test:evals -w apps/dashboard` runs end-to-end against one fixture locally and prints a structured result. Proves the plumbing before you invest in fixture content.
 
 **New files.**
 
@@ -44,32 +52,81 @@ Land this first. Every subsequent step in Phase 0 modifies the prompt or the pla
 
 `apps/dashboard/src/lib/agent/__evals__/index.test.ts`
 - A vitest suite that loads every fixture from `./fixtures/*.json`, runs each through `runFixture`, asserts pass.
-- Tagged so it can be run separately from unit tests: `pnpm test:evals`.
+- Tagged so it can be run separately from unit tests: `npm run test:evals -w apps/dashboard`.
 
-`apps/dashboard/src/lib/agent/__evals__/fixtures/` — initial corpus of 20–25 cases:
-- 4 order-status (with and without order number, with and without resolved customer, ambiguous customer match)
-- 3 refund (under cap, at cap, over cap → expect escalate)
-- 2 cancel (allowed, blocked by `blockCancellations` policy)
-- 3 address-change (pre-fulfillment OK, post-fulfillment escalate, missing required fields)
-- 2 KB-policy questions (article present, no article present → expect honest "I'm not sure")
-- 2 multi-step (refund + reply, address change + reply)
-- 2 prompt-injection attempts (customer trying to manipulate the agent)
-- 2 escalation triggers (Shopify down, out-of-scope question)
-- 2 quick-reply auto-approval candidates
-- 3 operator-channel cases (concierge: "what's Jane's order status?")
+`apps/dashboard/src/lib/agent/__evals__/fixtures/order-status-basic.json` — single pilot fixture: resolved customer asks "where is my order?" with one recent order in state. Expected: `mustCallTools: ["get_order_status", "send_reply"]`.
 
 **Existing files to edit.**
 
-`apps/dashboard/package.json` — add `"test:evals": "vitest run --config vitest.integration.config.ts src/lib/agent/__evals__"`.
+`apps/dashboard/package.json` — add `"test:evals": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/lib/agent/__evals__"`.
 
-`.github/workflows/` — add an eval-on-PR job. Gate on `paths: ['apps/dashboard/src/lib/agent/**', 'apps/dashboard/src/lib/messaging/**']`. Use a separate workflow or a step in the existing CI so it doesn't run on doc-only PRs.
+**Done when.** `npm run test:evals -w apps/dashboard` runs locally against the pilot fixture with `ANTHROPIC_API_KEY` set, hits real Anthropic, passes, and prints latency + token usage.
 
-**Anthropic prompt caching, while you're here.** The eval suite hammers the same system prompt 25+ times per CI run. Enable Anthropic prompt caching on the system prompt in `apps/dashboard/src/lib/agent/run.ts` and `planner.ts`. One-line change: add `cache_control: { type: "ephemeral" }` to the system prompt block. Cuts input cost by ~80% and benefits production too. The eval harness is the perfect place to validate it works without behavior change.
+---
 
-**Effort.** 5 days for harness + 20–25 fixtures + CI wiring. Each subsequent fixture ~30 minutes.
+### Step 1.2 — Anthropic prompt caching (~0.5 day) [COMPLETED]
 
-**Open decisions.**
-- **Do you want eval CI to gate merges, or just report?** Recommended: start non-blocking (report only, like a check that can fail without blocking merge) for the first month, then flip to blocking once the corpus stabilizes. Pre-blocking creates flaky-CI fatigue if fixtures aren't yet stable.
+Independent of fixture content, but easiest to validate now that the harness can re-run the same prompt back-to-back and observe cache hits.
+
+**Edits.**
+
+`apps/dashboard/src/lib/agent/run.ts` and `apps/dashboard/src/lib/agent/planner.ts`:
+- Add `cache_control: { type: "ephemeral" }` to the system prompt block in each Claude call.
+
+**Verification.** Run the pilot fixture twice in succession; the second response should report `cache_read_input_tokens > 0`. Cuts input cost ~80% — benefits the eval suite immediately and production going forward.
+
+**Done when.** Two consecutive `npm run test:evals -w apps/dashboard` runs show cache hits on the second.
+
+---
+
+### Step 1.3 — Read-path fixture corpus (~1 day)
+
+Build out the easier, deterministic fixtures first. Read paths are more stable across LLM nondeterminism than mutative actions — good place to shake out runner bugs before tackling the hard cases.
+
+**New fixtures** (~9 cases):
+- 4 order-status (with and without order number, with and without resolved customer, ambiguous customer match)
+- 2 KB-policy questions (article present, no article present → expect honest "I'm not sure")
+- 3 operator-channel cases (concierge: "what's Jane's order status?")
+
+**Done when.** All 9 fixtures pass `npm run test:evals -w apps/dashboard` consistently across 3 consecutive local runs (manual flake check).
+
+---
+
+### Step 1.4 — Mutative fixture corpus (~1.5 days)
+
+Action paths — refund, cancel, address change, multi-step. Where the harness earns its keep, and where you'll likely discover the runner needs extensions (e.g., `mustCallToolsInOrder`, partial tool-argument matching, simulating tool failures).
+
+**New fixtures** (~12 cases):
+- 3 refund (under cap, at cap, over cap → expect escalate)
+- 2 cancel (allowed, blocked by `blockCancellations` policy)
+- 3 address-change (pre-fulfillment OK, post-fulfillment escalate, missing required fields)
+- 2 multi-step (refund + reply, address change + reply)
+- 2 escalation triggers (Shopify down, out-of-scope question)
+
+**Done when.** All ~21 fixtures pass consistently. Expect small runner adjustments here.
+
+---
+
+### Step 1.5 — Adversarial fixtures + CI wiring (~1 day)
+
+Remaining fixture categories and the CI plumbing.
+
+**New fixtures** (~4 cases):
+- 2 prompt-injection attempts (customer trying to manipulate the agent)
+- 2 quick-reply auto-approval candidates
+
+**CI workflow** in `.github/workflows/`:
+- New workflow `evals.yml` (or a job in existing CI) gated on `paths: ['apps/dashboard/src/lib/agent/**', 'apps/dashboard/src/lib/messaging/**']` so doc-only PRs don't trigger it.
+- Runs `npm run test:evals -w apps/dashboard` with the Anthropic API key from a CI secret.
+- **Non-blocking for the first 4 weeks** — posts results as a PR comment or non-required status check. Do not add to branch protection yet.
+- After 4 weeks, flip to required once the corpus is calibrated and flake is understood.
+
+**Done when.** A PR touching `apps/dashboard/src/lib/agent/**` shows the eval suite running and reporting; a doc-only PR does not trigger it.
+
+---
+
+**Open decisions (apply to the whole step).**
+- **Eval CI gating**: settled — non-blocking for ~4 weeks, then flip to blocking.
 - **Synthetic fixtures only, or seed with redacted prod data?** Synthetic is sufficient for V1; redacted-prod replay is a Layer 3 problem.
 
 ---
