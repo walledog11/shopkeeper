@@ -1,0 +1,54 @@
+{
+  "id": "multi-step-address-change-and-reply",
+  "description": "Customer asks to update their shipping address and confirm. Agent should update the address first, then notify the customer (address update must occur before reply in the plan ordering).",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Otto Reyes",
+    "customerPlatformId": "otto@example.com",
+    "shopifyCustomerId": "10000001041",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please ship order #1041 to 100 Broadway, New York, NY 10001, United States. Let me know once it's updated." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001041",
+        "name": "#1041",
+        "created_at": "2026-05-22T09:30:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "95.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1041",
+            "title": "Denim Jacket",
+            "quantity": 1,
+            "variant_id": "variant_1041",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and update their shipping address.",
+  "expectedPlan": {
+    "mustCallTools": ["update_shopify_order_address", "send_reply"],
+    "mustCallToolsInOrder": ["update_shopify_order_address", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "update_shopify_order_address",
+        "inputIncludes": {
+          "order_id": "9000001041",
+          "address1": "100 Broadway",
+          "city": "New York",
+          "zip": "10001"
+        }
+      }
+    ]
+  }
+}

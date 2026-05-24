@@ -1,0 +1,46 @@
+{
+  "id": "refund-at-cap",
+  "description": "Customer asks for a refund on an order priced exactly at the workspace cap. The cap is inclusive, so the agent should issue the refund and not escalate.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Alex Morgan",
+    "customerPlatformId": "alex@example.com",
+    "shopifyCustomerId": "10000001011",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 50 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Order #1011 arrived defective - the zipper is broken. Can I have a full refund please?" }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001011",
+        "name": "#1011",
+        "created_at": "2026-05-14T12:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "50.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1011",
+            "title": "Canvas Pouch",
+            "quantity": 1,
+            "variant_id": "variant_1011",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001011" } }
+    ]
+  }
+}

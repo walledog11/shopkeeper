@@ -1,0 +1,42 @@
+{
+  "id": "address-change-missing-fields",
+  "description": "Customer asks for an address change but only provides a street line - no city, state, or zip. The address-update tool requires all fields; agent must ask for the missing info instead of calling the tool with placeholders.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Ruth Cohen",
+    "customerPlatformId": "ruth@example.com",
+    "shopifyCustomerId": "10000001032",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hey, can you ship order #1032 to 123 Maple Lane instead? Thanks." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001032",
+        "name": "#1032",
+        "created_at": "2026-05-22T17:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "55.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1032",
+            "title": "Bamboo Mug",
+            "quantity": 1,
+            "variant_id": "variant_1032",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their address change request.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["update_shopify_order_address", "create_refund", "cancel_order"]
+  }
+}

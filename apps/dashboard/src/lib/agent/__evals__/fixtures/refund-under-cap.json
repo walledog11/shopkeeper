@@ -1,0 +1,46 @@
+{
+  "id": "refund-under-cap",
+  "description": "Customer asks for a refund on an order well under the workspace cap. Agent should issue the refund on the correct order and notify the customer.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Jane Doe",
+    "customerPlatformId": "jane@example.com",
+    "shopifyCustomerId": "10000001010",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 100 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #1010." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001010",
+        "name": "#1010",
+        "created_at": "2026-05-15T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "42.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1010",
+            "title": "Cotton Tee",
+            "quantity": 1,
+            "variant_id": "variant_1010",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001010" } }
+    ]
+  }
+}

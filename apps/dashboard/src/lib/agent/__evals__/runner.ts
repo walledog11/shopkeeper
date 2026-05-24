@@ -10,9 +10,10 @@ import { vi } from "vitest";
 import { anthropic } from "@/lib/ai/anthropic";
 import { planAgent } from "../planner";
 import { resolveAgentSettings } from "../settings";
+import * as executor from "../tools/executor";
 import { readModelUsage } from "../usage";
 import type { AgentContext } from "../types";
-import type { Fixture, EvalResult, EvalUsage } from "./types";
+import type { Fixture, EvalResult, EvalUsage, ToolInputExpectation } from "./types";
 
 const SENDER_TYPE_MAP: Record<string, DbSenderType> = {
   customer: SenderType.customer,
@@ -72,12 +73,41 @@ function recordEvalUsage(usage: EvalUsage, response: unknown) {
   usage.cacheCreationInputTokens += modelUsage.cacheCreationInputTokens;
 }
 
+function isSubsequence(needle: readonly string[], haystack: readonly string[]): boolean {
+  let i = 0;
+  for (const item of haystack) {
+    if (i < needle.length && item === needle[i]) i += 1;
+  }
+  return i === needle.length;
+}
+
+function inputContainsExpected(actual: unknown, expected: Record<string, unknown>): boolean {
+  if (actual === null || typeof actual !== "object") return false;
+  const actualObj = actual as Record<string, unknown>;
+  for (const [key, value] of Object.entries(expected)) {
+    const got = actualObj[key];
+    if (typeof value === "string") {
+      if (typeof got !== "string" || !got.toLowerCase().includes(value.toLowerCase())) return false;
+    } else if (got !== value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function findToolInputMatch(rawToolCalls: { name: string; input: unknown }[], expectation: ToolInputExpectation): boolean {
+  return rawToolCalls.some(
+    (tc) => tc.name === expectation.tool && inputContainsExpected(tc.input, expectation.inputIncludes),
+  );
+}
+
 export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   const failures: string[] = [];
   const usage = emptyUsage();
   const startedAt = Date.now();
   let orgId: string | null = null;
   let spy: { mockRestore: () => void } | null = null;
+  let executorSpy: { mockRestore: () => void } | null = null;
 
   try {
     const org = await createTestOrg();
@@ -108,6 +138,19 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     )) as CreateFn;
     spy = vi.spyOn(anthropic.messages, "create").mockImplementation(createWithUsage);
 
+    const failureMap = new Map<string, string>(
+      (fixture.setup.simulateToolFailures ?? []).map((f) => [f.tool, f.error]),
+    );
+    if (failureMap.size > 0) {
+      const originalExecute = executor.executeTool;
+      executorSpy = vi
+        .spyOn(executor, "executeTool")
+        .mockImplementation(async (name, args, execCtx, settings) => {
+          if (failureMap.has(name)) return failureMap.get(name) as string;
+          return originalExecute(name, args, execCtx, settings);
+        });
+    }
+
     const ctx = buildContext(fixture, org.id, thread.id);
     const resolved = resolveAgentSettings(fixture.setup.orgSettings ?? null);
     const plan = await planAgent(ctx, fixture.instruction, resolved);
@@ -132,6 +175,24 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       }
     }
 
+    if (expected.mustCallToolsInOrder && expected.mustCallToolsInOrder.length > 0) {
+      if (!isSubsequence(expected.mustCallToolsInOrder, calledTools)) {
+        failures.push(
+          `expected tool order [${expected.mustCallToolsInOrder.join(", ")}] not found as subsequence; called: [${calledTools.join(", ")}]`,
+        );
+      }
+    }
+
+    for (const expectation of expected.mustCallToolsWithInput ?? []) {
+      if (!findToolInputMatch(plan.rawToolCalls, expectation)) {
+        const matching = plan.rawToolCalls.filter((tc) => tc.name === expectation.tool);
+        const observed = matching.map((tc) => JSON.stringify(tc.input)).join(" | ") || "(no calls)";
+        failures.push(
+          `expected "${expectation.tool}" call with input including ${JSON.stringify(expectation.inputIncludes)}; observed: ${observed}`,
+        );
+      }
+    }
+
     if (expected.mustEscalate === true && !calledTools.includes("escalate_to_human")) {
       failures.push(`expected escalation; called: [${calledTools.join(", ")}]`);
     }
@@ -150,6 +211,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   } catch (err) {
     failures.push(`runner threw: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
+    executorSpy?.mockRestore();
     spy?.mockRestore();
     if (orgId) {
       await cleanupTestData(orgId).catch(() => {});

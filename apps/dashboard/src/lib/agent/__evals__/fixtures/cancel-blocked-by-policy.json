@@ -1,0 +1,44 @@
+{
+  "id": "cancel-blocked-by-policy",
+  "description": "Customer requests cancellation in a workspace where cancellations are disabled by policy. The prompt forbids calling cancel_order and instructs handing off; expect escalation, not a cancel attempt.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Sasha Wei",
+    "customerPlatformId": "sasha@example.com",
+    "shopifyCustomerId": "10000001021",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "blockCancellations": true },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please cancel order #1021 - I no longer want it." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001021",
+        "name": "#1021",
+        "created_at": "2026-05-22T11:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "65.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1021",
+            "title": "Knit Scarf",
+            "quantity": 1,
+            "variant_id": "variant_1021",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their cancellation request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["cancel_order", "create_refund"],
+    "mustEscalate": true
+  }
+}

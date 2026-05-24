@@ -1,0 +1,44 @@
+{
+  "id": "refund-over-cap-escalate",
+  "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. The prompt instructs the agent to not proceed; expect escalation rather than a refund attempt.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Khan",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000001012",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 50 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Order #1012 - the leather bag is damaged on arrival. I want a full refund of $200." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001012",
+        "name": "#1012",
+        "created_at": "2026-05-10T09:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "200.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1012",
+            "title": "Leather Weekender",
+            "quantity": 1,
+            "variant_id": "variant_1012",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_refund", "cancel_order"],
+    "mustEscalate": true
+  }
+}

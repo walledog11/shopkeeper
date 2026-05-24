@@ -11,6 +11,11 @@ export interface FixtureKbArticle {
   body: string;
 }
 
+export interface SimulatedToolFailure {
+  tool: string;
+  error: string;
+}
+
 export interface ThreadSetup {
   channelType: "email" | "instagram" | "telegram" | "shopify" | "dashboard_agent" | "sms_agent";
   tag?: string;
@@ -24,10 +29,18 @@ export interface ThreadSetup {
   shopifyCustomerId?: string | null;
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;
+  simulateToolFailures?: SimulatedToolFailure[];
+}
+
+export interface ToolInputExpectation {
+  tool: string;
+  inputIncludes: Record<string, unknown>;
 }
 
 export interface ExpectedPlan {
   mustCallTools?: string[];
+  mustCallToolsInOrder?: string[];
+  mustCallToolsWithInput?: ToolInputExpectation[];
   mustNotCallTools?: string[];
   mustEscalate?: boolean;
   replyMustInclude?: string[];

@@ -1,0 +1,53 @@
+{
+  "id": "address-change-pre-fulfillment",
+  "description": "Customer asks to ship an unfulfilled order to a new address and supplies all required fields. Agent should update the address and reply.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Dana Liu",
+    "customerPlatformId": "dana@example.com",
+    "shopifyCustomerId": "10000001030",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi - for order #1030, please ship it to 456 Oak Ave, Apt 2, Portland, OR 97201, United States. I moved last week. Thanks!" }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001030",
+        "name": "#1030",
+        "created_at": "2026-05-22T08:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "78.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1030",
+            "title": "Linen Shirt",
+            "quantity": 1,
+            "variant_id": "variant_1030",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and update their shipping address.",
+  "expectedPlan": {
+    "mustCallTools": ["update_shopify_order_address", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      {
+        "tool": "update_shopify_order_address",
+        "inputIncludes": {
+          "order_id": "9000001030",
+          "address1": "456 Oak Ave",
+          "city": "Portland",
+          "zip": "97201"
+        }
+      }
+    ]
+  }
+}

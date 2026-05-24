@@ -79,7 +79,7 @@ Independent of fixture content, but easiest to validate now that the harness can
 
 ---
 
-### Step 1.3 — Read-path fixture corpus (~1 day)
+### Step 1.3 — Read-path fixture corpus (~1 day) [COMPLETED]
 
 Build out the easier, deterministic fixtures first. Read paths are more stable across LLM nondeterminism than mutative actions — good place to shake out runner bugs before tackling the hard cases.
 

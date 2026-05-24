@@ -1,0 +1,22 @@
+{
+  "id": "escalate-out-of-scope",
+  "description": "Customer asks for bulk wholesale pricing - clearly out of scope for the support agent with no KB article on pricing. The agent must not fabricate a quote or place an order; escalation is the right move.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Felix Howard",
+    "customerPlatformId": "felix@b2b-test.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi - what's your wholesale pricing for 500 units of the cotton hoodie? Need a quote by Friday." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their wholesale pricing inquiry.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_shopify_order", "create_refund", "cancel_order", "edit_shopify_order"],
+    "mustEscalate": true
+  }
+}

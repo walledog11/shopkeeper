@@ -1,0 +1,47 @@
+{
+  "id": "multi-step-refund-and-reply",
+  "description": "Customer asks for a refund and confirmation. Agent should issue the refund first, then notify the customer via send_reply (refund must occur before reply in the plan ordering).",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Iris Bauer",
+    "customerPlatformId": "iris@example.com",
+    "shopifyCustomerId": "10000001040",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 100 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Order #1040 was the wrong color. Please refund me and let me know once it's done." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001040",
+        "name": "#1040",
+        "created_at": "2026-05-13T14:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "30.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1040",
+            "title": "Cotton Socks",
+            "quantity": 1,
+            "variant_id": "variant_1040",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustCallToolsInOrder": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001040" } }
+    ]
+  }
+}

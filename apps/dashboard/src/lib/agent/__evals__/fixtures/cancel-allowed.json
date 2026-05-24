@@ -1,0 +1,46 @@
+{
+  "id": "cancel-allowed",
+  "description": "Customer requests cancellation on an unfulfilled order in a workspace that allows cancellations. Agent should cancel and reply.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Marco Silva",
+    "customerPlatformId": "marco@example.com",
+    "shopifyCustomerId": "10000001020",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "blockCancellations": false },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi - please cancel order #1020. I changed my mind and don't need the item." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001020",
+        "name": "#1020",
+        "created_at": "2026-05-22T16:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "89.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1020",
+            "title": "Wool Beanie",
+            "quantity": 1,
+            "variant_id": "variant_1020",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their cancellation request.",
+  "expectedPlan": {
+    "mustCallTools": ["cancel_order", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "create_refund"],
+    "mustCallToolsWithInput": [
+      { "tool": "cancel_order", "inputIncludes": { "order_id": "9000001020" } }
+    ]
+  }
+}
