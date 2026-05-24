@@ -1,0 +1,21 @@
+{
+  "id": "operator-status-by-customer-name",
+  "description": "Operator in the Concierge channel asks about a customer's order status by name, with no customer linked to the thread. The agent should call search_shopify_customers first to resolve the customer.",
+  "setup": {
+    "channelType": "dashboard_agent",
+    "tag": "Concierge",
+    "customerName": "Operator Session",
+    "customerPlatformId": "operator-session@internal.local",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Can you check Jane Doe's order status?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Can you check Jane Doe's order status?",
+  "expectedPlan": {
+    "mustCallTools": ["search_shopify_customers"],
+    "mustNotCallTools": ["create_refund", "cancel_order", "send_email", "send_reply"]
+  }
+}

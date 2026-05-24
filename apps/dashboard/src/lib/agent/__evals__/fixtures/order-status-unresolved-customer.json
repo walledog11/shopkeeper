@@ -1,0 +1,21 @@
+{
+  "id": "order-status-unresolved-customer",
+  "description": "Support thread with no Shopify customer linked and no orders in context. The agent should not fabricate an answer or take a mutative action - it should reply asking for more info or escalate.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": null,
+    "customerPlatformId": "unknown-shopper@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi, where is my order?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their order status.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["create_refund", "cancel_order", "update_shopify_order_address", "create_shopify_order", "edit_shopify_order"]
+  }
+}

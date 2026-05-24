@@ -243,11 +243,11 @@ export async function planAgent(
     await enforceSpendCap(ctx.orgId, resolvedSettings);
     const response2 = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 512,
+      max_tokens: 2048,
       system: systemPromptBlocks,
       messages: phase2Messages,
       tools: [sendReplyTool],
-      tool_choice: { type: "any" },
+      tool_choice: { type: "tool", name: "send_reply" },
     });
 
     const phase2ToolUse = response2.content.filter(

@@ -1,0 +1,64 @@
+{
+  "id": "order-status-multiple-orders-pick-recent",
+  "description": "Customer has two recent orders in context. They ask about 'my recent order' - per prompt rules the agent should infer the most recent and answer about it without refetching.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Khan",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000000004",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hey, where is my recent order?" }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000000005",
+        "name": "#1005",
+        "created_at": "2026-05-20T11:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "120.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_5",
+            "title": "Leather Wallet",
+            "quantity": 1,
+            "variant_id": "variant_5",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      },
+      {
+        "id": "9000000004",
+        "name": "#1004",
+        "created_at": "2026-04-10T11:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "35.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4",
+            "title": "Canvas Tote",
+            "quantity": 1,
+            "variant_id": "variant_4",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their recent order.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
+    "replyMustInclude": ["1005"],
+    "replyMustNotInclude": ["1004"]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "operator-status-by-order-number",
+  "description": "Operator in the Concierge channel asks about an order by its name (#1001). The agent should look it up via get_order_by_name and report back in text - no customer search needed, and no mutative actions.",
+  "setup": {
+    "channelType": "dashboard_agent",
+    "tag": "Concierge",
+    "customerName": "Operator Session",
+    "customerPlatformId": "operator-session@internal.local",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "What's the status of order #1001?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "What's the status of order #1001?",
+  "expectedPlan": {
+    "mustCallTools": ["get_order_by_name"],
+    "mustNotCallTools": ["search_shopify_customers", "create_refund", "cancel_order", "send_email", "send_reply"]
+  }
+}

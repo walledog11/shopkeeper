@@ -1,0 +1,21 @@
+{
+  "id": "operator-status-with-customer-linked",
+  "description": "Operator in the Concierge channel asks about the status of an order for a customer who is already linked to the thread (shopifyCustomerId set). The agent should call get_shopify_orders directly using the linked ID - no need to search for the customer again.",
+  "setup": {
+    "channelType": "dashboard_agent",
+    "tag": "Concierge",
+    "customerName": "Concierge Session",
+    "customerPlatformId": "operator-session@internal.local",
+    "shopifyCustomerId": "10000000001",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Pull the latest order status for this customer." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Pull the latest order status for this customer.",
+  "expectedPlan": {
+    "mustCallTools": ["get_shopify_orders"],
+    "mustNotCallTools": ["search_shopify_customers", "create_refund", "cancel_order", "send_email", "send_reply"]
+  }
+}

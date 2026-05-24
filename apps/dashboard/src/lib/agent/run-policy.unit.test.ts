@@ -23,6 +23,7 @@ const {
 
 vi.mock("@/lib/ai/anthropic", () => ({
   anthropic: { messages: { create: mockCreate } },
+  buildCachedSystemPrompt: (text: string) => [{ type: "text", text, cache_control: { type: "ephemeral" } }],
 }));
 
 vi.mock("@/lib/server/logger", () => ({

@@ -1,0 +1,28 @@
+{
+  "id": "kb-policy-article-present",
+  "description": "Customer asks about return policy. A KB article with the answer is pre-loaded - the agent should reply directly from the pre-loaded content, no need to call search_kb.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Liam Park",
+    "customerPlatformId": "liam@example.com",
+    "shopifyCustomerId": "10000000006",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi, what is your return policy? How long do I have?" }
+    ],
+    "kbArticles": [
+      {
+        "title": "Returns policy",
+        "body": "Returns are accepted within 14 days of delivery. Items must be unworn and in original packaging. Refunds are issued to the original payment method within 5 business days."
+      }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about the return policy.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["create_refund", "escalate_to_human", "search_kb"],
+    "replyMustInclude": ["14 days"]
+  }
+}
