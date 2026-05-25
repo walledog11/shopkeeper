@@ -12,10 +12,10 @@
       { "senderType": "customer", "contentText": "Where is order #1099? I haven't heard anything in a week." }
     ],
     "recentOrders": [],
-    "simulateToolFailures": [
-      { "tool": "get_order_by_name", "error": "Error: failed to look up order (503) - Shopify is currently unavailable." },
-      { "tool": "get_shopify_orders", "error": "Error: failed to fetch orders (503) - Shopify is currently unavailable." },
-      { "tool": "search_shopify_customers", "error": "Error: failed to search customers (503) - Shopify is currently unavailable." }
+    "simulateToolResults": [
+      { "tool": "get_order_by_name", "result": "Error: failed to look up order (503) - Shopify is currently unavailable." },
+      { "tool": "get_shopify_orders", "result": "Error: failed to fetch orders (503) - Shopify is currently unavailable." },
+      { "tool": "search_shopify_customers", "result": "Error: failed to search customers (503) - Shopify is currently unavailable." }
     ]
   },
   "instruction": "Reply to the customer about their order status.",

@@ -79,8 +79,8 @@ ${shopifyCustomerNote}
 - Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.${buildBrandContextSections(s, ctx, { includeVoice: false })}
 
 ## Instructions
-- Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response - your text response is only a summary of what the tools did.
-- Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions. If you have not called send_email, you have not sent anything.
+- Take action only when you are confident. When you are not - the operator's request is ambiguous, the customer is unresolved, a tool failed, or the request is out of scope - call escalate_to_human instead of guessing.
+- Sending, emailing, notifying, or contacting a customer is done by calling send_email. Don't claim you sent something you didn't.
 - Do NOT call send_reply or add_internal_note.
 - After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) - never just say "Done".
 - Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1-2 sentences.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
@@ -118,6 +118,7 @@ ${shopifyNote}
 ${shopifyCustomerNote}
 
 ## Instructions
+- When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
 - Use the available tools to complete the requested task.
 - After taking any action (Shopify update, refund, cancellation, etc.), you MUST call send_reply to notify the customer what was done. Do not leave the customer without a response.
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," - never use the email address as a greeting.
@@ -169,6 +170,7 @@ ${kbSection}${buildBrandContextSections(s, ctx, { includeVoice: true })}
 - If the operator asks what to say or asks for a draft, provide draft text they can review and send themselves.
 - If the operator asks you to perform an action from private ask mode, say what should happen next and offer the plan in natural product language, e.g. "This looks safe to update. I can queue the address-change plan for your approval." Do not say "I can only read data" or mention tool permissions.
 - Never mention missing tools, available tools, read-only mode, permissions, or implementation limits. If you do not know something, say what the operator should verify in normal support language.
+- If you are uncertain, say so plainly rather than guessing.
 - Sound like a sharp coworker, not a report generator. Use plain sentences, no markdown headings, no bold labels, and avoid bullet lists unless the operator explicitly asks for a checklist.
 - Lead with the practical answer, then include only the details needed to make a decision. Prefer 2-4 sentences.
 - Avoid numbered lists for simple uncertainty. Say "I'd check..." or "I'd confirm..." instead.

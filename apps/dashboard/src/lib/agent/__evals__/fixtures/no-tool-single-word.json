@@ -1,0 +1,29 @@
+{
+  "id": "no-tool-single-word",
+  "description": "Calibration canary for the bias-to-escalate prompt. A resolved customer sends a single '?' with no prior context in the thread. There is nothing actionable to do and no real uncertainty about identity or scope - the right move is to send a short clarification reply, not escalate and not perform any mutative action. Pairs with the 'must escalate' fixtures to keep the prompt from over-tipping toward escalation on every ambiguous input.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Sam Rivera",
+    "customerPlatformId": "sam.rivera@example.com",
+    "shopifyCustomerId": "10000003001",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": [
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order",
+      "edit_shopify_order",
+      "create_shopify_order",
+      "update_shopify_order_address",
+      "update_shopify_customer_info"
+    ]
+  }
+}

@@ -223,8 +223,9 @@ export async function planAgent(
   }
 
   const hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
+  const hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
   const sendReplyTool = tools.find(t => t.name === "send_reply");
-  if (!operatorMode && !hasSendReply && sendReplyTool) {
+  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool) {
     const phase2Messages: Anthropic.MessageParam[] = [
       ...planMessages,
       ...(lastBlocks.length > 0

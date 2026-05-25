@@ -256,7 +256,6 @@ export async function runAgent(
       system: systemPromptBlocks,
       messages,
       tools,
-      ...(operatorMode && !readOnly && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {}),
     });
 
     const toolUseBlocks = response.content.filter(

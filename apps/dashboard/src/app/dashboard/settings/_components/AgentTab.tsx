@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { ToggleRow, SectionCard } from "./shared"
 import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
-import type { OrgSettings, SampleReply } from "@/types"
+import type { OrgSettings } from "@/types"
 
 const SAMPLE_REPLY_CAP = 10
 const SAMPLE_REPLY_BODY_MAX = 300
@@ -354,92 +354,82 @@ export default function AgentTab({ settings, version }: Props) {
       </SectionCard>
 
       <SectionCard title="Sample replies" description="Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages.">
-        {(() => {
-          const samples = state.sampleReplies ?? []
-          const updateSamples = (next: SampleReply[]) => dispatch({ type: 'set', patch: { sampleReplies: next } })
-          const addSample = () => {
-            if (samples.length >= SAMPLE_REPLY_CAP) return
-            updateSamples([...samples, { id: crypto.randomUUID(), body: '' }])
-          }
-          const patchSample = (id: string, patch: Partial<SampleReply>) => {
-            updateSamples(samples.map(s => s.id === id ? { ...s, ...patch } : s))
-          }
-          const removeSample = (id: string) => updateSamples(samples.filter(s => s.id !== id))
-          return (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] text-white/35">Add a tag to apply a reply only to matching tickets. Leave blank to make it always eligible.</p>
-                <p className="text-[11px] text-white/30 shrink-0">{samples.length} / {SAMPLE_REPLY_CAP}</p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] text-white/35">Add a tag to apply a reply only to matching tickets. Leave blank to make it always eligible.</p>
+            <p className="text-[11px] text-white/30 shrink-0">{(state.sampleReplies ?? []).length} / {SAMPLE_REPLY_CAP}</p>
+          </div>
+
+          {(state.sampleReplies ?? []).length === 0 && (
+            <p className="text-xs text-white/30 italic">No sample replies yet. Add one to teach the agent your voice.</p>
+          )}
+
+          {(state.sampleReplies ?? []).map((s, idx) => (
+            <div key={s.id} className="rounded-md border border-white/[0.10] bg-white/[0.02] p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-white/45">Example {idx + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).filter(r => r.id !== s.id) } })}
+                  aria-label="Remove sample reply"
+                  className="text-white/35 hover:text-red-400 transition-colors p-1 -m-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-
-              {samples.length === 0 && (
-                <p className="text-xs text-white/30 italic">No sample replies yet. Add one to teach the agent your voice.</p>
-              )}
-
-              {samples.map((s, idx) => (
-                <div key={s.id} className="rounded-md border border-white/[0.10] bg-white/[0.02] p-3 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-white/45">Example {idx + 1}</span>
-                    <button
-                      type="button"
-                      onClick={() => removeSample(s.id)}
-                      aria-label="Remove sample reply"
-                      className="text-white/35 hover:text-red-400 transition-colors p-1 -m-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="space-y-1">
-                    <Textarea
-                      value={s.body}
-                      onChange={e => patchSample(s.id, { body: e.target.value })}
-                      placeholder="e.g. Hey! Totally hear you on the wait — let me chase that down and get back to you with an update."
-                      maxLength={SAMPLE_REPLY_BODY_MAX}
-                      rows={2}
-                    />
-                    <p className="text-[11px] text-white/30 text-right">{s.body.length}/{SAMPLE_REPLY_BODY_MAX}</p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-semibold text-white/55">
-                        When to use <span className="font-normal text-white/30">· optional</span>
-                      </label>
-                      <Input
-                        value={s.context ?? ''}
-                        onChange={e => patchSample(s.id, { context: e.target.value || undefined })}
-                        placeholder="e.g. shipping delay"
-                        maxLength={80}
-                        className="h-8 text-xs bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="block text-[11px] font-semibold text-white/55">
-                        Tag <span className="font-normal text-white/30">· match against ticket tag</span>
-                      </label>
-                      <Input
-                        value={s.tag ?? ''}
-                        onChange={e => patchSample(s.id, { tag: e.target.value || undefined })}
-                        placeholder="e.g. shipping"
-                        maxLength={40}
-                        className="h-8 text-xs bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
-                      />
-                    </div>
-                  </div>
+              <div className="space-y-1">
+                <Textarea
+                  value={s.body}
+                  onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, body: e.target.value } : r) } })}
+                  placeholder="e.g. Hey! Totally hear you on the wait — let me chase that down and get back to you with an update."
+                  maxLength={SAMPLE_REPLY_BODY_MAX}
+                  rows={2}
+                />
+                <p className="text-[11px] text-white/30 text-right">{s.body.length}/{SAMPLE_REPLY_BODY_MAX}</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-white/55">
+                    When to use <span className="font-normal text-white/30">· optional</span>
+                  </label>
+                  <Input
+                    value={s.context ?? ''}
+                    onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, context: e.target.value || undefined } : r) } })}
+                    placeholder="e.g. shipping delay"
+                    maxLength={80}
+                    className="h-8 text-xs bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+                  />
                 </div>
-              ))}
-
-              <button
-                type="button"
-                onClick={addSample}
-                disabled={samples.length >= SAMPLE_REPLY_CAP}
-                className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] text-xs font-semibold text-white/70 hover:bg-white/[0.08] hover:text-white/85 hover:border-white/[0.22] transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] disabled:hover:text-white/70 disabled:hover:border-white/[0.12]"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add sample reply
-              </button>
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-semibold text-white/55">
+                    Tag <span className="font-normal text-white/30">· match against ticket tag</span>
+                  </label>
+                  <Input
+                    value={s.tag ?? ''}
+                    onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, tag: e.target.value || undefined } : r) } })}
+                    placeholder="e.g. shipping"
+                    maxLength={40}
+                    className="h-8 text-xs bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+                  />
+                </div>
+              </div>
             </div>
-          )
-        })()}
+          ))}
+
+          <button
+            type="button"
+            onClick={() => {
+              const current = state.sampleReplies ?? []
+              if (current.length >= SAMPLE_REPLY_CAP) return
+              dispatch({ type: 'set', patch: { sampleReplies: [...current, { id: crypto.randomUUID(), body: '' }] } })
+            }}
+            disabled={(state.sampleReplies ?? []).length >= SAMPLE_REPLY_CAP}
+            className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] text-xs font-semibold text-white/70 hover:bg-white/[0.08] hover:text-white/85 hover:border-white/[0.22] transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] disabled:hover:text-white/70 disabled:hover:border-white/[0.12]"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add sample reply
+          </button>
+        </div>
       </SectionCard>
 
       <SectionCard title="Default Behavior" description="What the agent does automatically when a ticket is opened.">

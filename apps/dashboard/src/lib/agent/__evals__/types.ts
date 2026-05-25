@@ -11,9 +11,9 @@ export interface FixtureKbArticle {
   body: string;
 }
 
-export interface SimulatedToolFailure {
+export interface SimulatedToolResult {
   tool: string;
-  error: string;
+  result: string;
 }
 
 export interface ThreadSetup {
@@ -29,7 +29,7 @@ export interface ThreadSetup {
   shopifyCustomerId?: string | null;
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;
-  simulateToolFailures?: SimulatedToolFailure[];
+  simulateToolResults?: SimulatedToolResult[];
 }
 
 export interface ToolInputExpectation {

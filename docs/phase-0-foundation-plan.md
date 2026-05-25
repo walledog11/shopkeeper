@@ -232,7 +232,7 @@ Add a new `SectionCard` titled "Sample replies" directly below the existing "Ide
 
 ---
 
-### Step 2.4 — Eval fixtures (~1 hour)
+### Step 2.4 — Eval fixtures (~1 hour) [COMPLETED]
 
 Three new fixtures under `apps/dashboard/src/lib/agent/__evals__/fixtures/`. Slot into the existing `index.test.ts` runner without changes (it loads every `fixtures/*.json`).
 
@@ -244,7 +244,7 @@ Three new fixtures under `apps/dashboard/src/lib/agent/__evals__/fixtures/`. Slo
 
 ---
 
-### Step 2.5 — Verify end-to-end (~30 min)
+### Step 2.5 — Verify end-to-end (~30 min) [COMPLETED]
 
 1. `npm run test:evals -w apps/dashboard` — confirm new fixtures pass and existing 25 still pass (no regression from prompt structure changes).
 2. Manual: open `/dashboard/settings` → Agent tab, add 2 sample replies, set brand voice, save, open a real ticket, draft via composer, verify the voice shows up.
@@ -269,31 +269,84 @@ Three new fixtures under `apps/dashboard/src/lib/agent/__evals__/fixtures/`. Slo
 
 ---
 
-## Step 3 — Bias-to-escalate + remove forced `tool_choice` (S, depends on Step 1)
+## Step 3 — Bias-to-escalate + remove forced `tool_choice` (S, depends on Step 1) [COMPLETED]
 
-The prompt currently pushes hard toward action ("Every task MUST be completed by calling a tool"). For the trust principle, the agent needs an explicit uncertainty pathway.
+The prompt currently pushes hard toward action ("Every task MUST be completed by calling a tool" in the operator branch). For the trust principle, the agent needs an explicit uncertainty pathway, and the runtime needs to stop forcing tool calls when the right answer is "I'm not sure — escalate."
 
-**Prompt rewrite** in `apps/dashboard/src/lib/agent/prompt.ts`:
+Broken into 3 sub-steps. Total: ~2 hours sequential. 3A and 3B are conceptually paired ("stop forcing actions, start permitting uncertainty") and can land together if you want one PR; 3C is small because the failure-injection infra already landed in Step 1.4 and three of the originally-planned fixtures already exist.
 
-In `buildSystemPrompt` (both operator and support branches), add a clause near the top of the instructions:
-> When you are uncertain about a customer's identity, the right action, or whether a request is in scope, call `escalate_to_human` instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
+---
 
-Remove the "Every task MUST be completed by calling a tool" absolute. Replace with: "Take action only when you are confident. When you are not, escalate."
+### Step 3A — Prompt rewrite (~30–45 min) [COMPLETED]
 
-**Remove the first-iteration `tool_choice` forcing** in `apps/dashboard/src/lib/agent/run.ts:258`:
+**`apps/dashboard/src/lib/agent/prompt.ts`**
+
+- **Support branch** (`buildSystemPrompt`, around line 120 — the `## Instructions` block): add a bias-to-escalate clause near the top:
+  > When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call `escalate_to_human` instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
+
+  No "MUST call a tool" line exists in the support branch today, so this is purely additive.
+
+- **Operator branch** (around line 82): **remove** the existing absolutes:
+  > Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response - your text response is only a summary of what the tools did.
+  > Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions...
+
+  Replace with:
+  > Take action only when you are confident. When you are not, call `escalate_to_human`. Sending or contacting a customer is done by calling `send_email` — don't claim you sent something you didn't.
+
+- **`buildComposerAskPrompt`**: composer is read-only and has no `escalate_to_human` tool, so add a softer honesty clause to the `## Rules` block:
+  > If you are uncertain, say so plainly rather than guessing.
+
+**Done when.** File compiles; `npm run test:evals -w apps/dashboard` shows the existing 25+ fixtures still pass (no regression from the prompt restructure).
+
+---
+
+### Step 3B — Strip forced `tool_choice` from runtime + planner (~30–45 min) [COMPLETED]
+
+**`apps/dashboard/src/lib/agent/run.ts` (line 259).** Delete the operator first-iteration forcing:
 - Current: `...(operatorMode && !readOnly && i === 0 && tools.length > 0 ? { tool_choice: { type: "any" } } : {})`
 - This forces a tool call on the operator's first iteration even when the right answer might be "I need more info" or "you should handle this." Strip it. If the planner produces no tool calls in legitimate operator queries, fix it via prompt, not via forcing.
 
-**Verify the planner's third-call "force send_reply" path** in `planner.ts:243` does the same thing for support mode. It uses `tool_choice: { type: "any" }` with only `send_reply` available — this forces a customer-facing reply even when escalation might be right. Same treatment: remove, or guard behind a "if the agent already escalated, skip the force-reply phase" check (look for the `escalate_to_human` tool call in `rawToolCalls` before doing the third LLM call).
+**`apps/dashboard/src/lib/agent/planner.ts` (the phase-2 "force send_reply" block, lines 225–268).** Currently runs whenever `!operatorMode && !hasSendReply && sendReplyTool` and uses `tool_choice: { type: "tool", name: "send_reply" }`. This forces a customer-facing reply even when escalation was the right call. Add a guard:
+- Compute `hasEscalate = rawToolCalls.some(tc => tc.name === "escalate_to_human")`.
+- Change the condition to `!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool`.
 
-**New eval fixtures**:
-- 3 cases where the agent should escalate: out-of-scope question, ambiguous customer match, Shopify-tool simulated failure (need a way to inject a tool failure for the test — easiest via a special `__test_simulate_failure__` arg on a wrapped executor).
-- 2 cases where the agent should NOT call any tool: "thanks!" customer reply, single-word ambiguous request.
+**Done when.** Existing eval suite passes — this will surface any case that was secretly relying on the force.
 
-**Effort.** 1–2 days. Most of the work is verifying the eval harness catches the change correctly, not the code edits.
+---
+
+### Step 3C — Calibration fixtures + verify (~30 min) [COMPLETED]
+
+**Test infra.** Already in place from Step 1.4: `runner.ts` honors a fixture-level `simulateToolResults` (originally landed as `simulateToolFailures`; renamed since the same seam is used to inject both error strings and canned success payloads). No runner changes needed for 3C.
+
+**Pre-existing escalation coverage from Step 1.4 / 1.5** (no work in 3C):
+- `escalate-out-of-scope.json` — wholesale-pricing question, no KB. Asserts `escalate_to_human`.
+- `escalate-shopify-down.json` — Shopify lookup tools simulated as 503. Asserts `escalate_to_human`.
+- `quick-reply-thanks-ack.json` — "thanks!" follow-up. Asserts single `send_reply` and `quick_reply` classification (this is the "no destructive tools after a thanks" case the original plan called `no-tool-thanks`).
+
+**Two new fixtures actually added in 3C:**
+
+1. **`escalate-ambiguous-customer.json`** — `search_shopify_customers` returns four Jane Smiths. Asserts `escalate_to_human` and forbids any mutative tool.
+2. **`no-tool-single-word.json`** — single "?" from a resolved customer. Asserts `send_reply` only, forbids escalation. Calibration canary against over-tipping toward escalate.
+
+**Sample-reply fixture defensive update:** `sample-reply-shipping-delay-imitation.json` adds `escalate_to_human` to `mustNotCallTools` so the new bias-to-escalate clause can't quietly tip an otherwise-resolved shipping question to escalate.
+
+**Verify.** Run the full eval suite; confirm the 2 new fixtures pass and the existing 25+ stay green.
+
+**Done when.** All ~27 fixtures pass consistently across 2 consecutive local runs.
+
+---
+
+**Sub-step summary.**
+
+| Sub-step | Files | Effort |
+|----------|-------|--------|
+| 3A Prompt rewrite | `lib/agent/prompt.ts` | 30–45 min |
+| 3B Strip forced `tool_choice` | `lib/agent/run.ts`, `lib/agent/planner.ts` | 30–45 min |
+| 3C Calibration fixtures | 2 new JSON fixtures, 1 defensive update | 30 min |
 
 **Open decisions.**
-- **How strict on bias-to-escalate?** If you tune the prompt too far, the agent escalates everything and the auto-pilot value evaporates. The eval suite needs cases on both sides — "should escalate" AND "should NOT escalate" — to keep this in calibration.
+- **How strict on bias-to-escalate?** If you tune the prompt too far, the agent escalates everything and the auto-pilot value evaporates. The eval suite needs cases on both sides — "should escalate" AND "should NOT escalate" — to keep this in calibration. Fixture 5 (`no-tool-single-word`) is the canary.
+- **PR shape.** 3A + 3B together (paired conceptually, both small) or separate? Either is fine; separate gives cleaner bisection if a regression surfaces later. 3C stays its own PR because of the test infra surface area.
 
 ---
 

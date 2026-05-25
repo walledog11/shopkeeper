@@ -130,15 +130,15 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       return response;
     }) as CreateFn);
 
-    const failureMap = new Map<string, string>(
-      (fixture.setup.simulateToolFailures ?? []).map((f) => [f.tool, f.error]),
+    const simulatedResults = new Map<string, string>(
+      (fixture.setup.simulateToolResults ?? []).map((r) => [r.tool, r.result]),
     );
-    if (failureMap.size > 0) {
+    if (simulatedResults.size > 0) {
       const originalExecute = executor.executeTool;
       executorSpy = vi
         .spyOn(executor, "executeTool")
         .mockImplementation(async (name, args, execCtx, settings) => {
-          if (failureMap.has(name)) return failureMap.get(name) as string;
+          if (simulatedResults.has(name)) return simulatedResults.get(name) as string;
           return originalExecute(name, args, execCtx, settings);
         });
     }
