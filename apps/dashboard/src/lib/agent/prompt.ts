@@ -1,6 +1,33 @@
-import type { OrgSettings } from "@/types";
+import type { OrgSettings, SampleReply } from "@/types";
 import { resolveAgentSettings } from "./settings";
 import type { AgentContext } from "./types";
+
+function pickSampleReplies(all: SampleReply[], threadTag: string | null, n: number): SampleReply[] {
+  if (all.length === 0) return [];
+  const tagMatches = threadTag ? all.filter(r => r.tag && r.tag === threadTag) : [];
+  const rest = all.filter(r => !tagMatches.includes(r));
+  return [...tagMatches, ...rest].slice(0, n);
+}
+
+function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { includeVoice: boolean }): string {
+  const parts: string[] = [];
+  if (s.aiContext?.trim()) {
+    parts.push(`## About this store\n${s.aiContext.trim()}`);
+  }
+  if (opts.includeVoice && s.brandVoice?.trim()) {
+    parts.push(`## Voice\nMatch this tone in every customer-facing reply:\n${s.brandVoice.trim()}`);
+  }
+  if (opts.includeVoice) {
+    const samples = pickSampleReplies(s.sampleReplies ?? [], ctx.thread.tag, 3);
+    if (samples.length > 0) {
+      const rendered = samples
+        .map((r, i) => `Example ${i + 1}${r.context ? ` (${r.context})` : ""}:\n${r.body}`)
+        .join("\n\n");
+      parts.push(`## Sample replies (match this style)\n${rendered}`);
+    }
+  }
+  return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
+}
 
 function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): string[] {
   const clauses: string[] = [];
@@ -49,7 +76,8 @@ ${shopifyCustomerNote}
 - For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
 - Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
 - To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
-- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.
+- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.${buildBrandContextSections(s, ctx, { includeVoice: false })}
+
 ## Instructions
 - Every task MUST be completed by calling a tool. You CANNOT complete any task by writing a response - your text response is only a summary of what the tools did.
 - Sending, emailing, notifying, or contacting a customer = call send_email. There are no exceptions. If you have not called send_email, you have not sent anything.
@@ -104,7 +132,7 @@ ${shopifyCustomerNote}
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
 - Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${kbSection}`;
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
 }
 
 export function buildComposerAskPrompt(ctx: AgentContext, settings?: OrgSettings): string {
@@ -132,7 +160,7 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: OrgSettings
 ${ordersJson}
 
 ## Knowledge base
-${kbSection}
+${kbSection}${buildBrandContextSections(s, ctx, { includeVoice: true })}
 
 ## Rules
 - Answer the support operator privately. Do not address the customer unless the operator asks you to draft customer-facing wording.

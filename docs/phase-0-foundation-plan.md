@@ -24,7 +24,7 @@ Small wins that should land first because they clear noise and unblock CI signal
 
 ---
 
-## Step 1 — Eval harness, Layer 1 (M, no dependencies)
+## Step 1 — Eval harness, Layer 1 (M, no dependencies) [COMPLETED]
 
 Land this first. Every subsequent step in Phase 0 modifies the prompt or the planner; without the harness you cannot tell whether you regressed.
 
@@ -92,7 +92,7 @@ Build out the easier, deterministic fixtures first. Read paths are more stable a
 
 ---
 
-### Step 1.4 — Mutative fixture corpus (~1.5 days)
+### Step 1.4 — Mutative fixture corpus (~1.5 days) [COMPLETED]
 
 Action paths — refund, cancel, address change, multi-step. Where the harness earns its keep, and where you'll likely discover the runner needs extensions (e.g., `mustCallToolsInOrder`, partial tool-argument matching, simulating tool failures).
 
@@ -107,7 +107,7 @@ Action paths — refund, cancel, address change, multi-step. Where the harness e
 
 ---
 
-### Step 1.5 — Adversarial fixtures + CI wiring (~1 day)
+### Step 1.5 — Adversarial fixtures + CI wiring (~1 day) [COMPLETED]
 
 Remaining fixture categories and the CI plumbing.
 
@@ -135,37 +135,137 @@ Remaining fixture categories and the CI plumbing.
 
 Trivial code change, large perceived-quality lift. Eval-gated by Step 1.
 
-Current state: `brandVoice` and `aiContext` are collected at onboarding and displayed in the settings UI, but **never inserted into the system prompt**. They are dead inputs. Every merchant gets the same prompt.
+Current state: `brandVoice` and `aiContext` are collected at onboarding and displayed in the settings UI, but **never inserted into the system prompt**. They are dead inputs. Every merchant gets the same prompt. The Identity section in `AgentTab.tsx` (line 320) already renders `agentName`, `aiContext` (labeled "Brand name"), and `brandVoice` — only sample replies need a new UI block.
 
-**Schema change** in `packages/db/prisma/schema.prisma`:
-- No table change needed for the 200-char tone brief (`brandVoice`) and `aiContext`; they already exist in `OrgSettings` JSON.
-- For sample replies, add to the same JSON: `sampleReplies: { id: string, body: string, context?: string }[]`. Capped to ~10 entries to bound prompt size. Stored in `Organization.settings.sampleReplies`. No migration needed since settings is `JsonB`.
+Broken into 5 sub-steps. One PR is right for this — the pieces are coupled (type → defaults → prompt → UI → fixtures). Total: ~1 working day.
 
-**Type change** in `apps/dashboard/src/types/index.ts`:
-- Extend `OrgSettings` with `sampleReplies?: SampleReply[]`.
-- Add `SampleReply` interface.
+**Layout decision.** No DB migration: `Organization.settings` is `JsonB`, so `sampleReplies` lives inside the existing settings JSON alongside `brandVoice` and `aiContext`.
 
-**Settings default** in `apps/dashboard/src/lib/agent/settings.ts`:
+---
+
+### Step 2.1 — Types + defaults: add `sampleReplies` (~30 min) [COMPLETED]
+
+**`apps/dashboard/src/types/index.ts`**
+- Add interface near `OrgSettings`:
+  ```ts
+  export interface SampleReply {
+    id: string;        // uuid, generated client-side
+    body: string;      // ≤ 300 chars
+    context?: string;  // optional 1-line "when to use" hint, e.g. "shipping delay"
+    tag?: string;      // optional tag for matching against thread.tag
+  }
+  ```
+- Add `sampleReplies?: SampleReply[]` to `OrgSettings`, grouped right under `brandVoice` so the AI block stays together.
+
+**`apps/dashboard/src/lib/agent/settings.ts`**
 - Add `sampleReplies: []` to `AGENT_SETTINGS_DEFAULTS`.
+- `resolveAgentSettings` already spreads defaults — no change needed beyond ensuring the array default survives `null`/`undefined` settings (it will, via the `AGENT_SETTINGS_DEFAULTS` spread).
 
-**Prompt wiring** in `apps/dashboard/src/lib/agent/prompt.ts`:
-- In `buildSystemPrompt`, after the `## Integrations` block and before `## Instructions`, render a `## About this store` section if `aiContext` is non-empty.
-- Render a `## Voice` section if `brandVoice` is non-empty.
-- Render a `## Sample replies (match this style)` section if `sampleReplies.length > 0`. Pick 3 — either at random or by tag-matching against the thread's tag. Keep each ≤ ~300 chars to bound prompt size.
-- Mirror in `buildComposerAskPrompt`.
+**Done when.** Type-check passes; `resolveAgentSettings(null).sampleReplies` returns `[]`.
 
-**UI** in `apps/dashboard/src/app/dashboard/settings/_components/AgentTab.tsx`:
-- Already has inputs for `aiContext` and `brandVoice`. Add a sample-replies section: text-area, add/remove rows, char counter, max 10 entries.
+---
 
-**New eval fixtures** in Step 1's corpus:
-- 2 cases that set `brandVoice: "warm, slightly informal, sign off with 'cheers'"` and `expectedPlan.replyMustInclude: ["cheers"]`.
-- 1 case with sample replies for "shipping delay" and assert the agent's reply matches the structural pattern.
+### Step 2.2 — Prompt wiring (~1–2 hours) [COMPLETED]
 
-**Effort.** 2 days including UI polish.
+**`apps/dashboard/src/lib/agent/prompt.ts`**
+
+Add a single helper above `buildSystemPrompt`:
+
+```ts
+function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { includeVoice: boolean }): string {
+  const parts: string[] = [];
+  if (s.aiContext?.trim()) {
+    parts.push(`## About this store\n${s.aiContext.trim()}`);
+  }
+  if (opts.includeVoice && s.brandVoice?.trim()) {
+    parts.push(`## Voice\nMatch this tone in every customer-facing reply:\n${s.brandVoice.trim()}`);
+  }
+  if (opts.includeVoice) {
+    const samples = pickSampleReplies(s.sampleReplies ?? [], ctx.thread.tag, 3);
+    if (samples.length > 0) {
+      const rendered = samples
+        .map((r, i) => `Example ${i + 1}${r.context ? ` (${r.context})` : ""}:\n${r.body}`)
+        .join("\n\n");
+      parts.push(`## Sample replies (match this style)\n${rendered}`);
+    }
+  }
+  return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
+}
+
+function pickSampleReplies(all: SampleReply[], threadTag: string | null, n: number): SampleReply[] {
+  if (all.length === 0) return [];
+  const tagMatches = threadTag ? all.filter(r => r.tag && r.tag === threadTag) : [];
+  const rest = all.filter(r => !tagMatches.includes(r));
+  return [...tagMatches, ...rest].slice(0, n);
+}
+```
+
+Insertion points:
+- **Support branch of `buildSystemPrompt`**: insert `buildBrandContextSections(s, ctx, { includeVoice: true })` immediately before `## Knowledge base` (line ~107) so KB stays last.
+- **Operator branch**: insert `buildBrandContextSections(s, ctx, { includeVoice: false })` before `## Instructions` (line ~53). Operator mode does not draft to customers, so render `aiContext` only — skip voice/samples.
+- **`buildComposerAskPrompt`**: insert `buildBrandContextSections(s, ctx, { includeVoice: true })` before `## Rules` so operator-drafted replies inherit voice.
+
+**Determinism.** `pickSampleReplies` must not use `Math.random` (eval suite needs reproducibility). Tag-match + first-N order is deterministic.
+
+**Char cap.** Enforced on write (UI + API), not in the prompt builder. Keep the builder dumb.
+
+**Done when.** A unit test or REPL session shows `buildSystemPrompt` includes the three sections when settings provide them, and omits them cleanly when empty.
+
+---
+
+### Step 2.3 — UI: sample replies editor in AgentTab (~3–4 hours)
+
+**`apps/dashboard/src/app/dashboard/settings/_components/AgentTab.tsx`**
+
+Add a new `SectionCard` titled "Sample replies" directly below the existing "Identity" card (line 320) and before "Default Behavior":
+
+- List rendered from `state.sampleReplies ?? []`.
+- Each row: a `Textarea` (body, `maxLength={300}`, `rows={2}`), small `Input` for optional `context`, optional tag selector (free-text input is fine for V1), and a remove button.
+- "Add sample reply" button — disabled when `(state.sampleReplies?.length ?? 0) >= 10`.
+- Char counter per row + cap counter "X / 10" at the top of the section.
+- Generate `id` via `crypto.randomUUID()` on add.
+- Wire through the existing reducer: `dispatch({ type: 'set', patch: { sampleReplies: next } })`. Both `payload` and `isDirty` already react to `state` — no other plumbing.
+
+**API/server check.** `/api/org` PATCH already accepts arbitrary `settings` JSON. **Verify** by grepping the route for a whitelist or Zod schema; if one exists, add `sampleReplies` to it.
+
+**Done when.** Adding/removing/editing rows persists across a page reload; cap is enforced; char counter renders.
+
+---
+
+### Step 2.4 — Eval fixtures (~1 hour)
+
+Three new fixtures under `apps/dashboard/src/lib/agent/__evals__/fixtures/`. Slot into the existing `index.test.ts` runner without changes (it loads every `fixtures/*.json`).
+
+1. **`brand-voice-cheers-signoff.json`** — `orgSettings.brandVoice: "warm, slightly informal, sign off with 'cheers'"`, basic order-status question. `expectedPlan.replyMustInclude: ["cheers"]`.
+2. **`brand-voice-no-overapology.json`** — `brandVoice: "never over-apologize, no 'so sorry'"`, customer complaint about a delay. `replyMustNotInclude: ["so sorry", "deeply apologize"]`.
+3. **`sample-reply-shipping-delay-imitation.json`** — supply a `sampleReplies` array with one shipping-delay reply tagged `shipping`; thread `tag: "shipping"`; assert `replyMustInclude` on a distinctive phrase from the sample. Validates both the wiring and the tag-match selection.
+
+**Done when.** All three new fixtures pass `npm run test:evals -w apps/dashboard`.
+
+---
+
+### Step 2.5 — Verify end-to-end (~30 min)
+
+1. `npm run test:evals -w apps/dashboard` — confirm new fixtures pass and existing 25 still pass (no regression from prompt structure changes).
+2. Manual: open `/dashboard/settings` → Agent tab, add 2 sample replies, set brand voice, save, open a real ticket, draft via composer, verify the voice shows up.
+3. Run the suite twice back-to-back — confirm `cache_read_input_tokens > 0` on the second run. Cache breakpoints are positional, so adding sections inside the cached system prompt is fine, but verify.
+
+---
+
+**Sub-step summary.**
+
+| Sub-step | Files | Effort |
+|----------|-------|--------|
+| 2.1 Types + defaults | `types/index.ts`, `lib/agent/settings.ts` | 30 min |
+| 2.2 Prompt wiring | `lib/agent/prompt.ts` | 1–2 hr |
+| 2.3 UI editor | `settings/_components/AgentTab.tsx` (+ `/api/org` whitelist if present) | 3–4 hr |
+| 2.4 Eval fixtures | 3 new JSON files in `__evals__/fixtures/` | 1 hr |
+| 2.5 Verify | — | 30 min |
 
 **Open decisions.**
-- **Sample reply selection strategy** when `sampleReplies.length > 3`: pick 3 at random per request (cheap, fine), pick by tag match (better), or use embeddings to pick top-3 by semantic similarity to the current message (best, but adds a vector store). Recommendation: tag match for V1, embeddings later.
-- **Char budget per sample reply**: 300 or 500? Affects total prompt size with 10 samples × 5 included.
+- **Sample reply selection strategy** when `sampleReplies.length > 3`: tag-match (recommended for V1 and baked into 2.2 above), random (cheap, less relevant), or embeddings by semantic similarity (best, requires a vector store — defer).
+- **Char budget per sample reply**: 300 (recommended) or 500. With cap of 10 stored × 3 included, 300 keeps the worst-case prompt addition under ~900 chars.
+- **`aiContext` in operator mode**: render it (recommended — useful framing like "Acme Store sells handmade ceramics") or skip. Voice/samples stay off in operator mode regardless.
 
 ---
 

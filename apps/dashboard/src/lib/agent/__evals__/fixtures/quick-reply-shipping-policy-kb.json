@@ -22,6 +22,7 @@
   "instruction": "Reply to the customer about shipping times.",
   "expectedPlan": {
     "mustCallTools": ["send_reply"],
+    "mustClassifyAs": "quick_reply",
     "mustNotCallTools": [
       "escalate_to_human",
       "search_kb",

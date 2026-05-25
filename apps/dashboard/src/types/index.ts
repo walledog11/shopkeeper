@@ -13,10 +13,18 @@ export interface AgentToolPermissions {
   read: boolean;          // get_shopify_customer, get_shopify_orders, get_order_by_name
 }
 
+export interface SampleReply {
+  id: string;        // uuid, generated client-side
+  body: string;      // ≤ 300 chars
+  context?: string;  // optional 1-line "when to use" hint, e.g. "shipping delay"
+  tag?: string;      // optional tag for matching against thread.tag
+}
+
 export interface OrgSettings {
   // AI draft / summary
   aiContext: string;   // brand name / context fed into AI drafts
   brandVoice: string;  // tone brief appended to AI system prompt
+  sampleReplies?: SampleReply[]; // merchant-supplied example replies the agent should imitate
 
   // Agent identity
   agentName: string;

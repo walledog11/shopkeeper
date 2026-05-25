@@ -50,4 +50,23 @@ jobs:
       - name: Bootstrap test database
         run: node ./scripts/test-bootstrap.mjs
       - name: Run agent eval suite
-        run: npm run test:evals -w apps/dashboard
+        id: evals
+        run: |
+          set -o pipefail
+          npm run test:evals -w apps/dashboard 2>&1 | tee eval-output.log
+      - name: Eval summary
+        if: always()
+        run: |
+          {
+            echo "## Agent eval results"
+            echo ""
+            if [ "${{ steps.evals.outcome }}" = "success" ]; then
+              echo "Suite passed."
+            else
+              echo "Suite failed. Per-fixture log lines:"
+            fi
+            echo ""
+            echo '```'
+            grep -E '^\[eval(:cache)?\]' eval-output.log || echo "(no per-fixture lines captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

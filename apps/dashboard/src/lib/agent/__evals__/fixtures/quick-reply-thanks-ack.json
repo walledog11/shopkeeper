@@ -18,6 +18,7 @@
   "instruction": "Reply to the customer.",
   "expectedPlan": {
     "mustCallTools": ["send_reply"],
+    "mustClassifyAs": "quick_reply",
     "mustNotCallTools": [
       "escalate_to_human",
       "add_internal_note",

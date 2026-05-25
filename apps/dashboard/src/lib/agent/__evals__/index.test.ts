@@ -48,4 +48,19 @@ describe("agent evals", () => {
       60_000,
     );
   }
+
+  it(
+    "prompt caching: second run of the pilot fixture reads from cache",
+    async () => {
+      const pilot = fixtures.find((f) => f.id === "order-status-basic");
+      if (!pilot) throw new Error("pilot fixture 'order-status-basic' not found");
+      const first = await runFixture(pilot);
+      const second = await runFixture(pilot);
+      console.log(
+        `[eval:cache] first cacheCreation=${first.usage.cacheCreationInputTokens} cacheRead=${first.usage.cacheReadInputTokens}; second cacheCreation=${second.usage.cacheCreationInputTokens} cacheRead=${second.usage.cacheReadInputTokens}`,
+      );
+      expect(second.usage.cacheReadInputTokens).toBeGreaterThan(0);
+    },
+    120_000,
+  );
 });

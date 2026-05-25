@@ -9,6 +9,7 @@ import {
 import { vi } from "vitest";
 import { anthropic } from "@/lib/ai/anthropic";
 import { planAgent } from "../planner";
+import { classifyHomePlan } from "../plan-preview";
 import { resolveAgentSettings } from "../settings";
 import * as executor from "../tools/executor";
 import { readModelUsage } from "../usage";
@@ -47,16 +48,6 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string): AgentC
     shopify: setup.shopify ?? null,
     recentOrders: setup.recentOrders ?? [],
     kbArticles: setup.kbArticles ?? [],
-  };
-}
-
-function emptyUsage(): EvalUsage {
-  return {
-    modelCalls: 0,
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
   };
 }
 
@@ -103,7 +94,13 @@ function findToolInputMatch(rawToolCalls: { name: string; input: unknown }[], ex
 
 export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   const failures: string[] = [];
-  const usage = emptyUsage();
+  const usage: EvalUsage = {
+    modelCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  };
   const startedAt = Date.now();
   let orgId: string | null = null;
   let spy: { mockRestore: () => void } | null = null;
@@ -127,16 +124,11 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
 
     type CreateFn = typeof anthropic.messages.create;
     const originalCreate = anthropic.messages.create.bind(anthropic.messages) as CreateFn;
-    const createWithUsage = ((
-      body: Parameters<CreateFn>[0],
-      options?: Parameters<CreateFn>[1],
-    ) => (
-      originalCreate(body, options).then((response: Awaited<ReturnType<CreateFn>>) => {
-        recordEvalUsage(usage, response);
-        return response;
-      })
-    )) as CreateFn;
-    spy = vi.spyOn(anthropic.messages, "create").mockImplementation(createWithUsage);
+    spy = vi.spyOn(anthropic.messages, "create").mockImplementation((async (body, options) => {
+      const response = await originalCreate(body, options);
+      recordEvalUsage(usage, response);
+      return response;
+    }) as CreateFn);
 
     const failureMap = new Map<string, string>(
       (fixture.setup.simulateToolFailures ?? []).map((f) => [f.tool, f.error]),
@@ -195,6 +187,15 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
 
     if (expected.mustEscalate === true && !calledTools.includes("escalate_to_human")) {
       failures.push(`expected escalation; called: [${calledTools.join(", ")}]`);
+    }
+
+    if (expected.mustClassifyAs) {
+      const classification = classifyHomePlan(plan);
+      if (classification.kind !== expected.mustClassifyAs) {
+        failures.push(
+          `expected classifyHomePlan -> "${expected.mustClassifyAs}", got "${classification.kind}"`,
+        );
+      }
     }
 
     for (const phrase of expected.replyMustInclude ?? []) {
