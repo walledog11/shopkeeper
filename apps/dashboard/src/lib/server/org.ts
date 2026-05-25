@@ -1,7 +1,7 @@
 import { db } from '@clerk/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
-import { AGENT_SETTINGS_DEFAULTS } from '@/lib/agent/settings';
+import type { OrgSettings } from '@/types';
 import { getE2EBypassOrg } from './e2e-org';
 
 const USE_CASE_PHRASES: Record<string, string> = {
@@ -72,9 +72,7 @@ export async function getOrCreateOrg() {
   const meta = (clerkUser?.unsafeMetadata ?? {}) as Record<string, unknown>;
   const aiContext = composeAiContext(meta.useCases, meta.teamSize);
 
-  const settings = aiContext
-    ? { ...AGENT_SETTINGS_DEFAULTS, aiContext }
-    : AGENT_SETTINGS_DEFAULTS;
+  const settings: Partial<OrgSettings> = aiContext ? { aiContext } : {};
 
   try {
     return await db.organization.create({

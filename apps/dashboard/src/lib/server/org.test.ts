@@ -15,6 +15,8 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors'
+import { resolveAgentSettings } from '@/lib/agent/settings'
+import type { OrgSettings } from '@/types'
 import { getOrCreateOrg } from './org'
 
 type AuthResult = ReturnType<typeof auth> extends Promise<infer T> ? T : never
@@ -105,7 +107,7 @@ describe('getOrCreateOrg', () => {
 
     const persisted = await db.organization.findUniqueOrThrow({ where: { clerkOrgId } })
     expect(persisted.name).toBe('Acme')
-    const settings = persisted.settings as Record<string, unknown>
+    const settings = resolveAgentSettings(persisted.settings as Partial<OrgSettings>)
     expect(settings.aiContext).toBe(
       'Solo merchant using Clerk to organize support tickets and automate responses to common questions.'
     )
@@ -121,7 +123,7 @@ describe('getOrCreateOrg', () => {
     await getOrCreateOrg()
 
     const persisted = await db.organization.findUniqueOrThrow({ where: { clerkOrgId } })
-    const settings = persisted.settings as Record<string, unknown>
+    const settings = resolveAgentSettings(persisted.settings as Partial<OrgSettings>)
     expect(settings.aiContext).toBe('')
   })
 
@@ -134,7 +136,7 @@ describe('getOrCreateOrg', () => {
     await getOrCreateOrg()
 
     const persisted = await db.organization.findUniqueOrThrow({ where: { clerkOrgId } })
-    const settings = persisted.settings as Record<string, unknown>
+    const settings = resolveAgentSettings(persisted.settings as Partial<OrgSettings>)
     expect(settings.aiContext).toBe('')
   })
 

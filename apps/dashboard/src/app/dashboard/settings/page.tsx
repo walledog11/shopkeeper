@@ -6,13 +6,15 @@ import type { OrgSettings } from "@/types"
 
 export default async function SettingsPage() {
   const org = await getOrCreateOrg()
-  const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
+  const rawSettings = (org.settings as Partial<OrgSettings> | null) ?? {}
+  const settings = resolveAgentSettings(rawSettings)
 
   return (
     <Suspense fallback={null}>
       <SettingsPageClient
         orgName={org.name}
         settings={settings}
+        rawSettings={rawSettings}
         version={org.updatedAt.toISOString()}
       />
     </Suspense>

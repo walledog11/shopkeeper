@@ -9,6 +9,18 @@ import stripe from '@/lib/billing/stripe';
 import logger from '@/lib/server/logger';
 import type { OrgSettings } from '@/types';
 
+const ALLOWED_SETTINGS_UNSET = new Set([
+  'alwaysDraftReply',
+  'requireApprovalForActions',
+  'maxRefundAmount',
+  'blockCancellations',
+  'blockCustomLineItems',
+  'toolsEnabled.action',
+  'toolsEnabled.communication',
+  'toolsEnabled.internal',
+  'toolsEnabled.read',
+]);
+
 function resolvePlanName(priceId: string | null): string {
   if (!priceId) return 'Free';
   if (priceId === process.env.PRICE_ID_STARTER) return 'Starter';
@@ -16,8 +28,39 @@ function resolvePlanName(priceId: string | null): string {
   return 'Paid';
 }
 
-function toPrismaJsonObject(value: Partial<OrgSettings>): Prisma.InputJsonObject {
+function toPrismaJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonObject;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function mergeSettingsPatch(
+  currentSettings: Record<string, unknown>,
+  newSettings: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...currentSettings };
+  for (const [key, value] of Object.entries(newSettings)) {
+    const currentValue = merged[key];
+    merged[key] = isPlainObject(currentValue) && isPlainObject(value)
+      ? { ...currentValue, ...value }
+      : value;
+  }
+  return merged;
+}
+
+function deleteSettingPath(settings: Record<string, unknown>, path: string) {
+  const [first, second] = path.split('.');
+  if (!second) {
+    delete settings[first];
+    return;
+  }
+
+  const nested = settings[first];
+  if (!isPlainObject(nested)) return;
+  delete nested[second];
+  if (Object.keys(nested).length === 0) delete settings[first];
 }
 
 export async function GET() {
@@ -42,9 +85,10 @@ export async function PATCH(request: Request) {
     const org = await getOrCreateOrg();
     assertBillingWriteAllowed(org);
     const body = await request.json();
-    const { name, settings: newSettings, version } = body as {
+    const { name, settings: newSettings, settingsUnset, version } = body as {
       name?: string;
       settings?: Partial<OrgSettings>;
+      settingsUnset?: unknown;
       version?: string;
     };
 
@@ -68,14 +112,27 @@ export async function PATCH(request: Request) {
       );
     }
 
-    const currentSettings = (org.settings as Partial<OrgSettings> | null) ?? {};
+    const unsetPaths = settingsUnset === undefined ? [] : settingsUnset;
+    if (!Array.isArray(unsetPaths) || unsetPaths.some(path => typeof path !== 'string' || !ALLOWED_SETTINGS_UNSET.has(path))) {
+      return NextResponse.json({ error: 'Invalid settingsUnset' }, { status: 400 });
+    }
+
+    const currentSettings = (org.settings as Record<string, unknown> | null) ?? {};
+    const settingsPatch = newSettings === undefined
+      ? {}
+      : JSON.parse(JSON.stringify(newSettings)) as Record<string, unknown>;
+    const updatedSettings = mergeSettingsPatch(currentSettings, settingsPatch);
+    for (const path of unsetPaths) {
+      deleteSettingPath(updatedSettings, path);
+    }
+    const settingsChanged = newSettings !== undefined || unsetPaths.length > 0;
 
     const updated = await db.organization.update({
       where: { id: org.id },
       data: {
         ...(name !== undefined && { name }),
-        ...(newSettings !== undefined && {
-          settings: toPrismaJsonObject({ ...currentSettings, ...newSettings }),
+        ...(settingsChanged && {
+          settings: toPrismaJsonObject(updatedSettings),
         }),
       },
     });

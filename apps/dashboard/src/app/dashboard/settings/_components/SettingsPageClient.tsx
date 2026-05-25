@@ -20,6 +20,7 @@ import {
 interface Props {
   orgName: string
   settings: OrgSettings
+  rawSettings: Partial<OrgSettings>
   version: string
 }
 
@@ -33,7 +34,7 @@ const NAV_ITEMS = [
 
 export type SettingsTab = typeof NAV_ITEMS[number]['id']
 
-export default function SettingsPageClient({ orgName, settings, version }: Props) {
+export default function SettingsPageClient({ orgName, settings, rawSettings, version }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const activeTab = (searchParams.get('tab') as SettingsTab) ?? 'agent'
@@ -117,7 +118,7 @@ export default function SettingsPageClient({ orgName, settings, version }: Props
       <div className="flex-1 overflow-y-auto min-w-0">
         <div className="px-4 sm:px-8 py-6 sm:py-8 pb-20 max-w-3xl mx-auto w-full">
           <ConciergeSummary orgName={orgName} settings={settings} onJump={setTab} />
-          {activeTab === 'agent' && <AgentTab settings={settings} version={version} />}
+          {activeTab === 'agent' && <AgentTab settings={settings} rawSettings={rawSettings} version={version} />}
           {activeTab === 'workspace' && <WorkspaceTab orgName={orgName} version={version} />}
           {activeTab === 'billing' && <BillingTab />}
           {activeTab === 'audit' && <AuditLogTab />}

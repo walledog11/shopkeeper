@@ -1,12 +1,31 @@
 "use client"
 
 import { useMemo, useReducer, useRef, useState } from "react"
+import { useSWRConfig } from "swr"
 import { Check, Loader2, Plus, Trash2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { ToggleRow, SectionCard } from "./shared"
-import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
+import { TimezoneSelect } from "./TimezoneSelect"
+import {
+  DAY_OPTIONS,
+  DIGEST_DAYS_OPTIONS,
+  agentSettingsReducer,
+  applyTierDefaultsToInheritedSettings,
+  buildAgentSettingsPatch,
+  buildSettingsPayload,
+  collectExplicitOverridePaths,
+  hydrateSettings,
+  rawInputsFor,
+  readSettingsPath,
+  resetPathToTierDefault,
+  tierDefaultForPath,
+  writeSettingsPath,
+  type AutonomyOverridePath,
+} from "./agent-tab-helpers"
+import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
+import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
 import type { OrgSettings } from "@/types"
 
 const SAMPLE_REPLY_CAP = 10
@@ -14,211 +33,25 @@ const SAMPLE_REPLY_BODY_MAX = 300
 
 interface Props {
   settings: OrgSettings
+  rawSettings: Partial<OrgSettings>
   version: string
 }
 
-type Action =
-  | { type: 'set'; patch: Partial<OrgSettings> }
-  | { type: 'reset'; payload: OrgSettings }
-
-function reducer(state: OrgSettings, action: Action): OrgSettings {
-  if (action.type === 'reset') return action.payload
-  return { ...state, ...action.patch }
+function tierLabel(tier: AutonomyTier): string {
+  return AUTONOMY_TIERS.find(option => option.id === tier)?.label ?? tier
 }
 
-// Map legacy integer UTC offsets to curated IANA zones so users never see
-// "Etc/GMT+5" in the dropdown. Picks the most populous merchant region per
-// offset; users can always change to their actual zone after.
-const OFFSET_TO_CURATED_ZONE: Record<number, string> = {
-  [-10]: 'Pacific/Honolulu',
-  [-9]:  'America/Anchorage',
-  [-8]:  'America/Los_Angeles',
-  [-7]:  'America/Denver',
-  [-6]:  'America/Chicago',
-  [-5]:  'America/New_York',
-  [-4]:  'America/Halifax',
-  [-3]:  'America/Sao_Paulo',
-  [0]:   'Europe/London',
-  [1]:   'Europe/Paris',
-  [2]:   'Europe/Athens',
-  [3]:   'Europe/Moscow',
-  [4]:   'Asia/Dubai',
-  [5]:   'Asia/Karachi',
-  [6]:   'Asia/Dhaka',
-  [7]:   'Asia/Bangkok',
-  [8]:   'Asia/Singapore',
-  [9]:   'Asia/Tokyo',
-  [10]:  'Australia/Sydney',
-  [12]:  'Pacific/Auckland',
-  [13]:  'Pacific/Fiji',
-}
-
-function browserTz(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York'
-  } catch {
-    return 'America/New_York'
+function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string {
+  if (path === "maxRefundAmount") {
+    return typeof value === "number" ? `$${value}` : "No limit"
   }
+  if (typeof value === "boolean") return value ? "On" : "Off"
+  return value == null ? "Not set" : String(value)
 }
 
-function hydrateTz(existing: string | undefined, legacyOffset: number | undefined): string {
-  if (existing && existing.trim() !== '' && !existing.startsWith('Etc/')) return existing
-  if (typeof legacyOffset === 'number') {
-    const mapped = OFFSET_TO_CURATED_ZONE[Math.round(legacyOffset)]
-    if (mapped) return mapped
-  }
-  return browserTz()
-}
-
-function hydrate(settings: OrgSettings): OrgSettings {
-  return {
-    ...settings,
-    digestTimezone: hydrateTz(settings.digestTimezone, settings.digestTimezoneOffset),
-    businessHoursTimezone: hydrateTz(settings.businessHoursTimezone, settings.businessHoursTimezoneOffset),
-  }
-}
-
-// Curated list of ~30 zones grouped by region. One entry per DST region —
-// e.g. "Europe/Paris" covers Berlin / Madrid / Rome / Amsterdam.
-// All entries are real IANA ids, so DST is handled by Intl automatically.
-const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: string }[] }[] = [
-  {
-    label: 'Americas',
-    zones: [
-      { id: 'Pacific/Honolulu',     label: 'Hawaii — Honolulu' },
-      { id: 'America/Anchorage',    label: 'Alaska — Anchorage' },
-      { id: 'America/Los_Angeles',  label: 'Pacific Time — Los Angeles, Vancouver' },
-      { id: 'America/Phoenix',      label: 'Arizona — Phoenix' },
-      { id: 'America/Denver',       label: 'Mountain Time — Denver, Edmonton' },
-      { id: 'America/Chicago',      label: 'Central Time — Chicago, Mexico City' },
-      { id: 'America/New_York',     label: 'Eastern Time — New York, Toronto' },
-      { id: 'America/Halifax',      label: 'Atlantic Time — Halifax' },
-      { id: 'America/Sao_Paulo',    label: 'São Paulo' },
-      { id: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires' },
-    ],
-  },
-  {
-    label: 'Europe',
-    zones: [
-      { id: 'Europe/London',        label: 'London, Dublin, Lisbon' },
-      { id: 'Europe/Paris',         label: 'Central European Time — Paris, Berlin, Madrid, Rome' },
-      { id: 'Europe/Athens',        label: 'Eastern European Time — Athens, Helsinki, Bucharest' },
-      { id: 'Europe/Istanbul',      label: 'Istanbul' },
-      { id: 'Europe/Moscow',        label: 'Moscow' },
-    ],
-  },
-  {
-    label: 'Africa & Middle East',
-    zones: [
-      { id: 'Africa/Lagos',         label: 'Lagos' },
-      { id: 'Africa/Cairo',         label: 'Cairo' },
-      { id: 'Africa/Johannesburg',  label: 'Johannesburg' },
-      { id: 'Asia/Jerusalem',       label: 'Jerusalem' },
-      { id: 'Asia/Dubai',           label: 'Dubai' },
-      { id: 'Asia/Tehran',          label: 'Tehran' },
-    ],
-  },
-  {
-    label: 'Asia',
-    zones: [
-      { id: 'Asia/Karachi',         label: 'Karachi' },
-      { id: 'Asia/Kolkata',         label: 'India — Mumbai, Delhi' },
-      { id: 'Asia/Dhaka',           label: 'Dhaka' },
-      { id: 'Asia/Bangkok',         label: 'Bangkok, Jakarta' },
-      { id: 'Asia/Singapore',       label: 'Singapore, Hong Kong, Manila' },
-      { id: 'Asia/Shanghai',        label: 'Shanghai, Beijing' },
-      { id: 'Asia/Tokyo',           label: 'Tokyo, Seoul' },
-    ],
-  },
-  {
-    label: 'Oceania',
-    zones: [
-      { id: 'Australia/Perth',      label: 'Perth' },
-      { id: 'Australia/Adelaide',   label: 'Adelaide' },
-      { id: 'Australia/Sydney',     label: 'Sydney, Melbourne, Brisbane' },
-      { id: 'Pacific/Auckland',     label: 'Auckland' },
-      { id: 'Pacific/Fiji',         label: 'Fiji' },
-    ],
-  },
-]
-
-const KNOWN_TIMEZONE_IDS = new Set(TIMEZONE_GROUPS.flatMap(g => g.zones.map(z => z.id)))
-
-function TimezoneSelect({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
-  // Show a passthrough only for legitimate IANA values outside our curated list
-  // (e.g. America/Tijuana). Never surface Etc/GMT* — those are legacy garbage.
-  const isUnknown = value !== '' && !KNOWN_TIMEZONE_IDS.has(value) && !value.startsWith('Etc/')
-  return (
-    <select
-      value={KNOWN_TIMEZONE_IDS.has(value) || isUnknown ? value : ''}
-      onChange={e => onChange(e.target.value)}
-      className={className}
-    >
-      {isUnknown && <option value={value}>{value}</option>}
-      {TIMEZONE_GROUPS.map(group => (
-        <optgroup key={group.label} label={group.label}>
-          {group.zones.map(z => (
-            <option key={z.id} value={z.id}>{z.label}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
-  )
-}
-
-const DAY_OPTIONS = [['mon','Mon'],['tue','Tue'],['wed','Wed'],['thu','Thu'],['fri','Fri'],['sat','Sat'],['sun','Sun']] as const
-const DIGEST_DAYS_OPTIONS = [['every_day', 'Every day'], ['weekdays', 'Weekdays only']] as const
-
-interface RawInputs {
-  maxRefund: string
-  dailyRefundCap: string
-  dailyLLMSpendCap: string
-  maxIter: string
-  digestHour: string
-  digestSecondHour: string
-  bhStart: string
-  bhEnd: string
-}
-
-function clampHour(s: string, fallback: number): number {
-  const n = s.trim() === '' ? fallback : parseInt(s, 10)
-  return Math.min(23, Math.max(0, isNaN(n) ? fallback : n))
-}
-
-function buildPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
-  const parsedMax = raw.maxRefund.trim() === '' ? null : Number(raw.maxRefund)
-  const parsedDaily = raw.dailyRefundCap.trim() === '' ? null : Number(raw.dailyRefundCap)
-  const parsedLLM = raw.dailyLLMSpendCap.trim() === '' ? null : Number(raw.dailyLLMSpendCap)
-  const parsedIter = Number(raw.maxIter)
-  return {
-    ...state,
-    agentName: state.agentName.trim() || 'Clerk',
-    maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
-    dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
-    dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,
-    maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
-    digestHour: clampHour(raw.digestHour, 8),
-    digestSecondHour: clampHour(raw.digestSecondHour, 17),
-    businessHoursStart: clampHour(raw.bhStart, 9),
-    businessHoursEnd: clampHour(raw.bhEnd, 17),
-  }
-}
-
-function rawInputsFor(s: OrgSettings): RawInputs {
-  return {
-    maxRefund: s.maxRefundAmount != null ? String(s.maxRefundAmount) : '',
-    dailyRefundCap: s.dailyRefundCap != null ? String(s.dailyRefundCap) : '',
-    dailyLLMSpendCap: s.dailyLLMSpendCapUsd != null ? String(s.dailyLLMSpendCapUsd) : '',
-    maxIter: String(s.maxIterations ?? 10),
-    digestHour: String(s.digestHour ?? 8),
-    digestSecondHour: String(s.digestSecondHour ?? 17),
-    bhStart: String(s.businessHoursStart),
-    bhEnd: String(s.businessHoursEnd),
-  }
-}
-
-export default function AgentTab({ settings, version }: Props) {
-  const [state, dispatch] = useReducer(reducer, settings, hydrate)
+export default function AgentTab({ settings, rawSettings, version }: Props) {
+  const { mutate } = useSWRConfig()
+  const [state, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettings)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
   const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
   const [dailyRefundCapInput, setDailyRefundCapInput] = useState<string>(initialRaw.dailyRefundCap)
@@ -233,9 +66,12 @@ export default function AgentTab({ settings, version }: Props) {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [staleVersion, setStaleVersion] = useState(false)
+  const [explicitOverridePaths, setExplicitOverridePaths] = useState<AutonomyOverridePath[]>(
+    () => collectExplicitOverridePaths(rawSettings),
+  )
 
   const payload = useMemo(
-    () => buildPayload(state, {
+    () => buildSettingsPayload(state, {
       maxRefund: maxRefundInput,
       dailyRefundCap: dailyRefundCapInput,
       dailyLLMSpendCap: dailyLLMSpendCapInput,
@@ -248,16 +84,33 @@ export default function AgentTab({ settings, version }: Props) {
     [state, maxRefundInput, dailyRefundCapInput, dailyLLMSpendCapInput, maxIterationsInput, digestHourInput, digestSecondHourInput, businessHoursStartInput, businessHoursEndInput],
   )
 
-  const initialPayloadRef = useRef<string>(JSON.stringify(payload))
-  const freshBaselineRef = useRef<OrgSettings | null>(null)
-  const isDirty = JSON.stringify(payload) !== initialPayloadRef.current
+  const settingsPatch = useMemo(
+    () => buildAgentSettingsPatch(payload, explicitOverridePaths),
+    [payload, explicitOverridePaths],
+  )
+  const serializedPatch = useMemo(() => JSON.stringify(settingsPatch), [settingsPatch])
+  const initialPatchRef = useRef<string>(serializedPatch)
+  const baselineRawRef = useRef<Partial<OrgSettings>>(rawSettings)
+  const freshBaselineRef = useRef<Partial<OrgSettings> | null>(null)
+  const explicitOverrideSet = useMemo(() => new Set(explicitOverridePaths), [explicitOverridePaths])
+  const isDirty = serializedPatch !== initialPatchRef.current
 
   const businessHoursInvalid = payload.businessHoursEnabled && payload.businessHoursEnd <= payload.businessHoursStart
 
-  function applyBaseline(target: OrgSettings) {
-    const hydrated = hydrate(target)
-    const raw = rawInputsFor(target)
+  function markExplicit(path: AutonomyOverridePath) {
+    setExplicitOverridePaths(prev => prev.includes(path) ? prev : [...prev, path])
+  }
+
+  function clearExplicit(path: AutonomyOverridePath) {
+    setExplicitOverridePaths(prev => prev.filter(item => item !== path))
+  }
+
+  function applyBaseline(target: Partial<OrgSettings>) {
+    const hydrated = hydrateSettings(resolveAgentSettings(target))
+    const explicit = collectExplicitOverridePaths(target)
+    const raw = rawInputsFor(hydrated)
     dispatch({ type: 'reset', payload: hydrated })
+    setExplicitOverridePaths(explicit)
     setMaxRefundInput(raw.maxRefund)
     setDailyRefundCapInput(raw.dailyRefundCap)
     setDailyLLMSpendCapInput(raw.dailyLLMSpendCap)
@@ -266,14 +119,64 @@ export default function AgentTab({ settings, version }: Props) {
     setDigestSecondHourInput(raw.digestSecondHour)
     setBusinessHoursStartInput(raw.bhStart)
     setBusinessHoursEndInput(raw.bhEnd)
-    initialPayloadRef.current = JSON.stringify(buildPayload(hydrated, raw))
+    baselineRawRef.current = target
+    initialPatchRef.current = JSON.stringify(buildAgentSettingsPatch(buildSettingsPayload(hydrated, raw), explicit))
   }
 
   function reset() {
-    applyBaseline(freshBaselineRef.current ?? settings)
+    applyBaseline(freshBaselineRef.current ?? baselineRawRef.current)
     freshBaselineRef.current = null
     setError(null)
     setStaleVersion(false)
+  }
+
+  function selectTier(tier: AutonomyTier) {
+    const next = applyTierDefaultsToInheritedSettings(state, tier, explicitOverridePaths)
+    dispatch({ type: 'reset', payload: next })
+    if (!explicitOverrideSet.has("maxRefundAmount")) {
+      setMaxRefundInput(rawInputsFor(next).maxRefund)
+    }
+  }
+
+  function setAutonomyOverride(path: AutonomyOverridePath, value: unknown) {
+    markExplicit(path)
+    dispatch({ type: 'reset', payload: writeSettingsPath(state, path, value) as OrgSettings })
+  }
+
+  function resetAutonomyOverride(path: AutonomyOverridePath) {
+    clearExplicit(path)
+    const next = resetPathToTierDefault(state, path)
+    dispatch({ type: 'reset', payload: next })
+    if (path === "maxRefundAmount") {
+      setMaxRefundInput(rawInputsFor(next).maxRefund)
+    }
+  }
+
+  function OverrideHint({ path }: { path: AutonomyOverridePath }) {
+    const tier = state.autonomyTier ?? "guarded"
+    const explicit = explicitOverrideSet.has(path)
+    const defaultValue = formatOverrideValue(path, tierDefaultForPath(tier, path))
+    const currentValue = formatOverrideValue(path, readSettingsPath(payload, path))
+
+    return (
+      <p className="text-[11px] text-white/30">
+        Default for {tierLabel(tier)}: {defaultValue}
+        {explicit ? (
+          <>
+            <span> · You set: {currentValue}</span>
+            <button
+              type="button"
+              onClick={() => resetAutonomyOverride(path)}
+              className="ml-2 font-semibold text-amber-300 hover:text-amber-200"
+            >
+              Reset to tier default
+            </button>
+          </>
+        ) : (
+          <span> · Using tier default</span>
+        )}
+      </p>
+    )
   }
 
   async function save() {
@@ -285,7 +188,11 @@ export default function AgentTab({ settings, version }: Props) {
       const res = await fetch('/api/org', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ settings: payload, version: currentVersion }),
+        body: JSON.stringify({
+          settings: settingsPatch.settings,
+          settingsUnset: settingsPatch.settingsUnset,
+          version: currentVersion,
+        }),
       })
       if (res.status === 409) {
         const body = await res.json().catch(() => ({})) as {
@@ -294,15 +201,25 @@ export default function AgentTab({ settings, version }: Props) {
         if (body.current?.version) setCurrentVersion(body.current.version)
         if (body.current?.settings) {
           // Capture fresh server state so Reset jumps to it instead of the stale prop.
-          freshBaselineRef.current = { ...AGENT_SETTINGS_DEFAULTS, ...body.current.settings } as OrgSettings
+          freshBaselineRef.current = body.current.settings
         }
         setStaleVersion(true)
         return
       }
       if (!res.ok) throw new Error('Failed')
-      const body = await res.json().catch(() => ({})) as { version?: string }
+      const body = await res.json().catch(() => ({})) as { version?: string; settings?: Partial<OrgSettings> }
       if (body.version) setCurrentVersion(body.version)
-      initialPayloadRef.current = JSON.stringify(payload)
+      if (body.settings) baselineRawRef.current = body.settings
+      void mutate(
+        '/api/org',
+        (current: { settings?: Partial<OrgSettings>; version?: string } | undefined) => ({
+          ...(current ?? {}),
+          ...(body.version ? { version: body.version } : {}),
+          ...(body.settings ? { settings: body.settings } : {}),
+        }),
+        { revalidate: false },
+      )
+      initialPatchRef.current = serializedPatch
       freshBaselineRef.current = null
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
@@ -318,6 +235,166 @@ export default function AgentTab({ settings, version }: Props) {
       <div>
         <h1 className="text-lg font-bold text-white/80">Agent</h1>
         <p className="text-sm text-white/35 mt-0.5">Configure how your AI agent behaves, what it can do, and how it communicates.</p>
+      </div>
+
+      <div id="autonomy" className="scroll-mt-4">
+        <SectionCard title="Autonomy" description="Set how much the agent can do before it asks for approval.">
+          <div className="space-y-6">
+            <div role="radiogroup" aria-label="Autonomy tier" className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {AUTONOMY_TIERS.map(option => {
+              const selected = state.autonomyTier === option.id
+              const disabled = option.comingSoon
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  disabled={disabled}
+                  onClick={() => selectTier(option.id)}
+                  className={`min-h-[104px] rounded-md border p-3 text-left transition-all ${
+                    selected
+                      ? "border-amber-300/60 bg-amber-300/[0.08]"
+                      : "border-white/[0.10] bg-white/[0.025] hover:border-white/[0.22] hover:bg-white/[0.05]"
+                  } ${disabled ? "opacity-45 cursor-not-allowed hover:border-white/[0.10] hover:bg-white/[0.025]" : ""}`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-full border ${selected ? "border-amber-300 bg-amber-300" : "border-white/25"}`} />
+                    <span className="text-sm font-semibold text-white/75">{option.label}</span>
+                    {option.recommended && (
+                      <span className="rounded-sm border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-300">
+                        Recommended
+                      </span>
+                    )}
+                    {option.comingSoon && (
+                      <span className="rounded-sm border border-white/[0.12] bg-white/[0.05] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-white/45">
+                        Coming soon
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-white/40">{option.blurb}</p>
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
+                </button>
+              )
+            })}
+            </div>
+
+            <div className="space-y-5 border-t border-white/[0.08] pt-5">
+            <div className="space-y-1">
+              <ToggleRow
+                label="Always draft a customer reply"
+                description="Include a draft reply in every plan, even when no actions are needed."
+                checked={state.alwaysDraftReply}
+                onChange={v => setAutonomyOverride("alwaysDraftReply", v)}
+              />
+              <OverrideHint path="alwaysDraftReply" />
+            </div>
+
+            <div className="space-y-1">
+              <ToggleRow
+                label="Require approval before executing actions"
+                description="Show a plan card and wait for your confirmation before the agent runs Shopify or communication actions."
+                checked={state.requireApprovalForActions}
+                onChange={v => setAutonomyOverride("requireApprovalForActions", v)}
+              />
+              <OverrideHint path="requireApprovalForActions" />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-white/60">
+                Max refund amount
+                <span className="ml-1.5 font-normal text-white/30">· leave blank for no limit</span>
+              </label>
+              <div className="relative w-48">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
+                <Input
+                  value={maxRefundInput}
+                  onChange={e => {
+                    markExplicit("maxRefundAmount")
+                    setMaxRefundInput(e.target.value.replace(/[^0-9.]/g, ''))
+                  }}
+                  placeholder="e.g. 50"
+                  className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
+                />
+              </div>
+              <OverrideHint path="maxRefundAmount" />
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-white/60">Tool permissions</p>
+                <p className="text-[11px] text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
+              </div>
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Actions"
+                    description="Shopify write operations: issue refunds, cancel orders, update shipping addresses, add Shopify notes."
+                    checked={state.toolsEnabled.action}
+                    onChange={v => setAutonomyOverride("toolsEnabled.action", v)}
+                    badge="High impact"
+                    badgeColor="text-orange-300 bg-orange-400/10 border-orange-400/25"
+                  />
+                  <OverrideHint path="toolsEnabled.action" />
+                </div>
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Communication"
+                    description="Send replies to customers on their channel."
+                    checked={state.toolsEnabled.communication}
+                    onChange={v => setAutonomyOverride("toolsEnabled.communication", v)}
+                    badge="Customer-facing"
+                    badgeColor="text-blue-300 bg-blue-400/10 border-blue-400/25"
+                  />
+                  <OverrideHint path="toolsEnabled.communication" />
+                </div>
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Internal"
+                    description="Add internal notes, update ticket status, and update ticket tags."
+                    checked={state.toolsEnabled.internal}
+                    onChange={v => setAutonomyOverride("toolsEnabled.internal", v)}
+                    badge="Internal"
+                    badgeColor="text-violet-300 bg-violet-400/10 border-violet-400/25"
+                  />
+                  <OverrideHint path="toolsEnabled.internal" />
+                </div>
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Read"
+                    description="Fetch Shopify customer profiles and order history. Read-only."
+                    checked={state.toolsEnabled.read}
+                    onChange={v => setAutonomyOverride("toolsEnabled.read", v)}
+                    badge="Read-only"
+                    badgeColor="text-white/50 bg-white/[0.05] border-white/[0.10]"
+                  />
+                  <OverrideHint path="toolsEnabled.read" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <ToggleRow
+                label="Block order cancellations"
+                description="Prevent the agent from cancelling orders entirely. Cancellations will require manual handling."
+                checked={state.blockCancellations}
+                onChange={v => setAutonomyOverride("blockCancellations", v)}
+              />
+              <OverrideHint path="blockCancellations" />
+            </div>
+
+            <div className="space-y-1">
+              <ToggleRow
+                label="Block custom line items"
+                description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
+                checked={state.blockCustomLineItems}
+                onChange={v => setAutonomyOverride("blockCustomLineItems", v)}
+              />
+              <OverrideHint path="blockCustomLineItems" />
+            </div>
+            </div>
+          </div>
+        </SectionCard>
       </div>
 
       <SectionCard title="Identity" description="How the agent presents itself and writes replies.">
@@ -440,12 +517,6 @@ export default function AgentTab({ settings, version }: Props) {
             checked={state.autoPlanOnOpen}
             onChange={v => dispatch({ type: 'set', patch: { autoPlanOnOpen: v } })}
           />
-          <ToggleRow
-            label="Always draft a customer reply"
-            description="Include a draft reply in every plan, even when no actions are needed."
-            checked={state.alwaysDraftReply}
-            onChange={v => dispatch({ type: 'set', patch: { alwaysDraftReply: v } })}
-          />
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
               Default instruction
@@ -461,70 +532,8 @@ export default function AgentTab({ settings, version }: Props) {
         </div>
       </SectionCard>
 
-      <SectionCard title="Approval Workflow" description="Control when a human must approve before the agent acts.">
-        <ToggleRow
-          label="Require approval before executing actions"
-          description="Show a plan card and wait for your confirmation before the agent runs any Shopify or communication actions."
-          checked={state.requireApprovalForActions}
-          onChange={v => dispatch({ type: 'set', patch: { requireApprovalForActions: v } })}
-        />
-      </SectionCard>
-
-      <SectionCard title="Tool Permissions" description="Choose which categories of tools the agent is allowed to use.">
-        <div className="space-y-4">
-          <ToggleRow
-            label="Actions"
-            description="Shopify write operations: issue refunds, cancel orders, update shipping addresses, add Shopify notes."
-            checked={state.toolsEnabled.action}
-            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, action: v } } })}
-            badge="High impact"
-            badgeColor="text-orange-300 bg-orange-400/10 border-orange-400/25"
-          />
-          <ToggleRow
-            label="Communication"
-            description="Send replies to customers on their channel (email, Instagram DM, etc.)."
-            checked={state.toolsEnabled.communication}
-            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, communication: v } } })}
-            badge="Customer-facing"
-            badgeColor="text-blue-300 bg-blue-400/10 border-blue-400/25"
-          />
-          <ToggleRow
-            label="Internal"
-            description="Add internal notes, update ticket status, and update ticket tags."
-            checked={state.toolsEnabled.internal}
-            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, internal: v } } })}
-            badge="Internal"
-            badgeColor="text-violet-300 bg-violet-400/10 border-violet-400/25"
-          />
-          <ToggleRow
-            label="Read"
-            description="Fetch Shopify customer profiles and order history. Read-only — no changes are made."
-            checked={state.toolsEnabled.read}
-            onChange={v => dispatch({ type: 'set', patch: { toolsEnabled: { ...state.toolsEnabled, read: v } } })}
-            badge="Read-only"
-            badgeColor="text-white/50 bg-white/[0.05] border-white/[0.10]"
-          />
-        </div>
-      </SectionCard>
-
       <SectionCard title="Guardrails" description="Hard limits that the agent will never exceed.">
         <div className="space-y-5">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
-              Max refund amount
-              <span className="ml-1.5 font-normal text-white/30">· leave blank for no limit</span>
-            </label>
-            <div className="relative w-48">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
-              <Input
-                value={maxRefundInput}
-                onChange={e => setMaxRefundInput(e.target.value.replace(/[^0-9.]/g, ''))}
-                placeholder="e.g. 50"
-                className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
-              />
-            </div>
-            <p className="text-[11px] text-white/30">Refunds above this amount will require manual approval.</p>
-          </div>
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
               Daily refund cap
@@ -557,18 +566,6 @@ export default function AgentTab({ settings, version }: Props) {
             </div>
             <p className="text-[11px] text-white/30">Backstop on AI provider spend per UTC day. When reached, the agent pauses until midnight UTC.</p>
           </div>
-          <ToggleRow
-            label="Block order cancellations"
-            description="Prevent the agent from cancelling orders entirely. Cancellations will require manual handling."
-            checked={state.blockCancellations}
-            onChange={v => dispatch({ type: 'set', patch: { blockCancellations: v } })}
-          />
-          <ToggleRow
-            label="Block custom line items"
-            description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
-            checked={state.blockCustomLineItems}
-            onChange={v => dispatch({ type: 'set', patch: { blockCustomLineItems: v } })}
-          />
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-white/60">
               Max iterations

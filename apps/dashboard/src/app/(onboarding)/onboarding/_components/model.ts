@@ -1,7 +1,9 @@
 import { AtSign, Camera, ShoppingBag } from "lucide-react";
 import type { AutonomyTier } from "@/lib/agent/settings";
+import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers";
 
 export type { AutonomyTier };
+export { AUTONOMY_TIERS };
 
 export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v1";
@@ -39,14 +41,6 @@ export const STEPS: Array<{ id: StepId; label: string }> = [
   { id: "channels", label: "Channels" },
   { id: "autonomy", label: "My limits" },
   { id: "plan",     label: "First night" },
-];
-
-export const AUTONOMY_TIERS: Array<{ id: AutonomyTier; label: string; cap: number; blurb: string; recommended?: boolean }> = [
-  { id: "watch",   label: "Watch only",  cap: 0,    blurb: "I'll draft every reply for you. You hit send." },
-  { id: "guarded", label: "Guarded",     cap: 50,   blurb: "I send WISMO and KB-backed replies. Anything > $50 needs you." },
-  { id: "trusted", label: "Trusted",     cap: 100,  blurb: "Refunds up to $100, exchanges, address changes. Bulk inquiries pause for you.", recommended: true },
-  { id: "broad",   label: "Broad",       cap: 250,  blurb: "Refunds up to $250, bulk quotes, custom discount codes." },
-  { id: "full",    label: "Full auto",   cap: 1000, blurb: "I act on anything in policy. You only see exceptions." },
 ];
 
 export const CHANNEL_META: Array<{ key: ChannelKey; label: string; description: string; Icon: typeof AtSign }> = [

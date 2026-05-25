@@ -77,6 +77,66 @@ describe('/api/org billing access', () => {
   });
 });
 
+describe('/api/org PATCH settings', () => {
+  it('can unset explicit autonomy override fields while preserving other settings', async () => {
+    await db.organization.update({
+      where: { id: org.id },
+      data: {
+        settings: {
+          autonomyTier: 'guarded',
+          maxRefundAmount: 25,
+          brandVoice: 'warm',
+          toolsEnabled: {
+            action: false,
+            communication: true,
+          },
+        },
+      },
+    });
+
+    const res = await PATCH(new Request('http://localhost:3000/api/org', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settings: { autonomyTier: 'trusted' },
+        settingsUnset: ['maxRefundAmount', 'toolsEnabled.action'],
+      }),
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as {
+      settings: {
+        autonomyTier?: string;
+        maxRefundAmount?: number;
+        brandVoice?: string;
+        toolsEnabled?: Record<string, boolean>;
+      };
+    };
+    expect(body.settings.autonomyTier).toBe('trusted');
+    expect(body.settings.brandVoice).toBe('warm');
+    expect(body.settings.maxRefundAmount).toBeUndefined();
+    expect(body.settings.toolsEnabled).toEqual({ communication: true });
+
+    const saved = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(saved.settings).toMatchObject({
+      autonomyTier: 'trusted',
+      brandVoice: 'warm',
+      toolsEnabled: { communication: true },
+    });
+    expect((saved.settings as Record<string, unknown>).maxRefundAmount).toBeUndefined();
+  });
+
+  it('rejects unknown settingsUnset paths', async () => {
+    const res = await PATCH(new Request('http://localhost:3000/api/org', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settingsUnset: ['billing.status'] }),
+    }));
+
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('/api/org DELETE', () => {
   function deleteReq(confirmName: string) {
     return new Request('http://localhost:3000/api/org', {

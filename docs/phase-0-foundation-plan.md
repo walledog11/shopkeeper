@@ -453,7 +453,7 @@ Depends on 4.4. This is where the trust risk lives — auto-execution means the 
 
 ---
 
-### Step 4.6 — Settings UI: tier selector + override surface (~0.5 day)
+### Step 4.6 — Settings UI: tier selector + override surface (~0.5 day) [COMPLETED]
 
 **`apps/dashboard/src/app/dashboard/settings/_components/AgentTab.tsx`**
 
@@ -467,7 +467,7 @@ Add a new `SectionCard` titled "Autonomy" at the top of the page (above Identity
 
 ---
 
-### Step 4.7 — Persistent autonomy visibility pill (~1 hour)
+### Step 4.7 — Persistent autonomy visibility pill (~1 hour) [COMPLETED]
 
 **`apps/dashboard/src/app/dashboard/_components/DashboardHeader.tsx`** (or the sidebar — pick whichever is more visible from any dashboard route).
 

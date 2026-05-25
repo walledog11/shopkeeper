@@ -1,3 +1,4 @@
+import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
 import type { OrgSettings } from "@/types"
 
 export type AgentSettingsAction =
@@ -15,9 +16,138 @@ export interface RawInputs {
   bhEnd: string
 }
 
+export const AUTONOMY_OVERRIDE_PATHS = [
+  "alwaysDraftReply",
+  "requireApprovalForActions",
+  "maxRefundAmount",
+  "blockCancellations",
+  "blockCustomLineItems",
+  "toolsEnabled.action",
+  "toolsEnabled.communication",
+  "toolsEnabled.internal",
+  "toolsEnabled.read",
+] as const
+
+export type AutonomyOverridePath = typeof AUTONOMY_OVERRIDE_PATHS[number]
+
+export interface AgentSettingsPatch {
+  settings: Partial<OrgSettings>
+  settingsUnset: AutonomyOverridePath[]
+}
+
 export function agentSettingsReducer(state: OrgSettings, action: AgentSettingsAction): OrgSettings {
   if (action.type === "reset") return action.payload
   return { ...state, ...action.patch }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+export function hasSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): boolean {
+  const [first, second] = path.split(".")
+  const root = settings as Record<string, unknown>
+  if (!second) return Object.prototype.hasOwnProperty.call(root, first)
+  const nested = root[first]
+  return isRecord(nested) && Object.prototype.hasOwnProperty.call(nested, second)
+}
+
+export function readSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): unknown {
+  const [first, second] = path.split(".")
+  const root = settings as Record<string, unknown>
+  if (!second) return root[first]
+  const nested = root[first]
+  return isRecord(nested) ? nested[second] : undefined
+}
+
+export function writeSettingsPath<T extends Partial<OrgSettings>>(
+  settings: T,
+  path: AutonomyOverridePath,
+  value: unknown,
+): T {
+  const [first, second] = path.split(".")
+  const next = { ...settings } as Record<string, unknown>
+  if (!second) {
+    next[first] = value
+    return next as T
+  }
+
+  const current = next[first]
+  next[first] = {
+    ...(isRecord(current) ? current : {}),
+    [second]: value,
+  }
+  return next as T
+}
+
+function deleteSettingsPath(settings: Record<string, unknown>, path: AutonomyOverridePath) {
+  const [first, second] = path.split(".")
+  if (!second) {
+    delete settings[first]
+    return
+  }
+
+  const nested = settings[first]
+  if (!isRecord(nested)) return
+  delete nested[second]
+  if (Object.keys(nested).length === 0) delete settings[first]
+}
+
+export function collectExplicitOverridePaths(rawSettings: Partial<OrgSettings>): AutonomyOverridePath[] {
+  return AUTONOMY_OVERRIDE_PATHS.filter(path => hasSettingsPath(rawSettings, path))
+}
+
+export function tierResolvedSettings(tier: AutonomyTier): OrgSettings {
+  return resolveAgentSettings({ autonomyTier: tier })
+}
+
+export function tierDefaultForPath(tier: AutonomyTier, path: AutonomyOverridePath): unknown {
+  return readSettingsPath(tierResolvedSettings(tier), path)
+}
+
+export function resetPathToTierDefault(settings: OrgSettings, path: AutonomyOverridePath): OrgSettings {
+  const tier = settings.autonomyTier ?? "guarded"
+  return writeSettingsPath(settings, path, tierDefaultForPath(tier, path)) as OrgSettings
+}
+
+export function applyTierDefaultsToInheritedSettings(
+  settings: OrgSettings,
+  tier: AutonomyTier,
+  explicitOverridePaths: Iterable<AutonomyOverridePath>,
+): OrgSettings {
+  const explicit = new Set(explicitOverridePaths)
+  let next: OrgSettings = {
+    ...settings,
+    autonomyTier: tier,
+    toolsEnabled: { ...settings.toolsEnabled },
+  }
+
+  for (const path of AUTONOMY_OVERRIDE_PATHS) {
+    if (explicit.has(path)) continue
+    next = writeSettingsPath(next, path, tierDefaultForPath(tier, path)) as OrgSettings
+  }
+
+  return next
+}
+
+export function buildAgentSettingsPatch(
+  settings: OrgSettings,
+  explicitOverridePaths: Iterable<AutonomyOverridePath>,
+): AgentSettingsPatch {
+  const explicit = new Set(explicitOverridePaths)
+  const serialized = JSON.parse(JSON.stringify(settings)) as Record<string, unknown>
+  const settingsUnset: AutonomyOverridePath[] = []
+
+  for (const path of AUTONOMY_OVERRIDE_PATHS) {
+    if (explicit.has(path)) continue
+    deleteSettingsPath(serialized, path)
+    settingsUnset.push(path)
+  }
+
+  return {
+    settings: serialized as Partial<OrgSettings>,
+    settingsUnset,
+  }
 }
 
 // Map legacy integer UTC offsets to curated IANA zones so users never see

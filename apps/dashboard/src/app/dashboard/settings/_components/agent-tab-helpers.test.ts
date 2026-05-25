@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings";
 import type { OrgSettings } from "@/types";
 import {
+  applyTierDefaultsToInheritedSettings,
   agentSettingsReducer,
+  buildAgentSettingsPatch,
   buildSettingsPayload,
+  collectExplicitOverridePaths,
   hydrateSettings,
   rawInputsFor,
+  resetPathToTierDefault,
 } from "./agent-tab-helpers";
 
 function makeSettings(overrides: Partial<OrgSettings> = {}): OrgSettings {
@@ -101,5 +105,86 @@ describe("agent tab helpers", () => {
     expect(changed.agentName).toBe("Ada");
     expect(base.agentName).toBe("Clerk");
     expect(reset).toBe(base);
+  });
+
+  it("collects explicit autonomy override paths from raw settings", () => {
+    const explicit = collectExplicitOverridePaths({
+      maxRefundAmount: 75,
+      toolsEnabled: { action: false } as OrgSettings["toolsEnabled"],
+    });
+
+    expect(explicit).toEqual(["maxRefundAmount", "toolsEnabled.action"]);
+  });
+
+  it("updates inherited autonomy fields when the tier changes", () => {
+    const next = applyTierDefaultsToInheritedSettings(
+      makeSettings({
+        autonomyTier: "guarded",
+        maxRefundAmount: 50,
+        requireApprovalForActions: true,
+        toolsEnabled: { action: true, communication: true, internal: true, read: true },
+      }),
+      "trusted",
+      [],
+    );
+
+    expect(next.autonomyTier).toBe("trusted");
+    expect(next.maxRefundAmount).toBe(100);
+    expect(next.requireApprovalForActions).toBe(false);
+    expect(next.toolsEnabled).toEqual({
+      action: true,
+      communication: true,
+      internal: true,
+      read: true,
+    });
+  });
+
+  it("preserves explicit autonomy overrides when the tier changes", () => {
+    const next = applyTierDefaultsToInheritedSettings(
+      makeSettings({
+        autonomyTier: "guarded",
+        maxRefundAmount: 75,
+        requireApprovalForActions: true,
+      }),
+      "trusted",
+      ["maxRefundAmount"],
+    );
+
+    expect(next.autonomyTier).toBe("trusted");
+    expect(next.maxRefundAmount).toBe(75);
+    expect(next.requireApprovalForActions).toBe(false);
+  });
+
+  it("resets an override to the current tier default", () => {
+    const reset = resetPathToTierDefault(
+      makeSettings({ autonomyTier: "trusted", maxRefundAmount: 250 }),
+      "maxRefundAmount",
+    );
+
+    expect(reset.maxRefundAmount).toBe(100);
+  });
+
+  it("builds a persistence patch that omits inherited override fields", () => {
+    const patch = buildAgentSettingsPatch(
+      makeSettings({
+        autonomyTier: "trusted",
+        maxRefundAmount: 150,
+        requireApprovalForActions: false,
+        toolsEnabled: {
+          action: true,
+          communication: true,
+          internal: true,
+          read: true,
+        },
+      }),
+      ["maxRefundAmount", "toolsEnabled.action"],
+    );
+
+    expect(patch.settings.maxRefundAmount).toBe(150);
+    expect(patch.settings.requireApprovalForActions).toBeUndefined();
+    expect(patch.settings.toolsEnabled).toEqual({ action: true });
+    expect(patch.settingsUnset).toContain("requireApprovalForActions");
+    expect(patch.settingsUnset).toContain("toolsEnabled.communication");
+    expect(patch.settingsUnset).not.toContain("maxRefundAmount");
   });
 });

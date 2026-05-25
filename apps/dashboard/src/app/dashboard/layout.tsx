@@ -2,7 +2,6 @@ import { HelpProvider } from "./_components/help/HelpContext";
 import NotificationBar, { type Notification } from "./_components/NotificationBar";
 import NavProgressBar from "./_components/NavProgressBar";
 import DashboardSidebar from "./_components/DashboardSidebar";
-import DashboardHeader from "./_components/DashboardHeader";
 import HelpPanel from "./_components/help/HelpPanel";
 import AgentPanelRoot from "./_components/agent-panel/AgentPanelRoot";
 import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext";
@@ -62,7 +61,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="dashboard-shell dark flex h-dvh w-full flex-col overflow-hidden bg-background font-sans">
         <NotificationBar notifications={notifications} />
         <NavProgressBar />
-        <DashboardSidebar>
+        <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"}>
           
           <div className="flex-1 overflow-hidden flex min-h-0">
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">

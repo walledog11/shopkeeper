@@ -10,10 +10,13 @@ import { useOpenThreadCountQuery } from "@/hooks/useThreads";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 
 import { footerNavItems, navGroups } from "./nav-items";
+import AutonomyPill from "./AutonomyPill";
 import { useCommandPalette } from "./CommandPaletteContext";
 import { fetcher } from "@/lib/api/fetcher";
+import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings";
 import { formatRole } from "@/lib/format/role";
 import { cn } from "@/lib/ui/cn";
+import type { OrgSettings } from "@/types";
 import {
   Sidebar,
   SidebarContent,
@@ -47,14 +50,14 @@ type WorkspaceMembership = {
   };
 };
 
-function useNavAuth() {
+function useNavAuth(initialAutonomyTier: AutonomyTier) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const { organization, membership, memberships } = useOrganization({
     memberships: { infinite: false, pageSize: 20 },
   });
   const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });
-  const { data: orgData } = useSWR<{ planName?: string }>("/api/org", fetcher, {
+  const { data: orgData } = useSWR<{ planName?: string; settings?: Partial<OrgSettings> }>("/api/org", fetcher, {
     revalidateOnFocus: false,
   });
   const [mounted, setMounted] = useState(false);
@@ -63,6 +66,9 @@ function useNavAuth() {
 
   const membershipPage = memberships as { count?: number; data?: unknown[] } | undefined;
   const seatCount = membershipPage?.count ?? membershipPage?.data?.length ?? 1;
+  const autonomyTier = orgData?.settings
+    ? resolveAgentSettings(orgData.settings).autonomyTier ?? initialAutonomyTier
+    : initialAutonomyTier;
 
   return {
     user,
@@ -75,6 +81,7 @@ function useNavAuth() {
     roleLabel: formatRole(membership?.role),
     planName: orgData?.planName ?? "Free",
     seatCount,
+    autonomyTier,
   };
 }
 
@@ -459,6 +466,8 @@ function SidebarNavContent({
           <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} variant="desktop" />
         </div>
 
+        <AutonomyPill tier={navAuth.autonomyTier} className="mb-2.5 w-full justify-center" />
+
         <button
           type="button"
           onClick={openCmd}
@@ -589,9 +598,15 @@ function MobileBottomBar({ openCount }: { openCount: number }) {
   );
 }
 
-export default function DashboardSidebar({ children }: { children: React.ReactNode }) {
+export default function DashboardSidebar({
+  children,
+  initialAutonomyTier,
+}: {
+  children: React.ReactNode;
+  initialAutonomyTier: AutonomyTier;
+}) {
   const { count: openCount } = useOpenThreadCountQuery();
-  const navAuth = useNavAuth();
+  const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -628,6 +643,7 @@ export default function DashboardSidebar({ children }: { children: React.ReactNo
           >
             <Logo />
             <div className="flex items-center gap-1">
+              <AutonomyPill tier={navAuth.autonomyTier} compact />
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
