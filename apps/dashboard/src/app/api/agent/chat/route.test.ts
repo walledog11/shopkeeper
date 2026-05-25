@@ -161,6 +161,61 @@ describe("POST /api/agent/chat", () => {
     expect(thread.messages.map((message) => message.senderType)).toEqual(["customer", "agent"]);
   });
 
+  it("auto-executes planned dashboard actions when trusted rollout is enabled", async () => {
+    mockResolveAgentSettings.mockReturnValue({
+      autonomyTier: "trusted",
+      autoExecuteEnabled: true,
+      requireApprovalForActions: false,
+      maxRefundAmount: 100,
+      dailyRefundCap: null,
+      blockCancellations: false,
+      blockCustomLineItems: false,
+      toolsEnabled: { action: true, communication: true, internal: true, read: true },
+    });
+    mockPlanAgent.mockResolvedValueOnce({
+      instruction: "Refund Jane",
+      steps: [{
+        id: "refund_1",
+        tool: "create_refund",
+        label: "Issue refund",
+        description: "Refund $20",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "refund_1",
+        name: "create_refund",
+        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
+      }],
+    });
+    mockExecuteAgentTurn.mockResolvedValueOnce({
+      summary: "Refund issued.",
+      actionsPerformed: [{ tool: "create_refund", result: "Refund of $20.00 issued successfully." }],
+    });
+
+    const res = await POST(jsonReq({ instruction: "Refund Jane" }));
+    const body = await res.json() as { sessionId: string; autoExecuted?: boolean; summary: string };
+
+    expect(res.status).toBe(200);
+    expect(body.autoExecuted).toBe(true);
+    expect(body.summary).toBe("Refund issued.");
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      instruction: "Refund Jane",
+      approvedToolCalls: [{
+        id: "refund_1",
+        name: "create_refund",
+        input: { order_id: "gid://shopify/Order/1", amount: "20.00" },
+      }],
+      auditMode: "auto_executed",
+    }));
+
+    const thread = await db.thread.findUniqueOrThrow({
+      where: { id: body.sessionId },
+      select: { cachedPlan: true },
+    });
+    expect(thread.cachedPlan).toBeNull();
+  });
+
   it("maps spend-cap failures to the public 429 response", async () => {
     mockExecuteAgentTurn.mockRejectedValueOnce(
       new SpendCapError(usdToNanoDollars(25), usdToNanoDollars(25)),

@@ -1,6 +1,6 @@
 {
   "id": "tier-trusted-refund-under-cap",
-  "description": "Trusted-tier org: refund request well under the $100 tier cap. The agent should issue the refund and reply without escalating. Auto-execution classification lands in step 4.4; for now we assert plan shape.",
+  "description": "Trusted-tier org: refund request well under the $100 tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute.",
   "setup": {
     "channelType": "email",
     "tag": "Support",
@@ -41,6 +41,7 @@
     "mustNotCallTools": ["escalate_to_human", "cancel_order"],
     "mustCallToolsWithInput": [
       { "tool": "create_refund", "inputIncludes": { "order_id": "9000004003" } }
-    ]
+    ],
+    "mustClassifyAs": "auto_execute"
   }
 }

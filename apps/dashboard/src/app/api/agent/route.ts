@@ -92,6 +92,7 @@ export const POST = withOrgRoute(
       orgSettings: settings,
       approvedToolCalls,
       persistAuditNote: true,
+      auditMode: "human_approved",
     });
     logger.info({
       orgId: org.id,

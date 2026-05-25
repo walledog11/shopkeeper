@@ -10,6 +10,7 @@ import { writeWorkerHeartbeat } from './health.js';
 import { handleIgDmJob, handleEmailJob, handleShopifyJob } from './message-handlers/channels.js';
 import { generateThreadIntelligence } from './message-handlers/intelligence.js';
 import {
+  sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
   precomputeThreadPlan,
   isWithinBusinessHours,
@@ -125,10 +126,13 @@ export async function startWorkerRuntime() {
       select: { settings: true },
     });
     const rawSettings = (org?.settings ?? {}) as Record<string, unknown>;
+    const withinBusinessHours = isWithinBusinessHours(resolveBusinessHoursSettings(rawSettings));
 
-    const planPromise = precomputeThreadPlan(organizationId, threadId, rawSettings);
+    const planPromise = precomputeThreadPlan(organizationId, threadId, rawSettings, {
+      allowAutoExecute: withinBusinessHours,
+    });
 
-    if (!isWithinBusinessHours(resolveBusinessHoursSettings(rawSettings))) {
+    if (!withinBusinessHours) {
       logger.info({ threadId, organizationId }, '[AISummary] Outside business hours — sending auto-ack');
       await Promise.all([planPromise, sendAutoAck(organizationId, threadId)]);
       return;
@@ -137,6 +141,18 @@ export async function startWorkerRuntime() {
     const planResult = await planPromise;
     if (!planResult) {
       logger.info({ threadId, organizationId }, '[AISummary] No plan precomputed — skipping operator notification');
+      return;
+    }
+
+    if (planResult.autoExecuted) {
+      await sendOperatorAutoExecutionNotification(
+        organizationId,
+        threadId,
+        customerName,
+        channelType,
+        updatedThread?.aiSummary ?? null,
+        planResult,
+      );
       return;
     }
 

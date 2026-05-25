@@ -152,6 +152,7 @@ export function parseAgentPlanInternalBody(body: unknown) {
   return {
     orgId: requireNonEmptyString(candidate.orgId, "orgId"),
     threadId: requireNonEmptyString(candidate.threadId, "threadId"),
+    allowAutoExecute: parseOptionalBoolean(candidate.allowAutoExecute, "allowAutoExecute") ?? false,
   };
 }
 

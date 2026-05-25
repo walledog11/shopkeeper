@@ -20,6 +20,7 @@ interface ExecuteAgentTurnParams {
   persistAgentMessage?: boolean;
   persistAuditNote?: boolean;
   persistAuditNoteWhenNoActions?: boolean;
+  auditMode?: "human_approved" | "auto_executed" | "read_only";
   auditMetadata?: {
     senderPhone?: string | null;
     clerkUserId?: string | null;
@@ -81,6 +82,7 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
           actions: result.actionsPerformed,
           summary: result.summary,
           error: null,
+          ...(params.auditMode ? { mode: params.auditMode } : {}),
           senderPhone: params.auditMetadata?.senderPhone ?? null,
           clerkUserId: params.auditMetadata?.clerkUserId ?? null,
         }),

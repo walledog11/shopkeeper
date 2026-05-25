@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       failureRoute: "/api/agent/internal",
       approvedToolCalls,
       persistAuditNote: true,
+      ...(approvedToolCalls?.length ? { auditMode: "human_approved" as const } : {}),
       auditMetadata: {
         senderPhone,
         clerkUserId,

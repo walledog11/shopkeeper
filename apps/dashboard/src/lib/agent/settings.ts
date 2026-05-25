@@ -8,6 +8,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   sampleReplies: [],
   agentName: "Clerk",
   autoPlanOnOpen: true,
+  autoExecuteEnabled: false,
   alwaysDraftReply: false,
   defaultInstruction: "",
   requireApprovalForActions: true,

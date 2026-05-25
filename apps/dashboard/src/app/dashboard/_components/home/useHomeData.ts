@@ -199,10 +199,13 @@ export function useHomeData({ initialOpenThreads }: Options) {
       const plan = currentPlanForThread(t)
       const firstMessage = t.messages[0]?.contentText ?? null
       const copy = buildPlanPreview(plan, t.aiSummary, firstMessage)
-      const classification = classifyHomePlan(plan)
+      const classification = classifyHomePlan(plan, orgData?.settings)
+      // Auto-executed plans are cleared server-side. If one is still cached,
+      // it was intentionally left for review, for example outside business hours.
+      const uiKind: NeedsYouItem['kind'] = classification.kind === "quick_reply" ? "quick_reply" : "needs_review"
       return {
         threadId: t.id,
-        kind: classification.kind,
+        kind: uiKind,
         customerName: getCustomerName(t.customer),
         channelName: channel.name,
         timeAgo: timeAgoShort(t.messages[0]?.sentAt ?? t.updatedAt),
@@ -214,7 +217,7 @@ export function useHomeData({ initialOpenThreads }: Options) {
         tag: t.tag,
       }
     }),
-    [needsYouAll],
+    [needsYouAll, orgData?.settings],
   )
 
   // ── Sparklines + week chart (single walk producing 3 daily series) ─────────

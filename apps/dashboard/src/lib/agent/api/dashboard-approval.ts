@@ -1,8 +1,13 @@
 import { createMessage, db, Prisma } from "@clerk/db";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
+import { executeAgentTurn } from "@/lib/agent/api/execution";
+import { classifyHomePlan } from "@/lib/agent/plan-preview";
+import { isAutoExecuteEnabled } from "@/lib/agent/api/plan-execution";
+import { resolveAgentSettings } from "@/lib/agent/settings";
 import { TOOL_CATEGORIES } from "@/lib/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
+import type { AgentResult } from "@/lib/agent/types";
 
 const APPROVAL_INTENT_RE =
   /\b(create|place|make|refund|issue\s+a?\s*refund|cancel|update|change|edit|swap|remove|add|note|email|send|close|tag)\b/i;
@@ -25,8 +30,12 @@ export interface DashboardPendingApproval {
 
 export type DashboardApprovalReplyKind = "approve" | "dismiss" | "revise";
 
+const AUTO_EXECUTION_TIERS = new Set(["trusted", "broad", "full"]);
+
 export function shouldPlanBeforeExecuting(instruction: string, settings: OrgSettings): boolean {
-  return settings.requireApprovalForActions && APPROVAL_INTENT_RE.test(instruction);
+  if (!APPROVAL_INTENT_RE.test(instruction)) return false;
+  const resolved = resolveAgentSettings(settings);
+  return resolved.requireApprovalForActions || AUTO_EXECUTION_TIERS.has(resolved.autonomyTier ?? "guarded");
 }
 
 function normalizeApprovalReply(instruction: string): string {
@@ -260,7 +269,11 @@ export async function planDashboardApproval(params: {
   instruction: string;
   displayInstruction?: string;
   settings: OrgSettings;
-}) {
+}): Promise<
+  | { approval: DashboardPendingApproval }
+  | { autoExecuted: true; plan: AgentPlan; approvedToolCalls: RawToolCall[]; result: AgentResult }
+  | null
+> {
   const ctx = await buildContext(params.threadId, params.orgId);
   const plan = await planAgent(ctx, params.instruction, params.settings);
   const actionCalls = getDashboardActionCalls(plan);
@@ -279,6 +292,32 @@ export async function planDashboardApproval(params: {
 
   if (!requiresApproval) {
     return null;
+  }
+
+  if (isAutoExecuteEnabled(params.settings)) {
+    const classification = classifyHomePlan(plan, params.settings);
+    if (classification.kind === "auto_execute") {
+      const result = await executeAgentTurn({
+        orgId: params.orgId,
+        threadId: params.threadId,
+        instruction: params.displayInstruction ?? params.instruction,
+        failureRoute: "/api/agent/chat",
+        orgSettings: params.settings,
+        approvedToolCalls: actionCalls,
+        persistUserMessage: true,
+        persistAgentMessage: true,
+        persistAuditNote: true,
+        persistAuditNoteWhenNoActions: false,
+        auditMode: "auto_executed",
+      });
+
+      return {
+        autoExecuted: true,
+        plan,
+        approvedToolCalls: actionCalls,
+        result,
+      };
+    }
   }
 
   const summary = buildDashboardApprovalSummary(plan);

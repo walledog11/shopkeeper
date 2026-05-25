@@ -43,7 +43,7 @@ export interface ExpectedPlan {
   mustCallToolsWithInput?: ToolInputExpectation[];
   mustNotCallTools?: string[];
   mustEscalate?: boolean;
-  mustClassifyAs?: "quick_reply" | "needs_review";
+  mustClassifyAs?: "quick_reply" | "needs_review" | "auto_execute";
   replyMustInclude?: string[];
   replyMustNotInclude?: string[];
 }

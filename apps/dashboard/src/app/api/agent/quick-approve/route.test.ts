@@ -10,7 +10,7 @@ import {
 import { buildAgentPlanCacheRecord } from "@/lib/agent/api/plan-cache";
 import { AGENT_PLAN_CACHE_VERSION } from "@/lib/agent/plan-cache-shape";
 import { resolveAgentSettings } from "@/lib/agent/settings";
-import type { AgentPlan } from "@/types";
+import type { AgentPlan, OrgSettings } from "@/types";
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn(),
@@ -64,11 +64,22 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-async function createThreadWithCachedPlan(plan: AgentPlan, instruction = "Handle this") {
+async function createThreadWithCachedPlan(
+  plan: AgentPlan,
+  instruction = "Handle this",
+  orgSettings?: Partial<OrgSettings>,
+) {
+  if (orgSettings) {
+    await db.organization.update({
+      where: { id: org.id },
+      data: { settings: orgSettings },
+    });
+  }
+
   const customer = await createTestCustomer(org.id, `customer-${crypto.randomUUID()}@test.com`);
   const thread = await createTestThread(org.id, customer.id, ChannelType.email);
   const message = await createTestMessage(thread.id, "Do you ship to the UK?");
-  const settings = resolveAgentSettings(null);
+  const settings = resolveAgentSettings(orgSettings ?? null);
 
   await db.thread.update({
     where: { id: thread.id },
@@ -140,6 +151,98 @@ describe("POST /api/agent/quick-approve", () => {
       rawToolCalls: [{ id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1" } }],
     };
     const { thread } = await createThreadWithCachedPlan(actionPlan);
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
+
+  it("auto-executes the current auto-execute plan when the rollout flag is enabled", async () => {
+    mockExecuteAgentTurn.mockResolvedValueOnce({
+      summary: "Refund issued and customer notified.",
+      actionsPerformed: [
+        { tool: "create_refund", result: "Refund of $20.00 issued successfully." },
+        { tool: "send_reply", result: "Reply sent to customer via email." },
+      ],
+    });
+    const plan: AgentPlan = {
+      instruction: "Handle this",
+      steps: [
+        {
+          id: "refund_1",
+          tool: "create_refund",
+          label: "Issue refund",
+          description: "Refund $20",
+          category: "action",
+          enabled: true,
+        },
+        {
+          id: "send_1",
+          tool: "send_reply",
+          label: "Notify customer",
+          description: "Let the customer know",
+          category: "communication",
+          enabled: true,
+        },
+      ],
+      rawToolCalls: [
+        { id: "read_1", name: "get_order_by_name", input: { order_name: "#1001" } },
+        { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+        { id: "send_1", name: "send_reply", input: { text: "I've issued that refund for you." } },
+      ],
+    };
+    const { thread } = await createThreadWithCachedPlan(plan, "Handle this", {
+      autonomyTier: "trusted",
+      autoExecuteEnabled: true,
+      maxRefundAmount: 100,
+    });
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    }));
+
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: thread.id,
+      instruction: "Handle this",
+      approvedToolCalls: [
+        { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+        { id: "send_1", name: "send_reply", input: { text: "I've issued that refund for you." } },
+      ],
+      auditMode: "auto_executed",
+    }));
+
+    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updatedThread?.cachedPlan).toBeNull();
+    expect(updatedThread?.cachedPlanMessageId).toBeNull();
+  });
+
+  it("rejects auto-execute plans when the rollout flag is disabled", async () => {
+    const plan: AgentPlan = {
+      instruction: "Handle this",
+      steps: [{
+        id: "refund_1",
+        tool: "create_refund",
+        label: "Issue refund",
+        description: "Refund $20",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [
+        { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+      ],
+    };
+    const { thread } = await createThreadWithCachedPlan(plan, "Handle this", {
+      autonomyTier: "trusted",
+      maxRefundAmount: 100,
+    });
 
     const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
       method: "POST",

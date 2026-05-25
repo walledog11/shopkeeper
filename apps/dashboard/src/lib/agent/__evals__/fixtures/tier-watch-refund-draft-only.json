@@ -39,6 +39,7 @@
   "expectedPlan": {
     "mustCallTools": ["escalate_to_human"],
     "mustNotCallTools": ["create_refund", "cancel_order", "send_reply"],
-    "mustEscalate": true
+    "mustEscalate": true,
+    "mustClassifyAs": "needs_review"
   }
 }

@@ -17,6 +17,10 @@ import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } fr
 import { parseAgentPlanInternalBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
+import {
+  findFailedToolResult,
+  maybeAutoExecuteCurrentCachedHomePlan,
+} from "@/lib/agent/api/plan-execution";
 import { BadRequestError, handleApiError } from "@/lib/api/errors";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
@@ -29,7 +33,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { orgId, threadId } = parseAgentPlanInternalBody(await readJsonBody(request));
+    const { orgId, threadId, allowAutoExecute } = parseAgentPlanInternalBody(await readJsonBody(request));
 
     const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
     if (!rl.success) {
@@ -57,7 +61,10 @@ export async function POST(request: Request) {
       lastCustomerMessageId: lastCustomerMessage.id,
       settings,
     })) {
-      return NextResponse.json({ plan: cached?.plan, instruction });
+      const autoExecution = allowAutoExecute
+        ? await buildAutoExecutionResponse(orgId, threadId, settings)
+        : {};
+      return NextResponse.json({ plan: cached?.plan, instruction, ...autoExecution });
     }
     const ctx = await buildContext(threadId, orgId);
     const plan = await planAgent(ctx, instruction, settings);
@@ -77,10 +84,40 @@ export async function POST(request: Request) {
       });
     }
 
-    return NextResponse.json({ plan, instruction });
+    const autoExecution = allowAutoExecute
+      ? await buildAutoExecutionResponse(orgId, threadId, settings)
+      : {};
+
+    return NextResponse.json({ plan, instruction, ...autoExecution });
   } catch (error) {
     return handleApiError(error, "Agent plan-internal POST", "Failed to generate plan");
   }
+}
+
+async function buildAutoExecutionResponse(
+  orgId: string,
+  threadId: string,
+  settings: OrgSettings,
+) {
+  const executed = await maybeAutoExecuteCurrentCachedHomePlan({
+    orgId,
+    threadId,
+    settings,
+    failureRoute: "/api/agent/plan-internal",
+  });
+
+  if (!executed) {
+    return {};
+  }
+
+  const failed = findFailedToolResult(executed.result);
+  return {
+    autoExecuted: true,
+    autoExecutionStatus: failed ? "error" : "success",
+    autoExecutionSummary: executed.result.summary,
+    autoExecutionActions: executed.result.actionsPerformed,
+    ...(failed ? { autoExecutionError: failed.result, autoExecutionFailedTool: failed.tool } : {}),
+  };
 }
 
 async function readJsonBody(request: Request): Promise<unknown> {

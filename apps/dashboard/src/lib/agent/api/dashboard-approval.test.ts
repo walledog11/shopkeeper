@@ -10,10 +10,12 @@ import type { AgentPlan, OrgSettings } from "@/types";
 
 const {
   mockBuildContext,
+  mockExecuteAgentTurn,
   mockHashInstructionForLog,
   mockPlanAgent,
 } = vi.hoisted(() => ({
   mockBuildContext: vi.fn(),
+  mockExecuteAgentTurn: vi.fn(),
   mockHashInstructionForLog: vi.fn(),
   mockPlanAgent: vi.fn(),
 }));
@@ -22,6 +24,10 @@ vi.mock("@/lib/agent/runner", () => ({
   buildContext: mockBuildContext,
   hashInstructionForLog: mockHashInstructionForLog,
   planAgent: mockPlanAgent,
+}));
+
+vi.mock("@/lib/agent/api/execution", () => ({
+  executeAgentTurn: mockExecuteAgentTurn,
 }));
 
 vi.mock("@/lib/server/logger", () => ({
@@ -121,6 +127,7 @@ beforeEach(() => {
   mockBuildContext.mockResolvedValue({ messages: [] });
   mockHashInstructionForLog.mockReturnValue("hash_test");
   mockPlanAgent.mockResolvedValue(createOrderPlan);
+  mockExecuteAgentTurn.mockResolvedValue({ summary: "Done", actionsPerformed: [] });
 });
 
 afterEach(async () => {
@@ -143,6 +150,11 @@ describe("dashboard approval helpers", () => {
       ...settings,
       requireApprovalForActions: false,
     })).toBe(false);
+    expect(shouldPlanBeforeExecuting("Refund the order", {
+      ...settings,
+      autonomyTier: "trusted",
+      requireApprovalForActions: false,
+    })).toBe(true);
   });
 
   it("filters dashboard approval actions to action-category planned tool calls", () => {
@@ -240,5 +252,57 @@ describe("dashboard approval helpers", () => {
     expect(messages[0]).toMatchObject({ senderType: SenderType.customer, contentText: "Create an order" });
     expect(messages[1].senderType).toBe(SenderType.agent);
     expect(messages[1].contentText).toContain("Reply yes to create it");
+  });
+
+  it("auto-executes dashboard action plans when the rollout flag and classifier allow it", async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.dashboard_agent);
+    const refundPlan: AgentPlan = {
+      instruction: "Refund Ada",
+      steps: [{
+        id: "refund_1",
+        tool: "create_refund",
+        label: "Issue refund",
+        description: "Refund $20",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [
+        { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+      ],
+    };
+    mockPlanAgent.mockResolvedValueOnce(refundPlan);
+    mockExecuteAgentTurn.mockResolvedValueOnce({
+      summary: "Refund issued.",
+      actionsPerformed: [{ tool: "create_refund", result: "Refund of $20.00 issued successfully." }],
+    });
+
+    const planned = await planDashboardApproval({
+      orgId: org.id,
+      threadId: thread.id,
+      instruction: "Refund Ada",
+      settings: {
+        ...settings,
+        autonomyTier: "trusted",
+        autoExecuteEnabled: true,
+        requireApprovalForActions: false,
+        maxRefundAmount: 100,
+      },
+    });
+
+    expect(planned).toMatchObject({ autoExecuted: true });
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: org.id,
+      threadId: thread.id,
+      instruction: "Refund Ada",
+      approvedToolCalls: [
+        { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+      ],
+      auditMode: "auto_executed",
+    }));
+
+    const refreshed = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(refreshed.cachedPlan).toBeNull();
   });
 });

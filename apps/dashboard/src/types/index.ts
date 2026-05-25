@@ -31,6 +31,7 @@ export interface OrgSettings {
 
   // Default behavior
   autoPlanOnOpen: boolean;
+  autoExecuteEnabled?: boolean; // hidden rollout flag for trusted-tier auto-execution
   alwaysDraftReply: boolean;
   defaultInstruction: string;
 
@@ -195,6 +196,7 @@ export interface AgentTurn {
   actions: { tool: string; result: string }[]
   summary: string | null
   error: string | null
+  mode?: 'human_approved' | 'auto_executed' | 'read_only'
   senderPhone?: string | null
   clerkUserId?: string | null
 }

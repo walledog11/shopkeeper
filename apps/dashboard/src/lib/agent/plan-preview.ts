@@ -1,12 +1,21 @@
-import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
+import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types"
+import { resolveAgentSettings, type AutonomyTier } from "./settings"
+import { TOOL_CATEGORIES } from "./tools/registry"
+import { checkStaticToolPolicy } from "./tools/static-policy"
 
-export type HomePlanKind = "quick_reply" | "needs_review"
+export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute"
 
 export interface HomePlanClassification {
   kind: HomePlanKind
   replyText: string | null
   sendReplyToolCall: RawToolCall | null
 }
+
+const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<AutonomyTier>([
+  "trusted",
+  "broad",
+  "full",
+])
 
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",
@@ -72,18 +81,20 @@ function warningBlocksQuickReply(warning: string, plan: AgentPlan): boolean {
   return true
 }
 
-export function classifyHomePlan(plan: AgentPlan | null): HomePlanClassification {
-  if (!plan || (plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
-    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
-  }
+const NEEDS_REVIEW: HomePlanClassification = {
+  kind: "needs_review",
+  replyText: null,
+  sendReplyToolCall: null,
+}
 
+function detectQuickReply(plan: AgentPlan): HomePlanClassification {
   if (plan.steps.length !== 1 || plan.steps[0].tool !== "send_reply") {
-    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+    return NEEDS_REVIEW
   }
 
   const sendReplyCalls = plan.rawToolCalls.filter(toolCall => toolCall.name === "send_reply")
   if (sendReplyCalls.length !== 1 || sendReplyCalls[0].id !== plan.steps[0].id) {
-    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+    return NEEDS_REVIEW
   }
 
   const sendReplyToolCall = sendReplyCalls[0]
@@ -95,10 +106,43 @@ export function classifyHomePlan(plan: AgentPlan | null): HomePlanClassification
   const replyText = replyTextFromToolCall(sendReplyToolCall)
 
   if (!rawCallsAreSafe || !replyText) {
-    return { kind: "needs_review", replyText: null, sendReplyToolCall: null }
+    return NEEDS_REVIEW
   }
 
   return { kind: "quick_reply", replyText, sendReplyToolCall }
+}
+
+export function classifyHomePlan(
+  plan: AgentPlan | null,
+  settings?: Partial<OrgSettings> | OrgSettings | null,
+): HomePlanClassification {
+  if (!plan || (plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
+    return NEEDS_REVIEW
+  }
+
+  const resolved = resolveAgentSettings(settings ?? null)
+  const tier: AutonomyTier = resolved.autonomyTier ?? "guarded"
+
+  const mutativeCalls = plan.rawToolCalls.filter(tc => TOOL_CATEGORIES[tc.name] === "action")
+
+  if (mutativeCalls.length > 0) {
+    if (!TIERS_THAT_AUTO_EXECUTE.has(tier)) {
+      return NEEDS_REVIEW
+    }
+    const policyClean = mutativeCalls.every(tc => !checkStaticToolPolicy(tc.name, tc.input, resolved).blocked)
+    if (!policyClean) {
+      return NEEDS_REVIEW
+    }
+    const sendReplyToolCall = plan.rawToolCalls.find(tc => tc.name === "send_reply") ?? null
+    const replyText = replyTextFromToolCall(sendReplyToolCall)
+    return { kind: "auto_execute", replyText, sendReplyToolCall }
+  }
+
+  const quickReply = detectQuickReply(plan)
+  if (quickReply.kind === "quick_reply" && tier === "watch") {
+    return NEEDS_REVIEW
+  }
+  return quickReply
 }
 
 function findActionStep(plan: AgentPlan): PlanStep | null {

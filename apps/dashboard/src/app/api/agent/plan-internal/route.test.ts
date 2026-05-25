@@ -9,14 +9,19 @@ import {
 } from '@clerk/db/test-helpers';
 import type { AgentPlan } from '@/types';
 
-const { mockBuildContext, mockPlanAgent } = vi.hoisted(() => ({
+const { mockBuildContext, mockExecuteAgentTurn, mockPlanAgent } = vi.hoisted(() => ({
   mockBuildContext: vi.fn(),
+  mockExecuteAgentTurn: vi.fn(),
   mockPlanAgent: vi.fn(),
 }));
 
 vi.mock('@/lib/agent/runner', () => ({
   buildContext: mockBuildContext,
   planAgent: mockPlanAgent,
+}));
+
+vi.mock('@/lib/agent/api/execution', () => ({
+  executeAgentTurn: mockExecuteAgentTurn,
 }));
 
 import { POST } from './route';
@@ -50,6 +55,7 @@ beforeEach(async () => {
   process.env.INTERNAL_API_SECRET_PREV = 'previous-secret';
   mockBuildContext.mockResolvedValue({ threadId: 'thread_ctx' });
   mockPlanAgent.mockResolvedValue(TEST_PLAN);
+  mockExecuteAgentTurn.mockResolvedValue({ summary: 'Done', actionsPerformed: [] });
 });
 
 afterEach(async () => {
@@ -123,6 +129,121 @@ describe('POST /api/agent/plan-internal', () => {
     const unchanged = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(unchanged.cachedPlan).toBeNull();
     expect(unchanged.cachedPlanMessageId).toBeNull();
+  });
+
+  it('auto-executes a trusted cached plan when explicitly allowed and enabled for the org', async () => {
+    await db.organization.update({
+      where: { id: org!.id },
+      data: {
+        settings: {
+          autonomyTier: 'trusted',
+          autoExecuteEnabled: true,
+          maxRefundAmount: 100,
+        },
+      },
+    });
+    const thread = await createThreadWithCustomerMessage(org!.id);
+    const refundPlan: AgentPlan = {
+      instruction: 'Handle this request',
+      steps: [
+        {
+          id: 'refund_1',
+          tool: 'create_refund',
+          label: 'Issue refund',
+          description: 'Refund $20',
+          category: 'action',
+          enabled: true,
+        },
+        {
+          id: 'send_1',
+          tool: 'send_reply',
+          label: 'Notify customer',
+          description: 'Let the customer know',
+          category: 'communication',
+          enabled: true,
+        },
+      ],
+      rawToolCalls: [
+        { id: 'read_1', name: 'get_order_by_name', input: { order_name: '#1001' } },
+        { id: 'refund_1', name: 'create_refund', input: { order_id: 'gid://shopify/Order/1', amount: '20.00' } },
+        { id: 'send_1', name: 'send_reply', input: { text: 'I issued the refund.' } },
+      ],
+    };
+    mockPlanAgent.mockResolvedValueOnce(refundPlan);
+    mockExecuteAgentTurn.mockResolvedValueOnce({
+      summary: 'Refund issued and customer notified.',
+      actionsPerformed: [
+        { tool: 'create_refund', result: 'Refund of $20.00 issued successfully.' },
+        { tool: 'send_reply', result: 'Reply sent to customer via email.' },
+      ],
+    });
+
+    const res = await POST(planRequest({
+      orgId: org!.id,
+      threadId: thread.id,
+      allowAutoExecute: true,
+    }, 'current-secret'));
+    const body = await res.json() as {
+      plan: AgentPlan;
+      autoExecuted?: boolean;
+      autoExecutionStatus?: string;
+      autoExecutionSummary?: string;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.plan).toEqual(refundPlan);
+    expect(body.autoExecuted).toBe(true);
+    expect(body.autoExecutionStatus).toBe('success');
+    expect(body.autoExecutionSummary).toBe('Refund issued and customer notified.');
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: org!.id,
+      threadId: thread.id,
+      approvedToolCalls: [
+        { id: 'refund_1', name: 'create_refund', input: { order_id: 'gid://shopify/Order/1', amount: '20.00' } },
+        { id: 'send_1', name: 'send_reply', input: { text: 'I issued the refund.' } },
+      ],
+      auditMode: 'auto_executed',
+    }));
+
+    const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(updated.cachedPlan).toBeNull();
+    expect(updated.cachedPlanMessageId).toBeNull();
+  });
+
+  it('does not auto-execute when the internal caller does not opt in', async () => {
+    await db.organization.update({
+      where: { id: org!.id },
+      data: {
+        settings: {
+          autonomyTier: 'trusted',
+          autoExecuteEnabled: true,
+          maxRefundAmount: 100,
+        },
+      },
+    });
+    const thread = await createThreadWithCustomerMessage(org!.id);
+    mockPlanAgent.mockResolvedValueOnce({
+      instruction: 'Handle this request',
+      steps: [{
+        id: 'refund_1',
+        tool: 'create_refund',
+        label: 'Issue refund',
+        description: 'Refund $20',
+        category: 'action',
+        enabled: true,
+      }],
+      rawToolCalls: [
+        { id: 'refund_1', name: 'create_refund', input: { order_id: 'gid://shopify/Order/1', amount: '20.00' } },
+      ],
+    });
+
+    const res = await POST(planRequest({ orgId: org!.id, threadId: thread.id }, 'current-secret'));
+
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+    const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(updated.cachedPlan).not.toBeNull();
+    expect(updated.cachedPlanMessageId).not.toBeNull();
   });
 });
 

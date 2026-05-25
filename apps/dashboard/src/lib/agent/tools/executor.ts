@@ -24,7 +24,7 @@ import {
   createShopifyOrder,
   editShopifyOrder,
 } from "./shopify";
-import { TOOL_CATEGORIES } from "./registry";
+import { checkStaticToolPolicy } from "./static-policy";
 import { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@/lib/server/refund-spend";
 import type { AgentContext } from "../types";
 import type {
@@ -49,6 +49,7 @@ import type {
   EscalateToHumanInput,
   SearchKbInput,
 } from "./registry";
+export type { StaticPolicyResult } from "./static-policy";
 
 function cast<T>(v: unknown): T {
   return v as T;
@@ -60,49 +61,21 @@ function formatPolicyError(message: string): string {
 
 async function enforceToolPolicy(name: string, args: unknown, orgId: string, settings?: OrgSettings): Promise<string | null> {
   const s = resolveAgentSettings(settings);
-  const category = TOOL_CATEGORIES[name];
-  if (category && !s.toolsEnabled[category]) {
-    return formatPolicyError(`${category} tools are disabled by the workspace owner.`);
-  }
-
-  if (name === "cancel_order" && s.blockCancellations) {
-    return formatPolicyError("order cancellations are disabled by the workspace owner.");
-  }
+  const staticResult = checkStaticToolPolicy(name, args, s);
+  if (staticResult.blocked) return formatPolicyError(staticResult.reason);
 
   if (name === "create_refund") {
     const input = cast<CreateRefundInput>(args);
-    const hasPerCallCap = s.maxRefundAmount !== null && s.maxRefundAmount > 0;
     const hasDailyCap = s.dailyRefundCap !== null && s.dailyRefundCap > 0;
-
-    if (hasPerCallCap || hasDailyCap) {
-      if (!input.amount) {
-        const limit = hasPerCallCap ? s.maxRefundAmount : s.dailyRefundCap;
-        return formatPolicyError(`refund amount must be specified and cannot exceed $${limit}.`);
-      }
+    if (hasDailyCap && input.amount) {
       const amount = Number(input.amount);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        return formatPolicyError("refund amount must be a positive decimal value.");
+      const capCents = Math.round((s.dailyRefundCap as number) * 100);
+      const requestedCents = Math.round(amount * 100);
+      const spentCents = await getDailyRefundSpendCents(orgId);
+      if (spentCents + requestedCents > capCents) {
+        const remaining = Math.max(0, capCents - spentCents) / 100;
+        return formatPolicyError(`daily refund cap of $${s.dailyRefundCap} reached; $${remaining.toFixed(2)} remaining today.`);
       }
-      if (hasPerCallCap && amount > (s.maxRefundAmount as number)) {
-        return formatPolicyError(`refund amount $${input.amount} exceeds the workspace limit of $${s.maxRefundAmount}.`);
-      }
-      if (hasDailyCap) {
-        const capCents = Math.round((s.dailyRefundCap as number) * 100);
-        const requestedCents = Math.round(amount * 100);
-        const spentCents = await getDailyRefundSpendCents(orgId);
-        if (spentCents + requestedCents > capCents) {
-          const remaining = Math.max(0, capCents - spentCents) / 100;
-          return formatPolicyError(`daily refund cap of $${s.dailyRefundCap} reached; $${remaining.toFixed(2)} remaining today.`);
-        }
-      }
-    }
-  }
-
-  if (name === "create_shopify_order" && s.blockCustomLineItems) {
-    const input = cast<CreateShopifyOrderInput>(args);
-    const hasCustomLineItem = Array.isArray(input.line_items) && input.line_items.some((item) => !item.variant_id);
-    if (hasCustomLineItem) {
-      return formatPolicyError("custom line items are disabled by the workspace owner. Each line item must include a variant_id.");
     }
   }
 

@@ -190,7 +190,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     }
 
     if (expected.mustClassifyAs) {
-      const classification = classifyHomePlan(plan);
+      const classification = classifyHomePlan(plan, fixture.setup.orgSettings ?? null);
       if (classification.kind !== expected.mustClassifyAs) {
         failures.push(
           `expected classifyHomePlan -> "${expected.mustClassifyAs}", got "${classification.kind}"`,

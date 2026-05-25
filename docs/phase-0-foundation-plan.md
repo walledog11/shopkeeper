@@ -421,7 +421,7 @@ Cap values come from `resolvedSettings.maxRefundAmount` etc., so the prompt and 
 
 ---
 
-### Step 4.4 — Plan classification: add `auto_execute` (~1 day)
+### Step 4.4 — Plan classification: add `auto_execute` (~1 day) [COMPLETE]
 
 **`apps/dashboard/src/lib/agent/plan-preview.ts`**
 - Extend `HomePlanKind`: `"quick_reply" | "needs_review" | "auto_execute"`.
@@ -435,7 +435,7 @@ Cap values come from `resolvedSettings.maxRefundAmount` etc., so the prompt and 
 
 ---
 
-### Step 4.5 — Approval routing + auto-execute path (~1 day)
+### Step 4.5 — Approval routing + auto-execute path (~1 day) [COMPLETED]
 
 Depends on 4.4. This is where the trust risk lives — auto-execution means the agent acts without a merchant in the loop. Recommend shipping behind a per-org feature flag (or gating by `autonomyTier === "trusted"` and capping rollout via merchant comms).
 
