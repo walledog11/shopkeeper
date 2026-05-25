@@ -352,55 +352,167 @@ Broken into 3 sub-steps. Total: ~2 hours sequential. 3A and 3B are conceptually 
 
 ## Step 4 — Autonomy tier wiring (M, depends on Steps 1–3)
 
-The 5 tiers (`watch`/`guarded`/`trusted`/`broad`/`full`) exist as labels collected at onboarding but the runtime doesn't read them. They are flattened into legacy booleans + caps at onboarding, then the tier name is stored but ignored downstream. Wire them properly.
+The 5 tiers (`watch`/`guarded`/`trusted`/`broad`/`full`) exist as labels collected at onboarding but the runtime doesn't read them. They're flattened into legacy booleans + caps at onboarding, then the tier name is stored but ignored downstream. Wire them properly so picking a tier (or changing one later) actually changes runtime behavior.
 
-**Settings resolver** in `apps/dashboard/src/lib/agent/settings.ts`:
-- Rewrite `resolveAgentSettings`. Order of precedence: defaults → tier-derived → explicit overrides.
-- Define `TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>>` mapping tier → derived field values. Reuse the table currently in `onboarding/_components/model.ts:53-57` but extend it with autonomy implications (e.g., `watch` also gets `toolsEnabled: { action: false, ... }`).
-- The existing legacy fields (`requireApprovalForActions`, `maxRefundAmount`, `alwaysDraftReply`, `blockCancellations`) remain — they're now overrides on top of the tier, not the primary policy.
+Broken into 9 sub-steps. Total: ~4 working days. 4.1 is the foundation everything else depends on; 4.2/4.3/4.4/4.6/4.7 can largely parallelize once 4.1 lands; 4.5 follows 4.4 (it consumes the new `auto_execute` classification); 4.8 verifies the whole thing. Suggested PR shape: bundle 4.1 alone (pure refactor, easy to review), then 4.2–4.4 (the behavior change), then 4.5 on its own (this is where auto-execution lives — highest trust risk, easiest to ship behind a feature flag), then 4.6/4.7 together (UI), then 4.8.
 
-**Onboarding logic** in `apps/dashboard/src/app/(onboarding)/onboarding/page.tsx:146`:
-- Currently the onboarding flattens the tier into legacy settings on submit. Change this: write only `autonomyTier` to the org. Let `resolveAgentSettings` do the derivation at read time. This means changing the tier later (post-onboarding) actually changes behavior without having to back-fill legacy fields.
+**Layout decision.** Tier→settings derivation lives in the runtime (`lib/agent/settings.ts`), not in onboarding. Onboarding becomes a thin client that writes `autonomyTier` only; the resolver does the rest at read time.
 
-**Onboarding mapping file** `apps/dashboard/src/app/(onboarding)/onboarding/_components/model.ts`:
-- The tier → settings table moves into `settings.ts` (`TIER_DEFAULTS`) so the runtime owns it. Onboarding imports from there.
+---
 
-**Prompt branching** in `apps/dashboard/src/lib/agent/prompt.ts`:
-- Add a `## Your autonomy` section after `## Instructions`:
-  - `watch`: "Draft replies and plan actions but never execute. Always require approval."
-  - `guarded`: "Auto-reply to information questions. For any mutative action (refund, cancel, edit, address change), present a plan for approval and do not execute until approved."
-  - `trusted`: "Auto-reply to information questions. Auto-execute small refunds (≤ $X), address changes before fulfillment, and shipping replies. For cancellations, refunds above $X, or order edits, present a plan for approval."
-  - `broad` / `full`: defer to Phase 1, keep them in the type but route them as `trusted` for V1 (with a banner in the UI: "Coming soon: extended autonomy modes").
-- Compute the cap values from `resolvedSettings.maxRefundAmount` etc. so the prompt and runtime agree.
+### Step 4.0 — Audit `alwaysDraftReply` (~30 min)
 
-**Plan classification** in `apps/dashboard/src/lib/agent/plan-preview.ts`:
-- Add a third `HomePlanKind`: `"auto_execute"`. Currently `"quick_reply" | "needs_review"`.
-- `classifyHomePlan` becomes tier-aware: in `trusted`, a refund under cap classifies as `auto_execute` (the dashboard should run it immediately, not surface an approval card); in `guarded`, the same plan classifies as `needs_review`.
-- Quick-reply behavior unchanged in `watch`/`guarded` (they still show the card); in `trusted+`, quick-replies just send.
+Settle the open decision before touching the resolver. Grep `apps/dashboard/src/lib/agent/**` and `apps/dashboard/src/app/**` for `alwaysDraftReply`. Three possibilities:
+- Dead field — fold into tier semantics (e.g., `watch` implies `alwaysDraftReply: true`) and remove from `OrgSettings` if no UI/API surfaces it.
+- Live but redundant with tier — same treatment.
+- Live with semantics no tier captures — keep as an explicit override.
 
-**Approval routing** in:
-- `apps/dashboard/src/app/api/agent/quick-approve/route.ts` — already exists for `quick_reply`; extend to handle `auto_execute`.
-- `apps/dashboard/src/lib/agent/api/dashboard-approval.ts` — `shouldPlanBeforeExecuting` becomes tier-aware: in `trusted+`, only plan-before-executing if the action is above tier caps.
-- The auto-plan-on-open path in the gateway: if the plan classifies as `auto_execute`, the dashboard should run it without merchant intervention (with audit trail per Step 5). Right now plans always wait for approval.
+**Done when.** A one-line answer is recorded in the doc and 4.1 knows whether to drop the field, fold it, or preserve it.
 
-**Settings UI** in `apps/dashboard/src/app/dashboard/settings/_components/AgentTab.tsx`:
-- Add a tier selector at the top of the page (radio group with the 5 tiers, descriptive text per tier).
-- Show "(coming soon)" on `broad` and `full` until you decide to enable them.
-- Make the legacy fields (`requireApprovalForActions`, `maxRefundAmount`) explicit overrides on the tier — show the tier default value, let the merchant override per-field.
+---
 
-**Visibility** somewhere persistent — `apps/dashboard/src/app/dashboard/_components/DashboardHeader.tsx` or the sidebar:
-- A small pill: "Autopilot: Trusted" with click-to-edit. Per the trust principle, the merchant should always know how much rope the agent has.
+### Step 4.1 — Settings resolver + `TIER_DEFAULTS` (~1 day) [COMPLETED]
 
-**New eval fixtures**:
-- The same refund case run under three tiers: `watch` → expect plan only, no execution; `guarded` → expect plan with approval required; `trusted` (under cap) → expect `auto_execute` classification.
-- Tier override test: tier `trusted` but `blockCancellations: true` → cancellation request must still escalate.
+Pure refactor, no behavior change. Onboarding still flattens to legacy fields at this point, so observed behavior is unchanged — this just relocates the source of truth.
 
-**Effort.** 4 days including UI work and the planner-classification edit.
+**`apps/dashboard/src/lib/agent/settings.ts`**
+- Define `TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>>`. Reuse the table currently in `apps/dashboard/src/app/(onboarding)/onboarding/_components/model.ts:53-57` but extend it with autonomy implications: e.g. `watch` → `toolsEnabled: { action: false, communication: false, ... }`, `requireApprovalForActions: true`; `guarded` → `requireApprovalForActions: true` for mutative tools; `trusted` → `requireApprovalForActions: false` with caps applied via `maxRefundAmount`, etc.
+- Rewrite `resolveAgentSettings`. Precedence: `AGENT_SETTINGS_DEFAULTS` → `TIER_DEFAULTS[settings.autonomyTier ?? "guarded"]` → explicit fields on `settings`. Existing legacy fields (`requireApprovalForActions`, `maxRefundAmount`, `alwaysDraftReply`, `blockCancellations`) keep working — they're overrides on top of the tier now, not the primary policy.
+- Default tier when `autonomyTier` is unset: `guarded` (conservative, matches what most existing orgs were flattened to).
+
+**`apps/dashboard/src/app/(onboarding)/onboarding/_components/model.ts`**
+- Drop the local tier→settings table. Re-export from `lib/agent/settings.ts` so the onboarding form keeps its preview copy (tier descriptions) but no longer owns the mapping.
+
+**Done when.** Unit test in `settings.test.ts` covers each tier: `resolveAgentSettings({ autonomyTier: "watch", maxRefundAmount: 100 })` produces watch defaults with the override applied. Existing eval suite unchanged.
+
+---
+
+### Step 4.2 — Onboarding writes only `autonomyTier` (~0.5 day) [COMPLETED]
+
+**`apps/dashboard/src/app/(onboarding)/onboarding/page.tsx:146`**
+- Currently the onboarding flattens the picked tier into legacy settings on submit. Change to write `{ autonomyTier: pickedTier }` only — let `resolveAgentSettings` do the derivation at read time.
+- Existing orgs unaffected: their legacy fields are already populated and still win via precedence (overrides beat tier defaults).
+- New orgs will have the tier as their single source of truth, so changing the tier later (post-onboarding) actually changes behavior without backfilling legacy fields.
+
+**Done when.** A new signup lands with `settings.autonomyTier` set and no flattened legacy fields; running a thread through the agent produces identical behavior to a pre-change signup.
+
+---
+
+### Step 4.3 — Prompt branching by tier (~0.5 day) [COMPLETED]
+
+**`apps/dashboard/src/lib/agent/prompt.ts`**
+
+Add a `## Your autonomy` section after `## Instructions` in `buildSystemPrompt`:
+- `watch`: "Draft replies and plan actions but never execute. Always require approval."
+- `guarded`: "Auto-reply to information questions. For any mutative action (refund, cancel, edit, address change), present a plan for approval and do not execute until approved."
+- `trusted`: "Auto-reply to information questions. Auto-execute small refunds (≤ ${maxRefundAmount}), address changes before fulfillment, and shipping replies. For cancellations, refunds above ${maxRefundAmount}, or order edits, present a plan for approval."
+- `broad` / `full`: route as `trusted` for V1. Keep them in the type so the onboarding UI can label them "coming soon" without code branching downstream.
+
+Cap values come from `resolvedSettings.maxRefundAmount` etc., so the prompt and runtime agree.
+
+**Eval fixtures.** Three new fixtures in `apps/dashboard/src/lib/agent/__evals__/fixtures/`:
+- `tier-watch-refund-draft-only.json` — refund request on `watch` tier. Assert plan only, no execution intent.
+- `tier-guarded-refund-approval.json` — same request on `guarded`. Assert plan classifies for approval.
+- `tier-trusted-refund-under-cap.json` — same request on `trusted` with cap above amount. Assert auto-execution intent.
+
+(These also serve as eval inputs for 4.4 and 4.5 — same setup, different assertions per sub-step.)
+
+**Done when.** The three new fixtures pass, existing 27 stay green.
+
+---
+
+### Step 4.4 — Plan classification: add `auto_execute` (~1 day)
+
+**`apps/dashboard/src/lib/agent/plan-preview.ts`**
+- Extend `HomePlanKind`: `"quick_reply" | "needs_review" | "auto_execute"`.
+- Make `classifyHomePlan` tier-aware. Takes `resolvedSettings` (or `autonomyTier` + caps) as input.
+  - `watch`: every plan → `needs_review`. Quick-replies still surface, but no auto-send.
+  - `guarded`: information-only plans → `quick_reply`; any mutative tool → `needs_review`.
+  - `trusted`: information-only → `quick_reply`; mutative under caps and not blocked by overrides (`blockCancellations`, etc.) → `auto_execute`; otherwise `needs_review`.
+- Cap check uses the same comparison the executor uses (`maxRefundAmount`, etc.) — extract a shared helper if needed so policy enforcement and classification can't drift.
+
+**Done when.** Unit tests in `plan-preview.test.ts` cover the tier × action matrix. The fixtures from 4.3 also assert the classification each plan receives.
+
+---
+
+### Step 4.5 — Approval routing + auto-execute path (~1 day)
+
+Depends on 4.4. This is where the trust risk lives — auto-execution means the agent acts without a merchant in the loop. Recommend shipping behind a per-org feature flag (or gating by `autonomyTier === "trusted"` and capping rollout via merchant comms).
+
+**`apps/dashboard/src/app/api/agent/quick-approve/route.ts`**
+- Already handles `quick_reply`. Extend to handle `auto_execute`: when a cached plan is auto-execute, the dashboard can call this endpoint without merchant input. Same audit trail as quick-reply, plus the mode is recorded as `auto_executed` (per Step 5).
+
+**`apps/dashboard/src/lib/agent/api/dashboard-approval.ts`**
+- `shouldPlanBeforeExecuting` becomes tier-aware. In `trusted+`, only plan-before-executing if the action is above tier caps. In `guarded`/`watch`, behavior unchanged.
+
+**Auto-plan-on-open path** (gateway → `/api/agent/plan-internal` → dashboard, then dashboard surfaces the cached plan):
+- After the plan is classified, if `auto_execute`, fire the run immediately. Cache still populated for audit. Telegram/notification path per Step 5 surfaces "agent just refunded $X for Jane" so the merchant has real-time visibility.
+- If `auto_execute` is gated by a flag, the gate lives here.
+
+**Done when.** End-to-end: a `trusted` org's incoming refund-eligible thread auto-executes without merchant input and produces an audit row; a `guarded` org's same thread still surfaces an approval card.
+
+---
+
+### Step 4.6 — Settings UI: tier selector + override surface (~0.5 day)
+
+**`apps/dashboard/src/app/dashboard/settings/_components/AgentTab.tsx`**
+
+Add a new `SectionCard` titled "Autonomy" at the top of the page (above Identity / Sample Replies / etc.):
+- Radio group with 5 tiers and descriptive copy per tier (reuse onboarding copy from `model.ts`).
+- `broad` and `full` rendered as disabled with a "Coming soon" label.
+- Below the selector, the existing legacy fields (`requireApprovalForActions`, `maxRefundAmount`, `blockCancellations`, etc.) render with a visual cue showing the tier default and whether the current value is overriding it ("Default for Trusted: $50 · You set: $100" with a "Reset to tier default" link).
+- Wire through the existing reducer pattern; persist via the same `/api/org` PATCH used elsewhere.
+
+**Done when.** Switching the tier in the UI and saving updates `settings.autonomyTier`; legacy field defaults visibly track the chosen tier; overrides persist independently.
+
+---
+
+### Step 4.7 — Persistent autonomy visibility pill (~1 hour)
+
+**`apps/dashboard/src/app/dashboard/_components/DashboardHeader.tsx`** (or the sidebar — pick whichever is more visible from any dashboard route).
+
+Small pill: "Autopilot: Trusted" with a tier-tinted background (e.g., yellow for `watch`, green for `trusted`). Clicking navigates to `/dashboard/settings#autonomy`. Per the trust principle, the merchant should always know how much rope the agent has — including when they're deep in tickets and might forget they bumped the tier last week.
+
+**Done when.** Pill renders on every dashboard route, reflects current tier from a fast-cached source (Clerk org metadata, SWR-cached settings, or wherever the existing header reads org context).
+
+---
+
+### Step 4.8 — Verify + eval coverage (~0.5 day)
+
+**New eval fixtures** (in addition to those in 4.3):
+- `tier-override-cancel-blocked.json` — tier `trusted` but `blockCancellations: true`. Cancellation request must still escalate (override wins over tier).
+- `tier-trusted-refund-over-cap.json` — `trusted` tier, refund above `maxRefundAmount`. Must classify as `needs_review`, not `auto_execute`.
+
+**Manual end-to-end.**
+1. Switch tier in UI from `guarded` to `trusted`, save.
+2. Pill in header updates immediately.
+3. Open a thread that would have surfaced approval under `guarded`; verify it auto-executes (or queues for auto-execution if the gating flag is off).
+4. Switch back to `watch`; verify next thread plan is draft-only.
+5. Confirm the eval suite passes 2 runs in a row.
+
+**Done when.** All ~30 fixtures pass consistently; manual flow above completes without surprise.
+
+---
+
+**Sub-step summary.**
+
+| Sub-step | Files | Effort |
+|----------|-------|--------|
+| 4.0 Audit `alwaysDraftReply` | grep-only | 30 min |
+| 4.1 Resolver + `TIER_DEFAULTS` | `lib/agent/settings.ts`, `onboarding/_components/model.ts` | 1 day |
+| 4.2 Onboarding writes tier only | `(onboarding)/onboarding/page.tsx` | 0.5 day |
+| 4.3 Prompt branching | `lib/agent/prompt.ts` + 3 fixtures | 0.5 day |
+| 4.4 `auto_execute` classification | `lib/agent/plan-preview.ts` (+ test) | 1 day |
+| 4.5 Routing + auto-execute path | `api/agent/quick-approve/route.ts`, `lib/agent/api/dashboard-approval.ts`, auto-plan gateway | 1 day |
+| 4.6 Tier selector UI | `settings/_components/AgentTab.tsx` | 0.5 day |
+| 4.7 Visibility pill | `_components/DashboardHeader.tsx` (or sidebar) | 1 hr |
+| 4.8 Verify | 2 new fixtures + manual | 0.5 day |
 
 **Open decisions.**
-- **`alwaysDraftReply`**: it's in the tier table and `OrgSettings` but its runtime usage hasn't been traced. Verify before wiring. If it's another dead field, fold it into the tier system or remove.
-- **Should `watch` block action tools entirely** via `toolsEnabled`, or just disable execution? Block entirely — the planner can still propose them as drafts, but they cannot be called in `runAgent`. Cleaner trust story.
-- **Auto-execute UX**: when a `trusted` merchant's agent auto-sends a reply, should the merchant see a real-time notification ("agent just replied to Jane")? Yes — this is what gives the merchant confidence to stay on the tier. Telegram already does some of this; extend.
+- **`alwaysDraftReply`** behavior — settled in 4.0 before resolver work begins.
+- **Should `watch` block action tools entirely** via `toolsEnabled`, or just disable execution? Recommend block entirely — the planner can still propose them as drafts, but `runAgent` cannot call them. Cleaner trust story and matches the "draft only" promise.
+- **Auto-execute UX**: when a `trusted` merchant's agent auto-sends a reply or executes a refund, should the merchant see a real-time notification ("agent just replied to Jane")? Yes — this is what gives the merchant confidence to stay on the tier. Telegram already does some of this; extend in 4.5 alongside the audit row from Step 5.
+- **Feature flag for auto-execute (4.5)**: ship behind a flag for the first week of `trusted` rollout, or trust the eval suite + manual QA? Recommend flag — auto-execute is the irreversible-side-effect path and the flag costs five minutes.
 
 ---
 

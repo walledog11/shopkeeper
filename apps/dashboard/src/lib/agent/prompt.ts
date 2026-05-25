@@ -43,6 +43,29 @@ function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): stri
   return clauses;
 }
 
+function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): string {
+  const tier = s.autonomyTier ?? "guarded";
+  const effective = tier === "broad" || tier === "full" ? "trusted" : tier;
+  const cap = s.maxRefundAmount;
+  const capLabel = cap !== null && cap > 0 ? `$${cap}` : "the workspace cap";
+
+  let body: string;
+  switch (effective) {
+    case "watch":
+      body = "Draft replies and plan actions but never execute. Always require approval.";
+      break;
+    case "guarded":
+      body = "Auto-reply to information questions. For any mutative action (refund, cancel, edit, address change), present a plan for approval and do not execute until approved.";
+      break;
+    case "trusted":
+      body = `Auto-reply to information questions. Auto-execute small refunds (≤ ${capLabel}), address changes before fulfillment, and shipping replies. For cancellations, refunds above ${capLabel}, or order edits, present a plan for approval.`;
+      break;
+    default:
+      return "";
+  }
+  return `\n\n## Your autonomy\n${body}`;
+}
+
 export function buildSystemPrompt(ctx: AgentContext, settings?: OrgSettings): string {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
@@ -133,7 +156,7 @@ ${shopifyCustomerNote}
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
 - Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
 }
 
 export function buildComposerAskPrompt(ctx: AgentContext, settings?: OrgSettings): string {

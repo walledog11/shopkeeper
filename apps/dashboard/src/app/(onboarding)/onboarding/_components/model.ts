@@ -1,11 +1,11 @@
 import { AtSign, Camera, ShoppingBag } from "lucide-react";
-import type { OrgSettings } from "@/types";
+import type { AutonomyTier } from "@/lib/agent/settings";
+
+export type { AutonomyTier };
 
 export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v1";
 export const POPUP_NAME = "clerk_oauth_popup";
-
-export type AutonomyTier = NonNullable<OrgSettings["autonomyTier"]>;
 export type StepId = "intro" | "store" | "shopify" | "channels" | "autonomy" | "plan";
 export type ChannelKey = "email" | "ig_dm" | "shopify";
 
@@ -48,14 +48,6 @@ export const AUTONOMY_TIERS: Array<{ id: AutonomyTier; label: string; cap: numbe
   { id: "broad",   label: "Broad",       cap: 250,  blurb: "Refunds up to $250, bulk quotes, custom discount codes." },
   { id: "full",    label: "Full auto",   cap: 1000, blurb: "I act on anything in policy. You only see exceptions." },
 ];
-
-export const TIER_TO_SETTINGS: Record<AutonomyTier, Partial<OrgSettings>> = {
-  watch:   { maxRefundAmount: 0,    requireApprovalForActions: true,  alwaysDraftReply: true  },
-  guarded: { maxRefundAmount: 50,   requireApprovalForActions: true,  alwaysDraftReply: false },
-  trusted: { maxRefundAmount: 100,  requireApprovalForActions: false, alwaysDraftReply: false },
-  broad:   { maxRefundAmount: 250,  requireApprovalForActions: false, alwaysDraftReply: false },
-  full:    { maxRefundAmount: 1000, requireApprovalForActions: false, alwaysDraftReply: false },
-};
 
 export const CHANNEL_META: Array<{ key: ChannelKey; label: string; description: string; Icon: typeof AtSign }> = [
   { key: "email",   label: "Email",        description: "Primary channel for most stores. I read, draft, and send.", Icon: AtSign },

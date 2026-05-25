@@ -1,5 +1,7 @@
 import type { OrgSettings } from "@/types";
 
+export type AutonomyTier = NonNullable<OrgSettings["autonomyTier"]>;
+
 export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   aiContext: "",
   brandVoice: "",
@@ -38,13 +40,53 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   autonomyTier: 'trusted',
 };
 
+export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
+  watch: {
+    maxRefundAmount: 0,
+    requireApprovalForActions: true,
+    alwaysDraftReply: true,
+    toolsEnabled: {
+      action: false,
+      communication: false,
+      internal: true,
+      read: true,
+    },
+  },
+  guarded: {
+    maxRefundAmount: 50,
+    requireApprovalForActions: true,
+    alwaysDraftReply: false,
+  },
+  trusted: {
+    maxRefundAmount: 100,
+    requireApprovalForActions: false,
+    alwaysDraftReply: false,
+  },
+  broad: {
+    maxRefundAmount: 250,
+    requireApprovalForActions: false,
+    alwaysDraftReply: false,
+  },
+  full: {
+    maxRefundAmount: 1000,
+    requireApprovalForActions: false,
+    alwaysDraftReply: false,
+  },
+};
+
 export function resolveAgentSettings(settings: Partial<OrgSettings> | null | undefined): OrgSettings {
   const base = settings ?? {};
+  const requested = base.autonomyTier;
+  const tier: AutonomyTier = requested && requested in TIER_DEFAULTS ? requested : 'guarded';
+  const tierDefaults = TIER_DEFAULTS[tier];
   return {
     ...AGENT_SETTINGS_DEFAULTS,
+    ...tierDefaults,
     ...base,
+    autonomyTier: tier,
     toolsEnabled: {
       ...AGENT_SETTINGS_DEFAULTS.toolsEnabled,
+      ...(tierDefaults.toolsEnabled ?? {}),
       ...(base.toolsEnabled ?? {}),
     },
   };

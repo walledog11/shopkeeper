@@ -1,0 +1,47 @@
+{
+  "id": "tier-guarded-refund-approval",
+  "description": "Guarded-tier org: refund request under the $50 tier cap. The agent should produce a refund + reply plan, and the dashboard classifier must mark it as needs_review (mutative action gated behind approval).",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Sam Carter",
+    "customerPlatformId": "sam@example.com",
+    "shopifyCustomerId": "10000004002",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "autonomyTier": "guarded" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #4002." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000004002",
+        "name": "#4002",
+        "created_at": "2026-05-15T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "42.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4002",
+            "title": "Cotton Tee",
+            "quantity": 1,
+            "variant_id": "variant_4002",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000004002" } }
+    ],
+    "mustClassifyAs": "needs_review"
+  }
+}

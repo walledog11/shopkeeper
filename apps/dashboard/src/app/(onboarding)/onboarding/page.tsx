@@ -13,7 +13,6 @@ import {
   POPUP_NAME,
   STEPS,
   STORAGE_KEY,
-  TIER_TO_SETTINGS,
   type ChannelKey,
   type IntegrationRow,
   type OnboardingData,
@@ -139,11 +138,10 @@ export default function OnboardingPage() {
   async function persistAutonomy() {
     setSaving(true);
     try {
-      const mapped = TIER_TO_SETTINGS[data.autonomy];
       await fetch("/api/org", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: { autonomyTier: data.autonomy, ...mapped } }),
+        body: JSON.stringify({ settings: { autonomyTier: data.autonomy } }),
       });
     } catch {}
     setSaving(false);
