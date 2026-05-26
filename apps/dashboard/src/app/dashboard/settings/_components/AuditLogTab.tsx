@@ -3,7 +3,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { useEffect, useMemo, useState } from "react"
-import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X } from "lucide-react"
+import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X, Zap } from "lucide-react"
 import useSWRInfinite from "swr/infinite"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
 import { getChannelInfo } from "@/lib/messaging/channels"
@@ -128,6 +128,14 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="truncate text-sm font-semibold text-white/80">{entry.customerHandle}</span>
+                {entry.mode === "auto_executed" && (
+                  <span
+                    title="Auto-executed by the agent without merchant approval"
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-800/50 bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300"
+                  >
+                    <Zap className="h-2.5 w-2.5" /> Auto
+                  </span>
+                )}
                 <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-white/35">
                   {channel.name}
                 </span>

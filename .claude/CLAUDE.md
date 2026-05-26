@@ -52,7 +52,7 @@ Modes:
 
 Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 
-`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `alwaysDraftReply`, `defaultInstruction`, `requireApprovalForActions`, `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
+`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted/broad/full), `autoExecuteEnabled` (hidden rollout flag), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
 
 ## Key API routes (`apps/dashboard/src/app/api/`)
 - `agent/route.ts` — execute run on a ticket

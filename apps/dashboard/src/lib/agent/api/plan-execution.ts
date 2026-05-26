@@ -103,10 +103,6 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("Only current approved plans can be executed from this route");
   }
 
-  if (current.classification.kind === "auto_execute" && !isAutoExecuteEnabled(params.settings)) {
-    throw new BadRequestError("Auto-execute is not enabled for this organization");
-  }
-
   const approvedToolCalls = toolCallsForClassification(current.plan, current.classification);
   if (approvedToolCalls.length === 0) {
     throw new BadRequestError("The current plan has no executable tool calls");

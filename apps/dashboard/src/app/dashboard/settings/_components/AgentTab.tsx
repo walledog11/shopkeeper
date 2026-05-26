@@ -282,16 +282,6 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
             <div className="space-y-5 border-t border-white/[0.08] pt-5">
             <div className="space-y-1">
               <ToggleRow
-                label="Always draft a customer reply"
-                description="Include a draft reply in every plan, even when no actions are needed."
-                checked={state.alwaysDraftReply}
-                onChange={v => setAutonomyOverride("alwaysDraftReply", v)}
-              />
-              <OverrideHint path="alwaysDraftReply" />
-            </div>
-
-            <div className="space-y-1">
-              <ToggleRow
                 label="Require approval before executing actions"
                 description="Show a plan card and wait for your confirmation before the agent runs Shopify or communication actions."
                 checked={state.requireApprovalForActions}

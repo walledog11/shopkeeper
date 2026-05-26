@@ -3,7 +3,7 @@ import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runn
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { classifyHomePlan } from "@/lib/agent/plan-preview";
 import { isAutoExecuteEnabled } from "@/lib/agent/api/plan-execution";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE } from "@/lib/agent/settings";
 import { TOOL_CATEGORIES } from "@/lib/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
@@ -30,12 +30,10 @@ export interface DashboardPendingApproval {
 
 export type DashboardApprovalReplyKind = "approve" | "dismiss" | "revise";
 
-const AUTO_EXECUTION_TIERS = new Set(["trusted", "broad", "full"]);
-
 export function shouldPlanBeforeExecuting(instruction: string, settings: OrgSettings): boolean {
   if (!APPROVAL_INTENT_RE.test(instruction)) return false;
   const resolved = resolveAgentSettings(settings);
-  return resolved.requireApprovalForActions || AUTO_EXECUTION_TIERS.has(resolved.autonomyTier ?? "guarded");
+  return resolved.requireApprovalForActions || TIERS_THAT_AUTO_EXECUTE.has(resolved.autonomyTier ?? "guarded");
 }
 
 function normalizeApprovalReply(instruction: string): string {

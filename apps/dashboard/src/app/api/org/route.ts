@@ -10,7 +10,6 @@ import logger from '@/lib/server/logger';
 import type { OrgSettings } from '@/types';
 
 const ALLOWED_SETTINGS_UNSET = new Set([
-  'alwaysDraftReply',
   'requireApprovalForActions',
   'maxRefundAmount',
   'blockCancellations',

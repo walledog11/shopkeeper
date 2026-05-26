@@ -360,14 +360,9 @@ Broken into 9 sub-steps. Total: ~4 working days. 4.1 is the foundation everythin
 
 ---
 
-### Step 4.0 — Audit `alwaysDraftReply` (~30 min)
+### Step 4.0 — Audit `alwaysDraftReply` (~30 min) [COMPLETED]
 
-Settle the open decision before touching the resolver. Grep `apps/dashboard/src/lib/agent/**` and `apps/dashboard/src/app/**` for `alwaysDraftReply`. Three possibilities:
-- Dead field — fold into tier semantics (e.g., `watch` implies `alwaysDraftReply: true`) and remove from `OrgSettings` if no UI/API surfaces it.
-- Live but redundant with tier — same treatment.
-- Live with semantics no tier captures — keep as an explicit override.
-
-**Done when.** A one-line answer is recorded in the doc and 4.1 knows whether to drop the field, fold it, or preserve it.
+**Resolution.** Confirmed dead — zero runtime readers across `lib/agent/**` and `app/**`. Removed end-to-end (types, defaults, `TIER_DEFAULTS`, override paths, settings UI toggle, `/api/org` allow-list, e2e seed). `watch`-tier "draft only" behavior is already enforced by `toolsEnabled: { action: false, communication: false }`, so the boolean carried no unique semantics.
 
 ---
 
@@ -377,7 +372,7 @@ Pure refactor, no behavior change. Onboarding still flattens to legacy fields at
 
 **`apps/dashboard/src/lib/agent/settings.ts`**
 - Define `TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>>`. Reuse the table currently in `apps/dashboard/src/app/(onboarding)/onboarding/_components/model.ts:53-57` but extend it with autonomy implications: e.g. `watch` → `toolsEnabled: { action: false, communication: false, ... }`, `requireApprovalForActions: true`; `guarded` → `requireApprovalForActions: true` for mutative tools; `trusted` → `requireApprovalForActions: false` with caps applied via `maxRefundAmount`, etc.
-- Rewrite `resolveAgentSettings`. Precedence: `AGENT_SETTINGS_DEFAULTS` → `TIER_DEFAULTS[settings.autonomyTier ?? "guarded"]` → explicit fields on `settings`. Existing legacy fields (`requireApprovalForActions`, `maxRefundAmount`, `alwaysDraftReply`, `blockCancellations`) keep working — they're overrides on top of the tier now, not the primary policy.
+- Rewrite `resolveAgentSettings`. Precedence: `AGENT_SETTINGS_DEFAULTS` → `TIER_DEFAULTS[settings.autonomyTier ?? "guarded"]` → explicit fields on `settings`. Existing legacy fields (`requireApprovalForActions`, `maxRefundAmount`, `blockCancellations`) keep working — they're overrides on top of the tier now, not the primary policy.
 - Default tier when `autonomyTier` is unset: `guarded` (conservative, matches what most existing orgs were flattened to).
 
 **`apps/dashboard/src/app/(onboarding)/onboarding/_components/model.ts`**
@@ -477,7 +472,7 @@ Small pill: "Autopilot: Trusted" with a tier-tinted background (e.g., yellow for
 
 ---
 
-### Step 4.8 — Verify + eval coverage (~0.5 day)
+### Step 4.8 — Verify + eval coverage (~0.5 day) [COMPLETED]
 
 **New eval fixtures** (in addition to those in 4.3):
 - `tier-override-cancel-blocked.json` — tier `trusted` but `blockCancellations: true`. Cancellation request must still escalate (override wins over tier).
@@ -498,7 +493,7 @@ Small pill: "Autopilot: Trusted" with a tier-tinted background (e.g., yellow for
 
 | Sub-step | Files | Effort |
 |----------|-------|--------|
-| 4.0 Audit `alwaysDraftReply` | grep-only | 30 min |
+| 4.0 Audit `alwaysDraftReply` (dead — removed) | grep-only | 30 min |
 | 4.1 Resolver + `TIER_DEFAULTS` | `lib/agent/settings.ts`, `onboarding/_components/model.ts` | 1 day |
 | 4.2 Onboarding writes tier only | `(onboarding)/onboarding/page.tsx` | 0.5 day |
 | 4.3 Prompt branching | `lib/agent/prompt.ts` + 3 fixtures | 0.5 day |
@@ -509,7 +504,7 @@ Small pill: "Autopilot: Trusted" with a tier-tinted background (e.g., yellow for
 | 4.8 Verify | 2 new fixtures + manual | 0.5 day |
 
 **Open decisions.**
-- **`alwaysDraftReply`** behavior — settled in 4.0 before resolver work begins.
+- **`alwaysDraftReply`** behavior — settled in 4.0: dead field, removed end-to-end. `watch`-tier "draft only" is enforced via `toolsEnabled` rather than a separate boolean.
 - **Should `watch` block action tools entirely** via `toolsEnabled`, or just disable execution? Recommend block entirely — the planner can still propose them as drafts, but `runAgent` cannot call them. Cleaner trust story and matches the "draft only" promise.
 - **Auto-execute UX**: when a `trusted` merchant's agent auto-sends a reply or executes a refund, should the merchant see a real-time notification ("agent just replied to Jane")? Yes — this is what gives the merchant confidence to stay on the tier. Telegram already does some of this; extend in 4.5 alongside the audit row from Step 5.
 - **Feature flag for auto-execute (4.5)**: ship behind a flag for the first week of `trusted` rollout, or trust the eval suite + manual QA? Recommend flag — auto-execute is the irreversible-side-effect path and the flag costs five minutes.
@@ -726,4 +721,4 @@ These need direction before any code is written:
 4. **Sample-reply selection strategy**: random / tag-match / embeddings? Default: tag-match for V1.
 5. **`broad` and `full` tiers for V1**: keep visible-but-disabled, or hide entirely? Default: visible but labeled "coming soon" — sets the merchant expectation that more autonomy is on the roadmap.
 6. **Worker location for customer memory**: gateway (with its own Claude calls), or call back to dashboard? Default: gateway calls Claude directly — same pattern as `intelligence.ts` today.
-7. **`alwaysDraftReply`** behavior in the runtime — does it currently do anything? Verify; if it's a dead field, fold into tier semantics.
+7. **`alwaysDraftReply`** behavior in the runtime — settled in Step 4.0: dead field, removed end-to-end.

@@ -43,7 +43,7 @@ export const POST = withOrgRoute(
       orgId: org.id,
       threadId,
       settings,
-      allowedKinds: ["quick_reply", "auto_execute"],
+      allowedKinds: ["quick_reply"],
       failureRoute: "/api/agent/quick-approve",
     });
     const instructionHash = executed.instruction ? hashInstructionForLog(executed.instruction) : null;

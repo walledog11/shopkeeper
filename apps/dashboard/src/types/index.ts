@@ -32,7 +32,6 @@ export interface OrgSettings {
   // Default behavior
   autoPlanOnOpen: boolean;
   autoExecuteEnabled?: boolean; // hidden rollout flag for trusted-tier auto-execution
-  alwaysDraftReply: boolean;
   defaultInstruction: string;
 
   // Approval workflow
@@ -165,6 +164,7 @@ export interface ActionLogEntry {
   instruction: string | null;
   summary: string;
   actions: Array<{ tool: string; result: string }>;
+  mode: 'human_approved' | 'auto_executed' | 'read_only' | null;
 }
 
 export interface Thread {

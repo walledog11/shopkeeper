@@ -1,5 +1,5 @@
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types"
-import { resolveAgentSettings, type AutonomyTier } from "./settings"
+import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings"
 import { TOOL_CATEGORIES } from "./tools/registry"
 import { checkStaticToolPolicy } from "./tools/static-policy"
 
@@ -10,12 +10,6 @@ export interface HomePlanClassification {
   replyText: string | null
   sendReplyToolCall: RawToolCall | null
 }
-
-const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<AutonomyTier>([
-  "trusted",
-  "broad",
-  "full",
-])
 
 const QUICK_REPLY_READ_TOOLS = new Set([
   "search_kb",

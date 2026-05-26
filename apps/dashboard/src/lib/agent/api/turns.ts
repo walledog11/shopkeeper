@@ -95,5 +95,6 @@ export function toActionLogEntry(
       turn.summary?.trim() ||
       turn.actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · "),
     actions: turn.actions,
+    mode: turn.mode ?? null,
   };
 }

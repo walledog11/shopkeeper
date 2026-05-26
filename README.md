@@ -127,7 +127,7 @@ Configurable per org via Settings → Agent tab:
 - `aiContext` — brand/store context prepended to system prompt
 - `brandVoice` — tone brief appended to system prompt
 - `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true)
-- `alwaysDraftReply` — always pre-fill a draft reply
+- `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`/`broad`/`full`); drives runtime defaults via `TIER_DEFAULTS`
 - `defaultInstruction` — default agent instruction
 - `requireApprovalForActions` — show plan card before executing (default: true)
 - `toolsEnabled` — toggle tool categories: `action`, `communication`, `internal`, `read`

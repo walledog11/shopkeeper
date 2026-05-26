@@ -231,8 +231,9 @@ describe("dashboard approval helpers", () => {
       settings,
     });
 
-    expect(planned?.approval.instructionHash).toBe("hash_planned");
-    expect(planned?.approval.summary).toContain("Reply yes to create it");
+    if (!planned || !("approval" in planned)) throw new Error("expected an approval result");
+    expect(planned.approval.instructionHash).toBe("hash_planned");
+    expect(planned.approval.summary).toContain("Reply yes to create it");
     expect(mockBuildContext).toHaveBeenCalledWith(thread.id, org.id);
     expect(mockPlanAgent).toHaveBeenCalledWith({ messages: [] }, "Create an order", settings);
 

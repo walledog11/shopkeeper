@@ -17,7 +17,6 @@ export interface RawInputs {
 }
 
 export const AUTONOMY_OVERRIDE_PATHS = [
-  "alwaysDraftReply",
   "requireApprovalForActions",
   "maxRefundAmount",
   "blockCancellations",

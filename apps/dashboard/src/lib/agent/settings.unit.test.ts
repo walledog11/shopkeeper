@@ -12,7 +12,6 @@ describe("resolveAgentSettings", () => {
     expect(resolved.autonomyTier).toBe("guarded");
     expect(resolved.maxRefundAmount).toBe(TIER_DEFAULTS.guarded.maxRefundAmount);
     expect(resolved.requireApprovalForActions).toBe(true);
-    expect(resolved.alwaysDraftReply).toBe(false);
   });
 
   it("returns guarded-tier defaults when settings are undefined", () => {
@@ -28,21 +27,20 @@ describe("resolveAgentSettings", () => {
   });
 
   describe("per-tier defaults", () => {
-    const cases: Array<{ tier: AutonomyTier; maxRefund: number; requireApproval: boolean; alwaysDraft: boolean }> = [
-      { tier: "watch",   maxRefund: 0,    requireApproval: true,  alwaysDraft: true  },
-      { tier: "guarded", maxRefund: 50,   requireApproval: true,  alwaysDraft: false },
-      { tier: "trusted", maxRefund: 100,  requireApproval: false, alwaysDraft: false },
-      { tier: "broad",   maxRefund: 250,  requireApproval: false, alwaysDraft: false },
-      { tier: "full",    maxRefund: 1000, requireApproval: false, alwaysDraft: false },
+    const cases: Array<{ tier: AutonomyTier; maxRefund: number; requireApproval: boolean }> = [
+      { tier: "watch",   maxRefund: 0,    requireApproval: true  },
+      { tier: "guarded", maxRefund: 50,   requireApproval: true  },
+      { tier: "trusted", maxRefund: 100,  requireApproval: false },
+      { tier: "broad",   maxRefund: 250,  requireApproval: false },
+      { tier: "full",    maxRefund: 1000, requireApproval: false },
     ];
 
-    for (const { tier, maxRefund, requireApproval, alwaysDraft } of cases) {
+    for (const { tier, maxRefund, requireApproval } of cases) {
       it(`applies ${tier}-tier defaults`, () => {
         const resolved = resolveAgentSettings({ autonomyTier: tier });
         expect(resolved.autonomyTier).toBe(tier);
         expect(resolved.maxRefundAmount).toBe(maxRefund);
         expect(resolved.requireApprovalForActions).toBe(requireApproval);
-        expect(resolved.alwaysDraftReply).toBe(alwaysDraft);
       });
     }
   });
@@ -68,7 +66,6 @@ describe("resolveAgentSettings", () => {
     // Override wins over watch-tier default of 0.
     expect(resolved.maxRefundAmount).toBe(100);
     // Other watch-tier defaults still apply.
-    expect(resolved.alwaysDraftReply).toBe(true);
     expect(resolved.requireApprovalForActions).toBe(true);
   });
 

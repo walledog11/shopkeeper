@@ -11,7 +11,6 @@ const AGENT_SETTINGS_DEFAULTS = {
   brandVoice: '',
   agentName: 'Clerk',
   autoPlanOnOpen: true,
-  alwaysDraftReply: false,
   defaultInstruction: '',
   requireApprovalForActions: true,
   toolsEnabled: {

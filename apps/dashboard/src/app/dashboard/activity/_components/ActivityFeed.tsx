@@ -145,6 +145,14 @@ function EntryRow({ entry }: { entry: ActionLogEntry }) {
       <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-semibold text-white/80 truncate">{headline}</span>
+          {entry.mode === "auto_executed" && (
+            <span
+              title="Auto-executed by the agent without merchant approval"
+              className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded border bg-emerald-900/40 text-emerald-300 border-emerald-800/50"
+            >
+              <Zap className="w-2.5 h-2.5" /> Auto
+            </span>
+          )}
           {isOperator ? (
             <span className="text-[10px] font-semibold text-white/30 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
               {entry.channelType === "sms_agent" ? "SMS" : "Concierge"}

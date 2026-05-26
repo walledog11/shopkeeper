@@ -1,0 +1,43 @@
+{
+  "id": "tier-override-cancel-blocked",
+  "description": "Trusted-tier org with blockCancellations: true override. The merchant override must win over the tier default - the agent must not cancel the order and must escalate instead. Classifier must mark needs_review (the override blocks auto-execute).",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Devon Cruz",
+    "customerPlatformId": "devon@example.com",
+    "shopifyCustomerId": "10000004801",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "autonomyTier": "trusted", "blockCancellations": true },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please cancel order #4801 - I no longer want it." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000004801",
+        "name": "#4801",
+        "created_at": "2026-05-22T11:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "65.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4801",
+            "title": "Knit Scarf",
+            "quantity": 1,
+            "variant_id": "variant_4801",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their cancellation request.",
+  "expectedPlan": {
+    "mustNotCallTools": ["cancel_order", "create_refund"],
+    "mustClassifyAs": "needs_review"
+  }
+}

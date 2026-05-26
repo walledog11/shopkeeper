@@ -105,11 +105,12 @@ describe("agent action-log helpers", () => {
           { tool: "create_refund", result: "Refunded $25.00." },
           { tool: "update_thread_status", result: "Status set to closed." },
         ],
+        mode: "auto_executed",
       },
     ]);
 
-    expect(csv).toContain("timestamp,customer,channel,thread_tag,thread_id,instruction,summary,actions,action_results");
-    expect(csv).toContain('"Taylor","email","Returns","thread_1","Refund the order"');
+    expect(csv).toContain("timestamp,customer,channel,thread_tag,thread_id,mode,instruction,summary,actions,action_results");
+    expect(csv).toContain('"Taylor","email","Returns","thread_1","auto_executed","Refund the order"');
     expect(csv).toContain('"Issued refund | Updated thread status"');
     expect(csv).toContain('"Issued refund: Refunded $25.00. || Updated thread status: Status set to closed."');
   });

@@ -9,7 +9,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   agentName: "Clerk",
   autoPlanOnOpen: true,
   autoExecuteEnabled: false,
-  alwaysDraftReply: false,
   defaultInstruction: "",
   requireApprovalForActions: true,
   toolsEnabled: {
@@ -45,7 +44,6 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   watch: {
     maxRefundAmount: 0,
     requireApprovalForActions: true,
-    alwaysDraftReply: true,
     toolsEnabled: {
       action: false,
       communication: false,
@@ -56,24 +54,28 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   guarded: {
     maxRefundAmount: 50,
     requireApprovalForActions: true,
-    alwaysDraftReply: false,
   },
   trusted: {
     maxRefundAmount: 100,
     requireApprovalForActions: false,
-    alwaysDraftReply: false,
   },
   broad: {
     maxRefundAmount: 250,
     requireApprovalForActions: false,
-    alwaysDraftReply: false,
   },
   full: {
     maxRefundAmount: 1000,
     requireApprovalForActions: false,
-    alwaysDraftReply: false,
   },
 };
+
+// Tiers whose plans the classifier may surface as auto_execute, subject to
+// per-call caps and other static policy checks.
+export const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<AutonomyTier>([
+  "trusted",
+  "broad",
+  "full",
+]);
 
 export function resolveAgentSettings(settings: Partial<OrgSettings> | null | undefined): OrgSettings {
   const base = settings ?? {};
