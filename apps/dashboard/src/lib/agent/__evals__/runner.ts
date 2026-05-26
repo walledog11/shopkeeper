@@ -1,4 +1,4 @@
-import { SenderType, type DbChannelType, type DbSenderType } from "@clerk/db";
+import { db, SenderType, type DbChannelType, type DbSenderType } from "@clerk/db";
 import {
   createTestOrg,
   createTestCustomer,
@@ -9,12 +9,15 @@ import {
 import { vi } from "vitest";
 import { anthropic } from "@/lib/ai/anthropic";
 import { planAgent } from "../planner";
+import { runAgent, type RunAgentOptions } from "../run";
 import { classifyHomePlan } from "../plan-preview";
 import { resolveAgentSettings } from "../settings";
 import * as executor from "../tools/executor";
 import { readModelUsage } from "../usage";
-import type { AgentContext } from "../types";
-import type { Fixture, EvalResult, EvalUsage, ToolInputExpectation } from "./types";
+import { hashInstruction, hashPlan, type AgentActionApproval } from "../api/agent-actions";
+import type { AgentActionMode, AgentContext } from "../types";
+import type { AgentPlan, OrgSettings } from "@/types";
+import type { ExpectedAgentAction, Fixture, EvalResult, EvalUsage, ToolInputExpectation } from "./types";
 
 const SENDER_TYPE_MAP: Record<string, DbSenderType> = {
   customer: SenderType.customer,
@@ -93,6 +96,71 @@ function findToolInputMatch(rawToolCalls: { name: string; input: unknown }[], ex
   );
 }
 
+function isAgentActionSubsequence(
+  expected: readonly ExpectedAgentAction[],
+  observed: readonly ExpectedAgentAction[],
+): boolean {
+  let i = 0;
+  for (const row of observed) {
+    const target = expected[i];
+    if (i < expected.length && row.tool === target.tool && row.status === target.status && row.mode === target.mode) {
+      i += 1;
+    }
+  }
+  return i === expected.length;
+}
+
+function formatAgentAction(row: ExpectedAgentAction): string {
+  return `${row.tool}:${row.status}:${row.mode}`;
+}
+
+function inferRunMode(expected: ExpectedAgentAction[]): AgentActionMode {
+  if (expected.length === 0) return "read_only";
+  const first = expected[0].mode;
+  return first;
+}
+
+async function executeRunForFixture(params: {
+  ctx: AgentContext;
+  fixture: Fixture;
+  plan: AgentPlan;
+  mode: AgentActionMode;
+  settings: OrgSettings;
+}): Promise<void> {
+  const { ctx, fixture, plan, mode, settings } = params;
+  let approvedToolCalls = mode === "read_only" ? undefined : plan.rawToolCalls;
+  if (approvedToolCalls && approvedToolCalls.length === 0) {
+    approvedToolCalls = undefined;
+  }
+
+  const options: RunAgentOptions = { mode };
+  if (mode === "read_only") options.readOnly = true;
+  if (mode === "human_approved") {
+    const approval: AgentActionApproval = {
+      approverId: "eval_runner:Eval Runner",
+      approvedAt: new Date(),
+      approvedPlanHash: hashPlan(plan),
+      instructionHash: hashInstruction(fixture.instruction),
+    };
+    options.approval = approval;
+  }
+
+  await runAgent(ctx, fixture.instruction, approvedToolCalls, settings, options);
+}
+
+async function fetchObservedAgentActions(orgId: string, threadId: string): Promise<ExpectedAgentAction[]> {
+  const rows = await db.agentAction.findMany({
+    where: { organizationId: orgId, threadId },
+    orderBy: { executedAt: "asc" },
+    select: { tool: true, status: true, mode: true },
+  });
+  return rows.map((r) => ({
+    tool: r.tool,
+    status: r.status as ExpectedAgentAction["status"],
+    mode: r.mode as ExpectedAgentAction["mode"],
+  }));
+}
+
 export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   const failures: string[] = [];
   const usage: EvalUsage = {
@@ -106,6 +174,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   let orgId: string | null = null;
   let spy: { mockRestore: () => void } | null = null;
   let executorSpy: { mockRestore: () => void } | null = null;
+  let executorStatusSpy: { mockRestore: () => void } | null = null;
 
   try {
     const org = await createTestOrg();
@@ -141,6 +210,20 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         .mockImplementation(async (name, args, execCtx, settings) => {
           if (simulatedResults.has(name)) return simulatedResults.get(name) as string;
           return originalExecute(name, args, execCtx, settings);
+        });
+
+      const originalExecuteWithStatus = executor.executeToolWithStatus;
+      executorStatusSpy = vi
+        .spyOn(executor, "executeToolWithStatus")
+        .mockImplementation(async (name, args, execCtx, settings) => {
+          if (simulatedResults.has(name)) {
+            const result = simulatedResults.get(name) as string;
+            return {
+              result,
+              status: result.toLowerCase().startsWith("error:") ? "error" : "success",
+            };
+          }
+          return originalExecuteWithStatus(name, args, execCtx, settings);
         });
     }
 
@@ -210,9 +293,22 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         failures.push(`reply contained forbidden "${phrase}"; reply was: "${replyText}"`);
       }
     }
+
+    if (expected.expectedAgentActions) {
+      const runMode = inferRunMode(expected.expectedAgentActions);
+      await executeRunForFixture({ ctx, fixture, plan, mode: runMode, settings: resolved });
+
+      const observed = await fetchObservedAgentActions(org.id, thread.id);
+      if (!isAgentActionSubsequence(expected.expectedAgentActions, observed)) {
+        failures.push(
+          `expected AgentAction rows [${expected.expectedAgentActions.map(formatAgentAction).join(", ")}] not found as ordered subsequence; observed: [${observed.map(formatAgentAction).join(", ")}]`,
+        );
+      }
+    }
   } catch (err) {
     failures.push(`runner threw: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
+    executorStatusSpy?.mockRestore();
     executorSpy?.mockRestore();
     spy?.mockRestore();
     if (orgId) {

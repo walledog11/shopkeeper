@@ -12,6 +12,10 @@
     "messages": [
       { "senderType": "customer", "contentText": "Hi, the tee I got was the wrong size and I don't want a replacement. Please refund me for order #1010." }
     ],
+    "simulateToolResults": [
+      { "tool": "create_refund", "result": "Refund of $42.00 USD issued for order #1010." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
     "recentOrders": [
       {
         "id": "9000001010",
@@ -41,6 +45,10 @@
     "mustNotCallTools": ["escalate_to_human", "cancel_order"],
     "mustCallToolsWithInput": [
       { "tool": "create_refund", "inputIncludes": { "order_id": "9000001010" } }
+    ],
+    "expectedAgentActions": [
+      { "tool": "create_refund", "status": "success", "mode": "human_approved" },
+      { "tool": "send_reply", "status": "success", "mode": "human_approved" }
     ]
   }
 }

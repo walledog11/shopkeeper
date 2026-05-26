@@ -8,53 +8,8 @@ import { ArrowRight, ChevronDown, ChevronRight, Eye, Loader2, ShieldCheck, X, Za
 import { fetcher } from "@/lib/api/fetcher"
 import { redactPii } from "@/lib/format/redact"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import type { ActionLogEntry, ChannelType } from "@/types"
-
-// ── Tool metadata ──────────────────────────────────────────────────────────────
-
-const TOOL_LABELS: Record<string, string> = {
-  send_reply:                    "Send reply",
-  send_email:                    "Send email",
-  get_shopify_orders:            "Fetch orders",
-  get_shopify_customer:          "Fetch customer",
-  search_shopify_customers:      "Search customers",
-  search_shopify_products:       "Search products",
-  get_order_by_name:             "Look up order",
-  search_kb:                     "Search KB",
-  create_refund:                 "Issue refund",
-  cancel_order:                  "Cancel order",
-  edit_shopify_order:            "Edit order",
-  create_shopify_order:          "Create order",
-  update_shopify_order_address:  "Update address",
-  update_shopify_customer_info:  "Update customer",
-  add_shopify_customer_note:     "Add Shopify note",
-  add_internal_note:             "Add note",
-  update_thread_status:          "Update status",
-  update_thread_tag:             "Update tag",
-}
-
-type ToolCategory = "action" | "communication" | "internal" | "read"
-
-const TOOL_CATEGORIES: Record<string, ToolCategory> = {
-  send_reply:                   "communication",
-  send_email:                   "communication",
-  create_refund:                "action",
-  cancel_order:                 "action",
-  edit_shopify_order:           "action",
-  create_shopify_order:         "action",
-  update_shopify_order_address: "action",
-  update_shopify_customer_info: "action",
-  add_shopify_customer_note:    "action",
-  add_internal_note:            "internal",
-  update_thread_status:         "internal",
-  update_thread_tag:            "internal",
-  get_shopify_orders:           "read",
-  get_shopify_customer:         "read",
-  search_shopify_customers:     "read",
-  search_shopify_products:      "read",
-  get_order_by_name:            "read",
-  search_kb:                    "read",
-}
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
+import type { ActionLogEntry, ChannelType, ToolCategory } from "@/types"
 
 const PILL_STYLES: Record<ToolCategory, string> = {
   action:        "bg-amber-900/40 text-amber-400 border-amber-800/50",

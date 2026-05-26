@@ -4,6 +4,7 @@ import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
+import type { AgentTurnAction } from '@/lib/agent/api/turns';
 
 export const GET = withOrgRoute<{ id: string }>(
   { context: 'Threads GET by id', errorMessage: 'Failed to fetch thread' },
@@ -29,7 +30,26 @@ export const GET = withOrgRoute<{ id: string }>(
 
     if (!thread) throw new NotFoundError('Thread not found');
 
-    return NextResponse.json({ thread });
+    // Hydrate per-action records for inline display in the agent-turn notes.
+    // New turns omit the actions array from note JSON; AgentAction is the
+    // canonical record. Legacy turns keep their embedded actions and skip
+    // the map entry (their note has no `id` to key on).
+    const actionRows = await db.agentAction.findMany({
+      where: { organizationId: org.id, threadId: id },
+      select: { turnId: true, tool: true, output: true, errorDetail: true, status: true },
+      orderBy: { executedAt: 'asc' },
+    });
+    const agentActionsByTurnId: Record<string, AgentTurnAction[]> = {};
+    for (const row of actionRows) {
+      const action: AgentTurnAction = {
+        tool: row.tool,
+        result: row.errorDetail ?? row.output ?? '',
+        status: row.status as AgentTurnAction['status'],
+      };
+      (agentActionsByTurnId[row.turnId] ??= []).push(action);
+    }
+
+    return NextResponse.json({ thread, agentActionsByTurnId });
   },
 );
 

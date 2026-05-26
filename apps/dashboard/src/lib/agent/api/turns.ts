@@ -1,9 +1,14 @@
 import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@/lib/agent/tools/turn-content";
 import type { AgentTurn } from "@/types";
 
+export type AgentTurnAction = AgentTurn["actions"][number];
+
 // The note carries only the metadata the threads UI needs to render a turn
 // inline. The canonical per-action record lives in the AgentAction table.
+// `id` is the turnId — the join key into AgentAction so we can hydrate actions
+// when reading.
 interface SerializedAgentTurnNote {
+  id?: string;
   instruction: string;
   summary: string | null;
   error: string | null;
@@ -14,6 +19,7 @@ interface SerializedAgentTurnNote {
 
 function toNoteShape(turn: AgentTurn): SerializedAgentTurnNote {
   return {
+    ...(turn.id ? { id: turn.id } : {}),
     instruction: turn.instruction,
     summary: turn.summary,
     error: turn.error,
@@ -35,9 +41,11 @@ export function parseAgentTurn(contentText: string | null | undefined): AgentTur
   try {
     const parsed = JSON.parse(contentText.slice(AGENT_TURN_PREFIX.length)) as Partial<AgentTurn>;
     return {
+      ...(parsed.id ? { id: parsed.id } : {}),
       instruction: parsed.instruction ?? "",
       // Legacy notes carry the full actions array; new notes omit it because
-      // AgentAction is now the canonical per-tool record.
+      // AgentAction is now the canonical per-tool record. Hydration happens in
+      // extractAgentTurnsFromMessages when an actionsByTurnId map is supplied.
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
       summary: parsed.summary ?? null,
       error: parsed.error ?? null,
@@ -55,10 +63,18 @@ type MessageWithAgentTurn = {
   contentText: string | null;
 };
 
-export function extractAgentTurnsFromMessages<T extends MessageWithAgentTurn>(messages: T[]): AgentTurn[] {
+export function extractAgentTurnsFromMessages<T extends MessageWithAgentTurn>(
+  messages: T[],
+  actionsByTurnId?: Record<string, AgentTurnAction[]>,
+): AgentTurn[] {
   return messages
     .map((message) => parseAgentTurn(message.contentText))
-    .filter((turn): turn is AgentTurn => turn !== null);
+    .filter((turn): turn is AgentTurn => turn !== null)
+    .map((turn) => {
+      if (!actionsByTurnId || !turn.id) return turn;
+      const hydrated = actionsByTurnId[turn.id];
+      return hydrated ? { ...turn, actions: hydrated } : turn;
+    });
 }
 
 export function excludeAgentTurnMessages<T extends MessageWithAgentTurn>(messages: T[]): T[] {

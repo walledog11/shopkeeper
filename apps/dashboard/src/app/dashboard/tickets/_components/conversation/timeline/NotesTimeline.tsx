@@ -101,7 +101,9 @@ export default function NotesTimeline({
                   {turn.actions.length > 0 && (
                     <div className="space-y-1">
                       {turn.actions.map((action, actionIndex) => {
-                        const isError = action.result.startsWith("Error:")
+                        const isError = action.status
+                          ? (action.status === "error" || action.status === "policy_block")
+                          : action.result.startsWith("Error:")
                         return (
                           <div key={actionIndex} className="flex items-center gap-1.5">
                             {isError

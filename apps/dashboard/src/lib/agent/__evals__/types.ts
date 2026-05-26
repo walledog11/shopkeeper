@@ -1,5 +1,5 @@
 import type { OrgSettings } from "@/types";
-import type { ShopifyOrderSummary } from "../types";
+import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "../types";
 
 export interface FixtureMessage {
   senderType: "customer" | "agent" | "ai" | "note";
@@ -37,6 +37,12 @@ export interface ToolInputExpectation {
   inputIncludes: Record<string, unknown>;
 }
 
+export interface ExpectedAgentAction {
+  tool: string;
+  status: AgentActionStatus;
+  mode: AgentActionMode;
+}
+
 export interface ExpectedPlan {
   mustCallTools?: string[];
   mustCallToolsInOrder?: string[];
@@ -46,6 +52,7 @@ export interface ExpectedPlan {
   mustClassifyAs?: "quick_reply" | "needs_review" | "auto_execute";
   replyMustInclude?: string[];
   replyMustNotInclude?: string[];
+  expectedAgentActions?: ExpectedAgentAction[];
 }
 
 export interface Fixture {

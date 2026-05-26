@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createMessage } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
@@ -55,6 +56,7 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
       });
     }
 
+    const turnId = randomUUID();
     const ctx = await buildContext(params.threadId, params.orgId);
     const result = await runAgent(
       ctx,
@@ -64,6 +66,7 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
       {
         failureRoute: params.failureRoute,
         failureCounterClient,
+        turnId,
         ...(params.auditMode ? { mode: params.auditMode } : {}),
         ...(params.approval ? { approval: params.approval } : {}),
       }
@@ -82,6 +85,7 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
         threadId: params.threadId,
         senderType: "note",
         contentText: serializeAgentTurn({
+          id: turnId,
           instruction: params.instruction,
           actions: result.actionsPerformed,
           summary: result.summary,

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createMessage } from "@clerk/db";
 import { withOrgRoute } from "@/lib/api/route";
@@ -35,12 +36,14 @@ export const POST = withOrgRoute(
 
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const ctx = await buildContext(threadId, org.id);
-    const result = await runAgent(ctx, instruction, undefined, settings, { readOnly: true });
+    const turnId = randomUUID();
+    const result = await runAgent(ctx, instruction, undefined, settings, { readOnly: true, turnId });
 
     await createMessage({
       threadId,
       senderType: "note",
       contentText: serializeAgentTurn({
+        id: turnId,
         instruction,
         actions: result.actionsPerformed,
         summary: result.summary,

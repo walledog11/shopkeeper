@@ -200,7 +200,7 @@ export interface Thread {
 export interface AgentTurn {
   id?: string
   instruction: string
-  actions: { tool: string; result: string }[]
+  actions: { tool: string; result: string; status?: 'success' | 'error' | 'policy_block' | 'escalated' }[]
   summary: string | null
   error: string | null
   mode?: 'human_approved' | 'auto_executed' | 'read_only'

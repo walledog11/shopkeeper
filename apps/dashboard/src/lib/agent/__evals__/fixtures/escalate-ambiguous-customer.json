@@ -27,6 +27,9 @@
       "update_shopify_order_address",
       "update_shopify_customer_info",
       "create_shopify_order"
+    ],
+    "expectedAgentActions": [
+      { "tool": "search_shopify_customers", "status": "success", "mode": "read_only" }
     ]
   }
 }

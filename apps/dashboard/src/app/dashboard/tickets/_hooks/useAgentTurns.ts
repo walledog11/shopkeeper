@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentTurn, Message, Thread } from '@/types'
-import { extractAgentTurnsFromMessages, serializeAgentTurn } from '@/lib/agent/api/turns'
+import { extractAgentTurnsFromMessages, serializeAgentTurn, type AgentTurnAction } from '@/lib/agent/api/turns'
 import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 interface UseAgentTurnsProps {
   activeTicketId: string | null
   activeThread: Thread | undefined
+  agentActionsByTurnId: Record<string, AgentTurnAction[]> | undefined
   patchThreadCaches: (threadId: string, updateThread: (thread: Thread) => Thread) => Promise<void>
   revalidateThreadCaches: () => Promise<void>
 }
@@ -13,6 +14,7 @@ interface UseAgentTurnsProps {
 export function useAgentTurns({
   activeTicketId,
   activeThread,
+  agentActionsByTurnId,
   patchThreadCaches,
   revalidateThreadCaches,
 }: UseAgentTurnsProps) {
@@ -20,10 +22,10 @@ export function useAgentTurns({
   const [agentRunningThread, setAgentRunningThread] = useState<string | null>(null)
 
   const activeAgentTurns = useMemo((): AgentTurn[] => {
-    const dbTurns = extractAgentTurnsFromMessages(activeThread?.messages ?? [])
+    const dbTurns = extractAgentTurnsFromMessages(activeThread?.messages ?? [], agentActionsByTurnId)
     const errorTurns = activeTicketId ? (agentTurnsByThread[activeTicketId] ?? []) : []
     return [...dbTurns, ...errorTurns]
-  }, [activeThread?.messages, activeTicketId, agentTurnsByThread])
+  }, [activeThread?.messages, activeTicketId, agentActionsByTurnId, agentTurnsByThread])
 
   const isAgentRunning = agentRunningThread === activeTicketId
 

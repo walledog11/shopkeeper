@@ -17,6 +17,7 @@ import ConversationView from './conversation/ConversationView'
 import ContextPanel from './context-panel/ContextPanel'
 import ContextPanelSkeleton from './context-panel/ContextPanelSkeleton'
 import { getCurrentPlanForThread } from '@/lib/agent/plan-cache-shape'
+import type { AgentTurnAction } from '@/lib/agent/api/turns'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
 interface Props {
@@ -90,7 +91,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     data: activeThreadData,
     error: activeThreadError,
     mutate: mutateActiveThread,
-  } = useSWR<{ thread: Thread }>(activeThreadKey, fetcher)
+  } = useSWR<{ thread: Thread; agentActionsByTurnId?: Record<string, AgentTurnAction[]> }>(activeThreadKey, fetcher)
 
   const listThreads = useMemo(
     () => isSearchMode ? searchThreads : dbThreads,
@@ -235,6 +236,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   } = useAgentTurns({
     activeTicketId,
     activeThread,
+    agentActionsByTurnId: activeThreadData?.agentActionsByTurnId,
     patchThreadCaches,
     revalidateThreadCaches,
   })

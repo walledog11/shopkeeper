@@ -9,7 +9,6 @@ import {
 import {
   hashInstruction,
   hashPlan,
-  recordAgentAction,
   recordAgentActionsBatch,
 } from "@/lib/agent/api/agent-actions";
 import type { ActionEntry } from "@/lib/agent/types";
@@ -72,11 +71,11 @@ describe("agent-actions writer", () => {
       category: "action",
     };
 
-    await recordAgentAction({
+    await recordAgentActionsBatch({
       orgId: org.id,
       threadId: thread.id,
       customerId: customer.id,
-      action,
+      actions: [action],
       mode: "human_approved",
       approval: {
         approverId: "user_123:Ada Operator",

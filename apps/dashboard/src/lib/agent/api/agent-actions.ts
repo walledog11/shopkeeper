@@ -27,10 +27,6 @@ interface CommonRecordParams {
   turnId?: string;
 }
 
-export interface RecordAgentActionParams extends CommonRecordParams {
-  action: ActionEntry;
-}
-
 export interface RecordAgentActionsBatchParams extends CommonRecordParams {
   actions: ActionEntry[];
 }
@@ -96,13 +92,6 @@ function entryToRow(params: CommonRecordParams & { entry: ActionEntry; turnId: s
     executedAt: params.executedAt,
     durationMs: params.entry.durationMs ?? 0,
   };
-}
-
-export async function recordAgentAction(params: RecordAgentActionParams): Promise<void> {
-  const turnId = params.turnId ?? randomUUID();
-  await db.agentAction.create({
-    data: entryToRow({ ...params, entry: params.action, turnId, executedAt: new Date() }),
-  });
 }
 
 export async function recordAgentActionsBatch(params: RecordAgentActionsBatchParams): Promise<void> {

@@ -35,6 +35,9 @@ export interface RunAgentOptions {
   failureCounterClient?: OpsAlertCounterClient;
   mode?: AgentActionMode;
   approval?: AgentActionApproval;
+  // Pre-generated turn id so the caller can embed it in the agent-turn note
+  // and join AgentAction rows back to the note when rendering inline.
+  turnId?: string;
 }
 
 function inputKeys(input: unknown): string[] {
@@ -96,6 +99,7 @@ export async function runAgent(
           actions: result.actionsPerformed,
           instruction,
           summary: result.summary,
+          ...(options?.turnId ? { turnId: options.turnId } : {}),
           ...(approval ? { approval } : {}),
         });
       } catch (err) {

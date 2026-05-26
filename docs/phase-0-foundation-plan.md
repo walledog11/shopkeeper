@@ -658,7 +658,7 @@ Flip the source of truth. Ship in the same PR as 5.6 so historic data is present
 
 ---
 
-### Step 5.8 — Eval fixtures + verify (~0.5 day)
+### Step 5.8 — Eval fixtures + verify (~0.5 day) [COMPLETED]
 
 **`apps/dashboard/src/lib/agent/__evals__/types.ts`** — extend `ExpectedPlan` with optional `expectedAgentActions?: { tool: string, status: string, mode: string }[]`.
 
