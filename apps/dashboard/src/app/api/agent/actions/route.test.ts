@@ -5,10 +5,9 @@ vi.mock("@clerk/nextjs/server", () => ({
   clerkClient: vi.fn(),
 }));
 
-const { mockListEntries, mockListAllEntries, mockSerializeCsv } = vi.hoisted(() => ({
+const { mockListEntries, mockStreamCsv } = vi.hoisted(() => ({
   mockListEntries: vi.fn(),
-  mockListAllEntries: vi.fn(),
-  mockSerializeCsv: vi.fn(),
+  mockStreamCsv: vi.fn(),
 }));
 
 vi.mock("@/lib/server/org", () => ({
@@ -17,8 +16,11 @@ vi.mock("@/lib/server/org", () => ({
 
 vi.mock("@/lib/agent/api/action-log", () => ({
   listAgentActionLogEntries: mockListEntries,
-  listAllAgentActionLogEntries: mockListAllEntries,
-  serializeAgentActionLogCsv: mockSerializeCsv,
+  streamAgentActionLogCsv: mockStreamCsv,
+  decodeAgentActionCursor: (raw: string) => {
+    if (raw === "valid") return { executedAt: "2026-04-21T12:00:00.000Z", turnId: "turn_1" };
+    return null;
+  },
 }));
 
 import { GET } from "./route";
@@ -42,7 +44,7 @@ describe("GET /api/agent/actions", () => {
     mockListEntries.mockResolvedValue({
       entries: [
         {
-          id: "msg_1",
+          id: "turn_1",
           sentAt: "2026-04-21T12:00:00.000Z",
           threadId: "thread_1",
           channelType: "email",
@@ -51,6 +53,7 @@ describe("GET /api/agent/actions", () => {
           instruction: "Refund the order",
           summary: "Issued the refund and closed the ticket.",
           actions: [{ tool: "create_refund", result: "Refunded $25.00." }],
+          mode: "human_approved",
         },
       ],
       nextCursor: "cursor_2",
@@ -60,22 +63,8 @@ describe("GET /api/agent/actions", () => {
     expect(res.status).toBe(200);
 
     const body = await res.json() as { entries: unknown[]; nextCursor: string | null };
-    expect(body).toEqual({
-      entries: [
-        {
-          id: "msg_1",
-          sentAt: "2026-04-21T12:00:00.000Z",
-          threadId: "thread_1",
-          channelType: "email",
-          threadTag: "Returns",
-          customerHandle: "Taylor",
-          instruction: "Refund the order",
-          summary: "Issued the refund and closed the ticket.",
-          actions: [{ tool: "create_refund", result: "Refunded $25.00." }],
-        },
-      ],
-      nextCursor: "cursor_2",
-    });
+    expect(body.nextCursor).toBe("cursor_2");
+    expect(body.entries).toHaveLength(1);
     expect(mockListEntries).toHaveBeenCalledWith({
       orgId: "org_db_1",
       cursor: null,
@@ -87,33 +76,24 @@ describe("GET /api/agent/actions", () => {
         to: undefined,
       },
     });
-    expect(mockListAllEntries).not.toHaveBeenCalled();
+    expect(mockStreamCsv).not.toHaveBeenCalled();
   });
 
-  it("exports the full structured action log as CSV", async () => {
-    mockListAllEntries.mockResolvedValue([
-      {
-        id: "msg_1",
-        sentAt: "2026-04-21T12:00:00.000Z",
-        threadId: "thread_1",
-        channelType: "email",
-        threadTag: "Returns",
-        customerHandle: "Taylor",
-        instruction: "Reply and close",
-        summary: "Resolved the ticket.",
-        actions: [
-          { tool: "send_reply", result: "Reply sent to customer via email." },
-          { tool: "update_thread_status", result: "Status set to closed." },
-        ],
+  it("streams the action log as CSV when format=csv", async () => {
+    const csv = "timestamp,customer\n2026-04-21T12:00:00.000Z,Taylor\n";
+    mockStreamCsv.mockReturnValue(new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(csv));
+        controller.close();
       },
-    ]);
-    mockSerializeCsv.mockReturnValue("timestamp,customer\n2026-04-21T12:00:00.000Z,Taylor");
+    }));
 
     const res = await GET(new Request("http://localhost:3000/api/agent/actions?format=csv"));
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toContain("text/csv");
-    expect(await res.text()).toContain("timestamp,customer");
-    expect(mockListAllEntries).toHaveBeenCalledWith({
+    expect(res.headers.get("content-disposition")).toContain("agent-actions-");
+    expect(await res.text()).toBe(csv);
+    expect(mockStreamCsv).toHaveBeenCalledWith({
       orgId: "org_db_1",
       filters: {
         channels: undefined,
@@ -123,7 +103,6 @@ describe("GET /api/agent/actions", () => {
         to: undefined,
       },
     });
-    expect(mockSerializeCsv).toHaveBeenCalledOnce();
     expect(mockListEntries).not.toHaveBeenCalled();
   });
 

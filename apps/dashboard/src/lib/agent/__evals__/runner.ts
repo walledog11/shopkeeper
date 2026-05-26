@@ -23,7 +23,7 @@ const SENDER_TYPE_MAP: Record<string, DbSenderType> = {
   note: SenderType.note,
 };
 
-function buildContext(fixture: Fixture, orgId: string, threadId: string): AgentContext {
+function buildContext(fixture: Fixture, orgId: string, threadId: string, customerId: string): AgentContext {
   const { setup } = fixture;
   return {
     orgId,
@@ -37,6 +37,7 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string): AgentC
       shopifyCustomerId: setup.shopifyCustomerId ?? null,
     },
     customer: {
+      id: customerId,
       name: setup.customerName ?? null,
       platformId: setup.customerPlatformId ?? "customer@test.com",
     },
@@ -143,7 +144,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         });
     }
 
-    const ctx = buildContext(fixture, org.id, thread.id);
+    const ctx = buildContext(fixture, org.id, thread.id, customer.id);
     const resolved = resolveAgentSettings(fixture.setup.orgSettings ?? null);
     const plan = await planAgent(ctx, fixture.instruction, resolved);
 

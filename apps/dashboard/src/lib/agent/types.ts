@@ -29,6 +29,7 @@ export interface AgentContext {
     shopifyCustomerId: string | null;
   };
   customer: {
+    id: string;
     name: string | null;
     platformId: string;
   };

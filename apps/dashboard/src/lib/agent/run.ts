@@ -7,11 +7,11 @@ import { resolveAgentSettings } from "./settings";
 import { TOOL_CATEGORIES, selectAgentTools } from "./tools";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
-import { executeTool } from "./tools/executor";
+import { executeToolWithStatus } from "./tools/executor";
 import { ESCALATION_MARKER } from "./tools/thread";
 import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
-import type { ActionEntry, AgentContext, AgentResult } from "./types";
+import type { ActionEntry, AgentActionMode, AgentActionStatus, AgentContext, AgentResult } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 import { enforceSpendCap, recordSpend } from "./spend";
 import {
@@ -19,6 +19,7 @@ import {
   type AgentFailureAlertRoute,
 } from "@/lib/server/agent-failure-alerts";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
+import { recordAgentActionsBatch, type AgentActionApproval } from "./api/agent-actions";
 
 const DEFAULT_MAX_ITERATIONS = 10;
 const READ_ONLY_MAX_ITERATIONS = 4;
@@ -32,6 +33,8 @@ export interface RunAgentOptions {
   readOnly?: boolean;
   failureRoute?: AgentFailureAlertRoute;
   failureCounterClient?: OpsAlertCounterClient;
+  mode?: AgentActionMode;
+  approval?: AgentActionApproval;
 }
 
 function inputKeys(input: unknown): string[] {
@@ -68,6 +71,8 @@ export async function runAgent(
   const readOnly = options?.readOnly ?? false;
   const failureRoute = options?.failureRoute ?? "unknown";
   const failureCounterClient = options?.failureCounterClient;
+  const effectiveMode: AgentActionMode = options?.mode ?? (readOnly ? "read_only" : "human_approved");
+  const approval = effectiveMode === "human_approved" ? options?.approval : undefined;
   const maxIterations = readOnly
     ? READ_ONLY_MAX_ITERATIONS
     : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
@@ -79,6 +84,28 @@ export async function runAgent(
   const finish = async (result: AgentResult, outcome: string): Promise<AgentResult> => {
     if (failureAlertPromises.length > 0) {
       await Promise.allSettled(failureAlertPromises);
+    }
+
+    if (result.actionsPerformed.length > 0) {
+      try {
+        await recordAgentActionsBatch({
+          orgId: ctx.orgId,
+          threadId: ctx.thread.id,
+          customerId: ctx.customer.id,
+          mode: effectiveMode,
+          actions: result.actionsPerformed,
+          instruction,
+          summary: result.summary,
+          ...(approval ? { approval } : {}),
+        });
+      } catch (err) {
+        logger.error({
+          err,
+          orgId: ctx.orgId,
+          threadId: ctx.thread.id,
+          actionCount: result.actionsPerformed.length,
+        }, "[agent] failed to persist agent action audit rows");
+      }
     }
 
     logger.info({
@@ -138,40 +165,68 @@ export async function runAgent(
       inputChars: inputChars(toolCall.input),
     }, "[agent] tool call");
 
+    const startedAt = Date.now();
     let result: string;
+    let status: AgentActionStatus;
+    let errorDetail: string | undefined;
     let threw = false;
+
     if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
       result = `Error: ${toolCall.name} is not available in private ask mode.`;
+      status = "error";
+      errorDetail = result;
     } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
       result = "Error: skipped status update because send_reply failed.";
+      status = "error";
+      errorDetail = result;
     } else {
       try {
-        result = await executeTool(toolCall.name, toolCall.input, ctx, settings);
+        const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings);
+        result = executed.result;
+        status = executed.status;
+        if (status !== "success") errorDetail = result;
       } catch (err) {
         threw = true;
         const errorMessage = err instanceof Error ? err.message : String(err);
-        result = `Error: tool "${toolCall.name}" threw - ${err instanceof Error ? err.message : String(err)}`;
+        result = `Error: tool "${toolCall.name}" threw - ${errorMessage}`;
+        status = "error";
+        errorDetail = errorMessage;
         logger.error({ err, tool: toolCall.name }, "[agent] tool error");
         recordAgentFailureSafely("tool_exception", toolCall.name, errorMessage);
       }
     }
 
-    if (!threw && result.toLowerCase().startsWith("error:")) {
+    if (!threw && status === "error") {
       recordAgentFailureSafely("tool_result", toolCall.name, result);
     }
+
+    if (result.startsWith(ESCALATION_MARKER)) {
+      escalationReason = result.slice(ESCALATION_MARKER.length).trim() || "No reason provided";
+      status = "escalated";
+      errorDetail = undefined;
+    }
+
+    const durationMs = Date.now() - startedAt;
 
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
       tool: toolCall.name,
       resultChars: result.length,
-      isError: result.toLowerCase().startsWith("error:"),
+      isError: status === "error" || status === "policy_block",
+      status,
+      durationMs,
     }, "[agent] tool result");
     executedToolCalls.push(toolCall.name);
-    actionsPerformed.push({ tool: toolCall.name, result });
-    if (result.startsWith(ESCALATION_MARKER)) {
-      escalationReason = result.slice(ESCALATION_MARKER.length).trim() || "No reason provided";
-    }
+    actionsPerformed.push({
+      tool: toolCall.name,
+      result,
+      input: toolCall.input,
+      durationMs,
+      status,
+      category: TOOL_CATEGORIES[toolCall.name],
+      ...(errorDetail ? { errorDetail } : {}),
+    });
     return {
       type: "tool_result" as const,
       tool_use_id: toolCall.id,

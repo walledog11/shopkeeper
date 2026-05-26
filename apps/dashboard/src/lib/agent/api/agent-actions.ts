@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@clerk/db";
 import { TOOL_CATEGORIES } from "@/lib/agent/tools/registry";
@@ -12,7 +12,7 @@ import type { AgentPlan } from "@/types";
 export interface AgentActionApproval {
   approverId: string;
   approvedAt: Date;
-  approvedPlanHash: string;
+  approvedPlanHash?: string;
   instructionHash?: string;
 }
 
@@ -22,6 +22,9 @@ interface CommonRecordParams {
   customerId?: string | null;
   mode: AgentActionMode;
   approval?: AgentActionApproval;
+  instruction?: string | null;
+  summary?: string | null;
+  turnId?: string;
 }
 
 export interface RecordAgentActionParams extends CommonRecordParams {
@@ -70,9 +73,10 @@ function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
 }
 
-function entryToRow(params: CommonRecordParams & { entry: ActionEntry }) {
+function entryToRow(params: CommonRecordParams & { entry: ActionEntry; turnId: string; executedAt: Date }) {
   const status = deriveStatus(params.entry);
   return {
+    turnId: params.turnId,
     organizationId: params.orgId,
     threadId: params.threadId ?? null,
     customerId: params.customerId ?? null,
@@ -83,23 +87,37 @@ function entryToRow(params: CommonRecordParams & { entry: ActionEntry }) {
     status,
     errorDetail: deriveErrorDetail(params.entry, status),
     mode: params.entry.mode ?? params.mode,
+    instruction: params.instruction ?? null,
+    summary: params.summary ?? null,
     approverId: params.approval?.approverId ?? null,
     approvedAt: params.approval?.approvedAt ?? null,
     approvedPlanHash: params.approval?.approvedPlanHash ?? null,
     instructionHash: params.approval?.instructionHash ?? null,
+    executedAt: params.executedAt,
     durationMs: params.entry.durationMs ?? 0,
   };
 }
 
 export async function recordAgentAction(params: RecordAgentActionParams): Promise<void> {
+  const turnId = params.turnId ?? randomUUID();
   await db.agentAction.create({
-    data: entryToRow({ ...params, entry: params.action }),
+    data: entryToRow({ ...params, entry: params.action, turnId, executedAt: new Date() }),
   });
 }
 
 export async function recordAgentActionsBatch(params: RecordAgentActionsBatchParams): Promise<void> {
   if (params.actions.length === 0) return;
+  const turnId = params.turnId ?? randomUUID();
+  // PostgreSQL's CURRENT_TIMESTAMP is constant within a single createMany
+  // statement, so we set executedAt explicitly with millisecond offsets to
+  // preserve the order the agent executed tools in.
+  const base = Date.now();
   await db.agentAction.createMany({
-    data: params.actions.map((action) => entryToRow({ ...params, entry: action })),
+    data: params.actions.map((action, idx) => entryToRow({
+      ...params,
+      entry: action,
+      turnId,
+      executedAt: new Date(base + idx),
+    })),
   });
 }

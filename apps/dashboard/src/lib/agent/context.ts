@@ -139,6 +139,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       shopifyCustomerId,
     },
     customer: {
+      id: thread.customer.id,
       name: dbName ?? shopifyCustomerName,
       platformId: thread.customer.platformId,
     },

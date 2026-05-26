@@ -60,13 +60,20 @@ vi.mock("@/lib/agent/spend", () => ({
   getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
+vi.mock("@/lib/agent/api/agent-actions", () => ({
+  recordAgentActionsBatch: vi.fn().mockResolvedValue(undefined),
+  recordAgentAction: vi.fn().mockResolvedValue(undefined),
+  hashPlan: vi.fn().mockReturnValue("hash"),
+  hashInstruction: vi.fn().mockReturnValue("hash"),
+}));
+
 import { runAgent } from "./runner";
 
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
     orgId: "org_1",
     orgName: "Test Store",
-    customer: { name: "Jane", platformId: "jane@test.com" },
+    customer: { id: "customer_1", name: "Jane", platformId: "jane@test.com" },
     recentMessages: [{ senderType: "customer", contentText: "Help me" }],
     openThreadCount: 1,
     shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
@@ -127,12 +134,12 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, blockCancellations: true }
     );
 
-    expect(result.actionsPerformed).toEqual([
-      {
-        tool: "cancel_order",
-        result: "Error: order cancellations are disabled by the workspace owner.",
-      },
-    ]);
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "cancel_order",
+      result: "Error: order cancellations are disabled by the workspace owner.",
+      status: "policy_block",
+    });
     expect(result.summary).toBe("Error: order cancellations are disabled by the workspace owner.");
   });
 
@@ -254,12 +261,12 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 }
     );
 
-    expect(result.actionsPerformed).toEqual([
-      {
-        tool: "create_refund",
-        result: "Error: daily refund cap of $100 reached; $10.00 remaining today.",
-      },
-    ]);
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "create_refund",
+      result: "Error: daily refund cap of $100 reached; $10.00 remaining today.",
+      status: "policy_block",
+    });
     expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
   });
 
@@ -311,9 +318,10 @@ describe("runAgent policy enforcement", () => {
 
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(result.summary).toBe("Escalated to merchant: Customer is asking about wholesale pricing.");
-    expect(result.actionsPerformed.at(-1)).toEqual({
+    expect(result.actionsPerformed.at(-1)).toMatchObject({
       tool: "escalate_to_human",
       result: "__ESCALATED__: Customer is asking about wholesale pricing.",
+      status: "escalated",
     });
   });
 

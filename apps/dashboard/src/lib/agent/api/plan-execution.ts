@@ -3,11 +3,21 @@ import { BadRequestError } from "@/lib/api/errors";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
+import { hashInstruction, hashPlan, type AgentActionApproval } from "@/lib/agent/api/agent-actions";
 import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "@/lib/agent/plan-preview";
 import { TOOL_CATEGORIES } from "@/lib/agent/tools/registry";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { AgentResult } from "@/lib/agent/types";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
+
+export interface ApproverIdentity {
+  clerkUserId: string;
+  displayName: string | null;
+}
+
+export function formatApproverId(identity: ApproverIdentity): string {
+  return identity.displayName ? `${identity.clerkUserId}:${identity.displayName}` : identity.clerkUserId;
+}
 
 interface CurrentCachedPlan {
   instruction: string;
@@ -96,6 +106,7 @@ export async function executeCurrentCachedHomePlan(params: {
   settings: OrgSettings;
   allowedKinds: HomePlanKind[];
   failureRoute: AgentFailureAlertRoute;
+  approver?: ApproverIdentity;
 }): Promise<ExecutedCachedPlan> {
   const current = await loadCurrentCachedHomePlan(params);
 
@@ -108,6 +119,16 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
 
+  const auditMode = current.classification.kind === "auto_execute" ? "auto_executed" : "human_approved";
+  const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
+    ? {
+        approverId: formatApproverId(params.approver),
+        approvedAt: new Date(),
+        approvedPlanHash: hashPlan(current.plan),
+        instructionHash: hashInstruction(current.instruction),
+      }
+    : undefined;
+
   const result = await executeAgentTurn({
     orgId: params.orgId,
     threadId: params.threadId,
@@ -116,7 +137,8 @@ export async function executeCurrentCachedHomePlan(params: {
     orgSettings: params.settings,
     approvedToolCalls,
     persistAuditNote: true,
-    auditMode: current.classification.kind === "auto_execute" ? "auto_executed" : "human_approved",
+    auditMode,
+    ...(approval ? { approval } : {}),
   }).finally(() => clearCurrentCachedPlan({
     orgId: params.orgId,
     threadId: params.threadId,

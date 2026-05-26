@@ -4,6 +4,29 @@ import { executeTool } from "./tools/executor";
 import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./types";
 
+async function runFastPathTool(
+  tool: string,
+  input: unknown,
+  ctx: AgentContext,
+  settings: OrgSettings | undefined,
+  actionsPerformed: ActionEntry[],
+): Promise<string> {
+  const startedAt = Date.now();
+  const result = await executeTool(tool, input, ctx, settings);
+  const durationMs = Date.now() - startedAt;
+  const isError = result.toLowerCase().startsWith("error:");
+  actionsPerformed.push({
+    tool,
+    result,
+    input,
+    durationMs,
+    status: isError ? "error" : "success",
+    category: TOOL_CATEGORIES[tool],
+    ...(isError ? { errorDetail: result } : {}),
+  });
+  return result;
+}
+
 interface CustomerSearchResult {
   customer_id: string;
   name: string | null;
@@ -176,8 +199,13 @@ export async function tryRunOperatorOrderStatusFastPath(
     const query = requestedCustomerQuery;
     if (!query) return null;
 
-    const searchResult = await executeTool("search_shopify_customers", { query, limit: 5 }, ctx, settings);
-    actionsPerformed.push({ tool: "search_shopify_customers", result: searchResult });
+    const searchResult = await runFastPathTool(
+      "search_shopify_customers",
+      { query, limit: 5 },
+      ctx,
+      settings,
+      actionsPerformed,
+    );
 
     const customers = parseJsonArray<CustomerSearchResult>(searchResult);
     if (!customers) return { summary: searchResult, actionsPerformed };
@@ -200,8 +228,13 @@ export async function tryRunOperatorOrderStatusFastPath(
     customerName = customer.name || customer.email || customerId;
   }
 
-  const ordersResult = await executeTool("get_shopify_orders", { customer_id: customerId }, ctx, settings);
-  actionsPerformed.push({ tool: "get_shopify_orders", result: ordersResult });
+  const ordersResult = await runFastPathTool(
+    "get_shopify_orders",
+    { customer_id: customerId },
+    ctx,
+    settings,
+    actionsPerformed,
+  );
 
   const orders = parseJsonArray<ShopifyOrderSummary>(ordersResult);
   if (!orders) {

@@ -10,6 +10,9 @@ import { resolveAgentSettings } from "@/lib/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
+import { hashInstruction, hashPlan } from "@/lib/agent/api/agent-actions";
+import { formatApproverId } from "@/lib/agent/api/plan-execution";
+import { resolveSessionApprover } from "@/lib/agent/api/approver";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -84,6 +87,7 @@ export const POST = withOrgRoute(
       instructionHash,
     }, "[agent] POST");
 
+    const approver = await resolveSessionApprover();
     const result = await executeAgentTurn({
       orgId: org.id,
       threadId,
@@ -93,6 +97,14 @@ export const POST = withOrgRoute(
       approvedToolCalls,
       persistAuditNote: true,
       auditMode: "human_approved",
+      ...(approver ? {
+        approval: {
+          approverId: formatApproverId(approver),
+          approvedAt: new Date(),
+          approvedPlanHash: hashPlan(currentPlan),
+          instructionHash: hashInstruction(instruction),
+        },
+      } : {}),
     });
     logger.info({
       orgId: org.id,

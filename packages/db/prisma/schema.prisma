@@ -339,6 +339,7 @@ model Feedback {
 //   category: mirrors TOOL_CATEGORIES from lib/agent/tools/registry.ts
 model AgentAction {
   id               String    @id @default(uuid()) @db.Uuid
+  turnId           String    @map("turn_id") @db.Uuid
   organizationId   String    @map("organization_id") @db.Uuid
   threadId         String?   @map("thread_id") @db.Uuid
   customerId       String?   @map("customer_id") @db.Uuid
@@ -349,6 +350,8 @@ model AgentAction {
   status           String    @db.VarChar(32)
   errorDetail      String?   @map("error_detail") @db.Text
   mode             String    @db.VarChar(32)
+  instruction      String?   @db.Text
+  summary          String?   @db.Text
   approverId       String?   @map("approver_id") @db.VarChar(255)
   approvedAt       DateTime? @map("approved_at") @db.Timestamptz
   approvedPlanHash String?   @map("approved_plan_hash") @db.VarChar(64)
@@ -363,5 +366,6 @@ model AgentAction {
   @@index([organizationId, threadId])
   @@index([organizationId, tool, executedAt])
   @@index([organizationId, status])
+  @@index([turnId])
   @@map("agent_actions")
 }

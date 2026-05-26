@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BadRequestError } from "@/lib/api/errors";
-import { encodeActionLogCursor } from "@/lib/agent/api/turns";
+import { encodeAgentActionCursor } from "@/lib/agent/api/action-log";
 import {
   parseActionLogCursorQuery,
   parseAgentAskBody,
@@ -66,10 +66,10 @@ describe("agent api validation", () => {
   });
 
   it("decodes a valid action log cursor", () => {
-    const cursor = encodeActionLogCursor({ sentAt: "2026-04-18T12:00:00.000Z", id: "msg_123" });
+    const cursor = encodeAgentActionCursor({ executedAt: "2026-04-18T12:00:00.000Z", turnId: "11111111-1111-1111-1111-111111111111" });
     const parsed = parseActionLogCursorQuery(new Request(`http://localhost:3000/api/agent/actions?cursor=${cursor}`));
 
-    expect(parsed.cursor).toEqual({ sentAt: "2026-04-18T12:00:00.000Z", id: "msg_123" });
+    expect(parsed.cursor).toEqual({ executedAt: "2026-04-18T12:00:00.000Z", turnId: "11111111-1111-1111-1111-111111111111" });
     expect(parsed.filters).toEqual({
       channels: undefined,
       tools: undefined,

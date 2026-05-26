@@ -2,6 +2,7 @@ import { createMessage } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@/lib/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
+import type { AgentActionApproval } from "@/lib/agent/api/agent-actions";
 import { getRedis } from "@/lib/server/redis";
 import { acquireThreadLock } from "@/lib/server/agent-lock";
 import { ConflictError } from "@/lib/api/errors";
@@ -21,6 +22,7 @@ interface ExecuteAgentTurnParams {
   persistAuditNote?: boolean;
   persistAuditNoteWhenNoActions?: boolean;
   auditMode?: "human_approved" | "auto_executed" | "read_only";
+  approval?: AgentActionApproval;
   auditMetadata?: {
     senderPhone?: string | null;
     clerkUserId?: string | null;
@@ -62,6 +64,8 @@ export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
       {
         failureRoute: params.failureRoute,
         failureCounterClient,
+        ...(params.auditMode ? { mode: params.auditMode } : {}),
+        ...(params.approval ? { approval: params.approval } : {}),
       }
     );
 

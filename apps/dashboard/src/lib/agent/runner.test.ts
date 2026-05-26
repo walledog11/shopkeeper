@@ -61,12 +61,13 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let thread: Awaited<ReturnType<typeof createTestThread>>;
+let customerId: string;
 
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   return {
     orgId: org.id,
     orgName: 'Test Store',
-    customer: { name: 'Jane', platformId: 'jane@test.com' },
+    customer: { id: customerId, name: 'Jane', platformId: 'jane@test.com' },
     recentMessages: [{ senderType: 'customer', contentText: 'Help me' }],
     openThreadCount: 1,
     shopify: null,
@@ -88,6 +89,7 @@ beforeEach(async () => {
   mockSendReply.mockResolvedValue('Reply sent to customer via email.');
   org = await createTestOrg();
   const customer = await createTestCustomer(org.id, 'jane@test.com', { name: 'Jane Test' });
+  customerId = customer.id;
   thread = await createTestThread(org.id, customer.id, ChannelType.email);
   await createTestMessage(thread.id, 'I need help with my order');
 });

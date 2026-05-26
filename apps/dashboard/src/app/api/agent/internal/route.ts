@@ -20,6 +20,9 @@ import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-u
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
+import { resolveClerkUserApprover } from "@/lib/agent/api/approver";
+import { formatApproverId } from "@/lib/agent/api/plan-execution";
+import { hashInstruction } from "@/lib/agent/api/agent-actions";
 import logger from "@/lib/server/logger";
 
 export async function POST(request: Request) {
@@ -46,6 +49,10 @@ export async function POST(request: Request) {
       })
     ).id;
 
+    const approver = approvedToolCalls?.length
+      ? await resolveClerkUserApprover(clerkUserId)
+      : undefined;
+
     const result = await executeAgentTurn({
       orgId: parsedOrgId,
       threadId: resolvedThreadId,
@@ -54,6 +61,13 @@ export async function POST(request: Request) {
       approvedToolCalls,
       persistAuditNote: true,
       ...(approvedToolCalls?.length ? { auditMode: "human_approved" as const } : {}),
+      ...(approver ? {
+        approval: {
+          approverId: formatApproverId(approver),
+          approvedAt: new Date(),
+          instructionHash: hashInstruction(instruction),
+        },
+      } : {}),
       auditMetadata: {
         senderPhone,
         clerkUserId,

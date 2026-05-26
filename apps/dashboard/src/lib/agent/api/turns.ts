@@ -1,15 +1,30 @@
-import { Buffer } from "node:buffer";
 import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@/lib/agent/tools/turn-content";
-import { TOOL_LABELS } from "@/lib/agent/tools";
-import type { ActionLogEntry, AgentTurn } from "@/types";
+import type { AgentTurn } from "@/types";
 
-export interface ActionLogCursor {
-  sentAt: string;
-  id: string;
+// The note carries only the metadata the threads UI needs to render a turn
+// inline. The canonical per-action record lives in the AgentAction table.
+interface SerializedAgentTurnNote {
+  instruction: string;
+  summary: string | null;
+  error: string | null;
+  mode?: AgentTurn["mode"];
+  senderPhone?: string | null;
+  clerkUserId?: string | null;
+}
+
+function toNoteShape(turn: AgentTurn): SerializedAgentTurnNote {
+  return {
+    instruction: turn.instruction,
+    summary: turn.summary,
+    error: turn.error,
+    ...(turn.mode ? { mode: turn.mode } : {}),
+    ...(turn.senderPhone !== undefined ? { senderPhone: turn.senderPhone } : {}),
+    ...(turn.clerkUserId !== undefined ? { clerkUserId: turn.clerkUserId } : {}),
+  };
 }
 
 export function serializeAgentTurn(turn: AgentTurn): string {
-  return `${AGENT_TURN_PREFIX}${JSON.stringify(turn)}`;
+  return `${AGENT_TURN_PREFIX}${JSON.stringify(toNoteShape(turn))}`;
 }
 
 export function parseAgentTurn(contentText: string | null | undefined): AgentTurn | null {
@@ -18,26 +33,18 @@ export function parseAgentTurn(contentText: string | null | undefined): AgentTur
   }
 
   try {
-    return JSON.parse(contentText.slice(AGENT_TURN_PREFIX.length)) as AgentTurn;
-  } catch {
-    return null;
-  }
-}
-
-export function encodeActionLogCursor(cursor: ActionLogCursor): string {
-  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
-}
-
-export function decodeActionLogCursor(cursor: string): ActionLogCursor | null {
-  try {
-    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<ActionLogCursor>;
-    if (!parsed.sentAt || !parsed.id) {
-      return null;
-    }
-    if (Number.isNaN(new Date(parsed.sentAt).getTime())) {
-      return null;
-    }
-    return { sentAt: parsed.sentAt, id: parsed.id };
+    const parsed = JSON.parse(contentText.slice(AGENT_TURN_PREFIX.length)) as Partial<AgentTurn>;
+    return {
+      instruction: parsed.instruction ?? "",
+      // Legacy notes carry the full actions array; new notes omit it because
+      // AgentAction is now the canonical per-tool record.
+      actions: Array.isArray(parsed.actions) ? parsed.actions : [],
+      summary: parsed.summary ?? null,
+      error: parsed.error ?? null,
+      ...(parsed.mode ? { mode: parsed.mode } : {}),
+      ...(parsed.senderPhone !== undefined ? { senderPhone: parsed.senderPhone } : {}),
+      ...(parsed.clerkUserId !== undefined ? { clerkUserId: parsed.clerkUserId } : {}),
+    };
   } catch {
     return null;
   }
@@ -58,43 +65,7 @@ export function excludeAgentTurnMessages<T extends MessageWithAgentTurn>(message
   return messages.filter((message) => !isAgentTurnContent(message.contentText));
 }
 
-export function toActionLogEntry(
-  message: {
-    id: string;
-    sentAt: Date;
-    thread: {
-      id: string;
-      channelType: string;
-      tag: string | null;
-      customer: {
-        name: string | null;
-        platformId: string;
-      };
-    };
-  },
-  turn: AgentTurn,
-): ActionLogEntry | null {
-  if (!turn.actions?.length) {
-    return null;
-  }
-
-  const handle = message.thread.customer.name ??
-    (message.thread.customer.platformId.startsWith("dashboard:")
-      ? "Dashboard session"
-      : message.thread.customer.platformId);
-
-  return {
-    id: message.id,
-    sentAt: message.sentAt.toISOString(),
-    threadId: message.thread.id,
-    channelType: message.thread.channelType,
-    threadTag: message.thread.tag,
-    customerHandle: handle,
-    instruction: turn.instruction ?? null,
-    summary:
-      turn.summary?.trim() ||
-      turn.actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · "),
-    actions: turn.actions,
-    mode: turn.mode ?? null,
-  };
-}
+export const agentTurnMessageFilter = {
+  senderType: "note" as const,
+  contentText: { startsWith: AGENT_TURN_PREFIX },
+};

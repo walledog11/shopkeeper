@@ -1,6 +1,6 @@
 import { BadRequestError, type ApiErrorDetail } from "@/lib/api/errors";
 import { requireTrimmedInstruction } from "@/lib/agent/api/auth";
-import { decodeActionLogCursor, type ActionLogCursor } from "@/lib/agent/api/turns";
+import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
 
 function invalidField(field: string, message: string, code = "invalid"): never {
@@ -179,10 +179,10 @@ function parseDateParam(value: string | null, field: "from" | "to"): Date | unde
   return date;
 }
 
-export function parseActionLogCursorQuery(request: Request): { cursor: ActionLogCursor | null; filters: ActionLogFilters } {
+export function parseActionLogCursorQuery(request: Request): { cursor: AgentActionCursor | null; filters: ActionLogFilters } {
   const { searchParams } = new URL(request.url);
   const rawCursor = searchParams.get("cursor");
-  const cursor = rawCursor ? decodeActionLogCursor(rawCursor) : null;
+  const cursor = rawCursor ? decodeAgentActionCursor(rawCursor) : null;
 
   if (rawCursor && !cursor) {
     throw new BadRequestError("Validation failed", [

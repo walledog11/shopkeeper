@@ -7,6 +7,7 @@ import {
   executeCurrentCachedHomePlan,
   findFailedToolResult,
 } from "@/lib/agent/api/plan-execution";
+import { resolveSessionApprover } from "@/lib/agent/api/approver";
 import {
   recordAgentFailure,
   recordAgentRouteFailure,
@@ -39,12 +40,14 @@ export const POST = withOrgRoute(
     const startedAt = Date.now();
     const { threadId } = parseAgentQuickApproveBody(await request.json());
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
+    const approver = await resolveSessionApprover();
     const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
       threadId,
       settings,
       allowedKinds: ["quick_reply"],
       failureRoute: "/api/agent/quick-approve",
+      ...(approver ? { approver } : {}),
     });
     const instructionHash = executed.instruction ? hashInstructionForLog(executed.instruction) : null;
 

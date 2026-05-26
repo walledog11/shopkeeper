@@ -583,7 +583,7 @@ Build the helper in isolation so it's testable before wiring into the agent loop
 
 ---
 
-### Step 5.3 — Wire writer into the agent loop (~1 day)
+### Step 5.3 — Wire writer into the agent loop (~1 day) [COMPLETED]
 
 This is the dark-write step. After this lands, every agent run writes `AgentAction` rows but nothing reads them yet.
 
@@ -597,7 +597,7 @@ This is the dark-write step. After this lands, every agent run writes `AgentActi
 
 ---
 
-### Step 5.4 — Approval context plumbing (~0.5 day)
+### Step 5.4 — Approval context plumbing (~0.5 day) [COMPLETED]
 
 Layer approver identity onto the rows so the audit log answers "who said yes."
 
@@ -615,7 +615,7 @@ Layer approver identity onto the rows so the audit log answers "who said yes."
 
 ---
 
-### Step 5.5 — Read path rewrite + CSV (~1 day)
+### Step 5.5 — Read path rewrite + CSV (~1 day) [COMPLETED]
 
 Flip the source of truth. Ship in the same PR as 5.6 so historic data is present when the new reader goes live.
 
@@ -631,7 +631,7 @@ Flip the source of truth. Ship in the same PR as 5.6 so historic data is present
 
 ---
 
-### Step 5.6 — One-shot backfill (~0.5 day)
+### Step 5.6 — One-shot backfill (~0.5 day) [COMPLETED]
 
 **New file `packages/db/scripts/backfill-agent-actions.ts`**
 - Iterates `Message` rows with `senderType: "note"` and body prefixed `__clerk_agent__`.

@@ -90,15 +90,12 @@ function parseSuccessfulRefundCents(result: string): number | null {
   return Number.isFinite(cents) && cents > 0 ? cents : null;
 }
 
-export async function executeTool(
+async function runToolBody(
   name: string,
   args: unknown,
   ctx: AgentContext,
   settings?: OrgSettings
 ): Promise<string> {
-  const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
-  if (policyError) return policyError;
-
   const noShopify = "Error: no Shopify integration connected.";
   const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
   const resolvedSettings = resolveAgentSettings(settings);
@@ -203,4 +200,36 @@ export async function executeTool(
     default:
       return `Error: unknown tool "${name}".`;
   }
+}
+
+export async function executeTool(
+  name: string,
+  args: unknown,
+  ctx: AgentContext,
+  settings?: OrgSettings
+): Promise<string> {
+  const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
+  if (policyError) return policyError;
+  return runToolBody(name, args, ctx, settings);
+}
+
+export interface ExecuteToolResult {
+  result: string;
+  status: "success" | "error" | "policy_block";
+}
+
+export async function executeToolWithStatus(
+  name: string,
+  args: unknown,
+  ctx: AgentContext,
+  settings?: OrgSettings
+): Promise<ExecuteToolResult> {
+  const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
+  if (policyError) return { result: policyError, status: "policy_block" };
+
+  const result = await runToolBody(name, args, ctx, settings);
+  return {
+    result,
+    status: result.toLowerCase().startsWith("error:") ? "error" : "success",
+  };
 }

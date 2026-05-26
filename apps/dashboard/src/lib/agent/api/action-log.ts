@@ -1,179 +1,267 @@
+import { Buffer } from "node:buffer";
+import type { Prisma } from "@prisma/client";
 import { db, type DbChannelType as ChannelType } from "@clerk/db";
-import { AGENT_TURN_PREFIX } from "@/lib/agent/tools/turn-content";
 import { TOOL_LABELS } from "@/lib/agent/tools";
-import {
-  decodeActionLogCursor,
-  encodeActionLogCursor,
-  parseAgentTurn,
-  toActionLogEntry,
-  extractAgentTurnsFromMessages,
-  type ActionLogCursor,
-} from "@/lib/agent/api/turns";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry, AgentTurn } from "@/types";
 
+// Legacy note helpers — agent turns also write a slim summary note for inline
+// thread rendering. These exports stay so callers that filter/exclude those
+// notes (threads UI, page-level message counters, GDPR export) keep working.
 export { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
-export { extractAgentTurnsFromMessages, excludeAgentTurnMessages } from "@/lib/agent/api/turns";
+export {
+  agentTurnMessageFilter,
+  excludeAgentTurnMessages,
+  extractAgentTurnsFromMessages,
+} from "@/lib/agent/api/turns";
 
 const DEFAULT_PAGE_SIZE = 50;
-const DEFAULT_BATCH_SIZE = 100;
-const DEFAULT_EXPORT_PAGE_SIZE = 250;
+const DEFAULT_EXPORT_BATCH_SIZE = 250;
 
-export const agentTurnMessageFilter = {
-  senderType: "note" as const,
-  contentText: { startsWith: AGENT_TURN_PREFIX },
-};
+const OPERATOR_DASHBOARD_PLATFORM_PREFIX = "dashboard:";
 
-function entryMatchesFilters(entry: ActionLogEntry, filters: ActionLogFilters | undefined): boolean {
-  if (!filters) return true;
-  if (filters.tools?.length) {
-    const want = new Set(filters.tools);
-    if (!entry.actions.some((a) => want.has(a.tool))) return false;
+export interface AgentActionCursor {
+  executedAt: string;
+  turnId: string;
+}
+
+export function encodeAgentActionCursor(cursor: AgentActionCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+export function decodeAgentActionCursor(cursor: string): AgentActionCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<AgentActionCursor>;
+    if (!parsed.executedAt || !parsed.turnId) return null;
+    if (Number.isNaN(new Date(parsed.executedAt).getTime())) return null;
+    return { executedAt: parsed.executedAt, turnId: parsed.turnId };
+  } catch {
+    return null;
   }
-  if (filters.errorsOnly && !entry.actions.some((a) => a.result.startsWith("Error"))) {
-    return false;
+}
+
+function buildActionWhere(orgId: string, filters?: ActionLogFilters): Prisma.AgentActionWhereInput {
+  const where: Prisma.AgentActionWhereInput = { organizationId: orgId };
+
+  if (filters?.from || filters?.to) {
+    where.executedAt = {
+      ...(filters.from ? { gte: filters.from } : {}),
+      ...(filters.to ? { lte: filters.to } : {}),
+    };
   }
-  return true;
+  if (filters?.channels?.length) {
+    where.thread = { channelType: { in: filters.channels as ChannelType[] } };
+  }
+
+  return where;
+}
+
+function buildTurnSelectionWhere(orgId: string, filters?: ActionLogFilters): Prisma.AgentActionWhereInput {
+  const where = buildActionWhere(orgId, filters);
+  if (filters?.tools?.length) where.tool = { in: filters.tools };
+  if (filters?.errorsOnly) where.status = { in: ["error", "policy_block"] };
+  return where;
+}
+
+function applyCursor(
+  where: Prisma.AgentActionWhereInput,
+  cursor: AgentActionCursor | null,
+): Prisma.AgentActionWhereInput {
+  if (!cursor) return where;
+  const at = new Date(cursor.executedAt);
+  return {
+    ...where,
+    OR: [
+      { executedAt: { lt: at } },
+      { executedAt: at, turnId: { lt: cursor.turnId } },
+    ],
+  };
+}
+
+interface RawActionRow {
+  id: string;
+  turnId: string;
+  threadId: string | null;
+  tool: string;
+  output: string | null;
+  status: string;
+  mode: string;
+  instruction: string | null;
+  summary: string | null;
+  executedAt: Date;
+  thread: {
+    id: string;
+    channelType: string;
+    tag: string | null;
+    customer: { name: string | null; platformId: string };
+  } | null;
+}
+
+const ACTION_LOG_SELECT = {
+  id: true,
+  turnId: true,
+  threadId: true,
+  tool: true,
+  output: true,
+  status: true,
+  mode: true,
+  instruction: true,
+  summary: true,
+  executedAt: true,
+  thread: {
+    select: {
+      id: true,
+      channelType: true,
+      tag: true,
+      customer: { select: { name: true, platformId: true } },
+    },
+  },
+} satisfies Prisma.AgentActionSelect;
+
+function customerHandle(customer: { name: string | null; platformId: string } | null): string {
+  if (!customer) return "Unknown";
+  if (customer.name) return customer.name;
+  if (customer.platformId.startsWith(OPERATOR_DASHBOARD_PLATFORM_PREFIX)) {
+    return "Dashboard session";
+  }
+  return customer.platformId;
+}
+
+function isValidMode(value: string): value is NonNullable<ActionLogEntry["mode"]> {
+  return value === "human_approved" || value === "auto_executed" || value === "read_only";
+}
+
+function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntry | null {
+  if (rows.length === 0) return null;
+  // Within a turn every row shares the turn-level fields; first row is canonical.
+  const first = rows[0];
+  if (!first.thread) return null;
+
+  const actions = rows.map((row) => ({ tool: row.tool, result: row.output ?? "" }));
+  const summary = first.summary?.trim()
+    || actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · ");
+
+  return {
+    id: turnId,
+    sentAt: first.executedAt.toISOString(),
+    threadId: first.thread.id,
+    channelType: first.thread.channelType,
+    threadTag: first.thread.tag,
+    customerHandle: customerHandle(first.thread.customer),
+    instruction: first.instruction ?? null,
+    summary,
+    actions,
+    mode: isValidMode(first.mode) ? first.mode : null,
+  };
+}
+
+async function fetchTurnsPage(params: {
+  orgId: string;
+  cursor: AgentActionCursor | null;
+  filters?: ActionLogFilters;
+  pageSize: number;
+}): Promise<{ turns: ActionLogEntry[]; nextCursor: AgentActionCursor | null }> {
+  const { orgId, cursor, filters, pageSize } = params;
+
+  // Phase 1: select which turn IDs go on this page. We filter at row level (so
+  // tool/errorsOnly narrow the turn set) and then group up to pageSize turns.
+  const selectionWhere = applyCursor(buildTurnSelectionWhere(orgId, filters), cursor);
+  const turnGroups = await db.agentAction.groupBy({
+    by: ["turnId"],
+    where: selectionWhere,
+    _max: { executedAt: true },
+    orderBy: [{ _max: { executedAt: "desc" } }, { turnId: "desc" }],
+    take: pageSize + 1,
+  });
+
+  if (turnGroups.length === 0) {
+    return { turns: [], nextCursor: null };
+  }
+
+  const hasMore = turnGroups.length > pageSize;
+  const pageTurns = hasMore ? turnGroups.slice(0, pageSize) : turnGroups;
+  const turnIds = pageTurns.map((g) => g.turnId);
+
+  // Phase 2: load every row for the selected turns (unfiltered at row level —
+  // we want the full action breakdown even when the user filters by one tool).
+  const rows = await db.agentAction.findMany({
+    where: { ...buildActionWhere(orgId, filters), turnId: { in: turnIds } },
+    select: ACTION_LOG_SELECT,
+    orderBy: [{ executedAt: "asc" }, { id: "asc" }],
+  });
+
+  const byTurn = new Map<string, RawActionRow[]>();
+  for (const row of rows) {
+    const bucket = byTurn.get(row.turnId);
+    if (bucket) bucket.push(row);
+    else byTurn.set(row.turnId, [row]);
+  }
+
+  const entries: ActionLogEntry[] = [];
+  for (const turnId of turnIds) {
+    const entry = buildEntryFromRows(turnId, byTurn.get(turnId) ?? []);
+    if (entry) entries.push(entry);
+  }
+
+  const last = pageTurns[pageTurns.length - 1];
+  const nextCursor = hasMore && last._max.executedAt
+    ? { executedAt: last._max.executedAt.toISOString(), turnId: last.turnId }
+    : null;
+
+  return { turns: entries, nextCursor };
 }
 
 export async function listAgentActionLogEntries(params: {
   orgId: string;
-  cursor?: ActionLogCursor | null;
+  cursor?: AgentActionCursor | null;
   filters?: ActionLogFilters;
   pageSize?: number;
-  batchSize?: number;
 }): Promise<{ entries: ActionLogEntry[]; nextCursor: string | null }> {
   const pageSize = params.pageSize ?? DEFAULT_PAGE_SIZE;
-  const batchSize = params.batchSize ?? DEFAULT_BATCH_SIZE;
-  const filters = params.filters;
+  const { turns, nextCursor } = await fetchTurnsPage({
+    orgId: params.orgId,
+    cursor: params.cursor ?? null,
+    filters: params.filters,
+    pageSize,
+  });
+  return {
+    entries: turns,
+    nextCursor: nextCursor ? encodeAgentActionCursor(nextCursor) : null,
+  };
+}
 
-  const entries: ActionLogEntry[] = [];
-  let nextQueryCursor = params.cursor ?? null;
-  let nextCursor: string | null = null;
-
-  while (entries.length < pageSize) {
-    const messages = await db.message.findMany({
-      where: {
-        ...agentTurnMessageFilter,
-        deletedAt: null,
-        thread: filters?.channels?.length
-          ? { organizationId: params.orgId, channelType: { in: filters.channels as ChannelType[] } }
-          : { organizationId: params.orgId },
-        ...(filters?.from || filters?.to
-          ? {
-              sentAt: {
-                ...(filters.from ? { gte: filters.from } : {}),
-                ...(filters.to ? { lte: filters.to } : {}),
-              },
-            }
-          : {}),
-        ...(nextQueryCursor ? {
-          OR: [
-            { sentAt: { lt: new Date(nextQueryCursor.sentAt) } },
-            {
-              sentAt: new Date(nextQueryCursor.sentAt),
-              id: { lt: nextQueryCursor.id },
-            },
-          ],
-        } : {}),
-      },
-      orderBy: [{ sentAt: "desc" }, { id: "desc" }],
-      take: batchSize,
-      select: {
-        id: true,
-        sentAt: true,
-        contentText: true,
-        thread: {
-          select: {
-            id: true,
-            channelType: true,
-            tag: true,
-            customer: {
-              select: {
-                name: true,
-                platformId: true,
-              },
-            },
-          },
-        },
-      },
+// Async iterator over every action-log entry for an org, streamed in
+// bounded-size pages so CSV export does not load the full history into memory.
+export async function* iterateAgentActionLogEntries(params: {
+  orgId: string;
+  filters?: ActionLogFilters;
+  batchSize?: number;
+}): AsyncGenerator<ActionLogEntry> {
+  const batchSize = params.batchSize ?? DEFAULT_EXPORT_BATCH_SIZE;
+  let cursor: AgentActionCursor | null = null;
+  while (true) {
+    const { turns, nextCursor } = await fetchTurnsPage({
+      orgId: params.orgId,
+      cursor,
+      filters: params.filters,
+      pageSize: batchSize,
     });
-
-    if (messages.length === 0) {
-      nextCursor = null;
-      break;
-    }
-
-    for (const message of messages) {
-      const turn = parseAgentTurn(message.contentText);
-      if (!turn) {
-        continue;
-      }
-
-      const entry = toActionLogEntry(message, turn);
-      if (!entry) {
-        continue;
-      }
-
-      if (!entryMatchesFilters(entry, filters)) {
-        continue;
-      }
-
-      entries.push(entry);
-      if (entries.length === pageSize) {
-        break;
-      }
-    }
-
-    const lastMessage = messages[messages.length - 1];
-    nextQueryCursor = { sentAt: lastMessage.sentAt.toISOString(), id: lastMessage.id };
-    nextCursor = messages.length < batchSize ? null : encodeActionLogCursor(nextQueryCursor);
-
-    if (messages.length < batchSize) {
-      break;
-    }
+    for (const entry of turns) yield entry;
+    if (!nextCursor) return;
+    cursor = nextCursor;
   }
-
-  return { entries, nextCursor };
 }
 
 export async function listAllAgentActionLogEntries(params: {
   orgId: string;
   filters?: ActionLogFilters;
-  pageSize?: number;
   batchSize?: number;
 }): Promise<ActionLogEntry[]> {
-  const pageSize = params.pageSize ?? DEFAULT_EXPORT_PAGE_SIZE;
-  const batchSize = params.batchSize ?? Math.max(pageSize, DEFAULT_BATCH_SIZE);
-
-  const entries: ActionLogEntry[] = [];
-  let cursor: ActionLogCursor | null = null;
-
-  // Export uses cursor-based pagination so Settings and Activity share the same source of truth.
-  // We step through the entire action log in bounded chunks rather than querying raw notes again.
-  while (true) {
-    const page = await listAgentActionLogEntries({
-      orgId: params.orgId,
-      cursor,
-      filters: params.filters,
-      pageSize,
-      batchSize,
-    });
-    entries.push(...page.entries);
-
-    if (!page.nextCursor) {
-      break;
-    }
-
-    const nextCursor = decodeActionLogCursor(page.nextCursor);
-    if (!nextCursor) {
-      break;
-    }
-
-    cursor = nextCursor;
+  const out: ActionLogEntry[] = [];
+  for await (const entry of iterateAgentActionLogEntries(params)) {
+    out.push(entry);
   }
-
-  return entries;
+  return out;
 }
 
 function escapeCsvCell(value: string): string {
@@ -184,59 +272,112 @@ function normalizeCsvText(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim();
 }
 
+export const ACTION_LOG_CSV_HEADERS = [
+  "timestamp",
+  "customer",
+  "channel",
+  "thread_tag",
+  "thread_id",
+  "mode",
+  "instruction",
+  "summary",
+  "actions",
+  "action_results",
+];
+
+export function actionLogEntryToCsvRow(entry: ActionLogEntry): string {
+  const actions = entry.actions
+    .map((action) => normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool))
+    .join(" | ");
+  const actionResults = entry.actions
+    .map((action) => `${normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool)}: ${normalizeCsvText(action.result)}`)
+    .join(" || ");
+
+  return [
+    entry.sentAt,
+    entry.customerHandle,
+    entry.channelType,
+    entry.threadTag ?? "",
+    entry.threadId,
+    entry.mode ?? "",
+    entry.instruction ?? "",
+    entry.summary,
+    actions,
+    actionResults,
+  ].map((cell) => escapeCsvCell(normalizeCsvText(cell))).join(",");
+}
+
 export function serializeAgentActionLogCsv(entries: ActionLogEntry[]): string {
-  const headers = [
-    "timestamp",
-    "customer",
-    "channel",
-    "thread_tag",
-    "thread_id",
-    "mode",
-    "instruction",
-    "summary",
-    "actions",
-    "action_results",
-  ];
+  const rows = entries.map(actionLogEntryToCsvRow);
+  return [ACTION_LOG_CSV_HEADERS.join(","), ...rows].join("\n");
+}
 
-  const rows = entries.map((entry) => {
-    const actions = entry.actions
-      .map((action) => normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool))
-      .join(" | ");
-    const actionResults = entry.actions
-      .map((action) => `${normalizeCsvText(TOOL_LABELS[action.tool] ?? action.tool)}: ${normalizeCsvText(action.result)}`)
-      .join(" || ");
+export function streamAgentActionLogCsv(params: {
+  orgId: string;
+  filters?: ActionLogFilters;
+  batchSize?: number;
+}): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const iterator = iterateAgentActionLogEntries(params);
+  let wroteHeader = false;
 
-    return [
-      entry.sentAt,
-      entry.customerHandle,
-      entry.channelType,
-      entry.threadTag ?? "",
-      entry.threadId,
-      entry.mode ?? "",
-      entry.instruction ?? "",
-      entry.summary,
-      actions,
-      actionResults,
-    ].map((cell) => escapeCsvCell(normalizeCsvText(cell))).join(",");
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (!wroteHeader) {
+        wroteHeader = true;
+        controller.enqueue(encoder.encode(`${ACTION_LOG_CSV_HEADERS.join(",")}\n`));
+        return;
+      }
+      const { value, done } = await iterator.next();
+      if (done) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(encoder.encode(`${actionLogEntryToCsvRow(value)}\n`));
+    },
+    async cancel() {
+      await iterator.return?.(undefined);
+    },
   });
-
-  return [headers.join(","), ...rows].join("\n");
 }
 
 export async function listAgentTurnsForOrgInRange(orgId: string, from: Date, to: Date): Promise<AgentTurn[]> {
-  const messages = await db.message.findMany({
+  const rows = await db.agentAction.findMany({
     where: {
-      ...agentTurnMessageFilter,
-      sentAt: { gte: from, lte: to },
-      deletedAt: null,
-      thread: { organizationId: orgId },
+      organizationId: orgId,
+      executedAt: { gte: from, lte: to },
     },
     select: {
-      id: true,
-      contentText: true,
+      turnId: true,
+      tool: true,
+      output: true,
+      instruction: true,
+      summary: true,
+      mode: true,
+      executedAt: true,
     },
-    take: 5000,
+    orderBy: [{ executedAt: "asc" }, { id: "asc" }],
+    take: 50_000,
   });
 
-  return extractAgentTurnsFromMessages(messages);
+  const byTurn = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const bucket = byTurn.get(row.turnId);
+    if (bucket) bucket.push(row);
+    else byTurn.set(row.turnId, [row]);
+  }
+
+  const turns: AgentTurn[] = [];
+  for (const turnRows of byTurn.values()) {
+    const first = turnRows[0];
+    turns.push({
+      instruction: first.instruction ?? "",
+      actions: turnRows.map((row) => ({ tool: row.tool, result: row.output ?? "" })),
+      summary: first.summary,
+      error: null,
+      ...(isValidMode(first.mode) ? { mode: first.mode } : {}),
+    });
+  }
+
+  return turns;
 }
