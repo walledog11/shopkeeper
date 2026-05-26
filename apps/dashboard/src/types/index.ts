@@ -163,8 +163,15 @@ export interface ActionLogEntry {
   customerHandle: string;
   instruction: string | null;
   summary: string;
-  actions: Array<{ tool: string; result: string }>;
+  actions: Array<{
+    tool: string;
+    result: string;
+    input?: unknown;
+    durationMs?: number;
+    status?: 'success' | 'error' | 'policy_block' | 'escalated';
+  }>;
   mode: 'human_approved' | 'auto_executed' | 'read_only' | null;
+  approver: { id: string; displayName: string | null } | null;
 }
 
 export interface Thread {

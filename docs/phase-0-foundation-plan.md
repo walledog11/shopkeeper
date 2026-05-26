@@ -646,7 +646,7 @@ Flip the source of truth. Ship in the same PR as 5.6 so historic data is present
 
 ---
 
-### Step 5.7 — UI: mode / approver / duration columns (~0.5 day)
+### Step 5.7 — UI: mode / approver / duration columns (~0.5 day) [COMPLETED]
 
 **`apps/dashboard/src/app/dashboard/activity/`** (or wherever the action log lives — confirm path by grepping for the existing log component).
 

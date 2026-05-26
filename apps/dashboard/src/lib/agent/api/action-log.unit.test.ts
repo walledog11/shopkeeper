@@ -95,6 +95,7 @@ describe("agent action-log CSV", () => {
       { tool: "update_thread_status", result: "Status set to closed." },
     ],
     mode: "auto_executed",
+    approver: null,
   };
 
   it("renders headers + ordered cells in serializeAgentActionLogCsv", () => {

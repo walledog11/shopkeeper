@@ -156,9 +156,14 @@ export function parseAgentPlanInternalBody(body: unknown) {
   };
 }
 
+export type ActionLogMode = "human_approved" | "auto_executed" | "read_only";
+
+const VALID_MODES: ActionLogMode[] = ["human_approved", "auto_executed", "read_only"];
+
 export interface ActionLogFilters {
   channels?: string[];
   tools?: string[];
+  modes?: ActionLogMode[];
   errorsOnly?: boolean;
   from?: Date;
   to?: Date;
@@ -196,9 +201,18 @@ export function parseActionLogCursorQuery(request: Request): { cursor: AgentActi
     invalidField("to", "to must be after from");
   }
 
+  const rawModes = parseCsvList(searchParams.get("mode"));
+  let modes: ActionLogMode[] | undefined;
+  if (rawModes) {
+    const invalid = rawModes.find((m) => !VALID_MODES.includes(m as ActionLogMode));
+    if (invalid) invalidField("mode", `mode must be one of ${VALID_MODES.join(", ")}`);
+    modes = rawModes as ActionLogMode[];
+  }
+
   const filters: ActionLogFilters = {
     channels: parseCsvList(searchParams.get("channel")),
     tools: parseCsvList(searchParams.get("tool")),
+    modes,
     errorsOnly: searchParams.get("errorsOnly") === "true" ? true : undefined,
     from,
     to,

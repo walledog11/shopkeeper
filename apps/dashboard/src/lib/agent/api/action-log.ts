@@ -59,6 +59,7 @@ function buildActionWhere(orgId: string, filters?: ActionLogFilters): Prisma.Age
 function buildTurnSelectionWhere(orgId: string, filters?: ActionLogFilters): Prisma.AgentActionWhereInput {
   const where = buildActionWhere(orgId, filters);
   if (filters?.tools?.length) where.tool = { in: filters.tools };
+  if (filters?.modes?.length) where.mode = { in: filters.modes };
   if (filters?.errorsOnly) where.status = { in: ["error", "policy_block"] };
   return where;
 }
@@ -83,9 +84,12 @@ interface RawActionRow {
   turnId: string;
   threadId: string | null;
   tool: string;
+  input: Prisma.JsonValue;
   output: string | null;
   status: string;
   mode: string;
+  durationMs: number;
+  approverId: string | null;
   instruction: string | null;
   summary: string | null;
   executedAt: Date;
@@ -102,9 +106,12 @@ const ACTION_LOG_SELECT = {
   turnId: true,
   threadId: true,
   tool: true,
+  input: true,
   output: true,
   status: true,
   mode: true,
+  durationMs: true,
+  approverId: true,
   instruction: true,
   summary: true,
   executedAt: true,
@@ -131,13 +138,32 @@ function isValidMode(value: string): value is NonNullable<ActionLogEntry["mode"]
   return value === "human_approved" || value === "auto_executed" || value === "read_only";
 }
 
+function isValidActionStatus(value: string): value is NonNullable<ActionLogEntry["actions"][number]["status"]> {
+  return value === "success" || value === "error" || value === "policy_block" || value === "escalated";
+}
+
+// approverId is denormalized as `<clerkUserId>:<displayName>` (or bare id if
+// no display name was available at approval time). See formatApproverId.
+function parseApprover(raw: string | null): ActionLogEntry["approver"] {
+  if (!raw) return null;
+  const idx = raw.indexOf(":");
+  if (idx === -1) return { id: raw, displayName: null };
+  return { id: raw.slice(0, idx), displayName: raw.slice(idx + 1) || null };
+}
+
 function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntry | null {
   if (rows.length === 0) return null;
   // Within a turn every row shares the turn-level fields; first row is canonical.
   const first = rows[0];
   if (!first.thread) return null;
 
-  const actions = rows.map((row) => ({ tool: row.tool, result: row.output ?? "" }));
+  const actions = rows.map((row) => ({
+    tool: row.tool,
+    result: row.output ?? "",
+    input: row.input ?? undefined,
+    durationMs: row.durationMs,
+    ...(isValidActionStatus(row.status) ? { status: row.status } : {}),
+  }));
   const summary = first.summary?.trim()
     || actions.map((action) => TOOL_LABELS[action.tool] ?? action.tool).join(" · ");
 
@@ -152,6 +178,7 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
     summary,
     actions,
     mode: isValidMode(first.mode) ? first.mode : null,
+    approver: parseApprover(first.approverId),
   };
 }
 
