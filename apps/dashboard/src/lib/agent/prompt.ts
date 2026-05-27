@@ -29,6 +29,54 @@ function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { in
   return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
 }
 
+function buildCustomerMemorySection(ctx: AgentContext): string {
+  const memory = ctx.customerMemory;
+  if (!memory) return "";
+
+  const parts: string[] = [];
+  const summary = typeof memory.summary === "string" ? memory.summary.trim() : "";
+  if (summary) parts.push(summary);
+
+  const keyFacts = (Array.isArray(memory.keyFacts) ? memory.keyFacts : [])
+    .filter((fact): fact is string => typeof fact === "string")
+    .map((fact) => fact.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  if (keyFacts.length > 0) {
+    parts.push(`Key facts:\n${keyFacts.map((fact) => `- ${fact}`).join("\n")}`);
+  }
+
+  const recentInteractions = (Array.isArray(memory.recentInteractions) ? memory.recentInteractions : [])
+    .map((interaction) => {
+      const outcome = typeof interaction.outcome === "string" ? interaction.outcome.trim() : "";
+      if (!outcome) return null;
+      const tag = typeof interaction.tag === "string" && interaction.tag.trim() ? interaction.tag.trim() : "untagged";
+      const closedAt = typeof interaction.closedAt === "string" ? interaction.closedAt : "unknown";
+      return `${tag} — ${outcome} (${closedAt})`;
+    })
+    .filter((line): line is string => line !== null)
+    .slice(0, 3);
+  if (recentInteractions.length > 0) {
+    parts.push(`Recent interactions:\n${recentInteractions.map((line) => `- ${line}`).join("\n")}`);
+  }
+
+  const directives: string[] = [];
+  const policyFlags = memory.policyFlags ?? {};
+  if (policyFlags.complaintPattern) {
+    directives.push("This customer has filed multiple complaints recently — bias toward escalation.");
+  }
+  if (policyFlags.vip) {
+    directives.push("This is a high-value customer — extra care on tone.");
+  }
+  if (directives.length > 0) {
+    parts.push(directives.join(" "));
+  }
+
+  return parts.length > 0
+    ? `\n\n## What you know about this customer\n${parts.join("\n\n")}`
+    : "";
+}
+
 function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): string[] {
   const clauses: string[] = [];
   if (s.blockCancellations) {
@@ -66,7 +114,7 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
   return `\n\n## Your autonomy\n${body}`;
 }
 
-export function buildSystemPrompt(ctx: AgentContext, settings?: OrgSettings): string {
+export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
   const s = resolveAgentSettings(settings);
   const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
 
@@ -99,7 +147,7 @@ ${shopifyCustomerNote}
 - For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
 - Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
 - To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
-- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.${buildBrandContextSections(s, ctx, { includeVoice: false })}
+- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.${buildBrandContextSections(s, ctx, { includeVoice: false })}${buildCustomerMemorySection(ctx)}
 
 ## Instructions
 - Take action only when you are confident. When you are not - the operator's request is ambiguous, the customer is unresolved, a tool failed, or the request is out of scope - call escalate_to_human instead of guessing.
@@ -156,10 +204,10 @@ ${shopifyCustomerNote}
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
 - Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}${kbSection}`;
 }
 
-export function buildComposerAskPrompt(ctx: AgentContext, settings?: OrgSettings): string {
+export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
   const s = resolveAgentSettings(settings);
   const ordersJson = ctx.recentOrders.length > 0 ? JSON.stringify(ctx.recentOrders) : "[]";
   const kbSection = ctx.kbArticles.length > 0
@@ -181,10 +229,10 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: OrgSettings
 - Customer email/handle: ${ctx.customer.platformId}
 
 ## Customer's recent orders
-${ordersJson}
+${ordersJson}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}
 
 ## Knowledge base
-${kbSection}${buildBrandContextSections(s, ctx, { includeVoice: true })}
+${kbSection}
 
 ## Rules
 - Answer the support operator privately. Do not address the customer unless the operator asks you to draft customer-facing wording.

@@ -816,7 +816,7 @@ Independent of 6.4 — can land any time after 6.3.
 
 ---
 
-### Step 6.6 — Reader: load memory into AgentContext (~0.5 day)
+### Step 6.6 — Reader: load memory into AgentContext (~0.5 day) [COMPLETED]
 
 **`apps/dashboard/src/lib/agent/context.ts`**
 - `buildContext` already loads the customer row. Add `memory` and `memoryUpdatedAt` to the select.
@@ -828,7 +828,7 @@ No prompt change yet — that's 6.7.
 
 ---
 
-### Step 6.7 — Prompt rendering (~0.5 day)
+### Step 6.7 — Prompt rendering (~0.5 day) [COMPLETED]
 
 Pairs with 6.6 — must ship in the same PR. Reader without prompt is a dead field; prompt without reader references undefined data.
 

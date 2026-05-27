@@ -1,3 +1,5 @@
+import type { CustomerMemory } from "@clerk/db";
+
 export interface ShopifyOrderSummary {
   id: string;
   name: string;
@@ -33,6 +35,7 @@ export interface AgentContext {
     name: string | null;
     platformId: string;
   };
+  customerMemory: CustomerMemory | null;
   recentMessages: { senderType: string; contentText: string | null }[];
   openThreadCount: number;
   shopify: { shop: string; accessToken: string } | null;

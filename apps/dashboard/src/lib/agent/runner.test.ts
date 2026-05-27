@@ -68,6 +68,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     orgId: org.id,
     orgName: 'Test Store',
     customer: { id: customerId, name: 'Jane', platformId: 'jane@test.com' },
+    customerMemory: null,
     recentMessages: [{ senderType: 'customer', contentText: 'Help me' }],
     openThreadCount: 1,
     shopify: null,

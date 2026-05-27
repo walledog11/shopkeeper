@@ -44,6 +44,7 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
       name: setup.customerName ?? null,
       platformId: setup.customerPlatformId ?? "customer@test.com",
     },
+    customerMemory: null,
     recentMessages: setup.messages.map((m) => ({
       senderType: m.senderType,
       contentText: m.contentText,

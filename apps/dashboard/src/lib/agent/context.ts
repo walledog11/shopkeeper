@@ -1,13 +1,26 @@
-import { db } from "@clerk/db";
+import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
 import { SHOPIFY_API_VERSION } from "./tools/shopify";
 import type { AgentContext, ShopifyOrderSummary } from "./types";
+
+function readCustomerMemory(memory: unknown): CustomerMemory | null {
+  if (isEmptyMemory(memory)) return null;
+  return memory as CustomerMemory;
+}
 
 export async function buildContext(threadId: string, orgId: string): Promise<AgentContext> {
   const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
       include: {
-        customer: true,
+        customer: {
+          select: {
+            id: true,
+            name: true,
+            platformId: true,
+            memory: true,
+            memoryUpdatedAt: true,
+          },
+        },
         messages: { orderBy: { sentAt: "desc" }, take: 50 },
       },
     }),
@@ -143,6 +156,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       name: dbName ?? shopifyCustomerName,
       platformId: thread.customer.platformId,
     },
+    customerMemory: readCustomerMemory(thread.customer.memory),
     recentMessages: [...thread.messages].reverse().map((m) => ({
       senderType: m.senderType,
       contentText: m.contentText,
