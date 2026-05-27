@@ -40,18 +40,21 @@ export async function POST(request: Request) {
     orgId = parsedOrgId;
     await assertBillingWriteAllowedForOrgId(parsedOrgId);
 
-    const resolvedThreadId = (
-      await resolveInternalAgentThread({
-        orgId: parsedOrgId,
-        threadId,
-        orderNumber,
-        senderPhone,
-      })
-    ).id;
+    const resolvedThread = await resolveInternalAgentThread({
+      orgId: parsedOrgId,
+      threadId,
+      orderNumber,
+      senderPhone,
+    });
+    const resolvedThreadId = resolvedThread.id;
 
     const approver = approvedToolCalls?.length
       ? await resolveClerkUserApprover(clerkUserId)
       : undefined;
+
+    const isOperatorThread =
+      resolvedThread.channelType === "sms_agent" || resolvedThread.channelType === "dashboard_agent";
+    const persistOperatorExchange = isOperatorThread && !approvedToolCalls?.length;
 
     const result = await executeAgentTurn({
       orgId: parsedOrgId,
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
       instruction,
       failureRoute: "/api/agent/internal",
       approvedToolCalls,
+      ...(persistOperatorExchange ? { persistUserMessage: true, persistAgentMessage: true } : {}),
       persistAuditNote: true,
       ...(approvedToolCalls?.length ? { auditMode: "human_approved" as const } : {}),
       ...(approver ? {

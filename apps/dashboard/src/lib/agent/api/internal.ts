@@ -11,9 +11,10 @@ interface ResolveInternalAgentThreadParams {
   senderPhone?: string;
 }
 
-export async function resolveInternalAgentThread(params: ResolveInternalAgentThreadParams) {
+export async function resolveInternalAgentThread(params: ResolveInternalAgentThreadParams): Promise<{ id: string; channelType: string }> {
   if (params.threadId) {
-    return requireOrgThread(params.threadId, params.orgId);
+    const thread = await requireOrgThread(params.threadId, params.orgId);
+    return { id: thread.id, channelType: thread.channelType };
   }
 
   const shopifyIntegration = await db.integration.findFirst({
@@ -91,5 +92,5 @@ export async function resolveInternalAgentThread(params: ResolveInternalAgentThr
     });
   }
 
-  return thread;
+  return { id: thread.id, channelType: "sms_agent" };
 }
