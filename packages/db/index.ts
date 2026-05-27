@@ -183,3 +183,19 @@ export {
   utcDayString,
 } from './llm-spend.js';
 export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
+export {
+  CUSTOMER_MEMORY_VERSION,
+  EMPTY_MEMORY,
+  KEY_FACTS_MAX,
+  KEY_FACT_MAX_CHARS,
+  OUTCOME_MAX_CHARS,
+  RECENT_INTERACTIONS_MAX,
+  SUMMARY_MAX_CHARS,
+  boundMemory,
+  isEmptyMemory,
+} from './customer-memory.js';
+export type {
+  CustomerMemory,
+  CustomerMemoryInteraction,
+  CustomerMemoryPolicyFlags,
+} from './customer-memory.js';

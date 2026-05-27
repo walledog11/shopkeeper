@@ -511,7 +511,7 @@ Small pill: "Autopilot: Trusted" with a tier-tinted background (e.g., yellow for
 
 ---
 
-## Step 5 — Action audit table (M, depends on Step 1)
+## Step 5 — Action audit table (M, depends on Step 1) [COMPLETED]
 
 Stop overloading `Message.note` rows with parsed JSON. Make action records first-class.
 
@@ -700,66 +700,217 @@ Flip the source of truth. Ship in the same PR as 5.6 so historic data is present
 
 The largest Phase 0 piece. The biggest perceived-quality lift. Land after everything else so it inherits all the new wiring.
 
-**Schema** in `packages/db/prisma/schema.prisma`:
+Broken into 9 sub-steps. Total: ~6–7 working days. 6.1 is pure schema and ships alone. 6.2 + 6.3 are coupled (the shape and the function that produces it) and ship together. 6.4 is the dark-write step — thread-close populates memory but nothing reads it, so the change can soak in production for a few days before the read path turns on. 6.6 + 6.7 flip the read path together (memory loads into context AND renders into the prompt) — split them and you ship either a loaded-but-ignored field or a prompt section referring to data that isn't there. 6.5 (stale-refresh cron) is independent and can land any time after 6.3. 6.8 (UI editor) depends on 6.6 having a loadable memory shape. 6.9 verifies end-to-end.
 
-Two options. Recommend Option A.
+**Layout decision.** JSON column on `Customer`, single row per customer, cascades automatically. The alternative — separate `CustomerMemory` table for versioned history — is YAGNI for V1: one update path is simpler than two, and the JSON column migrates cleanly to a side table later if version history becomes a requirement.
 
-**Option A (recommended): JSON column on Customer.**
+**Writer location.** Summarizer lives in the gateway (`apps/gateway/src/maintenance/`) and calls Claude directly, mirroring the `intelligence.ts` pattern. No internal round-trip back to the dashboard.
+
+---
+
+### Step 6.1 — Schema migration (~0.5 day) [COMPLETED]
+
+Pure additive change in `packages/db/prisma/schema.prisma`. No reads, no writes — the column just exists.
+
 ```prisma
 model Customer {
   ...
-  memory          Json?    @default("{}") @db.JsonB
+  memory          Json?     @default("{}") @db.JsonB
   memoryUpdatedAt DateTime? @map("memory_updated_at") @db.Timestamptz
   ...
   @@index([organizationId, memoryUpdatedAt])
 }
 ```
-- Memory shape: `{ summary: string, keyFacts: string[], policyFlags: { vip?, complaintPattern?, priorRefundsTotal?, priorRefundsCount? }, recentInteractions: { threadId, channel, tag, closedAt, outcome }[], version: number }`
-- One row per customer; one update path; cascades with customer deletion automatically.
 
-**Option B: separate `CustomerMemory` table.**
-- Better if you want versioned history (every memory update creates a new row) or per-org-shared memory primitives. Probably overkill for V1.
+The index supports the stale-refresh cron's "find customers with memory older than N days" query without a full scan.
 
-Recommendation: A. Migrate to B later if you need version history.
+Run `npx prisma migrate dev` locally, apply to staging Neon.
 
-**Writer worker** in the gateway (where workers live):
+**Done when.** Migration applied locally and on staging; `prisma generate` produces the new client; `db.customer.findUnique(...).memory` returns `{}` for existing rows.
 
-New file `apps/gateway/src/maintenance/customer-memory.ts`:
+---
+
+### Step 6.2 — Memory shape + bounded helpers (~0.5 day) [COMPLETED]
+Build the contract in isolation so the summarizer and the UI agree.
+
+**New file `packages/db/src/customer-memory.ts`** (shared because gateway writes and dashboard reads):
+
+```ts
+export interface CustomerMemory {
+  summary: string;              // ≤ 500 chars
+  keyFacts: string[];           // ≤ 10 items × 80 chars
+  policyFlags: {
+    vip?: boolean;
+    complaintPattern?: boolean;
+    priorRefundsTotal?: number;
+    priorRefundsCount?: number;
+  };
+  recentInteractions: {
+    threadId: string;
+    channel: string;
+    tag: string | null;
+    closedAt: string;           // ISO
+    outcome: string;            // ≤ 120 chars
+  }[];                          // ≤ 10 entries
+  version: number;              // bump on shape changes
+}
+
+export const EMPTY_MEMORY: CustomerMemory;
+export function boundMemory(m: CustomerMemory): CustomerMemory;  // trims caps
+export function isEmptyMemory(m: unknown): boolean;
+```
+
+**Bounding strategy.** Always bound on write (in `boundMemory` before persisting). Cheaper than bounding on every read, and prevents one bad summarizer call from poisoning future requests.
+
+**Done when.** `boundMemory` unit-tested: trims `summary` over 500 chars, drops `keyFacts` beyond 10, drops `recentInteractions` beyond 10, drops `keyFacts` items over 80 chars. `isEmptyMemory({})` returns `true`.
+
+---
+
+### Step 6.3 — Summarizer function (~1 day) [COMPLETED]
+
+Pure function, callable from the worker. Builds the prompt, calls Claude, parses, bounds, returns.
+
+**New file `apps/gateway/src/maintenance/customer-memory-summarizer.ts`**
+
+- Exports `summarizeCustomerMemory({ priorMemory, customer, closedThread, messages }) → Promise<CustomerMemory>`.
+- Uses Anthropic SDK directly (gateway already holds the key). Sonnet 4.6 — judgment is sufficient and cost matters at scale.
+- JSON-mode / structured output bound to `CustomerMemory` shape, so we don't defensively parse free text.
+- Prompt: "Given the customer's prior memory and this newly closed thread, output an updated memory JSON. Preserve facts from prior memory unless explicitly contradicted. Don't speculate. Set `policyFlags.complaintPattern` only if ≥3 complaints across `recentInteractions`."
+- Token budget ~512 output. Cap input at last 50 messages of the closed thread.
+- Respects `enforceSpendCap` — fail soft (return `priorMemory`) if the org is over budget.
+- Cache-control on the system prompt block per existing pattern.
+
+**Done when.** Integration test against real Claude: empty prior memory + a closed shipping-complaint thread produces memory whose `summary` mentions shipping, `keyFacts` is non-empty, and `recentInteractions[0]` is populated with the thread's metadata.
+
+---
+
+### Step 6.4 — Writer wiring: fire on thread close (~1 day)
+
+Dark-write step. After this lands, thread close updates customer memory but nothing reads it.
+
+**New file `apps/gateway/src/maintenance/customer-memory.ts`**
 - Exports `updateCustomerMemoryOnThreadClose(threadId)`.
-- Triggered by a thread status change to `closed` (need a hook — either patch `updateThreadStatus` in `lib/agent/tools/thread.ts` to fire it, or wire a BullMQ job that listens to thread updates via a polling worker; the simpler path is the patch).
-- Loads the thread, its messages, and the customer's existing `memory`.
-- Calls Claude with a focused summarization prompt: "Given the customer's prior memory and this new closed thread, output an updated memory JSON. Preserve facts. Don't speculate."
-- Bounded output schema (use the SDK's structured output or JSON-mode). Token budget ~512 output.
-- Writes back `customer.memory` and `memoryUpdatedAt`.
-- Respects `enforceSpendCap` like every other Claude call.
+- Loads thread + messages + customer + prior memory.
+- Calls `summarizeCustomerMemory(...)`.
+- Writes `db.customer.update({ data: { memory: boundMemory(next), memoryUpdatedAt: new Date() } })`.
+- Wrap in try/catch — memory failures must never block thread close. Log to Sentry, swallow.
+- Idempotency guard: if `customer.memoryUpdatedAt > thread.closedAt`, skip (a prior run already covered this close event).
 
-**Worker also runs** on a rolling cron for customers with stale memory (`memoryUpdatedAt older than 30 days and recent thread activity`). Add to `apps/gateway/src/maintenance/workers.ts`.
+**Trigger.** Grep for every place `thread.status` is set to `"closed"` (`lib/agent/tools/thread.ts` is the main one). Enqueue a BullMQ job in each — don't await the summarizer inline, the close request shouldn't wait on Claude.
 
-**Reader** — `apps/dashboard/src/lib/agent/context.ts`:
-- Load `customer.memory` alongside the existing fields.
-- Add to `AgentContext`: `customerMemory: CustomerMemory | null`.
+**Done when.** Closing a real thread populates `customer.memory` within ~30s; closing the same thread twice produces one summarizer call (idempotent); a simulated Claude error logs to Sentry but does not 500 the close request.
 
-**Prompt rendering** — `apps/dashboard/src/lib/agent/prompt.ts`:
-- Render a `## What you know about this customer` section in `buildSystemPrompt` when memory is non-empty. Include `summary`, top 3 `keyFacts`, and `recentInteractions` summary (last 3).
-- Render `policyFlags` as instructions: if `complaintPattern`, prompt "this customer has filed multiple complaints this quarter — bias toward escalation"; if `vip`, prompt "this is a high-value customer."
+---
 
-**UI** — surface the memory so the merchant can audit and edit it:
-- A "Customer profile" panel in the ticket view, currently sparse. Add a memory section with the summary and key facts. Let the merchant edit. Edits persist directly to the memory JSON (no re-summarization needed; the next thread close will fold them in).
-- This addresses the "trust calibration" concern: the merchant can see what the agent thinks it knows.
+### Step 6.5 — Stale-refresh cron (~0.5 day)
 
-**New eval fixtures**:
-- Customer with memory `{ summary: "prior shipping complaint pattern", keyFacts: ["3 refunds in 30 days"] }` and a new refund request — assert the agent escalates rather than auto-refunds.
-- Customer with memory `{ keyFacts: ["VIP, signed up 2024"] }` and a routine question — assert the reply tone reflects VIP context.
-- Customer with empty memory — assert the agent runs as today (no memory section in prompt, no behavior change). This is the "doesn't regress" gate.
+Independent of 6.4 — can land any time after 6.3.
 
-**Effort.** 8–10 days including the worker, schema, context wiring, prompt rendering, UI editor, and eval coverage.
+**`apps/gateway/src/maintenance/workers.ts`**
+- Daily cron: customers where `memoryUpdatedAt < now() - 30 days` AND a thread was closed in the last 30 days.
+- Bounded batch (e.g. 50 customers/day per org) to cap runaway spend.
+- For each, find the most recent closed thread and call `updateCustomerMemoryOnThreadClose` — same code path as 6.4.
+- Skip orgs over `enforceSpendCap`.
+
+**Done when.** Cron registered; running it manually against a staging org with a stale customer produces a fresh `memoryUpdatedAt`; rerunning the same day is a no-op (already fresh).
+
+---
+
+### Step 6.6 — Reader: load memory into AgentContext (~0.5 day)
+
+**`apps/dashboard/src/lib/agent/context.ts`**
+- `buildContext` already loads the customer row. Add `memory` and `memoryUpdatedAt` to the select.
+- Extend `AgentContext`: `customerMemory: CustomerMemory | null` (null when `isEmptyMemory(customer.memory)`).
+
+No prompt change yet — that's 6.7.
+
+**Done when.** A thread for a customer with memory produces a context whose `customerMemory` is populated; a thread for an empty-memory customer produces `null`.
+
+---
+
+### Step 6.7 — Prompt rendering (~0.5 day)
+
+Pairs with 6.6 — must ship in the same PR. Reader without prompt is a dead field; prompt without reader references undefined data.
+
+**`apps/dashboard/src/lib/agent/prompt.ts`**
+
+When `ctx.customerMemory` is non-null, render a `## What you know about this customer` section in `buildSystemPrompt`:
+- `summary` as a paragraph.
+- Top 3 `keyFacts` as a bullet list.
+- Last 3 `recentInteractions` as `tag — outcome (closedAt)`.
+- `policyFlags` as inline directives: `complaintPattern` → "This customer has filed multiple complaints recently — bias toward escalation."; `vip` → "This is a high-value customer — extra care on tone."
+
+**Cache positioning.** Insert after brand-context sections (stable, cached) and before `## Knowledge base` (already-dynamic tail). Memory varies per request, so it must sit past the cache breakpoint.
+
+**Operator + composer-ask.** Render the same section in both branches — operators and composer-ask both benefit from "what we know about this customer."
+
+**Done when.** Unit test of `buildSystemPrompt`: with `customerMemory` populated, the prompt contains the new section; with `customerMemory: null`, the section is absent (no empty headings). Eval suite stays green.
+
+---
+
+### Step 6.8 — UI: editable memory panel (~1 day)
+
+Per the trust principle, the merchant must be able to audit and correct what the agent thinks it knows.
+
+**Customer profile panel in the ticket view** (confirm path by grepping for the existing `CustomerProfile` / `CustomerPanel` component under `app/dashboard/tickets/`).
+
+- New section "What we know about this customer".
+- `summary` — editable textarea (≤ 500 chars, char counter).
+- `keyFacts` — editable list, add/remove rows, each ≤ 80 chars, ≤ 10 rows.
+- `policyFlags` — rendered as read-only badges (these are agent-set; manual override invites foot-guns).
+- `recentInteractions` — read-only history list.
+- Save persists via new `PATCH /api/customers/[id]/memory`.
+
+**New endpoint `apps/dashboard/src/app/api/customers/[id]/memory/route.ts`**
+- `GET` — returns current memory (panel hydrates from this; SWR-cacheable).
+- `PATCH` — validates org scope, bounds via `boundMemory`, writes, bumps `memoryUpdatedAt`.
+
+**Done when.** Editing summary/keyFacts and saving persists across reload; cap enforcement visible in UI (counter + disabled add button at 10); `policyFlags` and `recentInteractions` render but are not editable.
+
+---
+
+### Step 6.9 — Eval fixtures + verify (~1 day)
+
+**3 new fixtures in `apps/dashboard/src/lib/agent/__evals__/fixtures/`.**
+
+1. **`memory-complaint-pattern-escalates.json`** — customer with `policyFlags.complaintPattern: true` and `keyFacts: ["3 refunds in 30 days"]`; new refund request under cap. `mustCallTools: ["escalate_to_human"]`, `mustNotCallTools: ["issue_refund"]`. Validates the `complaintPattern` directive overrides auto-execute.
+2. **`memory-vip-tone.json`** — customer with `policyFlags.vip: true` and `keyFacts: ["VIP since 2024"]`; routine "where's my order" question. `mustCallTools: ["get_order_status", "send_reply"]`. If Layer 2 (Step 7) lands first, add `expectedRubric: "reply tone reflects VIP context"`.
+3. **`memory-empty-no-regression.json`** — customer with empty `memory`. Identical setup to an existing order-status fixture. Asserts identical plan. The "no regression when memory is empty" gate.
+
+**Runner support.** Extend the `ThreadSetup` helper to seed `customer.memory`. No other runner changes.
+
+**Manual end-to-end.**
+1. Close a real thread on staging. Within 30s, customer's `memory` updates.
+2. Open a new thread for that customer. Verify the prompt (logged in dev) contains the memory section.
+3. Edit `summary` in the UI. Save. Open another new thread. Verify the edited summary appears in the prompt.
+4. Run the complaint-pattern scenario manually. Verify the agent escalates rather than auto-refunds.
+
+**Done when.** All ~33 fixtures pass 2 runs in a row; manual flow completes cleanly.
+
+---
+
+**Sub-step summary.**
+
+| Sub-step | Files | Effort |
+|----------|-------|--------|
+| 6.1 Schema migration | `packages/db/prisma/schema.prisma` (+ migration) | 0.5 day |
+| 6.2 Shape + helpers | new shared `packages/db/src/customer-memory.ts` | 0.5 day |
+| 6.3 Summarizer function | new `apps/gateway/src/maintenance/customer-memory-summarizer.ts` | 1 day |
+| 6.4 Writer wiring | new `apps/gateway/src/maintenance/customer-memory.ts`, patch thread-close paths | 1 day |
+| 6.5 Stale-refresh cron | `apps/gateway/src/maintenance/workers.ts` | 0.5 day |
+| 6.6 Reader | `lib/agent/context.ts` | 0.5 day |
+| 6.7 Prompt rendering | `lib/agent/prompt.ts` | 0.5 day |
+| 6.8 UI editor | ticket customer-profile component + new `api/customers/[id]/memory/route.ts` | 1 day |
+| 6.9 Eval fixtures + verify | 3 fixtures + runner seeding hook | 1 day |
+
+**Recommended PR shape.** (6.1) → (6.2 + 6.3) → (6.4) → (6.6 + 6.7) → (6.5) → (6.8) → (6.9). Seven PRs from nine sub-steps. The two collapses are deliberate: 6.2/6.3 share a contract, and 6.6/6.7 must flip together so the reader and the prompt agree.
 
 **Open decisions.**
-- **Memory refresh trigger**: on thread close (simple, recommended), on every customer message (more accurate but expensive), or hybrid (close + every 5th message)? Start with close-only. Add hybrid if eval shows staleness regressions.
-- **Memory caps**: how many `keyFacts`? How long can `summary` be? Bound to keep prompt size sane. Start: `summary ≤ 500 chars`, `keyFacts ≤ 10 items × 80 chars each`, `recentInteractions ≤ 10`.
-- **Cross-merchant signal sharing**: NO. Per-merchant customer memory only. Sharing customer facts across merchants is a privacy violation. State this explicitly in the privacy policy.
-- **Memory in customer data export**: yes, include in GDPR export at `/api/org/data`. Include in customer-delete cascades automatically via the schema.
-- **Worker is in gateway, agent is in dashboard**: customer-memory generation happens in the gateway via internal API back to dashboard for the Claude call, or the gateway calls Claude directly. The gateway already calls Claude in `intelligence.ts` — that pattern works here. No new round-trip needed.
+- **Memory refresh trigger**: thread-close-only (recommended for V1, baked into 6.4) vs. hybrid (close + every Nth message). Hybrid is the right call only if eval shows staleness regressions inside long-running threads — defer until measured.
+- **Cross-merchant signal sharing**: NO. Per-merchant only. Reaffirm in privacy policy.
+- **GDPR export + delete cascade**: include memory in `/api/org/data`. The JSON column cascades on customer delete automatically — no extra plumbing.
+- **Summarizer model**: Sonnet 4.6 (recommended) vs. Haiku 4.5. Sonnet's judgment on `complaintPattern` is worth the cost premium at expected V1 volume; revisit at scale.
+- **`policyFlags` editability in 6.8**: read-only (recommended — these are derived signals, manual edits invite drift). If merchants request override, add a "reset flag" affordance rather than free-edit.
 
 ---
 

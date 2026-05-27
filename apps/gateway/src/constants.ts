@@ -1,6 +1,9 @@
 export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SMS: 'sms', SHOPIFY: 'shopify' } as const;
 export const STATUS = { OPEN: 'open' } as const;
-export const MODEL = { CLAUDE: 'claude-haiku-4-5-20251001' } as const;
+export const MODEL = {
+  CLAUDE: 'claude-haiku-4-5-20251001',
+  CUSTOMER_MEMORY: 'claude-sonnet-4-6',
+} as const;
 export const QUEUE = { INBOUND: 'inbound-messages', TOKEN_HEALTH: 'token-health', AI_SUMMARY: 'ai-summary', ARCHIVAL: 'thread-archival', PURGE: 'purge', DIGEST: 'whatsapp-digest', QUEUE_HEALTH: 'queue-health' } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',

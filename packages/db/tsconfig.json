@@ -8,6 +8,6 @@
     "rootDir": ".",
     "declaration": true
   },
-  "include": ["index.ts", "test-helpers.ts", "crypto.ts", "scripts/**/*.ts"],
+  "include": ["index.ts", "test-helpers.ts", "crypto.ts", "customer-memory.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

@@ -103,13 +103,15 @@ model Integration {
 }
 
 model Customer {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  name           String?   @db.VarChar(255)
-  platformId     String    @map("platform_id") @db.VarChar(255)
-  profilePicUrl  String?   @map("profile_pic_url") @db.Text
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @map("organization_id") @db.Uuid
+  name            String?   @db.VarChar(255)
+  platformId      String    @map("platform_id") @db.VarChar(255)
+  profilePicUrl   String?   @map("profile_pic_url") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+  memory          Json?     @default("{}") @db.JsonB
+  memoryUpdatedAt DateTime? @map("memory_updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   threads      Thread[]
@@ -118,6 +120,7 @@ model Customer {
   @@unique([organizationId, platformId])
   @@index([organizationId])
   @@index([deletedAt])
+  @@index([organizationId, memoryUpdatedAt])
   @@map("customers")
 }
 
