@@ -40,5 +40,17 @@
     "mustCallTools": ["send_reply"],
     "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
     "replyMustInclude": ["cheers"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "tone_match",
+        "description": "Reply tone matches the brand voice description in orgSettings ('warm, slightly informal'). It should read as friendly and conversational, not stiff or overly formal."
+      },
+      {
+        "id": "cheers_is_signoff",
+        "description": "The word 'cheers' is used as the closing sign-off (e.g., at the end of the reply or just before a name), not merely mentioned in the middle of a sentence."
+      }
+    ]
   }
 }

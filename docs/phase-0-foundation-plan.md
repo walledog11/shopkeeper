@@ -955,7 +955,7 @@ Integration, gated on opt-in per fixture.
 
 ---
 
-### Step 7.3 — Brand-voice rubrics (~1.5 hrs)
+### Step 7.3 — Brand-voice rubrics (~1.5 hrs) [COMPLETED]
 
 Lowest-risk fixture set first. Brand voice is already validated by substring matching (`replyMustInclude`), so rubric failures will indicate rubric-design issues, not agent regressions.
 

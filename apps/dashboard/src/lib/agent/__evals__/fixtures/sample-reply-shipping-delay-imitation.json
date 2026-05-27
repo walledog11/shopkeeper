@@ -55,5 +55,13 @@
     "mustCallTools": ["send_reply"],
     "mustNotCallTools": ["escalate_to_human", "get_shopify_orders", "get_order_by_name"],
     "replyMustInclude": ["hang tight"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "imitates_sample_style",
+        "description": "Reply imitates the tone and shape of the merchant's 'shipping' sample reply in orgSettings.sampleReplies: opens with reassurance, mentions the order is in progress, references that a tracking link / shipping update is coming, and stays brief and warm rather than formal."
+      }
+    ]
   }
 }

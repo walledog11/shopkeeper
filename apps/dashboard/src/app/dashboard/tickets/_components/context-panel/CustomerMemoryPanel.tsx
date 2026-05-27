@@ -10,7 +10,7 @@ import {
   SUMMARY_MAX_CHARS,
   type CustomerMemory,
   type CustomerMemoryPolicyFlags,
-} from "@clerk/db"
+} from "@clerk/db/customer-memory"
 import { fetcher } from "@/lib/api/fetcher"
 import { SectionHeader } from "./SectionHeader"
 import { panelSectionClass } from "./constants"
