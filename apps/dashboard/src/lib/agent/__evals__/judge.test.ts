@@ -40,7 +40,7 @@ describe("judgeReply", () => {
         checks,
         replyText: reply,
         context: {
-          brandVoice: "Warm, slightly informal. Always sign off with 'cheers'.",
+          orgSettings: { brandVoice: "Warm, slightly informal. Always sign off with 'cheers'." },
         },
       });
 

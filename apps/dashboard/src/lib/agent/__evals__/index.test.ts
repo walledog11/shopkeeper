@@ -1,3 +1,12 @@
+// Agent evals: plan-shape suite (always-on, gated by ANTHROPIC_API_KEY) + optional
+// LLM-judge rubrics (Layer 2). The judge fires only for fixtures with `expectedRubric`
+// that draft a non-empty reply, and only when judging is enabled.
+//
+// Judge gating (see runner.ts:isJudgeEnabled): defaults to ON locally and OFF in CI
+// (when `process.env.CI` is set). Override with `RUN_JUDGE_EVALS`:
+//   RUN_JUDGE_EVALS=1     → force-enable (e.g. nightly / scheduled CI runs)
+//   RUN_JUDGE_EVALS=0     → force-disable
+// Skipping keeps per-push spend in check — each judged fixture adds a Sonnet call.
 import { describe, it, expect, beforeEach } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";

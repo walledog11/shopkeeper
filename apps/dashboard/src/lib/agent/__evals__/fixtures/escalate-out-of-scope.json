@@ -18,5 +18,13 @@
     "mustCallTools": ["escalate_to_human"],
     "mustNotCallTools": ["create_shopify_order", "create_refund", "cancel_order", "edit_shopify_order"],
     "mustEscalate": true
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "no_fabricated_pricing",
+        "description": "If the agent drafts a holding reply alongside the escalation, it does NOT fabricate wholesale prices, per-unit costs, discount percentages, minimum order quantities, lead times, or delivery terms. It also does NOT promise that those numbers will be honored. The reply acknowledges the wholesale inquiry and indicates that a teammate will follow up with specifics — a short, neutral handoff message is the expected pattern."
+      }
+    ]
   }
 }

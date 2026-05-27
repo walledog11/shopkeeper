@@ -914,7 +914,7 @@ Per the trust principle, the merchant must be able to audit and correct what the
 
 ---
 
-## Step 7 — LLM-judge eval, Layer 2 (S–M, can overlap with Step 6)
+## Step 7 — LLM-judge eval, Layer 2 (S–M, can overlap with Step 6) [COMPLETED]
 
 Adds qualitative checks on top of the plan-shape suite. Particularly useful for verifying brand voice (Step 2) and customer memory (Step 6) are actually doing what we think.
 
@@ -965,7 +965,7 @@ Lowest-risk fixture set first. Brand voice is already validated by substring mat
 
 ---
 
-### Step 7.4 — Customer-memory rubrics (~1.5 hrs)
+### Step 7.4 — Customer-memory rubrics (~1.5 hrs) [COMPLETED]
 
 - Add `expectedRubric` to `memory-vip-tone.json`, `memory-complaint-pattern-escalates.json`, `memory-empty-no-regression.json`.
 - `memory-empty-no-regression` gets an **informational** rubric (`required: false`): "reply does not invent prior customer history when memory is empty." Surfaces regressions without gating CI on a soft check.
@@ -973,7 +973,7 @@ Lowest-risk fixture set first. Brand voice is already validated by substring mat
 
 ---
 
-### Step 7.5 — Bias-to-escalate rubrics + CI cost guard (~2 hrs)
+### Step 7.5 — Bias-to-escalate rubrics + CI cost guard (~2 hrs) [COMPLETED]
 
 - Add `expectedRubric` to `escalate-ambiguous-customer.json`, `escalate-out-of-scope.json`, `escalate-shopify-down.json`. Note: most escalation fixtures have no reply, so judging applies only to ones where the agent also drafts a holding message before escalating.
 - Check pattern: "agent acknowledges uncertainty rather than fabricating a confident answer."

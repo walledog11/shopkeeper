@@ -23,5 +23,13 @@
     "mustCallTools": ["escalate_to_human"],
     "mustNotCallTools": ["create_refund", "cancel_order", "update_shopify_order_address", "create_shopify_order", "edit_shopify_order"],
     "mustEscalate": true
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "no_fabricated_order_details",
+        "description": "If the agent drafts a holding reply alongside the escalation, it does NOT fabricate order status, tracking info, shipping location, carrier, or ETA for order #1099. It acknowledges that it cannot pull up the order at the moment (or that a teammate will follow up) instead of guessing or claiming the order has shipped, is delayed, or will arrive by a specific date. A brief, honest 'we can't access that info right now, a teammate will get back to you' style reply is the expected pattern."
+      }
+    ]
   }
 }

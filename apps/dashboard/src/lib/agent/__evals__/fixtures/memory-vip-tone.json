@@ -48,5 +48,13 @@
     "mustCallTools": ["send_reply"],
     "mustNotCallTools": ["escalate_to_human", "get_shopify_orders", "get_order_by_name"],
     "replyMustInclude": ["4040"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "not_cold_or_robotic",
+        "description": "Reply is not cold, curt, or robotic — it reads as a human reply to a friendly customer, consistent with the 'quick, warm responses' note in customerMemory. A brief and direct answer is fine, including ones without an explicit greeting or sign-off; the bar this rubric enforces is just that the reply has at least one humanizing element (e.g. addresses the customer by name, mirrors their register, ends with a friendly closing, or offers help in a personable way). The failure mode is a one-line status dump that reads like an automated system message. Do NOT fail this rubric for being short, for not mentioning VIP status, or for not gushing — only for being impersonal/robotic."
+      }
+    ]
   }
 }

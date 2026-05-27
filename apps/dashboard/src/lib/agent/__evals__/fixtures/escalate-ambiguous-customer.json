@@ -31,5 +31,13 @@
     "expectedAgentActions": [
       { "tool": "search_shopify_customers", "status": "success", "mode": "read_only" }
     ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "acknowledges_ambiguity_no_premature_action",
+        "description": "If the agent drafts a holding reply alongside the escalation, it acknowledges that it cannot identify the correct order or account from the information provided (or that a teammate will follow up) rather than fabricating a confident answer. The reply must NOT confirm or promise the cancellation, must NOT silently pick one of the matching Jane Smiths, and must NOT claim any order has been or will be cancelled. A brief request for more identifying info, or a neutral acknowledgement that a human will review, is the expected pattern."
+      }
+    ]
   }
 }

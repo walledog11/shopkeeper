@@ -16,7 +16,6 @@ Return your results by calling the report_judgments tool exactly once. Include o
 Judge strictly on the rubric description. Do not penalize stylistic choices that the rubric does not call out.`;
 
 export interface JudgeContext {
-  brandVoice?: string | null;
   orgSettings?: Partial<OrgSettings> | null;
   customerMemory?: CustomerMemory | null;
   recentMessages?: { senderType: string; contentText: string | null }[];
@@ -48,7 +47,7 @@ const REPORT_TOOL: Anthropic.Tool = {
 function renderContext(context: JudgeContext): string {
   const lines: string[] = [];
 
-  const brandVoice = context.brandVoice ?? context.orgSettings?.brandVoice ?? null;
+  const brandVoice = context.orgSettings?.brandVoice ?? null;
   if (brandVoice) {
     lines.push(`Brand voice: ${brandVoice}`);
   }
@@ -85,6 +84,7 @@ function parseJudgments(response: Anthropic.Message, expectedIds: Set<string>): 
     throw new Error("judge tool input missing judgments array");
   }
 
+  const seen = new Set<string>();
   const results: JudgeResult[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
@@ -94,7 +94,14 @@ function parseJudgments(response: Anthropic.Message, expectedIds: Set<string>): 
     const reasoning = typeof obj.reasoning === "string" ? obj.reasoning : "";
     if (checkId === null || pass === null) continue;
     if (!expectedIds.has(checkId)) continue;
+    if (seen.has(checkId)) continue;
+    seen.add(checkId);
     results.push({ checkId, pass, reasoning });
+  }
+  // Surface missing checks as failures so a silent omission can't masquerade as a pass.
+  for (const id of expectedIds) {
+    if (seen.has(id)) continue;
+    results.push({ checkId: id, pass: false, reasoning: "judge did not return a verdict for this check" });
   }
   return results;
 }

@@ -122,6 +122,15 @@ function inferRunMode(expected: ExpectedAgentAction[]): AgentActionMode {
   return first;
 }
 
+function isJudgeEnabled(): boolean {
+  const flag = process.env.RUN_JUDGE_EVALS;
+  if (flag !== undefined) {
+    const normalized = flag.trim().toLowerCase();
+    return normalized !== "" && normalized !== "0" && normalized !== "false";
+  }
+  return !process.env.CI;
+}
+
 async function executeRunForFixture(params: {
   ctx: AgentContext;
   fixture: Fixture;
@@ -311,7 +320,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       }
     }
 
-    if (fixture.expectedRubric && replyText.length > 0) {
+    if (fixture.expectedRubric && replyText.length > 0 && isJudgeEnabled()) {
       const judged = await judgeReply({
         checks: fixture.expectedRubric.checks,
         replyText,
@@ -321,6 +330,12 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
           recentMessages: ctx.recentMessages,
         },
       });
+      // The anthropic.messages.create spy counts every call; move the judge's slice out of the agent totals.
+      usage.modelCalls -= 1;
+      usage.inputTokens -= judged.usage.inputTokens;
+      usage.outputTokens -= judged.usage.outputTokens;
+      usage.cacheReadInputTokens -= judged.usage.cacheReadInputTokens;
+      usage.cacheCreationInputTokens -= judged.usage.cacheCreationInputTokens;
       usage.judgeUsage.inputTokens += judged.usage.inputTokens;
       usage.judgeUsage.outputTokens += judged.usage.outputTokens;
       usage.judgeUsage.cacheReadInputTokens += judged.usage.cacheReadInputTokens;

@@ -51,5 +51,13 @@
     "mustCallTools": ["escalate_to_human"],
     "mustNotCallTools": ["create_refund"],
     "mustEscalate": true
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "acknowledges_prior_complaint_context",
+        "description": "If the agent drafts a holding reply alongside the escalation, it acknowledges the customer's relevant prior context from customerMemory (recent refund history, pattern of complaints) naturally — typically by referencing that a human teammate will review the situation given the history. The reply must NOT commit to or promise the requested refund, must NOT pretend there is no history, and must NOT lecture the customer about prior refunds. A short, neutral, empathetic acknowledgement is expected."
+      }
+    ]
   }
 }

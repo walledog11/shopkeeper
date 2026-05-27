@@ -46,5 +46,14 @@
     "mustCallTools": ["send_reply"],
     "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
     "replyMustInclude": ["1001"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "no_fabricated_history",
+        "description": "Reply does not invent prior customer history when customerMemory is empty. The agent must not reference past orders, prior interactions, VIP/loyalty status, or any relationship facts that are not present in customerMemory or recentMessages. Treating the customer as new (or making no relationship claims at all) is correct.",
+        "required": false
+      }
+    ]
   }
 }
