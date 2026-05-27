@@ -71,6 +71,7 @@ export function serializeOrder(order: ShopifyOrder) {
     total_price: order.current_total_price ?? order.total_price ?? null,
     currency: order.currency ?? null,
     items: (order.line_items ?? []).map(serializeOrderLineItem),
+    shipping_address: serializeAddress(order.shipping_address),
   };
 }
 

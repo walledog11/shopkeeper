@@ -166,7 +166,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: "get_shopify_orders",
-    description: "Fetch the most recent Shopify orders for a customer (up to 5), including financial status, fulfillment status, and line item IDs, variant IDs, quantities, and fulfillment quantities. Use this first for basic order-status questions; if fulfillment_status is null, the order has not shipped yet and you usually do not need get_order_tracking.",
+    description: "Fetch the most recent Shopify orders for a customer (up to 5), including financial status, fulfillment status, line items, and the order's shipping_address (address1, address2, city, province, zip, country). Use this first for basic order-status questions or to look up the shipping address; if fulfillment_status is null, the order has not shipped yet and you usually do not need get_order_tracking.",
     input_schema: {
       type: "object",
       properties: {
@@ -210,7 +210,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_order_by_name",
     description:
-      "Look up a Shopify order by its human-readable order number (e.g. '#1234'). Use this when the customer mentions an order number. Returns the order ID and details.",
+      "Look up a Shopify order by its human-readable order number (e.g. '#1234'). Use this when the customer mentions an order number. Returns the order ID, financial/fulfillment status, line items, and shipping_address.",
     input_schema: {
       type: "object",
       properties: {

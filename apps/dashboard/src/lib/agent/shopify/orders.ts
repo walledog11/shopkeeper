@@ -55,7 +55,7 @@ function buildAddress(input: {
 }
 
 function orderFields(): string {
-  return "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,line_items";
+  return "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,line_items,shipping_address";
 }
 
 export async function getShopifyOrders(
