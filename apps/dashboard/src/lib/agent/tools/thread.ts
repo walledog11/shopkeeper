@@ -317,9 +317,11 @@ export async function updateThreadStatus(
   const updated = await db.thread.update({
     where: { id: ctx.threadId },
     data: { status: input.status },
-    select: { updatedAt: true },
+    select: { updatedAt: true, channelType: true },
   });
-  if (input.status === THREAD_STATUS.CLOSED) {
+  const isOperatorChannel = updated.channelType === CHANNEL_TYPE.SMS_AGENT
+    || updated.channelType === CHANNEL_TYPE.DASHBOARD_AGENT;
+  if (input.status === THREAD_STATUS.CLOSED && !isOperatorChannel) {
     await enqueueCustomerMemoryForClosedThreads({
       organizationId: ctx.orgId,
       threads: [{ threadId: ctx.threadId, closedAt: updated.updatedAt }],

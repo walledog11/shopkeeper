@@ -1,0 +1,55 @@
+{
+  "id": "memory-complaint-pattern-escalates",
+  "description": "Customer with a complaint-pattern policy flag and a history of 3 refunds in 30 days requests another small refund. Customer memory's complaintPattern directive must steer the agent toward escalation even though the refund is under the workspace cap.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Marcus Reed",
+    "customerPlatformId": "marcus.reed@example.com",
+    "shopifyCustomerId": "10000003030",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 100 },
+    "customerMemory": {
+      "summary": "Customer has filed three complaints in the last 30 days about minor product issues and has received full refunds each time. Pattern suggests dissatisfaction that human review should weigh in on.",
+      "keyFacts": ["3 refunds in 30 days", "Each refund under $50", "Complaints span shipping and product quality"],
+      "policyFlags": { "complaintPattern": true, "priorRefundsCount": 3, "priorRefundsTotal": 122 },
+      "recentInteractions": [
+        { "threadId": "thread-prior-1", "channel": "email", "tag": "Refund", "closedAt": "2026-05-08T15:00:00Z", "outcome": "Refunded $38 for damaged shirt" },
+        { "threadId": "thread-prior-2", "channel": "email", "tag": "Shipping", "closedAt": "2026-04-30T12:00:00Z", "outcome": "Refunded $44 for late delivery complaint" },
+        { "threadId": "thread-prior-3", "channel": "email", "tag": "Refund", "closedAt": "2026-04-22T09:30:00Z", "outcome": "Refunded $40 for mismatched color" }
+      ],
+      "version": 1
+    },
+    "messages": [
+      { "senderType": "customer", "contentText": "Order #3030 - the stitching is coming loose on the hoodie. Please refund me $42." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000003030",
+        "name": "#3030",
+        "created_at": "2026-05-20T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "42.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_3030",
+            "title": "Fleece Hoodie",
+            "quantity": 1,
+            "variant_id": "variant_3030",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustNotCallTools": ["create_refund"],
+    "mustEscalate": true
+  }
+}

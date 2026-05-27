@@ -188,6 +188,18 @@ describe('updateThreadStatus', () => {
       threads: [{ threadId: thread.id, closedAt: expect.any(Date) }],
     });
   });
+
+  it('skips the customer memory enqueue when closing an operator-channel thread', async () => {
+    const customer = await createTestCustomer(org.id, 'agent-close-operator@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.dashboard_agent);
+
+    await updateThreadStatus(
+      { status: THREAD_STATUS.CLOSED },
+      { threadId: thread.id, orgId: org.id, orgName: org.name },
+    );
+
+    expect(mockEnqueueCustomerMemory).not.toHaveBeenCalled();
+  });
 });
 
 describe('escalateToHuman', () => {

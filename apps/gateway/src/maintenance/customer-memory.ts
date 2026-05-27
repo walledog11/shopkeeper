@@ -20,6 +20,7 @@ import { summarizeCustomerMemory } from './customer-memory-summarizer.js';
 
 export const CUSTOMER_MEMORY_STALE_AFTER_DAYS = 30;
 export const CUSTOMER_MEMORY_STALE_BATCH_PER_ORG = 50;
+const CUSTOMER_MEMORY_REFRESH_CONCURRENCY = 5;
 
 const CUSTOMER_MEMORY_CHANNELS = ['ig_dm', 'email', 'sms', 'shopify'] as const;
 const CUSTOMER_MEMORY_CHANNEL_SET = new Set<string>(CUSTOMER_MEMORY_CHANNELS);
@@ -223,15 +224,18 @@ export async function refreshStaleCustomerMemory(
 
     result.customersMatched += customers.length;
 
-    for (const customer of customers) {
-      const latestClosedThread = customer.threads[0];
-      if (!latestClosedThread) continue;
-
-      await updateCustomerMemoryOnThreadClose(latestClosedThread.id, {
-        organizationId: org.id,
-        closedAt: latestClosedThread.updatedAt.toISOString(),
-      });
-      result.customersRefreshed += 1;
+    const refreshable = customers.filter((customer) => customer.threads[0]);
+    for (let i = 0; i < refreshable.length; i += CUSTOMER_MEMORY_REFRESH_CONCURRENCY) {
+      await Promise.all(
+        refreshable.slice(i, i + CUSTOMER_MEMORY_REFRESH_CONCURRENCY).map(async (customer) => {
+          const latestClosedThread = customer.threads[0];
+          await updateCustomerMemoryOnThreadClose(latestClosedThread.id, {
+            organizationId: org.id,
+            closedAt: latestClosedThread.updatedAt.toISOString(),
+          });
+          result.customersRefreshed += 1;
+        }),
+      );
     }
   }
 
@@ -306,11 +310,12 @@ export async function updateCustomerMemoryOnThreadClose(
     const closedAt = parseDate(options.closedAt) ?? thread.updatedAt;
     const priorMemory = readPriorMemory(thread.customer.memory);
     const memoryUpdatedAt = thread.customer.memoryUpdatedAt;
-    if (memoryUpdatedAt && memoryUpdatedAt.getTime() > closedAt.getTime()) {
-      logger.info({ threadId, customerId: thread.customerId }, '[CustomerMemory] Memory already covers this close event');
-      return;
-    }
 
+    // Skip when prior memory already summarized this thread and no newer
+    // customer/agent message has landed since. Two close events for the
+    // same thread are idempotent; a separate close event for a different
+    // thread still falls through and runs (its interaction isn't recorded
+    // yet), so concurrent closes are not silently dropped.
     const latestMessageAt = latestConversationMessageAt(thread.messages);
     const hasThreadInteraction = priorMemory.recentInteractions.some((interaction) => interaction.threadId === thread.id);
     if (
@@ -341,11 +346,10 @@ export async function updateCustomerMemoryOnThreadClose(
       spendSettings: readSpendSettings(thread.organization.settings),
     });
 
-    const bounded = boundMemory(nextMemory);
     await db.customer.update({
       where: { id: thread.customerId },
       data: {
-        memory: toJsonInput(bounded),
+        memory: toJsonInput(nextMemory),
         memoryUpdatedAt: new Date(),
       },
     });

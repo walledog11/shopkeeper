@@ -7,6 +7,7 @@ import useSWR from "swr"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
 import { fetcher } from "@/lib/api/fetcher"
+import { CustomerMemoryPanel } from "./CustomerMemoryPanel"
 import { SectionHeader } from "./SectionHeader"
 import { ShopifySection } from "./ShopifySection"
 import { formatShortDate, locationString, shopifyName } from "./formatters"
@@ -100,6 +101,8 @@ export default function ContextPanel({
           )}
         </div>
       </section>
+
+      <CustomerMemoryPanel customerId={thread.customer.id} />
 
       {hasShopify && (
         <ShopifySection

@@ -848,7 +848,7 @@ When `ctx.customerMemory` is non-null, render a `## What you know about this cus
 
 ---
 
-### Step 6.8 — UI: editable memory panel (~1 day)
+### Step 6.8 — UI: editable memory panel (~1 day) [COMPLETED]
 
 Per the trust principle, the merchant must be able to audit and correct what the agent thinks it knows.
 
@@ -869,7 +869,7 @@ Per the trust principle, the merchant must be able to audit and correct what the
 
 ---
 
-### Step 6.9 — Eval fixtures + verify (~1 day)
+### Step 6.9 — Eval fixtures + verify (~1 day) [COMPLETED]
 
 **3 new fixtures in `apps/dashboard/src/lib/agent/__evals__/fixtures/`.**
 
