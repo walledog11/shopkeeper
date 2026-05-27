@@ -4,6 +4,7 @@ import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
+import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 import type { AgentTurnAction } from '@/lib/agent/api/turns';
 
 export const GET = withOrgRoute<{ id: string }>(
@@ -102,7 +103,12 @@ export const PATCH = withOrgRoute<{ id: string }>(
     // Fire playbooks in background (never await — don't block the response)
     if (tag !== undefined && tag) {
       runPlaybooks(org.id, { type: 'tag_applied', tag }, id);
-    } else if (status === THREAD_STATUS.CLOSED) {
+    }
+    if (status === THREAD_STATUS.CLOSED) {
+      await enqueueCustomerMemoryForClosedThreads({
+        organizationId: org.id,
+        threads: [{ threadId: id, closedAt: updated.updatedAt }],
+      });
       runPlaybooks(org.id, { type: 'ticket_closed' }, id);
     }
 

@@ -2,14 +2,16 @@ import { Worker, Queue, type ConnectionOptions, type WorkerOptions } from 'bullm
 import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from '../logger.js';
-import { CHANNEL, QUEUE, JOB } from '../constants.js';
+import { CHANNEL, QUEUE, JOB, PROCESSING_QUEUE_DEFAULTS } from '../constants.js';
 import { notifyOperator } from '../operator-notify.js';
+import type { CustomerMemoryJobData } from '../types.js';
 import {
   DIGEST_QUESTIONABLE_LIMIT,
   bucketDigestThreads,
   formatDigestMessage,
   shouldSendDigest,
 } from './digest.js';
+import { refreshStaleCustomerMemory, updateCustomerMemoryOnThreadClose } from './customer-memory.js';
 import {
   FILTERED_PURGE_AFTER_DAYS,
   purgeFilteredThreads,
@@ -126,6 +128,36 @@ export async function createMaintenanceWorkers(
     logger.info('[TokenHealth] Daily check complete');
   }, { connection: workerConn, ...workerOptions });
   registerWorkerFailure(tokenHealthWorker, 'TokenHealth', 'token-health');
+
+  const customerMemoryQueue = new Queue<CustomerMemoryJobData>(QUEUE.CUSTOMER_MEMORY, {
+    connection: producerConn,
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+  });
+
+  const customerMemoryWorker = new Worker<CustomerMemoryJobData>(QUEUE.CUSTOMER_MEMORY, async (job) => {
+    await updateCustomerMemoryOnThreadClose(job.data.threadId, {
+      closedAt: job.data.closedAt,
+      organizationId: job.data.organizationId,
+    });
+  }, { connection: workerConn, ...workerOptions });
+  registerWorkerFailure(customerMemoryWorker, 'CustomerMemory', 'customer-memory');
+
+  const customerMemoryRefreshQueue = new Queue(QUEUE.CUSTOMER_MEMORY_REFRESH, {
+    connection: producerConn,
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+  });
+  await scheduleRepeatableJob(
+    customerMemoryRefreshQueue,
+    JOB.REFRESH_STALE_CUSTOMER_MEMORY,
+    JOB.REFRESH_STALE_CUSTOMER_MEMORY_ID,
+    ONE_DAY_MS,
+  );
+
+  const customerMemoryRefreshWorker = new Worker(QUEUE.CUSTOMER_MEMORY_REFRESH, async () => {
+    const result = await refreshStaleCustomerMemory();
+    logger.info(result, '[CustomerMemory] Stale refresh complete');
+  }, { connection: workerConn, ...workerOptions });
+  registerWorkerFailure(customerMemoryRefreshWorker, 'CustomerMemoryRefresh', 'customer-memory-refresh');
 
   const archivalQueue = new Queue(QUEUE.ARCHIVAL, { connection: producerConn });
   await scheduleRepeatableJob(archivalQueue, JOB.ARCHIVE_THREADS, JOB.ARCHIVE_THREADS_ID, ONE_DAY_MS);
@@ -262,9 +294,19 @@ export async function createMaintenanceWorkers(
   registerWorkerFailure(queueHealthWorker, 'QueueHealth', 'queue-health');
 
   return {
-    workers: [tokenHealthWorker, archivalWorker, purgeWorker, digestWorker, queueHealthWorker],
+    workers: [
+      tokenHealthWorker,
+      customerMemoryWorker,
+      customerMemoryRefreshWorker,
+      archivalWorker,
+      purgeWorker,
+      digestWorker,
+      queueHealthWorker,
+    ],
     queues: [
       tokenHealthQueue,
+      customerMemoryQueue,
+      customerMemoryRefreshQueue,
       archivalQueue,
       purgeQueue,
       digestQueue,

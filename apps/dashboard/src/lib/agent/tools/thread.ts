@@ -5,6 +5,7 @@ import logger from "@/lib/server/logger";
 import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
+import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
 import type {
   AddInternalNoteInput,
@@ -313,10 +314,17 @@ export async function updateThreadStatus(
   input: UpdateThreadStatusInput,
   ctx: ThreadContext
 ): Promise<string> {
-  await db.thread.update({
+  const updated = await db.thread.update({
     where: { id: ctx.threadId },
     data: { status: input.status },
+    select: { updatedAt: true },
   });
+  if (input.status === THREAD_STATUS.CLOSED) {
+    await enqueueCustomerMemoryForClosedThreads({
+      organizationId: ctx.orgId,
+      threads: [{ threadId: ctx.threadId, closedAt: updated.updatedAt }],
+    });
+  }
   return `Thread status updated to "${input.status}".`;
 }
 

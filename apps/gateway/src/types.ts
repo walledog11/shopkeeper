@@ -56,3 +56,9 @@ export interface AiSummaryJobData {
   // WhatsApp notification downstream.
   skipSummary?: boolean;
 }
+
+export interface CustomerMemoryJobData {
+  threadId: string;
+  organizationId?: string;
+  closedAt?: string;
+}

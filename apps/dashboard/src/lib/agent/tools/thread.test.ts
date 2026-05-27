@@ -11,8 +11,16 @@ import {
   createTestThread,
 } from '@clerk/db/test-helpers';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
-import { escalateToHuman, sendEmail, sendReply, ESCALATION_MARKER } from './thread';
+import { escalateToHuman, sendEmail, sendReply, updateThreadStatus, ESCALATION_MARKER } from './thread';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@/lib/messaging/thread-constants';
+
+const { mockEnqueueCustomerMemory } = vi.hoisted(() => ({
+  mockEnqueueCustomerMemory: vi.fn(),
+}));
+
+vi.mock('@/lib/server/customer-memory', () => ({
+  enqueueCustomerMemoryForClosedThreads: mockEnqueueCustomerMemory,
+}));
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let tempDir: string | null = null;
@@ -28,6 +36,7 @@ beforeEach(async () => {
   process.env.E2E_OUTBOUND_MODE = 'record';
   process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
   delete process.env.POSTMARK_API_KEY;
+  mockEnqueueCustomerMemory.mockClear();
 });
 
 afterEach(async () => {
@@ -158,6 +167,26 @@ describe('sendEmail outbound recording', () => {
       where: { contentText: 'Recorded Outlook email.', senderType: SenderType.agent },
     });
     expect(saved).not.toBeNull();
+  });
+});
+
+describe('updateThreadStatus', () => {
+  it('enqueues a customer memory update when the agent closes a thread', async () => {
+    const customer = await createTestCustomer(org.id, 'agent-close@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await updateThreadStatus(
+      { status: THREAD_STATUS.CLOSED },
+      { threadId: thread.id, orgId: org.id, orgName: org.name },
+    );
+
+    expect(result).toBe('Thread status updated to "closed".');
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.status).toBe(THREAD_STATUS.CLOSED);
+    expect(mockEnqueueCustomerMemory).toHaveBeenCalledWith({
+      organizationId: org.id,
+      threads: [{ threadId: thread.id, closedAt: expect.any(Date) }],
+    });
   });
 });
 

@@ -1,18 +1,10 @@
 import express, { type Request, type Response, type Router } from 'express';
-import { timingSafeEqual } from 'crypto';
 import { db, type DbChannelType } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL } from '../constants.js';
 import { notifyOperator } from '../operator-notify.js';
-import { getInternalApiSecret } from '../message-handlers/shared.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
-
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
+import { authorizeInternalRequest } from './internal-auth.js';
 
 function formatEscalationMessage(
   customerName: string | null,
@@ -41,23 +33,7 @@ function formatEscalationMessage(
 
 export function registerInternalOperatorRoutes(router: Router): void {
   router.post('/operator/escalate', async (req: Request, res: Response) => {
-    const incomingSecret = req.headers['x-internal-secret'];
-    const secret = Array.isArray(incomingSecret) ? incomingSecret[0] : incomingSecret;
-    if (!secret || typeof secret !== 'string') {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    let expected: string;
-    try {
-      expected = getInternalApiSecret();
-    } catch (err) {
-      logger.error({ err: (err as Error).message }, '[InternalOperator] missing INTERNAL_API_SECRET');
-      return res.status(500).json({ error: 'Server misconfigured' });
-    }
-
-    if (!safeEqual(secret, expected)) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
+    if (!authorizeInternalRequest(req, res, 'InternalOperator')) return;
 
     const body = req.body as { organizationId?: unknown; threadId?: unknown; reason?: unknown };
     const organizationId = typeof body.organizationId === 'string' ? body.organizationId : null;

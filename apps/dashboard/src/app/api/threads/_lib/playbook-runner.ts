@@ -2,6 +2,7 @@ import { db, Prisma, SenderType, createMessage } from "@clerk/db";
 import type { PlaybookAction, PlaybookTrigger } from "@/types";
 import { dispatchMessage } from "@/lib/messaging/dispatch-message";
 import logger from "@/lib/server/logger";
+import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 
 export async function runPlaybooks(
   orgId: string,
@@ -57,9 +58,14 @@ async function executePlaybook(
       if (action.type === "apply_tag") {
         await db.thread.update({ where: { id: threadId }, data: { tag: action.tag ?? null } });
       } else if (action.type === "close_ticket") {
-        await db.thread.update({
+        const updated = await db.thread.update({
           where: { id: threadId },
           data: { status: "closed", cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+          select: { updatedAt: true },
+        });
+        await enqueueCustomerMemoryForClosedThreads({
+          organizationId: orgId,
+          threads: [{ threadId, closedAt: updated.updatedAt }],
         });
       } else if (action.type === "add_note") {
         if (action.note) {

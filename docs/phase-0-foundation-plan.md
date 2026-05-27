@@ -784,7 +784,7 @@ Pure function, callable from the worker. Builds the prompt, calls Claude, parses
 
 ---
 
-### Step 6.4 — Writer wiring: fire on thread close (~1 day)
+### Step 6.4 — Writer wiring: fire on thread close (~1 day) [COMPLETED]
 
 Dark-write step. After this lands, thread close updates customer memory but nothing reads it.
 
@@ -802,7 +802,7 @@ Dark-write step. After this lands, thread close updates customer memory but noth
 
 ---
 
-### Step 6.5 — Stale-refresh cron (~0.5 day)
+### Step 6.5 — Stale-refresh cron (~0.5 day) [COMPLETED]
 
 Independent of 6.4 — can land any time after 6.3.
 
