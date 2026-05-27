@@ -92,3 +92,65 @@ export function isEmptyMemory(m: unknown): boolean {
     Object.values(mem.policyFlags).some((v) => v !== undefined && v !== false && v !== null);
   return !(hasSummary || hasFacts || hasInteractions || hasFlags);
 }
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readPolicyFlags(value: unknown): CustomerMemoryPolicyFlags {
+  if (!isRecord(value)) return {};
+  const flags: CustomerMemoryPolicyFlags = {};
+  if (typeof value.vip === 'boolean') flags.vip = value.vip;
+  if (typeof value.complaintPattern === 'boolean') flags.complaintPattern = value.complaintPattern;
+  if (typeof value.priorRefundsTotal === 'number') flags.priorRefundsTotal = value.priorRefundsTotal;
+  if (typeof value.priorRefundsCount === 'number') flags.priorRefundsCount = value.priorRefundsCount;
+  return flags;
+}
+
+function readInteraction(value: unknown): CustomerMemoryInteraction | null {
+  if (!isRecord(value)) return null;
+  if (
+    typeof value.threadId !== 'string' ||
+    typeof value.channel !== 'string' ||
+    !(typeof value.tag === 'string' || value.tag === null) ||
+    typeof value.closedAt !== 'string' ||
+    typeof value.outcome !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    threadId: value.threadId,
+    channel: value.channel,
+    tag: value.tag,
+    closedAt: value.closedAt,
+    outcome: value.outcome,
+  };
+}
+
+// Permissively parses a stored memory JSON blob back into the canonical shape
+// and bounds it. Used by readers (dashboard route, agent context, gateway
+// summarizer pre-call) — never throws, so a malformed historical row degrades
+// to EMPTY_MEMORY rather than blowing up the request.
+export function parseStoredMemory(value: unknown): CustomerMemory {
+  if (isEmptyMemory(value) || !isRecord(value)) return EMPTY_MEMORY;
+
+  return boundMemory({
+    summary: typeof value.summary === 'string' ? value.summary : '',
+    keyFacts: Array.isArray(value.keyFacts)
+      ? value.keyFacts.filter((fact): fact is string => typeof fact === 'string')
+      : [],
+    policyFlags: readPolicyFlags(value.policyFlags),
+    recentInteractions: Array.isArray(value.recentInteractions)
+      ? value.recentInteractions
+          .map(readInteraction)
+          .filter((interaction): interaction is CustomerMemoryInteraction => interaction !== null)
+      : [],
+    version: CUSTOMER_MEMORY_VERSION,
+  });
+}
+
+// CustomerMemory is already JSON-safe (no Date/Map/class instances) — this is
+// a pure type launder to satisfy Prisma's InputJsonValue at the call site.
+export function toCustomerMemoryJson(value: CustomerMemory): import('@prisma/client').Prisma.InputJsonValue {
+  return value as unknown as import('@prisma/client').Prisma.InputJsonValue;
+}

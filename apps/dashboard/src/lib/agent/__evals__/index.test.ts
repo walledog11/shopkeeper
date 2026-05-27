@@ -36,7 +36,7 @@ describe("agent evals", () => {
       async () => {
         const result = await runFixture(fixture);
         console.log(
-          `[eval] ${result.id} pass=${result.pass} latency=${result.latencyMs}ms calls=${result.usage.modelCalls} in=${result.usage.inputTokens} out=${result.usage.outputTokens} cacheRead=${result.usage.cacheReadInputTokens}`,
+          `[eval] ${result.id} pass=${result.pass} latency=${result.latencyMs}ms calls=${result.usage.modelCalls} in=${result.usage.inputTokens} out=${result.usage.outputTokens} cacheRead=${result.usage.cacheReadInputTokens} judge[in=${result.usage.judgeUsage.inputTokens} out=${result.usage.judgeUsage.outputTokens} cacheRead=${result.usage.judgeUsage.cacheReadInputTokens}]`,
         );
         if (!result.pass) {
           for (const f of result.failures) {

@@ -1,15 +1,9 @@
 import type { Queue } from 'bullmq';
-import type { Prisma } from '@prisma/client';
 import {
-  CUSTOMER_MEMORY_VERSION,
-  EMPTY_MEMORY,
-  boundMemory,
   db,
-  isEmptyMemory,
   isSpendCapError,
-  type CustomerMemory,
-  type CustomerMemoryInteraction,
-  type CustomerMemoryPolicyFlags,
+  parseStoredMemory,
+  toCustomerMemoryJson,
 } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import { JOB } from '../constants.js';
@@ -39,65 +33,9 @@ interface RefreshStaleCustomerMemoryOptions {
   batchPerOrg?: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function readPolicyFlags(value: unknown): CustomerMemoryPolicyFlags {
-  if (!isRecord(value)) return {};
-  const flags: CustomerMemoryPolicyFlags = {};
-  if (typeof value.vip === 'boolean') flags.vip = value.vip;
-  if (typeof value.complaintPattern === 'boolean') flags.complaintPattern = value.complaintPattern;
-  if (typeof value.priorRefundsTotal === 'number') flags.priorRefundsTotal = value.priorRefundsTotal;
-  if (typeof value.priorRefundsCount === 'number') flags.priorRefundsCount = value.priorRefundsCount;
-  return flags;
-}
-
-function readInteraction(value: unknown): CustomerMemoryInteraction | null {
-  if (!isRecord(value)) return null;
-  if (
-    typeof value.threadId !== 'string' ||
-    typeof value.channel !== 'string' ||
-    !(typeof value.tag === 'string' || value.tag === null) ||
-    typeof value.closedAt !== 'string' ||
-    typeof value.outcome !== 'string'
-  ) {
-    return null;
-  }
-  return {
-    threadId: value.threadId,
-    channel: value.channel,
-    tag: value.tag,
-    closedAt: value.closedAt,
-    outcome: value.outcome,
-  };
-}
-
-function readPriorMemory(value: unknown): CustomerMemory {
-  if (isEmptyMemory(value) || !isRecord(value)) return EMPTY_MEMORY;
-
-  return boundMemory({
-    summary: typeof value.summary === 'string' ? value.summary : '',
-    keyFacts: Array.isArray(value.keyFacts)
-      ? value.keyFacts.filter((fact): fact is string => typeof fact === 'string')
-      : [],
-    policyFlags: readPolicyFlags(value.policyFlags),
-    recentInteractions: Array.isArray(value.recentInteractions)
-      ? value.recentInteractions
-          .map(readInteraction)
-          .filter((interaction): interaction is CustomerMemoryInteraction => interaction !== null)
-      : [],
-    version: CUSTOMER_MEMORY_VERSION,
-  });
-}
-
-function toJsonInput(value: CustomerMemory): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
 function readSpendSettings(settings: unknown): GatewaySpendSettings | null {
-  if (!isRecord(settings)) return null;
-  const raw = settings.dailyLLMSpendCapUsd;
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
+  const raw = (settings as Record<string, unknown>).dailyLLMSpendCapUsd;
   if (raw === null || typeof raw === 'number') {
     return { dailyLLMSpendCapUsd: raw };
   }
@@ -308,7 +246,7 @@ export async function updateCustomerMemoryOnThreadClose(
     }
 
     const closedAt = parseDate(options.closedAt) ?? thread.updatedAt;
-    const priorMemory = readPriorMemory(thread.customer.memory);
+    const priorMemory = parseStoredMemory(thread.customer.memory);
     const memoryUpdatedAt = thread.customer.memoryUpdatedAt;
 
     // Skip when prior memory already summarized this thread and no newer
@@ -349,7 +287,7 @@ export async function updateCustomerMemoryOnThreadClose(
     await db.customer.update({
       where: { id: thread.customerId },
       data: {
-        memory: toJsonInput(nextMemory),
+        memory: toCustomerMemoryJson(nextMemory),
         memoryUpdatedAt: new Date(),
       },
     });

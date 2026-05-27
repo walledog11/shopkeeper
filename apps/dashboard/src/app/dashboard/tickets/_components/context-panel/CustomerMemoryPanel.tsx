@@ -3,23 +3,18 @@
 import { useEffect, useMemo, useState } from "react"
 import useSWR from "swr"
 import { Check, Plus, RefreshCw, Trash2, X } from "lucide-react"
+import {
+  EMPTY_MEMORY,
+  KEY_FACTS_MAX,
+  KEY_FACT_MAX_CHARS,
+  SUMMARY_MAX_CHARS,
+  type CustomerMemory,
+  type CustomerMemoryPolicyFlags,
+} from "@clerk/db"
 import { fetcher } from "@/lib/api/fetcher"
 import { SectionHeader } from "./SectionHeader"
 import { panelSectionClass } from "./constants"
 import { formatShortDate } from "./formatters"
-import type { CustomerMemory, CustomerMemoryPolicyFlags } from "@clerk/db"
-
-const SUMMARY_MAX_CHARS = 500
-const KEY_FACT_MAX_CHARS = 80
-const KEY_FACTS_MAX = 10
-
-const EMPTY_CUSTOMER_MEMORY: CustomerMemory = {
-  summary: "",
-  keyFacts: [],
-  policyFlags: {},
-  recentInteractions: [],
-  version: 1,
-}
 
 interface CustomerMemoryResponse {
   memory: CustomerMemory
@@ -58,7 +53,7 @@ export function CustomerMemoryPanel({ customerId }: CustomerMemoryPanelProps) {
     customerId ? `/api/customers/${customerId}/memory` : null,
     fetcher,
   )
-  const memory = data?.memory ?? EMPTY_CUSTOMER_MEMORY
+  const memory = data?.memory ?? EMPTY_MEMORY
   const [draftSummary, setDraftSummary] = useState(memory.summary)
   const [draftKeyFacts, setDraftKeyFacts] = useState<string[]>(memory.keyFacts)
   const [isSaving, setIsSaving] = useState(false)

@@ -918,24 +918,66 @@ Per the trust principle, the merchant must be able to audit and correct what the
 
 Adds qualitative checks on top of the plan-shape suite. Particularly useful for verifying brand voice (Step 2) and customer memory (Step 6) are actually doing what we think.
 
-**Extend the runner** in `apps/dashboard/src/lib/agent/__evals__/runner.ts`:
-- Add an optional `expectedRubric` field to `Fixture`: `{ checks: string[] }` (e.g., `["reply must use a warm tone matching brandVoice", "reply must not promise a refund"]`).
-- After calling `planAgent` and asserting plan shape, if `expectedRubric` is set: execute the plan against a **stubbed tool surface** (a `MockExecutor` that returns canned strings — no real Shopify calls), capture the agent's final reply text, send it to Claude with the rubric as a judge prompt, parse pass/fail with reasoning.
-- Judge returns structured: `{ checkId: string, pass: boolean, reasoning: string }[]`.
+Broken into 5 sub-steps. Total: ~9 hours (vs. the original 3–4 day estimate). The savings come from reusing two pieces of existing infrastructure rather than building new abstractions:
+- `fixture.setup.simulateToolResults` already stubs the tool surface — no separate `MockExecutor` is needed.
+- The runner already extracts the final reply text from the `send_reply` tool call in `plan.rawToolCalls` (see `runner.ts:245`). No second execution pass is required to feed the judge.
 
-**New file** `apps/dashboard/src/lib/agent/__evals__/judge.ts`:
-- The judge prompt and call. Single function: `judgeReply(rubric, replyText, context) → JudgeResult`.
+7.1 → 7.2 are strictly sequential (types and module before integration). 7.3 / 7.4 / 7.5 can land in any order or in parallel once 7.2 is in. Each phase is independently shippable: existing fixtures without `expectedRubric` are unaffected.
 
-**Extend fixtures** in Steps 2 and 6's coverage:
-- Brand-voice fixtures get rubrics: "reply matches the brand voice description provided in settings."
-- Customer-memory fixtures get rubrics: "reply references the customer's prior interactions naturally."
-- Bias-to-escalate fixtures get rubrics: "agent acknowledges uncertainty rather than fabricating a confident answer."
+**Layout decisions.**
+- **Judge model**: Sonnet 4.6 for all judging — cheap and sufficient.
+- **Pass threshold**: per-check pass/fail. Each `RubricCheck` is `{ id, description, required? }`; `required` defaults to true. Informational checks (required=false) log a failure but don't gate CI.
+- **Judge prompt structure**: a stable, cacheable system prompt holds the judge instructions; the dynamic rubric + reply + context goes in the user message. Cuts repeated input tokens across fixtures.
 
-**Effort.** 3–4 days.
+---
 
-**Open decisions.**
-- **Judge model**: Sonnet 4.6 is sufficient and cheap. Opus 4.7 only if you want premium judgment for tight cases. Recommendation: Sonnet 4.6 for all judging.
-- **Pass threshold**: per-check pass/fail (strict) or aggregate score (lenient)? Per-check, with the fixture marking which checks are required vs informational.
+### Step 7.1 — Judge module + types (~2 hrs) [COMPLETED]
+
+Pure scaffolding. No runner changes. Existing fixtures untouched.
+
+- In `apps/dashboard/src/lib/agent/__evals__/types.ts`: add `RubricCheck` (`{ id: string; description: string; required?: boolean }`), `JudgeResult` (`{ checkId: string; pass: boolean; reasoning: string }`), and an optional `expectedRubric?: { checks: RubricCheck[] }` field on `Fixture`.
+- New file `apps/dashboard/src/lib/agent/__evals__/judge.ts`: single function `judgeReply(args: { checks, replyText, context }) → Promise<JudgeResult[]>`. Calls Sonnet 4.6 with a cacheable system prompt + dynamic user message. Parses structured output into `JudgeResult[]`.
+- One unit test in `judge.test.ts` with a hand-rolled rubric + reply pair to confirm structured parsing works.
+
+**Why first.** Zero blast radius. Reviewable as a self-contained module.
+
+---
+
+### Step 7.2 — Wire judge into `runFixture` (~2 hrs) [COMPLETED]
+
+Integration, gated on opt-in per fixture.
+
+- In `runner.ts`, after the existing plan-shape assertions and `replyText` extraction: if `fixture.expectedRubric` is set **and** `replyText` is non-empty, call `judgeReply`. For each check that returns `pass: false`, append a failure formatted as `rubric "<id>" failed: <reasoning>`. Skip informational checks (required=false) — log to console but don't push to `failures`.
+- Skip judge entirely if `replyText` is empty (escalation-only plans, no reply).
+- Add a `judgeUsage` field to `EvalUsage` (or new counters for `judgeInputTokens` / `judgeOutputTokens` / `judgeCacheReadInputTokens`) so per-fixture judge cost is visible in the eval log line.
+
+**Why second.** Turns the capability on without forcing any fixture migration. All existing fixtures (no `expectedRubric`) are no-ops on this code path.
+
+---
+
+### Step 7.3 — Brand-voice rubrics (~1.5 hrs)
+
+Lowest-risk fixture set first. Brand voice is already validated by substring matching (`replyMustInclude`), so rubric failures will indicate rubric-design issues, not agent regressions.
+
+- Add `expectedRubric` to `brand-voice-cheers-signoff.json`, `brand-voice-no-overapology.json`, `sample-reply-shipping-delay-imitation.json`.
+- Example check: `{ id: "tone_match", description: "Reply matches the brand voice description in orgSettings ('warm, slightly informal')." }`.
+- Run the suite; tune wording on any false negatives.
+
+---
+
+### Step 7.4 — Customer-memory rubrics (~1.5 hrs)
+
+- Add `expectedRubric` to `memory-vip-tone.json`, `memory-complaint-pattern-escalates.json`, `memory-empty-no-regression.json`.
+- `memory-empty-no-regression` gets an **informational** rubric (`required: false`): "reply does not invent prior customer history when memory is empty." Surfaces regressions without gating CI on a soft check.
+- VIP / complaint-pattern rubrics are required: "reply acknowledges relevant prior context naturally."
+
+---
+
+### Step 7.5 — Bias-to-escalate rubrics + CI cost guard (~2 hrs)
+
+- Add `expectedRubric` to `escalate-ambiguous-customer.json`, `escalate-out-of-scope.json`, `escalate-shopify-down.json`. Note: most escalation fixtures have no reply, so judging applies only to ones where the agent also drafts a holding message before escalating.
+- Check pattern: "agent acknowledges uncertainty rather than fabricating a confident answer."
+- Add a `RUN_JUDGE_EVALS` env flag (default on locally, opt-in or scheduled-only in CI). Without it, judges are skipped entirely — the per-fixture extra Sonnet call would otherwise roughly double the eval suite's API spend on every push. Document the flag in `index.test.ts`'s header.
 
 ---
 

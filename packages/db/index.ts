@@ -193,6 +193,8 @@ export {
   SUMMARY_MAX_CHARS,
   boundMemory,
   isEmptyMemory,
+  parseStoredMemory,
+  toCustomerMemoryJson,
 } from './customer-memory.js';
 export type {
   CustomerMemory,

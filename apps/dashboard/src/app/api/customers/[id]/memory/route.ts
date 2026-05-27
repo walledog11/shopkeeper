@@ -1,74 +1,16 @@
 import { NextResponse } from 'next/server';
 import {
   CUSTOMER_MEMORY_VERSION,
-  EMPTY_MEMORY,
   boundMemory,
   db,
-  isEmptyMemory,
-  type CustomerMemory,
-  type CustomerMemoryInteraction,
-  type CustomerMemoryPolicyFlags,
+  parseStoredMemory,
+  toCustomerMemoryJson,
 } from '@clerk/db';
-import type { Prisma } from '@prisma/client';
 import { BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readPolicyFlags(value: unknown): CustomerMemoryPolicyFlags {
-  if (!isRecord(value)) return {};
-
-  const flags: CustomerMemoryPolicyFlags = {};
-  if (typeof value.vip === 'boolean') flags.vip = value.vip;
-  if (typeof value.complaintPattern === 'boolean') flags.complaintPattern = value.complaintPattern;
-  if (typeof value.priorRefundsTotal === 'number' && Number.isFinite(value.priorRefundsTotal) && value.priorRefundsTotal >= 0) {
-    flags.priorRefundsTotal = value.priorRefundsTotal;
-  }
-  if (typeof value.priorRefundsCount === 'number' && Number.isFinite(value.priorRefundsCount) && value.priorRefundsCount >= 0) {
-    flags.priorRefundsCount = value.priorRefundsCount;
-  }
-  return flags;
-}
-
-function readInteraction(value: unknown): CustomerMemoryInteraction | null {
-  if (!isRecord(value)) return null;
-  if (
-    typeof value.threadId !== 'string' ||
-    typeof value.channel !== 'string' ||
-    !(typeof value.tag === 'string' || value.tag === null) ||
-    typeof value.closedAt !== 'string' ||
-    typeof value.outcome !== 'string'
-  ) {
-    return null;
-  }
-
-  return {
-    threadId: value.threadId,
-    channel: value.channel,
-    tag: value.tag,
-    closedAt: value.closedAt,
-    outcome: value.outcome,
-  };
-}
-
-function readStoredMemory(value: unknown): CustomerMemory {
-  if (isEmptyMemory(value) || !isRecord(value)) return EMPTY_MEMORY;
-
-  return boundMemory({
-    summary: typeof value.summary === 'string' ? value.summary : '',
-    keyFacts: Array.isArray(value.keyFacts)
-      ? value.keyFacts.filter((fact): fact is string => typeof fact === 'string')
-      : [],
-    policyFlags: readPolicyFlags(value.policyFlags),
-    recentInteractions: Array.isArray(value.recentInteractions)
-      ? value.recentInteractions
-          .map(readInteraction)
-          .filter((interaction): interaction is CustomerMemoryInteraction => interaction !== null)
-      : [],
-    version: CUSTOMER_MEMORY_VERSION,
-  });
 }
 
 function normalizeSummary(value: unknown, fallback: string): string {
@@ -94,10 +36,6 @@ function normalizeKeyFacts(value: unknown, fallback: string[]): string[] {
     .filter(Boolean);
 }
 
-function toJsonInput(value: CustomerMemory): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-}
-
 export const GET = withOrgRoute<{ id: string }>(
   {
     context: 'Customer Memory GET',
@@ -112,7 +50,7 @@ export const GET = withOrgRoute<{ id: string }>(
     assertEntityInOrg(customer, org.id, 'Customer not found');
 
     return NextResponse.json({
-      memory: readStoredMemory(customer.memory),
+      memory: parseStoredMemory(customer.memory),
       memoryUpdatedAt: customer.memoryUpdatedAt?.toISOString() ?? null,
     });
   },
@@ -141,7 +79,7 @@ export const PATCH = withOrgRoute<{ id: string }>(
     });
     assertEntityInOrg(customer, org.id, 'Customer not found');
 
-    const current = readStoredMemory(customer.memory);
+    const current = parseStoredMemory(customer.memory);
     const next = boundMemory({
       ...current,
       summary: normalizeSummary(body.summary, current.summary),
@@ -162,14 +100,14 @@ export const PATCH = withOrgRoute<{ id: string }>(
     const updated = await db.customer.update({
       where: { id: customer.id },
       data: {
-        memory: toJsonInput(next),
+        memory: toCustomerMemoryJson(next),
         memoryUpdatedAt: new Date(),
       },
       select: { memory: true, memoryUpdatedAt: true },
     });
 
     return NextResponse.json({
-      memory: readStoredMemory(updated.memory),
+      memory: parseStoredMemory(updated.memory),
       memoryUpdatedAt: updated.memoryUpdatedAt?.toISOString() ?? null,
     });
   },

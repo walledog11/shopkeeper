@@ -57,12 +57,29 @@ export interface ExpectedPlan {
   expectedAgentActions?: ExpectedAgentAction[];
 }
 
+export interface RubricCheck {
+  id: string;
+  description: string;
+  required?: boolean;
+}
+
+export interface JudgeResult {
+  checkId: string;
+  pass: boolean;
+  reasoning: string;
+}
+
+export interface ExpectedRubric {
+  checks: RubricCheck[];
+}
+
 export interface Fixture {
   id: string;
   description: string;
   setup: ThreadSetup;
   instruction: string;
   expectedPlan: ExpectedPlan;
+  expectedRubric?: ExpectedRubric;
 }
 
 export interface EvalUsage {
@@ -71,6 +88,12 @@ export interface EvalUsage {
   outputTokens: number;
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
+  judgeUsage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens: number;
+    cacheCreationInputTokens: number;
+  };
 }
 
 export interface EvalResult {

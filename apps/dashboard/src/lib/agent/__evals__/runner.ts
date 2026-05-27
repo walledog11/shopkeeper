@@ -17,6 +17,7 @@ import { readModelUsage } from "../usage";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "../api/agent-actions";
 import type { AgentActionMode, AgentContext } from "../types";
 import type { AgentPlan, OrgSettings } from "@/types";
+import { judgeReply } from "./judge";
 import type { ExpectedAgentAction, Fixture, EvalResult, EvalUsage, ToolInputExpectation } from "./types";
 
 const SENDER_TYPE_MAP: Record<string, DbSenderType> = {
@@ -170,6 +171,12 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     outputTokens: 0,
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
+    judgeUsage: {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    },
   };
   const startedAt = Date.now();
   let orgId: string | null = null;
@@ -301,6 +308,36 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     for (const phrase of expected.replyMustNotInclude ?? []) {
       if (replyText.toLowerCase().includes(phrase.toLowerCase())) {
         failures.push(`reply contained forbidden "${phrase}"; reply was: "${replyText}"`);
+      }
+    }
+
+    if (fixture.expectedRubric && replyText.length > 0) {
+      const judged = await judgeReply({
+        checks: fixture.expectedRubric.checks,
+        replyText,
+        context: {
+          orgSettings: resolved,
+          customerMemory: ctx.customerMemory,
+          recentMessages: ctx.recentMessages,
+        },
+      });
+      usage.judgeUsage.inputTokens += judged.usage.inputTokens;
+      usage.judgeUsage.outputTokens += judged.usage.outputTokens;
+      usage.judgeUsage.cacheReadInputTokens += judged.usage.cacheReadInputTokens;
+      usage.judgeUsage.cacheCreationInputTokens += judged.usage.cacheCreationInputTokens;
+
+      const checkById = new Map(fixture.expectedRubric.checks.map((c) => [c.id, c]));
+      for (const result of judged.results) {
+        if (result.pass) continue;
+        const check = checkById.get(result.checkId);
+        const required = check?.required !== false;
+        if (required) {
+          failures.push(`rubric "${result.checkId}" failed: ${result.reasoning}`);
+        } else {
+          console.log(
+            `[eval] ${fixture.id} informational rubric "${result.checkId}" failed: ${result.reasoning}`,
+          );
+        }
       }
     }
 
