@@ -1,3 +1,4 @@
+import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 import { TOOL_CATEGORIES } from "./tools";
 import { executeTool } from "./tools/executor";
@@ -226,6 +227,13 @@ export async function tryRunOperatorOrderStatusFastPath(
 
     customerId = customer.customer_id;
     customerName = customer.name || customer.email || customerId;
+  }
+
+  if (customerId && customerId !== ctx.thread.shopifyCustomerId) {
+    await db.thread
+      .update({ where: { id: ctx.thread.id }, data: { shopifyCustomerId: customerId } })
+      .catch(() => {});
+    ctx.thread.shopifyCustomerId = customerId;
   }
 
   const ordersResult = await runFastPathTool(

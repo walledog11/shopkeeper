@@ -25,5 +25,10 @@ export function buildMessageHistory(
     merged.shift();
   }
 
+  const tail = merged[merged.length - 1];
+  if (tail && tail.role === "user" && typeof tail.content === "string" && tail.content === instruction) {
+    return merged;
+  }
+
   return [...merged, { role: "user", content: instruction }];
 }
