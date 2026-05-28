@@ -1,9 +1,14 @@
-import { ChevronLeft, ChevronRight, Loader2, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/ui/cn";
 import { STEPS } from "./model";
 
-export function Header({ idx, onGoto }: { idx: number; onGoto: (i: number) => void }) {
+export function Header({ idx, onGoto, exitLabel, onExit }: {
+  idx: number;
+  onGoto: (i: number) => void;
+  exitLabel?: string;
+  onExit?: () => void | Promise<void>;
+}) {
   return (
     <header className="relative z-20 flex items-center gap-3.5 border-b border-white/[0.06] bg-background/80 px-7 py-[18px] backdrop-blur-md">
       <div className="flex items-center gap-2.5">
@@ -46,6 +51,16 @@ export function Header({ idx, onGoto }: { idx: number; onGoto: (i: number) => vo
       </div>
 
       <div className="flex shrink-0 items-center gap-3 whitespace-nowrap font-mono text-[11px] text-white/45">
+        {exitLabel && onExit && (
+          <button
+            type="button"
+            onClick={() => { void onExit(); }}
+            className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-white/55 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <LogOut className="h-3 w-3" />
+            <span className="text-[11.5px] font-medium normal-case tracking-normal">{exitLabel}</span>
+          </button>
+        )}
         <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-[ob-pulse-bg_2s_ease-in-out_infinite]" />
         ≈ {Math.max(1, 4 - idx)} min left
       </div>

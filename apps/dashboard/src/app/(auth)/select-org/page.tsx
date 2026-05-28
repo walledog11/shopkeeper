@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useOrganizationList } from "@clerk/nextjs";
+import { useState } from "react";
+import { useClerk, useOrganizationList } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   CheckCircle2,
   Loader2,
+  LogOut,
   ShieldCheck,
+  Sparkles,
   Workflow,
 } from "lucide-react";
 import AuthShell from "../_components/AuthShell";
@@ -20,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 
 type MembershipItem = {
   role?: string | null;
@@ -52,17 +55,13 @@ export default function SelectOrgPage() {
   const { isLoaded, userMemberships, setActive } = useOrganizationList({
     userMemberships: { infinite: false },
   });
+  const { signOut } = useClerk();
   const router = useRouter();
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const orgs = (userMemberships?.data ?? []) as MembershipItem[];
-
-  useEffect(() => {
-    if (isLoaded && orgs.length === 0) {
-      router.replace("/onboarding");
-    }
-  }, [isLoaded, orgs.length, router]);
+  const hasNoWorkspaces = isLoaded && orgs.length === 0;
 
   async function handleSelect(orgId: string) {
     if (!setActive || pendingOrgId) return;
@@ -106,18 +105,40 @@ export default function SelectOrgPage() {
     >
       <Card className="overflow-hidden rounded-[1.75rem] border-white/10 bg-[#0f0f0f]/95 shadow-[0_24px_100px_-48px_rgba(0,0,0,0.95)] backdrop-blur-xl">
         <CardHeader className="border-b border-white/10 pb-5">
-          <CardTitle className="text-lg font-semibold text-white">Your workspaces</CardTitle>
+          <CardTitle className="text-lg font-semibold text-white">
+            {hasNoWorkspaces ? "No workspaces yet" : "Your workspaces"}
+          </CardTitle>
           <CardDescription className="text-white/55">
-            {isLoaded
-              ? `${orgs.length} available ${orgs.length === 1 ? "workspace" : "workspaces"}`
-              : "Loading your workspace access"}
+            {!isLoaded
+              ? "Loading your workspace access"
+              : hasNoWorkspaces
+                ? "Create your first workspace to get started, or sign out."
+                : `${orgs.length} available ${orgs.length === 1 ? "workspace" : "workspaces"}`}
           </CardDescription>
         </CardHeader>
 
         <CardContent className="p-0">
-          {!isLoaded || orgs.length === 0 ? (
+          {!isLoaded ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="size-5 animate-spin text-white/45" />
+            </div>
+          ) : hasNoWorkspaces ? (
+            <div className="flex flex-col items-stretch gap-3 px-5 py-6">
+              <Button
+                onClick={() => router.push("/onboarding")}
+                className="h-10 gap-2 bg-green-400 text-green-950 hover:bg-green-300"
+              >
+                <Sparkles className="size-4" />
+                Create your first workspace
+              </Button>
+              <button
+                type="button"
+                onClick={() => signOut({ redirectUrl: "/login" })}
+                className="inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium text-white/55 transition-colors hover:bg-white/[0.04] hover:text-white"
+              >
+                <LogOut className="size-3.5" />
+                Sign out
+              </button>
             </div>
           ) : (
             <ul className="divide-y divide-white/10">
