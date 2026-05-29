@@ -230,7 +230,7 @@ export function TicketRow({
             data-testid="ticket-row-open"
             data-ticket-id={ticket.id}
             onClick={openTicketRow}
-            className={`flex w-full items-start gap-3 border-0 bg-transparent p-0 text-left transition-all [font-family:inherit] ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
+            className={`flex w-full items-start gap-3 border-0 bg-transparent p-0 text-left transition-transform [font-family:inherit] ${hasSelection ? "translate-x-5" : "group-hover:translate-x-5"}`}
           >
             <div className="relative size-9 shrink-0">
               <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
