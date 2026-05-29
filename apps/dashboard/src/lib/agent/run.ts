@@ -281,14 +281,14 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
+    await executeToolCalls(executableToolCalls);
+
     if (escalationReason) {
       return finish({
         summary: `Escalated to merchant: ${escalationReason}`,
         actionsPerformed,
       }, "escalated");
     }
-
-    await executeToolCalls(executableToolCalls);
 
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
