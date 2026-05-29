@@ -51,7 +51,7 @@ vi.mock('@/lib/server/redis', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
 
@@ -76,7 +76,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-describe('GET /api/integrations/shopify/callback', () => {
+describe('POST /api/integrations/shopify/callback', () => {
   it('rejects a callback for a different shop before token exchange', async () => {
     mockSavedCookies({
       shopify_oauth_state: 'state_123',
@@ -85,7 +85,7 @@ describe('GET /api/integrations/shopify/callback', () => {
       shopify_oauth_shop: 'fixture-shop.myshopify.com',
     });
 
-    const res = await GET(new Request('http://localhost/api/integrations/shopify/callback?code=abc&shop=evil-shop.myshopify.com&state=state_123&hmac=bad'));
+    const res = await POST(new Request('http://localhost/api/integrations/shopify/callback?code=abc&shop=evil-shop.myshopify.com&state=state_123&hmac=bad'));
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=shopify_shop_mismatch');
@@ -114,7 +114,7 @@ describe('GET /api/integrations/shopify/callback', () => {
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 4 } }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 5 } }));
 
-    const res = await GET(new Request(signedCallbackUrl({
+    const res = await POST(new Request(signedCallbackUrl({
       code: 'oauth_code',
       shop: 'fixture-shop.myshopify.com',
       state: 'state_123',

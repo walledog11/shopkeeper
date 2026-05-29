@@ -33,7 +33,7 @@ export async function runPlaybooks(
       });
       if (!run) {
         logger.info({ playbookId: playbook.id, threadId }, "[playbook-runner] Already ran , skipping");
-        continue;
+        return;
       }
 
       await executePlaybook(orgId, threadId, playbook.actions as unknown as PlaybookAction[]);

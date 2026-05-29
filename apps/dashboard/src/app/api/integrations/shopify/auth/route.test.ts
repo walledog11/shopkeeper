@@ -15,7 +15,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+import { POST } from './route';
 
 beforeEach(() => {
   vi.stubEnv('SHOPIFY_CLIENT_ID', 'shopify-client-id');
@@ -27,21 +27,21 @@ beforeEach(() => {
   mockCookieSet.mockClear();
 });
 
-describe('GET /api/integrations/shopify/auth', () => {
+describe('POST /api/integrations/shopify/auth', () => {
   it('requires an authenticated organization session', async () => {
     vi.mocked(auth).mockResolvedValueOnce({
       userId: null,
       orgId: null,
     } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
 
-    const res = await GET(new Request('http://localhost/api/integrations/shopify/auth?shop=fixture-shop'));
+    const res = await POST(new Request('http://localhost/api/integrations/shopify/auth?shop=fixture-shop'));
 
     expect(res.status).toBe(401);
     expect(mockCookieSet).not.toHaveBeenCalled();
   });
 
   it('rejects invalid shop domains', async () => {
-    const res = await GET(new Request('http://localhost/api/integrations/shopify/auth?shop=https://evil.test'));
+    const res = await POST(new Request('http://localhost/api/integrations/shopify/auth?shop=https://evil.test'));
 
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Invalid shop domain' });
@@ -49,7 +49,7 @@ describe('GET /api/integrations/shopify/auth', () => {
   });
 
   it('sets OAuth state cookies and redirects to the normalized Shopify auth URL', async () => {
-    const res = await GET(new Request('http://localhost/api/integrations/shopify/auth?shop=Fixture-Shop&returnTo=/dashboard/integrations'));
+    const res = await POST(new Request('http://localhost/api/integrations/shopify/auth?shop=Fixture-Shop&returnTo=/dashboard/integrations'));
 
     expect(res.status).toBe(307);
     const redirectUrl = new URL(res.headers.get('location')!);

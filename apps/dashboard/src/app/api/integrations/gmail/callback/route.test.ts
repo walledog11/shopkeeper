@@ -37,7 +37,7 @@ vi.mock('@/lib/server/logger', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
 
@@ -59,7 +59,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-describe('GET /api/integrations/gmail/callback', () => {
+describe('POST /api/integrations/gmail/callback', () => {
   it('rejects state mismatch before token exchange', async () => {
     mockSavedCookies({
       gmail_oauth_state: 'state_123',
@@ -67,7 +67,7 @@ describe('GET /api/integrations/gmail/callback', () => {
       gmail_oauth_user: 'usr_oauth',
     });
 
-    const res = await GET(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=other_state'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=other_state'));
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
@@ -82,7 +82,7 @@ describe('GET /api/integrations/gmail/callback', () => {
       gmail_oauth_user: 'someone_else',
     });
 
-    const res = await GET(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=state_123'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=abc&state=state_123'));
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
@@ -118,7 +118,7 @@ describe('GET /api/integrations/gmail/callback', () => {
       }))
       .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }));
 
-    const res = await GET(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123'));
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/settings');
@@ -141,7 +141,7 @@ describe('GET /api/integrations/gmail/callback', () => {
   });
 
   it('redirects to access_denied when user cancels', async () => {
-    const res = await GET(new Request('http://localhost/api/integrations/gmail/callback?error=access_denied'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?error=access_denied'));
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=access_denied');
     expect(mockFetch).not.toHaveBeenCalled();

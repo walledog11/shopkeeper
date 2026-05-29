@@ -144,7 +144,7 @@ export function AuditSection({
                 </p>
                 <div className="space-y-1.5">
                   {visibleTips.map((tip) => (
-                    <div key={tip.label} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs ${
+                    <div key={tip.text} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs ${
                       tip.ok
                         ? 'bg-emerald-950/40 border border-emerald-800/50 text-emerald-400'
                         : 'bg-card border border-border text-foreground'

@@ -15,7 +15,7 @@ vi.mock('next/headers', () => ({
 }));
 
 import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+import { POST } from './route';
 
 beforeEach(() => {
   vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
@@ -27,9 +27,9 @@ beforeEach(() => {
   mockCookieSet.mockClear();
 });
 
-describe('GET /api/integrations/gmail/auth', () => {
+describe('POST /api/integrations/gmail/auth', () => {
   it('requests send-only Gmail scope', async () => {
-    const res = await GET(new Request('http://localhost/api/integrations/gmail/auth?returnTo=/dashboard/integrations'));
+    const res = await POST(new Request('http://localhost/api/integrations/gmail/auth?returnTo=/dashboard/integrations'));
 
     expect(res.status).toBe(307);
     const redirectUrl = new URL(res.headers.get('location')!);

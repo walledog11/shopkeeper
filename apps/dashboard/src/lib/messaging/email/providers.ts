@@ -23,7 +23,7 @@ export function getEmailReauthorizePath(integration: { metadata?: unknown | null
   return null;
 }
 
-function isOAuthEmailProvider(integration: { metadata?: unknown | null }): boolean {
+export function isOAuthEmailProvider(integration: { metadata?: unknown | null }): boolean {
   const provider = getEmailProvider(integration);
   return provider === 'gmail' || provider === 'outlook';
 }

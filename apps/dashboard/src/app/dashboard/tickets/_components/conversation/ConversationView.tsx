@@ -42,7 +42,6 @@ interface Props {
   initialPlan?: AgentPlan | null
   onOpenContext?: () => void
   aiSummary: string | null
-  isSummaryRefreshing: boolean
   onRefreshSummary: () => void
   failedMessages?: FailedMessage[]
   onRetry?: (id: string) => void

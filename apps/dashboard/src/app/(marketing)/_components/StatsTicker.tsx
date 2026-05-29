@@ -25,8 +25,8 @@ export function StatsTicker() {
   return (
     <div className="max-w-[100vw] overflow-hidden border-y border-solid border-stone-900/10 bg-stone-900">
       <div className="flex w-max animate-[m-scroll_40s_linear_infinite] items-center gap-16 px-7 py-6 text-[13px] text-stone-100 [font-family:var(--m-mono)]">
-        {TICKER_STATS.map((s) => (
-          <TickerItem key={s.key} {...s} />
+        {TICKER_STATS.map(({ key, ...s }) => (
+          <TickerItem key={key} {...s} />
         ))}
       </div>
     </div>
