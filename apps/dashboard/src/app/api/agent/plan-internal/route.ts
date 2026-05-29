@@ -1,5 +1,5 @@
 /**
- * Internal Plan Generation API — called by the gateway worker when a new
+ * Internal Plan Generation API , called by the gateway worker when a new
  * thread event occurs and a WhatsApp notification needs to be sent.
  *
  * Auth: x-internal-secret header (shared secret between gateway and dashboard).

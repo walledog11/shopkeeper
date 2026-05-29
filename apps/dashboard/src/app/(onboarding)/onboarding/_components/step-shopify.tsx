@@ -32,16 +32,16 @@ export function StepShopify({ data, connected, shopifyRow, onOAuth }: {
       )}>
         <div className="flex items-center gap-3.5">
           <div className={cn(
-            "inline-flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl text-[26px] font-bold",
+            "inline-flex size-[52px] shrink-0 items-center justify-center rounded-xl text-[26px] font-bold",
             connected ? "bg-green-400/15 text-green-400" : "bg-white/[0.06] text-white/55"
           )}>
-            {connected ? <Check className="h-7 w-7" /> : <ShoppingBag className="h-7 w-7" />}
+            {connected ? <Check className="size-7" /> : <ShoppingBag className="size-7" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-[16px] font-semibold text-white">{connected ? "Connected to Shopify" : "Shopify"}</span>
               {connected && (
-                <span className="rounded-sm bg-green-400/15 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-green-400">LIVE</span>
+                <span className="rounded-sm bg-green-400/15 px-1.5 py-0.5 font-mono text-xs font-bold uppercase tracking-wider text-green-400">LIVE</span>
               )}
             </div>
             <div className="mt-0.5 truncate font-mono text-[12.5px] text-white/45">
@@ -65,7 +65,7 @@ export function StepShopify({ data, connected, shopifyRow, onOAuth }: {
               disabled={!shop.trim()}
               className="h-10 shrink-0 gap-1 bg-green-400 px-4 text-[13px] font-semibold text-green-950 hover:bg-green-300"
             >
-              Connect Shopify <ChevronRight className="h-4 w-4" />
+              Connect Shopify <ChevronRight className="size-4" />
             </Button>
           </div>
         )}
@@ -83,7 +83,7 @@ export function StepShopify({ data, connected, shopifyRow, onOAuth }: {
       <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3.5 py-3 text-[12.5px] leading-snug text-white/70">
         <span className="text-[14px] text-white/45">◇</span>
         <span>
-          Not on Shopify? You can <a className="font-semibold text-green-400"> skip this step </a> and I&apos;ll answer general questions until you connect a store.
+          Not on Shopify? You can <span className="font-semibold text-green-400"> skip this step </span> and I&apos;ll answer general questions until you connect a store.
         </span>
       </div>
     </div>
@@ -96,7 +96,7 @@ function AccessRow({ kind, label, hint, on }: { kind: "read" | "action"; label: 
   return (
     <div className={cn("flex items-center gap-2.5 py-1.5 transition-opacity", on ? "opacity-100" : "opacity-60")}>
       <span className={cn(
-        "inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-bold",
+        "inline-flex size-4 shrink-0 items-center justify-center rounded text-xs font-bold",
         on ? "bg-green-400/15 text-green-400" : "bg-white/[0.06] text-white/45"
       )}>
         {on ? "✓" : "·"}

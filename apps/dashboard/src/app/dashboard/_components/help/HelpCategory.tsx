@@ -10,7 +10,7 @@ interface Props {
 
 export default function HelpCategory({ category, onSelectArticle }: Props) {
   return (
-    <div className="px-5 py-5 space-y-4">
+    <div className="p-5 space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-xl">{category.icon}</span>
         <h2 className="text-base font-bold text-foreground">{category.title}</h2>
@@ -19,7 +19,7 @@ export default function HelpCategory({ category, onSelectArticle }: Props) {
 
       <div className="divide-y divide-border border border-border rounded-md overflow-hidden">
         {category.articles.map(article => (
-          <button
+          <button type="button"
             key={article.id}
             onClick={() => onSelectArticle(article)}
             className="w-full flex items-center justify-between px-4 py-3.5 hover:bg-muted transition-colors text-left group"
@@ -27,7 +27,7 @@ export default function HelpCategory({ category, onSelectArticle }: Props) {
             <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors leading-snug">
               {article.title}
             </span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 ml-3 transition-colors" />
+            <ChevronRight className="size-4 text-muted-foreground/40 group-hover:text-muted-foreground shrink-0 ml-3 transition-colors" />
           </button>
         ))}
       </div>

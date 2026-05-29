@@ -18,6 +18,9 @@ import {
 } from "@/lib/messaging/email/providers"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration, OrgSettings } from "@/types"
+import { PermissionToggleRow } from "./PermissionToggleRow"
+import { StatusPill } from "./StatusPill"
+import type { PillState } from "./integration-card-types"
 
 export type { ConnectType, PlatformConfig }
 
@@ -26,7 +29,7 @@ export type { ConnectType, PlatformConfig }
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
-    <button
+    <button type="button"
       onClick={(e) => {
         e.stopPropagation()
         navigator.clipboard.writeText(text)
@@ -38,33 +41,9 @@ function CopyButton({ text }: { text: string }) {
       className="ml-1 text-white/20 hover:text-white/50 transition-colors"
     >
       {copied
-        ? <Check className="w-3 h-3 text-emerald-400" />
-        : <Copy className="w-3 h-3" />
+        ? <Check className="size-3 text-emerald-400" />
+        : <Copy className="size-3" />
       }
-    </button>
-  )
-}
-
-function GreenToggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
-      className={cn(
-        "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none",
-        checked ? "bg-emerald-500" : "bg-white/[0.10]",
-        disabled && "opacity-50 cursor-not-allowed"
-      )}
-    >
-      <span
-        className={cn(
-          "inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
-          checked ? "translate-x-[18px]" : "translate-x-0.5"
-        )}
-      />
     </button>
   )
 }
@@ -79,90 +58,6 @@ function formatLastActivity(iso: string): string {
   return `${days}d ago`
 }
 
-// ── Status pill ────────────────────────────────────────────────────────────────
-
-type PillState = 'connected' | 'not-connected' | 'action-needed' | 'auth-expiring' | 'waiting-for-inbound' | 'coming-soon'
-
-function StatusPill({ state }: { state: PillState }) {
-  switch (state) {
-    case 'connected':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          Connected
-        </span>
-      )
-    case 'waiting-for-inbound':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/55 bg-white/[0.05] border border-white/[0.12] rounded-full px-2 py-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
-          Waiting for first inbound
-        </span>
-      )
-    case 'action-needed':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.20] rounded-full px-2 py-0.5">
-          <AlertTriangle className="w-3 h-3" />
-          Action needed
-        </span>
-      )
-    case 'auth-expiring':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.20] rounded-full px-2 py-0.5">
-          <AlertTriangle className="w-3 h-3" />
-          Auth expiring
-        </span>
-      )
-    case 'coming-soon':
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
-          Coming soon
-        </span>
-      )
-    case 'not-connected':
-    default:
-      return (
-        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
-          Not connected
-        </span>
-      )
-  }
-}
-
-// ── Shopify permissions panel ─────────────────────────────────────────────────
-
-function PermissionToggleRow({
-  label,
-  required,
-  suffix,
-  checked,
-  onChange,
-}: {
-  label: string
-  required?: boolean
-  suffix?: string | null
-  checked: boolean
-  onChange: (v: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between py-3">
-      <div className="flex items-center gap-2 min-w-0">
-        <p className="text-sm text-white/75 truncate">{label}</p>
-        {required && (
-          <span className="text-[9px] font-semibold text-white/35 bg-white/[0.05] border border-white/[0.08] uppercase tracking-wider rounded px-1.5 py-0.5 shrink-0">
-            Required
-          </span>
-        )}
-        {suffix && (
-          <span className="text-[11px] text-white/35 ml-1 shrink-0">{suffix}</span>
-        )}
-      </div>
-      <GreenToggle checked={checked} onChange={onChange} disabled={required} />
-    </div>
-  )
-}
-
 const FORWARDING_GUIDES = [
   {
     id: 'google',
@@ -170,7 +65,7 @@ const FORWARDING_GUIDES = [
     steps: [
       'Gmail → Settings (gear) → See all settings → Forwarding and POP/IMAP.',
       'Click "Add a forwarding address" and paste the address above.',
-      'Gmail sends a verification code to that address — it will appear as a new ticket in Clerk. Paste the code back into Gmail.',
+      'Gmail sends a verification code to that address , it will appear as a new ticket in Clerk. Paste the code back into Gmail.',
       'Select "Forward a copy of incoming mail to…" and choose to keep Gmail\'s copy in the inbox.',
     ],
   },
@@ -190,7 +85,7 @@ const FORWARDING_GUIDES = [
     steps: [
       'cPanel → Email → Forwarders → Add Forwarder.',
       'Address to Forward: your support address (e.g. support@yourstore.com).',
-      'Destination: Forward to email address — paste the address above.',
+      'Destination: Forward to email address , paste the address above.',
       'Add Forwarder.',
     ],
   },
@@ -199,7 +94,7 @@ const FORWARDING_GUIDES = [
     label: 'Cloudflare',
     steps: [
       'Cloudflare Dashboard → your domain → Email → Email Routing → Destination addresses.',
-      'Add the address above as a destination. Cloudflare sends a verification email — it will appear as a new ticket in Clerk. Click the link inside.',
+      'Add the address above as a destination. Cloudflare sends a verification email , it will appear as a new ticket in Clerk. Click the link inside.',
       'Routes → create a custom address (e.g. support@yourdomain.com) routed to that destination.',
       'Save.',
     ],
@@ -208,7 +103,7 @@ const FORWARDING_GUIDES = [
 
 type ForwardingProviderId = typeof FORWARDING_GUIDES[number]['id']
 
-function EmailForwardingDisclosure({
+function useEmailForwardingDisclosureView({
   isConnected,
   email,
   setEmail,
@@ -235,12 +130,12 @@ function EmailForwardingDisclosure({
         className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
       >
         <span className="text-xs font-medium text-white/55">Use email forwarding (advanced)</span>
-        <ChevronDown className={cn("w-3.5 h-3.5 text-white/30 transition-transform", open && "rotate-180")} />
+        <ChevronDown className={cn("size-3.5 text-white/30 transition-transform", open && "rotate-180")} />
       </button>
       {open && (
         <div className="px-3.5 pb-3.5 space-y-3 border-t border-white/[0.05]">
           <div className="space-y-1.5 pt-3">
-            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Forward incoming mail to</p>
+            <p className="text-xs font-semibold text-white/35 uppercase tracking-wider">Forward incoming mail to</p>
             <div className="flex items-center gap-2 rounded-md bg-black/30 border border-white/[0.07] px-3 py-2">
               {inboundAddress ? (
                 <>
@@ -253,7 +148,7 @@ function EmailForwardingDisclosure({
             </div>
           </div>
           <div className="space-y-2">
-            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Set up forwarding</p>
+            <p className="text-xs font-semibold text-white/35 uppercase tracking-wider">Set up forwarding</p>
             <div className="flex flex-wrap gap-1">
               {FORWARDING_GUIDES.map(g => (
                 <button
@@ -261,7 +156,7 @@ function EmailForwardingDisclosure({
                   type="button"
                   onClick={() => setProvider(g.id)}
                   className={cn(
-                    "text-[11px] font-medium rounded-md px-2.5 py-1 border transition-colors",
+                    "text-xs font-medium rounded-md px-2.5 py-1 border transition-colors",
                     provider === g.id
                       ? "bg-white/[0.08] border-white/[0.15] text-white/85"
                       : "bg-transparent border-white/[0.08] text-white/40 hover:text-white/65 hover:border-white/[0.12]",
@@ -271,14 +166,14 @@ function EmailForwardingDisclosure({
                 </button>
               ))}
             </div>
-            <ol className="text-[11px] text-white/40 space-y-1 list-decimal list-inside leading-relaxed pt-0.5">
-              {guide.steps.map((s, i) => <li key={i}>{s}</li>)}
+            <ol className="text-xs text-white/40 space-y-1 list-decimal list-inside leading-relaxed pt-0.5">
+              {guide.steps.map((s) => <li key={s}>{s}</li>)}
             </ol>
           </div>
           <div className="space-y-1.5">
-            <p className="text-[11px] font-semibold text-white/35 uppercase tracking-wider">Your support address</p>
+            <p className="text-xs font-semibold text-white/35 uppercase tracking-wider">Your support address</p>
             <div className="flex gap-2">
-              <Input
+              <Input aria-label="support@yourstore.com"
                 type="email"
                 placeholder="support@yourstore.com"
                 value={email}
@@ -292,10 +187,10 @@ function EmailForwardingDisclosure({
                 onClick={onSave}
                 className="shrink-0 h-9 px-4 font-medium"
               >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : isConnected ? 'Replace' : 'Save'}
+                {loading ? <Loader2 className="size-3.5 animate-spin" /> : isConnected ? 'Replace' : 'Save'}
               </Button>
             </div>
-            <p className="text-[11px] text-white/30 leading-relaxed">
+            <p className="text-xs text-white/30 leading-relaxed">
               Replies go out under this address.
             </p>
           </div>
@@ -305,8 +200,8 @@ function EmailForwardingDisclosure({
   )
 }
 
-function ShopifyPermissionsPanel() {
-  const { data, mutate } = useSWR<{ settings: Partial<OrgSettings> }>('/api/org', fetcher)
+function useShopifyPermissionsPanelView(enabled: boolean) {
+  const { data, mutate } = useSWR<{ settings: Partial<OrgSettings> }>(enabled ? '/api/org' : null, fetcher)
   const settings = resolveAgentSettings(data?.settings)
   const refundCap = settings.maxRefundAmount == null ? null : `auto-approve up to $${settings.maxRefundAmount}`
 
@@ -319,13 +214,15 @@ function ShopifyPermissionsPanel() {
     await mutate()
   }
 
+  if (!enabled) return null
+
   return (
     <div className="rounded-lg bg-white/[0.02] border border-white/[0.06] px-4 py-3">
       <div className="flex items-baseline justify-between mb-1">
-        <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest">Permissions &amp; limits</p>
+        <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Permissions &amp; limits</p>
         <Link
           href="/dashboard/settings"
-          className="text-[10px] font-medium text-white/30 hover:text-white/70 transition-colors"
+          className="text-xs font-medium text-white/30 hover:text-white/70 transition-colors"
         >
           Advanced settings →
         </Link>
@@ -341,17 +238,17 @@ function ShopifyPermissionsPanel() {
           label="Issue refunds"
           suffix={settings.toolsEnabled.action ? refundCap : null}
           checked={settings.toolsEnabled.action}
-          onChange={(v) => patch({ toolsEnabled: { ...settings.toolsEnabled, action: v } })}
+          onChange={(v) => { void patch({ toolsEnabled: { ...settings.toolsEnabled, action: v } }) }}
         />
         <PermissionToggleRow
           label="Cancel unfulfilled orders"
           checked={settings.toolsEnabled.action && !settings.blockCancellations}
-          onChange={(v) => patch({ blockCancellations: !v })}
+          onChange={(v) => { void patch({ blockCancellations: !v }) }}
         />
         <PermissionToggleRow
           label="Modify line items & discounts"
           checked={settings.toolsEnabled.action && !settings.blockCustomLineItems}
-          onChange={(v) => patch({ blockCustomLineItems: !v })}
+          onChange={(v) => { void patch({ blockCustomLineItems: !v }) }}
         />
       </div>
     </div>
@@ -368,7 +265,11 @@ interface Props {
   lastActivity?: string | null
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect, lastActivity }: Props) {
+export default function IntegrationCard(props: Props) {
+  return useIntegrationCardView(props)
+}
+
+function useIntegrationCardView({ config, connected, onConnect, onDisconnect, lastActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [shop, setShop] = useState('')
@@ -464,12 +365,20 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
       const total = syncedPolicies + syncedPages
       setKbSyncResult(`${total} article${total === 1 ? '' : 's'} synced to Knowledge Base`)
     } catch {
-      setKbSyncResult('Sync failed — please try again')
+      setKbSyncResult('Sync failed , please try again')
     } finally {
       setKbSyncing(false)
       setTimeout(() => setKbSyncResult(null), 4000)
     }
   }
+  const shopifyPermissionsPanel = useShopifyPermissionsPanelView(config.connectType === 'shopify' && isConnected)
+  const emailForwardingDisclosure = useEmailForwardingDisclosureView({
+    isConnected,
+    email,
+    setEmail,
+    loading,
+    onSave: handleEmailConnect,
+  })
 
   return (
     <div className={cn(
@@ -479,23 +388,16 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         : "border-white/[0.08]"
     )}>
 
-      {/* ── Row header ── */}
-      <div
-        role="button"
-        tabIndex={0}
+      <div className="relative">
+      <button
+        type="button"
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            setOpen(o => !o)
-          }
-        }}
-        className="w-full flex items-start gap-4 px-5 py-4 transition-colors hover:bg-white/[0.02] cursor-pointer"
+        className="w-full flex items-start gap-4 px-5 py-4 transition-colors hover:bg-white/[0.02] cursor-pointer border-0 bg-transparent text-left [font-family:inherit]"
       >
         {/* Brand-tinted logo */}
         <div className={cn(
-          "h-11 w-11 rounded-lg flex items-center justify-center shrink-0 border",
+          "size-11 rounded-lg flex items-center justify-center shrink-0 border",
           config.accentBg,
           config.accentBorder
         )}>
@@ -517,20 +419,21 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         {/* Right column */}
         <div className="flex items-center gap-3 shrink-0 mt-1">
           {isConnected && lastActivity && !needsReauth && (
-            <span className="text-[11px] text-white/30 hidden sm:block">
+            <span className="text-xs text-white/30 hidden sm:block">
               synced {formatLastActivity(lastActivity)}
             </span>
           )}
-          {needsReauth && (
-            <button
-              onClick={(e) => { e.stopPropagation(); handleReauthorize() }}
-              className="text-[11px] font-semibold text-white/80 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-1.5 transition-colors"
-            >
-              Reauthorize
-            </button>
-          )}
-          <ChevronDown className={cn("w-4 h-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
+          <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
         </div>
+      </button>
+      {needsReauth && (
+        <button type="button"
+          onClick={handleReauthorize}
+          className="absolute right-12 top-4 text-xs font-semibold text-white/80 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-1.5 transition-colors"
+        >
+          Reauthorize
+        </button>
+      )}
       </div>
 
       {/* ── Expanded body ── */}
@@ -538,7 +441,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         <div className="border-t border-white/[0.06] px-5 py-4 space-y-4">
 
           {/* Shopify permissions */}
-          {config.connectType === 'shopify' && isConnected && <ShopifyPermissionsPanel />}
+          {shopifyPermissionsPanel}
 
           {/* Connected accounts */}
           {isConnected && (
@@ -552,12 +455,12 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                           {integration.fromEmail || integration.externalAccountId}
                         </p>
                         {isTokenExpired(integration) ? (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-red-400 bg-red-400/[0.08] border border-red-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
-                            <AlertTriangle className="w-2.5 h-2.5" /> Expired
+                          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-red-400 bg-red-400/[0.08] border border-red-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
+                            <AlertTriangle className="size-2.5" /> Expired
                           </span>
                         ) : isTokenExpiringSoon(integration) ? (
-                          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
-                            <AlertTriangle className="w-2.5 h-2.5" /> Expiring
+                          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-400 bg-amber-400/[0.08] border border-amber-400/[0.15] rounded-full px-1.5 py-0.5 shrink-0">
+                            <AlertTriangle className="size-2.5" /> Expiring
                           </span>
                         ) : null}
                       </div>
@@ -566,16 +469,16 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                         <p className="text-xs font-mono text-white/50 truncate">{integration.externalAccountId}</p>
                         <CopyButton text={integration.externalAccountId} />
                         {config.connectType === 'email' && (
-                          <span className="inline-flex items-center text-[10px] font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
+                          <span className="inline-flex items-center text-xs font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
                             {getEmailProviderLabel(integration)}
                           </span>
                         )}
                       </div>
                     )}
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => onDisconnect(integration.id)}
-                    className="text-[11px] font-medium text-white/25 hover:text-red-400 transition-colors whitespace-nowrap shrink-0"
+                    className="text-xs font-medium text-white/25 hover:text-red-400 transition-colors whitespace-nowrap shrink-0"
                   >
                     Remove
                   </button>
@@ -594,29 +497,27 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               )}
               {!isConnected && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <a
-                    href="/api/integrations/gmail/auth"
-                    className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
-                  >
-                    <Image src="/logos/gmail.png" alt="" width={16} height={16} className="object-contain" />
-                    Connect Gmail
-                  </a>
-                  <a
-                    href="/api/integrations/outlook/auth"
-                    className="flex items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
-                  >
-                    <Mail className="w-4 h-4 text-white/65" />
-                    Connect Outlook
-                  </a>
+                  <form action="/api/integrations/gmail/auth" method="post">
+                    <button
+                      type="submit"
+                      className="flex w-full items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
+                    >
+                      <Image src="/logos/gmail.png" alt="" width={16} height={16} className="object-contain" />
+                      Connect Gmail
+                    </button>
+                  </form>
+                  <form action="/api/integrations/outlook/auth" method="post">
+                    <button
+                      type="submit"
+                      className="flex w-full items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
+                    >
+                      <Mail className="size-4 text-white/65" />
+                      Connect Outlook
+                    </button>
+                  </form>
                 </div>
               )}
-              <EmailForwardingDisclosure
-                isConnected={isConnected}
-                email={email}
-                setEmail={setEmail}
-                loading={loading}
-                onSave={handleEmailConnect}
-              />
+              {emailForwardingDisclosure}
             </div>
           )}
 
@@ -635,11 +536,11 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                   </ol>
                 </div>
               )}
-              <a href="/api/integrations/instagram/auth">
-                <Button size="sm" className="h-9 px-4 font-medium">
+              <form action="/api/integrations/instagram/auth" method="post">
+                <Button type="submit" size="sm" className="h-9 px-4 font-medium">
                   {isConnected ? 'Reconnect' : 'Connect with Instagram'}
                 </Button>
-              </a>
+              </form>
             </div>
           )}
 
@@ -660,7 +561,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               )}
               {!isConnected && (
                 <div className="flex gap-2">
-                  <Input
+                  <Input aria-label="mystore.myshopify.com"
                     type="text"
                     placeholder="mystore.myshopify.com"
                     value={shop}
@@ -674,7 +575,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                     onClick={handleShopifyConnect}
                     className="shrink-0 h-9 px-4 font-medium"
                   >
-                    {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Connect'}
+                    {loading ? <Loader2 className="size-3.5 animate-spin" /> : 'Connect'}
                   </Button>
                 </div>
               )}
@@ -688,8 +589,8 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
                     className="h-8 px-3 text-xs font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
                   >
                     {kbSyncing
-                      ? <><Loader2 className="w-3 h-3 mr-1.5 animate-spin" />Syncing…</>
-                      : <><BookOpen className="w-3 h-3 mr-1.5" />Sync to KB</>
+                      ? <><Loader2 className="size-3 mr-1.5 animate-spin" />Syncing…</>
+                      : <><BookOpen className="size-3 mr-1.5" />Sync to KB</>
                     }
                   </Button>
                   {kbSyncResult && (
@@ -722,7 +623,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               notified ? "text-emerald-400 pointer-events-none" : "text-white/30 hover:text-white/55"
             )}
           >
-            {notified ? <><Check className="w-3 h-3 mr-1" />Notified</> : "Notify me"}
+            {notified ? <><Check className="size-3 mr-1" />Notified</> : "Notify me"}
           </Button>
         </div>
       )}

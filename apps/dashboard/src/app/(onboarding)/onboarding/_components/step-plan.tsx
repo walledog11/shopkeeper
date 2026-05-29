@@ -9,7 +9,7 @@ export function StepPlan({ data, connected, onStart, onBack }: {
   const storeName = data.storeName || "your store";
   const founder = data.founderName || "there";
   const tier = AUTONOMY_TIERS.find(t => t.id === data.autonomy) ?? AUTONOMY_TIERS[2];
-  const channelNames = CHANNEL_META.filter(c => connected.has(c.key)).map(c => c.label).join(", ");
+  const channelNames = CHANNEL_META.flatMap(c => connected.has(c.key) ? [c.label] : []).join(", ");
   const hasShopify = connected.has("shopify");
 
   const planItems = [
@@ -42,18 +42,18 @@ export function StepPlan({ data, connected, onStart, onBack }: {
       <Kicker step={6} label="READY TO START" />
 
       <div className="relative mt-3.5 overflow-hidden rounded-[18px] border border-white/10 bg-gradient-to-b from-green-400/10 to-white/[0.04] px-8 pb-6 pt-7">
-        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 h-72 w-72 rounded-full bg-[radial-gradient(circle,rgba(74,222,128,0.18)_0%,transparent_65%)]" />
+        <div aria-hidden className="pointer-events-none absolute -right-12 -top-14 size-72 rounded-full bg-[radial-gradient(circle,rgba(74,222,128,0.18)_0%,transparent_65%)]" />
 
         <div className="relative flex items-center gap-2">
-          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-green-400 text-green-950">
-            <Sparkles className="h-3.5 w-3.5" />
+          <span className="inline-flex size-6 items-center justify-center rounded-md bg-green-400 text-green-950">
+            <Sparkles className="size-3.5" />
           </span>
           <span className="font-mono text-[10.5px] font-bold uppercase tracking-wider text-green-400">
             FIRST-NIGHT BRIEFING · WRITTEN BY ME
           </span>
           <span className="flex-1" />
-          <span className="inline-flex items-center gap-1.5 font-mono text-[11px] text-white/45">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-400 animate-[ob-pulse-bg_2s_ease-in-out_infinite]" /> ready
+          <span className="inline-flex items-center gap-1.5 font-mono text-xs text-white/45">
+            <span className="inline-block size-1.5 rounded-full bg-green-400 animate-[ob-pulse-bg_2s_ease-in-out_infinite]" /> ready
           </span>
         </div>
 
@@ -63,14 +63,14 @@ export function StepPlan({ data, connected, onStart, onBack }: {
 
         <p className="relative m-0 max-w-[640px] text-pretty text-[15px] leading-relaxed text-white/70">
           When the next message lands at <b className="text-white">{storeName}</b>, I&apos;ll get to work.
-          For tonight I&apos;m running at <SumPill>{tier.label}</SumPill> —
+          For tonight I&apos;m running at <SumPill>{tier.label}</SumPill> ,
           refunds capped at <SumPill>${tier.cap}</SumPill>,
           watching <SumPill>{channelNames || "your inbox"}</SumPill>.
           Here&apos;s what to expect.
         </p>
 
         <div className="relative mt-6 flex flex-col gap-3">
-          {planItems.map((p, i) => <PlanRow key={i} idx={i} {...p} />)}
+          {planItems.map((p, i) => <PlanRow key={p.title} idx={i} {...p} />)}
         </div>
 
         <div className="relative mt-6 flex flex-wrap items-center gap-2.5 border-t border-dashed border-white/[0.07] pt-4">
@@ -78,17 +78,17 @@ export function StepPlan({ data, connected, onStart, onBack }: {
             onClick={onStart}
             className="h-11 gap-2 rounded-md bg-green-400 px-5 text-[14px] font-semibold text-green-950 shadow-[0_4px_12px_rgba(74,222,128,0.4)] hover:bg-green-300"
           >
-            Let me start working <ChevronRight className="h-4 w-4" />
+            Let me start working <ChevronRight className="size-4" />
           </Button>
           <Button variant="ghost" size="sm" onClick={onBack} className="text-white/70 hover:bg-white/[0.06] hover:text-white">
-            <ChevronLeft className="mr-1 h-4 w-4" /> Change something
+            <ChevronLeft className="mr-1 size-4" /> Change something
           </Button>
           <span className="flex-1" />
           <span className="font-mono text-[11.5px] text-white/45">you can pause me with one click in Settings</span>
         </div>
       </div>
 
-      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-4">
+      <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.04] p-4">
         <div className="mb-2.5 font-mono text-[10.5px] font-bold uppercase tracking-wider text-white/45">
           WHAT&apos;S WAITING FOR YOU INSIDE
         </div>
@@ -105,8 +105,8 @@ export function StepPlan({ data, connected, onStart, onBack }: {
 function PlanRow({ time, title, detail, idx }: { time: string; title: string; detail: string; idx: number }) {
   return (
     <div className="flex items-start gap-3.5 rounded-lg border border-white/[0.07] bg-white/[0.04] px-3.5 py-3">
-      <div className="w-16 shrink-0 pt-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-green-400">{time}</div>
-      <div className="mt-0.5 inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-green-400/15 font-mono text-[11px] font-bold text-green-400">
+      <div className="w-16 shrink-0 pt-0.5 font-mono text-xs font-bold uppercase tracking-wider text-green-400">{time}</div>
+      <div className="mt-0.5 inline-flex size-[22px] shrink-0 items-center justify-center rounded-md bg-green-400/15 font-mono text-xs font-bold text-green-400">
         {idx + 1}
       </div>
       <div className="min-w-0 flex-1">

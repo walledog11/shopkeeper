@@ -18,9 +18,9 @@ export function StepAutonomy({ data, update }: { data: OnboardingData; update: (
 
       <div className="mt-7 rounded-2xl border border-l-[3px] border-white/10 border-l-green-400 bg-white/[0.04] px-6 py-5">
         <div className="flex items-baseline gap-2.5">
-          <span className="font-mono text-[11px] font-bold uppercase tracking-wider text-green-400">AUTONOMY LEVEL</span>
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-green-400">AUTONOMY LEVEL</span>
           <span className="flex-1" />
-          <span className="font-mono text-[11px] text-white/45">
+          <span className="font-mono text-xs text-white/45">
             refund cap: <b className="text-white">${tier.cap}</b>
           </span>
         </div>
@@ -38,11 +38,11 @@ export function StepAutonomy({ data, update }: { data: OnboardingData; update: (
               const active = i <= tierIdx;
               const current = i === tierIdx;
               return (
-                <button
+                <button type="button"
                   key={t.id}
                   onClick={() => update({ autonomy: t.id })}
                   className={cn(
-                    "absolute top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 p-0 transition-all",
+                    "absolute top-1/2 size-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 p-0 transition-all",
                     active ? "border-green-400 bg-green-400" : "border-white/15 bg-background",
                     current ? "ring-4 ring-green-400/30" : ""
                   )}
@@ -54,7 +54,7 @@ export function StepAutonomy({ data, update }: { data: OnboardingData; update: (
           </div>
           <div className="flex justify-between px-1">
             {AUTONOMY_TIERS.map((t, i) => (
-              <button
+              <button type="button"
                 key={t.id}
                 onClick={() => update({ autonomy: t.id })}
                 className={cn(
@@ -63,7 +63,7 @@ export function StepAutonomy({ data, update }: { data: OnboardingData; update: (
                 )}
               >
                 <span className={cn(
-                  "text-[11px] tracking-[0.01em]",
+                  "text-xs tracking-[0.01em]",
                   i === tierIdx ? "font-bold text-green-400" : "font-medium text-white/45"
                 )}>{t.label}</span>
                 {t.recommended && (
@@ -80,10 +80,10 @@ export function StepAutonomy({ data, update }: { data: OnboardingData; update: (
           </div>
           <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
             <Scenario ok title='"Where is my order?"' verdict="I reply instantly" />
-            <Scenario ok={tier.cap >= 80}  title="$80 refund — defective item"
+            <Scenario ok={tier.cap >= 80}  title="$80 refund , defective item"
               verdict={tier.cap >= 80  ? "I refund + apologize"   : "I'll pause for you"} />
-            <Scenario ok={tier.cap >= 200} title="$200 refund — wrong color"
-              verdict={tier.cap >= 200 ? "I refund (within cap)"  : `I'll pause — over your $${tier.cap} cap`} />
+            <Scenario ok={tier.cap >= 200} title="$200 refund , wrong color"
+              verdict={tier.cap >= 200 ? "I refund (within cap)"  : `I'll pause , over your $${tier.cap} cap`} />
             <Scenario ok={tier.cap >= 250} title="40-unit bulk inquiry"
               verdict={tier.cap >= 250 ? "I quote the 15% tier"   : "I'll pause and draft a quote"} />
           </div>
@@ -97,7 +97,7 @@ function Scenario({ title, verdict, ok }: { title: string; verdict: string; ok: 
   return (
     <div className="flex items-start gap-2.5 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
       <span className={cn(
-        "mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold",
+        "mt-0.5 inline-flex size-5 shrink-0 items-center justify-center rounded-md text-xs font-bold",
         ok ? "bg-green-400/15 text-green-400" : "bg-amber-300/15 text-amber-300"
       )}>
         {ok ? "✓" : "↗"}

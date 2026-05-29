@@ -4,7 +4,7 @@ import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { OrgSettings, RawToolCall } from "@/types";
 import { resolveAgentSettings } from "./settings";
-import { TOOL_CATEGORIES, selectAgentTools } from "./tools";
+import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeToolWithStatus } from "./tools/executor";
@@ -25,9 +25,9 @@ const DEFAULT_MAX_ITERATIONS = 10;
 const READ_ONLY_MAX_ITERATIONS = 4;
 const TOKEN_BUDGET = 20_000;
 
-const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES)
-  .filter(([, category]) => category === "read")
-  .map(([name]) => name);
+const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES).flatMap(([name, category]) => (
+  category === "read" ? [name] : []
+));
 
 export interface RunAgentOptions {
   readOnly?: boolean;
@@ -243,11 +243,16 @@ export async function runAgent(
       return Promise.all(toolCalls.map(executeToolCall));
     }
 
-    const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
-    for (const toolCall of toolCalls) {
-      results.push(await executeToolCall(toolCall));
-    }
-    return results;
+    const executeSequentially = async (
+      index: number,
+      results: Awaited<ReturnType<typeof executeToolCall>>[],
+    ): Promise<Awaited<ReturnType<typeof executeToolCall>>[]> => {
+      if (index >= toolCalls.length) return results;
+      results.push(await executeToolCall(toolCalls[index]));
+      return executeSequentially(index + 1, results);
+    };
+
+    return executeSequentially(0, []);
   };
 
   if (!readOnly && !approvedToolCalls?.length) {
@@ -276,14 +281,14 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
-    await executeToolCalls(executableToolCalls);
-
     if (escalationReason) {
       return finish({
         summary: `Escalated to merchant: ${escalationReason}`,
         actionsPerformed,
       }, "escalated");
     }
+
+    await executeToolCalls(executableToolCalls);
 
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
@@ -304,7 +309,16 @@ export async function runAgent(
     : buildSystemPrompt(ctx, settings);
   const systemPromptBlocks = buildCachedSystemPrompt(systemPrompt);
 
-  for (let i = 0; i < maxIterations; i += 1) {
+  const runModelIteration = async (i: number): Promise<AgentResult> => {
+    if (i >= maxIterations) {
+      return finish({
+        summary: readOnly
+          ? "I could not finish answering that. Try asking a narrower question."
+          : "Reached maximum steps without completing the task.",
+        actionsPerformed,
+      }, "max_iterations");
+    }
+
     logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
 
     await enforceSpendCap(ctx.orgId, s);
@@ -346,9 +360,13 @@ export async function runAgent(
     }
 
     if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
-      const textBlock = response.content.find(
-        (b): b is Anthropic.TextBlock => b.type === "text"
-      );
+      let textBlock: Anthropic.TextBlock | undefined;
+      for (const block of response.content) {
+        if (block.type === "text") {
+          textBlock = block;
+          break;
+        }
+      }
       return finish({
         summary: readOnly
           ? (textBlock?.text?.trim() || "I do not have enough information to answer that.")
@@ -366,12 +384,9 @@ export async function runAgent(
         actionsPerformed,
       }, "escalated");
     }
-  }
 
-  return finish({
-    summary: readOnly
-      ? "I could not finish answering that. Try asking a narrower question."
-      : "Reached maximum steps without completing the task.",
-    actionsPerformed,
-  }, "max_iterations");
+    return runModelIteration(i + 1);
+  };
+
+  return runModelIteration(0);
 }

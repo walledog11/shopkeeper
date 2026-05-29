@@ -21,9 +21,9 @@ export function LegalPage({
   return (
     <main className="min-h-screen bg-white text-stone-900">
       <header className="border-b border-stone-200">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-5 py-5">
+        <div className="mx-auto flex max-w-4xl items-center justify-between p-5">
           <Link href="/" className="flex items-center gap-2 text-base font-semibold text-stone-900">
-            <span className="inline-block h-3 w-3 rounded-full bg-green-400" />
+            <span className="inline-block size-3 rounded-full bg-green-400" />
             clerk
           </Link>
           <Link href="/signup" className="text-sm font-semibold text-stone-700 hover:text-stone-950">

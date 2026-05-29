@@ -66,7 +66,7 @@ export const POST = withOrgRoute(
       return NextResponse.json({ threadId: existingThread.id, isNew: false });
     }
 
-    // No open thread — create one
+    // No open thread , create one
     const thread = await db.thread.create({
       data: {
         organizationId: org.id,

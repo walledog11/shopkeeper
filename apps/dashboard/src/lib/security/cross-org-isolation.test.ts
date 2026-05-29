@@ -70,7 +70,7 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-describe('cross-org isolation — id-style routes return 404 for foreign resources', () => {
+describe('cross-org isolation , id-style routes return 404 for foreign resources', () => {
   it('PATCH /api/canned-responses/[id] returns 404 for another org id', async () => {
     const foreign = await db.cannedResponse.create({
       data: { organizationId: otherOrg.id, title: 't', body: 'b', tags: [], channels: [] },

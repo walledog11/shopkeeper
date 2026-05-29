@@ -9,7 +9,7 @@ export default function LoginPage() {
       backLabel="Back to home"
       eyebrow="Welcome back"
       title="Sign in to Clerk."
-      description="Pick up where you left off — your inbox, drafts, and approvals are waiting."
+      description="Pick up where you left off , your inbox, drafts, and approvals are waiting."
     >
       <SignIn
         routing="hash"

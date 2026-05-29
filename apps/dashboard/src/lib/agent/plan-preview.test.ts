@@ -53,7 +53,7 @@ function settings(overrides: Partial<OrgSettings>): Partial<OrgSettings> {
   return overrides
 }
 
-describe("classifyHomePlan — info-only plans (existing behavior, default tier)", () => {
+describe("classifyHomePlan , info-only plans (existing behavior, default tier)", () => {
   it("classifies a send_reply-only plan as quick reply", () => {
     const result = classifyHomePlan(plan())
 
@@ -140,7 +140,7 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
   })
 })
 
-describe("classifyHomePlan — tier × action matrix", () => {
+describe("classifyHomePlan , tier × action matrix", () => {
   describe("watch tier", () => {
     it("downgrades a clean info-only plan to needs_review", () => {
       expect(classifyHomePlan(plan(), settings({ autonomyTier: "watch" })).kind).toBe("needs_review")

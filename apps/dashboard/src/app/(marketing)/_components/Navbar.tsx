@@ -5,7 +5,7 @@ export function Navbar() {
     <div className="sticky flex top-3 z-30 justify-center mt-4 mb-2 px-4 pointer-events-none" >
     <nav className="flex items-center gap-8 rounded-full max-w-5xl w-full py-2.5 px-4 bg-stone-100 border border-solid border-stone-900/10 pointer-events-auto shadow-[0_2px_16px_rgba(0,0,0,0.06)]" >
       <div className="flex items-center gap-2 font-semibold text-md tracking-tight" >
-        <span className="inline-block w-3 h-3 bg-green-400 rounded-full" />
+        <span className="inline-block size-3 bg-green-400 rounded-full" />
         clerk
       </div>
 

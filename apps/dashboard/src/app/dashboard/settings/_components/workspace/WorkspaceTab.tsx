@@ -23,7 +23,11 @@ interface Props {
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
-export default function WorkspaceTab({ orgName, version }: Props) {
+export default function WorkspaceTab(props: Props) {
+  return useWorkspaceTabView(props)
+}
+
+function useWorkspaceTabView({ orgName, version }: Props) {
   const { organization, membership } = useOrganization()
   const { setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: false },
@@ -33,7 +37,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
   const isOnlyWorkspace = userMemberships?.data !== undefined && nextOrgId === null
 
   const [workspaceName, setWorkspaceName] = useState(orgName)
-  const [currentVersion, setCurrentVersion] = useState(version)
+  const currentVersionRef = useRef(version)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -63,18 +67,18 @@ export default function WorkspaceTab({ orgName, version }: Props) {
       const res = await fetch('/api/org', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: workspaceName, version: currentVersion }),
+        body: JSON.stringify({ name: workspaceName, version: currentVersionRef.current }),
       })
       if (res.status === 409) {
         const body = await res.json().catch(() => ({})) as { current?: { name?: string; version?: string } }
         if (body.current?.name) setWorkspaceName(body.current.name)
-        if (body.current?.version) setCurrentVersion(body.current.version)
+        if (body.current?.version) currentVersionRef.current = body.current.version
         setError('Workspace was updated in another tab. The latest name has been loaded.')
         return
       }
       if (!res.ok) throw new Error('Failed')
       const body = await res.json().catch(() => ({})) as { version?: string }
-      if (body.version) setCurrentVersion(body.version)
+      if (body.version) currentVersionRef.current = body.version
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
     } catch {
@@ -189,8 +193,9 @@ export default function WorkspaceTab({ orgName, version }: Props) {
       <SectionCard title="General" description="How your workspace is identified across the dashboard.">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">Workspace name</label>
+            <span className="block text-xs font-semibold text-white/60">Workspace name</span>
             <Input
+              aria-label="Workspace name"
               value={workspaceName}
               onChange={e => setWorkspaceName(e.target.value)}
               placeholder="My Store"
@@ -214,11 +219,12 @@ export default function WorkspaceTab({ orgName, version }: Props) {
           <OrgAvatar
             name={organization?.name ?? orgName}
             imageUrl={organization?.imageUrl}
-            className="w-14 h-14 rounded-md bg-white/[0.06] border border-white/[0.10] text-white/60 font-semibold text-sm shrink-0"
+            className="size-14 rounded-md bg-white/[0.06] border border-white/[0.10] text-white/60 font-semibold text-sm shrink-0"
           />
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <input
+                aria-label="Workspace logo"
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
@@ -236,11 +242,11 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                 disabled={logoBusy || !organization}
                 className="h-8 text-xs font-semibold border-white/[0.10] text-white/60 hover:bg-white/[0.08]"
               >
-                {logoBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {logoBusy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
                 {organization?.imageUrl ? "Replace" : "Upload"}
               </Button>
               {organization?.imageUrl && (
-                <button
+                <button type="button"
                   onClick={removeLogo}
                   disabled={logoBusy}
                   className="text-xs text-white/40 hover:text-white/70 transition-colors disabled:opacity-40"
@@ -249,7 +255,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-white/30 mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
+            <p className="text-xs text-white/30 mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
             {logoError && <p className="text-xs text-red-400 mt-1">{logoError}</p>}
           </div>
         </div>
@@ -269,7 +275,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
               disabled={exporting}
               className="h-8 text-xs font-semibold border-white/[0.10] text-white/60 hover:bg-white/[0.08]"
             >
-              {exporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+              {exporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
               Export JSON
             </Button>
           </div>
@@ -298,9 +304,9 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                   disabled={clearing}
                   className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
                 >
-                  {clearing ? <Loader2 className="w-3 h-3 animate-spin" /> : "Yes, clear"}
+                  {clearing ? <Loader2 className="size-3 animate-spin" /> : "Yes, clear"}
                 </Button>
-                <button
+                <button type="button"
                   onClick={() => setConfirmClear(false)}
                   className="text-xs text-white/30 hover:text-white/70 transition-colors"
                 >
@@ -324,7 +330,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
               <div>
                 <p className="text-sm font-semibold text-white/70">Delete workspace</p>
                 <p className="text-xs text-white/35 mt-0.5">
-                  Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data — conversations, customers, integrations, knowledge base, and billing. Every member will lose access.
+                  Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data , conversations, customers, integrations, knowledge base, and billing. Every member will lose access.
                 </p>
                 {isOnlyWorkspace && (
                   <p className="text-xs text-amber-400/80 mt-1.5">
@@ -343,7 +349,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
                 disabled={isOnlyWorkspace}
                 className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
               >
-                <Trash2 className="w-3 h-3" />
+                <Trash2 className="size-3" />
                 Delete workspace
               </Button>
             </div>
@@ -370,10 +376,11 @@ export default function WorkspaceTab({ orgName, version }: Props) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Type <span className="text-white/85 font-mono">{orgName}</span> to confirm
-            </label>
+            </span>
             <Input
+              aria-label="Confirm workspace name"
               autoFocus
               value={deleteConfirmName}
               onChange={(e) => setDeleteConfirmName(e.target.value)}
@@ -397,7 +404,7 @@ export default function WorkspaceTab({ orgName, version }: Props) {
               disabled={deleting || deleteConfirmName !== orgName}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
               Delete forever
             </Button>
           </DialogFooter>

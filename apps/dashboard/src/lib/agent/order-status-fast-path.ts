@@ -1,9 +1,15 @@
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
-import { TOOL_CATEGORIES } from "./tools";
+import { TOOL_CATEGORIES } from "./tools/registry";
 import { executeTool } from "./tools/executor";
 import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./types";
+
+const orderDateFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 async function runFastPathTool(
   tool: string,
@@ -107,11 +113,7 @@ function formatOrderDate(value: string | null): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+  return orderDateFormatter.format(date);
 }
 
 function formatOrderItems(items: ShopifyOrderSummary["items"]): string | null {

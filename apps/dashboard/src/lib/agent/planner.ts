@@ -3,7 +3,7 @@ import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
 import { AI_MODEL } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types";
-import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools";
+import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeTool } from "./tools/executor";
@@ -12,6 +12,9 @@ import type { AgentContext } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 import { enforceSpendCap, recordSpend } from "./spend";
 import { resolveAgentSettings } from "./settings";
+
+const MISSING_LOOKUP_RESULT_RE = /not found|no customer/;
+const EMPTY_KB_RESULT_RE = /no articles/;
 
 function describeTool(name: string, input: unknown): string {
   const a = input as Record<string, unknown>;
@@ -43,11 +46,11 @@ function describeTool(name: string, input: unknown): string {
       return "Add note to Shopify customer";
     case "send_reply": {
       const text = String(a.text ?? "");
-      return text.length > 80 ? `"${text.slice(0, 80)}..."` : `"${text}"`;
+      return text.length > 80 ? `"${text.slice(0, 80)}…"` : `"${text}"`;
     }
     case "send_email": {
       const body = String(a.body ?? "");
-      const preview = body.length > 60 ? `${body.slice(0, 60)}...` : body;
+      const preview = body.length > 60 ? `${body.slice(0, 60)}…` : body;
       return `Email to ${a.to}: "${preview}"`;
     }
     case "add_internal_note":
@@ -165,14 +168,18 @@ export async function planAgent(
       })
     );
 
+    const readBlocksById = new Map(readBlocks.map((block) => [block.id, block]));
+    let hasShopifyCustomerWarning = warnings.some(w => w.includes("Shopify customer"));
     for (const [id, result] of readResultsMap.entries()) {
-      const block = readBlocks.find(b => b.id === id);
+      const block = readBlocksById.get(id);
       if (!block) continue;
-      const lower = result.toLowerCase();
-      const isMissing = lower.includes("not found") || lower.includes("no customer") || lower === "lookup failed";
+      const trimmedResult = result.trim();
+      const lower = trimmedResult.toLowerCase();
+      const isMissing = MISSING_LOOKUP_RESULT_RE.test(lower) || lower === "lookup failed";
       if (isMissing) {
-        if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !warnings.some(w => w.includes("Shopify customer"))) {
+        if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerWarning) {
           warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
+          hasShopifyCustomerWarning = true;
         } else if (block.name === "get_shopify_orders" || block.name === "get_order_by_name") {
           warnings.push("No matching order found - confirm the order number with the customer before proceeding.");
         } else if (block.name === "get_order_tracking") {
@@ -181,7 +188,7 @@ export async function planAgent(
           warnings.push("No matching product found - the order edit step may need a corrected product name.");
         }
       }
-      if (block.name === "search_kb" && (lower.includes("no articles") || result.trim() === "[]" || result.trim() === "")) {
+      if (block.name === "search_kb" && (EMPTY_KB_RESULT_RE.test(lower) || trimmedResult === "[]" || trimmedResult === "")) {
         warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
       }
     }
@@ -268,16 +275,16 @@ export async function planAgent(
     rawToolCalls.push(...phase2ToolUse.map((b) => ({ id: b.id, name: b.name, input: b.input })));
   }
 
-  const steps: PlanStep[] = rawToolCalls
-    .filter((tc) => TOOL_CATEGORIES[tc.name] !== "read")
-    .map((tc) => ({
+  const steps: PlanStep[] = rawToolCalls.flatMap((tc) => (
+    TOOL_CATEGORIES[tc.name] !== "read" ? [{
       id: tc.id,
       tool: tc.name,
       label: PLAN_STEP_LABELS[tc.name] ?? tc.name.replace(/_/g, " "),
       description: describeTool(tc.name, tc.input),
       category: TOOL_CATEGORIES[tc.name] ?? "internal",
       enabled: true,
-    }));
+    }] : []
+  ));
 
   logger.info({
     orgId: ctx.orgId,

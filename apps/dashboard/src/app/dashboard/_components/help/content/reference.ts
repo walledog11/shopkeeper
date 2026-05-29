@@ -23,7 +23,7 @@ export const reference: Category = {
         },
         {
           tips: [
-            "IDs are scoped to your organisation — #1 in your account is not the same as #1 in another account.",
+            "IDs are scoped to your organisation , #1 in your account is not the same as #1 in another account.",
           ],
         },
       ],
@@ -39,9 +39,9 @@ export const reference: Category = {
           heading: "What Clerk stores",
           steps: [
             "Customer platform IDs and names (from the connected channel).",
-            "Message content — the text of each message in a thread.",
-            "AI summaries — generated and stored per thread.",
-            "Integration tokens — encrypted access credentials for connected channels.",
+            "Message content , the text of each message in a thread.",
+            "AI summaries , generated and stored per thread.",
+            "Integration tokens , encrypted access credentials for connected channels.",
           ],
         },
         {
@@ -54,7 +54,7 @@ export const reference: Category = {
         },
         {
           heading: "AI and your data",
-          text: "When you use Draft with Clerk or refresh a Clerk Context summary, the conversation content is sent to an AI model to generate a response. This is used solely to produce the summary or draft — it is not used to train models.",
+          text: "When you use Draft with Clerk or refresh a Clerk Context summary, the conversation content is sent to an AI model to generate a response. This is used solely to produce the summary or draft , it is not used to train models.",
         },
       ],
     },
@@ -76,8 +76,8 @@ export const reference: Category = {
         {
           heading: "Coming soon",
           steps: [
-            "TikTok — Shop messages and video comments.",
-            "Shopify — Order and Inbox messages.",
+            "TikTok , Shop messages and video comments.",
+            "Shopify , Order and Inbox messages.",
           ],
         },
       ],

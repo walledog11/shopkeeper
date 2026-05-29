@@ -75,10 +75,7 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
   const [state, setState] = useState<VisualKeyboardState>(DEFAULT_STATE)
 
   useEffect(() => {
-    if (!enabled) {
-      setState(DEFAULT_STATE)
-      return
-    }
+    if (!enabled) return
     if (typeof window === "undefined") return
 
     let settleTimer: ReturnType<typeof setTimeout> | null = null
@@ -123,8 +120,9 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
 
     scheduleUpdate()
 
+    const passiveListenerOptions = { passive: true }
     window.visualViewport?.addEventListener("resize", scheduleUpdate)
-    window.visualViewport?.addEventListener("scroll", scheduleUpdate)
+    window.visualViewport?.addEventListener("scroll", scheduleUpdate, passiveListenerOptions)
     window.addEventListener("resize", scheduleUpdate)
     window.addEventListener("focusin", scheduleUpdate)
     window.addEventListener("focusout", scheduleUpdate)
@@ -159,5 +157,5 @@ export function useVisualKeyboard(rootRef: RefObject<HTMLElement | null>, enable
     }
   }, [enabled, rootRef])
 
-  return state
+  return enabled ? state : DEFAULT_STATE
 }

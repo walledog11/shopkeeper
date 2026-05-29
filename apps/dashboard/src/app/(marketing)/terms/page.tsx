@@ -6,17 +6,19 @@ export const metadata: Metadata = {
   description: 'Terms that govern use of Clerk.',
 }
 
+const termsIntro = (
+  <p>
+    These Terms govern access to and use of Clerk. By creating an account or using the service, you agree to these
+    Terms on behalf of yourself and the business or organization you represent.
+  </p>
+)
+
 export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of Service"
       effectiveDate="May 10, 2026"
-      intro={
-        <p>
-          These Terms govern access to and use of Clerk. By creating an account or using the service, you agree to these
-          Terms on behalf of yourself and the business or organization you represent.
-        </p>
-      }
+      intro={termsIntro}
       sections={[
         {
           title: 'The Service',

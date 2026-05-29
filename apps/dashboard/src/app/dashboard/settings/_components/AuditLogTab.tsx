@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X, Zap } from "lucide-react"
 import useSWRInfinite from "swr/infinite"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
@@ -56,9 +56,9 @@ const CHANNEL_GROUPS: OptionGroup[] = [{ label: "Channels", options: CHANNEL_OPT
 
 const TOOL_GROUPS: OptionGroup[] = (Object.keys(CATEGORY_LABELS) as ToolCategory[]).map((cat) => ({
   label: CATEGORY_LABELS[cat],
-  options: Object.entries(TOOL_LABELS)
-    .filter(([id]) => TOOL_CATEGORIES[id] === cat)
-    .map(([id, label]) => ({ id, label })),
+  options: Object.entries(TOOL_LABELS).flatMap(([id, label]) => (
+    TOOL_CATEGORIES[id] === cat ? [{ id, label }] : []
+  )),
 }))
 
 function buildFilterParams(filters: Filters): URLSearchParams {
@@ -86,7 +86,7 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
   const isError = result.startsWith("Error")
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${
         isError
           ? "border-red-400/20 bg-red-400/10 text-red-300"
           : "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
@@ -94,9 +94,9 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
       title={result}
     >
       {isError ? (
-        <AlertCircle className="h-3 w-3 shrink-0" />
+        <AlertCircle className="size-3 shrink-0" />
       ) : (
-        <Check className="h-3 w-3 shrink-0" />
+        <Check className="size-3 shrink-0" />
       )}
       {TOOL_LABELS[tool] ?? tool}
     </span>
@@ -114,7 +114,7 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
   return (
     <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-4 py-3">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04]">
+        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-white/[0.08] bg-white/[0.04]">
           <Image
             src={channel.logo}
             alt={channel.name}
@@ -131,30 +131,30 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
                 {entry.mode === "auto_executed" && (
                   <span
                     title="Auto-executed by the agent without merchant approval"
-                    className="inline-flex items-center gap-1 rounded-full border border-emerald-800/50 bg-emerald-900/40 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300"
+                    className="inline-flex items-center gap-1 rounded-full border border-emerald-800/50 bg-emerald-900/40 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-300"
                   >
-                    <Zap className="h-2.5 w-2.5" /> Auto
+                    <Zap className="size-2.5" /> Auto
                   </span>
                 )}
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-white/35">
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold text-white/35">
                   {channel.name}
                 </span>
                 {entry.threadTag && (
-                  <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold text-white/35">
+                  <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-1.5 py-0.5 text-xs font-semibold text-white/35">
                     {entry.threadTag}
                   </span>
                 )}
               </div>
-              <p className="mt-1 text-[11px] text-white/25" title={formatDate(entry.sentAt)}>
+              <p className="mt-1 text-xs text-white/25" title={formatDate(entry.sentAt)}>
                 {timeAgo(entry.sentAt)} · {formatDate(entry.sentAt)}
               </p>
             </div>
             <Link
               href={href}
-              className="inline-flex shrink-0 items-center gap-1 text-[11px] font-semibold text-white/35 transition-colors hover:text-white/65"
+              className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-white/35 transition-colors hover:text-white/65"
             >
               {linkLabel}
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="size-3" />
             </Link>
           </div>
 
@@ -202,23 +202,23 @@ function MultiSelectPopover({
         >
           {label}
           {count > 0 && (
-            <span className="rounded-full bg-amber-400 text-black px-1.5 py-px text-[10px] font-bold">{count}</span>
+            <span className="rounded-full bg-amber-400 text-black px-1.5 py-px text-xs font-bold">{count}</span>
           )}
-          <ChevronDown className="h-3 w-3 opacity-60" />
+          <ChevronDown className="size-3 opacity-60" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-1.5 max-h-80 overflow-y-auto">
         {count > 0 && (
           <div className="flex items-center justify-between border-b border-white/[0.07] px-2 py-1.5 mb-1">
-            <span className="text-[11px] font-semibold text-white/40 uppercase tracking-wide">{count} selected</span>
-            <button onClick={onClear} className="text-[11px] font-semibold text-white/50 hover:text-white/80">
+            <span className="text-xs font-semibold text-white/40 uppercase tracking-wide">{count} selected</span>
+            <button type="button" onClick={onClear} className="text-xs font-semibold text-white/50 hover:text-white/80">
               Clear
             </button>
           </div>
         )}
         {groups.map((group) => (
           <div key={group.label} className="mb-1 last:mb-0">
-            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-[0.05em] text-white/30">{group.label}</div>
+            <div className="px-2 py-1 text-xs font-bold uppercase tracking-[0.05em] text-white/30">{group.label}</div>
             {group.options.map((opt) => {
               const active = selected.includes(opt.id)
               return (
@@ -229,7 +229,7 @@ function MultiSelectPopover({
                   className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs text-white/70 transition-colors hover:bg-white/[0.06]"
                 >
                   <span className="truncate">{opt.label}</span>
-                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-amber-300" />}
+                  {active && <Check className="size-3.5 shrink-0 text-amber-300" />}
                 </button>
               )
             })}
@@ -246,11 +246,6 @@ export default function AuditLogTab() {
   const { data, isLoading, size, setSize } = useSWRInfinite<Page>(getKey, fetcher)
   const [isExporting, setIsExporting] = useState(false)
 
-  // Reset pagination when filters change so we don't fetch N pages of the new filter set.
-  useEffect(() => {
-    setSize(1)
-  }, [filters, setSize])
-
   const allEntries = data?.flatMap((page) => page.entries) ?? []
   const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
   const hasActiveFilters: boolean =
@@ -260,8 +255,13 @@ export default function AuditLogTab() {
     filters.from !== "" ||
     filters.to !== ""
 
+  const updateFilters = (updater: (filters: Filters) => Filters) => {
+    void setSize(1)
+    setFilters(updater)
+  }
+
   const toggleInList = (key: "channels" | "tools", id: string) =>
-    setFilters((f) => ({
+    updateFilters((f) => ({
       ...f,
       [key]: f[key].includes(id) ? f[key].filter((x) => x !== id) : [...f[key], id],
     }))
@@ -294,15 +294,15 @@ export default function AuditLogTab() {
             Structured agent actions across your workspace. Human notes stay in thread history.
           </p>
         </div>
-        <button
+        <button type="button"
           onClick={handleExport}
           disabled={isExporting || allEntries.length === 0}
           className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-white/[0.07] px-3 py-1.5 text-xs font-semibold text-white/60 transition-colors hover:bg-white/[0.12] hover:text-white disabled:opacity-40"
         >
           {isExporting ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin" />
           ) : (
-            <Download className="h-3.5 w-3.5" />
+            <Download className="size-3.5" />
           )}
           Export CSV
         </button>
@@ -313,26 +313,26 @@ export default function AuditLogTab() {
           label="Channel"
           selected={filters.channels}
           onToggle={(id) => toggleInList("channels", id)}
-          onClear={() => setFilters((f) => ({ ...f, channels: [] }))}
+          onClear={() => updateFilters((f) => ({ ...f, channels: [] }))}
           groups={CHANNEL_GROUPS}
         />
         <MultiSelectPopover
           label="Tool"
           selected={filters.tools}
           onToggle={(id) => toggleInList("tools", id)}
-          onClear={() => setFilters((f) => ({ ...f, tools: [] }))}
+          onClear={() => updateFilters((f) => ({ ...f, tools: [] }))}
           groups={TOOL_GROUPS}
         />
         <button
           type="button"
-          onClick={() => setFilters((f) => ({ ...f, errorsOnly: !f.errorsOnly }))}
+          onClick={() => updateFilters((f) => ({ ...f, errorsOnly: !f.errorsOnly }))}
           className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 h-8 text-xs font-semibold transition-colors ${
             filters.errorsOnly
               ? "border-red-400/30 bg-red-400/10 text-red-300 hover:bg-red-400/15"
               : "border-white/[0.10] bg-white/[0.04] text-white/55 hover:bg-white/[0.08] hover:text-white/80"
           }`}
         >
-          <AlertCircle className="h-3 w-3" />
+          <AlertCircle className="size-3" />
           Errors only
         </button>
         <div className="flex items-center gap-1">
@@ -340,7 +340,7 @@ export default function AuditLogTab() {
             type="date"
             value={filters.from}
             max={filters.to || undefined}
-            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
+            onChange={(e) => updateFilters((f) => ({ ...f, from: e.target.value }))}
             className="h-8 w-36 text-xs bg-white/[0.04] border-white/[0.10] text-white/70"
           />
           <span className="text-xs text-white/30">→</span>
@@ -348,17 +348,17 @@ export default function AuditLogTab() {
             type="date"
             value={filters.to}
             min={filters.from || undefined}
-            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+            onChange={(e) => updateFilters((f) => ({ ...f, to: e.target.value }))}
             className="h-8 w-36 text-xs bg-white/[0.04] border-white/[0.10] text-white/70"
           />
         </div>
         {hasActiveFilters && (
           <button
             type="button"
-            onClick={() => setFilters(EMPTY_FILTERS)}
+            onClick={() => updateFilters(() => EMPTY_FILTERS)}
             className="inline-flex items-center gap-1 px-2 h-8 text-xs font-semibold text-white/45 hover:text-white/80 transition-colors"
           >
-            <X className="h-3 w-3" />
+            <X className="size-3" />
             Clear filters
           </button>
         )}
@@ -366,8 +366,8 @@ export default function AuditLogTab() {
 
       {isLoading && allEntries.length === 0 ? (
         <div className="space-y-2 animate-pulse">
-          {Array.from({ length: 8 }).map((_, index) => (
-            <div key={index} className="h-24 rounded-md border border-white/[0.06] bg-white/[0.04]" />
+          {Array.from({ length: 8 }, (_, index) => `audit-skeleton-${index}`).map((key) => (
+            <div key={key} className="h-24 rounded-md border border-white/[0.06] bg-white/[0.04]" />
           ))}
         </div>
       ) : allEntries.length === 0 ? (
@@ -389,12 +389,12 @@ export default function AuditLogTab() {
 
           {hasMore && (
             <div className="flex justify-center pt-2">
-              <button
-                onClick={() => setSize(size + 1)}
+              <button type="button"
+                onClick={() => setSize(current => current + 1)}
                 disabled={isLoading}
                 className="text-xs font-semibold text-white/40 transition-colors hover:text-white/70 disabled:opacity-40"
               >
-                {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Load more"}
+                {isLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Load more"}
               </button>
             </div>
           )}

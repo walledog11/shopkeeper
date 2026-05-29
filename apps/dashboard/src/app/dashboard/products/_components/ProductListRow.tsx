@@ -1,5 +1,3 @@
-"use client"
-
 import { ChevronRight } from "lucide-react"
 import { ProductImage } from "./ProductImage"
 import {
@@ -8,7 +6,7 @@ import {
   inventoryStyle,
   statusStyle,
   type ProductRow,
-} from "./products-helpers"
+} from "./products-page-utils"
 
 export function ProductListRow({ product, isSelected, onClick }: {
   product: ProductRow
@@ -19,7 +17,7 @@ export function ProductListRow({ product, isSelected, onClick }: {
   const priceStr = formatPrice(product.price_min, product.price_max)
 
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors group ${
         isSelected ? "bg-white/[0.06]" : "hover:bg-white/[0.03]"
@@ -37,16 +35,16 @@ export function ProductListRow({ product, isSelected, onClick }: {
 
       <div className="hidden sm:flex flex-col items-end gap-0.5 shrink-0">
         <span className="text-sm font-bold text-white/60">{priceStr}</span>
-        <span className={`text-[11px] ${inventoryStyle(product.total_inventory)}`}>
+        <span className={`text-xs ${inventoryStyle(product.total_inventory)}`}>
           {inventoryLabel(product.total_inventory)}
         </span>
       </div>
 
-      <span className={`hidden md:inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full border shrink-0 ${ss.cls}`}>
+      <span className={`hidden md:inline-flex text-xs font-semibold px-2 py-0.5 rounded-full border shrink-0 ${ss.cls}`}>
         {ss.label}
       </span>
 
-      <ChevronRight className={`w-4 h-4 shrink-0 transition-colors ${
+      <ChevronRight className={`size-4 shrink-0 transition-colors ${
         isSelected ? "text-white/40" : "text-white/15 group-hover:text-white/30"
       }`} />
     </button>

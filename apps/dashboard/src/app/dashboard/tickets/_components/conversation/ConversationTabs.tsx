@@ -18,17 +18,17 @@ export default function ConversationTabs({ noteCount, value, onValueChange }: Pr
             value="chat"
             className="text-xs font-semibold rounded px-3 py-1.5 gap-1.5 h-auto data-[state=active]:bg-white/[0.10] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
           >
-            <MessageSquare className="w-3 h-3" />
+            <MessageSquare className="size-3" />
             Conversation
           </TabsTrigger>
           <TabsTrigger
             value="notes"
             className="text-xs font-semibold rounded px-3 py-1.5 gap-1.5 h-auto data-[state=active]:bg-violet-500/15 data-[state=active]:text-violet-400 data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
           >
-            <Users className="w-3 h-3" />
+            <Users className="size-3" />
             Internal
             {noteCount > 0 && (
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+              <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
                 value === "notes" ? "bg-violet-500/20 text-violet-400" : "bg-white/[0.08] text-white/35"
               }`}>
                 {noteCount}

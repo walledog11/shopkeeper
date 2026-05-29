@@ -1,5 +1,3 @@
-"use client"
-
 import { cn } from "@/lib/ui/cn"
 
 export function GreenToggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
@@ -8,6 +6,7 @@ export function GreenToggle({ checked, onChange, disabled }: { checked: boolean;
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={checked ? "Disable permission" : "Enable permission"}
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onChange(!checked) }}
       className={cn(
@@ -18,7 +17,7 @@ export function GreenToggle({ checked, onChange, disabled }: { checked: boolean;
     >
       <span
         className={cn(
-          "inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
+          "inline-block size-3.5 rounded-full bg-white shadow transition-transform",
           checked ? "translate-x-[18px]" : "translate-x-0.5"
         )}
       />

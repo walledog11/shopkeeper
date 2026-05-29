@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useEffectEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useClerk, useUser, useOrganization, useOrganizationList } from "@clerk/nextjs";
 import useSWR from "swr";
@@ -24,8 +24,23 @@ import { StepChannels } from "./_components/step-channels";
 import { StepAutonomy } from "./_components/step-autonomy";
 import { StepPlan } from "./_components/step-plan";
 
+function readInitialOnboardingState() {
+  if (typeof window === "undefined") return { data: DEFAULT_DATA, idx: 0 };
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { data: DEFAULT_DATA, idx: 0 };
+    const parsed = JSON.parse(raw) as Partial<OnboardingData & { idx: number }>;
+    return {
+      data: { ...DEFAULT_DATA, ...parsed },
+      idx: typeof parsed.idx === "number" ? Math.min(STEPS.length - 1, Math.max(0, parsed.idx)) : 0,
+    };
+  } catch {
+    return { data: DEFAULT_DATA, idx: 0 };
+  }
+}
+
 export default function OnboardingPage() {
-  const router = useRouter();
+  const { push } = useRouter();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { organization } = useOrganization();
@@ -33,9 +48,9 @@ export default function OnboardingPage() {
     userMemberships: { infinite: false },
   });
 
-  const [idx, setIdx] = useState(0);
-  const [data, setData] = useState<OnboardingData>(DEFAULT_DATA);
-  const [hydrated, setHydrated] = useState(false);
+  const [initialState] = useState(() => readInitialOnboardingState());
+  const [idx, setIdx] = useState(initialState.idx);
+  const [data, setData] = useState<OnboardingData>(initialState.data);
   const [saving, setSaving] = useState(false);
   const orgCreationInFlight = useRef(false);
 
@@ -48,23 +63,9 @@ export default function OnboardingPage() {
     }
   }, []);
 
-  // Hydrate from localStorage after mount (no SSR mismatch).
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<OnboardingData & { idx: number }>;
-        setData(d => ({ ...d, ...parsed }));
-        if (typeof parsed.idx === "number") setIdx(Math.min(STEPS.length - 1, Math.max(0, parsed.idx)));
-      }
-    } catch {}
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, idx })); } catch {}
-  }, [data, idx, hydrated]);
+  }, [data, idx]);
 
   const { data: integrationData, mutate: refreshIntegrations } = useSWR<IntegrationRow[]>(
     organization ? "/api/integrations" : null,
@@ -107,8 +108,7 @@ export default function OnboardingPage() {
     orgCreationInFlight.current = true;
     try {
       const created = await createOrganization({ name });
-      await setActive({ organization: created.id });
-      await persistSettings();
+      await setActive({ organization: created.id }).then(() => persistSettings());
       return true;
     } catch {
       return false;
@@ -151,14 +151,17 @@ export default function OnboardingPage() {
     return true;
   }, [stepId, data, connected]);
 
-  async function next() {
+  const next = useCallback(async () => {
     if (!canContinue || saving) return;
     if (organization && (stepId === "store" || stepId === "autonomy")) {
       setSaving(true);
       try { await persistSettings(); } finally { setSaving(false); }
     }
     setIdx(i => Math.min(STEPS.length - 1, i + 1));
-  }
+  }, [canContinue, organization, persistSettings, saving, stepId]);
+  const advanceFromKeyboard = useEffectEvent(() => {
+    void next();
+  });
   function back() { setIdx(i => Math.max(0, i - 1)); }
 
   async function finish() {
@@ -171,7 +174,7 @@ export default function OnboardingPage() {
       setSaving(false);
     }
     try { localStorage.removeItem(STORAGE_KEY); } catch {}
-    router.push("/dashboard");
+    push("/dashboard");
   }
 
   const otherMembership = userMemberships?.data?.find(m => m.organization.id !== organization?.id);
@@ -183,7 +186,7 @@ export default function OnboardingPage() {
         action: async () => {
           try { localStorage.removeItem(STORAGE_KEY); } catch {}
           try { await setActive({ organization: target.organization.id }); } catch {}
-          router.push("/dashboard");
+          push("/dashboard");
         },
       };
     }
@@ -194,7 +197,7 @@ export default function OnboardingPage() {
         await signOut({ redirectUrl: "/login" });
       },
     };
-  }, [otherMembership, setActive, signOut, router]);
+  }, [otherMembership, setActive, signOut, push]);
 
   // Keyboard: Enter advances on non-textarea steps.
   useEffect(() => {
@@ -205,11 +208,11 @@ export default function OnboardingPage() {
       if (stepId === "plan") return;
       if (!canContinue) return;
       e.preventDefault();
-      void next();
+      advanceFromKeyboard();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [stepId, canContinue, saving]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [stepId, canContinue, saving]);
 
   const step = STEPS[idx];
 

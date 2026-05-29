@@ -16,7 +16,7 @@ export interface RawInputs {
   bhEnd: string
 }
 
-export const AUTONOMY_OVERRIDE_PATHS = [
+const AUTONOMY_OVERRIDE_PATHS = [
   "requireApprovalForActions",
   "maxRefundAmount",
   "blockCancellations",
@@ -43,7 +43,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-export function hasSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): boolean {
+function hasSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): boolean {
   const [first, second] = path.split(".")
   const root = settings as Record<string, unknown>
   if (!second) return Object.prototype.hasOwnProperty.call(root, first)
@@ -96,7 +96,7 @@ export function collectExplicitOverridePaths(rawSettings: Partial<OrgSettings>):
   return AUTONOMY_OVERRIDE_PATHS.filter(path => hasSettingsPath(rawSettings, path))
 }
 
-export function tierResolvedSettings(tier: AutonomyTier): OrgSettings {
+function tierResolvedSettings(tier: AutonomyTier): OrgSettings {
   return resolveAgentSettings({ autonomyTier: tier })
 }
 
@@ -207,14 +207,14 @@ export const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: strin
   {
     label: "Americas",
     zones: [
-      { id: "Pacific/Honolulu", label: "Hawaii — Honolulu" },
-      { id: "America/Anchorage", label: "Alaska — Anchorage" },
-      { id: "America/Los_Angeles", label: "Pacific Time — Los Angeles, Vancouver" },
-      { id: "America/Phoenix", label: "Arizona — Phoenix" },
-      { id: "America/Denver", label: "Mountain Time — Denver, Edmonton" },
-      { id: "America/Chicago", label: "Central Time — Chicago, Mexico City" },
-      { id: "America/New_York", label: "Eastern Time — New York, Toronto" },
-      { id: "America/Halifax", label: "Atlantic Time — Halifax" },
+      { id: "Pacific/Honolulu", label: "Hawaii , Honolulu" },
+      { id: "America/Anchorage", label: "Alaska , Anchorage" },
+      { id: "America/Los_Angeles", label: "Pacific Time , Los Angeles, Vancouver" },
+      { id: "America/Phoenix", label: "Arizona , Phoenix" },
+      { id: "America/Denver", label: "Mountain Time , Denver, Edmonton" },
+      { id: "America/Chicago", label: "Central Time , Chicago, Mexico City" },
+      { id: "America/New_York", label: "Eastern Time , New York, Toronto" },
+      { id: "America/Halifax", label: "Atlantic Time , Halifax" },
       { id: "America/Sao_Paulo", label: "São Paulo" },
       { id: "America/Argentina/Buenos_Aires", label: "Buenos Aires" },
     ],
@@ -223,8 +223,8 @@ export const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: strin
     label: "Europe",
     zones: [
       { id: "Europe/London", label: "London, Dublin, Lisbon" },
-      { id: "Europe/Paris", label: "Central European Time — Paris, Berlin, Madrid, Rome" },
-      { id: "Europe/Athens", label: "Eastern European Time — Athens, Helsinki, Bucharest" },
+      { id: "Europe/Paris", label: "Central European Time , Paris, Berlin, Madrid, Rome" },
+      { id: "Europe/Athens", label: "Eastern European Time , Athens, Helsinki, Bucharest" },
       { id: "Europe/Istanbul", label: "Istanbul" },
       { id: "Europe/Moscow", label: "Moscow" },
     ],
@@ -244,7 +244,7 @@ export const TIMEZONE_GROUPS: { label: string; zones: { id: string; label: strin
     label: "Asia",
     zones: [
       { id: "Asia/Karachi", label: "Karachi" },
-      { id: "Asia/Kolkata", label: "India — Mumbai, Delhi" },
+      { id: "Asia/Kolkata", label: "India , Mumbai, Delhi" },
       { id: "Asia/Dhaka", label: "Dhaka" },
       { id: "Asia/Bangkok", label: "Bangkok, Jakarta" },
       { id: "Asia/Singapore", label: "Singapore, Hong Kong, Manila" },
@@ -281,7 +281,7 @@ export const DIGEST_DAYS_OPTIONS = [
   ["weekdays", "Weekdays only"],
 ] as const
 
-export function clampHour(value: string, fallback: number): number {
+function clampHour(value: string, fallback: number): number {
   const parsed = value.trim() === "" ? fallback : parseInt(value, 10)
   return Math.min(23, Math.max(0, isNaN(parsed) ? fallback : parsed))
 }

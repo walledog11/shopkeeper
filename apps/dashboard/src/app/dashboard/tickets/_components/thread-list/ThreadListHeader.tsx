@@ -53,16 +53,17 @@ export function ThreadListHeader({
   return (
     <div className="px-3 pt-5 md:pt-3 pb-3 border-b border-border bg-background space-y-2">
       <div className="flex items-center gap-2 bg-white/[0.05] border border-border rounded-md px-3 h-9">
-        <Search className="w-3.5 h-3.5 text-white/20 shrink-0" />
+        <Search className="size-3.5 text-white/20 shrink-0" />
         <input
+          aria-label="Search tickets"
           value={searchQuery}
           onChange={event => onSearchChange(event.target.value)}
           placeholder="Search all tickets…"
           className="flex-1 bg-transparent text-sm text-white/70 placeholder:text-white/25 outline-none"
         />
         {searchQuery && (
-          <button onClick={() => onSearchChange("")} className="text-white/20 hover:text-white/50 transition-colors">
-            <X className="w-3.5 h-3.5" />
+          <button type="button" onClick={() => onSearchChange("")} className="text-white/20 hover:text-white/50 transition-colors">
+            <X className="size-3.5" />
           </button>
         )}
       </div>
@@ -76,7 +77,7 @@ export function ThreadListHeader({
             >
               Open
               {openCount > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === "open" ? "bg-white/[0.15] text-white" : "bg-white/[0.08] text-white/35"
                 }`}>
                   {openCount}
@@ -89,7 +90,7 @@ export function ThreadListHeader({
             >
               Closed
               {closedCount > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === "closed" ? "bg-white/[0.15] text-white" : "bg-white/[0.08] text-white/35"
                 }`}>
                   {closedCount}
@@ -98,12 +99,12 @@ export function ThreadListHeader({
             </TabsTrigger>
             <TabsTrigger
               value="filtered"
-              title="Spam — automatically filtered messages"
+              title="Spam , automatically filtered messages"
               className="flex-1 gap-1.5 py-1.5 h-auto text-xs font-semibold data-[state=active]:bg-white/[0.12] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
             >
               Spam
               {spamCount > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
                   activeTab === "filtered" ? "bg-white/[0.15] text-white" : "bg-white/[0.08] text-white/35"
                 }`}>
                   {spamCount}
@@ -117,12 +118,12 @@ export function ThreadListHeader({
       {isSearchMode && (
         <div className="flex items-center justify-between px-0.5">
           <div className="flex items-center gap-1.5">
-            {isSearchLoading && <Loader2 className="w-3 h-3 text-white/30 animate-spin" />}
-            <span className="text-[11px] font-semibold text-white/40">
+            {isSearchLoading && <Loader2 className="size-3 text-white/30 animate-spin" />}
+            <span className="text-xs font-semibold text-white/40">
               {isSearchLoading ? "Searching…" : "Search results"}
             </span>
           </div>
-          <button onClick={() => onSearchChange("")} className="text-[11px] text-white/30 hover:text-white/60 font-medium">
+          <button type="button" onClick={() => onSearchChange("")} className="text-xs text-white/30 hover:text-white/60 font-medium">
             Clear
           </button>
         </div>
@@ -133,7 +134,7 @@ export function ThreadListHeader({
           type="button"
           onClick={() => onNeedsReplyChange(!needsReply)}
           title="Show only threads where the customer sent the last message"
-          className={`w-full h-8 rounded-md border text-[11px] font-semibold transition-all ${
+          className={`w-full h-8 rounded-md border text-xs font-semibold transition-all ${
             needsReply
               ? "bg-white/[0.15] text-white border-white/[0.35]"
               : "bg-transparent border-border text-white/40 hover:border-white/[0.18] hover:text-white/60"
@@ -145,9 +146,9 @@ export function ThreadListHeader({
 
       {!isSearchMode && (
         <div className="flex items-center gap-1.5">
-          <button
+          <button type="button"
             onClick={() => onFilterChange(null)}
-            className={`flex-1 h-9 rounded-md border text-[11px] font-semibold transition-all ${
+            className={`flex-1 h-9 rounded-md border text-xs font-semibold transition-all ${
               activeFilter === null
                 ? "bg-white/[0.15] text-white border-white/[0.35]"
                 : "bg-transparent border-border text-white/40 hover:border-white/[0.18] hover:text-white/60"
@@ -156,7 +157,7 @@ export function ThreadListHeader({
             All
           </button>
           {CHANNEL_FILTERS.map(channel => (
-            <button
+            <button type="button"
               key={channel.id}
               onClick={() => onFilterChange(activeFilter === channel.id ? null : channel.id)}
               title={channel.label}

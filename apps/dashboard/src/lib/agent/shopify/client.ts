@@ -36,14 +36,14 @@ export class ShopifyRequestError extends Error {
   }
 }
 
-export function shopifyHeaders(token: string): HeadersInit {
+function shopifyHeaders(token: string): HeadersInit {
   return {
     "X-Shopify-Access-Token": token,
     "Content-Type": "application/json",
   };
 }
 
-export function normalizeShopifyShop(shop: string): string {
+function normalizeShopifyShop(shop: string): string {
   let stripped = shop
     .trim()
     .replace(/^https?:\/\//i, "")
@@ -61,7 +61,7 @@ export function normalizeShopifyShop(shop: string): string {
   return stripped;
 }
 
-export function buildShopifyAdminUrl(
+function buildShopifyAdminUrl(
   ctx: ShopifyContext,
   path: string,
   query?: ShopifyRequestOptions["query"]
@@ -131,7 +131,7 @@ async function parseResponseBody(res: Response): Promise<unknown> {
   }
 }
 
-export function describeShopifyPayload(payload: unknown): string {
+function describeShopifyPayload(payload: unknown): string {
   if (payload === null || payload === undefined || payload === "") {
     return "No response body.";
   }
@@ -178,13 +178,13 @@ export async function shopifyRestJson<T>(
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   };
 
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+  async function attemptRequest(attempt: number): Promise<T> {
     const res = await fetchWithTimeout(url, init, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < maxRetries;
 
     if (shouldRetry) {
       await delay(retryDelayMs(res));
-      continue;
+      return attemptRequest(attempt + 1);
     }
 
     const payload = await parseResponseBody(res);
@@ -198,7 +198,7 @@ export async function shopifyRestJson<T>(
     return payload as T;
   }
 
-  throw new ShopifyRequestError("Shopify API request failed after retries.");
+  return attemptRequest(0);
 }
 
 export async function shopifyGraphql<TData>(

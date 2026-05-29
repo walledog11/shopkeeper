@@ -1,6 +1,6 @@
 /**
- * GET  /api/agent/sessions — list past dashboard_agent sessions for this user
- * DELETE /api/agent/sessions — delete all sessions for this user
+ * GET  /api/agent/sessions , list past dashboard_agent sessions for this user
+ * DELETE /api/agent/sessions , delete all sessions for this user
  */
 import { NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";

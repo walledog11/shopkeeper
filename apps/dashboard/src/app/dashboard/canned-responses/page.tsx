@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { MessageSquare, Plus, Search, X, ArrowUpDown } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
-import { ReplyForm, emptyForm, formFrom, type FormState } from "./_components/ReplyForm"
+import { ReplyForm } from "./_components/ReplyForm"
+import { emptyForm, formFrom, type FormState } from "./_components/reply-form-state"
 import { ReplyCard } from "./_components/ReplyCard"
 import type { CannedResponse } from "@/types"
 
@@ -23,6 +24,10 @@ const EMPTY_RESPONSES: CannedResponse[] = []
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function CannedResponsesPage() {
+  return useCannedResponsesPageView()
+}
+
+function useCannedResponsesPageView() {
   const { data, isLoading, mutate } = useSWR<{ responses: CannedResponse[] }>("/api/canned-responses", fetcher)
   const responses = data?.responses ?? EMPTY_RESPONSES
 
@@ -33,11 +38,11 @@ export default function CannedResponsesPage() {
   const sortRef = useRef<HTMLDivElement>(null)
 
   const [isAdding, setIsAdding]       = useState(false)
-  const [newForm, setNewForm]         = useState<FormState>(emptyForm())
+  const [newForm, setNewForm]         = useState<FormState>(() => emptyForm())
   const [isSavingNew, setIsSavingNew] = useState(false)
 
   const [editingId, setEditingId]         = useState<string | null>(null)
-  const [editForm, setEditForm]           = useState<FormState>(emptyForm())
+  const [editForm, setEditForm]           = useState<FormState>(() => emptyForm())
   const [isSavingEdit, setIsSavingEdit]   = useState(false)
 
   // Close sort dropdown on outside click
@@ -53,7 +58,7 @@ export default function CannedResponsesPage() {
   const allTags = useMemo(() => {
     const set = new Set<string>()
     responses.forEach(r => (r.tags ?? []).forEach(t => set.add(t)))
-    return [...set].sort()
+    return Array.from(set).toSorted()
   }, [responses])
 
   const filtered = useMemo(() => {
@@ -127,25 +132,25 @@ export default function CannedResponsesPage() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-0.5">
-              <MessageSquare className="w-4 h-4 text-white/40" />
+              <MessageSquare className="size-4 text-white/40" />
               <h1 className="text-sm font-bold text-white/80">Saved Replies</h1>
               {!isLoading && responses.length > 0 && (
-                <span className="text-[11px] text-white/30 font-medium tabular-nums">{responses.length}</span>
+                <span className="text-xs text-white/30 font-medium tabular-nums">{responses.length}</span>
               )}
             </div>
             <p className="text-xs text-white/35">
               Reusable templates. Insert with{" "}
-              <kbd className="font-mono bg-white/[0.08] border border-white/[0.10] px-1 py-px rounded text-[10px] text-white/50">
+              <kbd className="font-mono bg-white/[0.08] border border-white/[0.10] px-1 py-px rounded text-xs text-white/50">
                 /
               </kbd>{" "}
               in the composer.
             </p>
           </div>
-          <button
+          <button type="button"
             onClick={startNew}
             className="flex items-center gap-1.5 text-xs font-semibold text-black bg-green-400 hover:bg-green-300 px-3 py-1.5 rounded-md transition-colors shrink-0"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="size-3.5" />
             New reply
           </button>
         </div>
@@ -153,32 +158,33 @@ export default function CannedResponsesPage() {
         {/* Search + sort */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 flex-1 bg-white/[0.05] border border-border rounded-md px-2.5 h-8">
-            <Search className="w-3.5 h-3.5 text-white/20 shrink-0" />
+            <Search className="size-3.5 text-white/20 shrink-0" />
             <input
+              aria-label="Search saved replies"
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search by title or content…"
               className="flex-1 bg-transparent text-xs text-white/70 placeholder:text-white/25 outline-none"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-white/20 hover:text-white/50 transition-colors">
-                <X className="w-3 h-3" />
+              <button type="button" onClick={() => setSearch("")} className="text-white/20 hover:text-white/50 transition-colors">
+                <X className="size-3" />
               </button>
             )}
           </div>
 
           <div className="relative" ref={sortRef}>
-            <button
+            <button type="button"
               onClick={() => setSortOpen(o => !o)}
-              className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-[11px] text-white/40 hover:text-white/70 font-medium transition-colors"
+              className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs text-white/40 hover:text-white/70 font-medium transition-colors"
             >
-              <ArrowUpDown className="w-3 h-3" />
+              <ArrowUpDown className="size-3" />
               {SORT_OPTIONS.find(s => s.id === sort)?.label}
             </button>
             {sortOpen && (
               <div className="absolute top-full right-0 mt-1 w-36 rounded-md border border-white/[0.12] bg-popover shadow-lg z-10 overflow-hidden">
                 {SORT_OPTIONS.map(opt => (
-                  <button
+                  <button type="button"
                     key={opt.id}
                     onClick={() => { setSort(opt.id); setSortOpen(false) }}
                     className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
@@ -198,9 +204,9 @@ export default function CannedResponsesPage() {
         {/* Tag filters */}
         {allTags.length > 0 && (
           <div className="flex items-center gap-1.5 flex-wrap">
-            <button
+            <button type="button"
               onClick={() => setActiveTag(null)}
-              className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-all ${
+              className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
                 !activeTag
                   ? "bg-white/[0.10] text-white/80 border-white/[0.20]"
                   : "bg-transparent border-border text-white/35 hover:text-white/55 hover:border-white/[0.16]"
@@ -209,10 +215,10 @@ export default function CannedResponsesPage() {
               All
             </button>
             {allTags.map(t => (
-              <button
+              <button type="button"
                 key={t}
                 onClick={() => setActiveTag(activeTag === t ? null : t)}
-                className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-all ${
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-all ${
                   activeTag === t
                     ? "bg-white/[0.10] text-white/80 border-white/[0.20]"
                     : "bg-transparent border-border text-white/35 hover:text-white/55 hover:border-white/[0.16]"
@@ -242,8 +248,8 @@ export default function CannedResponsesPage() {
 
           {isLoading && (
             <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+              {["reply-skeleton-1", "reply-skeleton-2", "reply-skeleton-3"].map((key) => (
+                <div key={key} className="rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
                   <div className="h-3.5 w-2/5 bg-white/[0.07] rounded animate-pulse mb-3" />
                   <div className="h-2.5 w-full bg-white/[0.05] rounded animate-pulse mb-1.5" />
                   <div className="h-2.5 w-3/4 bg-white/[0.04] rounded animate-pulse" />
@@ -254,13 +260,13 @@ export default function CannedResponsesPage() {
 
           {!isLoading && filtered.length === 0 && !isAdding && (
             <div className="flex flex-col items-center text-center py-16 gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-border flex items-center justify-center">
-                <MessageSquare className="w-4 h-4 text-white/20" />
+              <div className="size-10 rounded-xl bg-white/[0.04] border border-border flex items-center justify-center">
+                <MessageSquare className="size-4 text-white/20" />
               </div>
               {hasFilters ? (
                 <>
                   <p className="text-sm font-medium text-white/40">No results</p>
-                  <button
+                  <button type="button"
                     onClick={() => { setSearch(""); setActiveTag(null) }}
                     className="text-xs text-white/30 hover:text-white/60 transition-colors"
                   >
@@ -273,15 +279,15 @@ export default function CannedResponsesPage() {
                     <p className="text-sm font-semibold text-white/40 mb-1">No saved replies yet</p>
                     <p className="text-xs text-white/25 max-w-[260px] leading-relaxed">
                       Save reply templates and insert them with{" "}
-                      <kbd className="font-mono bg-white/[0.07] border border-white/[0.10] px-1 py-px rounded text-[10px]">/</kbd>{" "}
+                      <kbd className="font-mono bg-white/[0.07] border border-white/[0.10] px-1 py-px rounded text-xs">/</kbd>{" "}
                       in the composer.
                     </p>
                   </div>
-                  <button
+                  <button type="button"
                     onClick={startNew}
                     className="flex items-center gap-1.5 text-xs font-semibold text-black bg-green-400 hover:bg-green-300 px-3 py-1.5 rounded-md transition-colors"
                   >
-                    <Plus className="w-3.5 h-3.5" />
+                    <Plus className="size-3.5" />
                     Create your first reply
                   </button>
                 </>

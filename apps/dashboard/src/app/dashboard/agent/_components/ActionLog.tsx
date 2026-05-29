@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useReducer, useEffect, useCallback } from "react"
 import { AlertCircle, Check, ChevronDown, ExternalLink, Loader2 } from "lucide-react"
 import type { ActionLogEntry } from "@/types"
 import { TOOL_LABELS } from "@/lib/agent/tools"
@@ -25,6 +25,54 @@ const CHANNEL_COLORS: Record<string, string> = {
   shopify:         "bg-green-500/15 text-green-400",
 }
 
+interface ActionLogState {
+  entries: ActionLogEntry[]
+  nextCursor: string | null
+  isLoading: boolean
+  isLoadingMore: boolean
+  error: string | null
+  showAll: boolean
+}
+
+type ActionLogAction =
+  | { type: "loaded"; entries: ActionLogEntry[]; nextCursor: string | null }
+  | { type: "loadError"; error: string }
+  | { type: "loadMoreStart" }
+  | { type: "loadMoreSuccess"; entries: ActionLogEntry[]; nextCursor: string | null }
+  | { type: "loadMoreEnd" }
+  | { type: "showAll" }
+
+const initialActionLogState: ActionLogState = {
+  entries: [],
+  nextCursor: null,
+  isLoading: true,
+  isLoadingMore: false,
+  error: null,
+  showAll: false,
+}
+
+function actionLogReducer(state: ActionLogState, action: ActionLogAction): ActionLogState {
+  switch (action.type) {
+    case "loaded":
+      return { ...state, entries: action.entries, nextCursor: action.nextCursor, isLoading: false }
+    case "loadError":
+      return { ...state, error: action.error, isLoading: false }
+    case "loadMoreStart":
+      return { ...state, isLoadingMore: true }
+    case "loadMoreSuccess":
+      return {
+        ...state,
+        entries: [...state.entries, ...action.entries],
+        nextCursor: action.nextCursor,
+        isLoadingMore: false,
+      }
+    case "loadMoreEnd":
+      return { ...state, isLoadingMore: false }
+    case "showAll":
+      return { ...state, showAll: true }
+  }
+}
+
 function formatTimestamp(iso: string) {
   const d = new Date(iso)
   const now = new Date()
@@ -38,12 +86,8 @@ function formatTimestamp(iso: string) {
 }
 
 export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
-  const [entries, setEntries] = useState<ActionLogEntry[]>([])
-  const [nextCursor, setNextCursor] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [showAll, setShowAll] = useState(false)
+  const [state, dispatch] = useReducer(actionLogReducer, initialActionLogState)
+  const { entries, nextCursor, isLoading, isLoadingMore, error, showAll } = state
 
   const fetchPage = useCallback(async (cursor?: string) => {
     const url = cursor ? `/api/agent/actions?cursor=${encodeURIComponent(cursor)}` : "/api/agent/actions"
@@ -54,32 +98,25 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
 
   useEffect(() => {
     fetchPage()
-      .then(({ entries, nextCursor }) => {
-        setEntries(entries)
-        setNextCursor(nextCursor)
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setIsLoading(false))
+      .then(({ entries, nextCursor }) => dispatch({ type: "loaded", entries, nextCursor }))
+      .catch((err) => dispatch({ type: "loadError", error: err instanceof Error ? err.message : "Failed to load action log" }))
   }, [fetchPage])
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || isLoadingMore) return
-    setIsLoadingMore(true)
+    dispatch({ type: "loadMoreStart" })
     try {
       const { entries: more, nextCursor: next } = await fetchPage(nextCursor)
-      setEntries((prev) => [...prev, ...more])
-      setNextCursor(next)
+      dispatch({ type: "loadMoreSuccess", entries: more, nextCursor: next })
     } catch {
-      // silent
-    } finally {
-      setIsLoadingMore(false)
+      dispatch({ type: "loadMoreEnd" })
     }
   }, [nextCursor, isLoadingMore, fetchPage])
 
   if (isLoading) {
     return (
       <div className={`flex items-center justify-center ${sidebarLimit ? "h-16" : "h-64"}`}>
-        <Loader2 className="w-4 h-4 animate-spin text-violet-500" />
+        <Loader2 className="size-4 animate-spin text-violet-500" />
       </div>
     )
   }
@@ -87,7 +124,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
   if (error) {
     return (
       <div className={`flex items-center justify-center gap-2 text-xs text-red-500 ${sidebarLimit ? "h-16" : "h-64"}`}>
-        <AlertCircle className="w-3.5 h-3.5" />
+        <AlertCircle className="size-3.5" />
         {error}
       </div>
     )
@@ -114,7 +151,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
             <div className="flex items-center justify-between gap-2 mb-1">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
                     CHANNEL_COLORS[entry.channelType] ?? "bg-muted text-muted-foreground"
                   }`}
                 >
@@ -122,36 +159,36 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                 </span>
                 <span className="text-xs text-muted-foreground truncate">{entry.customerHandle}</span>
               </div>
-              <span className="text-[10px] text-muted-foreground/70 shrink-0">{formatTimestamp(entry.sentAt)}</span>
+              <span className="text-xs text-muted-foreground/70 shrink-0">{formatTimestamp(entry.sentAt)}</span>
             </div>
             <p className="text-xs text-muted-foreground truncate">{entry.summary}</p>
             <div className="flex flex-wrap gap-1 mt-1.5">
-              {entry.actions.slice(0, 3).map((action: { tool: string; result: string }, i: number) => {
+              {entry.actions.slice(0, 3).map((action: { tool: string; result: string }) => {
                 const isError = action.result.startsWith("Error")
                 return (
                   <span
-                    key={i}
-                    className={`inline-flex items-center gap-0.5 text-[10px] rounded px-1.5 py-0.5 ${
+                    key={`${action.tool}-${action.result}`}
+                    className={`inline-flex items-center gap-0.5 text-xs rounded px-1.5 py-0.5 ${
                       isError ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"
                     }`}
                   >
                     {isError
-                      ? <AlertCircle className="w-2.5 h-2.5 shrink-0" />
-                      : <Check className="w-2.5 h-2.5 shrink-0" />
+                      ? <AlertCircle className="size-2.5 shrink-0" />
+                      : <Check className="size-2.5 shrink-0" />
                     }
                     {TOOL_LABELS[action.tool] ?? action.tool}
                   </span>
                 )
               })}
               {entry.actions.length > 3 && (
-                <span className="text-[10px] text-slate-400">+{entry.actions.length - 3} more</span>
+                <span className="text-xs text-slate-400">+{entry.actions.length - 3} more</span>
               )}
             </div>
           </div>
         ))}
         {hiddenCount > 0 && (
-          <button
-            onClick={() => setShowAll(true)}
+          <button type="button"
+            onClick={() => dispatch({ type: "showAll" })}
             className="w-full text-xs text-muted-foreground hover:text-violet-400 py-2.5 transition-colors"
           >
             Show {hiddenCount} more
@@ -185,7 +222,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                 className="ml-auto flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
               >
                 View thread
-                <ExternalLink className="w-3 h-3" />
+                <ExternalLink className="size-3" />
               </a>
             )}
           </div>
@@ -200,11 +237,11 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
 
           {/* Row 4: action chips */}
           <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {entry.actions.map((action: { tool: string; result: string }, i: number) => {
+            {entry.actions.map((action: { tool: string; result: string }) => {
               const isError = action.result.startsWith("Error")
               return (
                 <span
-                  key={i}
+                  key={`${action.tool}-${action.result}`}
                   className={`inline-flex items-center gap-1 text-xs rounded-full px-2.5 py-1 ${
                     isError
                       ? "bg-red-500/15 text-red-400"
@@ -212,8 +249,8 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                   }`}
                 >
                   {isError
-                    ? <AlertCircle className="w-3 h-3 shrink-0" />
-                    : <Check className="w-3 h-3 shrink-0" />
+                    ? <AlertCircle className="size-3 shrink-0" />
+                    : <Check className="size-3 shrink-0" />
                   }
                   {TOOL_LABELS[action.tool] ?? action.tool}
                 </span>
@@ -225,15 +262,15 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
 
       {nextCursor && (
         <div className="flex justify-center pt-2">
-          <button
+          <button type="button"
             onClick={loadMore}
             disabled={isLoadingMore}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
           >
             {isLoadingMore ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
             ) : (
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="size-4" />
             )}
             Load more
           </button>

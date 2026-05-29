@@ -27,12 +27,12 @@ export function requireNumericId(value: unknown, field: string): string {
   return id;
 }
 
-export function optionalNumericId(value: unknown, field: string): string | undefined {
+function optionalNumericId(value: unknown, field: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return requireNumericId(value, field);
 }
 
-export function requirePositiveInteger(value: unknown, field: string): number {
+function requirePositiveInteger(value: unknown, field: string): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(numberValue) || numberValue <= 0) {
     throw new ShopifyInputError(`${field} must be a positive integer.`);

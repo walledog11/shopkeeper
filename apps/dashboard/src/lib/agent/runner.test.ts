@@ -104,7 +104,7 @@ afterEach(async () => {
 
 // ── Tool: add_internal_note ───────────────────────────────────────────────────
 
-describe('executeTool — add_internal_note', () => {
+describe('executeTool , add_internal_note', () => {
   it('writes a note message to the DB with the agent note prefix', async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse('add_internal_note', { text: 'Customer is VIP' }))
@@ -122,7 +122,7 @@ describe('executeTool — add_internal_note', () => {
 
 // ── Tool: update_thread_status ────────────────────────────────────────────────
 
-describe('executeTool — update_thread_status', () => {
+describe('executeTool , update_thread_status', () => {
   it('updates the thread status in the DB', async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse('update_thread_status', { status: 'closed' }))
@@ -137,7 +137,7 @@ describe('executeTool — update_thread_status', () => {
 
 // ── Tool: update_thread_tag ───────────────────────────────────────────────────
 
-describe('executeTool — update_thread_tag', () => {
+describe('executeTool , update_thread_tag', () => {
   it('updates the thread tag in the DB', async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse('update_thread_tag', { tag: 'Refund' }))
@@ -152,7 +152,7 @@ describe('executeTool — update_thread_tag', () => {
 
 // ── Tool: send_reply ─────────────────────────────────────────────────────────
 
-describe('executeTool — send_reply', () => {
+describe('executeTool , send_reply', () => {
   it('dispatches to sendReply and records the result in actionsPerformed', async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse('send_reply', { text: 'Your order shipped!' }))
@@ -170,7 +170,7 @@ describe('executeTool — send_reply', () => {
 
 // ── Tool: search_kb ───────────────────────────────────────────────────────────
 
-describe('executeTool — search_kb', () => {
+describe('executeTool , search_kb', () => {
   it('returns matching KB articles from the DB', async () => {
     const kb = await db.knowledgeBase.create({
       data: { organizationId: org.id, name: 'Test KB', source: 'user' },
@@ -204,7 +204,7 @@ describe('executeTool — search_kb', () => {
 
 // ── Tool: shopify guard ───────────────────────────────────────────────────────
 
-describe('executeTool — shopify guard', () => {
+describe('executeTool , shopify guard', () => {
   it('returns an error string when no Shopify integration is connected', async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse('get_shopify_orders', { customer_id: '999' }))

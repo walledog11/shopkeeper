@@ -30,10 +30,10 @@ export function DateRangeSelector({
   return (
     <Card>
       <CardContent className="py-3 px-3.5 flex flex-wrap items-center gap-2">
-        <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <Calendar className="size-3.5 text-muted-foreground shrink-0" />
         <div className="flex items-center gap-1 flex-wrap">
           {PRESETS.map(({ value, label }) => (
-            <button
+            <button type="button"
               key={value}
               onClick={() => setPreset(value)}
               className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
@@ -49,14 +49,16 @@ export function DateRangeSelector({
         {preset === 'custom' && (
           <div className="flex items-center gap-2 pl-1 border-l border-border ml-1">
             <input
+              aria-label="Custom start date"
               type="date"
               value={customFrom}
               max={customTo}
               onChange={e => setCustomFrom(e.target.value)}
               className="text-xs border border-border rounded-md px-2 py-1 text-foreground bg-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
             />
-            <span className="text-[10px] text-muted-foreground font-medium">to</span>
+            <span className="text-xs text-muted-foreground font-medium">to</span>
             <input
+              aria-label="Custom end date"
               type="date"
               value={customTo}
               min={customFrom}

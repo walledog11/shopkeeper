@@ -30,12 +30,12 @@ export default function AutonomyPill({ tier, compact = false, className }: Props
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border font-semibold transition-colors",
         "min-w-0 max-w-full",
-        compact ? "px-2.5 py-1 text-[11px]" : "px-2.5 py-1.5 text-xs",
+        compact ? "px-2.5 py-1 text-xs" : "px-2.5 py-1.5 text-xs",
         TIER_TINTS[tier],
         className,
       )}
     >
-      <Bot className={cn("shrink-0", compact ? "h-3.5 w-3.5" : "h-4 w-4")} />
+      <Bot className={cn("shrink-0", compact ? "size-3.5" : "size-4")} />
       <span className="truncate">Autopilot: {label}</span>
     </Link>
   )

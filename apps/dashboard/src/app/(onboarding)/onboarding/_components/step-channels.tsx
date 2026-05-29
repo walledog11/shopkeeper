@@ -13,7 +13,7 @@ export function StepChannels({ data, update, connected, onSkip, onOAuth }: {
     <div>
       <Kicker step={4} label="WHERE I'LL LISTEN" />
       <BigTitle>Where do customers reach you?</BigTitle>
-      <Lede>Connect the channels I should watch. You can add more later — this is just to start.</Lede>
+      <Lede>Connect the channels I should watch. You can add more later , this is just to start.</Lede>
 
       <div className="mt-7 grid grid-cols-1 gap-2.5 md:grid-cols-2">
         {CHANNEL_META.map(c => (
@@ -24,7 +24,7 @@ export function StepChannels({ data, update, connected, onSkip, onOAuth }: {
 
       {connected.has("email") && (
         <div className="mt-4 flex items-center gap-3.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3.5">
-          <AtSign className="h-4 w-4 text-white/55" />
+          <AtSign className="size-4 text-white/55" />
           <div className="flex-1">
             <div className="text-[12.5px] font-semibold text-white">Your support email</div>
             <div className="mt-0.5 text-[11.5px] text-white/45">For aliases and the address customers reply to. You can change this in Settings.</div>
@@ -62,10 +62,10 @@ function ChannelCard({ meta, connected, onOAuth }: { meta: typeof CHANNEL_META[n
         : "border-white/10 bg-white/[0.04] hover:bg-white/[0.06]"
     )}>
       <span className={cn(
-        "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-lg border",
         connected ? "border-green-400/30 bg-green-400/15 text-green-400" : "border-white/10 bg-white/[0.06] text-white/70"
       )}>
-        <Icon className="h-4 w-4" />
+        <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -74,12 +74,12 @@ function ChannelCard({ meta, connected, onOAuth }: { meta: typeof CHANNEL_META[n
         <div className="mt-0.5 text-[11.5px] leading-snug text-white/45">{description}</div>
       </div>
       <span className={cn(
-        "inline-flex h-[22px] shrink-0 items-center justify-center rounded-md text-[11px] font-bold transition-all",
+        "inline-flex h-[22px] shrink-0 items-center justify-center rounded-md text-xs font-bold transition-all",
         connected
           ? "bg-green-400/15 px-2 text-green-400"
           : "border border-white/15 bg-white/[0.06] px-2 text-white/70"
       )}>
-        {connected ? <><Check className="mr-1 h-3 w-3" /> Connected</> : "Connect"}
+        {connected ? <><Check className="mr-1 size-3" /> Connected</> : "Connect"}
       </span>
     </div>
   );
@@ -94,7 +94,7 @@ function ChannelCard({ meta, connected, onOAuth }: { meta: typeof CHANNEL_META[n
   if (!href) return body;
 
   return (
-    <button type="button" onClick={() => onOAuth(href)} className="block h-full w-full text-left">
+    <button type="button" onClick={() => onOAuth(href)} className="block size-full text-left">
       {body}
     </button>
   );
@@ -107,8 +107,8 @@ function SkipCard({ onSkip }: { onSkip: () => void }) {
       onClick={onSkip}
       className="flex h-full items-center gap-3 rounded-xl border border-dashed border-white/15 bg-white/[0.02] px-4 py-3.5 text-left transition-all hover:border-white/25 hover:bg-white/[0.04]"
     >
-      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white/55">
-        <SkipForward className="h-4 w-4" />
+      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06] text-white/55">
+        <SkipForward className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -125,7 +125,7 @@ function EmailCard({ body, onOAuth }: { body: React.ReactNode; onOAuth: (url: st
   const returnTo = encodeURIComponent(RETURN_TO);
   return (
     <div className="h-full">
-      <button type="button" onClick={() => setOpen(o => !o)} className="block h-full w-full text-left">{body}</button>
+      <button type="button" onClick={() => setOpen(o => !o)} className="block size-full text-left">{body}</button>
       {open && (
         <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-white/[0.07] bg-black/30 p-3">
           <button
@@ -133,14 +133,14 @@ function EmailCard({ body, onOAuth }: { body: React.ReactNode; onOAuth: (url: st
             onClick={() => onOAuth(`/api/integrations/gmail/auth?returnTo=${returnTo}`)}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] text-[13px] font-semibold text-white hover:bg-white/[0.10]"
           >
-            <Mail className="h-4 w-4 text-white/70" /> Gmail
+            <Mail className="size-4 text-white/70" /> Gmail
           </button>
           <button
             type="button"
             onClick={() => onOAuth(`/api/integrations/outlook/auth?returnTo=${returnTo}`)}
             className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-white/10 bg-white/[0.06] text-[13px] font-semibold text-white hover:bg-white/[0.10]"
           >
-            <Mail className="h-4 w-4 text-white/70" /> Outlook
+            <Mail className="size-4 text-white/70" /> Outlook
           </button>
         </div>
       )}

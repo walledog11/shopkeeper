@@ -21,23 +21,24 @@ export const POST = withOrgRoute(
     const headers = { 'X-Shopify-Access-Token': accessToken };
 
     const [policiesRes, pagesRes] = await Promise.all([
-      fetch(`https://${shop}/admin/api/2026-04/policies.json`, { headers }),
-      fetch(`https://${shop}/admin/api/2026-04/pages.json?published_status=published&limit=250`, { headers }),
+      fetch(`https://${shop}/admin/api/2026-04/policies.json`, { cache: 'no-store', headers }),
+      fetch(`https://${shop}/admin/api/2026-04/pages.json?published_status=published&limit=250`, { cache: 'no-store', headers }),
     ]);
 
     if (!policiesRes.ok || !pagesRes.ok) {
       throw new ApiError('Failed to fetch data from Shopify', 502);
     }
 
-    const [{ policies }, { pages }] = await Promise.all([
+    const [shopifyKbInitial, { policies }, { pages }] = await Promise.all([
+      db.knowledgeBase.findFirst({
+        where: { organizationId: org.id, source: 'shopify' },
+      }),
       policiesRes.json() as Promise<{ policies: { id: number; title: string; body: string }[] }>,
       pagesRes.json() as Promise<{ pages: { id: number; title: string; body_html: string }[] }>,
     ]);
 
     // Find or create the org's Shopify knowledge base
-    let shopifyKb = await db.knowledgeBase.findFirst({
-      where: { organizationId: org.id, source: 'shopify' },
-    });
+    let shopifyKb = shopifyKbInitial;
     if (!shopifyKb) {
       shopifyKb = await db.knowledgeBase.create({
         data: { organizationId: org.id, name: 'Shopify', source: 'shopify' },

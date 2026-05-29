@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { ArrowRight, Clock, Check } from "lucide-react"
 import { tips } from "../_components/help/content/tips"
@@ -11,16 +11,15 @@ const READ_ARTICLES_KEY = "clerk_read_articles"
 
 export default function LearnPage() {
   const [activeTag, setActiveTag] = useState("All")
-  const [readIds, setReadIds] = useState<string[]>([])
-
-  useEffect(() => {
+  const [readIds] = useState<string[]>(() => {
     try {
       const stored = localStorage.getItem(READ_ARTICLES_KEY)
-      if (stored) setReadIds(JSON.parse(stored))
+      return stored ? JSON.parse(stored) : []
     } catch {
       // localStorage unavailable
+      return []
     }
-  }, [])
+  })
 
   const filtered = activeTag === "All"
     ? tips.articles
@@ -35,14 +34,14 @@ export default function LearnPage() {
           <p className="text-xs font-semibold text-indigo-500 uppercase tracking-widest mb-2">Resources</p>
           <h1 className="text-2xl font-bold text-foreground">Tips & Strategies</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Best practices for social commerce and customer support — written for teams like yours.
+            Best practices for social commerce and customer support , written for teams like yours.
           </p>
         </div>
 
         {/* Tag filter */}
         <div className="flex items-center gap-2 flex-wrap mb-6">
           {ALL_TAGS.map(tag => (
-            <button
+            <button type="button"
               key={tag}
               onClick={() => setActiveTag(tag)}
               className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
@@ -70,19 +69,19 @@ export default function LearnPage() {
                 className="group bg-card rounded-xl border border-border hover:border-border/70 hover:shadow-md p-5 flex flex-col gap-3 transition-all"
               >
                 <div className="flex items-center justify-between">
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${tagColor}`}>
+                  <span className={`text-xs font-bold uppercase tracking-wide px-2 py-0.5 rounded-full border ${tagColor}`}>
                     {tag}
                   </span>
                   <div className="flex items-center gap-2">
                     {isRead && (
-                      <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground/60">
-                        <Check className="w-3 h-3" />
+                      <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground/60">
+                        <Check className="size-3" />
                         Read
                       </span>
                     )}
                     {article.readingTime && (
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Clock className="w-3 h-3" />
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="size-3" />
                         {article.readingTime} min read
                       </span>
                     )}
@@ -101,7 +100,7 @@ export default function LearnPage() {
                 </div>
 
                 <div className={`flex items-center gap-1 text-xs font-semibold mt-1 transition-colors ${isRead ? 'text-muted-foreground/50 group-hover:text-indigo-500' : 'text-indigo-500 group-hover:text-indigo-700'}`}>
-                  {isRead ? 'Read again' : 'Read article'} <ArrowRight className="w-3.5 h-3.5" />
+                  {isRead ? 'Read again' : 'Read article'} <ArrowRight className="size-3.5" />
                 </div>
               </Link>
             )

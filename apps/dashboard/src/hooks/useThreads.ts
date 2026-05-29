@@ -20,7 +20,7 @@ function useIsDocumentVisible() {
   return isVisible;
 }
 
-// Non-paginated — for analytics and other pages that need all threads
+// Non-paginated , for analytics and other pages that need all threads
 export function useThreads(
   status: 'open' | 'closed' = 'open',
   fallbackData?: Thread[],
@@ -61,7 +61,7 @@ export function useThreads(
   };
 }
 
-export const useOpenThreads = () => useThreads('open', undefined, true, true);
+const useOpenThreads = () => useThreads('open', undefined, true, true);
 
 export function useOpenThreadCountQuery(enabled = true) {
   const isVisible = useIsDocumentVisible();

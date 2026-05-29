@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { db } from '@clerk/db'
 import { getOrCreateOrg } from '@/lib/server/org'
 import { handleApiError } from '@/lib/api/errors'
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
@@ -15,7 +14,7 @@ export async function GET() {
 
     const customerId = await getOrCreateStripeCustomer(org)
 
-    // Fetch subscription — expand payment method only (product fetched separately below)
+    // Fetch subscription , expand payment method only (product fetched separately below)
     let subscription: import('stripe').Stripe.Subscription | null = null
     if (org.stripeSubscriptionId) {
       subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId, {
@@ -29,15 +28,6 @@ export async function GET() {
       })
       if (subs.data.length > 0) {
         subscription = subs.data[0]
-        await db.organization.update({
-          where: { id: org.id },
-          data: {
-            stripeSubscriptionId: subscription.id,
-            stripeStatus: subscription.status,
-            stripePriceId: subscription.items.data[0]?.price.id ?? null,
-            trialEndsAt: subscription.trial_end ? new Date(subscription.trial_end * 1000) : null,
-          },
-        })
       }
     }
 

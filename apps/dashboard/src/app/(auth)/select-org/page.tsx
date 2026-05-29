@@ -56,7 +56,7 @@ export default function SelectOrgPage() {
     userMemberships: { infinite: false },
   });
   const { signOut } = useClerk();
-  const router = useRouter();
+  const { push } = useRouter();
   const [pendingOrgId, setPendingOrgId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,7 +71,7 @@ export default function SelectOrgPage() {
 
     try {
       await setActive({ organization: orgId });
-      router.push("/dashboard");
+      push("/dashboard");
     } catch {
       setPendingOrgId(null);
       setError("Could not switch workspaces. Please try again.");
@@ -125,7 +125,7 @@ export default function SelectOrgPage() {
           ) : hasNoWorkspaces ? (
             <div className="flex flex-col items-stretch gap-3 px-5 py-6">
               <Button
-                onClick={() => router.push("/onboarding")}
+                onClick={() => push("/onboarding")}
                 className="h-10 gap-2 bg-green-400 text-green-950 hover:bg-green-300"
               >
                 <Sparkles className="size-4" />

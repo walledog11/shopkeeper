@@ -94,7 +94,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
       <div className="flex md:flex-row flex-col items-stretch">
         <div className="flex-1 min-w-0 px-4 py-3">
           <div className="flex items-center gap-2 mb-1">
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shrink-0 ${tagStyle.className}`}>
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider shrink-0 ${tagStyle.className}`}>
               {tagStyle.label}
             </span>
             <Link
@@ -105,8 +105,8 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
             </Link>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[11px] text-white/40 mb-1.5">
-            <ChannelIcon aria-hidden className={`h-[11px] w-[11px] shrink-0 ${channelMeta.className}`} />
+          <div className="flex items-center gap-1.5 text-xs text-white/40 mb-1.5">
+            <ChannelIcon aria-hidden className={`size-[11px] shrink-0 ${channelMeta.className}`} />
             <span className={`${channelMeta.className} uppercase tracking-wide`}>{item.channelName}</span>
             <span className="text-white/15">·</span>
             <span className="truncate text-white/55">{item.customerName}</span>
@@ -127,7 +127,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
           {item.kind === "quick_reply" && item.replyText ? (
             <div className="px-2.5 py-2 rounded-md bg-gradient-to-r from-sky-600/[0.1] to-sky-400/[0.1] border border-blue-400/[0.12]">
               <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-sky-400/80" />
+                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-sky-400/80" />
                 <span>
                   <span className="font-semibold text-white/85">{agentName} drafted: </span>
                   <span className="text-white/80">{item.replyText}</span>
@@ -137,7 +137,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
           ) : (
             <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
               <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="h-3 w-3 mt-[2px] shrink-0 text-green-400/80 " />
+                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-green-400/80 " />
                 <span>
                   <span className="font-semibold text-white/85">{agentName} proposes: </span>
                   <span className="text-white/80">{item.proposalSummary}</span>
@@ -147,28 +147,28 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
           )}
 
           {approvalError && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-red-300">
-              <AlertCircle aria-hidden className="h-3 w-3 shrink-0" />
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-300">
+              <AlertCircle aria-hidden className="size-3 shrink-0" />
               {approvalError}
             </p>
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 justify-center px-3 py-3 md:border-l border-t border-border bg-white/[0.01]">
+        <div className="flex flex-col gap-1.5 justify-center p-3 md:border-l border-t border-border bg-white/[0.01]">
           {item.kind === "quick_reply" ? (
             <>
               <button
                 type="button"
                 onClick={approveQuickReply}
                 disabled={isApproving}
-                className="inline-flex items-center justify-center gap-1.5 text-center md:text-[11px] text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 hover:bg-sky-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 hover:bg-sky-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
               >
-                {isApproving && <Loader2 aria-hidden className="h-3 w-3 animate-spin" />}
+                {isApproving && <Loader2 aria-hidden className="size-3 animate-spin" />}
                 {isApproving ? "Sending" : "Approve & send"}
               </button>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center md:text-[11px] text-sm font-semibold px-3 md:py-3 py-4 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
+                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
               >
                 Edit
               </Link>
@@ -177,7 +177,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agen
             <>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center md:text-[11px] text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
+                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
               >
                 Review decision
               </Link>

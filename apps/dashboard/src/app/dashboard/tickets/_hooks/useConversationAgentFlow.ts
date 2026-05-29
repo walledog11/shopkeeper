@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useReducer, useState } from "react"
 import type { AgentPlan, AgentTurn, RawToolCall, Ticket } from "@/types"
 
 interface UseConversationAgentFlowProps {
@@ -60,6 +60,22 @@ export function planRequiresApproval(plan: AgentPlan): boolean {
   return plan.steps.some(step => step.category === "action" || step.category === "communication" || step.category === "internal")
 }
 
+interface PendingPlanState {
+  ticketId: string
+  hasOverride: boolean
+  plan: AgentPlan | null
+}
+
+type PendingPlanAction = { type: "set"; ticketId: string; plan: AgentPlan | null }
+
+function pendingPlanReducer(_state: PendingPlanState, action: PendingPlanAction): PendingPlanState {
+  return {
+    ticketId: action.ticketId,
+    hasOverride: true,
+    plan: action.plan,
+  }
+}
+
 export function useConversationAgentFlow({
   ticket,
   viewTab,
@@ -75,16 +91,22 @@ export function useConversationAgentFlow({
   onNoteModeReset,
 }: UseConversationAgentFlowProps) {
   const [pendingInstruction, setPendingInstruction] = useState<string | null>(null)
-  const [pendingPlan, setPendingPlan] = useState<AgentPlan | null>(initialPlan ?? null)
+  const [pendingPlanState, dispatchPendingPlan] = useReducer(pendingPlanReducer, {
+    ticketId: ticket.id,
+    hasOverride: false,
+    plan: null,
+  })
   const [isPlanLoading, setIsPlanLoading] = useState(false)
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
 
   const { clerkInstruction, isClerkMode } = getClerkCommandState(replyText, agentName, viewTab)
-
-  useEffect(() => {
-    setPendingPlan(initialPlan ?? null)
-  }, [initialPlan])
+  const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
+    ? pendingPlanState.plan
+    : initialPlan ?? null
+  const setPendingPlan = (plan: AgentPlan | null) => {
+    dispatchPendingPlan({ type: "set", ticketId: ticket.id, plan })
+  }
 
   const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
     setPendingPlan(null)
@@ -116,7 +138,7 @@ export function useConversationAgentFlow({
         instruction,
         actions: [],
         summary: null,
-        error: "Network error — please try again.",
+        error: "Network error , please try again.",
       }))
     } finally {
       onAgentRunningChange(false)
@@ -155,7 +177,7 @@ export function useConversationAgentFlow({
         instruction,
         actions: [],
         summary: null,
-        error: "Network error — please try again.",
+        error: "Network error , please try again.",
       }))
     } finally {
       setIsPlanLoading(false)
@@ -206,7 +228,7 @@ export function useConversationAgentFlow({
           instruction,
           actions: [],
           summary: null,
-          error: err instanceof Error ? err.message : "Failed to generate plan — please try again.",
+          error: err instanceof Error ? err.message : "Failed to generate plan , please try again.",
         }))
       }
 

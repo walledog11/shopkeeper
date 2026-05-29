@@ -13,7 +13,7 @@ export const PATCH = withOrgRoute(
       throw new BadRequestError('Missing ids');
     }
     if (ids.length > 100) {
-      throw new BadRequestError('Too many ids — max 100 per request');
+      throw new BadRequestError('Too many ids , max 100 per request');
     }
     if (!['close', 'open', 'tag', 'archive'].includes(action)) {
       throw new BadRequestError('Invalid action');

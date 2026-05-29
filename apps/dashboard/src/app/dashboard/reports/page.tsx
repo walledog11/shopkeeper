@@ -12,7 +12,7 @@ import { getDateRangeFrom, getDateRangeTo, type DateRangePreset as Preset } from
 import { useReports } from '@/hooks/useReports'
 
 function formatMinutes(mins: number | null): string {
-  if (mins === null) return '—'
+  if (mins === null) return ','
   if (mins < 60) return `${mins}m`
   const h = Math.floor(mins / 60), m = mins % 60
   return m > 0 ? `${h}h ${m}m` : `${h}h`
@@ -74,12 +74,12 @@ function Skeleton({ className }: { className?: string }) {
 
 function ExportButton({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center gap-1.5 text-[11px] font-semibold text-muted-foreground hover:text-foreground border border-border hover:border-white/[0.2] rounded-md px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground border border-border hover:border-white/[0.2] rounded-md px-2.5 py-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
     >
-      <Download className="w-3 h-3" />
+      <Download className="size-3" />
       Export CSV
     </button>
   )
@@ -118,8 +118,8 @@ function SupportSummaryCard({
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileText className="w-3.5 h-3.5 text-primary" />
+            <div className="size-7 rounded-lg bg-primary/10 flex items-center justify-center">
+              <FileText className="size-3.5 text-primary" />
             </div>
             <CardTitle className="text-sm">Support Summary</CardTitle>
           </div>
@@ -130,18 +130,18 @@ function SupportSummaryCard({
       <CardContent className="pt-5 flex-1 space-y-5">
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Tickets',   value: support?.total,          icon: <MessageSquare className="w-4 h-4 text-white/40" /> },
-            { label: 'Resolved',        value: support?.closed,         icon: <CheckCircle2 className="w-4 h-4 text-emerald-500/70" /> },
-            { label: 'Resolution Rate', value: support ? `${support.resolutionRate}%` : undefined, icon: <CheckCircle2 className="w-4 h-4 text-primary/70" /> },
+            { label: 'Total Tickets',   value: support?.total,          icon: <MessageSquare className="size-4 text-white/40" /> },
+            { label: 'Resolved',        value: support?.closed,         icon: <CheckCircle2 className="size-4 text-emerald-500/70" /> },
+            { label: 'Resolution Rate', value: support ? `${support.resolutionRate}%` : undefined, icon: <CheckCircle2 className="size-4 text-primary/70" /> },
           ].map(({ label, value, icon }) => (
-            <div key={label} className="rounded-xl border border-border bg-muted/30 px-3 py-3">
+            <div key={label} className="rounded-xl border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
                 {icon}
               </div>
               {isLoading
                 ? <Skeleton className="h-7 w-12" />
-                : <p className="text-2xl font-extrabold text-foreground leading-none">{value?.toLocaleString() ?? '—'}</p>
+                : <p className="text-2xl font-extrabold text-foreground leading-none">{value?.toLocaleString() ?? ','}</p>
               }
             </div>
           ))}
@@ -149,7 +149,7 @@ function SupportSummaryCard({
 
         <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+            <Clock className="size-3.5 text-muted-foreground" />
             <span className="text-xs font-semibold text-muted-foreground">Avg first reply</span>
           </div>
           {isLoading
@@ -159,10 +159,10 @@ function SupportSummaryCard({
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">By channel</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">By channel</p>
           {isLoading ? (
             <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}
+              {["summary-skeleton-1", "summary-skeleton-2", "summary-skeleton-3"].map((key) => <Skeleton key={key} className="h-5 w-full" />)}
             </div>
           ) : support?.byChannel.length ? (
             <div className="space-y-2">
@@ -220,11 +220,11 @@ function AgentActivityCard({
   }
 
   const actionItems = [
-    { label: 'Refunds issued',   value: agent?.refundsIssued,  icon: <RotateCcw className="w-4 h-4 text-amber-400" />,      color: 'text-amber-400' },
-    { label: 'Orders cancelled', value: agent?.cancellations,  icon: <Package className="w-4 h-4 text-red-400" />,          color: 'text-red-400' },
-    { label: 'Orders edited',    value: agent?.orderEdits,     icon: <ShoppingCart className="w-4 h-4 text-blue-400" />,    color: 'text-blue-400' },
-    { label: 'Orders created',   value: agent?.ordersCreated,  icon: <ShoppingCart className="w-4 h-4 text-emerald-400" />, color: 'text-emerald-400' },
-    { label: 'Address updates',  value: agent?.addressUpdates, icon: <MapPin className="w-4 h-4 text-muted-foreground" />,  color: 'text-foreground' },
+    { label: 'Refunds issued',   value: agent?.refundsIssued,  icon: <RotateCcw className="size-4 text-amber-400" />,      color: 'text-amber-400' },
+    { label: 'Orders cancelled', value: agent?.cancellations,  icon: <Package className="size-4 text-red-400" />,          color: 'text-red-400' },
+    { label: 'Orders edited',    value: agent?.orderEdits,     icon: <ShoppingCart className="size-4 text-blue-400" />,    color: 'text-blue-400' },
+    { label: 'Orders created',   value: agent?.ordersCreated,  icon: <ShoppingCart className="size-4 text-emerald-400" />, color: 'text-emerald-400' },
+    { label: 'Address updates',  value: agent?.addressUpdates, icon: <MapPin className="size-4 text-muted-foreground" />,  color: 'text-foreground' },
   ]
 
   return (
@@ -232,8 +232,8 @@ function AgentActivityCard({
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
-              <Bot className="w-3.5 h-3.5 text-violet-400" />
+            <div className="size-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
+              <Bot className="size-3.5 text-violet-400" />
             </div>
             <CardTitle className="text-sm">Agent Activity</CardTitle>
           </div>
@@ -245,13 +245,13 @@ function AgentActivityCard({
         {/* Summary stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Agent Runs',   value: agent?.totalRuns,   icon: <Bot className="w-4 h-4 text-violet-400/70" /> },
-            { label: 'Replies Sent', value: agent?.repliesSent, icon: <MessageSquare className="w-4 h-4 text-white/40" /> },
-            { label: 'Refunds',      value: agent?.refundsIssued, icon: <RotateCcw className="w-4 h-4 text-amber-400/70" /> },
+            { label: 'Agent Runs',   value: agent?.totalRuns,   icon: <Bot className="size-4 text-violet-400/70" /> },
+            { label: 'Replies Sent', value: agent?.repliesSent, icon: <MessageSquare className="size-4 text-white/40" /> },
+            { label: 'Refunds',      value: agent?.refundsIssued, icon: <RotateCcw className="size-4 text-amber-400/70" /> },
           ].map(({ label, value, icon }) => (
-            <div key={label} className="rounded-xl border border-border bg-muted/30 px-3 py-3">
+            <div key={label} className="rounded-xl border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{label}</p>
                 {icon}
               </div>
               {isLoading
@@ -280,10 +280,10 @@ function AgentActivityCard({
 
         {/* Top tools */}
         <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Top tools used</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Top tools used</p>
           {isLoading ? (
             <div className="space-y-2">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-5 w-full" />)}
+              {["tool-skeleton-1", "tool-skeleton-2", "tool-skeleton-3", "tool-skeleton-4"].map((key) => <Skeleton key={key} className="h-5 w-full" />)}
             </div>
           ) : agent?.topTools.length ? (
             <div className="space-y-2">
@@ -344,7 +344,7 @@ function TopTopicsCard({
     if (!byTag.length) return
     downloadCSV(`top-topics-${rangeLabel.replace(/\s/g, '-')}.csv`, [
       ['Topic', 'Tickets', '% of Total'],
-      ...byTag.map(t => [t.tag, t.count, total > 0 ? `${Math.round((t.count / total) * 100)}%` : '—']),
+      ...byTag.map(t => [t.tag, t.count, total > 0 ? `${Math.round((t.count / total) * 100)}%` : ',']),
     ])
   }
 
@@ -353,8 +353,8 @@ function TopTopicsCard({
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="size-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+              <MessageSquare className="size-3.5 text-emerald-400" />
             </div>
             <CardTitle className="text-sm">Top Topics</CardTitle>
           </div>
@@ -365,8 +365,8 @@ function TopTopicsCard({
       <CardContent className="pt-5 flex-1">
         {isLoading ? (
           <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="space-y-1.5">
+            {["tag-skeleton-1", "tag-skeleton-2", "tag-skeleton-3", "tag-skeleton-4", "tag-skeleton-5"].map((key) => (
+              <div key={key} className="space-y-1.5">
                 <div className="flex justify-between">
                   <Skeleton className="h-3.5 w-24" />
                   <Skeleton className="h-3.5 w-10" />
@@ -378,7 +378,7 @@ function TopTopicsCard({
         ) : byTag.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-32 text-center">
             <p className="text-sm text-muted-foreground">No tagged tickets yet</p>
-            <p className="text-[11px] text-muted-foreground/60 mt-1">Tags are assigned automatically by AI</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">Tags are assigned automatically by AI</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -390,12 +390,12 @@ function TopTopicsCard({
                 <div key={t.tag}>
                   <div className="flex items-center justify-between mb-1.5">
                     <div className="flex items-center gap-2">
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
                         {t.tag}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[11px] text-muted-foreground">{pct}%</span>
+                      <span className="text-xs text-muted-foreground">{pct}%</span>
                       <span className="text-xs font-semibold text-foreground w-5 text-right">{t.count}</span>
                     </div>
                   </div>
@@ -410,7 +410,7 @@ function TopTopicsCard({
             })}
 
             {total > 0 && (
-              <p className="text-[10px] text-muted-foreground pt-1">
+              <p className="text-xs text-muted-foreground pt-1">
                 {total} tagged ticket{total !== 1 ? 's' : ''} in this period
               </p>
             )}
@@ -451,8 +451,8 @@ function CustomerContactCard({
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
-              <Users className="w-3.5 h-3.5 text-blue-400" />
+            <div className="size-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+              <Users className="size-3.5 text-blue-400" />
             </div>
             <CardTitle className="text-sm">Customer Contact</CardTitle>
           </div>
@@ -463,12 +463,12 @@ function CustomerContactCard({
       <CardContent className="pt-5 flex-1 space-y-5">
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: 'Unique Customers',    value: customers?.unique, icon: <Users className="w-4 h-4 text-blue-400/70" /> },
-            { label: 'Repeat (3+ tickets)', value: customers?.repeat, icon: <Users className="w-4 h-4 text-amber-400/70" /> },
+            { label: 'Unique Customers',    value: customers?.unique, icon: <Users className="size-4 text-blue-400/70" /> },
+            { label: 'Repeat (3+ tickets)', value: customers?.repeat, icon: <Users className="size-4 text-amber-400/70" /> },
           ].map(({ label, value, icon }) => (
-            <div key={label} className="rounded-xl border border-border bg-muted/30 px-3 py-3">
+            <div key={label} className="rounded-xl border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
                 {icon}
               </div>
               {isLoading
@@ -480,10 +480,10 @@ function CustomerContactCard({
         </div>
 
         <div>
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Most active customers</p>
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">Most active customers</p>
           {isLoading ? (
             <div className="space-y-2">
-              {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+              {["customer-skeleton-1", "customer-skeleton-2", "customer-skeleton-3"].map((key) => <Skeleton key={key} className="h-10 w-full" />)}
             </div>
           ) : customers?.top.length ? (
             <div className="space-y-1.5">
@@ -491,7 +491,7 @@ function CustomerContactCard({
                 <div key={c.platformId} className="flex items-center justify-between rounded-lg border border-border bg-muted/20 px-3 py-2.5">
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-foreground truncate">{c.name ?? 'Unknown'}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{c.platformId}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.platformId}</p>
                   </div>
                   <span className="text-sm font-bold text-foreground shrink-0 ml-3">
                     {c.count} {c.count === 1 ? 'ticket' : 'tickets'}
@@ -541,12 +541,12 @@ function GdprExportSection() {
     <Card>
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-            <Shield className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="size-7 rounded-lg bg-muted flex items-center justify-center">
+            <Shield className="size-3.5 text-muted-foreground" />
           </div>
           <div>
             <CardTitle className="text-sm">Customer Data Export</CardTitle>
-            <p className="text-[10px] text-muted-foreground mt-0.5">GDPR / CCPA — export all data associated with a customer</p>
+            <p className="text-xs text-muted-foreground mt-0.5">GDPR / CCPA , export all data associated with a customer</p>
           </div>
         </div>
       </CardHeader>
@@ -557,6 +557,7 @@ function GdprExportSection() {
         </p>
         <div className="flex items-center gap-2 flex-wrap">
           <input
+            aria-label="Customer email for data export"
             type="email"
             value={email}
             onChange={e => { setEmail(e.target.value); setStatus('idle') }}
@@ -564,21 +565,21 @@ function GdprExportSection() {
             placeholder="customer@example.com"
             className="flex-1 min-w-48 bg-muted border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 outline-none focus:ring-1 focus:ring-primary focus:border-primary"
           />
-          <button
+          <button type="button"
             onClick={handleExport}
             disabled={status === 'loading' || !email.trim()}
             className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {status === 'loading'
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Exporting…</>
-              : <><Download className="w-3.5 h-3.5" /> Export Data</>
+              ? <><Loader2 className="size-3.5 animate-spin" /> Exporting…</>
+              : <><Download className="size-3.5" /> Export Data</>
             }
           </button>
         </div>
         {status === 'error' && (
           <p className="text-xs text-red-400 mt-2">{errorMsg}</p>
         )}
-        <p className="text-[10px] text-muted-foreground mt-3">
+        <p className="text-xs text-muted-foreground mt-3">
           Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
         </p>
       </CardContent>

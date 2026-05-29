@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
 import { timeAgo } from "@/lib/format/date";
 import { OrgAvatar } from "@/components/OrgAvatar";
@@ -39,28 +39,40 @@ function roleLabel(role: string) {
 function RolePill({ role }: { role: string }) {
   const isAdmin = role === "org:admin";
   return (
-    <Badge variant="ghost" className={`text-[11px] font-semibold gap-1 ${
+    <Badge variant="ghost" className={`text-xs font-semibold gap-1 ${
       isAdmin ? "bg-violet-400/10 text-violet-400" : "bg-white/[0.08] text-white/40"
     }`}>
-      {isAdmin ? <Shield className="w-2.5 h-2.5" /> : <User className="w-2.5 h-2.5" />}
+      {isAdmin ? <Shield className="size-2.5" /> : <User className="size-2.5" />}
       {roleLabel(role)}
     </Badge>
   );
 }
 
-export default function TeamPageClient({ initialMembers, initialInvitations, currentUserId }: Props) {
+export default function TeamPageClient(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <TeamPageContent {...props} />
+    </Suspense>
+  );
+}
+
+function TeamPageContent(props: Props) {
+  return useTeamPageContentView(props)
+}
+
+function useTeamPageContentView({ initialMembers, initialInvitations, currentUserId }: Props) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get("invite") === "1") {
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.get("invite") === "1") {
       setShowInviteModal(true);
-      router.replace("/dashboard/team");
+      window.history.replaceState(null, "", "/dashboard/team");
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);
@@ -123,11 +135,11 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
             <h1 className="text-xl font-bold tracking-tight text-white/80">Team</h1>
             <p className="text-sm text-white/30 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
           </div>
-          <button
+          <button type="button"
             onClick={() => setShowInviteModal(true)}
             className="flex items-center gap-1.5 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md px-3.5 py-2 transition-all"
           >
-            <UserPlus className="w-4 h-4" /> Invite member
+            <UserPlus className="size-4" /> Invite member
           </button>
         </div>
 
@@ -142,11 +154,11 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
               const isSelf = member.userId === currentUserId;
               return (
                 <div key={member.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="w-9 h-9 rounded-full bg-white/[0.10] text-white/60 font-semibold text-xs shrink-0" />
+                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="size-9 rounded-full bg-white/[0.10] text-white/60 font-semibold text-xs shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-semibold text-white/80 truncate">{fullName}</span>
-                      {isSelf && <Badge variant="ghost" className="text-[10px] font-semibold text-white/30 bg-white/[0.08]">You</Badge>}
+                      {isSelf && <Badge variant="ghost" className="text-xs font-semibold text-white/30 bg-white/[0.08]">You</Badge>}
                     </div>
                     <p className="text-xs text-white/30 truncate">{member.identifier}</p>
                   </div>
@@ -155,13 +167,13 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
                     Joined {timeAgo(new Date(member.createdAt).toISOString())}
                   </span>
                   {!isSelf && (
-                    <button
+                    <button type="button"
                       onClick={() => handleRemoveMember(member.userId)}
                       disabled={removing === member.userId}
                       className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                       title="Remove member"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="size-4" />
                     </button>
                   )}
                 </div>
@@ -175,26 +187,26 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
           <div className="bg-card rounded-md border border-white/[0.08] overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07]">
               <h2 className="text-sm font-semibold text-white/70">Pending invitations</h2>
-              <Badge variant="ghost" className="text-[11px] font-semibold text-white/30 bg-white/[0.08]">{invitations.length}</Badge>
+              <Badge variant="ghost" className="text-xs font-semibold text-white/30 bg-white/[0.08]">{invitations.length}</Badge>
             </div>
             <div className="divide-y divide-white/[0.05]">
               {invitations.map(invite => (
                 <div key={invite.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="w-9 h-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
-                    <Mail className="w-4 h-4 text-white/30" />
+                  <div className="size-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
+                    <Mail className="size-4 text-white/30" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-white/60 truncate">{invite.emailAddress}</p>
                     <p className="text-xs text-white/30">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
                   </div>
                   <RolePill role={invite.role} />
-                  <button
+                  <button type="button"
                     onClick={() => handleRevokeInvite(invite.id)}
                     disabled={removing === invite.id}
                     className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                     title="Revoke invitation"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="size-4" />
                   </button>
                 </div>
               ))}
@@ -206,36 +218,37 @@ export default function TeamPageClient({ initialMembers, initialInvitations, cur
       {/* Invite modal */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowInviteModal(false)} />
+          <button type="button" aria-label="Close invite dialog" className="absolute inset-0 border-0 bg-neutral-950/60 p-0" onClick={() => setShowInviteModal(false)} />
           <div className="relative bg-card border border-white/[0.10] rounded-md shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-base font-bold text-white/80">Invite team member</h2>
-              <button onClick={() => setShowInviteModal(false)} className="p-1.5 rounded-md text-white/30 hover:text-white/70 hover:bg-white/[0.08] transition-colors">
-                <X className="w-4 h-4" />
+              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 rounded-md text-white/30 hover:text-white/70 hover:bg-white/[0.08] transition-colors">
+                <X className="size-4" />
               </button>
             </div>
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-white/50 mb-1.5">Email address</label>
+                <span className="block text-xs font-semibold text-white/50 mb-1.5">Email address</span>
                 <input
+                  aria-label="Email address"
                   type="email"
                   value={inviteEmail}
                   onChange={e => setInviteEmail(e.target.value)}
                   placeholder="colleague@company.com"
                   required
-                  autoFocus
                   className="w-full px-3 py-2 text-sm text-white/70 border border-white/[0.12] bg-white/[0.06] rounded-md focus:outline-none focus:border-white/[0.25] placeholder:text-white/20 transition"
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-white/50 mb-1.5">Role</label>
+                <span className="block text-xs font-semibold text-white/50 mb-1.5">Role</span>
                 <select
+                  aria-label="Role"
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value)}
                   className="w-full px-3 py-2 text-sm text-white/70 border border-white/[0.12] bg-white/[0.06] rounded-md focus:outline-none focus:border-white/[0.25] transition"
                 >
-                  <option value="org:member">Member — can view and respond to tickets</option>
-                  <option value="org:admin">Admin — full access including settings</option>
+                  <option value="org:member">Member , can view and respond to tickets</option>
+                  <option value="org:admin">Admin , full access including settings</option>
                 </select>
               </div>
               {inviteError && (

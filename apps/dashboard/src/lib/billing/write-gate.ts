@@ -7,14 +7,14 @@ export interface BillingWriteOrg {
   stripeStatus: string | null;
 }
 
-export class BillingWriteBlockedError extends ApiError {
+class BillingWriteBlockedError extends ApiError {
   constructor(status: string) {
     super(`Billing status ${status} blocks write actions. Update billing to continue.`, 402);
     this.name = 'BillingWriteBlockedError';
   }
 }
 
-export function isBillingWriteBlocked(status: string | null | undefined): status is 'past_due' | 'canceled' {
+function isBillingWriteBlocked(status: string | null | undefined): status is 'past_due' | 'canceled' {
   return typeof status === 'string' && BLOCKED_WRITE_STATUSES.has(status);
 }
 

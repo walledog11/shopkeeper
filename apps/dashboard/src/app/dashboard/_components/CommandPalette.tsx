@@ -26,10 +26,10 @@ interface Props {
 }
 
 export default function CommandPalette({ open, onClose }: Props) {
-  const router = useRouter();
+  const { push } = useRouter();
 
   function navigate(href: string) {
-    router.push(href);
+    push(href);
     onClose();
   }
 
@@ -46,11 +46,11 @@ export default function CommandPalette({ open, onClose }: Props) {
               onSelect={() => navigate(cmd.href)}
               className="gap-3 cursor-pointer"
             >
-              <div className="w-7 h-7 rounded-md bg-white/[0.06] flex items-center justify-center shrink-0">
-                <cmd.icon className="w-3.5 h-3.5 text-white/50" />
+              <div className="size-7 rounded-md bg-white/[0.06] flex items-center justify-center shrink-0">
+                <cmd.icon className="size-3.5 text-white/50" />
               </div>
               <span className="flex-1 text-sm font-medium">{cmd.label}</span>
-              <span className="text-[10px] text-white/30">{cmd.group}</span>
+              <span className="text-xs text-white/30">{cmd.group}</span>
             </CommandItem>
           ))}
         </CommandGroup>

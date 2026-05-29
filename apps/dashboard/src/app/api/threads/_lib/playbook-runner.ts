@@ -23,7 +23,7 @@ export async function runPlaybooks(
 
     if (matching.length === 0) return;
 
-    for (const playbook of matching) {
+    await Promise.all(matching.map(async (playbook) => {
       // Deduplicate: skip if this playbook already ran on this thread
       const run = await db.playbookRun.create({
         data: { playbookId: playbook.id, threadId },
@@ -32,7 +32,7 @@ export async function runPlaybooks(
         throw e;
       });
       if (!run) {
-        logger.info({ playbookId: playbook.id, threadId }, "[playbook-runner] Already ran — skipping");
+        logger.info({ playbookId: playbook.id, threadId }, "[playbook-runner] Already ran , skipping");
         continue;
       }
 
@@ -42,7 +42,7 @@ export async function runPlaybooks(
         where: { id: playbook.id },
         data: { runCount: { increment: 1 } },
       });
-    }
+    }));
   } catch (error) {
     logger.error({ err: error }, "[playbook-runner] Failed to run playbooks");
   }

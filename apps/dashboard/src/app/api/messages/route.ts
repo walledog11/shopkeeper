@@ -9,7 +9,7 @@ export const POST = withOrgRoute(
     context: 'Messages POST',
     errorMessage: 'Failed to process message',
     requireBillingWriteAllowed: true,
-    // 60 outbound messages per minute per org — prevents accidental or malicious message floods
+    // 60 outbound messages per minute per org , prevents accidental or malicious message floods
     rateLimit: { key: 'messages:send', limit: 60, windowSecs: 60 },
   },
   async ({ org, request }) => {

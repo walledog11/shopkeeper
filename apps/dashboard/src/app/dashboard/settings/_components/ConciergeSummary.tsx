@@ -21,12 +21,12 @@ export default function ConciergeSummary({ orgName, settings, onJump }: Props) {
     <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-amber-400/[0.08] via-white/[0.02] to-transparent px-5 py-4 mb-6 [&>p]:relative">
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-12 -right-10 h-52 w-52 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.18)_0%,transparent_65%)]"
+        className="pointer-events-none absolute -top-12 -right-10 size-52 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.18)_0%,transparent_65%)]"
       />
 
       <div className="relative flex items-center gap-2">
-        <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-amber-400 text-black">
-          <Sparkles className="h-3 w-3" />
+        <span className="inline-flex size-5 items-center justify-center rounded bg-amber-400 text-black">
+          <Sparkles className="size-3" />
         </span>
         <span className="text-[10.5px] font-bold tracking-[0.07em] text-amber-400 font-mono">
           HERE&apos;S HOW {agentName.toUpperCase()} IS SET UP

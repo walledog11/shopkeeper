@@ -162,7 +162,7 @@ export function TicketRow({
     }
   }
 
-  function handleClick(event: React.MouseEvent) {
+  function openTicketRow(event: React.MouseEvent) {
     if (swipe.current.suppressClick || swipe.current.committed) {
       swipe.current.suppressClick = false
       event.preventDefault()
@@ -189,8 +189,8 @@ export function TicketRow({
           }`}
         >
           {rowAction.kind === "spam"
-            ? <><Ban className="w-4 h-4" /> Spam</>
-            : <><RotateCcw className="w-4 h-4" /> Recover</>
+            ? <><Ban className="size-4" /> Spam</>
+            : <><RotateCcw className="size-4" /> Recover</>
           }
         </div>
       )}
@@ -213,29 +213,30 @@ export function TicketRow({
             isActive ? "bg-green-400" : "bg-transparent"
           }`} />
 
-          <button
+          <button type="button"
             onClick={event => { event.stopPropagation(); onToggleSelect(ticket.id) }}
             className={`absolute left-3 top-1/2 -translate-y-1/2 transition-opacity z-10 ${
               hasSelection || isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
             }`}
           >
             {isSelected
-              ? <CheckSquare className="w-3.5 h-3.5 text-white/70" />
-              : <Square className="w-3.5 h-3.5 text-white/20" />
+              ? <CheckSquare className="size-3.5 text-white/70" />
+              : <Square className="size-3.5 text-white/20" />
             }
           </button>
 
-          <div
+          <button
+            type="button"
             data-testid="ticket-row-open"
             data-ticket-id={ticket.id}
-            onClick={handleClick}
-            className={`flex items-start gap-3 transition-all ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
+            onClick={openTicketRow}
+            className={`flex w-full items-start gap-3 border-0 bg-transparent p-0 text-left transition-all [font-family:inherit] ${hasSelection ? "pl-5" : "group-hover:pl-5"}`}
           >
-            <div className="relative w-9 h-9 shrink-0">
-              <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+            <div className="relative size-9 shrink-0">
+              <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
                 {initials}
               </div>
-              <div className="absolute -bottom-0.5 -right-0.5 w-4.5 h-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+              <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
                 <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
               </div>
             </div>
@@ -245,26 +246,12 @@ export function TicketRow({
                 <span className="text-sm font-semibold text-white/90 truncate">{ticket.customer}</span>
                 <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
                   <span
-                    className={`text-[10px] transition-opacity ${overdue ? "text-red-400 font-semibold" : "text-white/30"} ${
+                    className={`text-xs transition-opacity ${overdue ? "text-red-400 font-semibold" : "text-white/30"} ${
                       !useSwipe && rowAction ? "group-hover:opacity-0" : ""
                     }`}
                   >
                     {ticket.time}
                   </span>
-                  {!useSwipe && rowAction && (
-                    <button
-                      onClick={event => { event.stopPropagation(); rowAction.run() }}
-                      title={rowAction.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
-                      className={`absolute inset-0 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
-                        rowAction.kind === "spam" ? "text-white/50 hover:text-red-400" : "text-white/50 hover:text-emerald-400"
-                      }`}
-                    >
-                      {rowAction.kind === "spam"
-                        ? <Ban className="w-3.5 h-3.5" />
-                        : <RotateCcw className="w-3.5 h-3.5" />
-                      }
-                    </button>
-                  )}
                 </div>
               </div>
 
@@ -277,41 +264,55 @@ export function TicketRow({
 
               <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                 {isSpam ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-400 shrink-0">
-                    <Ban className="w-2.5 h-2.5 mr-1" /> Spam
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 shrink-0">
+                    <Ban className="size-2.5 mr-1" /> Spam
                   </span>
                 ) : (
                   <>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${tagStyle.className}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${tagStyle.className}`}>
                       {tagStyle.label}
                     </span>
                     {ticket.hasPlan && !closed && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-400">
-                        <Sparkles className="w-2.5 h-2.5 mr-1"/> Plan ready
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400">
+                        <Sparkles className="size-2.5 mr-1"/> Plan ready
                       </span>
                     )}
                     {ticket.filterStatus === "questionable" && !closed && (
                       <span
-                        title={`Possibly not a genuine customer message${ticket.filterReason ? ` — ${ticket.filterReason}` : ""}`}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400"
+                        title={`Possibly not a genuine customer message${ticket.filterReason ? ` , ${ticket.filterReason}` : ""}`}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400"
                       >
-                        <Flag className="w-2.5 h-2.5 mr-1" /> Unverified sender
+                        <Flag className="size-2.5 mr-1" /> Unverified sender
                       </span>
                     )}
                     {closed && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-400/10 text-green-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-400/10 text-green-400">
+                        <span className="size-1.5 rounded-full bg-green-400" />
                         Closed
                       </span>
                     )}
                     {!sla && isSearchMode && ticket.status && !closed && (
-                      <span className="text-[10px] text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
+                      <span className="text-xs text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
                     )}
                   </>
                 )}
               </div>
             </div>
-          </div>
+          </button>
+          {!useSwipe && rowAction && (
+            <button type="button"
+              onClick={event => { event.stopPropagation(); rowAction.run() }}
+              title={rowAction.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
+              className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
+                rowAction.kind === "spam" ? "text-white/50 hover:text-red-400" : "text-white/50 hover:text-emerald-400"
+              }`}
+            >
+              {rowAction.kind === "spam"
+                ? <Ban className="size-3.5" />
+                : <RotateCcw className="size-3.5" />
+              }
+            </button>
+          )}
 
         </div>
       </div>

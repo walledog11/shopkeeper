@@ -140,8 +140,9 @@ export function classifyHomePlan(
 }
 
 function findActionStep(plan: AgentPlan): PlanStep | null {
+  const stepsByTool = new Map(plan.steps.map((step) => [step.tool, step]))
   for (const tool of ACTION_TOOL_PRIORITY) {
-    const found = plan.steps.find(s => s.tool === tool)
+    const found = stepsByTool.get(tool)
     if (found) return found
   }
   return null
@@ -149,11 +150,11 @@ function findActionStep(plan: AgentPlan): PlanStep | null {
 
 function trim(text: string, max = 110): string {
   const cleaned = text.replace(/^"([\s\S]*)"$/, "$1").trim()
-  return cleaned.length > max ? `${cleaned.slice(0, max - 3)}...` : cleaned
+  return cleaned.length > max ? `${cleaned.slice(0, max - 3)}…` : cleaned
 }
 
 function warningLead(warning: string): string {
-  const head = warning.split(/\s[-–—]\s/)[0] ?? warning
+  const head = warning.split(/\s[-–,]\s/)[0] ?? warning
   return head.replace(/[.?!]+$/, "").trim()
 }
 
@@ -179,15 +180,18 @@ function summarizeActionChain(plan: AgentPlan, excludeStepId?: string): string {
 }
 
 function buildProposal(plan: AgentPlan | null, headlineStep?: PlanStep | null): string {
-  if (!plan) return "No plan generated — open ticket to draft reply"
-  const warnings = (plan.warnings ?? []).slice(0, 2).map(warningLead).filter(Boolean)
+  if (!plan) return "No plan generated , open ticket to draft reply"
+  const warnings = (plan.warnings ?? []).slice(0, 2).flatMap((warning) => {
+    const lead = warningLead(warning)
+    return lead ? [lead] : []
+  })
   const action = summarizeActionChain(plan, headlineStep?.id)
   if (warnings.length === 0 && !action) {
-    return "No plan generated — open ticket to draft reply"
+    return "No plan generated , open ticket to draft reply"
   }
   if (warnings.length === 0) return action
   const left = warnings.join(". ")
-  return action ? `${left} — ${action}` : left
+  return action ? `${left} , ${action}` : left
 }
 
 function orderRefFromPlan(plan: AgentPlan): string | null {

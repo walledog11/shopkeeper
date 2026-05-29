@@ -37,7 +37,7 @@ export const GET = withOrgRoute(
     if (customerId) {
       const res = await fetch(
         `https://${shop}/admin/api/2026-04/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
-        { headers: { 'X-Shopify-Access-Token': token } }
+        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -48,7 +48,7 @@ export const GET = withOrgRoute(
     } else {
       const res = await fetch(
         `https://${shop}/admin/api/2026-04/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
-        { headers: { 'X-Shopify-Access-Token': token } }
+        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
@@ -68,7 +68,7 @@ export const GET = withOrgRoute(
     if (orderLimit > 0) {
       const ordersRes = await fetch(
         `https://${shop}/admin/api/2026-04/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
-        { headers: { 'X-Shopify-Access-Token': token } }
+        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!ordersRes.ok) {
         const errData = await ordersRes.json().catch(() => ({}));
@@ -126,6 +126,7 @@ export const PATCH = withOrgRoute(
     }
 
     const res = await fetch(`https://${shop}/admin/api/2026-04/customers/${customerId}.json`, {
+      cache: 'no-store',
       method: 'PUT',
       headers: {
         'X-Shopify-Access-Token': token,
@@ -232,7 +233,7 @@ async function addProductImagesToOrders(orders: ShopifyOrder[], shop: string, to
   try {
     const productsRes = await fetch(
       `https://${shop}/admin/api/2026-04/products.json?ids=${productIds.join(',')}&fields=id,images`,
-      { headers: { 'X-Shopify-Access-Token': token } }
+      { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
     );
 
     if (!productsRes.ok) return orders;

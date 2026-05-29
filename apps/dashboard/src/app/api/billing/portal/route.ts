@@ -10,7 +10,7 @@ export async function POST() {
   try {
     const org = await getOrCreateOrg()
 
-    // 5 portal sessions per hour per org — each call creates a Stripe session
+    // 5 portal sessions per hour per org , each call creates a Stripe session
     const rl = await rateLimit(`billing:portal:${org.id}`, 5, 3600)
     if (!rl.success) return tooManyRequests(rl.reset)
 

@@ -16,7 +16,7 @@ let e2eRedis: IORedis | null = null;
 /**
  * Fixed-window rate limiter backed by Redis INCR.
  *
- * Fails **closed** in production if Redis is unavailable — prevents rate-limit bypass.
+ * Fails **closed** in production if Redis is unavailable , prevents rate-limit bypass.
  * Fails **open** in development so a missing Redis instance doesn't block local work.
  *
  * @param key        Unique key scoped to the caller and action, e.g. `ai-draft:${orgId}`
@@ -47,7 +47,7 @@ export async function rateLimit(
     }
     return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
   } catch {
-    // Redis unavailable — fail closed in production to prevent rate-limit bypass
+    // Redis unavailable , fail closed in production to prevent rate-limit bypass
     if (process.env.NODE_ENV !== 'development') {
       return { success: false, remaining: 0, reset };
     }

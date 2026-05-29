@@ -9,9 +9,14 @@ import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
 import { timingSafeIncludes } from '@/lib/auth-utils';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 
 export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Finish Shopify connection');
+}
+
+export async function POST(request: Request) {
   const appUrl = process.env.APP_URL;
   const clientId = process.env.SHOPIFY_CLIENT_ID;
   const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
@@ -43,13 +48,13 @@ export async function GET(request: Request) {
   cookieStore.delete('shopify_oauth_return');
 
   if (!savedState || !state || !timingSafeIncludes([savedState], state)) {
-    logger.error('[Shopify OAuth] State mismatch — possible CSRF attempt');
+    logger.error('[Shopify OAuth] State mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_state_mismatch`);
   }
 
   const { userId: currentUserId } = await auth();
   if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[Shopify OAuth] User session mismatch — possible CSRF attempt');
+    logger.error({ savedUserId, currentUserId }, '[Shopify OAuth] User session mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_state_mismatch`);
   }
 
@@ -59,7 +64,7 @@ export async function GET(request: Request) {
 
   const shopDomain = normalizeShopifyShopDomain(shop);
   if (!shopDomain || !savedShop || shopDomain !== savedShop) {
-    logger.error({ shop, savedShop }, '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt');
+    logger.error({ shop, savedShop }, '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
   }
 
@@ -87,6 +92,7 @@ export async function GET(request: Request) {
   // ---------------------------------------------------------------
   try {
     const tokenRes = await fetch(`https://${shopDomain}/admin/oauth/access_token`, {
+      cache: 'no-store',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
@@ -99,10 +105,16 @@ export async function GET(request: Request) {
     }
     const accessToken: string = tokenData.access_token;
 
+    if (!clerkOrgId) {
+      logger.error('[Shopify OAuth] Missing org cookie , session likely interrupted');
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
+    }
+
     // ---------------------------------------------------------------
     // Step 4: Fetch shop info for display name
     // ---------------------------------------------------------------
     const shopRes = await fetch(`https://${shopDomain}/admin/api/2026-04/shop.json`, {
+      cache: 'no-store',
       headers: { 'X-Shopify-Access-Token': accessToken },
     });
     const shopData = await shopRes.json();
@@ -114,10 +126,6 @@ export async function GET(request: Request) {
     // fromEmail         = shop name (displayed in UI)
     // accessToken       = Shopify Admin API token (permanent)
     // ---------------------------------------------------------------
-    if (!clerkOrgId) {
-      logger.error('[Shopify OAuth] Missing org cookie — session likely interrupted');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
-    }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });
     if (!org) {
       logger.error({ clerkOrgId }, '[Shopify OAuth] Org not found');
@@ -147,7 +155,7 @@ export async function GET(request: Request) {
     try {
       gatewayUrl = getGatewayBaseUrl();
     } catch (error) {
-      logger.warn({ err: error, shop: shopDomain }, '[Shopify OAuth] Gateway URL invalid — skipping webhook registration');
+      logger.warn({ err: error, shop: shopDomain }, '[Shopify OAuth] Gateway URL invalid , skipping webhook registration');
     }
 
     if (gatewayUrl) {
@@ -155,6 +163,7 @@ export async function GET(request: Request) {
       await Promise.allSettled(
         webhookTopics.map((topic) =>
           fetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
+            cache: 'no-store',
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
             body: JSON.stringify({ webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } }),
@@ -175,7 +184,7 @@ export async function GET(request: Request) {
         )
       );
     } else {
-      logger.warn({ shop: shopDomain }, '[Shopify OAuth] Gateway URL not set — skipping webhook registration');
+      logger.warn({ shop: shopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');
     }
 
     const successUrl = returnTo

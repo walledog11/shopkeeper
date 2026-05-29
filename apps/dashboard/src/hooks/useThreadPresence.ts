@@ -1,31 +1,40 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
+import useSWR from "swr"
+
+interface PresenceResponse {
+  count: number
+}
+
+async function fetchPresence(url: string): Promise<PresenceResponse> {
+  const response = await fetch(url)
+  return response.ok ? response.json() : { count: 0 }
+}
+
+function sendPresence(url: string, method: "PUT" | "DELETE") {
+  return fetch(url, { method }).catch(() => {})
+}
 
 export function useThreadPresence(ticketId: string) {
-  const [presenceCount, setPresenceCount] = useState(0)
+  const presenceUrl = `/api/threads/${ticketId}/presence`
+  const { data } = useSWR<PresenceResponse>(presenceUrl, fetchPresence, {
+    refreshInterval: 15000,
+    revalidateOnFocus: false,
+  })
 
   useEffect(() => {
-    const presenceUrl = `/api/threads/${ticketId}/presence`
-    const heartbeat = () => fetch(presenceUrl, { method: "PUT" }).catch(() => {})
-    const poll = () =>
-      fetch(presenceUrl)
-        .then(response => response.ok ? response.json() : { count: 0 })
-        .then((data: { count: number }) => setPresenceCount(data.count))
-        .catch(() => {})
+    const heartbeat = () => sendPresence(presenceUrl, "PUT")
 
-    heartbeat()
-    poll()
+    void heartbeat()
 
     const heartbeatTimer = setInterval(heartbeat, 15000)
-    const pollTimer = setInterval(poll, 15000)
 
     return () => {
       clearInterval(heartbeatTimer)
-      clearInterval(pollTimer)
-      fetch(presenceUrl, { method: "DELETE" }).catch(() => {})
+      void sendPresence(presenceUrl, "DELETE")
     }
-  }, [ticketId])
+  }, [presenceUrl])
 
-  return { presenceCount }
+  return { presenceCount: data?.count ?? 0 }
 }

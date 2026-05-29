@@ -101,7 +101,7 @@ function currentPlanForThread(thread: Thread): AgentPlan | null {
 }
 
 function initialsOf(name: string): string {
-  return name.split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?'
+  return name.split(/\s+/).flatMap(p => p[0] ? [p[0]] : []).slice(0, 2).join('').toUpperCase() || '?'
 }
 
 interface Options {
@@ -136,10 +136,10 @@ export function useHomeData({ initialOpenThreads }: Options) {
   const isLoading = loadingOpen || loadingClosed
   const openCount = openThreads.length
 
-  // Single combined list — re-used by every cross-status derivation below.
+  // Single combined list , re-used by every cross-status derivation below.
   const allThreads = useMemo(() => openThreads.concat(closedThreads), [openThreads, closedThreads])
 
-  // Per-customer thread counts — drives both VIP queue + repeat-customer panel.
+  // Per-customer thread counts , drives both VIP queue + repeat-customer panel.
   const customerCounts = useMemo(() => {
     const m = new Map<string, number>()
     for (const t of allThreads) m.set(t.customerId, (m.get(t.customerId) ?? 0) + 1)
@@ -310,7 +310,7 @@ export function useHomeData({ initialOpenThreads }: Options) {
     if (!ordersData?.orders) return []
     return ordersData.orders.slice(0, 5).map(o => {
       const li = o.line_items[0]
-      const summary = li ? `${li.title}${li.variant_title ? ` — ${li.variant_title}` : ''}` : ''
+      const summary = li ? `${li.title}${li.variant_title ? ` , ${li.variant_title}` : ''}` : ''
       const status: 'ship' | 'refund' = o.financial_status === 'refunded' || o.financial_status === 'partially_refunded' ? 'refund' : 'ship'
       return {
         id: o.id,

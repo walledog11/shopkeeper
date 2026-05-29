@@ -25,7 +25,7 @@ export function isOutboundRecordingEnabled(env: NodeJS.ProcessEnv = process.env)
   return isOutboundTestRuntime(env) && env.E2E_OUTBOUND_MODE === 'record';
 }
 
-export function getOutboundRecordPath(env: NodeJS.ProcessEnv = process.env): string {
+function getOutboundRecordPath(env: NodeJS.ProcessEnv = process.env): string {
   return env.E2E_OUTBOUND_RECORD_PATH || `${process.cwd()}/test-results/e2e-outbound.jsonl`;
 }
 

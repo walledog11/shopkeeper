@@ -38,7 +38,7 @@ export const troubleshooting: Category = {
         },
         {
           tips: [
-            "Tickets arrive in real-time — if you're connected and the email was forwarded correctly, it should appear within a few seconds.",
+            "Tickets arrive in real-time , if you're connected and the email was forwarded correctly, it should appear within a few seconds.",
             "Spam filters in Gmail can sometimes block forwarding. Check your spam folder.",
           ],
         },
@@ -60,9 +60,9 @@ export const troubleshooting: Category = {
         {
           heading: "DMs are connected but not appearing",
           steps: [
-            "Instagram only forwards new DMs after the connection is made — historical messages will not appear.",
+            "Instagram only forwards new DMs after the connection is made , historical messages will not appear.",
             "Make sure the customer messaged your connected Instagram account directly (not a comment).",
-            "Try reconnecting the integration — the token may have expired.",
+            "Try reconnecting the integration , the token may have expired.",
           ],
         },
       ],
@@ -76,7 +76,7 @@ export const troubleshooting: Category = {
           steps: [
             "Confirm forwarding is set up correctly in Gmail Settings → Forwarding and POP/IMAP.",
             "Check that the forwarding address matches your Clerk inbound address exactly.",
-            "Make sure Gmail hasn't paused forwarding — this can happen after a password change.",
+            "Make sure Gmail hasn't paused forwarding , this can happen after a password change.",
           ],
         },
         {

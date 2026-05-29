@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { CheckCircle2, AlertCircle, AlertTriangle, X, Zap } from "lucide-react"
@@ -15,13 +15,22 @@ import type { Integration } from "@/types"
 // ── Page ───────────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPageClient() {
+  return (
+    <Suspense fallback={null}>
+      <IntegrationsPageContent />
+    </Suspense>
+  )
+}
+
+function IntegrationsPageContent() {
   const searchParams = useSearchParams()
   const { data: integrations = [], mutate } = useSWR<Integration[]>('/api/integrations', fetcher)
   const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   useEffect(() => {
-    const connected = searchParams.get('connected')
-    const error = searchParams.get('error')
+    const params = new URLSearchParams(searchParams.toString())
+    const connected = params.get('connected')
+    const error = params.get('error')
     if (connected === 'instagram') setBanner({ type: 'success', message: 'Instagram connected successfully.' })
     else if (connected === 'shopify') setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
     else if (connected === 'gmail') setBanner({ type: 'success', message: 'Gmail connected successfully.' })
@@ -82,7 +91,7 @@ export default function IntegrationsPageClient() {
         {/* Stat strip */}
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5">
-            <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest mb-1">Connected</p>
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-1">Connected</p>
             <div className="flex items-baseline gap-1.5">
               <span className="text-2xl font-bold text-white/80">{connectedCount}</span>
               <span className="text-sm text-white/30">of {activePlatforms.length}</span>
@@ -95,7 +104,7 @@ export default function IntegrationsPageClient() {
               : "border-white/[0.07] bg-white/[0.02]"
           )}>
             <p className={cn(
-              "text-[11px] font-semibold uppercase tracking-widest mb-1",
+              "text-xs font-semibold uppercase tracking-widest mb-1",
               alertCount > 0 ? "text-amber-400/70" : "text-white/30"
             )}>
               {alertCount > 0 ? 'Needs attention' : 'Health'}
@@ -103,12 +112,12 @@ export default function IntegrationsPageClient() {
             <div className="flex items-center gap-2">
               {alertCount > 0 ? (
                 <>
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                  <AlertTriangle className="size-4 text-amber-400" />
                   <span className="text-sm font-semibold text-amber-400">{alertCount} alert{alertCount > 1 ? 's' : ''}</span>
                 </>
               ) : (
                 <div className="flex items-center gap-2">
-                  <Zap className="w-4 h-4 text-emerald-400" />
+                  <Zap className="size-4 text-emerald-400" />
                   <span className="text-sm font-semibold text-emerald-400">All good</span>
                 </div>
               )}
@@ -125,15 +134,15 @@ export default function IntegrationsPageClient() {
               : 'bg-red-400/[0.06] border-red-400/[0.15] text-red-400'
           )}>
             {banner.type === 'success'
-              ? <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
-              : <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              ? <CheckCircle2 className="size-4 mt-0.5 shrink-0" />
+              : <AlertCircle className="size-4 mt-0.5 shrink-0" />
             }
             <span>{banner.message}</span>
-            <button
+            <button type="button"
               onClick={() => setBanner(null)}
               className="ml-auto text-current opacity-40 hover:opacity-80 transition-opacity shrink-0"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="size-3.5" />
             </button>
           </div>
         )}
@@ -141,10 +150,10 @@ export default function IntegrationsPageClient() {
         {/* Data sources */}
         <div className="space-y-3">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">Data sources</p>
-            <p className="text-[11px] italic text-white/25">What Concierge reads from to answer questions and take action.</p>
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Data sources</p>
+            <p className="text-xs italic text-white/25">What Concierge reads from to answer questions and take action.</p>
           </div>
-          {PLATFORM_CONFIG.filter(p => p.id === 'shopify').map(def => (
+          {PLATFORM_CONFIG.flatMap(def => def.id === 'shopify' ? [(
             <IntegrationCard
               key={def.id}
               config={def}
@@ -153,16 +162,16 @@ export default function IntegrationsPageClient() {
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
             />
-          ))}
+          )] : [])}
         </div>
 
         {/* Channels */}
         <div className="space-y-3">
           <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-[11px] font-semibold text-white/30 uppercase tracking-widest">Channels</p>
-            <p className="text-[11px] italic text-white/25">Where Concierge talks to your customers and team.</p>
+            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Channels</p>
+            <p className="text-xs italic text-white/25">Where Concierge talks to your customers and team.</p>
           </div>
-          {PLATFORM_CONFIG.filter(p => ['email', 'instagram'].includes(p.id)).map(def => (
+          {PLATFORM_CONFIG.flatMap(def => def.id === 'email' || def.id === 'instagram' ? [(
             <IntegrationCard
               key={def.id}
               config={def}
@@ -171,9 +180,9 @@ export default function IntegrationsPageClient() {
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
             />
-          ))}
+          )] : [])}
           <TelegramCard />
-          {PLATFORM_CONFIG.filter(p => p.id === 'tiktok').map(def => (
+          {PLATFORM_CONFIG.flatMap(def => def.id === 'tiktok' ? [(
             <IntegrationCard
               key={def.id}
               config={def}
@@ -182,7 +191,7 @@ export default function IntegrationsPageClient() {
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
             />
-          ))}
+          )] : [])}
         </div>
 
       </div>

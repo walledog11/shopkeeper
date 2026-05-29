@@ -29,13 +29,13 @@ export default function TodayOrders({ orders, hasShopify }: Props) {
   if (!hasShopify) {
     return (
       <div className="flex flex-col gap-2.5">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40">Today&apos;s orders</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-white/40">Today&apos;s orders</p>
         <Link
           href="/dashboard/integrations"
           className="px-3 py-4 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors text-center"
         >
           <p className="text-xs text-white/55">Connect Shopify to see today&apos;s orders here.</p>
-          <p className="text-[11px] font-semibold text-green-400 mt-2">Connect Shopify →</p>
+          <p className="text-xs font-semibold text-green-400 mt-2">Connect Shopify →</p>
         </Link>
       </div>
     )
@@ -44,9 +44,9 @@ export default function TodayOrders({ orders, hasShopify }: Props) {
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40">Today&apos;s orders</p>
-        <Link href="/dashboard/orders" className="text-[10px] text-white/35 hover:text-white/70 inline-flex items-center gap-0.5">
-          View all <ArrowRight className="w-2.5 h-2.5" />
+        <p className="text-xs uppercase tracking-wider font-semibold text-white/40">Today&apos;s orders</p>
+        <Link href="/dashboard/orders" className="text-xs text-white/35 hover:text-white/70 inline-flex items-center gap-0.5">
+          View all <ArrowRight className="size-2.5" />
         </Link>
       </div>
       <div className="rounded-md bg-card border border-border overflow-hidden">
@@ -70,8 +70,8 @@ export default function TodayOrders({ orders, hasShopify }: Props) {
                     <span className="text-white/40 tabular-nums mr-1">{o.name}</span>
                     <span className="font-semibold">{o.customerName}</span>
                   </p>
-                  <p className="text-[10px] text-white/35 truncate">
-                    {o.status === 'refund' && o.amount ? `$${o.amount} · awaiting your call` : o.summary || '—'}
+                  <p className="text-xs text-white/35 truncate">
+                    {o.status === 'refund' && o.amount ? `$${o.amount} · awaiting your call` : o.summary || ','}
                   </p>
                 </div>
               </Link>

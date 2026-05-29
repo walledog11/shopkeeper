@@ -45,9 +45,10 @@ export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Playbooks PATCH', errorMessage: 'Failed to update playbook' },
   async ({ org, request, params }) => {
     const { id } = params;
-    const { name, enabled, trigger, actions } = await request.json();
-
-    const existing = await db.playbook.findUnique({ where: { id }, select: { organizationId: true } });
+    const [{ name, enabled, trigger, actions }, existing] = await Promise.all([
+      request.json(),
+      db.playbook.findUnique({ where: { id }, select: { organizationId: true } }),
+    ]);
     assertEntityInOrg(existing, org.id, 'Playbook not found');
 
     const updated = await db.playbook.update({

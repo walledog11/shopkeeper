@@ -13,7 +13,7 @@ import { getRedis } from "@/lib/server/redis";
 
 // Backstop on per-org daily LLM spend. Tracked in Redis as integer nano-dollars.
 // Concurrent calls can briefly overshoot the cap by at most ~one call's worth
-// per parallel run — acceptable for a backstop whose job is to stop runaway
+// per parallel run , acceptable for a backstop whose job is to stop runaway
 // loops, not enforce a billing meter to the cent.
 
 function capNanoUsd(settings: OrgSettings): number {
@@ -53,7 +53,7 @@ export async function recordSpend(
     const key = spendKey(orgId);
     const next = await redis.incrby(key, delta);
     if (next === delta) {
-      // First increment of the day — set TTL so the key doesn't outlive the window.
+      // First increment of the day , set TTL so the key doesn't outlive the window.
       await redis.expire(key, SPEND_KEY_TTL_SECONDS);
     }
   } catch (err) {

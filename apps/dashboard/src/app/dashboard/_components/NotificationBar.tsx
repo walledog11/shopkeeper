@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { X, Info, AlertTriangle, Sparkles } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react";
 
 export interface Notification {
   id: string;
@@ -46,23 +46,15 @@ function saveDismissed(ids: Set<string>) {
 }
 
 export default function NotificationBar({ notifications }: NotificationBarProps) {
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => loadDismissed());
   const [current, setCurrent] = useState(0);
   const directionRef = useRef(1);
   const barRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setDismissedIds(loadDismissed());
-  }, []);
 
   const visibleNotifications = notifications.filter(n => !dismissedIds.has(n.id));
   const count = visibleNotifications.length;
 
   const safeIndex = Math.min(current, Math.max(0, count - 1));
-
-  useEffect(() => {
-    if (safeIndex !== current) setCurrent(safeIndex);
-  }, [current, safeIndex]);
 
   useEffect(() => {
     if (count <= 1) return;
@@ -101,9 +93,10 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
   }, [n]);
 
   return (
+    <LazyMotion features={domAnimation}>
     <AnimatePresence initial={false}>
       {n && (
-        <motion.div
+        <m.div
           ref={barRef}
           data-dashboard-notification-bar
           key="bar"
@@ -115,7 +108,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
         >
           <div className="py-2 md:py-3 flex items-center gap-2 md:gap-2.5">
             <AnimatePresence mode="wait" custom={directionRef.current}>
-              <motion.div
+              <m.div
                 key={n.id}
                 custom={directionRef.current}
                 variants={{
@@ -129,7 +122,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="flex items-center gap-2.5 transition-colors"
               >
-                <Icon className={`w-4 h-4 shrink-0 ${styles.icon}`} />
+                <Icon className={`size-4 shrink-0 ${styles.icon}`} />
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
                   {n.message && <span className="font-normal text-white/40 hidden sm:inline whitespace-nowrap">{n.message}</span>}
@@ -144,7 +137,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                           {n.action.label}
                         </Link>
                       ) : (
-                        <button
+                        <button type="button"
                           onClick={n.action.onClick}
                           className={`font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity whitespace-nowrap ${styles.action}`}
                         >
@@ -154,21 +147,22 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                     </>
                   )}
                 </div>
-              </motion.div>
+              </m.div>
             </AnimatePresence>
           </div>
 
-          <motion.button
+          <m.button
             onClick={() => dismiss(n.id)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
             className="absolute right-3 p-1.5 rounded hover:bg-black/10 transition-colors"
             aria-label="Dismiss"
           >
-            <X className="w-4 h-4" />
-          </motion.button>
-        </motion.div>
+            <X className="size-4" />
+          </m.button>
+        </m.div>
       )}
     </AnimatePresence>
+    </LazyMotion>
   );
 }

@@ -35,7 +35,7 @@ const TEMPLATES: Array<{ name: string; trigger: PlaybookTrigger; actions: Playbo
     name: 'WISMO Auto-Reply',
     trigger: { type: 'tag_applied', tag: 'Shipping' },
     actions: [
-      { type: 'send_reply', message: "Hi! I can see you have a question about your shipment. Let me look into that for you right away — could you confirm your order number so I can give you the most up-to-date info?" },
+      { type: 'send_reply', message: "Hi! I can see you have a question about your shipment. Let me look into that for you right away , could you confirm your order number so I can give you the most up-to-date info?" },
     ],
   },
   {
@@ -92,14 +92,15 @@ function emptyAction(): PlaybookAction {
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button
+    <button type="button"
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none ${checked ? 'bg-green-500' : 'bg-white/[0.12]'}`}
       role="switch"
       aria-checked={checked}
+      aria-label={checked ? "Disable playbook" : "Enable playbook"}
     >
       <span
-        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
+        className={`pointer-events-none inline-block size-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
       />
     </button>
   )
@@ -113,7 +114,11 @@ interface DrawerProps {
   onSave: () => void
 }
 
-function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
+function PlaybookDrawer(props: DrawerProps) {
+  return usePlaybookDrawerView(props)
+}
+
+function usePlaybookDrawerView({ initial, onClose, onSave }: DrawerProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [trigger, setTrigger] = useState<PlaybookTrigger>(initial?.trigger ?? emptyTrigger())
   const [actions, setActions] = useState<PlaybookAction[]>(initial?.actions ?? [emptyAction()])
@@ -170,23 +175,25 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
 
   return (
     <>
-      <div
-        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-300 ease-in-out ${visible ? 'opacity-100' : 'opacity-0'}`}
+      <button
+        type="button"
+        aria-label="Close playbook editor"
+        className={`fixed inset-0 z-40 bg-neutral-950/40 transition-opacity duration-300 ease-in-out ${visible ? 'opacity-100' : 'opacity-0'}`}
         onClick={handleClose}
       />
       <div className={`fixed right-0 top-0 bottom-0 z-50 w-full max-w-md bg-[#0f0f0f] border-l border-white/[0.1] flex flex-col shadow-2xl transition-transform duration-300 ease-in-out ${visible ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.08]">
           <h2 className="text-sm font-semibold text-white">{isEditing ? 'Edit Playbook' : 'New Playbook'}</h2>
-          <button onClick={handleClose} className="text-white/40 hover:text-white/70 transition-colors">
-            <X className="w-4 h-4" />
+          <button type="button" onClick={handleClose} className="text-white/40 hover:text-white/70 transition-colors">
+            <X className="size-4" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           <div className="space-y-1.5">
-            <label className={labelCls}>Name</label>
+            <span className={labelCls}>Name</span>
             <input
-              autoFocus
+              aria-label="Playbook name"
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. WISMO Auto-Reply"
@@ -195,10 +202,11 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
           </div>
 
           <div className="space-y-2">
-            <label className={labelCls}>Trigger</label>
+            <span className={labelCls}>Trigger</span>
             <p className="text-xs text-white/30">When does this run?</p>
             <div className="relative">
               <select
+                aria-label="Playbook trigger"
                 value={trigger.type}
                 onChange={e => updateTriggerType(e.target.value as PlaybookTriggerType)}
                 className={selectCls}
@@ -207,12 +215,13 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
                   <option key={t} value={t}>{TRIGGER_LABELS[t]}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/30" />
             </div>
 
             {trigger.type === 'tag_applied' && (
               <div className="relative">
                 <select
+                  aria-label="Trigger tag"
                   value={trigger.tag ?? ''}
                   onChange={e => setTrigger({ type: 'tag_applied', tag: e.target.value })}
                   className={selectCls}
@@ -221,21 +230,22 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/30" />
               </div>
             )}
           </div>
 
           <div className="space-y-2">
-            <label className={labelCls}>Actions</label>
+            <span className={labelCls}>Actions</span>
             <p className="text-xs text-white/30">What happens when the trigger fires?</p>
 
             <div className="space-y-2">
               {actions.map((action, i) => (
-                <div key={i} className="rounded-lg border border-white/[0.1] bg-white/[0.03] p-3 space-y-2">
+                <div key={`${action.type}-${action.message ?? action.note ?? action.tag ?? i + 1}`} className="rounded-lg border border-white/[0.1] bg-white/[0.03] p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <div className="relative flex-1">
                       <select
+                        aria-label={`Action ${i + 1} type`}
                         value={action.type}
                         onChange={e => changeActionType(i, e.target.value as PlaybookActionType)}
                         className={selectCls}
@@ -244,21 +254,22 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
                           <option key={t} value={t}>{ACTION_LABELS[t]}</option>
                         ))}
                       </select>
-                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/30" />
                     </div>
-                    <button
+                    <button type="button"
                       onClick={() => removeAction(i)}
                       className="text-white/30 hover:text-white/60 transition-colors shrink-0"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="size-4" />
                     </button>
                   </div>
 
                   {action.type === 'send_reply' && (
                     <textarea
+                      aria-label={`Action ${i + 1} reply message`}
                       value={action.message ?? ''}
                       onChange={e => updateAction(i, { message: e.target.value })}
-                      placeholder="Type the reply message..."
+                      placeholder="Type the reply message…"
                       rows={3}
                       className={`${inputCls} resize-none`}
                     />
@@ -267,22 +278,24 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
                   {action.type === 'apply_tag' && (
                     <div className="relative">
                       <select
+                        aria-label={`Action ${i + 1} tag`}
                         value={action.tag ?? ''}
                         onChange={e => updateAction(i, { tag: e.target.value })}
                         className={selectCls}
                       >
-                        <option value="">Select tag...</option>
+                        <option value="">Select tag…</option>
                         {TICKET_TAGS.map(t => <option key={t} value={t}>{t}</option>)}
                       </select>
-                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30" />
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-white/30" />
                     </div>
                   )}
 
                   {action.type === 'add_note' && (
                     <textarea
+                      aria-label={`Action ${i + 1} internal note`}
                       value={action.note ?? ''}
                       onChange={e => updateAction(i, { note: e.target.value })}
-                      placeholder="Type the internal note..."
+                      placeholder="Type the internal note…"
                       rows={2}
                       className={`${inputCls} resize-none`}
                     />
@@ -291,29 +304,29 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
               ))}
             </div>
 
-            <button
+            <button type="button"
               onClick={() => setActions(prev => [...prev, emptyAction()])}
               className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors"
             >
-              <Plus className="w-3.5 h-3.5" />
+              <Plus className="size-3.5" />
               Add action
             </button>
           </div>
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/[0.08]">
-          <button
+          <button type="button"
             onClick={handleClose}
             className="text-xs text-white/40 hover:text-white/70 px-3 py-1.5 transition-colors"
           >
             Cancel
           </button>
-          <button
+          <button type="button"
             onClick={handleSave}
             disabled={!name.trim() || saving}
             className="flex items-center gap-1.5 text-xs font-semibold text-black bg-white hover:bg-white/90 disabled:opacity-40 px-4 py-1.5 rounded-md transition-colors"
           >
-            {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+            {saving && <Loader2 className="size-3 animate-spin" />}
             {isEditing ? 'Save changes' : 'Create playbook'}
           </button>
         </div>
@@ -326,18 +339,18 @@ function PlaybookDrawer({ initial, onClose, onSave }: DrawerProps) {
 
 function TemplatesModal({ onSelect, onClose }: { onSelect: (t: typeof TEMPLATES[number]) => void; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button type="button" aria-label="Close templates dialog" className="absolute inset-0 border-0 bg-neutral-950/60 p-0" onClick={onClose} />
       <div className="relative bg-[#0f0f0f] border border-white/[0.1] rounded-xl p-6 w-full max-w-lg shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-white">Start from a template</h2>
-          <button onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors">
-            <X className="w-4 h-4" />
+          <button type="button" onClick={onClose} className="text-white/40 hover:text-white/70 transition-colors">
+            <X className="size-4" />
           </button>
         </div>
         <div className="space-y-2">
           {TEMPLATES.map(t => (
-            <button
+            <button type="button"
               key={t.name}
               onClick={() => { onSelect(t); onClose() }}
               className="w-full text-left rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.06] p-4 transition-colors group"
@@ -358,18 +371,18 @@ function TemplatesModal({ onSelect, onClose }: { onSelect: (t: typeof TEMPLATES[
 function EmptyState({ onUseTemplate }: { onUseTemplate: (t: typeof TEMPLATES[number]) => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-4">
-        <Zap className="w-5 h-5 text-white/30" />
+      <div className="size-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-4">
+        <Zap className="size-5 text-white/30" />
       </div>
       <p className="text-sm font-medium text-white/60 mb-1">No playbooks yet</p>
       <p className="text-xs text-white/30 mb-8 max-w-xs">
-        Playbooks automate repetitive actions — auto-reply to common questions, close resolved tickets, and more.
+        Playbooks automate repetitive actions , auto-reply to common questions, close resolved tickets, and more.
       </p>
 
       <p className="text-xs font-semibold text-white/30 uppercase tracking-wider mb-3">Start from a template</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl">
         {TEMPLATES.map(t => (
-          <button
+          <button type="button"
             key={t.name}
             onClick={() => onUseTemplate(t)}
             className="text-left rounded-lg border border-white/[0.1] bg-white/[0.03] hover:bg-white/[0.06] p-4 transition-colors group"
@@ -403,7 +416,7 @@ function PlaybookCard({
   return (
     <div className={`flex items-center gap-4 rounded-lg border p-4 group transition-colors ${playbook.enabled ? 'border-white/[0.08] bg-white/[0.025]' : 'border-white/[0.05] bg-transparent'}`}>
       {/* Play icon */}
-      <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${playbook.enabled ? 'bg-orange-500/20' : 'bg-white/[0.05]'}`}>
+      <div className={`size-9 rounded-full flex items-center justify-center shrink-0 ${playbook.enabled ? 'bg-orange-500/20' : 'bg-white/[0.05]'}`}>
         <div className={`ml-0.5 border-y-[5px] border-y-transparent border-l-[8px] ${playbook.enabled ? 'border-l-orange-400' : 'border-l-white/20'}`} />
       </div>
 
@@ -417,7 +430,7 @@ function PlaybookCard({
           </span>
           <span className="text-white/25 text-xs">→</span>
           {actions.map((a, i) => (
-            <span key={i} className={`text-xs px-2 py-0.5 rounded border ${ACTION_CHIP_CLS[a.type]}`}>
+            <span key={`${a.type}-${a.message ?? a.note ?? a.tag ?? i + 1}`} className={`text-xs px-2 py-0.5 rounded border ${ACTION_CHIP_CLS[a.type]}`}>
               {a.type}
             </span>
           ))}
@@ -433,11 +446,11 @@ function PlaybookCard({
       {/* Toggle + hover actions */}
       <div className="flex items-center gap-2 shrink-0">
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
-          <button onClick={onEdit} className="text-white/30 hover:text-white/60 transition-colors p-1">
-            <Pencil className="w-3.5 h-3.5" />
+          <button type="button" onClick={onEdit} className="text-white/30 hover:text-white/60 transition-colors p-1">
+            <Pencil className="size-3.5" />
           </button>
-          <button onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors p-1">
-            <Trash2 className="w-3.5 h-3.5" />
+          <button type="button" onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors p-1">
+            <Trash2 className="size-3.5" />
           </button>
         </div>
         <Toggle checked={playbook.enabled} onChange={onToggle} />
@@ -493,14 +506,14 @@ export default function PlaybooksPage() {
           <p className="text-sm text-white/40">Trigger-based rules that run automatically. Combine tags, replies, and closures.</p>
         </div>
         <div className="flex md:flex-row flex-col items-center gap-3 shrink-0">
-          <button
+          <button type="button"
             onClick={openNew}
             className="flex items-center gap-1.5 text-sm font-semibold text-white border border-green-500 bg-green-600 hover:bg-green-500 px-4 py-1.5 rounded-md transition-colors"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="size-4" />
             New playbook
           </button>
-          <button
+          <button type="button"
             onClick={() => setTemplatesOpen(true)}
             className="text-sm text-white/50 hover:text-white/80 border border-white/40 font-semibold px-4 py-1.5 gap-1.5 bg-white/10 rounded-md transition-colors"
           >
@@ -512,8 +525,8 @@ export default function PlaybooksPage() {
       {/* Content */}
       {isLoading ? (
         <div className="space-y-3">
-          {[1, 2].map(i => (
-            <div key={i} className="h-20 rounded-lg border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+          {["playbook-skeleton-1", "playbook-skeleton-2"].map(key => (
+            <div key={key} className="h-20 rounded-lg border border-white/[0.06] bg-white/[0.02] animate-pulse" />
           ))}
         </div>
       ) : playbooks.length === 0 ? (

@@ -93,7 +93,7 @@ describe('GET /api/integrations/shopify/callback', () => {
     expect(mockCookieDelete).toHaveBeenCalledWith('shopify_oauth_shop');
     expect(mockLogger.error).toHaveBeenCalledWith(
       { shop: 'evil-shop.myshopify.com', savedShop: 'fixture-shop.myshopify.com' },
-      '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
+      '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
     );
   });
 

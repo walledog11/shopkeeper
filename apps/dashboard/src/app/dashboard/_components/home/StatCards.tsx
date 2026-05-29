@@ -12,7 +12,7 @@ function formatMinutes(minutes: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
-const DASH = <span className="text-white/15">—</span>
+const DASH = <span className="text-white/15">,</span>
 
 interface CardProps {
   href: string
@@ -29,12 +29,12 @@ function StatCard({ href, label, value, spark, footer, footerClass }: CardProps)
       href={href}
       className="flex flex-col justify-between px-4 py-2 rounded-md bg-card border border-border hover:border-white/[0.14] transition-colors min-h-[88px]"
     >
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40">{label}</p>
+      <p className="text-xs uppercase tracking-wider font-semibold text-white/40">{label}</p>
       <div className="flex items-end justify-between gap-2">
         <p className="text-3xl font-bold tabular-nums text-white leading-none">{value}</p>
         <Sparkline data={spark} color="#4ade80" className="opacity-70" />
       </div>
-      <p className={`text-[11px] tabular-nums ${footerClass ?? 'text-white/30'}`}>{footer}</p>
+      <p className={`text-xs tabular-nums ${footerClass ?? 'text-white/30'}`}>{footer}</p>
     </Link>
   )
 }
@@ -62,7 +62,7 @@ export default function StatCards({
   aiResolvedByDay,
   totalRepliesByDay,
 }: Props) {
-  let openFooter: React.ReactNode = '—'
+  let openFooter: React.ReactNode = ','
   let openFooterClass = 'text-white/30'
   if (openDelta != null) {
     if (openDelta === 0) {

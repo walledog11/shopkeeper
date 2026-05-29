@@ -23,21 +23,20 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
-    aiSummary: thread.aiSummary || "Clerk is analyzing this conversation...",
+    aiSummary: thread.aiSummary || "Clerk is analyzing this conversation…",
     status: thread.status,
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
     hasPlan: planIsForLastMessage,
     filterStatus: thread.filterStatus,
     filterReason: thread.filterReason,
-    messages: thread.messages
-      .filter((message) => !(message.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(message.contentText)))
-      .map((message) => {
+    messages: thread.messages.flatMap((message) => {
+        if (message.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(message.contentText)) return [];
         const isAgentNote =
           message.senderType === SENDER_TYPE.NOTE &&
           message.contentText?.startsWith(AGENT_NOTE_PREFIX);
 
-        return {
+        return [{
           id: message.id,
           sender: message.senderType,
           text: isAgentNote ? message.contentText!.slice(AGENT_NOTE_PREFIX.length) : message.contentText,
@@ -50,7 +49,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
               : undefined,
           isAgentNote,
           attachments: message.attachments ?? [],
-        };
+        }];
       }),
   };
 }

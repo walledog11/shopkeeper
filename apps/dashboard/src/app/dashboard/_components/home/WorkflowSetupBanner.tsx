@@ -1,9 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Check, ChevronDown, ChevronRight, X } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 
 const DISMISS_KEY = 'workflowSetupBannerDismissed'
 const EXPAND_KEY = 'workflowSetupBannerExpanded'
@@ -83,17 +83,10 @@ function getStepKey(step: Step) {
 }
 
 export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
-  // Defer first paint until we've read localStorage to avoid a hydration flash.
-  const [dismissed, setDismissed] = useState<boolean | null>(null)
-  const [expanded, setExpanded] = useState(false)
-
-  useEffect(() => {
-    setDismissed(readStoredBoolean(DISMISS_KEY))
-    setExpanded(readStoredBoolean(EXPAND_KEY))
-  }, [])
+  const [dismissed, setDismissed] = useState(() => readStoredBoolean(DISMISS_KEY))
+  const [expanded, setExpanded] = useState(() => readStoredBoolean(EXPAND_KEY))
 
   const totalCount = steps.length
-  if (dismissed === null) return null
 
   const isVisible = dismissed === false && doneCount < totalCount
 
@@ -114,9 +107,10 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
   }
 
   return (
+    <LazyMotion features={domAnimation}>
     <AnimatePresence>
       {isVisible && (
-        <motion.div
+        <m.div
           key="workflow-setup-banner"
           initial={{ opacity: 0, height: 0, y: -6 }}
           animate={{ opacity: 1, height: "auto", y: 0 }}
@@ -131,13 +125,13 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
               className="flex items-center gap-3 min-w-0 flex-1 text-left"
               aria-expanded={expanded}
             >
-              <motion.div
+              <m.div
                 aria-hidden="true"
                 whileHover={{ scale: 1.08 }}
                 transition={{ duration: 0.16, ease: "easeOut" }}
-                className="w-5 h-5 shrink-0"
+                className="size-5 shrink-0"
               >
-                <svg viewBox="0 0 20 20" className="w-5 h-5">
+                <svg viewBox="0 0 20 20" className="size-5">
                   <circle
                     cx="10"
                     cy="10"
@@ -146,7 +140,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                     strokeWidth="2"
                     className="stroke-green-400/15"
                   />
-                  <motion.circle
+                  <m.circle
                     cx="10"
                     cy="10"
                     r={PROGRESS_RING_RADIUS}
@@ -161,37 +155,37 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                     transform="rotate(-90 10 10)"
                   />
                 </svg>
-              </motion.div>
+              </m.div>
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="text-xs font-semibold text-white/80 shrink-0">
                   Workflow setup · {doneCount} of {totalCount}
                 </span>
-                <span className="text-white/15">—</span>
+                <span className="text-white/15">,</span>
                 <span className="text-xs text-white/45 truncate">{summary}</span>
               </div>
-              <motion.div
+              <m.div
                 animate={{ rotate: expanded ? 180 : 0 }}
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="shrink-0"
               >
-                <ChevronDown className="w-3.5 h-3.5 text-white/40" />
-              </motion.div>
+                <ChevronDown className="size-3.5 text-white/40" />
+              </m.div>
             </button>
-            <motion.button
+            <m.button
               type="button"
               onClick={dismiss}
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.94 }}
-              className="w-6 h-6 rounded flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.04] transition-colors shrink-0"
+              className="size-6 rounded flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.04] transition-colors shrink-0"
               aria-label="Dismiss"
             >
-              <X className="w-3.5 h-3.5" />
-            </motion.button>
+              <X className="size-3.5" />
+            </m.button>
           </div>
 
           <AnimatePresence initial={false}>
             {expanded && (
-              <motion.div
+              <m.div
                 key="workflow-setup-steps"
                 variants={stepsListVariants}
                 initial="collapsed"
@@ -205,41 +199,42 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                     const stepKey = getStepKey(step)
                     if (isDone) {
                       return (
-                        <motion.li
+                        <m.li
                           key={stepKey}
                           variants={stepItemVariants}
                           className="flex items-center gap-3 px-2.5 py-2 rounded-md"
                         >
-                          <span className="w-4 h-4 rounded-full bg-green-400/15 border border-green-400/40 flex items-center justify-center shrink-0">
-                            <Check className="w-2.5 h-2.5 text-green-400" />
+                          <span className="size-4 rounded-full bg-green-400/15 border border-green-400/40 flex items-center justify-center shrink-0">
+                            <Check className="size-2.5 text-green-400" />
                           </span>
                           <span className="text-xs text-white/40 line-through truncate flex-1">
                             {step.label}
                           </span>
-                        </motion.li>
+                        </m.li>
                       )
                     }
                     return (
-                      <motion.li key={stepKey} variants={stepItemVariants}>
+                      <m.li key={stepKey} variants={stepItemVariants}>
                         <Link
                           href={step.href}
                           className="group flex items-center gap-3 px-2.5 py-2 rounded-md hover:bg-white/[0.03] transition-colors"
                         >
-                          <span className="w-4 h-4 rounded-full border border-white/25 shrink-0" />
+                          <span className="size-4 rounded-full border border-white/25 shrink-0" />
                           <span className="text-xs text-white/80 group-hover:text-white truncate flex-1">
                             {step.label}
                           </span>
-                          <ChevronRight className="w-3.5 h-3.5 text-white/30 group-hover:text-white/60 shrink-0 transition-colors" />
+                          <ChevronRight className="size-3.5 text-white/30 group-hover:text-white/60 shrink-0 transition-colors" />
                         </Link>
-                      </motion.li>
+                      </m.li>
                     )
                   })}
                 </ul>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>
+    </LazyMotion>
   )
 }

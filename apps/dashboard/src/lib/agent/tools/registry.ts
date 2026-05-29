@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { ToolCategory } from "@/types";
 export { AGENT_TURN_PREFIX } from "./turn-content";
 
-// ── Tool category map — used for plan filtering and UI display ────────────────
+// ── Tool category map , used for plan filtering and UI display ────────────────
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   search_kb:                    'read',
   search_shopify_products:      'read',
@@ -178,7 +178,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "update_shopify_order_address",
     description:
-      "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context — use it directly. Pass ALL address components in a single call.",
+      "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context , use it directly. Pass ALL address components in a single call.",
     input_schema: {
       type: "object",
       properties: {
@@ -274,7 +274,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "create_shopify_order",
     description:
-      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending — do not charge the customer.",
+      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending , do not charge the customer.",
     input_schema: {
       type: "object",
       properties: {
@@ -317,7 +317,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         order_id:          { type: "string", description: "Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context." },
         variant_id:        { type: "string", description: "Variant ID to add. Required when adding or swapping. Omit for pure removal." },
         quantity:          { type: "number", description: "Number of units to add. Required when variant_id is provided." },
-        remove_variant_id: { type: "string", description: "Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context — no search needed." },
+        remove_variant_id: { type: "string", description: "Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context , no search needed." },
       },
       required: ["order_id"],
     },
@@ -343,7 +343,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     input_schema: {
       type: "object",
       properties: {
-        to:      { type: "string", description: "Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number." },
+        to:      { type: "string", description: "Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address , never a name or phone number." },
         subject: { type: "string", description: "Email subject line." },
         body:    { type: "string", description: "Email body text." },
       },
@@ -391,13 +391,13 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "escalate_to_human",
     description:
-      "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Marks the thread as pending with a 'needs_human' tag and logs the reason. Stop after calling this — do not attempt any other tools or send a reply.",
+      "Hand off the ticket to the merchant when a tool failure, missing data, or out-of-scope question prevents you from helping. Marks the thread as pending with a 'needs_human' tag and logs the reason. Stop after calling this , do not attempt any other tools or send a reply.",
     input_schema: {
       type: "object",
       properties: {
         reason: {
           type: "string",
-          description: "A short explanation of why a human needs to take over (e.g. 'Customer is asking about wholesale pricing — out of scope', 'Shopify returned 503 on refund attempt').",
+          description: "A short explanation of why a human needs to take over (e.g. 'Customer is asking about wholesale pricing , out of scope', 'Shopify returned 503 on refund attempt').",
         },
       },
       required: ["reason"],

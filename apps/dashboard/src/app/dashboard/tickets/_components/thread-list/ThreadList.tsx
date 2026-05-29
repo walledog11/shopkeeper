@@ -16,8 +16,12 @@ interface Props {
   closedCount: number
   spamCount: number
   searchQuery: string
-  isSearchMode?: boolean
-  isSearchLoading?: boolean
+  listState?: {
+    searchMode?: boolean
+    searchLoading?: boolean
+    hasMore?: boolean
+    loadingMore?: boolean
+  }
   selectedIds: string[]
   needsReply: boolean
   onNeedsReplyChange: (value: boolean) => void
@@ -30,8 +34,6 @@ interface Props {
   onBulkArchive: () => void
   onBulkTag: (tag: string) => void
   onClearSelection: () => void
-  hasMore?: boolean
-  isLoadingMore?: boolean
   onLoadMore?: () => void
   onMarkAsSpam?: (id: string) => void
   onRecover?: (id: string) => void
@@ -47,8 +49,7 @@ export default function ThreadList({
   closedCount,
   spamCount,
   searchQuery,
-  isSearchMode,
-  isSearchLoading,
+  listState,
   selectedIds,
   needsReply,
   onNeedsReplyChange,
@@ -61,13 +62,17 @@ export default function ThreadList({
   onBulkArchive,
   onBulkTag,
   onClearSelection,
-  hasMore,
-  isLoadingMore,
   onLoadMore,
   onMarkAsSpam,
   onRecover,
 }: Props) {
   const hasSelection = selectedIds.length > 0
+  const {
+    searchMode: isSearchMode,
+    searchLoading: isSearchLoading,
+    hasMore,
+    loadingMore: isLoadingMore,
+  } = listState ?? {}
 
   return (
     <>
@@ -125,7 +130,7 @@ export default function ThreadList({
 
         {!isSearchMode && hasMore && (
           <div className="px-4 py-3 border-t border-white/[0.05]">
-            <button
+            <button type="button"
               onClick={onLoadMore}
               disabled={isLoadingMore}
               className="w-full text-xs font-semibold text-white/40 hover:text-white/70 disabled:opacity-40 transition-colors py-1"

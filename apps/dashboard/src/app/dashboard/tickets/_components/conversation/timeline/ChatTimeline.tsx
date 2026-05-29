@@ -1,6 +1,7 @@
 "use client"
 
 import { AlertTriangle, MessageSquare } from "lucide-react"
+import Image from "next/image"
 import type { FailedMessage, Ticket } from "@/types"
 
 interface Props {
@@ -18,11 +19,10 @@ function AttachmentList({ attachments }: { attachments: string[] }) {
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">
-      {attachments.map((url, index) => (
+      {attachments.map((url) => (
         /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)
-          // eslint-disable-next-line @next/next/no-img-element
-          ? <img key={index} src={url} alt="attachment" className="max-w-[240px] rounded-md border border-white/[0.10]" />
-          : <a key={index} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
+          ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-white/[0.10]" />
+          : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
       ))}
     </div>
   )
@@ -38,8 +38,8 @@ export default function ChatTimeline({
   if (messages.length === 0 && !isAgentRunning) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-        <div className="w-10 h-10 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-          <MessageSquare className="w-4 h-4 text-white/20" />
+        <div className="size-10 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+          <MessageSquare className="size-4 text-white/20" />
         </div>
         <p className="text-sm text-white/30">No messages yet</p>
       </div>
@@ -69,7 +69,7 @@ export default function ChatTimeline({
             {msg.text}
             <AttachmentList attachments={msg.attachments ?? []} />
           </div>
-          <span className="text-[10px] text-white/25 mx-1">{msg.time}</span>
+          <span className="text-xs text-white/25 mx-1">{msg.time}</span>
         </div>
       ))}
 
@@ -88,12 +88,12 @@ export default function ChatTimeline({
             {failedMessage.text}
           </div>
           <div className="flex items-center gap-1.5 mx-1">
-            <AlertTriangle className="w-3 h-3 text-red-400" />
-            <span className="text-[10px] text-red-400">Failed to send</span>
-            <span className="text-[10px] text-white/20">·</span>
-            <button
+            <AlertTriangle className="size-3 text-red-400" />
+            <span className="text-xs text-red-400">Failed to send</span>
+            <span className="text-xs text-white/20">·</span>
+            <button type="button"
               onClick={() => onRetry?.(failedMessage.id)}
-              className="text-[10px] font-semibold text-red-400 hover:text-red-300 transition-colors"
+              className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
             >
               Retry
             </button>

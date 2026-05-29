@@ -1,8 +1,6 @@
-"use client"
+import { formatDate, type ArticleWithBase } from "./kb-page-utils"
 
-import { formatDate, type ArticleWithBase } from "./kb-helpers"
-
-export function KbArticleCard({
+export function ArticleCard({
   article, active, onClick,
 }: {
   article: ArticleWithBase
@@ -20,7 +18,7 @@ export function KbArticleCard({
         {article.title}
       </p>
       <p className="text-xs text-white/90 leading-relaxed font-light line-clamp-2 mb-2">{article.body}</p>
-      <div className="flex items-center gap-2 text-[10px] text-white/30">
+      <div className="flex items-center gap-2 text-xs text-white/30">
         <span className="truncate">{article.baseName}</span>
         <span className="ml-auto">{formatDate(article.updatedAt)}</span>
       </div>

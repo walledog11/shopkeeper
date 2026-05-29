@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useId, useRef, useState } from "react"
-import { motion } from "motion/react"
+import { LazyMotion, domAnimation, m } from "motion/react"
 
 import { cn } from "@/lib/ui/cn"
 
@@ -75,7 +75,10 @@ export function DotPattern({
 }: DotPatternProps) {
   const id = useId()
   const containerRef = useRef<SVGSVGElement>(null)
-  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
+  const [dimensions, setDimensions] = useState(() => ({
+    width: typeof window === "undefined" ? 0 : window.innerWidth,
+    height: typeof window === "undefined" ? 0 : window.innerHeight,
+  }))
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -84,8 +87,6 @@ export function DotPattern({
         setDimensions({ width, height })
       }
     }
-
-    updateDimensions()
     window.addEventListener("resize", updateDimensions)
     return () => window.removeEventListener("resize", updateDimensions)
   }, [])
@@ -116,11 +117,12 @@ export function DotPattern({
   })
 
   return (
+    <LazyMotion features={domAnimation}>
     <svg
       ref={containerRef}
       aria-hidden="true"
       className={cn(
-        "pointer-events-none absolute inset-0 h-full w-full text-neutral-400/80",
+        "pointer-events-none absolute inset-0 size-full text-neutral-400/80",
         className
       )}
       {...props}
@@ -133,7 +135,7 @@ export function DotPattern({
       </defs>
       {dots.map((dot, index) =>
         dot.glow ? (
-          <motion.circle
+          <m.circle
             key={`${dot.x}-${dot.y}`}
             cx={dot.x}
             cy={dot.y}
@@ -160,5 +162,6 @@ export function DotPattern({
         )
       )}
     </svg>
+    </LazyMotion>
   )
 }

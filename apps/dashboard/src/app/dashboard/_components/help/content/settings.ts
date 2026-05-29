@@ -46,9 +46,9 @@ export const settings: Category = {
         {
           heading: "Example Brand Voices",
           steps: [
-            "Friendly and conversational — use casual language, avoid jargon.",
-            "Professional and concise — keep replies brief and formal.",
-            "Warm and empathetic — acknowledge the customer's frustration before solving.",
+            "Friendly and conversational , use casual language, avoid jargon.",
+            "Professional and concise , keep replies brief and formal.",
+            "Warm and empathetic , acknowledge the customer's frustration before solving.",
           ],
         },
         {

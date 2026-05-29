@@ -5,8 +5,8 @@
  * AgentAction audit table.
  *
  * Query params:
- *   cursor — encoded cursor for pagination
- *   format=csv — stream the full action log as CSV
+ *   cursor , encoded cursor for pagination
+ *   format=csv , stream the full action log as CSV
  *
  * Response: { entries: ActionLogEntry[], nextCursor: string | null }
  */

@@ -38,7 +38,7 @@ export const STATUS_FILTERS = [
 export type StatusFilter = typeof STATUS_FILTERS[number]['id']
 
 export function formatPrice(min: number | null, max: number | null) {
-  if (min === null) return '—'
+  if (min === null) return ','
   if (min === max || max === null) return `$${min.toFixed(2)}`
   return `$${min.toFixed(2)} – $${max.toFixed(2)}`
 }

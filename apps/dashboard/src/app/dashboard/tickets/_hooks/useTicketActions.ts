@@ -30,6 +30,10 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
+function requestOk(input: RequestInfo | URL, init: RequestInit, fallback: string) {
+  return fetch(input, init).then(res => requireOkResponse(res, fallback))
+}
+
 export function useTicketActions({
   activeTicketId,
   patchThreadCaches,
@@ -75,12 +79,11 @@ export function useTicketActions({
     }))
 
     try {
-      const res = await fetch('/api/messages', {
+      await requestOk('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId, text: textToSend, isNote: noteMode }),
-      })
-      await requireOkResponse(res, 'Failed to send message')
+      }, 'Failed to send message')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to send message', err)
@@ -101,12 +104,11 @@ export function useTicketActions({
     showToast('Ticket resolved')
 
     try {
-      const res = await fetch(`/api/threads/${resolvedId}`, {
+      await requestOk(`/api/threads/${resolvedId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'closed' }),
-      })
-      await requireOkResponse(res, 'Failed to close ticket')
+      }, 'Failed to close ticket')
       revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to resolve ticket', err)
@@ -124,12 +126,11 @@ export function useTicketActions({
     showToast('Ticket reopened')
 
     try {
-      const res = await fetch(`/api/threads/${reopenId}`, {
+      await requestOk(`/api/threads/${reopenId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'open' }),
-      })
-      await requireOkResponse(res, 'Failed to reopen ticket')
+      }, 'Failed to reopen ticket')
       revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to reopen ticket', err)
@@ -143,12 +144,11 @@ export function useTicketActions({
     const threadId = activeTicketId
     await patchThreadCaches(threadId, thread => ({ ...thread, shopifyCustomerId: customerId }))
     try {
-      const res = await fetch(`/api/threads/${threadId}`, {
+      await requestOk(`/api/threads/${threadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ shopifyCustomerId: customerId }),
-      })
-      await requireOkResponse(res, 'Failed to link Shopify customer')
+      }, 'Failed to link Shopify customer')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to link Shopify customer', err)
@@ -179,12 +179,11 @@ export function useTicketActions({
     }))
 
     try {
-      const res = await fetch('/api/messages', {
+      await requestOk('/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId: failed.threadId, text: failed.text, isNote: failed.isNote }),
-      })
-      await requireOkResponse(res, 'Failed to retry message')
+      }, 'Failed to retry message')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to retry message', err)
@@ -198,12 +197,11 @@ export function useTicketActions({
     if (selectedIds.length === 0) return
     const ids = [...selectedIds]
     try {
-      const res = await fetch('/api/threads/bulk', {
+      await requestOk('/api/threads/bulk', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'close' }),
-      })
-      await requireOkResponse(res, 'Failed to close selected tickets')
+      }, 'Failed to close selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
@@ -218,12 +216,11 @@ export function useTicketActions({
     if (selectedIds.length === 0) return
     const ids = [...selectedIds]
     try {
-      const res = await fetch('/api/threads/bulk', {
+      await requestOk('/api/threads/bulk', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'archive' }),
-      })
-      await requireOkResponse(res, 'Failed to archive selected tickets')
+      }, 'Failed to archive selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
@@ -236,12 +233,11 @@ export function useTicketActions({
 
   const handleMarkAsSpam = useCallback(async (threadId: string) => {
     try {
-      const res = await fetch(`/api/threads/${threadId}`, {
+      await requestOk(`/api/threads/${threadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }),
-      })
-      await requireOkResponse(res, 'Failed to mark as spam')
+      }, 'Failed to mark as spam')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Marked as spam')
@@ -253,12 +249,11 @@ export function useTicketActions({
 
   const handleRecover = useCallback(async (threadId: string) => {
     try {
-      const res = await fetch(`/api/threads/${threadId}`, {
+      await requestOk(`/api/threads/${threadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }),
-      })
-      await requireOkResponse(res, 'Failed to recover thread')
+      }, 'Failed to recover thread')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Recovered to inbox')
@@ -273,12 +268,11 @@ export function useTicketActions({
     if (selectedIds.length === 0 || !trimmedTag) return
     const ids = [...selectedIds]
     try {
-      const res = await fetch('/api/threads/bulk', {
+      await requestOk('/api/threads/bulk', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids, action: 'tag', tag: trimmedTag }),
-      })
-      await requireOkResponse(res, 'Failed to tag selected tickets')
+      }, 'Failed to tag selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)

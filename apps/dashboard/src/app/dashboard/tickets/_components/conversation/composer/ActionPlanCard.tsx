@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Zap, MessageSquare, StickyNote, Check, ChevronUp, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
-import { motion, AnimatePresence } from "motion/react"
-import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
+import type { AgentPlan, RawToolCall } from "@/types"
 import { Badge } from "@/components/ui/badge"
 
 const CATEGORY_STYLES = {
@@ -45,27 +45,27 @@ interface Props {
 }
 
 export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onApprove, onDismiss, onRegenerate }: Props) {
-  const [steps, setSteps] = useState<PlanStep[]>(plan.steps)
+  const [disabledStepIds, setDisabledStepIds] = useState(() => new Set<string>())
   const [collapsed, setCollapsed] = useState(false)
-
-  useEffect(() => {
-    setSteps(plan.steps)
-  }, [plan])
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
-      setCollapsed(true)
-    }
-  }, [])
+  const steps = plan.steps.map(step => ({
+    ...step,
+    enabled: !disabledStepIds.has(step.id),
+  }))
 
   const toggleStep = (id: string) => {
-    setSteps(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s))
+    setDisabledStepIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const handleRun = () => {
-    const enabledIds = new Set(steps.filter(s => s.enabled).map(s => s.id))
+    const enabledIds = new Set(steps.flatMap(s => s.enabled ? [s.id] : []))
+    const stepIds = new Set(steps.map(s => s.id))
     const approved = plan.rawToolCalls.filter(tc => {
-      const isRead = !steps.find(s => s.id === tc.id)
+      const isRead = !stepIds.has(tc.id)
       return isRead || enabledIds.has(tc.id)
     })
     onApprove(approved)
@@ -74,10 +74,11 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
   const enabledCount = steps.filter(s => s.enabled).length
 
   return (
+    <LazyMotion features={domAnimation}>
     <div className="w-full">
       <AnimatePresence initial={false} mode="popLayout">
         {collapsed ? (
-          <motion.button
+          <m.button
             key="bubble"
             layoutId="plan-card"
             initial={{ opacity: 0 }}
@@ -87,14 +88,14 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
             onClick={() => setCollapsed(false)}
             className="w-full flex items-center gap-2 pl-3 pr-4 py-2 bg-card border border-white/[0.12] rounded-full shadow-lg hover:border-white/[0.20] transition-colors overflow-hidden"
           >
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: CONTENT_IN }}
               exit={{ opacity: 0, transition: CONTENT_OUT }}
               className="flex items-center gap-2 w-full"
             >
-              <div className="w-5 h-5 rounded-full bg-white/[0.12] flex items-center justify-center shrink-0">
-                <ChevronUp className="w-3 h-3 text-white/60" />
+              <div className="size-5 rounded-full bg-white/[0.12] flex items-center justify-center shrink-0">
+                <ChevronUp className="size-3 text-white/60" />
               </div>
               <span className="text-[12px] font-semibold text-white/60">Proposed plan</span>
               <div className="flex items-center gap-1 ml-auto">
@@ -105,18 +106,18 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
                     <Badge
                       variant="ghost"
                       key={step.id}
-                      className={`text-[10px] font-semibold gap-0.5 ${styles.badge} ${!step.enabled ? 'opacity-40' : ''}`}
+                      className={`text-xs font-semibold gap-0.5 ${styles.badge} ${!step.enabled ? 'opacity-40' : ''}`}
                     >
-                      <Icon className="w-2.5 h-2.5" />
+                      <Icon className="size-2.5" />
                       {CATEGORY_LABELS[step.category]}
                     </Badge>
                   )
                 })}
               </div>
-            </motion.div>
-          </motion.button>
+            </m.div>
+          </m.button>
         ) : (
-          <motion.div
+          <m.div
             key="card"
             layoutId="plan-card"
             data-testid="action-plan-card"
@@ -126,31 +127,31 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
             transition={TRANSITION}
             className="w-full bg-card border border-white/[0.12] rounded-xl shadow-xl overflow-hidden"
           >
-            <motion.div
+            <m.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: CONTENT_IN }}
               exit={{ opacity: 0, transition: CONTENT_OUT }}
             >
               {/* Header */}
               <div className="relative flex items-center px-4 py-2.5 border-b border-white/[0.08] bg-white/[0.04]">
-                <button
+                <button type="button"
                   onClick={() => setCollapsed(true)}
                   className="flex-1 flex items-center gap-2 text-left"
                 >
                   <span className="text-[13px] font-semibold text-white/70">Proposed plan</span>
-                  <span className="ml-auto text-[11px] text-white/35 font-medium">
+                  <span className="ml-auto text-xs text-white/35 font-medium">
                     {enabledCount} of {steps.length} step{steps.length !== 1 ? 's' : ''}
                   </span>
-                  <ChevronUp className="w-3.5 h-3.5 text-white/35" />
+                  <ChevronUp className="size-3.5 text-white/35" />
                 </button>
                 {onRegenerate && (
-                  <button
+                  <button type="button"
                     onClick={onRegenerate}
                     disabled={isExecuting || isRegenerating}
                     title="Regenerate plan"
                     className="ml-2 shrink-0 p-1 rounded text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors disabled:opacity-40"
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`size-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
                   </button>
                 )}
               </div>
@@ -158,9 +159,9 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
               {/* Warnings */}
               {plan.warnings && plan.warnings.length > 0 && (
                 <div className="px-4 py-2.5 border-b border-white/[0.06] space-y-1.5 bg-amber-400/[0.04]">
-                  {plan.warnings.map((w, i) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                  {plan.warnings.map((w) => (
+                    <div key={w} className="flex items-start gap-2">
+                      <AlertTriangle className="size-3 text-amber-400 shrink-0 mt-0.5" />
                       <p className="text-xs text-amber-300/80 leading-relaxed">{w}</p>
                     </div>
                   ))}
@@ -173,7 +174,7 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
                   const styles = CATEGORY_STYLES[step.category]
                   const Icon = CATEGORY_ICONS[step.category]
                   return (
-                    <button
+                    <button type="button"
                       key={step.id}
                       data-testid="action-plan-step-toggle"
                       data-step-id={step.id}
@@ -182,18 +183,18 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
                       disabled={isExecuting}
                       className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-60"
                     >
-                      <div className={`mt-0.5 w-4 h-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
+                      <div className={`mt-0.5 size-4 shrink-0 rounded border flex items-center justify-center transition-colors ${
                         step.enabled ? 'bg-white border-white' : 'bg-transparent border-white/[0.20]'
                       }`}>
                         {isExecuting && step.enabled
-                          ? <Loader2 className="w-2.5 h-2.5 text-black animate-spin" />
-                          : step.enabled && <Check className="w-2.5 h-2.5 text-black" strokeWidth={3} />
+                          ? <Loader2 className="size-2.5 text-black animate-spin" />
+                          : step.enabled && <Check className="size-2.5 text-black" strokeWidth={3} />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="ghost" className={`text-[11px] font-semibold gap-1 ${styles.badge}`}>
-                            <Icon className="w-2.5 h-2.5" />
+                          <Badge variant="ghost" className={`text-xs font-semibold gap-1 ${styles.badge}`}>
+                            <Icon className="size-2.5" />
                             {CATEGORY_LABELS[step.category]}
                           </Badge>
                           <span className={`text-[13px] font-medium ${step.enabled ? 'text-white/80' : 'text-white/25 line-through'}`}>
@@ -219,18 +220,18 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
 
               {/* Actions */}
               <div className="flex items-center gap-2 px-4 py-2.5 border-t border-white/[0.06] bg-white/[0.02]">
-                <button
+                <button type="button"
                   data-testid="action-plan-run"
                   onClick={handleRun}
                   disabled={isExecuting || enabledCount === 0}
                   className="flex items-center gap-1.5 h-8 px-4 bg-green-400 hover:bg-green-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black text-xs font-semibold rounded-md transition-colors"
                 >
                   {isExecuting
-                    ? <><Loader2 className="w-3 h-3 animate-spin" /> Running…</>
+                    ? <><Loader2 className="size-3 animate-spin" /> Running…</>
                     : 'Run plan'
                   }
                 </button>
-                <button
+                <button type="button"
                   data-testid="action-plan-dismiss"
                   onClick={onDismiss}
                   disabled={isExecuting}
@@ -239,10 +240,11 @@ export default function ActionPlanCard({ plan, isExecuting, isRegenerating, onAp
                   Dismiss
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
     </div>
+    </LazyMotion>
   )
 }

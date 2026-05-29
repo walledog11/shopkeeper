@@ -5,11 +5,11 @@ import { X } from "lucide-react"
 
 export function TagPill({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-white/50 bg-white/[0.06] border border-white/[0.09] px-1.5 py-0.5 rounded-full">
+    <span className="inline-flex items-center gap-1 text-xs font-medium text-white/50 bg-white/[0.06] border border-white/[0.09] px-1.5 py-0.5 rounded-full">
       {tag}
       {onRemove && (
         <button type="button" onClick={onRemove} className="text-white/30 hover:text-white/70 transition-colors">
-          <X className="w-2 h-2" />
+          <X className="size-2" />
         </button>
       )}
     </span>
@@ -29,6 +29,7 @@ export function TagInput({ tags, onChange }: { tags: string[]; onChange: (v: str
     <div className="flex flex-wrap gap-1.5 px-2.5 py-2 bg-white/[0.05] border border-white/[0.12] rounded-md min-h-[36px] focus-within:border-white/[0.25] transition-colors cursor-text">
       {tags.map(t => <TagPill key={t} tag={t} onRemove={() => onChange(tags.filter(x => x !== t))} />)}
       <input
+        aria-label="Add tag"
         value={input}
         onChange={e => setInput(e.target.value)}
         onKeyDown={e => {

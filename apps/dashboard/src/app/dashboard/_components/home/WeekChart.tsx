@@ -15,7 +15,7 @@ export default function WeekChart({ data }: Props) {
 
   return (
     <div className="flex flex-col gap-2.5">
-      <p className="text-[10px] uppercase tracking-wider font-semibold text-white/40">Your week</p>
+      <p className="text-xs uppercase tracking-wider font-semibold text-white/40">Your week</p>
       <div className="rounded-md bg-card border border-border px-3 pt-3 pb-2.5">
         <div className="grid grid-cols-7 gap-1.5 items-end h-[88px]">
           {data.map((d, i) => {
@@ -44,13 +44,13 @@ export default function WeekChart({ data }: Props) {
         <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-border">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1 text-[9px] text-white/40">
-              <span className="block w-2 h-2 rounded-sm bg-white/45" /> you
+              <span className="block size-2 rounded-sm bg-white/45" /> you
             </span>
             <span className="inline-flex items-center gap-1 text-[9px] text-white/40">
-              <span className="block w-2 h-2 rounded-sm bg-white/15" /> auto
+              <span className="block size-2 rounded-sm bg-white/15" /> auto
             </span>
           </div>
-          <span className="text-[10px] text-white/40 tabular-nums">{total} total</span>
+          <span className="text-xs text-white/40 tabular-nums">{total} total</span>
         </div>
       </div>
     </div>

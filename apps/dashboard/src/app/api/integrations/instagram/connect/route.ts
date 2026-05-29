@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import logger from '@/lib/server/logger';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
-export async function GET() {
+export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Connect Instagram');
+}
+
+export async function POST() {
   if (process.env.NODE_ENV !== 'development') {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
@@ -26,7 +31,8 @@ export async function GET() {
     let accountName = igAccountId;
     try {
       const igRes = await fetch(
-        `${FB_GRAPH}/${igAccountId}?fields=username&access_token=${pageAccessToken}`
+        `${FB_GRAPH}/${igAccountId}?fields=username&access_token=${pageAccessToken}`,
+        { cache: 'no-store' }
       );
       const igData = await igRes.json();
       if (igData.username) accountName = igData.username;

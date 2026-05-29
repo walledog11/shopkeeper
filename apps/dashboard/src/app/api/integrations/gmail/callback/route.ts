@@ -5,11 +5,16 @@ import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
 import { timingSafeIncludes } from '@/lib/auth-utils';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
 
 export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Finish Gmail connection');
+}
+
+export async function POST(request: Request) {
   const appUrl = process.env.APP_URL;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -44,18 +49,19 @@ export async function GET(request: Request) {
   cookieStore.delete('gmail_oauth_return');
 
   if (!savedState || !timingSafeIncludes([savedState], state)) {
-    logger.error('[Gmail OAuth] State mismatch — possible CSRF attempt');
+    logger.error('[Gmail OAuth] State mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
   }
 
   const { userId: currentUserId } = await auth();
   if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[Gmail OAuth] User session mismatch — possible CSRF attempt');
+    logger.error({ savedUserId, currentUserId }, '[Gmail OAuth] User session mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
   }
 
   try {
     const tokenRes = await fetch(TOKEN_URL, {
+      cache: 'no-store',
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -79,6 +85,7 @@ export async function GET(request: Request) {
     }
 
     const userinfoRes = await fetch(USERINFO_URL, {
+      cache: 'no-store',
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
     const userinfo = await userinfoRes.json() as { email?: string };
@@ -90,7 +97,7 @@ export async function GET(request: Request) {
     const userEmail = userinfo.email;
 
     if (!clerkOrgId) {
-      logger.error('[Gmail OAuth] Missing org cookie — session likely interrupted');
+      logger.error('[Gmail OAuth] Missing org cookie , session likely interrupted');
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });

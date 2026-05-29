@@ -61,8 +61,6 @@ export const navGroups: NavGroup[] = [
   },
 ];
 
-export const navItems: NavItem[] = navGroups.flatMap((g) => g.items);
-
 export const footerNavItems: NavItem[] = [
   { name: "Feedback", href: "/dashboard/feedback", icon: MessageSquareCode },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },

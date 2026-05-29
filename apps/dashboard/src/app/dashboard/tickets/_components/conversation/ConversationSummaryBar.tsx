@@ -26,14 +26,14 @@ export default function ConversationSummaryBar({
     <div className="shrink-0 border-b border-border bg-[#050505] px-2 py-1 mt-1 md:px-6">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-r from-slate-200 via-slate-400 to-slate-600 text-white">
-            <Brain className="h-2.5 w-2.5" />
+          <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-r from-slate-200 via-slate-400 to-slate-600 text-white">
+            <Brain className="size-2.5" />
           </div>
           <p className="min-w-0 text-xs leading-6 text-white/55">
             <span className="font-semibold text-white/90">Summary</span>
             <span className="text-white/35"> · </span>
             <span className={displaySummary ? "" : "text-white/35"}>
-              {displaySummary || "Generating summary..."}
+              {displaySummary || "Generating summary…"}
             </span>
           </p>
         </div>
@@ -49,7 +49,7 @@ export default function ConversationSummaryBar({
                 onClick={onRefresh}
                 aria-label="Refresh summary"
               >
-                <RefreshCw className={`h-3 w-3 ${isRefreshing ? "animate-spin" : ""}`} />
+                <RefreshCw className={`size-3 ${isRefreshing ? "animate-spin" : ""}`} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Refresh summary</TooltipContent>

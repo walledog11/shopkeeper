@@ -1,5 +1,5 @@
 /**
- * Internal Auto-Acknowledgment API — called by the gateway worker when an
+ * Internal Auto-Acknowledgment API , called by the gateway worker when an
  * inbound message arrives outside the org's configured business hours.
  *
  * Auth: x-internal-secret header (shared secret between gateway and dashboard).
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
     }
 
-    // Single query — include org so we avoid a second round-trip to Postgres
+    // Single query , include org so we avoid a second round-trip to Postgres
     const thread = await db.thread.findUnique({
       where: { id: threadId },
       include: {
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     assertBillingWriteAllowed(org);
     const settings = resolveAgentSettings(org.settings as Parameters<typeof resolveAgentSettings>[0]);
 
-    // Guard: empty message means misconfiguration — the gateway decides when to call this endpoint.
+    // Guard: empty message means misconfiguration , the gateway decides when to call this endpoint.
     if (!settings.autoAckMessage.trim()) {
       return NextResponse.json({ ok: true, skipped: true });
     }

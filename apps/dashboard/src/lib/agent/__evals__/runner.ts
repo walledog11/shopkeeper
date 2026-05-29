@@ -214,10 +214,15 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     }
     const thread = await createTestThread(org.id, customer.id, channel, { tag: fixture.setup.tag });
 
-    for (const m of fixture.setup.messages) {
+    const createFixtureMessages = async (index: number): Promise<void> => {
+      const m = fixture.setup.messages[index];
+      if (!m) return;
       const sender = SENDER_TYPE_MAP[m.senderType] ?? SenderType.customer;
       await createTestMessage(thread.id, m.contentText, sender);
-    }
+      return createFixtureMessages(index + 1);
+    };
+
+    await createFixtureMessages(0);
 
     type CreateFn = typeof anthropic.messages.create;
     const originalCreate = anthropic.messages.create.bind(anthropic.messages) as CreateFn;
@@ -259,6 +264,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     const plan = await planAgent(ctx, fixture.instruction, resolved);
 
     const calledTools = plan.rawToolCalls.map((tc) => tc.name);
+    const calledToolSet = new Set(calledTools);
     const sendReplyCall = plan.rawToolCalls.find((tc) => tc.name === "send_reply");
     const replyText = sendReplyCall && typeof sendReplyCall.input === "object" && sendReplyCall.input !== null
       ? String((sendReplyCall.input as { text?: unknown }).text ?? "")
@@ -267,13 +273,13 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     const expected = fixture.expectedPlan;
 
     for (const tool of expected.mustCallTools ?? []) {
-      if (!calledTools.includes(tool)) {
+      if (!calledToolSet.has(tool)) {
         failures.push(`expected tool "${tool}" to be called; called: [${calledTools.join(", ")}]`);
       }
     }
 
     for (const tool of expected.mustNotCallTools ?? []) {
-      if (calledTools.includes(tool)) {
+      if (calledToolSet.has(tool)) {
         failures.push(`tool "${tool}" should not have been called; called: [${calledTools.join(", ")}]`);
       }
     }

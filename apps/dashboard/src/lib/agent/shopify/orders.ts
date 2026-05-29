@@ -247,7 +247,7 @@ export async function createShopifyOrder(
     const orderName = data.order.name ?? `#${data.order.id}`;
     const total = data.order.total_price ? `$${data.order.total_price}` : "unknown total";
     const adminUrl = `https://${ctx.shop}/admin/orders/${data.order.id}`;
-    return `Done — order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`;
+    return `Done , order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`;
   } catch (err) {
     return formatShopifyToolError("failed to create order", err);
   }
@@ -426,13 +426,12 @@ export async function editShopifyOrder(
     const order = commitPayload?.order;
     if (!order) return "Error: could not commit order edit - Shopify did not return the updated order.";
 
-    const itemList = order.lineItems.edges
-      .filter(({ node }) => node.quantity > 0)
-      .map(({ node }) => {
+    const itemList = order.lineItems.edges.flatMap(({ node }) => {
+        if (node.quantity <= 0) return [];
         const variantTitle = node.variant?.title && node.variant.title !== "Default Title"
           ? ` (${node.variant.title})`
           : "";
-        return `${node.quantity}x ${node.title}${variantTitle}`;
+        return [`${node.quantity}x ${node.title}${variantTitle}`];
       })
       .join(", ");
 

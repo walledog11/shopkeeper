@@ -166,7 +166,7 @@ export async function sendReply(
         });
       }
     } catch (err) {
-      if (err instanceof EmailNotConfiguredError) return `Error: email not configured — ${err.message}`;
+      if (err instanceof EmailNotConfiguredError) return `Error: email not configured , ${err.message}`;
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg, provider }, '[sendReply] Email dispatch error');
       void recordProviderSendFailure(provider, 'email', ctx.orgId, {
@@ -175,7 +175,7 @@ export async function sendReply(
         integrationId: emailIntegration.id,
         detail: msg,
       });
-      return `Error: email dispatch failed — ${msg}`;
+      return `Error: email dispatch failed , ${msg}`;
     }
     await createMessage({
       threadId: ctx.threadId,
@@ -221,7 +221,7 @@ export async function sendEmail(
   if (existingThread) {
     targetThreadId = existingThread.id;
   } else {
-    // No existing thread — upsert the customer then create a new thread shell
+    // No existing thread , upsert the customer then create a new thread shell
     const customerKey = { organizationId: ctx.orgId, platformId: input.to };
     let customer = await db.customer.findUnique({ where: { organizationId_platformId: customerKey } });
     if (!customer) {
@@ -280,11 +280,11 @@ export async function sendEmail(
     }
     logger.info({ threadId: targetThreadId, provider }, '[sendEmail] Provider accepted');
   } catch (err) {
-    // Provider failed — archive the thread shell if we just created it.
+    // Provider failed , archive the thread shell if we just created it.
     if (!existingThread) {
       await db.thread.update({ where: { id: targetThreadId }, data: { archivedAt: new Date() } }).catch(() => {});
     }
-    if (err instanceof EmailNotConfiguredError) return `Error: email not configured — ${err.message}`;
+    if (err instanceof EmailNotConfiguredError) return `Error: email not configured , ${err.message}`;
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, threadId: targetThreadId, provider }, '[sendEmail] Email dispatch error');
     void recordProviderSendFailure(provider, 'email', ctx.orgId, {
@@ -293,10 +293,10 @@ export async function sendEmail(
       integrationId: emailIntegration.id,
       detail: msg,
     });
-    return `Error: email dispatch failed — ${msg}`;
+    return `Error: email dispatch failed , ${msg}`;
   }
 
-  // Send confirmed — persist the message
+  // Send confirmed , persist the message
   await createMessage({
     threadId: targetThreadId,
     senderType: SenderType.agent,
@@ -352,12 +352,12 @@ async function notifyGatewayOfEscalation(args: {
 }): Promise<void> {
   const base = getGatewayBaseUrl();
   if (!base) {
-    logger.warn({ threadId: args.threadId }, '[escalateToHuman] No gateway base URL — skipping operator push');
+    logger.warn({ threadId: args.threadId }, '[escalateToHuman] No gateway base URL , skipping operator push');
     return;
   }
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) {
-    logger.warn({ threadId: args.threadId }, '[escalateToHuman] INTERNAL_API_SECRET unset — skipping operator push');
+    logger.warn({ threadId: args.threadId }, '[escalateToHuman] INTERNAL_API_SECRET unset , skipping operator push');
     return;
   }
   try {

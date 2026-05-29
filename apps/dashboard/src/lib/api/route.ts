@@ -52,7 +52,7 @@ export function withOrgRoute<P = Record<string, never>>(
         try {
           await options.onError(error, orgId);
         } catch {
-          // Swallow — onError must not mask the original error.
+          // Swallow , onError must not mask the original error.
         }
       }
       return handleApiError(error, options.context, options.errorMessage);

@@ -53,7 +53,7 @@ export function ShopifyCustomerCreate({
         disabled={isDisabled}
         className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded-md py-1.5 transition-colors"
       >
-        {isCreating ? <RefreshCw className="w-3 h-3 animate-spin" /> : <UserPlus className="w-3 h-3" />}
+        {isCreating ? <RefreshCw className="size-3 animate-spin" /> : <UserPlus className="size-3" />}
         Create & link
       </button>
     </div>

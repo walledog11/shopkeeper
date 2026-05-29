@@ -5,7 +5,7 @@ import { TOOL_LABELS } from "@/lib/agent/tools";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry, AgentTurn } from "@/types";
 
-// Legacy note helpers — agent turns also write a slim summary note for inline
+// Legacy note helpers , agent turns also write a slim summary note for inline
 // thread rendering. These exports stay so callers that filter/exclude those
 // notes (threads UI, page-level message counters, GDPR export) keep working.
 export { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
@@ -209,7 +209,7 @@ async function fetchTurnsPage(params: {
   const pageTurns = hasMore ? turnGroups.slice(0, pageSize) : turnGroups;
   const turnIds = pageTurns.map((g) => g.turnId);
 
-  // Phase 2: load every row for the selected turns (unfiltered at row level —
+  // Phase 2: load every row for the selected turns (unfiltered at row level ,
   // we want the full action breakdown even when the user filters by one tool).
   const rows = await db.agentAction.findMany({
     where: { ...buildActionWhere(orgId, filters), turnId: { in: turnIds } },

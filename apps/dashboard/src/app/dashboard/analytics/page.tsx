@@ -116,15 +116,15 @@ export default function AnalyticsPage() {
     ? Math.round(scoreParts.reduce((s, p) => s + p.score * p.weight, 0) / totalWeight)
     : null
 
-  const auditGrade = auditScore === null ? '—' :
+  const auditGrade = auditScore === null ? ',' :
     auditScore >= 90 ? 'A' : auditScore >= 75 ? 'B' : auditScore >= 60 ? 'C' : auditScore >= 40 ? 'D' : 'F'
 
   const kpiCards = [
     {
       label: 'Resolution Rate',
-      value: totalThreads > 0 ? `${resolutionRate}%` : '—',
+      value: totalThreads > 0 ? `${resolutionRate}%` : ',',
       sub: `${closedCount} of ${totalThreads} tickets closed`,
-      icon: <CheckCircle2 className="w-3 h-3 text-current" />,
+      icon: <CheckCircle2 className="size-3 text-current" />,
       status: kpiStatus(resolutionScore),
       statusLabel: STATUS_LABEL[kpiStatus(resolutionScore)],
       barPct: Math.min(100, resolutionRate),
@@ -132,9 +132,9 @@ export default function AnalyticsPage() {
     },
     {
       label: 'AI Usage',
-      value: totalReplies > 0 ? `${aiUsageRate}%` : '—',
+      value: totalReplies > 0 ? `${aiUsageRate}%` : ',',
       sub: `${aiReplies} of ${totalReplies} replies`,
-      icon: <Bot className="w-3 h-3 text-current" />,
+      icon: <Bot className="size-3 text-current" />,
       status: kpiStatus(aiScore),
       statusLabel: STATUS_LABEL[kpiStatus(aiScore)],
       barPct: Math.min(100, aiUsageRate * 2),
@@ -142,9 +142,9 @@ export default function AnalyticsPage() {
     },
     {
       label: 'Avg Messages / Ticket',
-      value: totalThreads > 0 ? avgMessages.toString() : '—',
+      value: totalThreads > 0 ? avgMessages.toString() : ',',
       sub: 'Lower means faster resolution',
-      icon: <MessageSquare className="w-3 h-3 text-current" />,
+      icon: <MessageSquare className="size-3 text-current" />,
       status: kpiStatus(msgScore),
       statusLabel: STATUS_LABEL[kpiStatus(msgScore)],
       barPct: totalThreads > 0 ? Math.max(0, Math.min(100, 100 - ((avgMessages - 4) / 8) * 100)) : 0,
@@ -152,9 +152,9 @@ export default function AnalyticsPage() {
     },
     {
       label: 'First Reply Time',
-      value: avgResponseMinutes !== null ? formatResponseTime(avgResponseMinutes) : '—',
+      value: avgResponseMinutes !== null ? formatResponseTime(avgResponseMinutes) : ',',
       sub: avgResponseMinutes !== null ? `${firstReplyCount} tickets measured` : 'No data yet',
-      icon: <Clock className="w-3 h-3 text-current" />,
+      icon: <Clock className="size-3 text-current" />,
       status: kpiStatus(replyScore),
       statusLabel: STATUS_LABEL[kpiStatus(replyScore)],
       barPct: avgResponseMinutes !== null ? Math.max(0, Math.min(100, 100 - ((avgResponseMinutes - 5) / 235) * 100)) : 0,
@@ -169,15 +169,15 @@ export default function AnalyticsPage() {
     auditTips.push({ ok: true, text: 'No tickets in this period yet.', benchmark: '' })
   } else {
     if (resolutionRate < 60)
-      auditTips.push({ ok: false, text: `Resolution is ${resolutionRate}% — enable AI auto-replies to clear your backlog faster`, benchmark: 'Healthy ≥ 80% · OK 60–80% · Needs work < 60%' })
+      auditTips.push({ ok: false, text: `Resolution is ${resolutionRate}% , enable AI auto-replies to clear your backlog faster`, benchmark: 'Healthy ≥ 80% · OK 60–80% · Needs work < 60%' })
     if (totalReplies > 0 && aiUsageRate < 30)
-      auditTips.push({ ok: false, text: `AI handles only ${aiUsageRate}% of replies — turn on AI drafts to scale your team`, benchmark: 'Healthy ≥ 50% · OK 30–50% · Low < 30%' })
+      auditTips.push({ ok: false, text: `AI handles only ${aiUsageRate}% of replies , turn on AI drafts to scale your team`, benchmark: 'Healthy ≥ 50% · OK 30–50% · Low < 30%' })
     if (avgMessages > 6)
-      auditTips.push({ ok: false, text: `${avgMessages} messages per ticket on average — add FAQs to your AI context to shorten threads`, benchmark: 'Healthy ≤ 4 msgs · OK 4–6 · Too long > 6' })
+      auditTips.push({ ok: false, text: `${avgMessages} messages per ticket on average , add FAQs to your AI context to shorten threads`, benchmark: 'Healthy ≤ 4 msgs · OK 4–6 · Too long > 6' })
     if (avgResponseMinutes !== null && avgResponseMinutes > 240)
-      auditTips.push({ ok: false, text: `${formatResponseTime(avgResponseMinutes)} average first reply — configure AI triage to respond instantly`, benchmark: 'Healthy < 30 min · OK < 4h · Slow > 4h' })
+      auditTips.push({ ok: false, text: `${formatResponseTime(avgResponseMinutes)} average first reply , configure AI triage to respond instantly`, benchmark: 'Healthy < 30 min · OK < 4h · Slow > 4h' })
     if (auditTips.length === 0)
-      auditTips.push({ ok: true, text: 'All metrics are within healthy ranges — keep it up!', benchmark: '' })
+      auditTips.push({ ok: true, text: 'All metrics are within healthy ranges , keep it up!', benchmark: '' })
   }
   const visibleTips = auditTips.slice(0, 4)
 
@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
   const dayMap = new Map((data?.threads.volumeByDay ?? []).map(d => [d.day, d.count]))
 
   if (rangeDays <= 30) {
-    chartTitle = rangeDays <= 7 ? 'Tickets Last 7 Days' : 'Tickets — Daily'
+    chartTitle = rangeDays <= 7 ? 'Tickets Last 7 Days' : 'Tickets , Daily'
     chartData = Array.from({ length: rangeDays }, (_, i) => {
       const date = new Date(rangeFrom)
       date.setDate(date.getDate() + i)
@@ -196,7 +196,7 @@ export default function AnalyticsPage() {
       return { label: shortDate(date.toISOString()), count: dayMap.get(dateStr) ?? 0 }
     })
   } else if (rangeDays <= 91) {
-    chartTitle = 'Tickets — Weekly'
+    chartTitle = 'Tickets , Weekly'
     const weeks = Math.ceil(rangeDays / 7)
     chartData = Array.from({ length: weeks }, (_, i) => {
       const start = new Date(rangeFrom); start.setDate(start.getDate() + i * 7)
@@ -209,14 +209,14 @@ export default function AnalyticsPage() {
       return { label: shortDate(start.toISOString()), count }
     })
   } else {
-    chartTitle = 'Tickets — Monthly'
+    chartTitle = 'Tickets , Monthly'
     const monthMap = new Map<string, number>()
     for (const [day, count] of dayMap) {
       const key = day.slice(0, 7)
       monthMap.set(key, (monthMap.get(key) ?? 0) + count)
     }
-    chartData = [...monthMap.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
+    chartData = Array.from(monthMap.entries())
+      .toSorted(([a], [b]) => a.localeCompare(b))
       .map(([key, count]) => ({
         label: new Date(key + '-01').toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         count,

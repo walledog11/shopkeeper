@@ -51,10 +51,10 @@ function formatDate(iso: string) {
 // ── StartThreadButton ─────────────────────────────────────────────────────────
 
 function StartThreadButton({ order }: { order: OrderRow }) {
-  const router = useRouter()
+  const { push } = useRouter()
   const [loading, setLoading] = useState(false)
 
-  const handleClick = async (e: React.MouseEvent) => {
+  const startSupportThread = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!order.customer) return
     setLoading(true)
@@ -71,7 +71,7 @@ function StartThreadButton({ order }: { order: OrderRow }) {
       })
       const data = await res.json()
       if (res.ok && data.threadId) {
-        router.push(`/dashboard/tickets?thread=${data.threadId}`)
+        push(`/dashboard/tickets?thread=${data.threadId}`)
       }
     } finally {
       setLoading(false)
@@ -81,13 +81,13 @@ function StartThreadButton({ order }: { order: OrderRow }) {
   if (!order.customer) return null
 
   return (
-    <button
-      onClick={handleClick}
+    <button type="button"
+      onClick={startSupportThread}
       disabled={loading}
-      className="inline-flex items-center justify-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-[11px] font-medium text-white/65 hover:bg-white/[0.06] hover:text-white hover:border-white/[0.18] disabled:opacity-40 transition-colors shrink-0"
+      className="inline-flex items-center justify-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/65 hover:bg-white/[0.06] hover:text-white hover:border-white/[0.18] disabled:opacity-40 transition-colors shrink-0"
       title="New support thread"
     >
-      {loading && <Loader2 className="w-3 h-3 animate-spin" />}
+      {loading && <Loader2 className="size-3 animate-spin" />}
       New thread
     </button>
   )
@@ -100,8 +100,8 @@ const GRID_COLS = "grid-cols-[100px_minmax(0,1.4fr)_80px_120px_130px_70px_90px_1
 export function OrdersTableSkeleton() {
   return (
     <div className="divide-y divide-white/[0.04] animate-pulse">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className={`hidden lg:grid ${GRID_COLS} items-center gap-4 px-5 py-4`}>
+      {Array.from({ length: 8 }, (_, i) => `order-skeleton-${i}`).map((key) => (
+        <div key={key} className={`hidden lg:grid ${GRID_COLS} items-center gap-4 px-5 py-4`}>
           <div className="h-3 w-16 bg-white/[0.06] rounded" />
           <div className="h-3 w-32 bg-white/[0.06] rounded" />
           <div className="h-3 w-12 bg-white/[0.05] rounded" />
@@ -122,8 +122,8 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
-        <div className="w-10 h-10 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center mb-3">
-          <Check className="w-4 h-4 text-green-400/60" />
+        <div className="size-10 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center mb-3">
+          <Check className="size-4 text-green-400/60" />
         </div>
         <p className="text-sm font-semibold text-white/40 mb-1">No orders found</p>
         <p className="text-xs text-white/25">Try adjusting your filters or search.</p>
@@ -135,8 +135,8 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
     <div>
       {/* Column headers */}
       <div className={`hidden lg:grid ${GRID_COLS} gap-4 px-5 py-3 border-b border-white/[0.05]`}>
-        {['Order', 'Customer', 'Date', 'Payment', 'Fulfillment', 'Items', 'Total', ''].map((h, i) => (
-          <span key={i} className="text-[10px] font-semibold uppercase tracking-[0.08em] text-white/30">{h}</span>
+        {['Order', 'Customer', 'Date', 'Payment', 'Fulfillment', 'Items', 'Total', 'Actions'].map((h) => (
+          <span key={h} className="text-xs font-semibold uppercase tracking-[0.08em] text-white/30">{h === 'Actions' ? '' : h}</span>
         ))}
       </div>
 
@@ -153,20 +153,20 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
               <div className="lg:hidden px-4 py-3.5 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold text-white/75">{order.name}</span>
-                  <span className="text-[11px] text-white/40">{formatDate(order.created_at)}</span>
+                  <span className="text-xs text-white/40">{formatDate(order.created_at)}</span>
                 </div>
                 {order.customer ? (
-                  <p className="text-xs text-white/75 truncate">{order.customer.name || order.customer.email || '—'}</p>
+                  <p className="text-xs text-white/75 truncate">{order.customer.name || order.customer.email || ','}</p>
                 ) : (
                   <p className="text-xs text-white/30 italic">Guest</p>
                 )}
                 <div className="flex items-center gap-3 flex-wrap">
-                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${fn.cls}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${fn.dot}`} />
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${fn.cls}`}>
+                    <span className={`size-1.5 rounded-full shrink-0 ${fn.dot}`} />
                     {fn.label}
                   </span>
-                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${ff.cls}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ff.dot}`} />
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ff.cls}`}>
+                    <span className={`size-1.5 rounded-full shrink-0 ${ff.dot}`} />
                     {ff.label}
                   </span>
                 </div>
@@ -184,21 +184,21 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
                 <span className="text-xs font-semibold text-white/75">{order.name}</span>
                 <div className="min-w-0">
                   {order.customer ? (
-                    <p className="text-xs text-white/75 truncate">{order.customer.name || order.customer.email || '—'}</p>
+                    <p className="text-xs text-white/75 truncate">{order.customer.name || order.customer.email || ','}</p>
                   ) : (
                     <p className="text-xs text-white/30 italic">Guest</p>
                   )}
                 </div>
-                <span className="text-[11px] text-white/40">{formatDate(order.created_at)}</span>
+                <span className="text-xs text-white/40">{formatDate(order.created_at)}</span>
                 <div className="min-w-0">
-                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${fn.cls}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${fn.dot}`} />
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${fn.cls}`}>
+                    <span className={`size-1.5 rounded-full shrink-0 ${fn.dot}`} />
                     {fn.label}
                   </span>
                 </div>
                 <div className="min-w-0">
-                  <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${ff.cls}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ff.dot}`} />
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${ff.cls}`}>
+                    <span className={`size-1.5 rounded-full shrink-0 ${ff.dot}`} />
                     {ff.label}
                   </span>
                 </div>
@@ -218,7 +218,7 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
 
       {hasMore && (
         <div className="px-5 py-4 border-t border-white/[0.05]">
-          <button
+          <button type="button"
             onClick={onLoadMore}
             disabled={isLoadingMore}
             className="w-full text-xs font-semibold text-white/35 hover:text-white/60 disabled:opacity-40 transition-colors py-1"

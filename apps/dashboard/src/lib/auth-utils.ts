@@ -19,7 +19,7 @@ export function timingSafeIncludes(candidates: string[], input: string): boolean
  * Resolve the set of valid internal API secrets from env vars.
  * Supports zero-downtime rotation via INTERNAL_API_SECRET_PREV.
  */
-export function getValidInternalSecrets(): string[] {
+function getValidInternalSecrets(): string[] {
   return [process.env.INTERNAL_API_SECRET, process.env.INTERNAL_API_SECRET_PREV]
     .filter((s): s is string => typeof s === 'string' && s.length > 0);
 }

@@ -2,7 +2,7 @@ import * as Sentry from '@sentry/nextjs';
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 import logger from '@/lib/server/logger';
 
-export const OPS_ALERT_CATEGORIES = [
+const OPS_ALERT_CATEGORIES = [
   'queue_health',
   'webhook_signature',
   'provider_send',
@@ -194,7 +194,7 @@ export async function incrementOpsAlertWindow(
   };
 }
 
-export function buildOpsAlertWindowKey(
+function buildOpsAlertWindowKey(
   keyParts: readonly OpsAlertTagValue[],
   windowStart: number,
   prefix = 'ops-alert',

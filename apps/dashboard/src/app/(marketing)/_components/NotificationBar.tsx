@@ -35,12 +35,12 @@ export default function NotificationBar() {
       </div>
 
       {/* Close Button */}
-      <button
+      <button type="button"
         onClick={() => setIsVisible(false)}
         className="absolute right-4 top-1/2 -translate-y-1/2 p-2 hover:bg-black/5 rounded-full transition-colors"
         aria-label="Close banner"
       >
-        <X className="w-4 h-4" />
+        <X className="size-4" />
       </button>
     </div>
   );

@@ -16,19 +16,21 @@ function normalizeOptionalStringArray(value: unknown, field: string): string[] |
   if (!Array.isArray(value)) {
     throw new BadRequestError(`${field} must be an array`);
   }
-  return value
-    .filter((item): item is string => typeof item === 'string')
-    .map(item => item.trim())
-    .filter(Boolean);
+  return value.flatMap((item) => {
+    if (typeof item !== 'string') return [];
+    const trimmed = item.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Canned Responses PATCH', errorMessage: 'Failed to update canned response' },
   async ({ org, request, params }) => {
     const { id } = params;
-    const { title, body, tags, channels } = await request.json();
-
-    const existing = await db.cannedResponse.findUnique({ where: { id } });
+    const [{ title, body, tags, channels }, existing] = await Promise.all([
+      request.json(),
+      db.cannedResponse.findUnique({ where: { id } }),
+    ]);
     assertEntityInOrg(existing, org.id);
 
     const updated = await db.cannedResponse.update({

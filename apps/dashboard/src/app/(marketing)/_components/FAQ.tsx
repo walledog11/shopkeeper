@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     q: "Can I export my data?",
-    a: "Yes — full conversation history, customer notes, and tags export to CSV any time. We don't hold your data hostage.",
+    a: "Yes , full conversation history, customer notes, and tags export to CSV any time. We don't hold your data hostage.",
   },
   {
     q: "What if I don't use Shopify?",
@@ -25,16 +25,18 @@ const faqs = [
   },
   {
     q: "Is my customers' data secure?",
-    a: "All customer data is encrypted in transit and at rest. Each organization's data is strictly isolated — no cross-tenant access.",
+    a: "All customer data is encrypted in transit and at rest. Each organization's data is strictly isolated , no cross-tenant access.",
   },
 ];
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div
+    <button
+      type="button"
       onClick={() => setOpen(!open)}
-      className="cursor-pointer border-t border-solid border-stone-900/10 py-6"
+      aria-expanded={open}
+      className="w-full cursor-pointer border-0 border-t border-solid border-stone-900/10 bg-transparent py-6 text-left [font-family:inherit]"
     >
       <div className="flex items-center justify-between text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-serif)]">
         <span>{q}</span>
@@ -45,14 +47,14 @@ function FaqItem({ q, a }: { q: string; a: string }) {
           {a}
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
 export function FAQ() {
   return (
     <section className="mx-auto max-w-7xl border-t border-solid border-stone-900/10 px-7 py-20 text-center">
-      <div className="mb-4 flex items-center justify-center gap-2.5 text-[11px] uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
+      <div className="mb-4 flex items-center justify-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
         <span className="inline-block h-px w-6 bg-stone-700" />
         04 · Honest questions
       </div>

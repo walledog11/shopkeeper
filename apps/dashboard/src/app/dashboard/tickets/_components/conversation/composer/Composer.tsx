@@ -37,7 +37,11 @@ interface Props {
   onSend: (isNote: boolean) => void
 }
 
-export default function Composer({
+export default function Composer(props: Props) {
+  return useComposerView(props)
+}
+
+function useComposerView({
   customerName,
   agentName = "Clerk",
   channelType,
@@ -108,13 +112,13 @@ export default function Composer({
       : EMPTY_CANNED_RESPONSES
   ), [cannedResponses, channelType, slashQuery])
 
-  useEffect(() => { setSelectedIdx(0) }, [slashQuery, filteredCanned.length])
+  const selectedCannedIdx = filteredCanned.length > 0 ? Math.min(selectedIdx, filteredCanned.length - 1) : 0
 
   useEffect(() => {
     if (!listRef.current) return
-    const item = listRef.current.children[selectedIdx] as HTMLElement | undefined
+    const item = listRef.current.children[selectedCannedIdx] as HTMLElement | undefined
     item?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIdx])
+  }, [selectedCannedIdx])
 
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
@@ -124,20 +128,26 @@ export default function Composer({
     const cap = Math.min(viewportHeight * 0.4, 320)
     ta.style.height = `${Math.min(ta.scrollHeight, cap)}px`
   }, [])
+  const resizeTextareaRef = useRef(resizeTextarea)
+
+  useEffect(() => {
+    resizeTextareaRef.current = resizeTextarea
+  }, [resizeTextarea])
 
   useEffect(() => {
     resizeTextarea()
   }, [resizeTextarea, value])
 
   useEffect(() => {
-    window.visualViewport?.addEventListener("resize", resizeTextarea)
-    window.addEventListener("resize", resizeTextarea)
+    const handleResize = () => resizeTextareaRef.current()
+    window.visualViewport?.addEventListener("resize", handleResize)
+    window.addEventListener("resize", handleResize)
 
     return () => {
-      window.visualViewport?.removeEventListener("resize", resizeTextarea)
-      window.removeEventListener("resize", resizeTextarea)
+      window.visualViewport?.removeEventListener("resize", handleResize)
+      window.removeEventListener("resize", handleResize)
     }
-  }, [resizeTextarea])
+  }, [])
 
   const handleTextChange = (newValue: string) => {
     onChange(newValue)
@@ -147,6 +157,7 @@ export default function Composer({
     } else {
       setSlashQuery(null)
     }
+    setSelectedIdx(0)
   }
 
   const insertCanned = (r: CannedResponse) => {
@@ -219,7 +230,7 @@ export default function Composer({
         >
           Internal note
           {noteCount > 0 && (
-            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+            <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${
               isNoteTab ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/[0.08] text-white/35'
             }`}>
               {noteCount}
@@ -229,7 +240,7 @@ export default function Composer({
       </div>
 
       {igWindowExpired && (
-        <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+        <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           Instagram only allows replies within 24 hours of the customer&apos;s last message. Wait
           for them to message again before you can reply here.
         </div>
@@ -243,12 +254,12 @@ export default function Composer({
             className="absolute left-5 right-5 bottom-full mb-2 rounded-md border border-white/[0.12] bg-popover shadow-lg overflow-hidden max-h-52 overflow-y-auto z-10"
           >
             {filteredCanned.map((r, idx) => (
-              <button
+              <button type="button"
                 key={r.id}
                 onMouseDown={e => { e.preventDefault(); insertCanned(r) }}
                 onMouseEnter={() => setSelectedIdx(idx)}
                 className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors border-b border-white/[0.05] last:border-0 ${
-                  idx === selectedIdx ? 'bg-white/[0.10]' : 'hover:bg-white/[0.07]'
+                  idx === selectedCannedIdx ? 'bg-white/[0.10]' : 'hover:bg-white/[0.07]'
                 }`}
               >
                 <div className="min-w-0 flex-1">
@@ -260,7 +271,7 @@ export default function Composer({
                     {r.channels.map(ch => (
                       <span
                         key={ch}
-                        className={`w-1.5 h-1.5 rounded-full ${
+                        className={`size-1.5 rounded-full ${
                           ch === 'email' ? 'bg-blue-400' : ch === 'ig_dm' ? 'bg-pink-400' : 'bg-green-400'
                         }`}
                       />
@@ -274,12 +285,13 @@ export default function Composer({
 
         <div className="flex items-start gap-2">
           {isClerkMode && (
-            <span className="inline-flex items-center gap-1 bg-violet-500/15 text-violet-400 text-[11px] font-semibold px-2.5 py-[5px] rounded-full shrink-0 mt-0.5">
-              <Bot className="w-3 h-3" />
+            <span className="inline-flex items-center gap-1 bg-violet-500/15 text-violet-400 text-xs font-semibold px-2.5 py-[5px] rounded-full shrink-0 mt-0.5">
+              <Bot className="size-3" />
               @{agentName.toLowerCase()}
             </span>
           )}
           <textarea
+            aria-label="Reply composer"
             data-testid="reply-composer-textarea"
             ref={textareaRef}
             value={value}
@@ -298,7 +310,7 @@ export default function Composer({
                 }
                 if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
                   e.preventDefault()
-                  insertCanned(filteredCanned[selectedIdx])
+                  insertCanned(filteredCanned[selectedCannedIdx])
                   return
                 }
                 if (e.key === 'Escape') {
@@ -334,7 +346,7 @@ export default function Composer({
                 Replies as <span className="font-semibold text-white/70">{senderEmail}</span>
               </span>
             )}
-            <button
+            <button type="button"
               data-testid="reply-composer-send"
               disabled={sendDisabled}
               onClick={() => onSend(isNoteTab)}
@@ -347,14 +359,14 @@ export default function Composer({
               }`}
             >
               {isSending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {isClerkMode ? 'Running…' : 'Sending…'}</>
+                <><Loader2 className="size-3.5 animate-spin" /> {isClerkMode ? 'Running…' : 'Sending…'}</>
               ) : (
                 <>
                   <span className="flex items-center gap-1">
                     <span className="text-sm leading-none">↑</span>
                     {isClerkMode ? `Ask ${agentName}` : isNoteTab ? 'Save note' : 'Send'}
                   </span>
-                  <kbd className="hidden md:inline bg-black/25 text-white/80 text-[10px] font-semibold rounded px-1.5 py-0.5 leading-none">
+                  <kbd className="hidden md:inline bg-black/25 text-white/80 text-xs font-semibold rounded px-1.5 py-0.5 leading-none">
                     ⌘↵
                   </kbd>
                 </>
@@ -364,7 +376,7 @@ export default function Composer({
         </div>
       </div>
       {error && (
-        <p className="mt-1 mb-2 text-[11px] text-red-400 font-medium px-5">{error}</p>
+        <p className="mt-1 mb-2 text-xs text-red-400 font-medium px-5">{error}</p>
       )}
     </div>
   )
@@ -379,7 +391,7 @@ interface TabButtonProps {
 
 function TabButton({ active, onClick, onPointerDown, children }: TabButtonProps) {
   return (
-    <button
+    <button type="button"
       onClick={onClick}
       onPointerDown={onPointerDown}
       className={`relative inline-flex items-center text-sm font-semibold px-3 py-2 transition-colors ${

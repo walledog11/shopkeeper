@@ -71,7 +71,7 @@ export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRec
   }
 }
 
-export function readAgentPlanCachePlan(value: unknown): AgentPlan | null {
+function readAgentPlanCachePlan(value: unknown): AgentPlan | null {
   return readAgentPlanCacheRecordShape(value)?.plan ?? null
 }
 

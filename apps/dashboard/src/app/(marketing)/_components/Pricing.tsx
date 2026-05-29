@@ -6,7 +6,7 @@ const tiers = [
     price: "$19",
     per: "/mo",
     desc: "For solo founders just getting their DMs under control.",
-    features: ["Unified inbox — IG, email, SMS", "AI drafts every reply", "Up to 500 conversations/mo"],
+    features: ["Unified inbox , IG, email, SMS", "AI drafts every reply", "Up to 500 conversations/mo"],
     cta: "Start free trial",
     href: "/signup",
     featured: false,
@@ -36,7 +36,7 @@ const tiers = [
 export function Pricing() {
   return (
     <section id="pricing" className="mx-auto max-w-7xl border-t border-solid border-stone-900/10 px-7 py-20">
-      <div className="mb-4 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
+      <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
         <span className="inline-block h-px w-6 bg-stone-700" />
         03 · Pricing
       </div>
@@ -51,7 +51,7 @@ export function Pricing() {
             key={tier.name}
             className={`relative px-7 py-9 ${i < tiers.length - 1 ? "border-r border-solid border-stone-900/10" : ""} ${tier.featured ? "bg-stone-900 text-stone-100" : "text-stone-900"}`}
           >
-            <div className={`mb-4 text-[11px] uppercase tracking-[0.15em] [font-family:var(--m-mono)] ${tier.featured ? "text-green-600" : "text-stone-700"}`}>
+            <div className={`mb-4 text-xs uppercase tracking-[0.15em] [font-family:var(--m-mono)] ${tier.featured ? "text-green-600" : "text-stone-700"}`}>
               {tier.name}
             </div>
             <div className="mb-2 flex items-baseline gap-1.5 text-[64px] leading-none tracking-[-0.03em] [font-family:var(--m-serif)]">

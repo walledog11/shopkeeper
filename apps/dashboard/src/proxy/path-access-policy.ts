@@ -19,12 +19,12 @@ export const publicRoutePatterns = [
   "/api/agent/internal(.*)",
 ] as const;
 
-export const signedInNoOrgRoutePatterns = [
+const signedInNoOrgRoutePatterns = [
   "/select-org(.*)",
   "/onboarding(.*)",
 ] as const;
 
-export const orgOptionalApiRoutePatterns = ["/api/feedback(.*)"] as const;
+const orgOptionalApiRoutePatterns = ["/api/feedback(.*)"] as const;
 
 const patternRegexCache = new Map<string, RegExp>();
 
@@ -45,11 +45,11 @@ export function isPublicPath(pathname: string): boolean {
   return matchesPathname(pathname, publicRoutePatterns);
 }
 
-export function isSignedInNoOrgPath(pathname: string): boolean {
+function isSignedInNoOrgPath(pathname: string): boolean {
   return matchesPathname(pathname, signedInNoOrgRoutePatterns);
 }
 
-export function isOrgOptionalApiPath(pathname: string): boolean {
+function isOrgOptionalApiPath(pathname: string): boolean {
   return matchesPathname(pathname, orgOptionalApiRoutePatterns);
 }
 

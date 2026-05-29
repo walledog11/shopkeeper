@@ -1,7 +1,7 @@
 "use client"
 
 import type { Ref } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
 import type { AgentPlan, RawToolCall, Ticket } from "@/types"
@@ -55,10 +55,11 @@ export default function ConversationComposerArea({
   viewTab,
 }: Props) {
   return (
+    <LazyMotion features={domAnimation}>
     <div ref={containerRef} className="mobile-ticket-composer-row relative z-20 shrink-0 flex flex-col">
       <AnimatePresence initial={false}>
         {pendingPlan && viewTab === "chat" && (
-          <motion.div
+          <m.div
             className="overflow-hidden"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
@@ -75,7 +76,7 @@ export default function ConversationComposerArea({
                 onRegenerate={onPlanRegenerate}
               />
             </div>
-          </motion.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -98,5 +99,6 @@ export default function ConversationComposerArea({
         onSend={onSend}
       />
     </div>
+    </LazyMotion>
   )
 }

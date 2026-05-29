@@ -3,8 +3,13 @@ import { cookies } from 'next/headers';
 import { auth } from '@clerk/nextjs/server';
 import crypto from 'crypto';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 
 export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Connect Instagram');
+}
+
+export async function POST(request: Request) {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

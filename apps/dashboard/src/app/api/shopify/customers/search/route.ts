@@ -26,7 +26,7 @@ export const GET = withOrgRoute(
 
     const res = await fetch(
       `https://${shop}/admin/api/2026-04/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
-      { headers: { 'X-Shopify-Access-Token': token } }
+      { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
     );
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));

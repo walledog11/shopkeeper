@@ -32,7 +32,7 @@ export const GET = withOrgRoute(
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '25', 10), 50);
 
-    // Build Shopify URL — cursor pagination (page_info) and search are mutually exclusive
+    // Build Shopify URL , cursor pagination (page_info) and search are mutually exclusive
     let url: string;
     const base = `https://${shop}/admin/api/${API_VERSION}/orders.json`;
     if (pageInfo) {
@@ -51,6 +51,7 @@ export const GET = withOrgRoute(
     }
 
     const res = await fetch(url, {
+      cache: 'no-store',
       headers: { 'X-Shopify-Access-Token': token },
     });
 
@@ -103,12 +104,10 @@ function normalizeOrder(o: ShopifyOrderRaw) {
           email: o.customer.email,
         }
       : null,
-    line_items: o.line_items
-      .filter(li => li.current_quantity > 0)
-      .map(li => ({
+    line_items: o.line_items.flatMap(li => li.current_quantity > 0 ? [{
         title: li.title,
         quantity: li.current_quantity,
         variant_title: li.variant_title || null,
-      })),
+      }] : []),
   };
 }

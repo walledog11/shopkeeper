@@ -17,17 +17,20 @@ import type { Ticket, AgentTurn, AgentPlan, FailedMessage } from "@/types"
 
 interface Props {
   ticket: Ticket
-  isThreadLoading?: boolean
   activeTab: 'open' | 'closed'
   agentName: string
   shopifyCustomerId?: string | null
   customerPlatformId?: string
   replyText: string
-  isSending: boolean
   sendError: string | null
   messagesEndRef: RefObject<HTMLDivElement | null>
   agentTurns: AgentTurn[]
-  isAgentRunning: boolean
+  status: {
+    threadLoading?: boolean
+    sending: boolean
+    agentRunning: boolean
+    summaryRefreshing: boolean
+  }
   onAgentTurnAdd: (turn: AgentTurn) => void
   onAgentRunningChange: (running: boolean) => void
   onBack: () => void
@@ -45,19 +48,19 @@ interface Props {
   onRetry?: (id: string) => void
 }
 
+const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
+
 export default function ConversationView({
   ticket,
-  isThreadLoading = false,
   activeTab,
   agentName,
   shopifyCustomerId,
   customerPlatformId,
   replyText,
-  isSending,
   sendError,
   messagesEndRef,
   agentTurns,
-  isAgentRunning,
+  status,
   onAgentTurnAdd,
   onAgentRunningChange,
   onBack,
@@ -69,16 +72,20 @@ export default function ConversationView({
   initialPlan,
   onOpenContext,
   aiSummary,
-  isSummaryRefreshing,
   onRefreshSummary,
-  failedMessages = [],
+  failedMessages = EMPTY_FAILED_MESSAGES,
   onRetry,
 }: Props) {
+  const {
+    threadLoading: isThreadLoading = false,
+    sending: isSending,
+    agentRunning: isAgentRunning,
+    summaryRefreshing: isSummaryRefreshing,
+  } = status
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
-  const [composerHeight, setComposerHeight] = useState(0)
   const { keyboardInset, visualViewportHeight } = useVisualKeyboard(conversationRef, activeTab === 'open')
   const keyboardLayoutOpen = keyboardInset > 0
 
@@ -127,7 +134,6 @@ export default function ConversationView({
 
   const { presenceCount } = useThreadPresence(ticket.id)
   const conversationStyle = {
-    "--ticket-composer-height": `${composerHeight}px`,
     "--ticket-visual-viewport-height": `${visualViewportHeight}px`,
   } as CSSProperties
 
@@ -141,8 +147,9 @@ export default function ConversationView({
   }, [messagesEndRef])
 
   useEffect(() => {
+    const root = conversationRef.current
     if (activeTab !== 'open') {
-      setComposerHeight(0)
+      root?.style.setProperty("--ticket-composer-height", "0px")
       return
     }
 
@@ -150,7 +157,7 @@ export default function ConversationView({
     if (!element) return
 
     const updateHeight = () => {
-      setComposerHeight(Math.ceil(element.getBoundingClientRect().height))
+      root?.style.setProperty("--ticket-composer-height", `${Math.ceil(element.getBoundingClientRect().height)}px`)
     }
 
     updateHeight()
@@ -178,7 +185,6 @@ export default function ConversationView({
       window.clearTimeout(second)
     }
   }, [
-    composerHeight,
     displayMessages.length,
     failedMessages.length,
     keyboardInset,

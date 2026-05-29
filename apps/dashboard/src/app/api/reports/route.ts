@@ -112,13 +112,13 @@ export const GET = withOrgRoute(
       `,
     ])
 
-    // Support stats — derive closedCount from the status groupBy, no extra query needed
+    // Support stats , derive closedCount from the status groupBy, no extra query needed
     const byStatus = Object.fromEntries(threadStatusCounts.map(r => [r.status, r._count.id]))
     const totalThreads = threadStatusCounts.reduce((s, r) => s + r._count.id, 0)
     const closedCount = byStatus['closed'] ?? 0
     const firstReply = firstReplyStats[0] ?? { avg_minutes: null, measured_count: BigInt(0) }
 
-    // Agent stats — parse turn notes
+    // Agent stats , parse turn notes
     const toolCounts: Record<string, number> = {}
     let totalRuns = 0
 

@@ -34,8 +34,8 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
     <section className="flex flex-col gap-2.5">
       <div className="flex items-baseline gap-3 flex-wrap">
         <h2 className="text-sm font-bold text-white/85">{agentName} cleared overnight</h2>
-        <span className="text-[11px] text-white/35 tabular-nums">{totalCount}</span>
-        <span className="text-[11px] text-white/35">
+        <span className="text-xs text-white/35 tabular-nums">{totalCount}</span>
+        <span className="text-xs text-white/35">
           · Saved you ~{formatHours(timeSavedHours)} · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
         </span>
       </div>
@@ -44,12 +44,12 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
         {topics.map(t => {
           const color = TOPIC_COLORS[t.tag] ?? TOPIC_COLORS.General
           return (
-            <Card key={t.tag} className={`bg-card border-border rounded-md px-3 py-3 border-l-2 ${color.bar}`}>
-              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${color.text} ${color.bg} mb-2`}>
+            <Card key={t.tag} className={`bg-card border-border rounded-md p-3 border-l-2 ${color.bar}`}>
+              <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold ${color.text} ${color.bg} mb-2`}>
                 {t.tag}
               </span>
               <p className="text-2xl font-bold tabular-nums text-white leading-none">{t.count}</p>
-              <p className="text-[11px] text-white/40 mt-1.5 leading-snug">{t.subtitle}</p>
+              <p className="text-xs text-white/40 mt-1.5 leading-snug">{t.subtitle}</p>
             </Card>
           )
         })}

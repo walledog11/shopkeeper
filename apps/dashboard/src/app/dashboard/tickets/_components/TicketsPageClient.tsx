@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react"
+import { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { AlertCircle, CheckCircle2, Inbox } from "lucide-react"
 import useSWR from 'swr'
@@ -26,6 +26,8 @@ interface Props {
   agentName: string
 }
 
+const EMPTY_SEARCH_THREADS: Thread[] = []
+
 function createLoadingTicket(threadId: string): Ticket {
   return {
     id: threadId,
@@ -48,9 +50,21 @@ function createLoadingTicket(threadId: string): Ticket {
   }
 }
 
-export default function TicketsPageClient({ initialOpenThreads, hasShopify, agentName }: Props) {
+export default function TicketsPageClient(props: Props) {
+  return (
+    <Suspense fallback={null}>
+      <TicketsPageContent {...props} />
+    </Suspense>
+  )
+}
+
+function TicketsPageContent(props: Props) {
+  return useTicketsPageContentView(props)
+}
+
+function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }: Props) {
   const searchParams = useSearchParams()
-  const queryThreadId = searchParams.get('thread')
+  const queryThreadId = new URLSearchParams(searchParams.toString()).get('thread')
 
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
@@ -59,7 +73,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const [searchQuery, setSearchQuery] = useState('')
   const [showContextDrawer, setShowContextDrawer] = useState(false)
   const [refreshingSummaryId, setRefreshingSummaryId] = useState<string | null>(null)
-  const summaryRequestsRef = useRef(new Set<string>())
+  const refreshingSummaryIdRef = useRef<string | null>(null)
   const appliedQueryThreadRef = useRef<string | null>(null)
   const isDesktopContext = useMediaQuery('(min-width: 1280px)')
 
@@ -69,23 +83,13 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, removeThreadById: removeFromClosed, prependThread: prependToClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true)
   const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered')
   const isSearchMode = searchQuery.length >= 2
-  const dbThreads = useMemo(
-    () => {
-      if (isSearchMode) return []
-      if (activeTab === 'open') return openThreads
-      if (activeTab === 'closed') return closedThreads
-      return filteredThreads
-    },
-    [activeTab, closedThreads, filteredThreads, isSearchMode, openThreads],
-  )
-  const isLoading = activeTab === 'open' ? openLoading : activeTab === 'closed' ? closedLoading : filteredLoading
 
   const { data: searchData, isLoading: isSearchLoading, mutate: mutateSearch } = useSWR<{ threads: Thread[] }>(
     isSearchMode ? `/api/search?q=${encodeURIComponent(searchQuery)}` : null,
     fetcher,
     { keepPreviousData: true },
   )
-  const searchThreads = useMemo(() => searchData?.threads ?? [], [searchData?.threads])
+  const searchThreads = searchData?.threads ?? EMPTY_SEARCH_THREADS
   const activeThreadKey = activeTicketId ? `/api/threads/${activeTicketId}` : null
   const {
     data: activeThreadData,
@@ -93,10 +97,31 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     mutate: mutateActiveThread,
   } = useSWR<{ thread: Thread; agentActionsByTurnId?: Record<string, AgentTurnAction[]> }>(activeThreadKey, fetcher)
 
-  const listThreads = useMemo(
-    () => isSearchMode ? searchThreads : dbThreads,
-    [dbThreads, isSearchMode, searchThreads],
+  const activeThread = activeThreadData?.thread
+  const effectiveActiveTab = useMemo(() => {
+    if (queryThreadId) {
+      if (activeThread?.id === queryThreadId) {
+        if (activeThread.filterStatus === 'filtered') return 'filtered'
+        return activeThread.status === 'closed' ? 'closed' : 'open'
+      }
+      if (openThreads.some(t => t.id === queryThreadId)) return 'open'
+      if (closedThreads.some(t => t.id === queryThreadId)) return 'closed'
+      if (filteredThreads.some(t => t.id === queryThreadId)) return 'filtered'
+    }
+    return activeTab
+  }, [activeTab, activeThread, closedThreads, filteredThreads, openThreads, queryThreadId])
+  const dbThreads = useMemo(
+    () => {
+      if (isSearchMode) return []
+      if (effectiveActiveTab === 'open') return openThreads
+      if (effectiveActiveTab === 'closed') return closedThreads
+      return filteredThreads
+    },
+    [closedThreads, effectiveActiveTab, filteredThreads, isSearchMode, openThreads],
   )
+  const isLoading = effectiveActiveTab === 'open' ? openLoading : effectiveActiveTab === 'closed' ? closedLoading : filteredLoading
+
+  const listThreads = isSearchMode ? searchThreads : dbThreads
 
   const liveTickets: Ticket[] = useMemo(
     () => listThreads.map(t => threadToTicket(t, agentName)),
@@ -110,7 +135,6 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     [activeFilter, isSearchMode, liveTickets],
   )
 
-  const activeThread = activeThreadData?.thread
   const activeTicket = activeThread ? threadToTicket(activeThread, agentName) : undefined
   const activeThreadPreview = useMemo(
     () => {
@@ -145,8 +169,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   // ref, which churns on every SWR poll and would re-fire downstream effects.
   const cachedPlan = useMemo(
     () => activeThread ? getCurrentPlanForThread(activeThread, lastCustomerMessageId) : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeThread?.id, cachedPlanMessageId, lastCustomerMessageId],
+    [activeThread, lastCustomerMessageId],
   )
 
   const patchThreadCaches = useCallback(async (threadId: string, updateThread: (thread: Thread) => Thread) => {
@@ -251,23 +274,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
     if (appliedQueryThreadRef.current === queryThreadId) return
     appliedQueryThreadRef.current = queryThreadId
     setActiveTicketId(current => current === queryThreadId ? current : queryThreadId)
-    if (openThreads.find(t => t.id === queryThreadId)) {
-      setActiveTab('open')
-    } else if (closedThreads.find(t => t.id === queryThreadId)) {
-      setActiveTab('closed')
-    } else if (filteredThreads.find(t => t.id === queryThreadId)) {
-      setActiveTab('filtered')
-    }
-  }, [queryThreadId, openThreads, closedThreads, filteredThreads])
-
-  useEffect(() => {
-    if (!queryThreadId || activeThread?.id !== queryThreadId) return
-    if (activeThread.filterStatus === 'filtered') {
-      setActiveTab('filtered')
-    } else {
-      setActiveTab(activeThread.status === 'closed' ? 'closed' : 'open')
-    }
-  }, [activeThread?.filterStatus, activeThread?.id, activeThread?.status, queryThreadId])
+  }, [queryThreadId])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -278,7 +285,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
   }, [patchThreadCaches])
 
   const handleRefreshSummary = useCallback(async (threadId: string) => {
-    if (refreshingSummaryId === threadId) return
+    if (refreshingSummaryIdRef.current === threadId) return
+    refreshingSummaryIdRef.current = threadId
     setRefreshingSummaryId(threadId)
 
     try {
@@ -295,20 +303,12 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
       await patchThreadSummary(threadId, data.summary ?? null)
     } catch (err) {
-      summaryRequestsRef.current.delete(threadId)
       console.error('Failed to refresh summary', err)
     } finally {
+      if (refreshingSummaryIdRef.current === threadId) refreshingSummaryIdRef.current = null
       setRefreshingSummaryId(current => current === threadId ? null : current)
     }
-  }, [patchThreadSummary, refreshingSummaryId])
-
-  useEffect(() => {
-    if (!activeThread || activeThread.aiSummary || activeThread.messages.length === 0) return
-    if (summaryRequestsRef.current.has(activeThread.id)) return
-
-    summaryRequestsRef.current.add(activeThread.id)
-    handleRefreshSummary(activeThread.id)
-  }, [activeThread, handleRefreshSummary])
+  }, [patchThreadSummary])
 
   const handleTabChange = (tab: 'open' | 'closed' | 'filtered') => {
     setActiveTab(tab)
@@ -329,7 +329,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   if (isLoading && dbThreads.length === 0 && !isSearchMode) {
     return (
-      <div className="flex h-full w-full overflow-hidden bg-background">
+      <div className="flex size-full overflow-hidden bg-background">
         <div className="w-full md:w-72 md:min-w-[260px] md:max-w-[300px] shrink-0 border-r border-border flex flex-col bg-background">
           <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
             <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
@@ -337,8 +337,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
             <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
           </div>
           <div className="flex-1 divide-y divide-white/[0.05]">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="px-4 py-3.5 animate-pulse space-y-2">
+            {["ticket-skeleton-1", "ticket-skeleton-2", "ticket-skeleton-3", "ticket-skeleton-4", "ticket-skeleton-5", "ticket-skeleton-6"].map((key) => (
+              <div key={key} className="px-4 py-3.5 animate-pulse space-y-2">
                 <div className="flex justify-between">
                   <div className="h-3 w-24 bg-white/[0.06] rounded" />
                   <div className="h-3 w-10 bg-white/[0.04] rounded" />
@@ -350,8 +350,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           </div>
         </div>
         <div className="hidden md:flex flex-1 items-center justify-center bg-background">
-          <div className="w-14 h-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-            <Inbox className="w-6 h-6 text-white/20" />
+          <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+            <Inbox className="size-6 text-white/20" />
           </div>
         </div>
       </div>
@@ -360,14 +360,14 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
 
   if (error) {
     return (
-      <div className="flex h-full w-full items-center justify-center bg-background">
+      <div className="flex size-full items-center justify-center bg-background">
         <div className="text-red-400 text-sm font-medium">Failed to connect to database.</div>
       </div>
     )
   }
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background relative">
+    <div className="flex size-full overflow-hidden bg-background relative">
 
       {/* ── Col 1: Thread list ─────────────────────────────────────────────── */}
       <div className={`
@@ -377,15 +377,19 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
         <ThreadList
           tickets={filteredTickets}
           totalCount={liveTickets.length}
-          activeTab={activeTab}
+          activeTab={effectiveActiveTab}
           activeFilter={activeFilter}
           activeTicketId={activeTicketId}
           openCount={openThreads.length}
           closedCount={closedThreads.length}
           spamCount={filteredThreads.length}
           searchQuery={searchQuery}
-          isSearchMode={isSearchMode}
-          isSearchLoading={isSearchLoading}
+          listState={{
+            searchMode: isSearchMode,
+            searchLoading: isSearchLoading,
+            hasMore: effectiveActiveTab === 'open' ? hasMoreOpen : effectiveActiveTab === 'closed' ? hasMoreClosed : hasMoreFiltered,
+            loadingMore: effectiveActiveTab === 'open' ? isLoadingMoreOpen : effectiveActiveTab === 'closed' ? isLoadingMoreClosed : isLoadingMoreFiltered,
+          }}
           selectedIds={selectedIds}
           needsReply={needsReply}
           onNeedsReplyChange={setNeedsReply}
@@ -398,9 +402,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           onBulkArchive={() => handleBulkArchive(selectedIds)}
           onBulkTag={(tag) => handleBulkTag(selectedIds, tag)}
           onClearSelection={handleClearSelection}
-          hasMore={activeTab === 'open' ? hasMoreOpen : activeTab === 'closed' ? hasMoreClosed : hasMoreFiltered}
-          isLoadingMore={activeTab === 'open' ? isLoadingMoreOpen : activeTab === 'closed' ? isLoadingMoreClosed : isLoadingMoreFiltered}
-          onLoadMore={activeTab === 'open' ? loadMoreOpen : activeTab === 'closed' ? loadMoreClosed : loadMoreFiltered}
+          onLoadMore={effectiveActiveTab === 'open' ? loadMoreOpen : effectiveActiveTab === 'closed' ? loadMoreClosed : loadMoreFiltered}
           onMarkAsSpam={handleMarkAsSpam}
           onRecover={handleRecover}
         />
@@ -413,28 +415,30 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
             <ConversationView
               key={conversationTicket.id}
               ticket={conversationTicket}
-              isThreadLoading={isConversationLoading}
               agentName={agentName}
               shopifyCustomerId={activeThread?.shopifyCustomerId}
               customerPlatformId={activeThread?.customer?.platformId}
               agentTurns={activeAgentTurns}
-              isAgentRunning={isAgentRunning}
+              status={{
+                threadLoading: isConversationLoading,
+                sending: isSending,
+                agentRunning: isAgentRunning,
+                summaryRefreshing: activeThread ? refreshingSummaryId === activeThread.id : false,
+              }}
               onAgentTurnAdd={handleAgentTurnAdd}
               onAgentRunningChange={handleAgentRunningChange}
               onAgentComplete={handleAgentComplete}
-              activeTab={isSearchMode || activeTab === 'filtered'
+              activeTab={isSearchMode || effectiveActiveTab === 'filtered'
                 ? ((activeThread?.status ?? activeThreadPreview?.status) === 'closed' ? 'closed' : 'open')
-                : activeTab}
+                : effectiveActiveTab}
               initialPlan={cachedPlan}
               aiSummary={activeThread?.aiSummary ?? activeThreadPreview?.aiSummary ?? null}
-              isSummaryRefreshing={activeThread ? refreshingSummaryId === activeThread.id : false}
               onRefreshSummary={() => {
                 if (activeThread) {
                   handleRefreshSummary(activeThread.id)
                 }
               }}
               replyText={replyText}
-              isSending={isSending}
               sendError={sendError}
               messagesEndRef={messagesEndRef}
               failedMessages={failedMessages.filter(m => m.threadId === activeTicketId)}
@@ -486,7 +490,7 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
             {activeThreadError ? (
               <>
-                <AlertCircle className="w-5 h-5 text-red-400" />
+                <AlertCircle className="size-5 text-red-400" />
                 <div>
                   <p className="text-sm font-semibold text-white/60">Unable to load conversation</p>
                   <p className="text-xs text-white/30 mt-1">The thread may have been archived or is no longer available.</p>
@@ -496,18 +500,18 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
           </div>
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-4">
-            <div className="w-14 h-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-              {activeTab === 'open' && openThreads.length === 0
-                ? <CheckCircle2 className="w-6 h-6 text-green-400" />
-                : <Inbox className="w-6 h-6 text-white/20" />
+            <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+              {effectiveActiveTab === 'open' && openThreads.length === 0
+                ? <CheckCircle2 className="size-6 text-green-400" />
+                : <Inbox className="size-6 text-white/20" />
               }
             </div>
             <div>
               <p className="text-sm font-semibold text-white/60">
-                {activeTab === 'open' && openThreads.length === 0 ? 'All caught up' : 'No conversation open'}
+                {effectiveActiveTab === 'open' && openThreads.length === 0 ? 'All caught up' : 'No conversation open'}
               </p>
               <p className="text-xs text-white/30 mt-1 max-w-[200px]">
-                {activeTab === 'open' && openThreads.length === 0
+                {effectiveActiveTab === 'open' && openThreads.length === 0
                   ? 'No open tickets right now. Check back soon.'
                   : 'Select a thread from the list to start replying.'}
               </p>
@@ -520,8 +524,8 @@ export default function TicketsPageClient({ initialOpenThreads, hasShopify, agen
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1c1c1c] border border-white/[0.10] text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
           {toast.tone === 'error'
-            ? <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
-            : <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+            ? <AlertCircle className="size-4 text-red-400 shrink-0" />
+            : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
           }
           {toast.message}
         </div>

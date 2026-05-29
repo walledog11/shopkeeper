@@ -29,8 +29,8 @@ export function EmptyState({
   if (totalCount === 0 && !searchQuery && !activeFilter) {
     return (
       <div className="flex flex-col items-center text-center p-8 gap-3">
-        <div className="w-12 h-12 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-          <Inbox className="w-5 h-5 text-white/20" />
+        <div className="size-12 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+          <Inbox className="size-5 text-white/20" />
         </div>
         <div>
           <p className="text-sm font-semibold text-white/50 mb-1">No tickets yet</p>

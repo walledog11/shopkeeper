@@ -5,7 +5,7 @@ import type { OrgSettings } from "@/types";
 import { readModelUsage } from "../usage";
 import type { JudgeResult, RubricCheck } from "./types";
 
-export const JUDGE_MODEL = "claude-sonnet-4-6";
+const JUDGE_MODEL = "claude-sonnet-4-6";
 
 const JUDGE_SYSTEM_PROMPT = `You evaluate an AI support agent's drafted reply against a list of rubric checks.
 

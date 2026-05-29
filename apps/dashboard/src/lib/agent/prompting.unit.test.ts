@@ -90,12 +90,12 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('- Prefers email updates');
     expect(prompt).toContain('- Usually asks about shipping timelines');
     expect(prompt).not.toContain('This fourth fact should stay out of the prompt');
-    expect(prompt).toContain('- Shipping — Resolved a delayed shipment question. (2026-05-26T12:00:00.000Z)');
-    expect(prompt).toContain('- Returns — Explained the return window. (2026-05-25T12:00:00.000Z)');
-    expect(prompt).toContain('- untagged — Updated the customer profile. (2026-05-24T12:00:00.000Z)');
+    expect(prompt).toContain('- Shipping , Resolved a delayed shipment question. (2026-05-26T12:00:00.000Z)');
+    expect(prompt).toContain('- Returns , Explained the return window. (2026-05-25T12:00:00.000Z)');
+    expect(prompt).toContain('- untagged , Updated the customer profile. (2026-05-24T12:00:00.000Z)');
     expect(prompt).not.toContain('This older interaction should stay out of the prompt');
-    expect(prompt).toContain('This customer has filed multiple complaints recently — bias toward escalation.');
-    expect(prompt).toContain('This is a high-value customer — extra care on tone.');
+    expect(prompt).toContain('This customer has filed multiple complaints recently , bias toward escalation.');
+    expect(prompt).toContain('This is a high-value customer , extra care on tone.');
 
     expect(prompt.indexOf('## About this store')).toBeLessThan(prompt.indexOf('## What you know about this customer'));
     expect(prompt.indexOf('## What you know about this customer')).toBeLessThan(prompt.indexOf('## Knowledge base'));

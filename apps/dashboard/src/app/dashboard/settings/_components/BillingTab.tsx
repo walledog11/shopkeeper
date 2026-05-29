@@ -54,7 +54,7 @@ export default function BillingTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
       </div>
     )
   }
@@ -62,7 +62,7 @@ export default function BillingTab() {
   if (error || !data) {
     return (
       <div className="flex items-center gap-2 py-10 text-sm text-red-500">
-        <AlertTriangle className="w-4 h-4 shrink-0" />
+        <AlertTriangle className="size-4 shrink-0" />
         Failed to load billing information.
       </div>
     )
@@ -97,8 +97,8 @@ export default function BillingTab() {
                   <p className="text-sm font-bold text-foreground">
                     {data.planName ?? (isActive ? 'Pro' : 'Free')}
                   </p>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${statusCfg.className}`}>
-                    <StatusIcon className="w-3 h-3" />
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${statusCfg.className}`}>
+                    <StatusIcon className="size-3" />
                     {statusCfg.label}
                   </span>
                 </div>
@@ -140,7 +140,7 @@ export default function BillingTab() {
           <div className="flex items-center justify-between gap-4">
             {data.paymentMethod ? (
               <div className="flex items-center gap-2.5">
-                <CreditCard className="w-4 h-4 text-muted-foreground shrink-0" />
+                <CreditCard className="size-4 text-muted-foreground shrink-0" />
                 <CardBrandIcon brand={data.paymentMethod.brand} />
                 <span className="text-sm text-foreground">ending in <span className="font-semibold">{data.paymentMethod.last4}</span></span>
               </div>
@@ -170,10 +170,10 @@ export default function BillingTab() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="px-5 sm:px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-[11px] font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Status</th>
-                <th className="px-5 sm:px-6 py-3 text-right text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">PDF</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Date</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wide hidden sm:table-cell">Status</th>
+                <th className="px-5 sm:px-6 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wide">PDF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -182,12 +182,12 @@ export default function BillingTab() {
                   <td className="px-5 sm:px-6 py-3.5 text-muted-foreground">{formatDate(inv.date)}</td>
                   <td className="px-5 sm:px-6 py-3.5 font-medium text-foreground">{formatAmount(inv.amount)}</td>
                   <td className="px-5 sm:px-6 py-3.5 hidden sm:table-cell">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ${
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
                       inv.status === 'paid'
                         ? 'text-green-400 bg-green-400/10 border-green-400/20'
                         : 'text-muted-foreground bg-muted border-border'
                     }`}>
-                      {inv.status ?? '—'}
+                      {inv.status ?? ','}
                     </span>
                   </td>
                   <td className="px-5 sm:px-6 py-3.5 text-right">
@@ -198,10 +198,10 @@ export default function BillingTab() {
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        Download <ExternalLink className="w-3 h-3" />
+                        Download <ExternalLink className="size-3" />
                       </a>
                     ) : (
-                      <span className="text-xs text-muted-foreground/40">—</span>
+                      <span className="text-xs text-muted-foreground/40">,</span>
                     )}
                   </td>
                 </tr>

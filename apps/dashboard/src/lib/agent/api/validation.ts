@@ -56,7 +56,7 @@ function parseOptionalBoolean(value: unknown, fieldName: string): boolean | unde
   return value as boolean;
 }
 
-export function parseApprovedToolCalls(value: unknown): RawToolCall[] | undefined {
+function parseApprovedToolCalls(value: unknown): RawToolCall[] | undefined {
   if (value == null) {
     return undefined;
   }
@@ -171,7 +171,10 @@ export interface ActionLogFilters {
 
 function parseCsvList(value: string | null): string[] | undefined {
   if (!value) return undefined;
-  const list = value.split(",").map((s) => s.trim()).filter(Boolean);
+  const list = value.split(",").flatMap((s) => {
+    const trimmed = s.trim();
+    return trimmed ? [trimmed] : [];
+  });
   return list.length === 0 ? undefined : list;
 }
 

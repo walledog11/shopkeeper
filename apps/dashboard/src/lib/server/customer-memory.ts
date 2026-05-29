@@ -98,12 +98,12 @@ export async function enqueueCustomerMemoryForClosedThreads(args: {
     return;
   }
 
-  for (const chunk of chunkTargets(threads, MAX_THREADS_PER_REQUEST)) {
-    await postCustomerMemoryTargets({
+  await Promise.all(chunkTargets(threads, MAX_THREADS_PER_REQUEST).map((chunk) => (
+    postCustomerMemoryTargets({
       base,
       secret,
       organizationId: args.organizationId,
       threads: chunk,
-    });
-  }
+    })
+  )));
 }

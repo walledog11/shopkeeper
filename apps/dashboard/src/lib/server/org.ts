@@ -25,7 +25,7 @@ function composeAiContext(useCases: unknown, teamSize: unknown): string {
   const team = typeof teamSize === 'string' ? teamSize : null;
 
   const teamPhrase = team && TEAM_SIZE_PHRASES[team] ? TEAM_SIZE_PHRASES[team] : null;
-  const casePhrases = cases.map(c => USE_CASE_PHRASES[c]).filter(Boolean);
+  const casePhrases = cases.flatMap(c => USE_CASE_PHRASES[c] ? [USE_CASE_PHRASES[c]] : []);
 
   if (!teamPhrase && casePhrases.length === 0) return '';
 
@@ -61,7 +61,7 @@ export async function getOrCreateOrg() {
 
   if (existing) return existing;
 
-  // First time this Clerk org is seen — provision it in our DB
+  // First time this Clerk org is seen , provision it in our DB
   const client = await clerkClient();
   const [clerkOrg, clerkUser] = await Promise.all([
     client.organizations.getOrganization({ organizationId: orgId }),

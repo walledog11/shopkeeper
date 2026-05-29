@@ -1,5 +1,3 @@
-"use client"
-
 import { GreenToggle } from "./GreenToggle"
 
 export function PermissionToggleRow({
@@ -25,7 +23,7 @@ export function PermissionToggleRow({
           </span>
         )}
         {suffix && (
-          <span className="text-[11px] text-white/35 ml-1 shrink-0">{suffix}</span>
+          <span className="text-xs text-white/35 ml-1 shrink-0">{suffix}</span>
         )}
       </div>
       <GreenToggle checked={checked} onChange={onChange} disabled={required} />

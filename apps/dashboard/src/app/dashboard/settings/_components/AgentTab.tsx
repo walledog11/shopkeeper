@@ -49,7 +49,49 @@ function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string
   return value == null ? "Not set" : String(value)
 }
 
-export default function AgentTab({ settings, rawSettings, version }: Props) {
+function OverrideHint({
+  path,
+  tier,
+  payload,
+  explicitOverrideSet,
+  onReset,
+}: {
+  path: AutonomyOverridePath
+  tier: AutonomyTier
+  payload: OrgSettings
+  explicitOverrideSet: Set<AutonomyOverridePath>
+  onReset: (path: AutonomyOverridePath) => void
+}) {
+  const explicit = explicitOverrideSet.has(path)
+  const defaultValue = formatOverrideValue(path, tierDefaultForPath(tier, path))
+  const currentValue = formatOverrideValue(path, readSettingsPath(payload, path))
+
+  return (
+    <p className="text-xs text-white/30">
+      Default for {tierLabel(tier)}: {defaultValue}
+      {explicit ? (
+        <>
+          <span> · You set: {currentValue}</span>
+          <button
+            type="button"
+            onClick={() => onReset(path)}
+            className="ml-2 font-semibold text-amber-300 hover:text-amber-200"
+          >
+            Reset to tier default
+          </button>
+        </>
+      ) : (
+        <span> · Using tier default</span>
+      )}
+    </p>
+  )
+}
+
+export default function AgentTab(props: Props) {
+  return useAgentTabView(props)
+}
+
+function useAgentTabView({ settings, rawSettings, version }: Props) {
   const { mutate } = useSWRConfig()
   const [state, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettings)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
@@ -61,7 +103,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
   const [digestSecondHourInput, setDigestSecondHourInput] = useState<string>(initialRaw.digestSecondHour)
   const [businessHoursStartInput, setBusinessHoursStartInput] = useState<string>(initialRaw.bhStart)
   const [businessHoursEndInput, setBusinessHoursEndInput] = useState<string>(initialRaw.bhEnd)
-  const [currentVersion, setCurrentVersion] = useState(version)
+  const currentVersionRef = useRef(version)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -94,6 +136,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
   const freshBaselineRef = useRef<Partial<OrgSettings> | null>(null)
   const explicitOverrideSet = useMemo(() => new Set(explicitOverridePaths), [explicitOverridePaths])
   const isDirty = serializedPatch !== initialPatchRef.current
+  const autonomyTier = state.autonomyTier ?? "guarded"
 
   const businessHoursInvalid = payload.businessHoursEnabled && payload.businessHoursEnd <= payload.businessHoursStart
 
@@ -152,33 +195,6 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
     }
   }
 
-  function OverrideHint({ path }: { path: AutonomyOverridePath }) {
-    const tier = state.autonomyTier ?? "guarded"
-    const explicit = explicitOverrideSet.has(path)
-    const defaultValue = formatOverrideValue(path, tierDefaultForPath(tier, path))
-    const currentValue = formatOverrideValue(path, readSettingsPath(payload, path))
-
-    return (
-      <p className="text-[11px] text-white/30">
-        Default for {tierLabel(tier)}: {defaultValue}
-        {explicit ? (
-          <>
-            <span> · You set: {currentValue}</span>
-            <button
-              type="button"
-              onClick={() => resetAutonomyOverride(path)}
-              className="ml-2 font-semibold text-amber-300 hover:text-amber-200"
-            >
-              Reset to tier default
-            </button>
-          </>
-        ) : (
-          <span> · Using tier default</span>
-        )}
-      </p>
-    )
-  }
-
   async function save() {
     setError(null)
     setStaleVersion(false)
@@ -191,14 +207,14 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
         body: JSON.stringify({
           settings: settingsPatch.settings,
           settingsUnset: settingsPatch.settingsUnset,
-          version: currentVersion,
+          version: currentVersionRef.current,
         }),
       })
       if (res.status === 409) {
         const body = await res.json().catch(() => ({})) as {
           current?: { version?: string; settings?: Partial<OrgSettings> }
         }
-        if (body.current?.version) setCurrentVersion(body.current.version)
+        if (body.current?.version) currentVersionRef.current = body.current.version
         if (body.current?.settings) {
           // Capture fresh server state so Reset jumps to it instead of the stale prop.
           freshBaselineRef.current = body.current.settings
@@ -208,7 +224,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
       }
       if (!res.ok) throw new Error('Failed')
       const body = await res.json().catch(() => ({})) as { version?: string; settings?: Partial<OrgSettings> }
-      if (body.version) setCurrentVersion(body.version)
+      if (body.version) currentVersionRef.current = body.version
       if (body.settings) baselineRawRef.current = body.settings
       void mutate(
         '/api/org',
@@ -259,7 +275,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                   } ${disabled ? "opacity-45 cursor-not-allowed hover:border-white/[0.10] hover:bg-white/[0.025]" : ""}`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className={`h-2.5 w-2.5 rounded-full border ${selected ? "border-amber-300 bg-amber-300" : "border-white/25"}`} />
+                    <span className={`size-2.5 rounded-full border ${selected ? "border-amber-300 bg-amber-300" : "border-white/25"}`} />
                     <span className="text-sm font-semibold text-white/75">{option.label}</span>
                     {option.recommended && (
                       <span className="rounded-sm border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-300">
@@ -273,7 +289,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                     )}
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-white/40">{option.blurb}</p>
-                  <p className="mt-2 font-mono text-[10px] uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
+                  <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
                 </button>
               )
             })}
@@ -287,17 +303,24 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 checked={state.requireApprovalForActions}
                 onChange={v => setAutonomyOverride("requireApprovalForActions", v)}
               />
-              <OverrideHint path="requireApprovalForActions" />
+              <OverrideHint
+                path="requireApprovalForActions"
+                tier={autonomyTier}
+                payload={payload}
+                explicitOverrideSet={explicitOverrideSet}
+                onReset={resetAutonomyOverride}
+              />
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-white/60">
+              <span className="block text-xs font-semibold text-white/60">
                 Max refund amount
                 <span className="ml-1.5 font-normal text-white/30">· leave blank for no limit</span>
-              </label>
+              </span>
               <div className="relative w-48">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
                 <Input
+                  aria-label="Max refund amount"
                   value={maxRefundInput}
                   onChange={e => {
                     markExplicit("maxRefundAmount")
@@ -307,13 +330,19 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                   className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
                 />
               </div>
-              <OverrideHint path="maxRefundAmount" />
+              <OverrideHint
+                path="maxRefundAmount"
+                tier={autonomyTier}
+                payload={payload}
+                explicitOverrideSet={explicitOverrideSet}
+                onReset={resetAutonomyOverride}
+              />
             </div>
 
             <div className="space-y-3">
               <div>
                 <p className="text-xs font-semibold text-white/60">Tool permissions</p>
-                <p className="text-[11px] text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
+                <p className="text-xs text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
               </div>
               <div className="space-y-4">
                 <div className="space-y-1">
@@ -325,7 +354,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                     badge="High impact"
                     badgeColor="text-orange-300 bg-orange-400/10 border-orange-400/25"
                   />
-                  <OverrideHint path="toolsEnabled.action" />
+                  <OverrideHint
+                    path="toolsEnabled.action"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
                 </div>
                 <div className="space-y-1">
                   <ToggleRow
@@ -336,7 +371,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                     badge="Customer-facing"
                     badgeColor="text-blue-300 bg-blue-400/10 border-blue-400/25"
                   />
-                  <OverrideHint path="toolsEnabled.communication" />
+                  <OverrideHint
+                    path="toolsEnabled.communication"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
                 </div>
                 <div className="space-y-1">
                   <ToggleRow
@@ -347,7 +388,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                     badge="Internal"
                     badgeColor="text-violet-300 bg-violet-400/10 border-violet-400/25"
                   />
-                  <OverrideHint path="toolsEnabled.internal" />
+                  <OverrideHint
+                    path="toolsEnabled.internal"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
                 </div>
                 <div className="space-y-1">
                   <ToggleRow
@@ -358,7 +405,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                     badge="Read-only"
                     badgeColor="text-white/50 bg-white/[0.05] border-white/[0.10]"
                   />
-                  <OverrideHint path="toolsEnabled.read" />
+                  <OverrideHint
+                    path="toolsEnabled.read"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
                 </div>
               </div>
             </div>
@@ -370,7 +423,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 checked={state.blockCancellations}
                 onChange={v => setAutonomyOverride("blockCancellations", v)}
               />
-              <OverrideHint path="blockCancellations" />
+              <OverrideHint
+                path="blockCancellations"
+                tier={autonomyTier}
+                payload={payload}
+                explicitOverrideSet={explicitOverrideSet}
+                onReset={resetAutonomyOverride}
+              />
             </div>
 
             <div className="space-y-1">
@@ -380,7 +439,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 checked={state.blockCustomLineItems}
                 onChange={v => setAutonomyOverride("blockCustomLineItems", v)}
               />
-              <OverrideHint path="blockCustomLineItems" />
+              <OverrideHint
+                path="blockCustomLineItems"
+                tier={autonomyTier}
+                payload={payload}
+                explicitOverrideSet={explicitOverrideSet}
+                onReset={resetAutonomyOverride}
+              />
             </div>
             </div>
           </div>
@@ -390,32 +455,33 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
       <SectionCard title="Identity" description="How the agent presents itself and writes replies.">
         <div className="space-y-5">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Agent name
               <span className="ml-1.5 font-normal text-white/30">· shown in the notes panel and used as the @mention trigger</span>
-            </label>
-            <Input value={state.agentName} onChange={e => dispatch({ type: 'set', patch: { agentName: e.target.value } })} placeholder="Clerk" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
+            </span>
+            <Input aria-label="Agent name" value={state.agentName} onChange={e => dispatch({ type: 'set', patch: { agentName: e.target.value } })} placeholder="Clerk" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Brand name
               <span className="ml-1.5 font-normal text-white/30">· used in AI draft prompts</span>
-            </label>
-            <Input value={state.aiContext} onChange={e => dispatch({ type: 'set', patch: { aiContext: e.target.value } })} placeholder="e.g. Acme Store" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
+            </span>
+            <Input aria-label="Brand name" value={state.aiContext} onChange={e => dispatch({ type: 'set', patch: { aiContext: e.target.value } })} placeholder="e.g. Acme Store" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Brand voice
               <span className="ml-1.5 font-normal text-white/30">· max 200 characters</span>
-            </label>
+            </span>
             <Textarea
+              aria-label="Brand voice"
               value={state.brandVoice}
               onChange={e => dispatch({ type: 'set', patch: { brandVoice: e.target.value } })}
               placeholder="e.g. Friendly and direct. Never over-apologise. Use plain language."
               maxLength={200}
               rows={3}
             />
-            <p className="text-[11px] text-white/30 text-right">{state.brandVoice.length}/200</p>
+            <p className="text-xs text-white/30 text-right">{state.brandVoice.length}/200</p>
           </div>
         </div>
       </SectionCard>
@@ -423,8 +489,8 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
       <SectionCard title="Sample replies" description="Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages.">
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[11px] text-white/35">Add a tag to apply a reply only to matching tickets. Leave blank to make it always eligible.</p>
-            <p className="text-[11px] text-white/30 shrink-0">{(state.sampleReplies ?? []).length} / {SAMPLE_REPLY_CAP}</p>
+            <p className="text-xs text-white/35">Add a tag to apply a reply only to matching tickets. Leave blank to make it always eligible.</p>
+            <p className="text-xs text-white/30 shrink-0">{(state.sampleReplies ?? []).length} / {SAMPLE_REPLY_CAP}</p>
           </div>
 
           {(state.sampleReplies ?? []).length === 0 && (
@@ -434,32 +500,34 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
           {(state.sampleReplies ?? []).map((s, idx) => (
             <div key={s.id} className="rounded-md border border-white/[0.10] bg-white/[0.02] p-3 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-white/45">Example {idx + 1}</span>
+                <span className="text-xs font-semibold text-white/45">Example {idx + 1}</span>
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).filter(r => r.id !== s.id) } })}
                   aria-label="Remove sample reply"
                   className="text-white/35 hover:text-red-400 transition-colors p-1 -m-1"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="size-3.5" />
                 </button>
               </div>
               <div className="space-y-1">
                 <Textarea
+                  aria-label={`Sample reply ${idx + 1} body`}
                   value={s.body}
                   onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, body: e.target.value } : r) } })}
-                  placeholder="e.g. Hey! Totally hear you on the wait — let me chase that down and get back to you with an update."
+                  placeholder="e.g. Hey! Totally hear you on the wait , let me chase that down and get back to you with an update."
                   maxLength={SAMPLE_REPLY_BODY_MAX}
                   rows={2}
                 />
-                <p className="text-[11px] text-white/30 text-right">{s.body.length}/{SAMPLE_REPLY_BODY_MAX}</p>
+                <p className="text-xs text-white/30 text-right">{s.body.length}/{SAMPLE_REPLY_BODY_MAX}</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-white/55">
+                  <span className="block text-xs font-semibold text-white/55">
                     When to use <span className="font-normal text-white/30">· optional</span>
-                  </label>
+                  </span>
                   <Input
+                    aria-label={`Sample reply ${idx + 1} usage context`}
                     value={s.context ?? ''}
                     onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, context: e.target.value || undefined } : r) } })}
                     placeholder="e.g. shipping delay"
@@ -468,10 +536,11 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-semibold text-white/55">
+                  <span className="block text-xs font-semibold text-white/55">
                     Tag <span className="font-normal text-white/30">· match against ticket tag</span>
-                  </label>
+                  </span>
                   <Input
+                    aria-label={`Sample reply ${idx + 1} tag`}
                     value={s.tag ?? ''}
                     onChange={e => dispatch({ type: 'set', patch: { sampleReplies: (state.sampleReplies ?? []).map(r => r.id === s.id ? { ...r, tag: e.target.value || undefined } : r) } })}
                     placeholder="e.g. shipping"
@@ -488,12 +557,12 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
             onClick={() => {
               const current = state.sampleReplies ?? []
               if (current.length >= SAMPLE_REPLY_CAP) return
-              dispatch({ type: 'set', patch: { sampleReplies: [...current, { id: crypto.randomUUID(), body: '' }] } })
+              dispatch({ type: 'set', patch: { sampleReplies: [...current, { id: `sample-${current.length + 1}`, body: '' }] } })
             }}
             disabled={(state.sampleReplies ?? []).length >= SAMPLE_REPLY_CAP}
             className="h-8 px-3 inline-flex items-center gap-1.5 rounded-md border border-white/[0.12] bg-white/[0.04] text-xs font-semibold text-white/70 hover:bg-white/[0.08] hover:text-white/85 hover:border-white/[0.22] transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white/[0.04] disabled:hover:text-white/70 disabled:hover:border-white/[0.12]"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="size-3.5" />
             Add sample reply
           </button>
         </div>
@@ -508,11 +577,12 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
             onChange={v => dispatch({ type: 'set', patch: { autoPlanOnOpen: v } })}
           />
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Default instruction
               <span className="ml-1.5 font-normal text-white/30">· pre-filled in the plan prompt</span>
-            </label>
+            </span>
             <Input
+              aria-label="Default instruction"
               value={state.defaultInstruction}
               onChange={e => dispatch({ type: 'set', patch: { defaultInstruction: e.target.value } })}
               placeholder="e.g. Resolve the customer's issue and draft a reply"
@@ -525,59 +595,63 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
       <SectionCard title="Guardrails" description="Hard limits that the agent will never exceed.">
         <div className="space-y-5">
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Daily refund cap
               <span className="ml-1.5 font-normal text-white/30">· leave blank for no limit</span>
-            </label>
+            </span>
             <div className="relative w-48">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
               <Input
+                aria-label="Daily refund cap"
                 value={dailyRefundCapInput}
                 onChange={e => setDailyRefundCapInput(e.target.value.replace(/[^0-9.]/g, ''))}
                 placeholder="e.g. 200"
                 className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
               />
             </div>
-            <p className="text-[11px] text-white/30">Total refunds the agent can issue per day across all orders. Resets at UTC midnight.</p>
+            <p className="text-xs text-white/30">Total refunds the agent can issue per day across all orders. Resets at UTC midnight.</p>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Daily AI spend limit
               <span className="ml-1.5 font-normal text-white/30">· leave blank for $20 default</span>
-            </label>
+            </span>
             <div className="relative w-48">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
               <Input
+                aria-label="Daily AI spend limit"
                 value={dailyLLMSpendCapInput}
                 onChange={e => setDailyLLMSpendCapInput(e.target.value.replace(/[^0-9.]/g, ''))}
                 placeholder="20"
                 className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25 pl-7"
               />
             </div>
-            <p className="text-[11px] text-white/30">Backstop on AI provider spend per UTC day. When reached, the agent pauses until midnight UTC.</p>
+            <p className="text-xs text-white/30">Backstop on AI provider spend per UTC day. When reached, the agent pauses until midnight UTC.</p>
           </div>
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-white/60">
+            <span className="block text-xs font-semibold text-white/60">
               Max iterations
               <span className="ml-1.5 font-normal text-white/30">· default 10</span>
-            </label>
+            </span>
             <div className="w-32">
               <Input
+                aria-label="Max iterations"
                 value={maxIterationsInput}
                 onChange={e => setMaxIterationsInput(e.target.value.replace(/[^0-9]/g, ''))}
                 placeholder="10"
                 className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
               />
             </div>
-            <p className="text-[11px] text-white/30">Maximum number of tool-calling steps per agent run.</p>
+            <p className="text-xs text-white/30">Maximum number of tool-calling steps per agent run.</p>
           </div>
         </div>
       </SectionCard>
 
       <SectionCard title="Response" description="How the agent formats its customer-facing messages.">
         <div className="space-y-1.5">
-          <label className="block text-xs font-semibold text-white/60">Reply language</label>
+          <span className="block text-xs font-semibold text-white/60">Reply language</span>
           <select
+            aria-label="Reply language"
             value={state.replyLanguage}
             onChange={e => dispatch({ type: 'set', patch: { replyLanguage: e.target.value } })}
             className="h-9 w-56 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
@@ -594,7 +668,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
             <option value="Korean">Korean</option>
             <option value="Arabic">Arabic</option>
           </select>
-          <p className="text-[11px] text-white/30">Auto-detect matches the language the customer wrote in.</p>
+          <p className="text-xs text-white/30">Auto-detect matches the language the customer wrote in.</p>
         </div>
       </SectionCard>
 
@@ -610,8 +684,9 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
           {state.digestEnabled && (
             <>
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">Frequency</label>
+                <span className="block text-xs font-semibold text-white/60">Frequency</span>
                 <select
+                  aria-label="Digest frequency"
                   value={state.digestFrequency}
                   onChange={e => dispatch({ type: 'set', patch: { digestFrequency: e.target.value as OrgSettings['digestFrequency'] } })}
                   className="h-9 w-56 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
@@ -627,14 +702,15 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
 
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-white/60">
+                  <span className="block text-xs font-semibold text-white/60">
                     {state.digestFrequency === 'twice_daily' ? 'First send time' : 'Send time'}
                     <span className="ml-1.5 font-normal text-white/30">
-                      {state.digestFrequency.startsWith('every_') ? '· starting hour — repeats from here' : '· local hour (0–23)'}
+                      {state.digestFrequency.startsWith('every_') ? '· starting hour , repeats from here' : '· local hour (0–23)'}
                     </span>
-                  </label>
+                  </span>
                   <div className="w-32">
                     <Input
+                      aria-label={state.digestFrequency === 'twice_daily' ? 'First send time' : 'Send time'}
                       type="number"
                       min={0}
                       max={23}
@@ -648,12 +724,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
 
                 {state.digestFrequency === 'twice_daily' && (
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold text-white/60">
+                    <span className="block text-xs font-semibold text-white/60">
                       Second send time
                       <span className="ml-1.5 font-normal text-white/30">· local hour (0–23)</span>
-                    </label>
+                    </span>
                     <div className="w-32">
                       <Input
+                        aria-label="Second send time"
                         type="number"
                         min={0}
                         max={23}
@@ -668,7 +745,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">Days</label>
+                <span className="block text-xs font-semibold text-white/60">Days</span>
                 <div className="flex gap-2">
                   {DIGEST_DAYS_OPTIONS.map(([val, label]) => (
                     <button
@@ -688,13 +765,14 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">Timezone</label>
+                <span className="block text-xs font-semibold text-white/60">Timezone</span>
                 <TimezoneSelect
+                  aria-label="Digest timezone"
                   value={state.digestTimezone ?? ''}
                   onChange={v => dispatch({ type: 'set', patch: { digestTimezone: v } })}
                   className="h-9 w-80 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
                 />
-                <p className="text-[11px] text-white/30">Daylight Saving Time is handled automatically.</p>
+                <p className="text-xs text-white/30">Daylight Saving Time is handled automatically.</p>
               </div>
             </>
           )}
@@ -713,7 +791,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
           {state.businessHoursEnabled && (
             <>
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">Days open</label>
+                <span className="block text-xs font-semibold text-white/60">Days open</span>
                 <div className="flex gap-1.5 flex-wrap">
                   {DAY_OPTIONS.map(([val, label]) => (
                     <button
@@ -741,12 +819,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
 
               <div className="flex items-end gap-4">
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-white/60">
+                  <span className="block text-xs font-semibold text-white/60">
                     Opens at
                     <span className="ml-1.5 font-normal text-white/30">· hour (0–23)</span>
-                  </label>
+                  </span>
                   <div className="w-24">
                     <Input
+                      aria-label="Business hours start"
                       type="number"
                       min={0}
                       max={23}
@@ -758,12 +837,13 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-white/60">
+                  <span className="block text-xs font-semibold text-white/60">
                     Closes at
                     <span className="ml-1.5 font-normal text-white/30">· hour (0–23)</span>
-                  </label>
+                  </span>
                   <div className="w-24">
                     <Input
+                      aria-label="Business hours end"
                       type="number"
                       min={0}
                       max={23}
@@ -778,32 +858,34 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 </div>
               </div>
               {businessHoursInvalid && (
-                <p className="text-[11px] text-red-400">Closing time must be later than opening time.</p>
+                <p className="text-xs text-red-400">Closing time must be later than opening time.</p>
               )}
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">Timezone</label>
+                <span className="block text-xs font-semibold text-white/60">Timezone</span>
                 <TimezoneSelect
+                  aria-label="Business hours timezone"
                   value={state.businessHoursTimezone ?? ''}
                   onChange={v => dispatch({ type: 'set', patch: { businessHoursTimezone: v } })}
                   className="h-9 w-80 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
                 />
-                <p className="text-[11px] text-white/30">Daylight Saving Time is handled automatically.</p>
+                <p className="text-xs text-white/30">Daylight Saving Time is handled automatically.</p>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-white/60">
+                <span className="block text-xs font-semibold text-white/60">
                   Auto-acknowledgment message
                   <span className="ml-1.5 font-normal text-white/30">· max 500 characters</span>
-                </label>
+                </span>
                 <Textarea
+                  aria-label="Auto-acknowledgment message"
                   value={state.autoAckMessage}
                   onChange={e => dispatch({ type: 'set', patch: { autoAckMessage: e.target.value } })}
                   placeholder="Thanks for reaching out! We're currently outside business hours and will get back to you soon."
                   maxLength={500}
                   rows={3}
                 />
-                <p className="text-[11px] text-white/30 text-right">{state.autoAckMessage.length}/500</p>
+                <p className="text-xs text-white/30 text-right">{state.autoAckMessage.length}/500</p>
               </div>
             </>
           )}
@@ -829,11 +911,11 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 <p className="text-xs text-red-400 truncate">{error}</p>
               ) : saved && !isDirty ? (
                 <p className="text-xs text-emerald-400 inline-flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5" /> Saved
+                  <Check className="size-3.5" /> Saved
                 </p>
               ) : (
                 <>
-                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
+                  <span className="size-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
                   <p className="text-xs text-white/70">Unsaved changes</p>
                 </>
               )}
@@ -853,7 +935,7 @@ export default function AgentTab({ settings, rawSettings, version }: Props) {
                 disabled={saving || !isDirty || businessHoursInvalid}
                 className="h-8 px-4 bg-amber-400 text-black hover:bg-amber-300 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
               >
-                {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save changes"}
+                {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save changes"}
               </Button>
             </div>
           </div>

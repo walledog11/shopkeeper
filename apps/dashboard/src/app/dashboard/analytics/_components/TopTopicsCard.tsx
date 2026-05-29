@@ -22,8 +22,8 @@ export function TopTopicsCard({ byTag, maxTag, isLoading }: TopTopicsCardProps) 
       <CardContent>
         {isLoading ? (
           <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="animate-pulse space-y-1">
+            {["topic-skeleton-1", "topic-skeleton-2", "topic-skeleton-3", "topic-skeleton-4", "topic-skeleton-5"].map((key) => (
+              <div key={key} className="animate-pulse space-y-1">
                 <div className="flex justify-between">
                   <div className="h-3 w-20 bg-muted rounded" />
                   <div className="h-3 w-6 bg-muted rounded" />

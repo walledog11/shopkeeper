@@ -17,12 +17,12 @@ type View =
 export default function HelpPanel() {
   const { isOpen, closeHelp } = useHelp()
   const [view, setView] = useState<View>({ type: "home" })
-  const router = useRouter()
+  const { push } = useRouter()
 
   function handleSelectArticle(category: Category, article: Article) {
     if (category.id === "tips") {
       closeHelp()
-      router.push(`/dashboard/learn/${article.id}`)
+      push(`/dashboard/learn/${article.id}`)
     } else {
       setView({ type: "article", category, article })
     }
@@ -55,11 +55,11 @@ export default function HelpPanel() {
           <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-border shrink-0">
             <div className="flex items-start gap-2 min-w-0">
               {view.type !== "home" && (
-                <button
+                <button type="button"
                   onClick={goBack}
                   className="mt-0.5 text-muted-foreground hover:text-foreground transition-colors shrink-0"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="size-4" />
                 </button>
               )}
               <div className="min-w-0">
@@ -67,11 +67,11 @@ export default function HelpPanel() {
                 <p className="text-xs text-muted-foreground mt-1 truncate">{subtitle}</p>
               </div>
             </div>
-            <button
+            <button type="button"
               onClick={handleClose}
-              className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-border/70 transition-colors shrink-0 mt-0.5"
+              className="size-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:border-border/70 transition-colors shrink-0 mt-0.5"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="size-3.5" />
             </button>
           </div>
 

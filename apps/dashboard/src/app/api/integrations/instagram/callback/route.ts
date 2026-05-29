@@ -5,10 +5,15 @@ import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
 import { timingSafeIncludes } from '@/lib/auth-utils';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Finish Instagram connection');
+}
+
+export async function POST(request: Request) {
   const appUrl = process.env.APP_URL;
   const appId = process.env.META_APP_ID;
   const appSecret = process.env.META_APP_SECRET;
@@ -43,13 +48,13 @@ export async function GET(request: Request) {
   cookieStore.delete('ig_oauth_return');
 
   if (!savedState || !state || !timingSafeIncludes([savedState], state)) {
-    logger.error('[IG OAuth] State mismatch — possible CSRF attempt');
+    logger.error('[IG OAuth] State mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
   }
 
   const { userId: currentUserId } = await auth();
   if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[IG OAuth] User session mismatch — possible CSRF attempt');
+    logger.error({ savedUserId, currentUserId }, '[IG OAuth] User session mismatch , possible CSRF attempt');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
   }
 
@@ -58,7 +63,8 @@ export async function GET(request: Request) {
     // Step 1: Exchange code for a short-lived user access token
     // ---------------------------------------------------------------
     const tokenRes = await fetch(
-      `${FB_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`
+      `${FB_GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`,
+      { cache: 'no-store' }
     );
     const tokenData = await tokenRes.json();
 
@@ -72,7 +78,8 @@ export async function GET(request: Request) {
     // Step 2: Upgrade to a long-lived user access token (60 days)
     // ---------------------------------------------------------------
     const longLivedRes = await fetch(
-      `${FB_GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`
+      `${FB_GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${shortLivedToken}`,
+      { cache: 'no-store' }
     );
     const longLivedData = await longLivedRes.json();
     const userToken: string = longLivedData.access_token || shortLivedToken;
@@ -83,7 +90,8 @@ export async function GET(request: Request) {
     // Facebook access), not just Business Portfolio access.
     // ---------------------------------------------------------------
     const pagesRes = await fetch(
-      `${FB_GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${userToken}`
+      `${FB_GRAPH}/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${userToken}`,
+      { cache: 'no-store' }
     );
     const pagesData = await pagesRes.json();
     logger.info({ pagesData }, '[IG OAuth] /me/accounts response');
@@ -113,6 +121,7 @@ export async function GET(request: Request) {
     // Must use the Facebook Page ID (not the IG account ID) per Meta docs.
     // ---------------------------------------------------------------
     const subscribeRes = await fetch(`${FB_GRAPH}/${pageId}/subscribed_apps`, {
+      cache: 'no-store',
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -131,7 +140,7 @@ export async function GET(request: Request) {
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
     if (!clerkOrgId) {
-      logger.error('[IG OAuth] Missing org cookie — session likely interrupted');
+      logger.error('[IG OAuth] Missing org cookie , session likely interrupted');
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });

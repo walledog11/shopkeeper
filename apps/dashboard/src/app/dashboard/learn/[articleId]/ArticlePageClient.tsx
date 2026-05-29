@@ -13,26 +13,29 @@ interface Props {
   relatedArticles: Article[]
 }
 
+function markArticleRead(articleId: string) {
+  try {
+    const stored = localStorage.getItem(READ_ARTICLES_KEY)
+    const ids: string[] = stored ? JSON.parse(stored) : []
+    if (!ids.includes(articleId)) {
+      localStorage.setItem(READ_ARTICLES_KEY, JSON.stringify([...ids, articleId]))
+    }
+  } catch {
+    // localStorage unavailable, skip silently
+  }
+}
+
 export default function ArticlePageClient({ article, relatedArticles }: Props) {
-  const headings = article.body
-    .filter(s => !!s.heading)
-    .map(s => s.heading as string)
+  const headings = article.body.flatMap(s => s.heading ? [s.heading] : [])
 
   const [activeHeading, setActiveHeading] = useState<string | null>(headings[0] ?? null)
+  const articleIdRef = useRef(article.id)
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
 
   // Persist read state to localStorage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(READ_ARTICLES_KEY)
-      const ids: string[] = stored ? JSON.parse(stored) : []
-      if (!ids.includes(article.id)) {
-        localStorage.setItem(READ_ARTICLES_KEY, JSON.stringify([...ids, article.id]))
-      }
-    } catch {
-      // localStorage unavailable — skip silently
-    }
-  }, [article.id])
+    markArticleRead(articleIdRef.current)
+  }, [])
 
   // Track which heading is in view for TOC highlighting
   useEffect(() => {
@@ -72,11 +75,11 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
           <Link href="/dashboard/learn" className="hover:text-foreground transition-colors font-medium">
             Articles
           </Link>
-          <ChevronRight className="w-3 h-3 shrink-0" />
-          <span className={`font-semibold px-1.5 py-0.5 rounded-full border text-[10px] uppercase tracking-wide ${tagColor}`}>
+          <ChevronRight className="size-3 shrink-0" />
+          <span className={`font-semibold px-1.5 py-0.5 rounded-full border text-xs uppercase tracking-wide ${tagColor}`}>
             {tag}
           </span>
-          <ChevronRight className="w-3 h-3 shrink-0" />
+          <ChevronRight className="size-3 shrink-0" />
           <span className="text-foreground/60 truncate">{article.title}</span>
         </nav>
 
@@ -93,7 +96,7 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
               <div className="flex items-center gap-3">
                 {article.readingTime && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5" />
+                    <Clock className="size-3.5" />
                     {article.readingTime} min read
                   </span>
                 )}
@@ -111,9 +114,9 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
 
             {/* Sections */}
             <div className="space-y-8">
-              {article.body.map((section, i) => (
+              {article.body.map((section) => (
                 <div
-                  key={i}
+                  key={section.heading ?? section.text ?? section.steps?.join("|") ?? section.tips?.join("|")}
                   ref={el => {
                     if (section.heading) sectionRefs.current[section.heading] = el
                   }}
@@ -135,8 +138,8 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
                   {section.steps && (
                     <ol className="space-y-3">
                       {section.steps.map((step, j) => (
-                        <li key={j} className="flex gap-3.5 text-sm text-foreground/70 leading-relaxed">
-                          <span className="shrink-0 w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+                        <li key={step} className="flex gap-3.5 text-sm text-foreground/70 leading-relaxed">
+                          <span className="shrink-0 size-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
                             {j + 1}
                           </span>
                           <span>{step}</span>
@@ -147,9 +150,9 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
 
                   {section.tips && (
                     <ul className="space-y-2.5">
-                      {section.tips.map((tip, j) => (
-                        <li key={j} className="flex gap-3 text-sm text-foreground/70 leading-relaxed">
-                          <span className="shrink-0 w-1.5 h-1.5 rounded-full bg-muted-foreground mt-2" />
+                      {section.tips.map((tip) => (
+                        <li key={tip} className="flex gap-3 text-sm text-foreground/70 leading-relaxed">
+                          <span className="shrink-0 size-1.5 rounded-full bg-muted-foreground mt-2" />
                           <span>{tip}</span>
                         </li>
                       ))}
@@ -189,12 +192,12 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
                           {rel.title}
                         </p>
                         {rel.readingTime && (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground mt-0.5">
-                            <Clock className="w-3 h-3" /> {rel.readingTime} min read
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                            <Clock className="size-3" /> {rel.readingTime} min read
                           </span>
                         )}
                       </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
+                      <ChevronRight className="size-4 text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
                     </Link>
                   ))}
                 </div>
@@ -207,22 +210,22 @@ export default function ArticlePageClient({ article, relatedArticles }: Props) {
                 href="/dashboard/learn"
                 className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
+                <ArrowLeft className="size-3.5" />
                 Back to all articles
               </Link>
             </div>
           </article>
 
-          {/* Sticky TOC — desktop only, only if there are headings */}
+          {/* Sticky TOC , desktop only, only if there are headings */}
           {headings.length > 1 && (
             <aside className="hidden lg:block w-52 shrink-0 sticky top-0">
               <div className="bg-card border border-border rounded-xl p-4">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">
                   On this page
                 </p>
                 <nav className="space-y-1">
                   {headings.map(heading => (
-                    <button
+                    <button type="button"
                       key={heading}
                       onClick={() => scrollTo(heading)}
                       className={`w-full text-left text-xs leading-snug px-2.5 py-1.5 rounded-md transition-all ${

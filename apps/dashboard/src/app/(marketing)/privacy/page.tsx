@@ -6,17 +6,19 @@ export const metadata: Metadata = {
   description: 'How Clerk collects, uses, and protects personal information.',
 }
 
+const privacyIntro = (
+  <p>
+    Clerk helps merchants manage support conversations and customer context. This policy explains what
+    information we collect, how we use it, and the choices available to customers and merchants.
+  </p>
+)
+
 export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
       effectiveDate="May 10, 2026"
-      intro={
-        <p>
-          Clerk helps merchants manage support conversations and customer context. This policy explains what
-          information we collect, how we use it, and the choices available to customers and merchants.
-        </p>
-      }
+      intro={privacyIntro}
       sections={[
         {
           title: 'Information We Collect',

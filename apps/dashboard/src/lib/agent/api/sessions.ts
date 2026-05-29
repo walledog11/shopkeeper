@@ -59,7 +59,7 @@ export async function listDashboardAgentSessions(orgId: string, userId: string):
 
   return threads.map((thread) => {
     const raw = thread.messages[0]?.contentText ?? "Empty session";
-    const preview = raw.length > 60 ? `${raw.slice(0, 57)}...` : raw;
+    const preview = raw.length > 60 ? `${raw.slice(0, 57)}…` : raw;
     return {
       id: thread.id,
       createdAt: thread.createdAt,

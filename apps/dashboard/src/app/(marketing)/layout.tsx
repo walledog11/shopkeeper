@@ -4,7 +4,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        /* Hardcoded cream background and dark text — overrides body's dark theme */
+        /* Hardcoded cream background and dark text , overrides body's dark theme */
         background: "#ffffff",
         color: "#161413",
         minHeight: "100vh",

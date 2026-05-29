@@ -1,7 +1,7 @@
 /**
- * GET    /api/integrations/telegram — fetch current Telegram binding for this user
- * POST   /api/integrations/telegram — issue a single-use bind token + deep-link URL
- * DELETE /api/integrations/telegram — clear this user's Telegram binding
+ * GET    /api/integrations/telegram , fetch current Telegram binding for this user
+ * POST   /api/integrations/telegram , issue a single-use bind token + deep-link URL
+ * DELETE /api/integrations/telegram , clear this user's Telegram binding
  */
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";

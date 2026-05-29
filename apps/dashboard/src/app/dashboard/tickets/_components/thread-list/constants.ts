@@ -4,7 +4,7 @@ import type { ChannelType } from "@/types"
 
 export type TicketListTab = "open" | "closed" | "filtered"
 
-export const FILTER_IDS: ChannelType[] = ["email", "ig_dm", "sms"]
+const FILTER_IDS: ChannelType[] = ["email", "ig_dm", "sms"]
 
 export const CHANNEL_FILTERS = FILTER_IDS.map(id => {
   const info = getChannelInfo(id)

@@ -12,13 +12,13 @@ export function Hero() {
 
       {/* Subtitle */}
       <p className="text-md text-stone-800 leading-relaxed max-w-[52ch] mx-auto mb-6" >
-        Clerk is an AI support agent for Shopify brands. It reads every Instagram DM, email, and SMS — drafts replies that actually sound like you, and only sends after you tap approve.
+        Clerk is an AI support agent for Shopify brands. It reads every Instagram DM, email, and SMS , drafts replies that actually sound like you, and only sends after you tap approve.
       </p>
 
       {/* CTAs */}
       <div className="flex flex-wrap gap-5 align-center mb-3 justify-center" >
         <Link href="/signup" className="inline-flex align-center gap-3 py-2 px-4 rounded-full text-white text-sm bg-slate-900 font-semibold border border-solid border-black " >
-          Start free — 14 days
+          Start free , 14 days
         </Link>
         <Link href="#demo" className="inline-flex align-center gap-3 py-2 px-4 rounded-full text-sm font-semibold border border-solid border-stone-900/10 text-stone-900 " >
           ▶ Watch a 90s walkthrough
@@ -29,7 +29,7 @@ export function Hero() {
       <div className="flex flex-wrap justify-center gap-14 text-sm text-slate-800 mt-7" >
         {["No credit card", "Connect Shopify in 2 min", "Cancel any time"].map((item) => (
           <span key={item} className="inline-flex items-center gap-1.5">
-            <span className="inline-flex align-center justify-center text-xs w-4 h-4 rounded-full bg-green-700 text-white" >✓</span>
+            <span className="inline-flex align-center justify-center text-xs size-4 rounded-full bg-green-700 text-white" >✓</span>
             {item}
           </span>
         ))}

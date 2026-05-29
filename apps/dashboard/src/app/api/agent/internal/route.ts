@@ -1,5 +1,5 @@
 /**
- * Internal Agent API — called by the gateway when a team member sends an SMS/WhatsApp.
+ * Internal Agent API , called by the gateway when a team member sends an SMS/WhatsApp.
  *
  * Auth: x-internal-secret header (shared secret between gateway and dashboard).
  * No Clerk session required.

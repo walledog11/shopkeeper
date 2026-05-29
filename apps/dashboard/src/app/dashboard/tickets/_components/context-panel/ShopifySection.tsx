@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useReducer, useRef } from "react"
 import useSWR from "swr"
 import { Link, Pencil, Unlink } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
@@ -25,19 +25,94 @@ interface ShopifySectionProps {
   onLinkShopifyCustomer: (id: string | null) => Promise<void>
 }
 
+interface ShopifySectionState {
+  mode: ShopifyMode
+  isEditingCustomer: boolean
+  query: string
+  debouncedQuery: string
+  isLinking: number | null
+  linkError: string | null
+  createDraft: CreateCustomerDraft
+  isCreating: boolean
+  createError: string | null
+}
+
+type ShopifySectionAction =
+  | { type: "mode"; mode: ShopifyMode }
+  | { type: "editing"; editing: boolean }
+  | { type: "query"; query: string }
+  | { type: "debouncedQuery"; query: string }
+  | { type: "clearSearch" }
+  | { type: "exitSearch" }
+  | { type: "linking"; id: number | null }
+  | { type: "linkError"; error: string | null }
+  | { type: "createDraft"; draft: CreateCustomerDraft }
+  | { type: "creating"; creating: boolean }
+  | { type: "createError"; error: string | null }
+  | { type: "createSuccess" }
+
+const initialShopifyState: ShopifySectionState = {
+  mode: 'view',
+  isEditingCustomer: false,
+  query: '',
+  debouncedQuery: '',
+  isLinking: null,
+  linkError: null,
+  createDraft: { first_name: '', last_name: '', email: '' },
+  isCreating: false,
+  createError: null,
+}
+
+function shopifySectionReducer(state: ShopifySectionState, action: ShopifySectionAction): ShopifySectionState {
+  switch (action.type) {
+    case "mode":
+      return { ...state, mode: action.mode }
+    case "editing":
+      return { ...state, isEditingCustomer: action.editing }
+    case "query":
+      return { ...state, query: action.query }
+    case "debouncedQuery":
+      return { ...state, debouncedQuery: action.query }
+    case "clearSearch":
+      return { ...state, query: '', debouncedQuery: '' }
+    case "exitSearch":
+      return { ...state, query: '', debouncedQuery: '', linkError: null, mode: 'view' }
+    case "linking":
+      return { ...state, isLinking: action.id }
+    case "linkError":
+      return { ...state, linkError: action.error }
+    case "createDraft":
+      return { ...state, createDraft: action.draft }
+    case "creating":
+      return { ...state, isCreating: action.creating, createError: action.creating ? null : state.createError }
+    case "createError":
+      return { ...state, createError: action.error }
+    case "createSuccess":
+      return { ...state, createDraft: { first_name: '', last_name: '', email: '' }, mode: 'view' }
+  }
+}
+
 export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: ShopifySectionProps) {
+  return <ShopifySectionContent key={thread.id} thread={thread} shopify={shopify} onLinkShopifyCustomer={onLinkShopifyCustomer} />
+}
+
+function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: ShopifySectionProps) {
   const isEmailThread = thread.channelType === 'email'
   const isLinked = !!thread.shopifyCustomerId
   const canLoadCustomer = isEmailThread || isLinked
   const canCreate = !isEmailThread
-
-  const [mode, setMode] = useState<ShopifyMode>('view')
-  const [isEditingCustomer, setIsEditingCustomer] = useState(false)
-
-  useEffect(() => {
-    setMode('view')
-    setIsEditingCustomer(false)
-  }, [thread.id])
+  const [state, dispatch] = useReducer(shopifySectionReducer, initialShopifyState)
+  const {
+    mode,
+    isEditingCustomer,
+    query,
+    debouncedQuery,
+    isLinking,
+    linkError,
+    createDraft,
+    isCreating,
+    createError,
+  } = state
 
   const { data, error: customerError, isLoading, mutate } = shopify
 
@@ -46,15 +121,11 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
     void mutate({ ...data, customer: { ...data.customer, ...updated } }, false)
   }
 
-  const [query, setQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [isLinking, setIsLinking] = useState<number | null>(null)
-  const [linkError, setLinkError] = useState<string | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setDebouncedQuery(query), 150)
+    timerRef.current = setTimeout(() => dispatch({ type: "debouncedQuery", query }), 150)
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
   }, [query])
 
@@ -67,49 +138,41 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
   )
 
   const clearSearch = () => {
-    setQuery('')
-    setDebouncedQuery('')
+    dispatch({ type: "clearSearch" })
   }
 
   const handleLink = async (customer: ShopifyCustomerSearchResult) => {
-    setIsLinking(customer.id)
-    setLinkError(null)
+    dispatch({ type: "linking", id: customer.id })
+    dispatch({ type: "linkError", error: null })
     try {
       await onLinkShopifyCustomer(customer.id.toString())
       clearSearch()
-      setMode('view')
+      dispatch({ type: "mode", mode: 'view' })
     } catch (error) {
       console.error('Failed to link Shopify customer', error)
-      setLinkError('Failed to link customer.')
+      dispatch({ type: "linkError", error: 'Failed to link customer.' })
     } finally {
-      setIsLinking(null)
+      dispatch({ type: "linking", id: null })
     }
   }
 
   const handleUnlink = async () => {
-    setLinkError(null)
+    dispatch({ type: "linkError", error: null })
     try {
       await onLinkShopifyCustomer(null)
       void mutate(undefined, false)
     } catch (error) {
       console.error('Failed to unlink Shopify customer', error)
-      setLinkError('Failed to unlink customer.')
+      dispatch({ type: "linkError", error: 'Failed to unlink customer.' })
     }
   }
 
   const exitSearch = () => {
-    clearSearch()
-    setLinkError(null)
-    setMode('view')
+    dispatch({ type: "exitSearch" })
   }
 
-  const [createDraft, setCreateDraft] = useState<CreateCustomerDraft>({ first_name: '', last_name: '', email: '' })
-  const [isCreating, setIsCreating] = useState(false)
-  const [createError, setCreateError] = useState<string | null>(null)
-
   const handleCreate = async () => {
-    setIsCreating(true)
-    setCreateError(null)
+    dispatch({ type: "creating", creating: true })
     try {
       const res = await fetch('/api/shopify/customers', {
         method: 'POST',
@@ -118,34 +181,33 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok || !json.customer) {
-        setCreateError(typeof json.error === 'string' ? json.error : 'Failed to create customer.')
+        dispatch({ type: "createError", error: typeof json.error === 'string' ? json.error : 'Failed to create customer.' })
         return
       }
       try {
         await onLinkShopifyCustomer(json.customer.id.toString())
       } catch (error) {
         console.error('Failed to link created Shopify customer', error)
-        setCreateError('Customer created, but linking failed.')
+        dispatch({ type: "createError", error: 'Customer created, but linking failed.' })
         return
       }
-      setCreateDraft({ first_name: '', last_name: '', email: '' })
-      setMode('view')
+      dispatch({ type: "createSuccess" })
     } catch (error) {
       console.error('Failed to create Shopify customer', error)
-      setCreateError('Failed to create customer.')
+      dispatch({ type: "createError", error: 'Failed to create customer.' })
     } finally {
-      setIsCreating(false)
+      dispatch({ type: "creating", creating: false })
     }
   }
 
   const dropdownItems: ManageDropdownItem[] = []
   if (isLinked || (isEmailThread && data?.customer)) {
-    dropdownItems.push({ label: 'Change customer', icon: <Link className="w-3 h-3" />, onClick: () => setMode('search') })
+    dropdownItems.push({ label: 'Change customer', icon: <Link className="size-3" />, onClick: () => dispatch({ type: "mode", mode: 'search' }) })
   } else if (isEmailThread && !isLoading && !data?.customer) {
-    dropdownItems.push({ label: 'Link existing customer', icon: <Link className="w-3 h-3" />, onClick: () => setMode('search') })
+    dropdownItems.push({ label: 'Link existing customer', icon: <Link className="size-3" />, onClick: () => dispatch({ type: "mode", mode: 'search' }) })
   }
   if (isLinked) {
-    dropdownItems.push({ label: 'Unlink customer', icon: <Unlink className="w-3 h-3" />, onClick: handleUnlink, danger: true })
+    dropdownItems.push({ label: 'Unlink customer', icon: <Unlink className="size-3" />, onClick: handleUnlink, danger: true })
   }
 
   const header = (
@@ -157,12 +219,12 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
             {!isEditingCustomer && mode === 'view' && (
               <button
                 type="button"
-                onClick={() => setIsEditingCustomer(true)}
-                className="flex h-6 w-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/70"
+                onClick={() => dispatch({ type: "editing", editing: true })}
+                className="flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/70"
                 aria-label="Edit customer"
                 title="Edit customer"
               >
-                <Pencil className="w-3 h-3" />
+                <Pencil className="size-3" />
               </button>
             )}
             {dropdownItems.length > 0 && <ManageDropdown items={dropdownItems} />}
@@ -186,15 +248,17 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
       <ShopifyCustomerSearch
         query={query}
         customers={searchData?.customers}
-        isSearching={isSearching}
-        isLinking={isLinking}
-        linkError={linkError}
-        hasSearchError={!!searchError}
-        canCreate={!isEmailThread}
-        onQueryChange={setQuery}
+        status={{
+          searching: isSearching,
+          linkingId: isLinking,
+          linkError,
+          searchError: !!searchError,
+          createAllowed: !isEmailThread,
+        }}
+        onQueryChange={(nextQuery) => dispatch({ type: "query", query: nextQuery })}
         onClear={clearSearch}
         onCancel={exitSearch}
-        onCreate={() => setMode('create')}
+        onCreate={() => dispatch({ type: "mode", mode: 'create' })}
         onLink={customer => { void handleLink(customer) }}
       />
     )
@@ -204,8 +268,8 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
         draft={createDraft}
         error={createError}
         isCreating={isCreating}
-        onDraftChange={setCreateDraft}
-        onBack={() => setMode('search')}
+        onDraftChange={(draft) => dispatch({ type: "createDraft", draft })}
+        onBack={() => dispatch({ type: "mode", mode: 'search' })}
         onCreate={() => { void handleCreate() }}
       />
     )
@@ -217,7 +281,7 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
         <CustomerInfo
           customer={data.customer}
           isEditing={isEditingCustomer}
-          onEditingChange={setIsEditingCustomer}
+          onEditingChange={(editing) => dispatch({ type: "editing", editing })}
           onSaved={handleCustomerSaved}
         />
         {linkError && <p className="mt-2 text-xs text-red-400">{linkError}</p>}
@@ -235,15 +299,17 @@ export function ShopifySection({ thread, shopify, onLinkShopifyCustomer }: Shopi
       <ShopifyCustomerSearch
         query={query}
         customers={searchData?.customers}
-        isSearching={isSearching}
-        isLinking={isLinking}
-        linkError={linkError}
-        hasSearchError={!!searchError}
-        canCreate
-        onQueryChange={setQuery}
+        status={{
+          searching: isSearching,
+          linkingId: isLinking,
+          linkError,
+          searchError: !!searchError,
+          createAllowed: canCreate,
+        }}
+        onQueryChange={(nextQuery) => dispatch({ type: "query", query: nextQuery })}
         onClear={clearSearch}
         onCancel={exitSearch}
-        onCreate={() => setMode('create')}
+        onCreate={() => dispatch({ type: "mode", mode: 'create' })}
         onLink={customer => { void handleLink(customer) }}
       />
     )

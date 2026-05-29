@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { MouseEvent } from "react";
 import useSWR from "swr";
 import { Bot, Box, ChevronDown, Inbox, LogOut, Menu, Search, Settings, X } from "lucide-react";
@@ -38,9 +38,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { OrgAvatar } from "@/components/OrgAvatar";
 
-const OpenThreadCountContext = createContext(0);
-export const useOpenThreadCount = () => useContext(OpenThreadCountContext);
-
 type NavAuth = ReturnType<typeof useNavAuth>;
 type WorkspaceMembership = {
   organization: {
@@ -60,9 +57,11 @@ function useNavAuth(initialAutonomyTier: AutonomyTier) {
   const { data: orgData } = useSWR<{ planName?: string; settings?: Partial<OrgSettings> }>("/api/org", fetcher, {
     revalidateOnFocus: false,
   });
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   const membershipPage = memberships as { count?: number; data?: unknown[] } | undefined;
   const seatCount = membershipPage?.count ?? membershipPage?.data?.length ?? 1;
@@ -105,18 +104,17 @@ function dispatchNavProgressStart() {
 }
 
 function Logo() {
-  const pathname = usePathname();
-
   return (
     <Link
       href="/dashboard"
       className="flex items-center gap-1.5"
       onClick={() => {
+        const pathname = window.location.pathname;
         if (pathname !== "/dashboard") dispatchNavProgressStart();
       }}
     >
       <span className="text-xl font-black text-white tracking-tight">clerk</span>
-      <span className="w-2 h-2 rounded-full bg-green-400 self-start mt-1.5 shrink-0" />
+      <span className="size-2 rounded-full bg-green-400 self-start mt-1.5 shrink-0" />
     </Link>
   );
 }
@@ -177,7 +175,7 @@ function OrgSwitcher({
           type="button"
           className={cn(
             "w-full flex items-center outline-none text-left transition-colors hover:bg-white/[0.06]",
-            isMobile ? "gap-2.5 px-3 py-2.5 mb-4 rounded-lg" : "gap-2 px-1 py-1 rounded-lg hover:bg-white/[0.04]",
+            isMobile ? "gap-2.5 px-3 py-2.5 mb-4 rounded-lg" : "gap-2 p-1 rounded-lg hover:bg-white/[0.04]",
           )}
         >
           <OrgAvatar
@@ -185,18 +183,18 @@ function OrgSwitcher({
             imageUrl={organization?.imageUrl}
             className={cn(
               "rounded-md bg-green-500/20 text-[13px] font-bold text-green-300 shrink-0",
-              isCompact ? "w-6 h-6" : "w-9 h-9",
+              isCompact ? "size-6" : "size-9",
             )}
           />
           <div className="flex-1 min-w-0">
             <p className={cn("font-bold text-white truncate leading-tight", isCompact ? "text-xs" : "text-sm")}>
               {organization?.name ?? "Workspace"}
             </p>
-            <p className="text-[11px] font-medium text-white/40 truncate leading-tight mt-0.5">
+            <p className="text-xs font-medium text-white/40 truncate leading-tight mt-0.5">
               {planName} plan · {seatCount} seat{seatCount === 1 ? "" : "s"}
             </p>
           </div>
-          <ChevronDown className={cn("text-white/30 shrink-0", isCompact ? "w-3.5 h-3.5" : "w-4 h-4")} />
+          <ChevronDown className={cn("text-white/30 shrink-0", isCompact ? "size-3.5" : "size-4")} />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -220,10 +218,10 @@ function OrgSwitcher({
                 <OrgAvatar
                   name={mem.organization.name}
                   imageUrl={mem.organization.imageUrl}
-                  className="w-5 h-5 rounded bg-white/10 text-[10px] text-white/70 shrink-0"
+                  className="size-5 rounded bg-white/10 text-xs text-white/70 shrink-0"
                 />
                 <span className="flex-1 text-xs font-medium text-white/80 truncate">{mem.organization.name}</span>
-                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-green-400 shrink-0" />}
+                {isActive && <span className="size-1.5 rounded-full bg-green-400 shrink-0" />}
               </DropdownMenuItem>
             );
           })}
@@ -251,14 +249,14 @@ function UserMenu({ navAuth, variant }: { navAuth: NavAuth; variant: "desktop" |
             imageUrl={user?.imageUrl}
             className={cn(
               "rounded-full bg-white/20 text-white font-bold ring-1 ring-white/20 shrink-0",
-              isMobile ? "w-8 h-8 text-[11px]" : "w-7 h-7 text-[10px]",
+              isMobile ? "size-8 text-xs" : "size-7 text-xs",
             )}
           />
           <div className="flex-1 min-w-0">
             <p className={cn("font-semibold text-white truncate leading-tight", isMobile ? "text-sm" : "text-xs")}>
               {fullName}
             </p>
-            <p className={cn("font-medium text-white/40 truncate leading-tight mt-0.5", isMobile ? "text-[11px]" : "text-[10px]")}>
+            <p className={cn("font-medium text-white/40 truncate leading-tight mt-0.5", isMobile ? "text-xs" : "text-xs")}>
               {roleLabel}
             </p>
           </div>
@@ -269,7 +267,7 @@ function UserMenu({ navAuth, variant }: { navAuth: NavAuth; variant: "desktop" |
           onClick={() => signOut({ redirectUrl: "/login" })}
           className="text-red-400 focus:text-red-400 focus:bg-white/[0.07] cursor-pointer gap-2"
         >
-          <LogOut className="w-4 h-4 shrink-0" />
+          <LogOut className="size-4 shrink-0" />
           Log out
         </DropdownMenuItem>
       </DropdownMenuContent>
@@ -317,7 +315,7 @@ function NavGroupList({
                     {item.badge && (
                       <OpenCountBadge
                         openCount={openCount}
-                        className="ml-auto min-w-[20px] h-5 px-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums"
+                        className="ml-auto min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center bg-green-400 text-black tabular-nums"
                       />
                     )}
                   </Link>
@@ -353,7 +351,7 @@ function NavGroupList({
                     className="rounded-md h-auto py-1 px-3 text-sm font-light leading-snug text-white/60 hover:text-white hover:bg-white/[0.05] data-[active=true]:bg-white/[0.06] data-[active=true]:text-white data-[active=true]:font-medium"
                   >
                     <Link href={item.href} onClick={(e) => onNavigate(e, isActive)}>
-                      <item.icon className="w-[10px] h-[10px] shrink-0 stroke-1 mr-1" />
+                      <item.icon className="size-[10px] shrink-0 stroke-1 mr-1" />
                       <span>{item.name}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -362,7 +360,7 @@ function NavGroupList({
                       <OpenCountBadge
                         openCount={openCount}
                         animate
-                        className="min-w-[20px] h-5 px-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
+                        className="min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center bg-green-400 text-black tabular-nums animate-in zoom-in-75 duration-150"
                       />
                     </SidebarMenuBadge>
                   )}
@@ -409,7 +407,7 @@ function FooterLinks({
                 : "text-white/30 hover:text-white/70 hover:bg-white/[0.05]",
             )}
           >
-            <item.icon className={isMobile ? "w-[18px] h-[18px]" : "w-[15px] h-[15px]"} />
+            <item.icon className={isMobile ? "size-[18px]" : "size-[15px]"} />
           </Link>
         );
       })}
@@ -432,17 +430,22 @@ function SidebarNavContent({
 
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isScrolling, setIsScrolling] = useState(false);
+  const clearScrollTimer = useCallback(() => {
+    if (scrollTimer.current) {
+      clearTimeout(scrollTimer.current);
+      scrollTimer.current = null;
+    }
+  }, []);
   const handleScroll = useCallback(() => {
     setIsScrolling(true);
-    if (scrollTimer.current) clearTimeout(scrollTimer.current);
-    scrollTimer.current = setTimeout(() => setIsScrolling(false), 800);
-  }, []);
+    clearScrollTimer();
+    scrollTimer.current = setTimeout(() => {
+      scrollTimer.current = null;
+      setIsScrolling(false);
+    }, 800);
+  }, [clearScrollTimer]);
 
-  useEffect(() => {
-    return () => {
-      if (scrollTimer.current) clearTimeout(scrollTimer.current);
-    };
-  }, []);
+  useEffect(() => clearScrollTimer, [clearScrollTimer]);
 
   const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
     if (isActive) {
@@ -457,7 +460,7 @@ function SidebarNavContent({
     <>
       <SidebarContent
         className={cn(
-          "px-2 pt-1 pb-2 gap-0 overflow-x-hidden bg-black custom-scrollbar",
+          "px-2 pt-1 pb-2 gap-0 overflow-x-hidden bg-neutral-950 custom-scrollbar",
           isScrolling && "is-scrolling",
         )}
         onScroll={handleScroll}
@@ -473,15 +476,15 @@ function SidebarNavContent({
           onClick={openCmd}
           className="w-full mb-2.5 flex items-center gap-2 px-2.5 py-2 rounded-md bg-white/[0.1] hover:bg-white/[0.2] transition-colors outline-none text-left"
         >
-          <Search className="w-3.5 h-3.5 text-white/35 shrink-0" />
+          <Search className="size-3.5 text-white/35 shrink-0" />
           <span className="flex-1 text-xs text-white/40">Search or jump to…</span>
-          <kbd className="text-[10px] font-semibold bg-white/[0.08] px-1 py-0.5 rounded text-white/40 shrink-0 leading-none">⌘K</kbd>
+          <kbd className="text-xs font-semibold bg-white/[0.08] px-1 py-0.5 rounded text-white/40 shrink-0 leading-none">⌘K</kbd>
         </button>
 
         <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="desktop" />
       </SidebarContent>
 
-      <SidebarFooter className="border-t bg-black border-sidebar-border px-2 py-2 gap-0">
+      <SidebarFooter className="border-t bg-neutral-950 border-sidebar-border p-2 gap-0">
         <div className="flex items-center gap-1">
           <UserMenu navAuth={navAuth} variant="desktop" />
           <FooterLinks pathname={pathname} onNavigate={handleNavClick} variant="desktop" />
@@ -520,11 +523,11 @@ function MobileNavSheet({
       <SheetContent
         side="top"
         showCloseButton={false}
-        className="bg-black border-b border-white/[0.08] p-0 max-h-[90dvh] overflow-y-auto"
+        className="bg-neutral-950 border-b border-white/[0.08] p-0 max-h-[90dvh] overflow-y-auto"
       >
         <SheetTitle className="sr-only">Navigation</SheetTitle>
 
-        <div className="sticky top-0 z-50 flex bg-black items-center gap-2 px-3 py-2 border-b border-white/[0.08] shrink-0">
+        <div className="sticky top-0 z-50 flex bg-neutral-950 items-center gap-2 px-3 py-2 border-b border-white/[0.08] shrink-0">
           <div className="flex-1 min-w-0">
             <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="mobileCompact" />
           </div>
@@ -534,7 +537,7 @@ function MobileNavSheet({
             aria-label="Close navigation"
             className="p-2 rounded-md text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="size-5" />
           </button>
         </div>
 
@@ -542,7 +545,7 @@ function MobileNavSheet({
           <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="mobile" />
         </div>
 
-        <div className="sticky bottom-0 bg-black w-full border-t border-white/[0.08] px-3 py-2">
+        <div className="sticky bottom-0 bg-neutral-950 w-full border-t border-white/[0.08] px-3 py-2">
           <div className="flex items-center gap-1 ">
             <UserMenu navAuth={navAuth} variant="mobile" />
             <FooterLinks pathname={pathname} onNavigate={handleNavClick} variant="mobile" />
@@ -559,7 +562,7 @@ function MobileBottomBar({ openCount }: { openCount: number }) {
   return (
     <div
       data-dashboard-mobile-bottom-bar
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-black border-t border-white/[0.08] flex items-stretch"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-neutral-950 border-t border-white/[0.08] flex items-stretch"
     >
       {mobileTabs.map((tab) => {
         const isActive = isRouteActive(pathname, tab.href);
@@ -582,15 +585,15 @@ function MobileBottomBar({ openCount }: { openCount: number }) {
           >
             {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-sky-400" />}
             <div className="relative">
-              <tab.icon className="w-5 h-5" />
+              <tab.icon className="size-5" />
               {tab.badge && (
                 <OpenCountBadge
                   openCount={openCount}
-                  className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-green-400 text-black tabular-nums leading-none"
+                  className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 rounded-full text-xs font-bold flex items-center justify-center bg-green-400 text-black tabular-nums leading-none"
                 />
               )}
             </div>
-            <span className="text-[10px] font-medium leading-none">{tab.name}</span>
+            <span className="text-xs font-medium leading-none">{tab.name}</span>
           </Link>
         );
       })}
@@ -621,11 +624,11 @@ export default function DashboardSidebar({
   }, []);
 
   return (
-    <OpenThreadCountContext.Provider value={openCount}>
+    <>
       {isSwitching && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
           <div className="flex items-center gap-3 text-white/60">
-            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+            <div className="size-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
             <span className="text-sm font-medium">Switching workspace…</span>
           </div>
         </div>
@@ -636,7 +639,7 @@ export default function DashboardSidebar({
           <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} navAuth={navAuth} />
         </Sidebar>
 
-        <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-black flex flex-col">
+        <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-neutral-950 flex flex-col">
           <div
             data-dashboard-mobile-header
             className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar"
@@ -650,7 +653,7 @@ export default function DashboardSidebar({
                 aria-label="Open navigation"
                 className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="size-5" />
               </button>
             </div>
           </div>
@@ -675,6 +678,6 @@ export default function DashboardSidebar({
       />
 
       <MobileBottomBar openCount={openCount} />
-    </OpenThreadCountContext.Provider>
+    </>
   );
 }

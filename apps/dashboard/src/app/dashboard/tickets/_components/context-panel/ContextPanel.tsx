@@ -54,9 +54,9 @@ export default function ContextPanel({
     <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-white/[0.12] flex flex-col xl:overflow-y-auto bg-[#030303]">
       <section className="px-3.5 pt-3 pb-3 border-b border-white/[0.08]">
         <div className="flex flex-row items-center gap-4">
-          <div className="w-8 h-8 rounded-full overflow-hidden bg-[#ff7a1a] flex items-center justify-center text-white text-xs font-semibold shrink-0">
+          <div className="size-8 rounded-full overflow-hidden bg-[#ff7a1a] flex items-center justify-center text-white text-xs font-semibold shrink-0">
             {thread.customer?.profilePicUrl ? (
-              <Image src={thread.customer.profilePicUrl} alt={displayName} width={40} height={40} className="w-full h-full object-cover" />
+              <Image src={thread.customer.profilePicUrl} alt={displayName} width={40} height={40} className="size-full object-cover" />
             ) : initials}
           </div>
 
@@ -76,7 +76,7 @@ export default function ContextPanel({
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {emailAddress ? (
             <a href={`mailto:${emailAddress}`} className={actionPill}>
-              <Mail className="w-3 h-3" />
+              <Mail className="size-3" />
               Email
             </a>
           ) : (
@@ -89,12 +89,12 @@ export default function ContextPanel({
           {hasShopify && (
             shopifyAdminCustomerUrl ? (
               <a href={shopifyAdminCustomerUrl} target="_blank" rel="noopener noreferrer" className={actionPill}>
-                <ShoppingBagIcon className="h-3 w-3" />
+                <ShoppingBagIcon className="size-3" />
                 Shopify
               </a>
             ) : (
               <span className={basePill}>
-                <ShoppingBagIcon className="h-3 w-3" />
+                <ShoppingBagIcon className="size-3" />
                 Shopify
               </span>
             )
@@ -130,12 +130,12 @@ export default function ContextPanel({
                       {title}
                     </span>
                     {preview && preview !== title && (
-                      <span className="mt-0.5 block truncate text-[11px] leading-3 text-white/40">
+                      <span className="mt-0.5 block truncate text-xs leading-3 text-white/40">
                         {preview}
                       </span>
                     )}
                   </span>
-                  <span className="text-[11px] leading-4 text-white/50 shrink-0">
+                  <span className="text-xs leading-4 text-white/50 shrink-0">
                     {formatShortDate(t.updatedAt)}
                   </span>
                 </NextLink>

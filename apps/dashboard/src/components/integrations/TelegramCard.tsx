@@ -55,25 +55,25 @@ export default function TelegramCard() {
 
   return (
     <div className="rounded-xl border border-white/[0.08] bg-card overflow-hidden">
-      <button
+      <button type="button"
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
       >
-        <div className="h-11 w-11 rounded-lg flex items-center justify-center shrink-0 bg-sky-500/[0.08] border border-sky-500/20">
-          <Send className="w-[22px] h-[22px] text-sky-300" />
+        <div className="size-11 rounded-lg flex items-center justify-center shrink-0 bg-sky-500/[0.08] border border-sky-500/20">
+          <Send className="size-[22px] text-sky-300" />
         </div>
 
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2.5 flex-wrap">
             <p className="text-[15px] font-bold text-white/95 leading-none">Telegram</p>
             {isConnected ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
+                <span className="size-1.5 rounded-full bg-emerald-400" />
                 Connected
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-white/20" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
+                <span className="size-1.5 rounded-full bg-white/20" />
                 Not connected
               </span>
             )}
@@ -87,7 +87,7 @@ export default function TelegramCard() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0 mt-1">
-          <ChevronDown className={cn("w-4 h-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
+          <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
         </div>
       </button>
 
@@ -104,7 +104,7 @@ export default function TelegramCard() {
           {isAvailable && !isConnected && (
             <div className="space-y-3">
               <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
-                <li>Click Connect Telegram — opens a chat with the Clerk bot</li>
+                <li>Click Connect Telegram , opens a chat with the Clerk bot</li>
                 <li>Tap Start in Telegram to link this account</li>
                 <li>Reply to digests or send free-form instructions from there</li>
               </ol>
@@ -116,7 +116,7 @@ export default function TelegramCard() {
                   className="h-9 px-4 font-medium"
                 >
                   {connecting
-                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />Opening…</>
+                    ? <><Loader2 className="size-3.5 animate-spin mr-1.5" />Opening…</>
                     : 'Connect Telegram'
                   }
                 </Button>
@@ -128,13 +128,13 @@ export default function TelegramCard() {
             <div className="rounded-md overflow-hidden border border-white/[0.07]">
               <div className="flex items-center gap-3 px-3.5 py-2.5 bg-white/[0.02]">
                 <div className="flex-1 min-w-0">
-                  <p className="text-[10px] font-semibold text-white/30 uppercase tracking-wide mb-0.5">Linked chat</p>
+                  <p className="text-xs font-semibold text-white/30 uppercase tracking-wide mb-0.5">Linked chat</p>
                   <p className="text-xs font-mono font-medium text-white/60">{status?.chatId}</p>
                 </div>
-                <button
+                <button type="button"
                   onClick={disconnect}
                   disabled={disconnecting}
-                  className="text-[11px] font-medium text-white/25 hover:text-red-400 transition-colors shrink-0"
+                  className="text-xs font-medium text-white/25 hover:text-red-400 transition-colors shrink-0"
                 >
                   {disconnecting ? 'Disconnecting…' : 'Disconnect'}
                 </button>

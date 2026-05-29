@@ -34,13 +34,13 @@ export const GET = withOrgRoute(
     if (pageInfo) {
       url = `${base}/customers.json?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
     } else if (q.length >= 1) {
-      // Search endpoint — no cursor pagination supported by Shopify
+      // Search endpoint , no cursor pagination supported by Shopify
       url = `${base}/customers/search.json?query=${encodeURIComponent(q)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
     } else {
       url = `${base}/customers.json?limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}&order=updated_at+DESC`;
     }
 
-    const res = await fetch(url, { headers: { 'X-Shopify-Access-Token': token } });
+    const res = await fetch(url, { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } });
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));
@@ -62,11 +62,12 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: 'Shopify Customer POST', errorMessage: 'server_error' },
   async ({ org, request }) => {
-    const { first_name, last_name, email } = await request.json();
-
-    const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: 'shopify' },
-    });
+    const [{ first_name, last_name, email }, integration] = await Promise.all([
+      request.json(),
+      db.integration.findFirst({
+        where: { organizationId: org.id, platform: 'shopify' },
+      }),
+    ]);
 
     if (!integration?.accessToken) {
       throw new NotFoundError('no_integration');
@@ -76,6 +77,7 @@ export const POST = withOrgRoute(
     const token = integration.accessToken;
 
     const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/customers.json`, {
+      cache: 'no-store',
       method: 'POST',
       headers: {
         'X-Shopify-Access-Token': token,

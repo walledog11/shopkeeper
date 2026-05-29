@@ -60,15 +60,15 @@ export function AuditSection({
       <CardHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <BarChart2 className="w-4 h-4 text-primary" />
+            <div className="size-8 rounded-lg bg-primary/10 flex items-center justify-center">
+              <BarChart2 className="size-4 text-primary" />
             </div>
             <div>
               <CardTitle className="text-sm">{auditLabel} Performance Audit</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">KPI health check for your support operation</p>
             </div>
           </div>
-          <span className="text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase tracking-wide">
+          <span className="text-xs font-semibold text-primary bg-primary/10 border border-primary/20 px-2.5 py-1 rounded-full uppercase tracking-wide">
             {badgeLabel}
           </span>
         </div>
@@ -80,7 +80,7 @@ export function AuditSection({
             <div className="flex gap-3">
               <div className="w-24 h-32 rounded-xl bg-muted shrink-0" />
               <div className="flex-1 grid grid-cols-2 gap-2.5">
-                {[...Array(4)].map((_, i) => <div key={i} className="h-[68px] bg-muted rounded-xl" />)}
+                {["one", "two", "three", "four"].map((key) => <div key={key} className="h-[68px] bg-muted rounded-xl" />)}
               </div>
             </div>
             <div className="h-16 bg-muted rounded-xl" />
@@ -93,7 +93,7 @@ export function AuditSection({
                 <span className={`text-5xl font-black leading-none ${grade.text}`}>{auditGrade}</span>
                 <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">Overall</span>
                 {auditScore !== null && (
-                  <span className={`text-[11px] font-bold ${grade.text}`}>{auditScore}/100</span>
+                  <span className={`text-xs font-bold ${grade.text}`}>{auditScore}/100</span>
                 )}
                 <div className="pt-1.5 border-t border-border/60 w-full text-center space-y-0.5 mt-0.5">
                   <p className="text-[9px] text-muted-foreground">{totalThreads} ticket{totalThreads !== 1 ? 's' : ''}</p>
@@ -111,10 +111,10 @@ export function AuditSection({
                     <div key={kpi.label} className={`rounded-xl border px-3 py-2.5 ${colors.bg} ${colors.border}`}>
                       <div className="flex items-center justify-between mb-1.5 gap-1">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${colors.icon}`}>
+                          <div className={`size-4 rounded flex items-center justify-center shrink-0 ${colors.icon}`}>
                             {kpi.icon}
                           </div>
-                          <span className="text-[10px] font-semibold text-muted-foreground truncate">{kpi.label}</span>
+                          <span className="text-xs font-semibold text-muted-foreground truncate">{kpi.label}</span>
                         </div>
                         <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide shrink-0 ${colors.badge}`}>
                           {kpi.statusLabel}
@@ -139,19 +139,19 @@ export function AuditSection({
             {/* Recommendations */}
             {visibleTips.length > 0 && (
               <div className="rounded-xl border border-border bg-muted/50 px-4 py-3.5">
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2.5">
                   {visibleTips.every(t => t.ok) ? 'All systems healthy' : `${auditIssues} recommendation${auditIssues !== 1 ? 's' : ''}`}
                 </p>
                 <div className="space-y-1.5">
-                  {visibleTips.map((tip, i) => (
-                    <div key={i} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs ${
+                  {visibleTips.map((tip) => (
+                    <div key={tip.label} className={`flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-xs ${
                       tip.ok
                         ? 'bg-emerald-950/40 border border-emerald-800/50 text-emerald-400'
                         : 'bg-card border border-border text-foreground'
                     }`}>
                       {tip.ok
-                        ? <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-400 mt-0.5" />
-                        : <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-400 mt-0.5" />
+                        ? <CheckCircle className="size-3.5 shrink-0 text-emerald-400 mt-0.5" />
+                        : <AlertTriangle className="size-3.5 shrink-0 text-amber-400 mt-0.5" />
                       }
                       <span className="leading-relaxed">{tip.text}</span>
                       {tip.benchmark && (

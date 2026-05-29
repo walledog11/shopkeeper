@@ -20,6 +20,10 @@ function getPlaceholder(r: number) {
 }
 
 export default function FeedbackPage() {
+  return useFeedbackPageView()
+}
+
+function useFeedbackPageView() {
   const [rating, setRating] = useState(0)
   const [hovered, setHovered] = useState(0)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -63,7 +67,7 @@ export default function FeedbackPage() {
               <p className="text-sm font-medium text-white/70 mb-3">How are you liking Clerk?</p>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map(star => (
-                  <button
+                  <button type="button"
                     key={star}
                     onMouseEnter={() => {
                       if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
@@ -75,7 +79,7 @@ export default function FeedbackPage() {
                     onClick={() => setRating(star)}
                     className="transition-transform hover:scale-110 p-1"
                   >
-                    <Star className={`w-6 h-6 transition-colors ${
+                    <Star className={`size-6 transition-colors ${
                       star <= activeRating ? "fill-amber-400 text-amber-400" : "text-white/20"
                     }`} />
                   </button>
@@ -90,6 +94,7 @@ export default function FeedbackPage() {
 
             <div>
               <textarea
+                aria-label="Feedback comment"
                 value={comment}
                 onChange={e => setComment(e.target.value.slice(0, 280))}
                 placeholder={getPlaceholder(rating)}
@@ -100,12 +105,12 @@ export default function FeedbackPage() {
             </div>
 
             <div className="flex justify-end">
-              <button
+              <button type="button"
                 onClick={submit}
                 disabled={rating === 0 || submitting}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-md bg-amber-400 text-black text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed hover:bg-amber-300 transition-colors"
               >
-                <Send className="w-3.5 h-3.5" />
+                <Send className="size-3.5" />
                 Send feedback
               </button>
             </div>

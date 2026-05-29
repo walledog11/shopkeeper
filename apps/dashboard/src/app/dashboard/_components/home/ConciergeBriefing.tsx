@@ -44,7 +44,7 @@ export default function ConciergeBriefing({
   let narrative: React.ReactNode
   if (overnightClearedCount === 0 && needsYouCount === 0) {
     narrative = (
-      <>You&apos;re all caught up — no new tickets since yesterday. {agentName} is on duty for anything that comes in.</>
+      <>You&apos;re all caught up , no new tickets since yesterday. {agentName} is on duty for anything that comes in.</>
     )
   } else if (overnightClearedCount === 0) {
     narrative = (
@@ -76,7 +76,7 @@ export default function ConciergeBriefing({
     <Card className="relative bg-card border-border rounded-xl overflow-hidden noise-texture">
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(180deg,rgba(255,255,255,0.045),transparent_46%)]" />
       <div className="absolute -left-8 top-1/2 -translate-y-1/2 w-[320px] h-[200px] rounded-full opacity-[0.06] pointer-events-none" />
-      <div className="absolute -right-20 -top-24 h-56 w-56 rounded-full bg-blue-400/[0.10] blur-3xl pointer-events-none" />
+      <div className="absolute -right-20 -top-24 size-56 rounded-full bg-blue-400/[0.10] blur-3xl pointer-events-none" />
       <div className="absolute right-0 top-0 h-px w-2/3 bg-gradient-to-l from-blue-300/35 to-transparent pointer-events-none" />
       <GridPattern
         width={34}
@@ -96,14 +96,14 @@ export default function ConciergeBriefing({
       <div className="relative px-6 pt-5 pb-5">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 border border-blue-800 flex items-center justify-center">
-              <Sparkles className="w-3.5 h-3.5 text-blue-800" />
+            <div className="size-6 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 border border-blue-800 flex items-center justify-center">
+              <Sparkles className="size-3.5 text-blue-800" />
             </div>
-            <span className="text-[11px] uppercase tracking-wider font-semibold text-white/45">
+            <span className="text-xs uppercase tracking-wider font-semibold text-white/45">
               Daily briefing
             </span>
             <span className="text-white/15">·</span>
-            <span className="text-[11px] text-white/35 tabular-nums">{now}</span>
+            <span className="text-xs text-white/35 tabular-nums">{now}</span>
           </div>
         </div>
 
@@ -133,7 +133,7 @@ export default function ConciergeBriefing({
             href="/dashboard/agent"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold text-white/60 hover:text-white/90 transition-colors"
           >
-            <Sparkles className="w-3 h-3" /> Ask {agentName}
+            <Sparkles className="size-3" /> Ask {agentName}
           </Link>
         </div>
       </div>

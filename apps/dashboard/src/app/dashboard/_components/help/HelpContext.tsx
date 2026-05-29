@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
+import { createContext, use, useState, useCallback, useMemo, type ReactNode } from "react"
 
 interface HelpContextValue {
   isOpen: boolean
@@ -15,16 +15,17 @@ export function HelpProvider({ children }: { children: ReactNode }) {
 
   const openHelp = useCallback(() => setIsOpen(true), [])
   const closeHelp = useCallback(() => setIsOpen(false), [])
+  const value = useMemo(() => ({ isOpen, openHelp, closeHelp }), [closeHelp, isOpen, openHelp])
 
   return (
-    <HelpContext.Provider value={{ isOpen, openHelp, closeHelp }}>
+    <HelpContext.Provider value={value}>
       {children}
     </HelpContext.Provider>
   )
 }
 
 export function useHelp() {
-  const ctx = useContext(HelpContext)
+  const ctx = use(HelpContext)
   if (!ctx) throw new Error("useHelp must be used within HelpProvider")
   return ctx
 }

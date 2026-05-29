@@ -38,9 +38,11 @@ function buildCustomerMemorySection(ctx: AgentContext): string {
   if (summary) parts.push(summary);
 
   const keyFacts = (Array.isArray(memory.keyFacts) ? memory.keyFacts : [])
-    .filter((fact): fact is string => typeof fact === "string")
-    .map((fact) => fact.trim())
-    .filter(Boolean)
+    .flatMap((fact) => {
+      if (typeof fact !== "string") return [];
+      const trimmed = fact.trim();
+      return trimmed ? [trimmed] : [];
+    })
     .slice(0, 3);
   if (keyFacts.length > 0) {
     parts.push(`Key facts:\n${keyFacts.map((fact) => `- ${fact}`).join("\n")}`);
@@ -52,7 +54,7 @@ function buildCustomerMemorySection(ctx: AgentContext): string {
       if (!outcome) return null;
       const tag = typeof interaction.tag === "string" && interaction.tag.trim() ? interaction.tag.trim() : "untagged";
       const closedAt = typeof interaction.closedAt === "string" ? interaction.closedAt : "unknown";
-      return `${tag} — ${outcome} (${closedAt})`;
+      return `${tag} , ${outcome} (${closedAt})`;
     })
     .filter((line): line is string => line !== null)
     .slice(0, 3);
@@ -63,10 +65,10 @@ function buildCustomerMemorySection(ctx: AgentContext): string {
   const directives: string[] = [];
   const policyFlags = memory.policyFlags ?? {};
   if (policyFlags.complaintPattern) {
-    directives.push("This customer has filed multiple complaints recently — bias toward escalation.");
+    directives.push("This customer has filed multiple complaints recently , bias toward escalation.");
   }
   if (policyFlags.vip) {
-    directives.push("This is a high-value customer — extra care on tone.");
+    directives.push("This is a high-value customer , extra care on tone.");
   }
   if (directives.length > 0) {
     parts.push(directives.join(" "));
@@ -141,7 +143,7 @@ export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSetti
       : "";
 
     const ordersSection = ctx.recentOrders.length > 0
-      ? `\n\n## Customer's recent orders (use these IDs directly — no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
+      ? `\n\n## Customer's recent orders (use these IDs directly , no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
       : "";
 
     return `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.
@@ -151,7 +153,7 @@ ${shopifyNote}
 ${shopifyCustomerNote}
 - When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
 - When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
-- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly — do not ask for the order number.
+- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly , do not ask for the order number.
 - For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
 - Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
 - To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
@@ -252,7 +254,7 @@ ${kbSection}
 - If you are uncertain, say so plainly rather than guessing.
 - Sound like a sharp coworker, not a report generator. Use plain sentences, no markdown headings, no bold labels, and avoid bullet lists unless the operator explicitly asks for a checklist.
 - Lead with the practical answer, then include only the details needed to make a decision. Prefer 2-4 sentences.
-- Avoid numbered lists for simple uncertainty. Say "I'd check..." or "I'd confirm..." instead.
+- Avoid numbered lists for simple uncertainty. Say "I'd check…" or "I'd confirm…" instead.
 - Do not end by asking a broad follow-up question unless it is necessary to answer the operator's request.
 - Be concise, factual, and specific.${languageClause}`;
 }

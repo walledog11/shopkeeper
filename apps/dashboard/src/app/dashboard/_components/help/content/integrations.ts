@@ -35,7 +35,7 @@ export const integrations: Category = {
         {
           tips: [
             "Only new emails received after forwarding is set up will appear as tickets.",
-            "You can connect multiple email addresses — each appears as a separate integration.",
+            "You can connect multiple email addresses , each appears as a separate integration.",
           ],
         },
       ],
@@ -63,13 +63,13 @@ export const integrations: Category = {
             "You'll be redirected to Facebook to authorise Clerk.",
             "Select the Facebook Page linked to your Instagram account.",
             "Grant the requested permissions and confirm.",
-            "You'll be redirected back to Clerk — a green Connected badge will appear.",
+            "You'll be redirected back to Clerk , a green Connected badge will appear.",
           ],
         },
         {
           tips: [
             "If you see a 'No Instagram Business account found' error, make sure your Instagram account is set to Business (not Creator or Personal) and is linked to your Facebook Page.",
-            "Classic Page admin access is required — Business Portfolio access alone is not sufficient.",
+            "Classic Page admin access is required , Business Portfolio access alone is not sufficient.",
           ],
         },
       ],

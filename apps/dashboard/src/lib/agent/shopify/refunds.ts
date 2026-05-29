@@ -30,13 +30,13 @@ function refundableQuantity(lineItem: ShopifyOrderLineItem): number {
 }
 
 function buildRefundLineItems(order: ShopifyOrder): ShopifyCalculatedRefundLineItem[] {
-  return (order.line_items ?? [])
-    .filter((lineItem) => lineItem.id !== undefined && lineItem.id !== null && refundableQuantity(lineItem) > 0)
-    .map((lineItem) => ({
+  return (order.line_items ?? []).flatMap((lineItem) => (
+    lineItem.id !== undefined && lineItem.id !== null && refundableQuantity(lineItem) > 0 ? [{
       line_item_id: lineItem.id!,
       quantity: refundableQuantity(lineItem),
       restock_type: "no_restock",
-    }));
+    }] : []
+  ));
 }
 
 function calculatedTransactions(calculation: RefundCalculation): ShopifyTransaction[] {
@@ -55,9 +55,9 @@ function normalizeRefundTransaction(transaction: ShopifyTransaction, amount?: st
 }
 
 function buildFullRefundTransactions(calculation: RefundCalculation): ShopifyTransaction[] {
-  return calculatedTransactions(calculation)
-    .filter((transaction) => moneyToCents(transaction.amount) > 0)
-    .map((transaction) => normalizeRefundTransaction(transaction));
+  return calculatedTransactions(calculation).flatMap((transaction) => (
+    moneyToCents(transaction.amount) > 0 ? [normalizeRefundTransaction(transaction)] : []
+  ));
 }
 
 function buildPartialRefundTransactions(calculation: RefundCalculation, amount: string): ShopifyTransaction[] {

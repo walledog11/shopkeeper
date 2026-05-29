@@ -26,14 +26,13 @@ function normalizeKeyFacts(value: unknown, fallback: string[]): string[] {
   if (!Array.isArray(value)) {
     throw new BadRequestError('keyFacts must be an array');
   }
-  return value
-    .map((item) => {
+  return value.flatMap((item) => {
       if (typeof item !== 'string') {
         throw new BadRequestError('keyFacts must contain only strings');
       }
-      return item.trim();
-    })
-    .filter(Boolean);
+      const trimmed = item.trim();
+      return trimmed ? [trimmed] : [];
+    });
 }
 
 export const GET = withOrgRoute<{ id: string }>(

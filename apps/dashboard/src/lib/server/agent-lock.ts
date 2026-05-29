@@ -21,7 +21,7 @@ export interface ThreadLock {
 }
 
 // Fails open: if Redis is unreachable or test env points at a fake host, return a no-op lock so
-// the agent stays functional. A Redis outage shouldn't take the agent down — the mutex is a soft
+// the agent stays functional. A Redis outage shouldn't take the agent down , the mutex is a soft
 // mitigation against same-thread races, not a hard guarantee.
 export async function acquireThreadLock(threadId: string, ttlSeconds = 90): Promise<ThreadLock | null> {
   const key = `agent:lock:${threadId}`;

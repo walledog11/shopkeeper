@@ -5,12 +5,10 @@ export function buildMessageHistory(
   recentMessages: AgentContext["recentMessages"],
   instruction: string
 ): Anthropic.MessageParam[] {
-  const rawHistory = recentMessages
-    .filter((m) => m.senderType !== "note")
-    .map((m) => ({
+  const rawHistory = recentMessages.flatMap((m) => m.senderType !== "note" ? [{
       role: m.senderType === "agent" ? "assistant" as const : "user" as const,
       content: m.contentText ?? "(media)",
-    }));
+    }] : []);
 
   const merged: Anthropic.MessageParam[] = [];
   for (const msg of rawHistory) {

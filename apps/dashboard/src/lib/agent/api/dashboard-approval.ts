@@ -44,12 +44,12 @@ function normalizeApprovalReply(instruction: string): string {
     .replace(/\s+/g, " ");
 }
 
-export function isApprovalReply(instruction: string): boolean {
+function isApprovalReply(instruction: string): boolean {
   const normalized = normalizeApprovalReply(instruction);
   return APPROVAL_RE.test(normalized) && !APPROVAL_WITH_EDIT_RE.test(normalized);
 }
 
-export function isDismissReply(instruction: string): boolean {
+function isDismissReply(instruction: string): boolean {
   return DISMISS_RE.test(normalizeApprovalReply(instruction));
 }
 
@@ -76,7 +76,7 @@ export function readDashboardPendingApproval(value: unknown): DashboardPendingAp
   return candidate as DashboardPendingApproval;
 }
 
-export async function loadDashboardPendingApproval(threadId: string): Promise<DashboardPendingApproval | null> {
+async function loadDashboardPendingApproval(threadId: string): Promise<DashboardPendingApproval | null> {
   const thread = await db.thread.findUnique({
     where: { id: threadId },
     select: { cachedPlan: true },
@@ -94,9 +94,7 @@ function stringValue(value: unknown): string | null {
 
 export function getDashboardActionCalls(plan: AgentPlan): RawToolCall[] {
   const actionStepIds = new Set(
-    plan.steps
-      .filter((step) => step.category === "action")
-      .map((step) => step.id)
+    plan.steps.flatMap((step) => step.category === "action" ? [step.id] : [])
   );
   return plan.rawToolCalls.filter((toolCall) => (
     actionStepIds.has(toolCall.id) &&
@@ -212,13 +210,12 @@ export function buildDashboardApprovalSummary(plan: AgentPlan): string {
   }
 
   const stepSummary = plan.steps
-    .filter((step) => step.category === "action")
-    .map((step) => step.description)
+    .flatMap((step) => step.category === "action" ? [step.description] : [])
     .join("; ");
   return `I can run this action: ${stepSummary || "the requested Shopify update"}. Reply yes to continue, or let me know what to change.`;
 }
 
-export async function storeDashboardPendingApproval(threadId: string, approval: DashboardPendingApproval) {
+async function storeDashboardPendingApproval(threadId: string, approval: DashboardPendingApproval) {
   await db.thread.update({
     where: { id: threadId },
     data: {
@@ -238,7 +235,7 @@ export async function clearDashboardPendingApproval(threadId: string) {
   });
 }
 
-export async function persistDashboardExchange(threadId: string, userText: string, agentText: string) {
+async function persistDashboardExchange(threadId: string, userText: string, agentText: string) {
   await createMessage({
     threadId,
     senderType: "customer",

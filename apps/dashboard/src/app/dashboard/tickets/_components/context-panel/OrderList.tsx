@@ -28,7 +28,7 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
   return (
     <section className={panelSectionClass}>
       <div className="flex items-center justify-between gap-2 mb-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40 truncate">
+        <span className="text-xs font-semibold uppercase tracking-[0.12em] text-white/40 truncate">
           ORDER {order.name}
         </span>
         {adminUrl && (
@@ -36,11 +36,11 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
             href={adminUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex h-6 w-6 items-center justify-center rounded text-white/30 hover:bg-white/[0.05] hover:text-white/70 transition-colors shrink-0"
+            className="flex size-6 items-center justify-center rounded text-white/30 hover:bg-white/[0.05] hover:text-white/70 transition-colors shrink-0"
             aria-label={`View order ${order.name} in Shopify`}
             title="View order in Shopify"
           >
-            <ExternalLink className="w-3.5 h-3.5" />
+            <ExternalLink className="size-3.5" />
           </a>
         )}
       </div>
@@ -62,7 +62,7 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
                     {item.title}
                   </p>
                   {skuParts.length > 0 && (
-                    <p className="mt-0.5 font-mono text-[11px] leading-3 text-white/40 truncate">
+                    <p className="mt-0.5 font-mono text-xs leading-3 text-white/40 truncate">
                       {skuParts.join(' / ')}
                     </p>
                   )}
@@ -91,14 +91,14 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs leading-4 text-white/50">Status</span>
           <span className={`inline-flex items-center gap-1.5 text-xs leading-4 font-medium ${fulfillment.textClass}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${fulfillment.dotClass}`} />
+            <span className={`size-1.5 rounded-full ${fulfillment.dotClass}`} />
             {fulfillment.label}{orderDate ? ` - ${orderDate}` : ''}
           </span>
         </div>
       </div>
 
       {olderOrderCount > 0 && (
-        <p className="mt-2 text-[11px] leading-4 text-white/30">
+        <p className="mt-2 text-xs leading-4 text-white/30">
           {olderOrderCount} older order{olderOrderCount !== 1 ? 's' : ''} available in Shopify.
         </p>
       )}

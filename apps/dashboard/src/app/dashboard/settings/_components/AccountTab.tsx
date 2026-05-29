@@ -26,7 +26,7 @@ export default function AccountTab() {
             <p className="text-xs text-white/35 mt-1 leading-relaxed">Your personal account. Name, email, and password are managed by Clerk.</p>
           </div>
           <div className="flex items-center gap-4 p-4 bg-white/[0.04] rounded-md border border-white/[0.07]">
-            <div className="w-10 h-10 rounded-full bg-white/[0.10] flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
+            <div className="size-10 rounded-full bg-white/[0.10] flex items-center justify-center text-white font-bold text-sm overflow-hidden shrink-0">
               {userImageUrl ? (
                 <Image
                   src={userImageUrl}
@@ -34,7 +34,7 @@ export default function AccountTab() {
                   width={40}
                   height={40}
                   unoptimized
-                  className="w-full h-full object-cover"
+                  className="size-full object-cover"
                 />
               ) : (
                 initials

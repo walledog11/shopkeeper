@@ -17,9 +17,9 @@ export function SaveButton({ saving, saved, onClick, disabled }: {
       className="h-8 px-4 bg-white/[0.12] text-white hover:bg-white/[0.18] text-xs font-semibold disabled:opacity-40 min-w-[80px]"
     >
       {saving ? (
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <Loader2 className="size-3.5 animate-spin" />
       ) : saved ? (
-        <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> Saved</span>
+        <span className="flex items-center gap-1.5"><Check className="size-3.5" /> Saved</span>
       ) : (
         "Save changes"
       )}
@@ -27,19 +27,20 @@ export function SaveButton({ saving, saved, onClick, disabled }: {
   )
 }
 
-export function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={checked ? "Disable setting" : "Enable setting"}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
         checked ? 'bg-amber-400' : 'bg-white/[0.15]'
       }`}
     >
       <span
-        className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+        className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
           checked ? 'translate-x-4' : 'translate-x-0.5'
         }`}
       />
@@ -68,7 +69,7 @@ export function ToggleRow({
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-white/75">{label}</p>
           {badge && (
-            <Badge variant="outline" className={`text-[10px] font-semibold ${badgeColor}`}>
+            <Badge variant="outline" className={`text-xs font-semibold ${badgeColor}`}>
               {badge}
             </Badge>
           )}

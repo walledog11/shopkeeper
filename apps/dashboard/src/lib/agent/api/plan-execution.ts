@@ -58,7 +58,7 @@ function toolCallsForClassification(
   return [];
 }
 
-export async function loadCurrentCachedHomePlan(params: {
+async function loadCurrentCachedHomePlan(params: {
   orgId: string;
   threadId: string;
   settings: OrgSettings;
@@ -82,7 +82,7 @@ export async function loadCurrentCachedHomePlan(params: {
   };
 }
 
-export async function clearCurrentCachedPlan(params: {
+async function clearCurrentCachedPlan(params: {
   orgId: string;
   threadId: string;
   lastCustomerMessageId: string | null;

@@ -28,7 +28,7 @@ const steps = [
         <div className="grid gap-2 text-xs [font-family:var(--m-mono)]">
           {[
             ["shopify.order(2961)", "→ found"],
-            ["usps.track(9400...)", "→ out for delivery"],
+            ["usps.track(9400…)", "→ out for delivery"],
             ["history.last(3)", "→ first order"],
             ["policy.shipping", "→ 5-7 day est"],
           ].map(([k, v]) => (
@@ -49,9 +49,9 @@ const steps = [
       <div>
         <div className="mb-3.5 text-xs text-white/60 [font-family:var(--m-mono)]">drafting · in your voice</div>
         <div className="rounded-t-xl rounded-bl-xl rounded-br border border-solid border-orange-500/50 bg-white/10 px-5 py-4 text-[15px] leading-[1.5]">
-          Hey! so sorry for the wait — your order #2961 is out for delivery today, should arrive by 8pm. tracking: usps.com/track/9400... lmk if it doesn&apos;t show up 💛
+          Hey! so sorry for the wait , your order #2961 is out for delivery today, should arrive by 8pm. tracking: usps.com/track/9400… lmk if it doesn&apos;t show up 💛
         </div>
-        <div className="mt-3 text-[11px] text-white/60 [font-family:var(--m-mono)]">tone match: 94% · learned from your last 127 replies</div>
+        <div className="mt-3 text-xs text-white/60 [font-family:var(--m-mono)]">tone match: 94% · learned from your last 127 replies</div>
       </div>
     ),
   },
@@ -64,10 +64,10 @@ const steps = [
         <div className="mb-3.5 text-xs text-white/60 [font-family:var(--m-mono)]">awaiting your tap · 14:42:13</div>
         <div className="mb-5 text-[42px] tracking-[-0.02em] [font-family:var(--m-serif)]">approve &amp; send?</div>
         <div className="flex justify-center gap-2">
-          <button className="cursor-pointer rounded-lg border-0 bg-white/10 px-5 py-2.5 text-[13px] text-white [font-family:inherit]">Edit first</button>
-          <button className="cursor-pointer rounded-lg border-0 bg-orange-500 px-5 py-2.5 text-[13px] font-semibold text-white [font-family:inherit]">Send →</button>
+          <button type="button" className="cursor-pointer rounded-lg border-0 bg-white/10 px-5 py-2.5 text-[13px] text-white [font-family:inherit]">Edit first</button>
+          <button type="button" className="cursor-pointer rounded-lg border-0 bg-orange-500 px-5 py-2.5 text-[13px] font-semibold text-white [font-family:inherit]">Send →</button>
         </div>
-        <div className="mt-5 text-[11px] text-white/50 [font-family:var(--m-mono)]">avg time-to-approve: 4.2s</div>
+        <div className="mt-5 text-xs text-white/50 [font-family:var(--m-mono)]">avg time-to-approve: 4.2s</div>
       </div>
     ),
   },
@@ -78,7 +78,7 @@ export function Workflow() {
 
   return (
     <section className="mx-auto max-w-7xl border-t border-solid border-stone-900/10 px-7 py-20">
-      <div className="mb-4 flex items-center gap-2.5 text-[11px] uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
+      <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
         <span className="inline-block h-px w-6 bg-stone-700" />
         02 · How it actually works
       </div>
@@ -92,12 +92,12 @@ export function Workflow() {
         <ol className="m-0 list-none p-0">
           {steps.map((s, i) => (
             <li
-              key={i}
+              key={s.num}
               onMouseEnter={() => setActive(i)}
               className={`relative cursor-pointer border-b border-solid border-stone-900/10 py-6 transition-[padding] duration-200 last:border-b-0 ${i === active ? "pl-4" : ""}`}
             >
               {i === active && <span className="absolute bottom-6 left-0 top-6 w-[3px] bg-green-600" />}
-              <span className="mb-2 block text-[11px] text-stone-700 [font-family:var(--m-mono)]">{s.num}</span>
+              <span className="mb-2 block text-xs text-stone-700 [font-family:var(--m-mono)]">{s.num}</span>
               <h4 className="mb-2 text-[26px] font-normal tracking-[-0.01em] [font-family:var(--m-serif)]">{s.title}</h4>
               <p className="m-0 text-sm leading-[1.5] text-stone-700">{s.body}</p>
             </li>
@@ -110,9 +110,9 @@ export function Workflow() {
 
       {/* Mobile: stacked */}
       <div className="flex flex-col gap-8 md:hidden">
-        {steps.map((s, i) => (
-          <div key={i}>
-            <span className="mb-2 block text-[11px] text-stone-700 [font-family:var(--m-mono)]">{s.num}</span>
+        {steps.map((s) => (
+          <div key={s.num}>
+            <span className="mb-2 block text-xs text-stone-700 [font-family:var(--m-mono)]">{s.num}</span>
             <h4 className="mb-2 text-2xl font-normal [font-family:var(--m-serif)]">{s.title}</h4>
             <p className="mb-4 text-sm leading-[1.5] text-stone-700">{s.body}</p>
             <div className="rounded-xl bg-stone-900 p-6 text-stone-100">{s.vis}</div>

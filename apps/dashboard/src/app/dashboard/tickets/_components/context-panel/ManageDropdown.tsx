@@ -40,13 +40,13 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex h-6 w-6 items-center justify-center rounded text-white/40 hover:bg-white/[0.05] hover:text-white/70 transition-colors"
+        className="flex size-6 items-center justify-center rounded text-white/40 hover:bg-white/[0.05] hover:text-white/70 transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Manage customer"
         title="Manage customer"
       >
-        <MoreHorizontal className="w-3.5 h-3.5" />
+        <MoreHorizontal className="size-3.5" />
       </button>
       {open && (
         <div role="menu" className="absolute right-0 top-7 z-10 w-44 rounded-md border border-white/[0.09] bg-popover shadow-md py-1">

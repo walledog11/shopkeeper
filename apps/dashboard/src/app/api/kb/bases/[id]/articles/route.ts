@@ -5,10 +5,11 @@ import { withOrgRoute } from '@/lib/api/route';
 
 function normalizeTags(tags: unknown): string[] {
   if (!Array.isArray(tags)) return [];
-  return tags
-    .filter((tag): tag is string => typeof tag === 'string')
-    .map(tag => tag.trim())
-    .filter(Boolean);
+  return tags.flatMap((tag) => {
+    if (typeof tag !== 'string') return [];
+    const trimmed = tag.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 export const POST = withOrgRoute<{ id: string }>(

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, use, useCallback, useEffect, useMemo, useState } from "react";
 import CommandPalette from "./CommandPalette";
 
 interface CommandPaletteContextValue {
@@ -13,7 +13,7 @@ interface CommandPaletteContextValue {
 const CommandPaletteContext = createContext<CommandPaletteContextValue | null>(null);
 
 export function useCommandPalette() {
-  const ctx = useContext(CommandPaletteContext);
+  const ctx = use(CommandPaletteContext);
   if (!ctx) throw new Error("useCommandPalette must be used inside CommandPaletteProvider");
   return ctx;
 }
@@ -23,6 +23,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
   const toggle = useCallback(() => setIsOpen(o => !o), []);
+  const value = useMemo(() => ({ open, close, toggle, isOpen }), [close, isOpen, open, toggle]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -36,7 +37,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   }, [toggle]);
 
   return (
-    <CommandPaletteContext.Provider value={{ open, close, toggle, isOpen }}>
+    <CommandPaletteContext.Provider value={value}>
       {children}
       <CommandPalette open={isOpen} onClose={close} />
     </CommandPaletteContext.Provider>

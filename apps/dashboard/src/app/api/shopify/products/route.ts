@@ -45,6 +45,7 @@ export const GET = withOrgRoute(
     }
 
     const res = await fetch(url, {
+      cache: 'no-store',
       headers: { 'X-Shopify-Access-Token': token },
     });
 
@@ -92,7 +93,10 @@ interface ShopifyProductRaw {
 }
 
 function normalizeProduct(p: ShopifyProductRaw) {
-  const prices = p.variants.map(v => parseFloat(v.price)).filter(n => !isNaN(n));
+  const prices = p.variants.flatMap(v => {
+    const price = parseFloat(v.price);
+    return Number.isNaN(price) ? [] : [price];
+  });
   const minPrice = prices.length ? Math.min(...prices) : null;
   const maxPrice = prices.length ? Math.max(...prices) : null;
 
@@ -104,7 +108,10 @@ function normalizeProduct(p: ShopifyProductRaw) {
     status: p.status,
     vendor: p.vendor || null,
     product_type: p.product_type || null,
-    tags: p.tags ? p.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
+    tags: p.tags ? p.tags.split(',').flatMap(t => {
+      const tag = t.trim();
+      return tag ? [tag] : [];
+    }) : [],
     image: p.images?.[0]?.src ?? null,
     variant_count: p.variants.length,
     price_min: minPrice,

@@ -6,6 +6,7 @@ async function proxy(request: NextRequest) {
   const body = request.method === 'GET' ? undefined : await request.arrayBuffer();
 
   const res = await fetch(url, {
+    cache: 'no-store',
     method: request.method,
     headers: request.headers,
     body: body ? Buffer.from(body) : undefined,

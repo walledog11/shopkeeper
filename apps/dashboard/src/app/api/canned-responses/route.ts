@@ -15,10 +15,11 @@ function normalizeStringArray(value: unknown, field: string): string[] {
   if (!Array.isArray(value)) {
     throw new BadRequestError(`${field} must be an array`);
   }
-  return value
-    .filter((item): item is string => typeof item === 'string')
-    .map(item => item.trim())
-    .filter(Boolean);
+  return value.flatMap((item) => {
+    if (typeof item !== 'string') return [];
+    const trimmed = item.trim();
+    return trimmed ? [trimmed] : [];
+  });
 }
 
 export const GET = withOrgRoute(

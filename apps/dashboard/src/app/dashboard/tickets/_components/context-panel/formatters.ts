@@ -17,7 +17,7 @@ export function formatMoney(value: string | number | null | undefined, currency?
   const amount = Number.isFinite(n) ? n : 0
   if (currency) {
     try {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount)
+      return amount.toLocaleString('en-US', { style: 'currency', currency })
     } catch {
       // Fall through to a compact numeric fallback for unexpected currency codes.
     }

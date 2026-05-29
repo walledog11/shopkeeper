@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import Link from "next/link"
 import { Search, X, ShoppingBag, RefreshCw, Download } from "lucide-react"
 import useSWR from "swr"
 import { fetcher } from "@/lib/api/fetcher"
@@ -64,6 +65,10 @@ function ordersToCsv(orders: OrderRow[]): string {
 // ── Main client ───────────────────────────────────────────────────────────────
 
 export default function OrdersPageClient() {
+  return useOrdersPageClientView()
+}
+
+function useOrdersPageClientView() {
   const [filter, setFilter] = useState<FilterId>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -156,18 +161,18 @@ export default function OrdersPageClient() {
   if (error?.message?.includes('404')) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
-        <div className="w-12 h-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
-          <ShoppingBag className="w-5 h-5 text-[#96BF48]/60" />
+        <div className="size-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
+          <ShoppingBag className="size-5 text-[#96BF48]/60" />
         </div>
         <div>
           <p className="text-sm font-semibold text-white/50 mb-1">No Shopify store connected</p>
           <p className="text-xs text-white/30 mb-3">Connect your store to view and manage orders here.</p>
-          <a
+          <Link
             href="/dashboard/integrations"
             className="text-xs font-semibold text-[#96BF48] hover:text-[#7da33a] transition-colors"
           >
             Set up Shopify integration →
-          </a>
+          </Link>
         </div>
       </div>
     )
@@ -188,20 +193,20 @@ export default function OrdersPageClient() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <button type="button"
                 onClick={() => mutate()}
                 disabled={isValidating}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-white/60 hover:text-white hover:bg-white/[0.05] disabled:opacity-40 transition-colors"
               >
-                <RefreshCw className={`w-3.5 h-3.5 ${isValidating ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`size-3.5 ${isValidating ? 'animate-spin' : ''}`} />
                 Refresh
               </button>
-              <button
+              <button type="button"
                 onClick={handleExport}
                 disabled={allOrders.length === 0}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/75 hover:bg-white/[0.06] hover:border-white/[0.18] hover:text-white disabled:opacity-40 transition-colors"
               >
-                <Download className="w-3.5 h-3.5" />
+                <Download className="size-3.5" />
                 Export CSV
               </button>
             </div>
@@ -213,16 +218,17 @@ export default function OrdersPageClient() {
             {/* Search + filter row */}
             <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.05] flex-wrap">
               <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-md px-3 h-8 flex-1 min-w-[260px] max-w-[360px]">
-                <Search className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                <Search className="size-3.5 text-white/30 shrink-0" />
                 <input
+                  aria-label="Search orders"
                   value={searchQuery}
                   onChange={e => handleSearchChange(e.target.value)}
                   placeholder="Search orders, customers, #numbers…"
                   className="flex-1 bg-transparent text-xs text-white/75 placeholder:text-white/30 outline-none"
                 />
                 {searchQuery && (
-                  <button onClick={() => handleSearchChange('')} className="text-white/25 hover:text-white/55 transition-colors">
-                    <X className="w-3.5 h-3.5" />
+                  <button type="button" onClick={() => handleSearchChange('')} className="text-white/25 hover:text-white/55 transition-colors">
+                    <X className="size-3.5" />
                   </button>
                 )}
               </div>
@@ -230,10 +236,10 @@ export default function OrdersPageClient() {
               {!isSearchMode && (
                 <div className="flex items-center gap-1">
                   {FILTERS.map(f => (
-                    <button
+                    <button type="button"
                       key={f.id}
                       onClick={() => handleFilterChange(f.id)}
-                      className={`h-7 px-3 rounded-md text-[11px] font-medium transition-all ${
+                      className={`h-7 px-3 rounded-md text-xs font-medium transition-all ${
                         filter === f.id
                           ? 'bg-white/[0.10] text-white'
                           : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
@@ -247,10 +253,10 @@ export default function OrdersPageClient() {
 
               {isSearchMode && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-white/40">
+                  <span className="text-xs text-white/40">
                     {isLoading ? 'Searching…' : `${allOrders.length} result${allOrders.length !== 1 ? 's' : ''}`}
                   </span>
-                  <button onClick={() => handleSearchChange('')} className="text-[11px] text-white/35 hover:text-white/65 font-medium">
+                  <button type="button" onClick={() => handleSearchChange('')} className="text-xs text-white/35 hover:text-white/65 font-medium">
                     Clear
                   </button>
                 </div>

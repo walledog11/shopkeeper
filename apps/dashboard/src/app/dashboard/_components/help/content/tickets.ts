@@ -35,7 +35,7 @@ export const tickets: Category = {
           steps: [
             "Once the issue is handled, click the Resolve button in the top-right of the conversation.",
             "The ticket moves to the Closed tab.",
-            "Closed tickets are read-only — you can view the full history but cannot reply.",
+            "Closed tickets are read-only , you can view the full history but cannot reply.",
           ],
         },
       ],
@@ -74,12 +74,12 @@ export const tickets: Category = {
         },
         {
           heading: "Deep-linking from home",
-          text: "Clicking a ticket in Recent Activity or Needs Attention on the Home page will take you directly to that conversation — no need to search manually.",
+          text: "Clicking a ticket in Recent Activity or Needs Attention on the Home page will take you directly to that conversation , no need to search manually.",
         },
         {
           tips: [
             "The ticket count shown above the list updates as you apply filters.",
-            "Each ticket displays a #ID number — useful for referencing specific conversations.",
+            "Each ticket displays a #ID number , useful for referencing specific conversations.",
           ],
         },
       ],

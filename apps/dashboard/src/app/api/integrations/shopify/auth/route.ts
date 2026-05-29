@@ -3,9 +3,14 @@ import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import crypto from 'crypto';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 
 export async function GET(request: Request) {
+  return createPostRedirectResponse(request, 'Connect Shopify');
+}
+
+export async function POST(request: Request) {
   const { userId, orgId } = await auth();
   if (!userId || !orgId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

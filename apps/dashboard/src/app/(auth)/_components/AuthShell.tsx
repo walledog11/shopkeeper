@@ -62,7 +62,7 @@ export default function AuthShell({
             )}
           >
             <div className={cn("space-y-6", hasAside ? "max-w-xl" : "text-center")}>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-white/45">
                 <span className="size-2 rounded-full bg-green-400" />
                 {eyebrow}
               </div>

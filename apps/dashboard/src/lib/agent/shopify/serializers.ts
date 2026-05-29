@@ -10,7 +10,7 @@ export function customerName(customer: Pick<ShopifyCustomer, "first_name" | "las
   return [customer.first_name, customer.last_name].filter(Boolean).join(" ").trim();
 }
 
-export function serializeAddress(addr: ShopifyCustomerAddress | null | undefined) {
+function serializeAddress(addr: ShopifyCustomerAddress | null | undefined) {
   if (!addr) return null;
 
   return {
@@ -49,7 +49,7 @@ export function serializeCustomer(customer: ShopifyCustomer) {
   };
 }
 
-export function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
+function serializeOrderLineItem(lineItem: ShopifyOrderLineItem) {
   return {
     line_item_id: lineItem.id !== undefined && lineItem.id !== null ? String(lineItem.id) : null,
     variant_id: lineItem.variant_id !== undefined && lineItem.variant_id !== null ? String(lineItem.variant_id) : null,
