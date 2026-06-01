@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs";
 import {
   runFixture,
+  probeSystemPromptCacheRead,
   summarizeResults,
   formatSummary,
   shouldUpdateBaseline,
@@ -105,16 +106,13 @@ describe("agent evals", () => {
   });
 
   it(
-    "prompt caching: second run of the pilot fixture reads from cache",
+    "prompt caching: an identical cached system prompt reads from cache on repeat",
     async () => {
-      const pilot = fixtures.find((f) => f.id === "order-status-basic");
-      if (!pilot) throw new Error("pilot fixture 'order-status-basic' not found");
-      const first = await runFixture(pilot);
-      const second = await runFixture(pilot);
+      const cache = await probeSystemPromptCacheRead();
       console.log(
-        `[eval:cache] first cacheCreation=${first.usage.cacheCreationInputTokens} cacheRead=${first.usage.cacheReadInputTokens}; second cacheCreation=${second.usage.cacheCreationInputTokens} cacheRead=${second.usage.cacheReadInputTokens}`,
+        `[eval:cache] first cacheCreation=${cache.firstCreate} cacheRead=${cache.firstRead}; second cacheCreation=${cache.secondCreate} cacheRead=${cache.secondRead}`,
       );
-      expect(second.usage.cacheReadInputTokens).toBeGreaterThan(0);
+      expect(cache.secondRead).toBeGreaterThan(0);
     },
     120_000,
   );

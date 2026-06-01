@@ -9,7 +9,8 @@ import {
   cleanupTestData,
 } from "@clerk/db/test-helpers";
 import { vi } from "vitest";
-import { anthropic } from "@/lib/ai/anthropic";
+import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
+import { HAIKU_MODEL } from "@/lib/ai";
 import { planAgent } from "../planner";
 import { runAgent, type RunAgentOptions } from "../run";
 import { classifyHomePlan } from "../plan-preview";
@@ -52,6 +53,43 @@ const CATEGORY_PREFIXES = [
 
 const BASELINE_PATH = join(__dirname, "baseline.json");
 const DEFAULT_REGRESSION_THRESHOLD = 0.05;
+
+export interface CacheProbeUsage {
+  firstCreate: number;
+  firstRead: number;
+  secondCreate: number;
+  secondRead: number;
+}
+
+// Verifies the system-prompt cache plumbing (buildCachedSystemPrompt + the
+// client honoring cache_control) on its own, independent of agent model
+// tiering. The planner now splits its calls across Haiku and Sonnet, so a
+// real-fixture run no longer produces two same-model calls that share a cache;
+// this probe pins one model and one byte-identical prompt so the second call
+// must read the ephemeral block the first created.
+export async function probeSystemPromptCacheRead(): Promise<CacheProbeUsage> {
+  // Comfortably above haiku-4-5's minimum cacheable prefix length (empirically
+  // ~4k tokens don't cache but ~8k do; 1200 reps ≈ 9.5k tokens clears it).
+  const systemText = `You are a careful support agent.\n${"Follow the workspace policies and answer accurately. ".repeat(1200)}`;
+  const system = buildCachedSystemPrompt(systemText);
+  const callOnce = async () => {
+    const response = await anthropic.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 16,
+      system,
+      messages: [{ role: "user", content: "Reply with the single word OK." }],
+    });
+    return readModelUsage(response);
+  };
+  const first = await callOnce();
+  const second = await callOnce();
+  return {
+    firstCreate: first.cacheCreationInputTokens,
+    firstRead: first.cacheReadInputTokens,
+    secondCreate: second.cacheCreationInputTokens,
+    secondRead: second.cacheReadInputTokens,
+  };
+}
 
 export function categoryOf(id: string): string {
   return CATEGORY_PREFIXES.find((p) => id === p || id.startsWith(`${p}-`)) ?? id;

@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
-import { AI_MODEL } from "@/lib/ai";
+import { pickModel } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { OrgSettings, RawToolCall } from "@/types";
 import { resolveAgentSettings } from "./settings";
@@ -308,6 +308,9 @@ export async function runAgent(
     ? buildComposerAskPrompt(ctx, settings)
     : buildSystemPrompt(ctx, settings);
   const systemPromptBlocks = buildCachedSystemPrompt(systemPrompt);
+  // The read-only composer-ask loop stays on Haiku; the mutative agent loop
+  // (operator + end-to-end runs) is a judgment/mutative path, so it runs on Sonnet.
+  const iterationModel = pickModel(readOnly ? "composer_ask" : "agent_run");
 
   const runModelIteration = async (i: number): Promise<AgentResult> => {
     if (i >= maxIterations) {
@@ -324,7 +327,7 @@ export async function runAgent(
     await enforceSpendCap(ctx.orgId, s);
 
     const response = await anthropic.messages.create({
-      model: AI_MODEL,
+      model: iterationModel,
       max_tokens: readOnly ? 2048 : 4096,
       system: systemPromptBlocks,
       messages,
@@ -335,9 +338,10 @@ export async function runAgent(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
     );
     const usage = recordModelUsage(usageTotals, response);
-    await recordSpend(ctx.orgId, usage, AI_MODEL);
+    await recordSpend(ctx.orgId, usage, iterationModel);
     logger.info({
       iteration: i,
+      model: iterationModel,
       stopReason: response.stop_reason,
       tools: toolUseBlocks.map(b => b.name),
       usage,

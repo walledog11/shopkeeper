@@ -25,7 +25,7 @@ Effort key: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks.
 
 ---
 
-## Phase 0 — Lock the safety net *(do before touching anything)*
+## Phase 0 — Lock the safety net *(do before touching anything)* [COMPLETED]
 
 **Goal:** make agent quality a number you watch over time, so the model swap and prompt refactor can be proven non-regressive.
 

@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
-import { AI_MODEL } from "@/lib/ai";
+import { pickModel } from "@/lib/ai";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types";
 import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
@@ -102,8 +102,9 @@ export async function planAgent(
     instructionHash,
   }, "[agent:plan] start");
 
+  const initialModel = pickModel("plan_initial");
   const response1 = await anthropic.messages.create({
-    model: AI_MODEL,
+    model: initialModel,
     max_tokens: 2048,
     system: systemPromptBlocks,
     messages: baseMessages,
@@ -112,11 +113,12 @@ export async function planAgent(
 
   const blocks1 = response1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
   const usage1 = recordModelUsage(usageTotals, response1);
-  await recordSpend(ctx.orgId, usage1, AI_MODEL);
+  await recordSpend(ctx.orgId, usage1, initialModel);
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
     phase: "initial",
+    model: initialModel,
     stopReason: response1.stop_reason,
     tools: blocks1.map(b => b.name),
     usage: usage1,
@@ -206,8 +208,12 @@ export async function planAgent(
     ];
 
     await enforceSpendCap(ctx.orgId, resolvedSettings);
+    // Re-plan: the model now has the read results and decides the mutative
+    // action (refund/cancel/edit) or escalation. This is the judgment call, so
+    // it runs on Sonnet.
+    const replanModel = pickModel("plan_replan");
     const response15 = await anthropic.messages.create({
-      model: AI_MODEL,
+      model: replanModel,
       max_tokens: 2048,
       system: systemPromptBlocks,
       messages: planMessages,
@@ -215,11 +221,12 @@ export async function planAgent(
     });
     lastBlocks = response15.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
     const usage15 = recordModelUsage(usageTotals, response15);
-    await recordSpend(ctx.orgId, usage15, AI_MODEL);
+    await recordSpend(ctx.orgId, usage15, replanModel);
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
       phase: "after_read_results",
+      model: replanModel,
       stopReason: response15.stop_reason,
       tools: lastBlocks.map(b => b.name),
       usage: usage15,
@@ -249,8 +256,9 @@ export async function planAgent(
     ];
 
     await enforceSpendCap(ctx.orgId, resolvedSettings);
+    const draftModel = pickModel("reply_draft");
     const response2 = await anthropic.messages.create({
-      model: AI_MODEL,
+      model: draftModel,
       max_tokens: 2048,
       system: systemPromptBlocks,
       messages: phase2Messages,
@@ -262,11 +270,12 @@ export async function planAgent(
       (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply"
     );
     const usage2 = recordModelUsage(usageTotals, response2);
-    await recordSpend(ctx.orgId, usage2, AI_MODEL);
+    await recordSpend(ctx.orgId, usage2, draftModel);
     logger.info({
       orgId: ctx.orgId,
       threadId: ctx.thread.id,
       phase: "reply_preview",
+      model: draftModel,
       stopReason: response2.stop_reason,
       tools: phase2ToolUse.map(b => b.name),
       usage: usage2,
