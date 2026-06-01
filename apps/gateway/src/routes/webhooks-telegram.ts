@@ -2,6 +2,7 @@ import type { Request, Response, Router } from 'express';
 import { timingSafeEqual } from 'crypto';
 import { db } from '@clerk/db';
 import { getContext, updateContext, extractOrderNumber, type ToolCall } from '../operator-context.js';
+import { buildOrgDigest } from '../maintenance/digest.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { READ_TOOLS, STATUS } from '../constants.js';
@@ -24,6 +25,15 @@ const FILLER_PHRASES = [
   'Just a moment…',
 ];
 const filler = () => FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];
+
+const HELP_TEXT = [
+  'Clerk commands:',
+  'SUMMARY — your current support inbox',
+  '#1234 — look up a ticket by its order number',
+  'After a summary, act on a flagged ticket:',
+  '  OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to re-list',
+  "Or just send an instruction like 'refund #1234'.",
+].join('\n');
 
 interface TelegramUpdate {
   message?: {
@@ -184,7 +194,7 @@ async function handleStart(chatId: string, body: string, reply: (text: string) =
   }
 
   await redis.del(key);
-  await reply("Connected. Reply to ticket digests here, or send free-form instructions like 'refund #1234'.");
+  await reply("Connected. Text SUMMARY for your inbox or HELP for commands. You can also reply to digests or send instructions like 'refund #1234'.");
 }
 
 async function handleMessage(
@@ -199,6 +209,8 @@ async function handleMessage(
   const internalSecret = process.env.INTERNAL_API_SECRET ?? '';
 
   const normalised = body.toLowerCase();
+  const isHelp = normalised === 'help' || normalised === '/help';
+  const isSummary = normalised === 'summary' || normalised === 'status';
   const isRun = normalised === 'run' || normalised === 'yes';
   const isDismiss = normalised === 'dismiss' || normalised === 'no';
   const skipMatch = normalised.match(/^skip\s+(\d+)$/);
@@ -206,6 +218,22 @@ async function handleMessage(
   const openMatch = normalised.match(/^open\s+(\d+)$/);
   const spamMatch = normalised.match(/^spam\s+(\d+)$/);
   const replyMatch = body.match(/^reply\s+(\d+)\s+([\s\S]+)$/i);
+
+  if (isHelp) {
+    await reply(HELP_TEXT);
+    return;
+  }
+
+  if (isSummary) {
+    const digest = await buildOrgDigest(organizationId, new Date());
+    if (!digest) {
+      await reply('Your support inbox is empty — no open tickets.');
+      return;
+    }
+    await updateContext(organizationId, chatId, { pendingDigest: digest.pendingDigest });
+    await reply(digest.message);
+    return;
+  }
 
   if ((isReview || openMatch || spamMatch || replyMatch) && ctx.pendingDigest) {
     const { threadIds } = ctx.pendingDigest;

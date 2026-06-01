@@ -1,4 +1,4 @@
-import { ThreadFilterStatus, type DbThreadFilterStatus } from '@clerk/db';
+import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@clerk/db';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
@@ -104,6 +104,46 @@ export function formatDigestMessage(buckets: DigestBuckets): string {
   lines.push(`Or send an order number (e.g. #1234) for ticket details.`);
 
   return lines.join('\n');
+}
+
+export interface OrgDigest {
+  message: string;
+  pendingDigest: { threadIds: string[]; sentAt: string };
+  flaggedCount: number;
+}
+
+/**
+ * Build the support-inbox digest for one org from its open threads, ready to
+ * send and to seed `OperatorContext.pendingDigest` for follow-up commands.
+ * Returns null when the org has no open tickets. Shared by the scheduled digest
+ * worker and the on-demand `SUMMARY` operator command.
+ */
+export async function buildOrgDigest(organizationId: string, now: Date): Promise<OrgDigest | null> {
+  const openThreads = await db.thread.findMany({
+    where: { organizationId, status: 'open', deletedAt: null },
+    select: {
+      id: true,
+      updatedAt: true,
+      tag: true,
+      filterStatus: true,
+      aiSummary: true,
+      filterReason: true,
+      customer: { select: { name: true } },
+    },
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  if (openThreads.length === 0) return null;
+
+  const buckets = bucketDigestThreads(openThreads, now);
+  return {
+    message: formatDigestMessage(buckets),
+    pendingDigest: {
+      threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
+      sentAt: now.toISOString(),
+    },
+    flaggedCount: buckets.questionable.length,
+  };
 }
 
 function normalizeHour(value: unknown, fallback: number): number {

@@ -453,6 +453,69 @@ describe('POST /webhooks/telegram — digest commands', () => {
   });
 });
 
+// ── HELP / SUMMARY commands ──────────────────────────────────────────────────
+describe('POST /webhooks/telegram — help & summary', () => {
+  async function bindMember(chatId: string) {
+    return db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}`, telegramChatId: chatId },
+    });
+  }
+
+  it('"help" lists the available commands without touching the DB feed', async () => {
+    const chatId = '7500001';
+    await bindMember(chatId);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'help' } });
+
+    await waitForReplies(1);
+    const text = lastReplyText();
+    expect(text).toMatch(/Clerk commands/);
+    expect(text).toMatch(/SUMMARY/);
+    expect(text).toMatch(/OPEN <n>/);
+  });
+
+  it('"summary" sends the live inbox digest and seeds pendingDigest', async () => {
+    const chatId = '7500002';
+    await bindMember(chatId);
+    const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, { name: 'Dana' });
+    const flagged = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: flagged.id },
+      data: { filterStatus: 'questionable', aiSummary: 'Wholesale pricing question' },
+    });
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
+
+    await waitForReplies(1);
+    const text = lastReplyText();
+    expect(text).toMatch(/support inbox/i);
+    expect(text).toMatch(/Flagged \(review needed\): 1/);
+    expect(text).toMatch(/1\. Dana — Wholesale pricing question/);
+
+    const ctx = await getContext(org.id, chatId);
+    expect(ctx.pendingDigest?.threadIds).toEqual([flagged.id]);
+  });
+
+  it('"summary" replies that the inbox is empty when there are no open tickets', async () => {
+    const chatId = '7500003';
+    await bindMember(chatId);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
+
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/inbox is empty/i);
+  });
+});
+
 // ── Order lookup #1234 ───────────────────────────────────────────────────────
 describe('POST /webhooks/telegram — order lookup', () => {
   it('replies with thread context when #N matches an open thread', async () => {

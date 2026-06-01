@@ -5,12 +5,7 @@ import logger from '../logger.js';
 import { CHANNEL, QUEUE, JOB, PROCESSING_QUEUE_DEFAULTS } from '../constants.js';
 import { notifyOperator } from '../operator-notify.js';
 import type { CustomerMemoryJobData } from '../types.js';
-import {
-  DIGEST_QUESTIONABLE_LIMIT,
-  bucketDigestThreads,
-  formatDigestMessage,
-  shouldSendDigest,
-} from './digest.js';
+import { buildOrgDigest, shouldSendDigest } from './digest.js';
 import { refreshStaleCustomerMemory, updateCustomerMemoryOnThreadClose } from './customer-memory.js';
 import {
   FILTERED_PURGE_AFTER_DAYS,
@@ -226,49 +221,17 @@ export async function createMaintenanceWorkers(
 
     if (eligibleOrgs.length === 0) return;
 
-    const allOpenThreads = await db.thread.findMany({
-      where: { organizationId: { in: eligibleOrgs.map(o => o.id) }, status: 'open', deletedAt: null },
-      select: {
-        id: true,
-        organizationId: true,
-        updatedAt: true,
-        tag: true,
-        filterStatus: true,
-        aiSummary: true,
-        filterReason: true,
-        customer: { select: { name: true } },
-      },
-      orderBy: { updatedAt: 'desc' },
-    });
-
-    type DigestThread = typeof allOpenThreads[number];
-    const threadsByOrg = new Map<string, DigestThread[]>();
-    for (const t of allOpenThreads) {
-      const orgThreads = threadsByOrg.get(t.organizationId);
-      if (orgThreads) {
-        orgThreads.push(t);
-      } else {
-        threadsByOrg.set(t.organizationId, [t]);
-      }
-    }
-
     for (const org of eligibleOrgs) {
-      const openThreads = threadsByOrg.get(org.id) ?? [];
-      if (openThreads.length === 0) continue;
-
-      const buckets = bucketDigestThreads(openThreads, now);
-      const message = formatDigestMessage(buckets);
-
-      const pendingDigest = {
-        threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map(t => t.id),
-        sentAt: now.toISOString(),
-      };
+      const digest = await buildOrgDigest(org.id, now);
+      if (!digest) continue;
 
       for (const member of org.members) {
-        const result = await notifyOperator(org.id, member, message, { pendingDigest });
+        const result = await notifyOperator(org.id, member, digest.message, {
+          pendingDigest: digest.pendingDigest,
+        });
         if (result) {
           logger.info(
-            { organizationId: org.id, chatId: result.chatId, flagged: buckets.questionable.length },
+            { organizationId: org.id, chatId: result.chatId, flagged: digest.flaggedCount },
             '[Digest] Sent digest',
           );
         }

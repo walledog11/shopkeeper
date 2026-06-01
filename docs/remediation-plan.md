@@ -45,7 +45,7 @@ The 9 failures cluster on one axis — **the agent under-escalates**: all three 
 
 ---
 
-## Phase 1 — Generalize the core + pay down the load-bearing debt
+## Phase 1 — Generalize the core + pay down the load-bearing debt [COMPLETED]
 
 **Goal:** the engine becomes module-agnostic; the support-specific bits compose onto it; the integration seam is finished and rate-safe; the model is tiered. Re-run Phase 0 evals after **each** item.
 
@@ -106,11 +106,15 @@ Group the 20 tools by capability/module and formalize per-module subsets through
 
 | # | Workstream | Effort | Notes |
 |---|---|---|---|
-| 2.1 | **Production output-sampling surface.** A way to eyeball real agent outputs (drafts sent, actions taken) — you're flying on evals alone. Pipe from the existing `AgentAction` audit table into a review view. | M | Highest-leverage quality gap. Reuses audit infra. |
-| 2.2 | **Structured-command texting / daily-summary.** Telegram operator + digests exist; make the SMS/structured-command summary a first-class V1 deliverable. | M | Builds on `OperatorContext` + maintenance digests. |
+| 2.1 | **Production output-sampling surface.** A way to eyeball real agent outputs (drafts sent, actions taken) — you're flying on evals alone. Pipe from the existing `AgentAction` audit table into a review view. | M | Highest-leverage quality gap. Reuses audit infra. | [COMPLETED]
+| 2.2 | **Structured-command texting / daily-summary.** Telegram operator + digests exist; make the SMS/structured-command summary a first-class V1 deliverable. | M | Builds on `OperatorContext` + maintenance digests. | [COMPLETED]
 | 2.3 | **Prompt-injection strategy, not a denylist.** `sanitizeUserInput` is a regex denylist feeding an agent that can refund/cancel. Autonomy caps are the real backstop (keep), but as supplier email / social DMs feed the agent, harden input handling (structural quoting/segregation of untrusted text in the prompt, not pattern-matching). | M | Caps already mitigate; this reduces blast radius. |
 | 2.4 | **Close V1-path stub pages.** Audit the 18 dashboard routes; finish the ones on the support critical path. | M | Scope depends on how stubby — needs a sizing pass. |
 | 2.5 | **Brand-voice correction loop (decision needed).** Today: free-text + tagged sample replies, prompt-injected. If "training" means "you edited my draft → I learn," that's net-new and needs a scope call. | S–L | Flag for decision before building. |
+
+**2.1 done (2026-06-01).** New **Review** surface at `/dashboard/review` (nav: Insights → Review, `ScanEye` icon) for quality spot-checking. The gap it closes: the existing `/dashboard/activity` feed is an *audit* view — it shows tool chips, modes, durations, and approver, but the agent's actual prose is only reachable as redacted raw JSON behind a per-action expander, because `send_reply`'s result string is just `"Reply sent to customer…"` — the drafted text lives in `AgentAction.input.text` (likewise `send_email.body`, `escalate_to_human.reason`, `add_internal_note.text`). The Review view reuses the existing `GET /api/agent/actions` feed + `ActionLogEntry` type verbatim (zero backend/schema change) and renders that prose readably: each turn is a card showing the actual reply/email/escalation/note text in a tone-coded block, with side-effecting outcomes (refund/cancel/edit) listed compactly underneath from their result strings. A server-side focus lens (Replies / Escalations / All) drives the API's existing `tool` filter so the sample is built in-query, not client-side. Files: `app/dashboard/review/page.tsx`, `app/dashboard/review/_components/ReviewFeed.tsx`, `_components/nav-items.ts`. `tsc`/eslint clean (the 23 pre-existing `*.test.ts` type errors are untouched and unrelated).
+
+**2.2 done (2026-06-01).** The digest existed only as a **scheduled push** — the operator could read it and run the structured follow-ups (`OPEN`/`SPAM`/`REPLY`/`REVIEW`), but had no way to *pull* it, and the command vocabulary was undiscoverable. Made the summary first-class on both axes: (1) **on-demand `SUMMARY`** (alias `STATUS`) texts back the live inbox digest and seeds `OperatorContext.pendingDigest`, so the existing flagged-ticket commands work identically off a pulled summary as off a pushed one; (2) **`HELP`** (alias `/help`) lists the command set; (3) the `/start` connect message now advertises both. The digest build (open-thread query → bucket → format → `pendingDigest`) was extracted into one shared `buildOrgDigest(orgId, now)` in `maintenance/digest.ts` and is now the single source for both the scheduled worker and the `SUMMARY` command — the worker's old batched cross-org query + inline bucketing/`threadsByOrg` map collapsed into a per-eligible-org call (eligible orgs per hour are few, so N small queries is fine and removes the duplication). No schema change, no new push cadence. Files: `maintenance/digest.ts`, `maintenance/workers.ts`, `routes/webhooks-telegram.ts` (+ 3 webhook tests). `tsc` clean; telegram + digest suites green (34/34).
 
 **Deferred out of V1 (Phase 3 candidates):** KB semantic retrieval (real feature: needs embeddings + pgvector/store + retrieval — defer unless support quality on policy questions demands it); single-LLM-vendor fallback / graceful-degradation queue (real availability risk, but heavy — decide explicitly).
 
