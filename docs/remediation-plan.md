@@ -86,7 +86,7 @@ Brittle today: `executor.ts` infers status via `result.toLowerCase().startsWith(
 Split `AgentContext` into a base (`org`, `settings`, `memory`, `channel`, `tools`) + a composed `SupportContext` (thread, customer, recentOrders, kbArticles, shopify linkage). `buildContext()` becomes "build base, then compose support." No behavior change — pure shape refactor that unblocks future modules.
 - Files: `lib/agent/types.ts`, `context.ts`, consumers in `planner.ts`/`run.ts`/`prompt.ts`.
 
-### 1.5 — Prompt skeleton + module blocks *(M, highest regression risk)*
+### 1.5 — Prompt skeleton + module blocks *(M, highest regression risk)* [COMPLETE]
 `prompt.ts` already has helpers; add the structural split: a shared skeleton (identity, autonomy, guardrails, voice, memory) + a **support instruction block** injected as a module. This is the change most likely to move eval scores — do it last in Phase 1, isolated, and diff the baseline before/after.
 - Files: `prompt.ts`.
 

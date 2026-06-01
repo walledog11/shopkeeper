@@ -116,90 +116,36 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
   return `\n\n## Your autonomy\n${body}`;
 }
 
-export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
-  const s = resolveAgentSettings(settings);
-  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+// ──────────────────────────────────────────────────────────────────────────
+// Skeleton: shared, module-agnostic frame. Identity + the trailing scaffold
+// (guardrails, language, autonomy, voice, memory) wrap every agent persona; each
+// module injects its own context block and instruction block. Section builders
+// below produce those shared pieces so modules only declare order and content.
+// ──────────────────────────────────────────────────────────────────────────
 
-  const shopifyNote = ctx.shopify
-    ? `A Shopify integration is connected (shop: ${ctx.shopify.shop}).`
-    : "No Shopify integration is connected - Shopify tools will not work.";
+function buildGuardrailSection(s: ReturnType<typeof resolveAgentSettings>): string {
+  const clauses = buildGuardrailClauses(s);
+  return clauses.length > 0 ? "\n" + clauses.join("\n") : "";
+}
 
-  const shopifyCustomerNote = ctx.thread.shopifyCustomerId
-    ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} - pass this directly when calling Shopify tools.`
-    : isOperatorMode
-      ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call search_shopify_customers first."
-      : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
+function buildLanguageSection(s: ReturnType<typeof resolveAgentSettings>, variant: "support" | "operator"): string {
+  if (!s.replyLanguage || s.replyLanguage === "auto") return "";
+  return variant === "operator"
+    ? `\n- Always respond in ${s.replyLanguage}.`
+    : `\n- Always write customer-facing replies in ${s.replyLanguage}, regardless of the language the customer used.`;
+}
 
-  const guardrailClauses = buildGuardrailClauses(s);
+function composeSystemPrompt(parts: { identity: string; context: string; instructions: string; trailer: string }): string {
+  return `${parts.identity}
 
-  if (isOperatorMode) {
-    const channel = ctx.thread.channelType === "sms_agent" ? "WhatsApp/SMS" : "the dashboard";
-    const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
-      ? `- Always respond in ${s.replyLanguage}.`
-      : "";
-
-    const linkedCustomerSection = ctx.thread.shopifyCustomerId
-      ? `\n\n## Linked Shopify customer\n${ctx.linkedShopifyCustomerName ?? "(name unavailable)"} (ID: ${ctx.thread.shopifyCustomerId}). Use this ID directly for Shopify tools unless the operator names a different customer.`
-      : "";
-
-    const ordersSection = ctx.recentOrders.length > 0
-      ? `\n\n## Customer's recent orders (use these IDs directly , no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
-      : "";
-
-    return `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.
-
-## Integrations
-${shopifyNote}
-${shopifyCustomerNote}
-- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
-- When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
-- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly , do not ask for the order number.
-- For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
-- Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
-- To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
-- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.${linkedCustomerSection}${ordersSection}${buildBrandContextSections(s, ctx, { includeVoice: false })}${buildCustomerMemorySection(ctx)}
+${parts.context}
 
 ## Instructions
-- Take action only when you are confident. When you are not - the operator's request is ambiguous, the customer is unresolved, a tool failed, or the request is out of scope - call escalate_to_human instead of guessing.
-- Sending, emailing, notifying, or contacting a customer is done by calling send_email. Don't claim you sent something you didn't.
-- Do NOT call send_reply or add_internal_note.
-- After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) - never just say "Done".
-- Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1-2 sentences.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}`;
-  }
+${parts.instructions}${parts.trailer}`;
+}
 
-  const otherOpenThreads = Math.max(0, ctx.openThreadCount - 1);
-  const ordersJson = ctx.recentOrders.length > 0 ? JSON.stringify(ctx.recentOrders) : "[]";
-  const languageClause = s.replyLanguage && s.replyLanguage !== "auto"
-    ? `- Always write customer-facing replies in ${s.replyLanguage}, regardless of the language the customer used.`
-    : "";
-
-  const kbSection = ctx.kbArticles.length > 0
-    ? `\n## Knowledge base\nThe following articles are pre-loaded for this thread. Use the search_kb tool to find additional articles when these don't contain the answer.\n\n${
-        ctx.kbArticles.map(a => `### ${a.title}\n${a.body}`).join("\n\n")
-      }`
-    : "\n## Knowledge base\nNo articles are pre-loaded. Use the search_kb tool to search for relevant policy or FAQ information before replying.";
-
-  return `You are ${s.agentName}, an AI support agent for ${ctx.orgName}. You help support staff take actions on their behalf.
-
-## Current thread
-- Thread ID: ${ctx.thread.id}
-- Status: ${ctx.thread.status}
-- Channel: ${ctx.thread.channelType}
-- Tag: ${ctx.thread.tag ?? "none"}
-- AI Summary: ${ctx.thread.aiSummary ?? "none"}
-- Customer name: ${ctx.customer.name ?? "(not available)"}
-- Customer email: ${ctx.customer.platformId}
-- Customer's other open threads: ${otherOpenThreads}
-
-## Customer's recent orders (use these IDs directly - do not call get_shopify_orders unless you need to refresh)
-${ordersJson}
-
-## Integrations
-${shopifyNote}
-${shopifyCustomerNote}
-
-## Instructions
-- When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
+// ── Support module ──
+const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
 - Use the available tools to complete the requested task.
 - After taking any action (Shopify update, refund, cancellation, etc.), you MUST call send_reply to notify the customer what was done. Do not leave the customer without a response.
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," - never use the email address as a greeting.
@@ -214,7 +160,86 @@ ${shopifyCustomerNote}
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.
 - Never ask if the user has more questions or offer further help. Just state what you found or did and stop.
-- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.${guardrailClauses.length > 0 ? "\n" + guardrailClauses.join("\n") : ""}${languageClause ? "\n" + languageClause : ""}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}${kbSection}`;
+- If send_reply returns an error, do NOT change the thread status. Log an internal note describing the failure and report the error back to the support agent so they can act.`;
+
+// ── Operator module ──
+const OPERATOR_INTEGRATION_GUIDANCE = `- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
+- When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
+- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly , do not ask for the order number.
+- For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
+- Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
+- To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
+- Use search_kb to look up store policies or FAQs when the operator asks about return/shipping/refund rules.`;
+
+const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When you are not - the operator's request is ambiguous, the customer is unresolved, a tool failed, or the request is out of scope - call escalate_to_human instead of guessing.
+- Sending, emailing, notifying, or contacting a customer is done by calling send_email. Don't claim you sent something you didn't.
+- Do NOT call send_reply or add_internal_note.
+- After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) - never just say "Done".
+- Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1-2 sentences.`;
+
+export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
+  const s = resolveAgentSettings(settings);
+  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+
+  const shopifyNote = ctx.shopify
+    ? `A Shopify integration is connected (shop: ${ctx.shopify.shop}).`
+    : "No Shopify integration is connected - Shopify tools will not work.";
+
+  const shopifyCustomerNote = ctx.thread.shopifyCustomerId
+    ? `Shopify customer ID: ${ctx.thread.shopifyCustomerId} - pass this directly when calling Shopify tools.`
+    : isOperatorMode
+      ? "No Shopify customer ID is pre-loaded. If you need to look up or act on a customer, call search_shopify_customers first."
+      : "No Shopify customer ID is pre-loaded for this thread. If you need to look up or act on a customer, call search_shopify_customers first to resolve their ID.";
+
+  if (isOperatorMode) {
+    const channel = ctx.thread.channelType === "sms_agent" ? "WhatsApp/SMS" : "the dashboard";
+
+    const linkedCustomerSection = ctx.thread.shopifyCustomerId
+      ? `\n\n## Linked Shopify customer\n${ctx.linkedShopifyCustomerName ?? "(name unavailable)"} (ID: ${ctx.thread.shopifyCustomerId}). Use this ID directly for Shopify tools unless the operator names a different customer.`
+      : "";
+
+    const ordersSection = ctx.recentOrders.length > 0
+      ? `\n\n## Customer's recent orders (use these IDs directly , no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
+      : "";
+
+    return composeSystemPrompt({
+      identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.`,
+      context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildBrandContextSections(s, ctx, { includeVoice: false })}${buildCustomerMemorySection(ctx)}`,
+      instructions: OPERATOR_INSTRUCTIONS,
+      trailer: `${buildGuardrailSection(s)}${buildLanguageSection(s, "operator")}`,
+    });
+  }
+
+  const otherOpenThreads = Math.max(0, ctx.openThreadCount - 1);
+  const ordersJson = ctx.recentOrders.length > 0 ? JSON.stringify(ctx.recentOrders) : "[]";
+
+  const kbSection = ctx.kbArticles.length > 0
+    ? `\n## Knowledge base\nThe following articles are pre-loaded for this thread. Use the search_kb tool to find additional articles when these don't contain the answer.\n\n${
+        ctx.kbArticles.map(a => `### ${a.title}\n${a.body}`).join("\n\n")
+      }`
+    : "\n## Knowledge base\nNo articles are pre-loaded. Use the search_kb tool to search for relevant policy or FAQ information before replying.";
+
+  return composeSystemPrompt({
+    identity: `You are ${s.agentName}, an AI support agent for ${ctx.orgName}. You help support staff take actions on their behalf.`,
+    context: `## Current thread
+- Thread ID: ${ctx.thread.id}
+- Status: ${ctx.thread.status}
+- Channel: ${ctx.thread.channelType}
+- Tag: ${ctx.thread.tag ?? "none"}
+- AI Summary: ${ctx.thread.aiSummary ?? "none"}
+- Customer name: ${ctx.customer.name ?? "(not available)"}
+- Customer email: ${ctx.customer.platformId}
+- Customer's other open threads: ${otherOpenThreads}
+
+## Customer's recent orders (use these IDs directly - do not call get_shopify_orders unless you need to refresh)
+${ordersJson}
+
+## Integrations
+${shopifyNote}
+${shopifyCustomerNote}`,
+    instructions: SUPPORT_INSTRUCTIONS,
+    trailer: `${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}${kbSection}`,
+  });
 }
 
 export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
