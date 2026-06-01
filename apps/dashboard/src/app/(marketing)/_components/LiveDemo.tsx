@@ -199,6 +199,12 @@ const CH_BG: Record<Channel, string> = {
   sm: "#7c4dff",
 };
 
+const PROPOSED_PLAN_PILL_CLASS: Record<string, string> = {
+  shopify: "bg-amber-500/15 text-amber-500",
+  reply: "bg-blue-500/15 text-blue-400",
+  search: "bg-white/10 text-white/90",
+};
+
 function ChBadge({ ch }: { ch: Channel }) {
   return (
     <span
@@ -220,11 +226,6 @@ function classifyStep(label: string): "shopify" | "reply" | "search" {
 function ProposedPlan({ conv }: { conv: Conv }) {
   const steps = conv.plan;
   const checked = steps.filter(p => p.state === "done" || p.state === "active").length;
-  const pillClass: Record<string, string> = {
-    shopify: "bg-amber-500/15 text-amber-500",
-    reply: "bg-blue-500/15 text-blue-400",
-    search: "bg-white/10 text-white/90",
-  };
   return (
     <div className="bg-white/[0.05] border border-solid border-white/[0.1] overflow-hidden rounded-xl" >
       <div className="flex align-center justify-between py-2 px-3 border-b border-b-solid border-b-white/[0.10]" >
@@ -248,7 +249,7 @@ function ProposedPlan({ conv }: { conv: Conv }) {
               </span>
               <div>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-xs font-semibold leading-none ${pillClass[kind]}`}>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-[7px] py-0.5 text-xs font-semibold leading-none ${PROPOSED_PLAN_PILL_CLASS[kind]}`}>
                     {kind === "shopify" ? <ShopifyIcon /> : kind === "reply" ? <ReplyIcon /> : <SearchIcon />}
                     {kind === "shopify" ? "Shopify" : kind === "reply" ? "Reply" : "Lookup"}
                   </span>

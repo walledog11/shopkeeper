@@ -2,8 +2,15 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError, type ShopifyContext } from '@/lib/agent/shopify';
 import logger from '@/lib/server/logger';
+
+function shopifyErrorResponse(err: unknown): NextResponse {
+  if (err instanceof ShopifyRequestError) {
+    return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
+  }
+  throw err;
+}
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';
 
@@ -31,32 +38,26 @@ export const GET = withOrgRoute(
     }
 
     const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx: ShopifyContext = { shop, accessToken: integration.accessToken };
 
     let customer: ShopifyCustomer | null = null;
 
-    if (customerId) {
-      const res = await fetch(
-        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
-        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
-      );
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    try {
+      if (customerId) {
+        const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
+          query: { fields: CUSTOMER_FIELDS },
+          maxRetries: 0,
+        });
+        customer = data.customer ?? null;
+      } else {
+        const data = await shopifyRestJson<{ customers?: ShopifyCustomer[] }>(ctx, 'customers/search.json', {
+          query: { query: `email:${email!}`, fields: CUSTOMER_FIELDS },
+          maxRetries: 0,
+        });
+        customer = (data.customers ?? [])[0] ?? null;
       }
-      const data = await res.json();
-      customer = data.customer ?? null;
-    } else {
-      const res = await fetch(
-        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
-        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
-      );
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
-      }
-      const data = await res.json();
-      customer = (data.customers ?? [])[0] ?? null;
+    } catch (err) {
+      return shopifyErrorResponse(err);
     }
 
     if (!customer) {
@@ -67,17 +68,22 @@ export const GET = withOrgRoute(
 
     let orders: ShopifyOrder[] = [];
     if (orderLimit > 0) {
-      const ordersRes = await fetch(
-        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
-        { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
-      );
-      if (!ordersRes.ok) {
-        const errData = await ordersRes.json().catch(() => ({}));
-        return NextResponse.json({ error: 'shopify_error', details: errData }, { status: ordersRes.status });
+      let rawOrders: ShopifyOrder[];
+      try {
+        const ordersData = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, 'orders.json', {
+          query: {
+            customer_id: customer.id,
+            status: 'any',
+            limit: orderLimit,
+            fields: 'id,name,created_at,fulfillment_status,total_price,currency,line_items',
+          },
+          maxRetries: 0,
+        });
+        rawOrders = ordersData.orders ?? [];
+      } catch (err) {
+        return shopifyErrorResponse(err);
       }
-      const ordersData = await ordersRes.json();
-      const rawOrders: ShopifyOrder[] = ordersData.orders ?? [];
-      orders = await addProductImagesToOrders(rawOrders, shop, token);
+      orders = await addProductImagesToOrders(rawOrders, ctx);
     }
 
     return NextResponse.json({ customer, orders, shop });
@@ -101,8 +107,7 @@ export const PATCH = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx: ShopifyContext = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
     // Build the Shopify customer update payload
     const customerPayload: Record<string, unknown> = {
@@ -126,21 +131,25 @@ export const PATCH = withOrgRoute(
       }];
     }
 
-    const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/${customerId}.json`, {
-      cache: 'no-store',
-      method: 'PUT',
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ customer: customerPayload }),
-    });
+    let data: { customer?: unknown };
+    try {
+      data = await shopifyRestJson<{ customer?: unknown }>(ctx, `customers/${customerId}.json`, {
+        method: 'PUT',
+        maxRetries: 0,
+        body: { customer: customerPayload },
+      });
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        logger.error({ err: err.payload }, '[Shopify Customer PATCH] Shopify error');
+        const errors = (err.payload as { errors?: unknown } | null)?.errors;
+        return NextResponse.json({ error: errors ?? 'Failed to update customer' }, { status: err.status ?? 502 });
+      }
+      throw err;
+    }
 
-    const data = await res.json();
-
-    if (!res.ok || !data.customer) {
+    if (!data.customer) {
       logger.error({ err: data }, '[Shopify Customer PATCH] Shopify error');
-      return NextResponse.json({ error: data.errors ?? 'Failed to update customer' }, { status: res.status });
+      return NextResponse.json({ error: 'Failed to update customer' }, { status: 502 });
     }
 
     return NextResponse.json({ customer: data.customer });
@@ -224,7 +233,7 @@ async function persistCustomerName(organizationId: string, shopifyCustomer: Shop
   }
 }
 
-async function addProductImagesToOrders(orders: ShopifyOrder[], shop: string, token: string) {
+async function addProductImagesToOrders(orders: ShopifyOrder[], ctx: ShopifyContext) {
   const productIds = Array.from(new Set(
     orders.flatMap(order => order.line_items.map(item => item.product_id).filter((id): id is number => typeof id === 'number'))
   ));
@@ -232,16 +241,13 @@ async function addProductImagesToOrders(orders: ShopifyOrder[], shop: string, to
   if (productIds.length === 0) return orders;
 
   try {
-    const productsRes = await fetch(
-      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json?ids=${productIds.join(',')}&fields=id,images`,
-      { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
-    );
+    const productsData = await shopifyRestJson<{ products?: ShopifyProduct[] }>(ctx, 'products.json', {
+      query: { ids: productIds.join(','), fields: 'id,images' },
+      maxRetries: 0,
+    });
 
-    if (!productsRes.ok) return orders;
-
-    const productsData = await productsRes.json();
     const productImageById = new Map<number, string | null>(
-      ((productsData.products ?? []) as ShopifyProduct[]).map(product => [
+      (productsData.products ?? []).map(product => [
         product.id,
         product.images?.[0]?.src ?? null,
       ])

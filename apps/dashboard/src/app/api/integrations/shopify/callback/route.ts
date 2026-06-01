@@ -11,7 +11,9 @@ import { timingSafeIncludes } from '@/lib/auth-utils';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
+
+const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Shopify connection');
@@ -112,14 +114,19 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------------
-    // Step 4: Fetch shop info for display name
+    // Step 4: Fetch shop info for display name (best-effort)
     // ---------------------------------------------------------------
-    const shopRes = await fetch(`https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
-      cache: 'no-store',
-      headers: { 'X-Shopify-Access-Token': accessToken },
-    });
-    const shopData = await shopRes.json();
-    const shopName: string = shopData.shop?.name ?? shopDomain;
+    let shopName: string = shopDomain;
+    try {
+      const shopData = await shopifyRestJson<{ shop?: { name?: string } }>(
+        { shop: shopDomain, accessToken },
+        'shop.json',
+        { maxRetries: 0 }
+      );
+      shopName = shopData.shop?.name ?? shopDomain;
+    } catch (err) {
+      logger.warn({ err, shop: shopDomain }, '[Shopify OAuth] Failed to fetch shop name , using domain');
+    }
 
     // ---------------------------------------------------------------
     // Step 5: Save integration to database
@@ -160,29 +167,30 @@ export async function POST(request: Request) {
     }
 
     if (gatewayUrl) {
-      const webhookTopics = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
       await Promise.allSettled(
-        webhookTopics.map((topic) =>
-          fetch(`https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`, {
-            cache: 'no-store',
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },
-            body: JSON.stringify({ webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } }),
-          }).then(async (r) => {
-            if (!r.ok) {
-              const err = await r.json().catch(() => ({}));
-              logger.warn({ topic, shop: shopDomain, err }, '[Shopify OAuth] Webhook registration failed');
-              void recordProviderSendFailure('shopify', 'webhook_registration', org.id, {
-                counterClient: getRedis(),
-                integrationId: shopifyIntegrationId,
-                detail: `Shopify webhook registration failed for ${topic}`,
-                extra: { topic, shop: shopDomain },
-              });
-            } else {
-              logger.info({ topic, shop: shopDomain }, '[Shopify OAuth] Webhook registered');
-            }
-          })
-        )
+        SHOPIFY_WEBHOOK_TOPICS.map(async (topic) => {
+          try {
+            await shopifyRestJson(
+              { shop: shopDomain, accessToken },
+              'webhooks.json',
+              {
+                method: 'POST',
+                maxRetries: 0,
+                body: { webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } },
+              }
+            );
+            logger.info({ topic, shop: shopDomain }, '[Shopify OAuth] Webhook registered');
+          } catch (err) {
+            const detail = err instanceof ShopifyRequestError ? err.payload ?? {} : err;
+            logger.warn({ topic, shop: shopDomain, err: detail }, '[Shopify OAuth] Webhook registration failed');
+            void recordProviderSendFailure('shopify', 'webhook_registration', org.id, {
+              counterClient: getRedis(),
+              integrationId: shopifyIntegrationId,
+              detail: `Shopify webhook registration failed for ${topic}`,
+              extra: { topic, shop: shopDomain },
+            });
+          }
+        })
       );
     } else {
       logger.warn({ shop: shopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');

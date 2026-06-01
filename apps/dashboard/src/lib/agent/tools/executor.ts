@@ -25,6 +25,7 @@ import {
   editShopifyOrder,
 } from "./shopify";
 import { checkStaticToolPolicy } from "./static-policy";
+import { toolError, toolNotFound, toolOk, type ToolResult, type ToolStatus } from "./result";
 import { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@/lib/server/refund-spend";
 import type { AgentContext } from "../types";
 import type {
@@ -87,8 +88,8 @@ async function runToolBody(
   args: unknown,
   ctx: AgentContext,
   settings?: OrgSettings
-): Promise<string> {
-  const noShopify = "Error: no Shopify integration connected.";
+): Promise<ToolResult> {
+  const noShopify = toolError("Error: no Shopify integration connected.");
   const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
   const resolvedSettings = resolveAgentSettings(settings);
 
@@ -122,11 +123,11 @@ async function runToolBody(
 
     case "create_refund": {
       if (!ctx.shopify) return noShopify;
-      const { message, refundedCents } = await createRefund(cast<CreateRefundInput>(args), ctx.shopify);
-      if (refundedCents !== null && refundedCents > 0) {
-        await incrementDailyRefundSpendCents(ctx.orgId, refundedCents);
+      const refund = await createRefund(cast<CreateRefundInput>(args), ctx.shopify);
+      if (refund.refundedCents !== null && refund.refundedCents > 0) {
+        await incrementDailyRefundSpendCents(ctx.orgId, refund.refundedCents);
       }
-      return message;
+      return refund;
     }
 
     case "cancel_order":
@@ -163,7 +164,7 @@ async function runToolBody(
     case "search_kb": {
       const { query } = cast<SearchKbInput>(args);
       const words = query.trim().split(/\s+/).filter((word) => word.length >= 2);
-      if (words.length === 0) return "No knowledge base articles found for that query.";
+      if (words.length === 0) return toolNotFound("No knowledge base articles found for that query.");
 
       const wordConditions = words.flatMap(w => [
         { title: { contains: w, mode: "insensitive" as const } },
@@ -175,7 +176,7 @@ async function runToolBody(
         orderBy: { updatedAt: "desc" },
         select: { id: true, title: true, body: true, tags: true },
       });
-      if (articles.length === 0) return "No knowledge base articles found for that query.";
+      if (articles.length === 0) return toolNotFound("No knowledge base articles found for that query.");
 
       await db.kbCitation.createMany({
         data: articles.map(a => ({
@@ -185,11 +186,11 @@ async function runToolBody(
         })),
       });
 
-      return JSON.stringify(articles.map(a => ({ title: a.title, body: a.body, tags: a.tags })));
+      return toolOk(JSON.stringify(articles.map(a => ({ title: a.title, body: a.body, tags: a.tags }))));
     }
 
     default:
-      return `Error: unknown tool "${name}".`;
+      return toolError(`Error: unknown tool "${name}".`);
   }
 }
 
@@ -201,6 +202,19 @@ export async function executeTool(
 ): Promise<string> {
   const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
   if (policyError) return policyError;
+  return (await runToolBody(name, args, ctx, settings)).message;
+}
+
+// Structured variant used by the planner, which derives plan warnings from the
+// semantic status (e.g. not_found) rather than scraping the model-facing text.
+export async function executeToolStructured(
+  name: string,
+  args: unknown,
+  ctx: AgentContext,
+  settings?: OrgSettings
+): Promise<ToolResult> {
+  const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
+  if (policyError) return toolError(policyError);
   return runToolBody(name, args, ctx, settings);
 }
 
@@ -208,6 +222,12 @@ export interface ExecuteToolResult {
   result: string;
   status: "success" | "error" | "policy_block";
 }
+
+const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, "success" | "error"> = {
+  ok: "success",
+  not_found: "success",
+  error: "error",
+};
 
 export async function executeToolWithStatus(
   name: string,
@@ -218,9 +238,6 @@ export async function executeToolWithStatus(
   const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
   if (policyError) return { result: policyError, status: "policy_block" };
 
-  const result = await runToolBody(name, args, ctx, settings);
-  return {
-    result,
-    status: result.toLowerCase().startsWith("error:") ? "error" : "success",
-  };
+  const { status, message } = await runToolBody(name, args, ctx, settings);
+  return { result: message, status: TOOL_STATUS_TO_EXECUTE_STATUS[status] };
 }

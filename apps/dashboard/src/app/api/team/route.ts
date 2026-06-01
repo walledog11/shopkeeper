@@ -3,6 +3,8 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { handleApiError } from '@/lib/api/errors';
 import { getDashboardAppUrl } from '@/lib/env';
 
+const ALLOWED_ROLES = ['org:admin', 'org:member'];
+
 export async function GET() {
   try {
     const { orgId } = await auth();
@@ -45,7 +47,6 @@ export async function POST(request: Request) {
     const { emailAddress, role } = await request.json();
     if (!emailAddress) return NextResponse.json({ error: 'Email required' }, { status: 400 });
 
-    const ALLOWED_ROLES = ['org:admin', 'org:member'];
     const resolvedRole = ALLOWED_ROLES.includes(role) ? role : 'org:member';
 
     const client = await clerkClient();

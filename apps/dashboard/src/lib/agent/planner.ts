@@ -6,15 +6,13 @@ import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "@/types";
 import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
-import { executeTool } from "./tools/executor";
+import { executeToolStructured } from "./tools/executor";
+import type { ToolStatus } from "./tools/result";
 import { buildMessageHistory } from "./message-history";
 import type { AgentContext } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 import { enforceSpendCap, recordSpend } from "./spend";
 import { resolveAgentSettings } from "./settings";
-
-const MISSING_LOOKUP_RESULT_RE = /not found|no customer/;
-const EMPTY_KB_RESULT_RE = /no articles/;
 
 function describeTool(name: string, input: unknown): string {
   const a = input as Record<string, unknown>;
@@ -135,6 +133,7 @@ export async function planAgent(
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === "read");
   const warnings: string[] = [];
   const readResultsMap = new Map<string, string>();
+  const readStatusMap = new Map<string, ToolStatus>();
 
   if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode) {
     warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
@@ -154,10 +153,15 @@ export async function planAgent(
           inputChars: JSON.stringify(b.input ?? null).length,
         }, "[agent:plan] read tool call");
         let content: string;
+        let status: ToolStatus;
         try {
-          content = await executeTool(b.name, b.input, ctx, settings);
+          const executed = await executeToolStructured(b.name, b.input, ctx, settings);
+          content = executed.message;
+          status = executed.status;
         } catch {
+          // A thrown lookup is treated as "nothing found" for warning purposes.
           content = "Lookup failed";
+          status = "not_found";
         }
         logger.info({
           orgId: ctx.orgId,
@@ -167,17 +171,16 @@ export async function planAgent(
           resultChars: content.length,
         }, "[agent:plan] read tool result");
         readResultsMap.set(b.id, content);
+        readStatusMap.set(b.id, status);
       })
     );
 
     const readBlocksById = new Map(readBlocks.map((block) => [block.id, block]));
     let hasShopifyCustomerWarning = warnings.some(w => w.includes("Shopify customer"));
-    for (const [id, result] of readResultsMap.entries()) {
+    for (const id of readResultsMap.keys()) {
       const block = readBlocksById.get(id);
       if (!block) continue;
-      const trimmedResult = result.trim();
-      const lower = trimmedResult.toLowerCase();
-      const isMissing = MISSING_LOOKUP_RESULT_RE.test(lower) || lower === "lookup failed";
+      const isMissing = readStatusMap.get(id) === "not_found";
       if (isMissing) {
         if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerWarning) {
           warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
@@ -188,10 +191,9 @@ export async function planAgent(
           warnings.push("No tracking information found - the order may not have been fulfilled yet.");
         } else if (block.name === "search_shopify_products") {
           warnings.push("No matching product found - the order edit step may need a corrected product name.");
+        } else if (block.name === "search_kb") {
+          warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
         }
-      }
-      if (block.name === "search_kb" && (EMPTY_KB_RESULT_RE.test(lower) || trimmedResult === "[]" || trimmedResult === "")) {
-        warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
       }
     }
 

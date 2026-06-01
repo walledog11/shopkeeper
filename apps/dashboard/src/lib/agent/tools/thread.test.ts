@@ -67,7 +67,7 @@ describe('sendReply outbound recording', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result).toBe('Reply sent to customer via email.');
+    expect(result.message).toBe('Reply sent to customer via email.');
     const records = await readOutboundRecords();
     expect(records).toMatchObject([
       {
@@ -110,7 +110,7 @@ describe('sendReply outbound recording', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result).toBe('Reply sent to customer via email.');
+    expect(result.message).toBe('Reply sent to customer via email.');
     const records = await readOutboundRecords();
     expect(records).toMatchObject([
       {
@@ -148,7 +148,7 @@ describe('sendEmail outbound recording', () => {
       { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
     );
 
-    expect(result).toBe('Email sent to prospect@example.com and a new ticket was opened.');
+    expect(result.message).toBe('Email sent to prospect@example.com and a new ticket was opened.');
     const records = await readOutboundRecords();
     expect(records).toMatchObject([
       {
@@ -180,7 +180,7 @@ describe('updateThreadStatus', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result).toBe('Thread status updated to "closed".');
+    expect(result.message).toBe('Thread status updated to "closed".');
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe(THREAD_STATUS.CLOSED);
     expect(mockEnqueueCustomerMemory).toHaveBeenCalledWith({
@@ -212,8 +212,8 @@ describe('escalateToHuman', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result.startsWith(ESCALATION_MARKER)).toBe(true);
-    expect(result).toContain('Customer is asking about wholesale pricing.');
+    expect(result.message.startsWith(ESCALATION_MARKER)).toBe(true);
+    expect(result.message).toContain('Customer is asking about wholesale pricing.');
 
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe(THREAD_STATUS.PENDING);
@@ -235,7 +235,7 @@ describe('escalateToHuman', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result).toContain('No reason provided');
+    expect(result.message).toContain('No reason provided');
 
     const note = await db.message.findFirst({
       where: { threadId: thread.id, senderType: SenderType.note },

@@ -58,6 +58,24 @@ function formatLastActivity(iso: string): string {
   return `${days}d ago`
 }
 
+function isTokenExpired(integration: Integration) {
+  if (!integration.tokenExpiresAt) return false
+  if (integration.platform === 'email') return isEmailAuthReauthorizationRequired(integration)
+  return new Date(integration.tokenExpiresAt).getTime() < Date.now()
+}
+
+function isTokenExpiringSoon(integration: Integration) {
+  if (!integration.tokenExpiresAt) return false
+  if (integration.platform === 'email') return false
+  const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()
+  return msLeft > 0 && msLeft / 86_400_000 < 10
+}
+
+function isPostmarkEmail(integration: Integration): boolean {
+  if (integration.platform !== 'email') return false
+  return getEmailProvider(integration) === 'postmark'
+}
+
 const FORWARDING_GUIDES = [
   {
     id: 'google',
@@ -281,27 +299,10 @@ function useIntegrationCardView({ config, connected, onConnect, onDisconnect, la
   const isConnected = connected.length > 0
   const isComingSoon = config.connectType === 'coming-soon'
 
-  const isTokenExpired = (integration: Integration) => {
-    if (!integration.tokenExpiresAt) return false
-    if (integration.platform === 'email') return isEmailAuthReauthorizationRequired(integration)
-    return new Date(integration.tokenExpiresAt).getTime() < Date.now()
-  }
-
-  const isTokenExpiringSoon = (integration: Integration) => {
-    if (!integration.tokenExpiresAt) return false
-    if (integration.platform === 'email') return false
-    const msLeft = new Date(integration.tokenExpiresAt).getTime() - Date.now()
-    return msLeft > 0 && msLeft / 86_400_000 < 10
-  }
-
   const hasExpired = isConnected && connected.some(isTokenExpired)
   const hasExpiringSoon = isConnected && !hasExpired && connected.some(isTokenExpiringSoon)
   const needsReauth = hasExpired || hasExpiringSoon
 
-  const isPostmarkEmail = (integration: Integration): boolean => {
-    if (integration.platform !== 'email') return false
-    return getEmailProvider(integration) === 'postmark'
-  }
   const isAwaitingFirstInbound =
     isConnected &&
     !lastActivity &&

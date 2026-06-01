@@ -41,15 +41,15 @@ function CardBrandIcon({ brand }: { brand: string }) {
   )
 }
 
+async function openBillingPortal() {
+  const res = await fetch('/api/billing/portal', { method: 'POST' })
+  if (!res.ok) return
+  const { url } = await res.json()
+  window.location.href = url
+}
+
 export default function BillingTab() {
   const { data, isLoading, error } = useSWR<BillingInfo>('/api/billing', fetcher)
-
-  async function openPortal() {
-    const res = await fetch('/api/billing/portal', { method: 'POST' })
-    if (!res.ok) return
-    const { url } = await res.json()
-    window.location.href = url
-  }
 
   if (isLoading) {
     return (
@@ -120,7 +120,7 @@ export default function BillingTab() {
               </div>
               <Button
                 size="sm"
-                onClick={openPortal}
+                onClick={openBillingPortal}
                 className="h-8 px-4 bg-slate-900 text-white hover:bg-slate-700 text-xs font-semibold shrink-0"
               >
                 {isActive ? 'Manage plan' : 'Upgrade'}
@@ -150,7 +150,7 @@ export default function BillingTab() {
             <Button
               variant="outline"
               size="sm"
-              onClick={openPortal}
+              onClick={openBillingPortal}
               className="h-8 px-3 text-xs font-semibold shrink-0"
             >
               {data.paymentMethod ? 'Update' : 'Add card'}

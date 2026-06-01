@@ -1,11 +1,39 @@
 import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
-import { SHOPIFY_API_VERSION } from "./tools/shopify";
+import { shopifyRestJson, type ShopifyContext } from "./shopify/client";
 import type { AgentContext, ShopifyOrderSummary } from "./types";
 
 function readCustomerMemory(memory: unknown): CustomerMemory | null {
   if (isEmptyMemory(memory)) return null;
   return memory as CustomerMemory;
 }
+
+type RawShopifyOrder = {
+  id: number;
+  name: string;
+  created_at: string;
+  financial_status: string;
+  fulfillment_status: string | null;
+  current_total_price: string;
+  currency?: string | null;
+  line_items: {
+    id?: number | string;
+    title: string;
+    quantity: number;
+    fulfillable_quantity?: number;
+    current_quantity?: number;
+    fulfillment_status?: string | null;
+    variant_id: number | string | null;
+  }[];
+  shipping_address?: {
+    address1?: string | null;
+    address2?: string | null;
+    city?: string | null;
+    province?: string | null;
+    zip?: string | null;
+    country?: string | null;
+    country_name?: string | null;
+  } | null;
+};
 
 export async function buildContext(threadId: string, orgId: string): Promise<AgentContext> {
   const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
@@ -49,11 +77,11 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
   if (!shopifyCustomerId && thread.channelType === "email" && shopifyIntegration?.accessToken) {
     try {
       const email = thread.customer.platformId;
-      const res = await fetch(
-        `https://${shopifyIntegration.externalAccountId}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=email:${encodeURIComponent(email)}&fields=id,first_name,last_name&limit=1`,
-        { headers: { "X-Shopify-Access-Token": shopifyIntegration.accessToken } }
+      const data = await shopifyRestJson<{ customers?: { id: number; first_name?: string | null; last_name?: string | null }[] }>(
+        { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken },
+        "customers/search.json",
+        { query: { query: `email:${email}`, fields: "id,first_name,last_name", limit: 1 } }
       );
-      const data = await res.json();
       const found = data.customers?.[0];
       if (found?.id) {
         shopifyCustomerId = String(found.id);
@@ -73,54 +101,38 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
 
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
-    const { externalAccountId, accessToken } = shopifyIntegration;
-    const headers = { "X-Shopify-Access-Token": accessToken };
+    const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
 
     const nameFetch = (!shopifyCustomerName && (isOperatorChannel || !dbName))
-      ? fetch(`https://${externalAccountId}/admin/api/${SHOPIFY_API_VERSION}/customers/${shopifyCustomerId}.json?fields=first_name,last_name`, { headers })
-          .then(r => r.json()).catch(() => null)
+      ? shopifyRestJson<{ customer?: { first_name?: string | null; last_name?: string | null } }>(
+          ctx,
+          `customers/${shopifyCustomerId}.json`,
+          { query: { fields: "first_name,last_name" } }
+        ).catch(() => null)
       : Promise.resolve(null);
 
-    const ordersFetch = fetch(
-      `https://${externalAccountId}/admin/api/${SHOPIFY_API_VERSION}/orders.json?customer_id=${shopifyCustomerId}&status=any&limit=5&fields=id,name,created_at,financial_status,fulfillment_status,current_total_price,line_items,shipping_address`,
-      { headers }
-    ).then(async r => ({ ok: r.ok, data: await r.json() })).catch(() => null);
+    const ordersFetch = shopifyRestJson<{ orders?: RawShopifyOrder[] }>(
+      ctx,
+      "orders.json",
+      {
+        query: {
+          customer_id: shopifyCustomerId,
+          status: "any",
+          limit: 5,
+          fields: "id,name,created_at,financial_status,fulfillment_status,current_total_price,line_items,shipping_address",
+        },
+      }
+    ).catch(() => null);
 
-    const [nameData, ordersResult] = await Promise.all([nameFetch, ordersFetch]);
+    const [nameData, ordersData] = await Promise.all([nameFetch, ordersFetch]);
 
     if (nameData) {
       const parts = [nameData.customer?.first_name, nameData.customer?.last_name].filter(Boolean);
       if (parts.length > 0) shopifyCustomerName = parts.join(" ");
     }
 
-    if (ordersResult?.ok && ordersResult.data?.orders) {
-      recentOrders = ordersResult.data.orders.map((o: {
-        id: number;
-        name: string;
-        created_at: string;
-        financial_status: string;
-        fulfillment_status: string | null;
-        current_total_price: string;
-        currency?: string | null;
-        line_items: {
-          id?: number | string;
-          title: string;
-          quantity: number;
-          fulfillable_quantity?: number;
-          current_quantity?: number;
-          fulfillment_status?: string | null;
-          variant_id: number | string | null;
-        }[];
-        shipping_address?: {
-          address1?: string | null;
-          address2?: string | null;
-          city?: string | null;
-          province?: string | null;
-          zip?: string | null;
-          country?: string | null;
-          country_name?: string | null;
-        } | null;
-      }) => ({
+    if (ordersData?.orders) {
+      recentOrders = ordersData.orders.map((o) => ({
         id: String(o.id),
         name: o.name,
         created_at: o.created_at,

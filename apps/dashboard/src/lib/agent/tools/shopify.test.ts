@@ -31,7 +31,8 @@ describe("shopify tools", () => {
 
     const result = await addShopifyCustomerNote({ customer_id: "123", note: "New note" }, ctx);
 
-    expect(result).toContain("Error: failed to add note");
+    expect(result.message).toContain("Error: failed to add note");
+    expect(result.status).toBe("error");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -64,8 +65,9 @@ describe("shopify tools", () => {
       country: "United States",
     }, ctx);
 
-    expect(result).toContain("shipping address updated");
-    expect(result).toContain("customer profile sync failed");
+    expect(result.message).toContain("shipping address updated");
+    expect(result.message).toContain("customer profile sync failed");
+    expect(result.status).toBe("ok");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -146,7 +148,8 @@ describe("shopify tools", () => {
 
     const result = await editShopifyOrder({ order_id: "456", remove_variant_id: "123" }, ctx);
 
-    expect(result).toContain("variant 123 was not found");
+    expect(result.message).toContain("variant 123 was not found");
+    expect(result.status).toBe("error");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -166,7 +169,8 @@ describe("shopify tools", () => {
       line_items: [{ title: "Custom item", price: "10.00", quantity: 1 }],
     }, ctx);
 
-    expect(result).toContain("Custom line items are disabled");
+    expect(result.message).toContain("Custom line items are disabled");
+    expect(result.status).toBe("error");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

@@ -100,6 +100,57 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── Per-shop request throttling ─────────────────────────────────────────────
+// Shopify's REST Admin API is a leaky bucket (standard plan: 40 burst, 2 req/s
+// refill). The per-call retry above only backs off a lone 429 — concurrent
+// agent/autopilot runs against the same shop would each stampede the bucket
+// independently. A shared in-process token bucket per shop makes them wait
+// cooperatively so request starts are paced under the leak rate.
+const BUCKET_CAPACITY = 40;
+const BUCKET_REFILL_PER_SEC = 2;
+
+interface ShopTokenBucket {
+  tokens: number;
+  lastRefill: number;
+  queue: (() => void)[];
+  timer?: ReturnType<typeof setTimeout>;
+}
+
+const shopBuckets = new Map<string, ShopTokenBucket>();
+
+function drainBucket(bucket: ShopTokenBucket): void {
+  const now = Date.now();
+  const elapsedSec = (now - bucket.lastRefill) / 1000;
+  if (elapsedSec > 0) {
+    bucket.tokens = Math.min(BUCKET_CAPACITY, bucket.tokens + elapsedSec * BUCKET_REFILL_PER_SEC);
+    bucket.lastRefill = now;
+  }
+
+  while (bucket.queue.length > 0 && bucket.tokens >= 1) {
+    bucket.tokens -= 1;
+    bucket.queue.shift()!();
+  }
+
+  if (bucket.queue.length > 0 && !bucket.timer) {
+    const waitMs = Math.max(50, Math.ceil(((1 - bucket.tokens) / BUCKET_REFILL_PER_SEC) * 1000));
+    bucket.timer = setTimeout(() => {
+      bucket.timer = undefined;
+      drainBucket(bucket);
+    }, waitMs);
+  }
+}
+
+function acquireShopToken(shop: string): Promise<void> {
+  const existing = shopBuckets.get(shop);
+  const bucket: ShopTokenBucket = existing ?? { tokens: BUCKET_CAPACITY, lastRefill: Date.now(), queue: [] };
+  if (!existing) shopBuckets.set(shop, bucket);
+
+  return new Promise<void>((resolve) => {
+    bucket.queue.push(resolve);
+    drainBucket(bucket);
+  });
+}
+
 async function fetchWithTimeout(
   url: string,
   init: RequestInit,
@@ -164,21 +215,29 @@ export function formatShopifyToolError(action: string, err: unknown): string {
   return `Error: ${action} - ${String(err)}`;
 }
 
-export async function shopifyRestJson<T>(
+export interface ShopifyResponse<T> {
+  data: T;
+  headers: Headers;
+}
+
+export async function shopifyRest<T>(
   ctx: ShopifyContext,
   path: string,
   options: ShopifyRequestOptions = {}
-): Promise<T> {
+): Promise<ShopifyResponse<T>> {
+  const shop = normalizeShopifyShop(ctx.shop);
   const url = buildShopifyAdminUrl(ctx, path, options.query);
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const method = options.method ?? "GET";
   const init: RequestInit = {
     method,
+    cache: "no-store",
     headers: shopifyHeaders(ctx.accessToken),
     ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
   };
 
-  async function attemptRequest(attempt: number): Promise<T> {
+  async function attemptRequest(attempt: number): Promise<ShopifyResponse<T>> {
+    await acquireShopToken(shop);
     const res = await fetchWithTimeout(url, init, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < maxRetries;
 
@@ -195,10 +254,26 @@ export async function shopifyRestJson<T>(
       });
     }
 
-    return payload as T;
+    return { data: payload as T, headers: res.headers };
   }
 
   return attemptRequest(0);
+}
+
+export async function shopifyRestJson<T>(
+  ctx: ShopifyContext,
+  path: string,
+  options: ShopifyRequestOptions = {}
+): Promise<T> {
+  const { data } = await shopifyRest<T>(ctx, path, options);
+  return data;
+}
+
+// Shopify paginates list endpoints via a cursor in the `Link` response header.
+export function parseNextPageInfo(headers: Headers): string | null {
+  const linkHeader = headers.get("link") ?? "";
+  const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
+  return nextMatch ? nextMatch[1] : null;
 }
 
 export async function shopifyGraphql<TData>(

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { shopifyRestJson, type ShopifyContext } from '@/lib/agent/shopify';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
@@ -18,25 +18,27 @@ export const POST = withOrgRoute(
       throw new BadRequestError('No Shopify integration connected');
     }
 
-    const { externalAccountId: shop, accessToken } = integration;
-    const headers = { 'X-Shopify-Access-Token': accessToken };
+    const ctx: ShopifyContext = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
-    const [policiesRes, pagesRes] = await Promise.all([
-      fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/policies.json`, { cache: 'no-store', headers }),
-      fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/pages.json?published_status=published&limit=250`, { cache: 'no-store', headers }),
-    ]);
-
-    if (!policiesRes.ok || !pagesRes.ok) {
+    let policies: { id: number; title: string; body: string }[];
+    let pages: { id: number; title: string; body_html: string }[];
+    try {
+      const [policiesData, pagesData] = await Promise.all([
+        shopifyRestJson<{ policies?: { id: number; title: string; body: string }[] }>(ctx, 'policies.json', { maxRetries: 0 }),
+        shopifyRestJson<{ pages?: { id: number; title: string; body_html: string }[] }>(ctx, 'pages.json', {
+          query: { published_status: 'published', limit: 250 },
+          maxRetries: 0,
+        }),
+      ]);
+      policies = policiesData.policies ?? [];
+      pages = pagesData.pages ?? [];
+    } catch {
       throw new ApiError('Failed to fetch data from Shopify', 502);
     }
 
-    const [shopifyKbInitial, { policies }, { pages }] = await Promise.all([
-      db.knowledgeBase.findFirst({
-        where: { organizationId: org.id, source: 'shopify' },
-      }),
-      policiesRes.json() as Promise<{ policies: { id: number; title: string; body: string }[] }>,
-      pagesRes.json() as Promise<{ pages: { id: number; title: string; body_html: string }[] }>,
-    ]);
+    const shopifyKbInitial = await db.knowledgeBase.findFirst({
+      where: { organizationId: org.id, source: 'shopify' },
+    });
 
     // Find or create the org's Shopify knowledge base
     let shopifyKb = shopifyKbInitial;

@@ -7,6 +7,7 @@ import { getRedis } from "@/lib/server/redis";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
+import { toolError, toolOk, type ToolResult } from "./result";
 import type {
   AddInternalNoteInput,
   SendReplyInput,
@@ -39,13 +40,13 @@ function threadMessageId(threadId: string): string {
 export async function addInternalNote(
   input: AddInternalNoteInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   await createMessage({
     threadId: ctx.threadId,
     senderType: SenderType.note,
     contentText: `${AGENT_NOTE_PREFIX}${input.text}`,
   });
-  return `Note logged: "${input.text}"`;
+  return toolOk(`Note logged: "${input.text}"`);
 }
 
 // ── send_reply ────────────────────────────────────────────────────────────────
@@ -53,14 +54,14 @@ export async function addInternalNote(
 export async function sendReply(
   input: SendReplyInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   const thread = await db.thread.update({
     where: { id: ctx.threadId },
     data: { status: "open" },
     include: { customer: true },
   }).catch(() => null);
 
-  if (!thread) return "Error: thread not found.";
+  if (!thread) return toolError("Error: thread not found.");
 
   const recipientId = thread.customer.platformId;
 
@@ -70,7 +71,7 @@ export async function sendReply(
       where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.IG_DM },
     });
     if (!igIntegration?.externalAccountId) {
-      return "Error: no Instagram integration configured.";
+      return toolError("Error: no Instagram integration configured.");
     }
     const recorded = await recordOutboundCall({
       source: "agent_send_reply",
@@ -84,7 +85,7 @@ export async function sendReply(
       metadata: { igAccountId: igIntegration.externalAccountId },
     });
     if (!recorded) {
-      if (!igIntegration.accessToken) return "Error: no Instagram integration configured.";
+      if (!igIntegration.accessToken) return toolError("Error: no Instagram integration configured.");
       const igRes = await fetch(
         `https://graph.facebook.com/v22.0/${igIntegration.externalAccountId}/messages`,
         {
@@ -108,7 +109,7 @@ export async function sendReply(
           integrationId: igIntegration.id,
           detail: `Instagram dispatch failed (${igRes.status})`,
         });
-        return `Error: Instagram dispatch failed (${igRes.status}).`;
+        return toolError(`Error: Instagram dispatch failed (${igRes.status}).`);
       }
     }
     await createMessage({
@@ -116,7 +117,7 @@ export async function sendReply(
       senderType: SenderType.agent,
       contentText: input.text,
     });
-    return `Reply sent to customer via Instagram DM.`;
+    return toolOk(`Reply sent to customer via Instagram DM.`);
   }
 
   // ── Email dispatch ──
@@ -124,7 +125,7 @@ export async function sendReply(
     const emailIntegration = await db.integration.findFirst({
       where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.EMAIL },
     });
-    if (!emailIntegration) return "Error: no email integration configured.";
+    if (!emailIntegration) return toolError("Error: no email integration configured.");
     const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
     const syntheticMessageId = threadMessageId(ctx.threadId);
     const lastCustomerMsg = await db.message.findFirst({
@@ -166,7 +167,7 @@ export async function sendReply(
         });
       }
     } catch (err) {
-      if (err instanceof EmailNotConfiguredError) return `Error: email not configured , ${err.message}`;
+      if (err instanceof EmailNotConfiguredError) return toolError(`Error: email not configured , ${err.message}`);
       const msg = err instanceof Error ? err.message : String(err);
       logger.error({ err: msg, provider }, '[sendReply] Email dispatch error');
       void recordProviderSendFailure(provider, 'email', ctx.orgId, {
@@ -175,17 +176,17 @@ export async function sendReply(
         integrationId: emailIntegration.id,
         detail: msg,
       });
-      return `Error: email dispatch failed , ${msg}`;
+      return toolError(`Error: email dispatch failed , ${msg}`);
     }
     await createMessage({
       threadId: ctx.threadId,
       senderType: SenderType.agent,
       contentText: input.text,
     });
-    return `Reply sent to customer via email.`;
+    return toolOk(`Reply sent to customer via email.`);
   }
 
-  return `Error: channel dispatch not implemented for ${thread.channelType}.`;
+  return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
 }
 
 // ── send_email ────────────────────────────────────────────────────────────────
@@ -193,7 +194,7 @@ export async function sendReply(
 export async function sendEmail(
   input: SendEmailInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   // Fetch email integration; simultaneously search for an existing open email thread
   // for this recipient directly via relation filter (avoids a separate customer lookup
   // that can miss if the address casing differs from the stored platformId).
@@ -210,7 +211,7 @@ export async function sendEmail(
       orderBy: { updatedAt: "desc" },
     }),
   ]);
-  if (!emailIntegration) return "Error: no email integration connected.";
+  if (!emailIntegration) return toolError("Error: no email integration connected.");
 
   const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
   const provider = getEmailProvider(emailIntegration);
@@ -284,7 +285,7 @@ export async function sendEmail(
     if (!existingThread) {
       await db.thread.update({ where: { id: targetThreadId }, data: { archivedAt: new Date() } }).catch(() => {});
     }
-    if (err instanceof EmailNotConfiguredError) return `Error: email not configured , ${err.message}`;
+    if (err instanceof EmailNotConfiguredError) return toolError(`Error: email not configured , ${err.message}`);
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, threadId: targetThreadId, provider }, '[sendEmail] Email dispatch error');
     void recordProviderSendFailure(provider, 'email', ctx.orgId, {
@@ -293,7 +294,7 @@ export async function sendEmail(
       integrationId: emailIntegration.id,
       detail: msg,
     });
-    return `Error: email dispatch failed , ${msg}`;
+    return toolError(`Error: email dispatch failed , ${msg}`);
   }
 
   // Send confirmed , persist the message
@@ -303,9 +304,9 @@ export async function sendEmail(
     contentText: input.body,
   });
 
-  return existingThread
+  return toolOk(existingThread
     ? `Email sent to ${input.to} via their existing open ticket.`
-    : `Email sent to ${input.to} and a new ticket was opened.`;
+    : `Email sent to ${input.to} and a new ticket was opened.`);
 }
 
 // ── update_thread_status ──────────────────────────────────────────────────────
@@ -313,7 +314,7 @@ export async function sendEmail(
 export async function updateThreadStatus(
   input: UpdateThreadStatusInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   const updated = await db.thread.update({
     where: { id: ctx.threadId },
     data: { status: input.status },
@@ -327,7 +328,7 @@ export async function updateThreadStatus(
       threads: [{ threadId: ctx.threadId, closedAt: updated.updatedAt }],
     });
   }
-  return `Thread status updated to "${input.status}".`;
+  return toolOk(`Thread status updated to "${input.status}".`);
 }
 
 // ── update_thread_tag ─────────────────────────────────────────────────────────
@@ -335,12 +336,12 @@ export async function updateThreadStatus(
 export async function updateThreadTag(
   input: UpdateThreadTagInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   await db.thread.update({
     where: { id: ctx.threadId },
     data: { tag: input.tag },
   });
-  return `Thread tag updated to "${input.tag}".`;
+  return toolOk(`Thread tag updated to "${input.tag}".`);
 }
 
 // ── escalate_to_human ─────────────────────────────────────────────────────────
@@ -387,7 +388,7 @@ async function notifyGatewayOfEscalation(args: {
 export async function escalateToHuman(
   input: EscalateToHumanInput,
   ctx: ThreadContext
-): Promise<string> {
+): Promise<ToolResult> {
   const reason = input.reason.trim() || "No reason provided";
   await db.thread.update({
     where: { id: ctx.threadId },
@@ -403,5 +404,5 @@ export async function escalateToHuman(
     threadId: ctx.threadId,
     reason,
   });
-  return `${ESCALATION_MARKER} ${reason}`;
+  return toolOk(`${ESCALATION_MARKER} ${reason}`);
 }

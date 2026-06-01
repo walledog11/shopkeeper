@@ -5,6 +5,7 @@ import type {
   UpdateShopifyCustomerInfoInput,
 } from "../tools";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
 import { customerName, serializeCustomer } from "./serializers";
 import type { ShopifyCustomer } from "./types";
 import { clampLimit, optionalString, requireNonEmptyString, requireNumericId } from "./validation";
@@ -12,7 +13,7 @@ import { clampLimit, optionalString, requireNonEmptyString, requireNumericId } f
 export async function searchShopifyCustomers(
   input: SearchShopifyCustomersInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const query = requireNonEmptyString(input.query, "query");
     const limit = clampLimit(input.limit, 5, 10);
@@ -25,25 +26,25 @@ export async function searchShopifyCustomers(
     });
 
     const customers = data.customers ?? [];
-    if (customers.length === 0) return `No customers found matching "${query}".`;
+    if (customers.length === 0) return toolNotFound(`No customers found matching "${query}".`);
 
-    return JSON.stringify(
+    return toolOk(JSON.stringify(
       customers.map((customer) => ({
         customer_id: String(customer.id),
         name: customerName(customer),
         email: customer.email ?? null,
         phone: customer.phone ?? null,
       }))
-    );
+    ));
   } catch (err) {
-    return formatShopifyToolError("could not search customers", err);
+    return toolError(formatShopifyToolError("could not search customers", err));
   }
 }
 
 export async function getShopifyCustomer(
   input: GetShopifyCustomerInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
     const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
@@ -53,19 +54,19 @@ export async function getShopifyCustomer(
     });
 
     if (!data.customer) {
-      return `Error: could not fetch customer - customer ${customerId} was not returned by Shopify.`;
+      return toolError(`Error: could not fetch customer - customer ${customerId} was not returned by Shopify.`);
     }
 
-    return JSON.stringify(serializeCustomer(data.customer));
+    return toolOk(JSON.stringify(serializeCustomer(data.customer)));
   } catch (err) {
-    return formatShopifyToolError("could not fetch customer", err);
+    return toolError(formatShopifyToolError("could not fetch customer", err));
   }
 }
 
 export async function updateShopifyCustomerInfo(
   input: UpdateShopifyCustomerInfoInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
     const payload: Record<string, string> = { id: customerId };
@@ -81,7 +82,7 @@ export async function updateShopifyCustomerInfo(
     if (phone !== undefined) payload.phone = phone;
 
     if (Object.keys(payload).length === 1) {
-      return "Error: failed to update customer info - provide at least one customer field to update.";
+      return toolError("Error: failed to update customer info - provide at least one customer field to update.");
     }
 
     const data = await shopifyRestJson<{ customer?: ShopifyCustomer }>(ctx, `customers/${customerId}.json`, {
@@ -90,20 +91,20 @@ export async function updateShopifyCustomerInfo(
     });
 
     if (!data.customer) {
-      return `Error: failed to update customer info - customer ${customerId} was not returned by Shopify.`;
+      return toolError(`Error: failed to update customer info - customer ${customerId} was not returned by Shopify.`);
     }
 
     const c = data.customer;
-    return `Customer info updated. Name: ${customerName(c)}, Email: ${c.email ?? "none"}, Phone: ${c.phone ?? "none"}.`;
+    return toolOk(`Customer info updated. Name: ${customerName(c)}, Email: ${c.email ?? "none"}, Phone: ${c.phone ?? "none"}.`);
   } catch (err) {
-    return formatShopifyToolError("failed to update customer info", err);
+    return toolError(formatShopifyToolError("failed to update customer info", err));
   }
 }
 
 export async function addShopifyCustomerNote(
   input: AddShopifyCustomerNoteInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
     const note = requireNonEmptyString(input.note, "note");
@@ -115,7 +116,7 @@ export async function addShopifyCustomerNote(
     );
 
     if (!existing.customer) {
-      return `Error: failed to add note - customer ${customerId} was not returned by Shopify.`;
+      return toolError(`Error: failed to add note - customer ${customerId} was not returned by Shopify.`);
     }
 
     const existingNote = existing.customer.note ?? "";
@@ -127,11 +128,11 @@ export async function addShopifyCustomerNote(
     });
 
     if (!data.customer) {
-      return `Error: failed to add note - customer ${customerId} was not returned after update.`;
+      return toolError(`Error: failed to add note - customer ${customerId} was not returned after update.`);
     }
 
-    return `Note added to Shopify customer record: "${note}"`;
+    return toolOk(`Note added to Shopify customer record: "${note}"`);
   } catch (err) {
-    return formatShopifyToolError("failed to add note", err);
+    return toolError(formatShopifyToolError("failed to add note", err));
   }
 }

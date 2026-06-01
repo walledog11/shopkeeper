@@ -11,6 +11,14 @@ const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
 ].join(' ');
 
+const GMAIL_OAUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 600,
+  path: '/',
+};
+
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Gmail');
 }
@@ -35,19 +43,12 @@ export async function POST(request: Request) {
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   const state = crypto.randomBytes(16).toString('hex');
-  const cookieOpts = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    maxAge: 600,
-    path: '/',
-  };
   const cookieStore = await cookies();
-  cookieStore.set('gmail_oauth_state', state, cookieOpts);
-  cookieStore.set('gmail_oauth_org', orgId, cookieOpts);
-  cookieStore.set('gmail_oauth_user', userId, cookieOpts);
+  cookieStore.set('gmail_oauth_state', state, GMAIL_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('gmail_oauth_org', orgId, GMAIL_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('gmail_oauth_user', userId, GMAIL_OAUTH_COOKIE_OPTIONS);
   if (returnTo) {
-    cookieStore.set('gmail_oauth_return', returnTo, cookieOpts);
+    cookieStore.set('gmail_oauth_return', returnTo, GMAIL_OAUTH_COOKIE_OPTIONS);
   }
 
   const redirectUri = `${appUrl}/api/integrations/gmail/callback`;

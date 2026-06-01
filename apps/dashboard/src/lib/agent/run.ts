@@ -281,9 +281,10 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
-    await executeToolCalls(executableToolCalls);
+    const toolResults = await executeToolCalls(executableToolCalls);
+    const hasEscalation = toolResults.some((result) => result.content.startsWith(ESCALATION_MARKER));
 
-    if (escalationReason) {
+    if (hasEscalation && escalationReason) {
       return finish({
         summary: `Escalated to merchant: ${escalationReason}`,
         actionsPerformed,

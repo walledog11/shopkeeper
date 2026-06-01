@@ -13,6 +13,14 @@ const OUTLOOK_SCOPES = [
   'Mail.Send',
 ].join(' ');
 
+const OUTLOOK_OAUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 600,
+  path: '/',
+};
+
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Outlook');
 }
@@ -37,19 +45,12 @@ export async function POST(request: Request) {
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   const state = crypto.randomBytes(16).toString('hex');
-  const cookieOpts = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    maxAge: 600,
-    path: '/',
-  };
   const cookieStore = await cookies();
-  cookieStore.set('outlook_oauth_state', state, cookieOpts);
-  cookieStore.set('outlook_oauth_org', orgId, cookieOpts);
-  cookieStore.set('outlook_oauth_user', userId, cookieOpts);
+  cookieStore.set('outlook_oauth_state', state, OUTLOOK_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('outlook_oauth_org', orgId, OUTLOOK_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('outlook_oauth_user', userId, OUTLOOK_OAUTH_COOKIE_OPTIONS);
   if (returnTo) {
-    cookieStore.set('outlook_oauth_return', returnTo, cookieOpts);
+    cookieStore.set('outlook_oauth_return', returnTo, OUTLOOK_OAUTH_COOKIE_OPTIONS);
   }
 
   const redirectUri = `${appUrl}/api/integrations/outlook/callback`;

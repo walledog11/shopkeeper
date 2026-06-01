@@ -18,7 +18,7 @@ const {
   mockRecordAgentFailure: vi.fn().mockResolvedValue({ emitted: false }),
   mockGetDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
   mockIncrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
-  mockEscalateToHuman: vi.fn().mockResolvedValue("__ESCALATED__: ran out of options"),
+  mockEscalateToHuman: vi.fn().mockResolvedValue({ status: "ok", message: "__ESCALATED__: ran out of options" }),
 }));
 
 vi.mock("@/lib/ai/anthropic", () => ({
@@ -40,11 +40,11 @@ vi.mock("@/lib/server/agent-failure-alerts", () => ({
 }));
 
 vi.mock("@/lib/agent/tools/thread", () => ({
-  addInternalNote: vi.fn().mockResolvedValue("Note added."),
+  addInternalNote: vi.fn().mockResolvedValue({ status: "ok", message: "Note added." }),
   sendReply: mockSendReply,
-  sendEmail: vi.fn().mockResolvedValue("Email sent."),
+  sendEmail: vi.fn().mockResolvedValue({ status: "ok", message: "Email sent." }),
   updateThreadStatus: mockUpdateThreadStatus,
-  updateThreadTag: vi.fn().mockResolvedValue("Tag updated."),
+  updateThreadTag: vi.fn().mockResolvedValue({ status: "ok", message: "Tag updated." }),
   escalateToHuman: mockEscalateToHuman,
   ESCALATION_MARKER: "__ESCALATED__:",
 }));
@@ -153,10 +153,12 @@ describe("runAgent policy enforcement", () => {
     mockSendReply.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 5));
       replyFinished = true;
-      return "Reply sent.";
+      return { status: "ok", message: "Reply sent." };
     });
     mockUpdateThreadStatus.mockImplementation(async () => (
-      replyFinished ? "Status updated after reply." : "Status updated before reply."
+      replyFinished
+        ? { status: "ok", message: "Status updated after reply." }
+        : { status: "ok", message: "Status updated before reply." }
     ));
 
     const result = await runAgent(makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }), "Reply and close");
@@ -172,7 +174,7 @@ describe("runAgent policy enforcement", () => {
     mockCreate
       .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Done." }))
       .mockResolvedValueOnce(endTurn("All done."));
-    mockSendReply.mockResolvedValueOnce("Error: provider send failed.");
+    mockSendReply.mockResolvedValueOnce({ status: "error", message: "Error: provider send failed." });
 
     await runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
@@ -308,7 +310,7 @@ describe("runAgent policy enforcement", () => {
   it("halts the run loop after escalate_to_human and surfaces the reason in the summary", async () => {
     mockCreate.mockReset();
     mockEscalateToHuman.mockReset();
-    mockEscalateToHuman.mockResolvedValueOnce("__ESCALATED__: Customer is asking about wholesale pricing.");
+    mockEscalateToHuman.mockResolvedValueOnce({ status: "ok", message: "__ESCALATED__: Customer is asking about wholesale pricing." });
     mockCreate.mockResolvedValueOnce(singleToolUse("escalate_to_human", { reason: "Customer is asking about wholesale pricing." }));
 
     const result = await runAgent(
@@ -329,7 +331,7 @@ describe("runAgent policy enforcement", () => {
 
   it("halts an approved-plan run when escalate_to_human is in the approved set", async () => {
     mockEscalateToHuman.mockReset();
-    mockEscalateToHuman.mockResolvedValueOnce("__ESCALATED__: Shopify is down.");
+    mockEscalateToHuman.mockResolvedValueOnce({ status: "ok", message: "__ESCALATED__: Shopify is down." });
 
     const result = await runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),

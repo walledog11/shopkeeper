@@ -1,7 +1,7 @@
 import { db } from "@clerk/db";
 import { BadRequestError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
-import { SHOPIFY_API_VERSION } from "@/lib/agent/tools/shopify";
+import { shopifyRestJson } from "@/lib/agent/shopify";
 import logger from "@/lib/server/logger";
 
 interface ResolveInternalAgentThreadParams {
@@ -27,17 +27,20 @@ export async function resolveInternalAgentThread(params: ResolveInternalAgentThr
   let threadTag: string | null = null;
 
   if (params.orderNumber && shopifyIntegration?.accessToken) {
-    const shop = shopifyIntegration.externalAccountId;
-    const token = shopifyIntegration.accessToken;
     const orderName = params.orderNumber.startsWith("#") ? params.orderNumber : `#${params.orderNumber}`;
 
-    const orderRes = await fetch(
-      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?name=${encodeURIComponent(orderName)}&status=any&fields=id,name,email,customer&limit=1`,
-      { headers: { "X-Shopify-Access-Token": token } }
-    );
+    try {
+      const orderData = await shopifyRestJson<{
+        orders?: {
+          email?: string | null;
+          customer?: { id?: number | string; email?: string | null; first_name?: string | null; last_name?: string | null } | null;
+        }[];
+      }>(
+        { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken },
+        "orders.json",
+        { query: { name: orderName, status: "any", fields: "id,name,email,customer", limit: 1 } }
+      );
 
-    if (orderRes.ok) {
-      const orderData = await orderRes.json();
       const order = orderData.orders?.[0];
       if (order) {
         customerEmail = order.email || order.customer?.email || customerEmail;
@@ -47,7 +50,7 @@ export async function resolveInternalAgentThread(params: ResolveInternalAgentThr
           : null;
         threadTag = `Order ${orderName}`;
       }
-    } else {
+    } catch {
       logger.warn({ orderNumber: params.orderNumber }, "[agent/internal] Shopify order lookup failed");
     }
   }

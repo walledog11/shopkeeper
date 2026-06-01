@@ -1,4 +1,11 @@
-export { SHOPIFY_API_VERSION, type ShopifyContext } from "./client";
+export {
+  SHOPIFY_API_VERSION,
+  ShopifyRequestError,
+  parseNextPageInfo,
+  shopifyRest,
+  shopifyRestJson,
+  type ShopifyContext,
+} from "./client";
 export { searchShopifyProducts } from "./products";
 export {
   addShopifyCustomerNote,

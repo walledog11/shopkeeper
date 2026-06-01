@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 
@@ -22,40 +22,38 @@ export const GET = withOrgRoute(
     }
 
     const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx = { shop, accessToken: integration.accessToken };
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q')?.trim() ?? '';
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = 25;
 
-    let url: string;
-    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}`;
-
+    // Search endpoint has no cursor pagination; the list endpoint returns a Link header.
+    let path: string;
+    let query: Record<string, string | number>;
     if (pageInfo) {
-      url = `${base}/customers.json?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
+      path = 'customers.json';
+      query = { page_info: pageInfo, limit, fields: CUSTOMER_LIST_FIELDS };
     } else if (q.length >= 1) {
-      // Search endpoint , no cursor pagination supported by Shopify
-      url = `${base}/customers/search.json?query=${encodeURIComponent(q)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
+      path = 'customers/search.json';
+      query = { query: q, limit, fields: CUSTOMER_LIST_FIELDS };
     } else {
-      url = `${base}/customers.json?limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}&order=updated_at+DESC`;
+      path = 'customers.json';
+      query = { limit, fields: CUSTOMER_LIST_FIELDS, order: 'updated_at DESC' };
     }
 
-    const res = await fetch(url, { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    let data: { customers?: unknown[] };
+    let headers: Headers;
+    try {
+      ({ data, headers } = await shopifyRest<{ customers?: unknown[] }>(ctx, path, { query, maxRetries: 0 }));
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
+      }
+      throw err;
     }
 
-    const data = await res.json();
-    const customers = data.customers ?? [];
-
-    // Extract next cursor from Link header (only available on list endpoint, not search)
-    const linkHeader = res.headers.get('link') ?? '';
-    const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-    const nextPageInfo = nextMatch ? nextMatch[1] : null;
-
-    return NextResponse.json({ customers, nextPageInfo, shop });
+    return NextResponse.json({ customers: data.customers ?? [], nextPageInfo: parseNextPageInfo(headers), shop });
   },
 );
 
@@ -73,29 +71,31 @@ export const POST = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
-    const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers.json`, {
-      cache: 'no-store',
-      method: 'POST',
-      headers: {
-        'X-Shopify-Access-Token': token,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        customer: {
-          first_name: first_name || '',
-          last_name: last_name || '',
-          email: email || undefined,
+    let data: { customer?: unknown };
+    try {
+      data = await shopifyRestJson<{ customer?: unknown }>(ctx, 'customers.json', {
+        method: 'POST',
+        maxRetries: 0,
+        body: {
+          customer: {
+            first_name: first_name || '',
+            last_name: last_name || '',
+            email: email || undefined,
+          },
         },
-      }),
-    });
+      });
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        const errors = (err.payload as { errors?: unknown } | null)?.errors;
+        return NextResponse.json({ error: errors ?? 'Failed to create customer' }, { status: err.status ?? 502 });
+      }
+      throw err;
+    }
 
-    const data = await res.json();
-
-    if (!res.ok || !data.customer) {
-      return NextResponse.json({ error: data.errors ?? 'Failed to create customer' }, { status: res.status });
+    if (!data.customer) {
+      return NextResponse.json({ error: 'Failed to create customer' }, { status: 502 });
     }
 
     return NextResponse.json({ customer: data.customer });

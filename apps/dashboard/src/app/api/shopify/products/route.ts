@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { parseNextPageInfo, shopifyRest, ShopifyRequestError } from '@/lib/agent/shopify';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +24,7 @@ export const GET = withOrgRoute(
     }
 
     const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx = { shop, accessToken: integration.accessToken };
     const { searchParams } = new URL(request.url);
 
     const q = searchParams.get('q')?.trim() ?? '';
@@ -32,34 +32,29 @@ export const GET = withOrgRoute(
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = 25;
 
-    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json`;
-    const statusParam = status !== 'any' ? `&status=${status}` : '';
-    let url: string;
-
+    const statusParam: Record<string, string> = status !== 'any' ? { status } : {};
+    let query: Record<string, string | number>;
     if (pageInfo) {
-      url = `${base}?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${PRODUCT_FIELDS}`;
+      query = { page_info: pageInfo, limit, fields: PRODUCT_FIELDS };
     } else if (q) {
-      url = `${base}?title=${encodeURIComponent(q)}&limit=${limit}&fields=${PRODUCT_FIELDS}${statusParam}`;
+      query = { title: q, limit, fields: PRODUCT_FIELDS, ...statusParam };
     } else {
-      url = `${base}?limit=${limit}&fields=${PRODUCT_FIELDS}${statusParam}`;
+      query = { limit, fields: PRODUCT_FIELDS, ...statusParam };
     }
 
-    const res = await fetch(url, {
-      cache: 'no-store',
-      headers: { 'X-Shopify-Access-Token': token },
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    let data: { products?: ShopifyProductRaw[] };
+    let headers: Headers;
+    try {
+      ({ data, headers } = await shopifyRest<{ products?: ShopifyProductRaw[] }>(ctx, 'products.json', { query, maxRetries: 0 }));
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
+      }
+      throw err;
     }
 
-    const data = await res.json();
     const products: ShopifyProductRaw[] = data.products ?? [];
-
-    const linkHeader = res.headers.get('link') ?? '';
-    const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-    const nextPageInfo = nextMatch ? nextMatch[1] : null;
+    const nextPageInfo = parseNextPageInfo(headers);
 
     return NextResponse.json({ products: products.map(normalizeProduct), nextPageInfo, shop });
   },

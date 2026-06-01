@@ -49,19 +49,35 @@ The 9 failures cluster on one axis — **the agent under-escalates**: all three 
 
 **Goal:** the engine becomes module-agnostic; the support-specific bits compose onto it; the integration seam is finished and rate-safe; the model is tiered. Re-run Phase 0 evals after **each** item.
 
-### 1.1 — Model tiering: Sonnet on judgment/mutative paths *(M, medium risk)*
+### 1.1 — Model tiering: Sonnet on judgment/mutative paths *(M, medium risk)* [COMPLETED]
 Today `AI_MODEL` is one constant. Introduce a model-selection seam so the *decision-making* calls that can lead to mutations run on Sonnet, while reads/drafts/summaries/classification-tagging stay on Haiku.
 - Concretely: the **planner's re-plan call** (the one that decides whether to refund/cancel/edit) and the **`classifyHomePlan` auto-execute gate** → Sonnet; read-tool execution, `send_reply` drafting, composer-ask, gateway summaries → Haiku.
 - Keep it a single function (`pickModel(context)`) threaded through, mirroring the existing `AI_MODEL` discipline so it stays one place.
 - **Measure the delta against the 0.1 baseline** — this is exactly why Phase 0 comes first. If Sonnet doesn't move the score on mutative fixtures, don't pay for it.
 - Files: `lib/ai/index.ts`, `lib/agent/planner.ts`, `lib/agent/run.ts`, `plan-preview.ts`.
 
-### 1.2 — Finish the Shopify integration seam + make it rate-safe *(M, medium risk — top scale concern)*
+**Done (2026-06-01).** `pickModel(task)` added in `lib/ai/index.ts` (`HAIKU_MODEL`/`SONNET_MODEL`; `AI_MODEL` kept as a Haiku alias for non-agent calls). Threaded through the planner (`response1`/`response2` Haiku, **`response15` re-plan Sonnet**) and `run.ts` (mutative loop Sonnet, read-only composer-ask Haiku). `recordSpend` and the per-call logs now carry the actual model. `plan-preview.ts` needed no model change — `classifyHomePlan` is a pure gate with no LLM call, and the auto-execute path runs approved tool calls with no further model decision, so its "→ Sonnet" requirement is satisfied transitively by the Sonnet re-plan that produced the plan.
+
+**Eval delta (one judge-off run vs the committed baseline): aggregate 30/39 → 32/39.** Gains: `escalate` 0/3 → 2/3, `memory` 2/3 → 3/3. Regression: `order-status` 5/5 → 4/5 (`order-status-unresolved-customer` now *over*-escalates — searches then escalates where a reply-for-more-info was expected). `refund`/`tier`/`sample-reply` unchanged. The aggregate regression gate stays green (score rose); the `order-status` category drop is a non-blocking WARN. The escalate gains come from fixtures that read first (decision lands in the Sonnet `response15`); the spend is justified per the "must move the score" rule.
+
+**Left alone (deliberate, not yet done):**
+- **`response1` stays on Haiku.** So no-read judgment calls — notably `escalate-out-of-scope`, which decides without a lookup — still land on Haiku and under-escalate. Promoting `response1` to Sonnet would likely fix it but taxes *every* quick-reply (the dominant path); deferred pending a cost/score decision.
+- **`baseline.json` not re-committed.** A single LLM-nondeterministic run with a fresh `order-status` regression isn't a safe basis to move the gate. Re-run to confirm before `UPDATE_EVAL_BASELINE=1`.
+- **`order-status-unresolved-customer` regression unaddressed.** Watch whether it's a genuine over-escalation tendency or run-to-run flap on the next eval pass.
+- **Prompt-cache eval test repaired as a side effect.** Tiering split the planner's two same-model calls, which the old test relied on; replaced with a standalone single-model `probeSystemPromptCacheRead` in `runner.ts`. (Aside: `claude-haiku-4-5` doesn't cache a ~4k-token prefix but does at ~8k.)
+
+### 1.2 — Finish the Shopify integration seam + make it rate-safe *(M, medium risk — top scale concern)* [COMPLETED]
 - Route the **7 dashboard CRUD routes** + `context.ts` + `api/internal.ts` through `shopify/client.ts`. Kill the inline `admin/api/${SHOPIFY_API_VERSION}` literals and raw `fetch`.
 - Add the missing piece the client *doesn't* have: **cross-call throttling**. Per-call single-retry doesn't stop concurrent auto-pilot runs from stampeding the 2 req/s leaky bucket. Add a per-shop concurrency limiter / token-bucket in the client (or a small queue) so parallel runs back off cooperatively, not just individually on 429.
 - Files: `shopify/client.ts`, `context.ts`, `api/internal.ts`, `app/api/shopify/*`, `app/api/orders/route.ts`, `app/api/integrations/shopify/*`.
 
-### 1.3 — De-string-key the control flow *(S, medium risk)*
+**Done (2026-06-01).** Every raw Shopify `fetch` and inline `admin/api/${SHOPIFY_API_VERSION}` literal outside `client.ts` is gone (verified by grep). Migrated: `orders`, `shopify/products`, `shopify/customers` (GET list + POST), `shopify/customers/search`, `shopify/customer` (GET + PATCH + product-image enrichment), `integrations/shopify/kb-sync`, `integrations/shopify/callback` (`shop.json` + webhook registration; the OAuth `access_token` exchange stays raw — it's not an Admin-API call), plus `context.ts` and `api/internal.ts`.
+- **Cross-call throttling added.** `client.ts` now holds a per-shop in-process **token bucket** (40 burst, 2 req/s refill, FIFO queue) acquired before every request, so concurrent agent/autopilot runs against one shop pace their request *starts* under the leak rate cooperatively — not just each backing off its own 429. Bucket is per process/instance (serverless: shared across concurrent runs on the same warm instance, which is the stampede case the plan named).
+- **Seam mechanics.** Split the core into `shopifyRest<T>()` (returns `{ data, headers }`) with `shopifyRestJson<T>()` as a thin wrapper, so the three list routes that need Shopify's cursor `Link` header keep working via a new exported `parseNextPageInfo(headers)`. Added `cache: "no-store"` to the client (correct for a live-data Admin API; the raw routes set it, the agent tools never did — now uniform).
+- **Behavior preserved deliberately.** Migrated call sites pass `maxRetries: 0` to keep their prior no-retry semantics: the GET browse routes never retried (and their tests assert single-call 429/503 passthrough), and skipping retry on the POST/PUT mutations avoids a new double-write/double-register risk the client's default single-retry would have introduced. The token bucket is the universal rate-safety addition; per-call retry stays opt-in for the original agent-tool callers. Route error responses still surface as `{ error: 'shopify_error', details }` with the upstream status (mapped from `ShopifyRequestError.payload`/`.status`).
+- **Tests:** affected route + agent-tool + context suites green; no test rewrites needed beyond aligning one callback assertion (the soft-fail webhook log now records `err.payload` instead of the whole error). `tsc` adds zero new errors.
+
+### 1.3 — De-string-key the control flow *(S, medium risk)* [COMPLETED]
 Brittle today: `executor.ts` infers status via `result.toLowerCase().startsWith("error:")`; the planner derives warnings via regexes on lowercased tool output. A wording change silently breaks spend accounting / warning suppression.
 - Have tool implementations return a structured result (`{ status, message, data }`) and let the executor/planner branch on `status`, keeping the string only for the model-facing text.
 - Files: `tools/executor.ts`, `tools/thread.ts`, `shopify/*.ts`, `planner.ts`.

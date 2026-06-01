@@ -1,5 +1,6 @@
 import type { CreateRefundInput } from "../tools";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
+import { toolError, toolOk, type ToolResult } from "../tools/result";
 import type {
   ShopifyCalculatedRefundLineItem,
   ShopifyOrder,
@@ -24,8 +25,7 @@ interface RefundCreateResponse {
   };
 }
 
-export interface RefundResult {
-  message: string;
+export interface RefundResult extends ToolResult {
   refundedCents: number | null;
 }
 
@@ -119,12 +119,12 @@ export async function createRefund(
     });
 
     if (!orderData.order) {
-      return { message: `Error: could not create refund - order ${orderId} was not returned by Shopify.`, refundedCents: null };
+      return { ...toolError(`Error: could not create refund - order ${orderId} was not returned by Shopify.`), refundedCents: null };
     }
 
     const refundLineItems = buildRefundLineItems(orderData.order);
     if (refundLineItems.length === 0 && !amount) {
-      return { message: "Error: could not create refund - no refundable line items were found on this order.", refundedCents: null };
+      return { ...toolError("Error: could not create refund - no refundable line items were found on this order."), refundedCents: null };
     }
 
     const calculation = await calculateRefund(ctx, orderId, refundLineItems);
@@ -134,7 +134,7 @@ export async function createRefund(
       : buildFullRefundTransactions(calculation);
 
     if (transactions.length === 0) {
-      return { message: "Error: could not create refund - Shopify did not return refundable transactions.", refundedCents: null };
+      return { ...toolError("Error: could not create refund - Shopify did not return refundable transactions."), refundedCents: null };
     }
 
     const data = await shopifyRestJson<RefundCreateResponse>(ctx, `orders/${orderId}/refunds.json`, {
@@ -156,17 +156,17 @@ export async function createRefund(
     });
 
     if (!data.refund) {
-      return { message: `Error: failed to create refund - Shopify did not return a refund for order ${orderId}.`, refundedCents: null };
+      return { ...toolError(`Error: failed to create refund - Shopify did not return a refund for order ${orderId}.`), refundedCents: null };
     }
 
     const totalRefunded = (data.refund.transactions ?? [])
       .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
 
     return {
-      message: `Refund of $${centsToMoney(totalRefunded)} issued successfully for order ${orderId}.${note ? ` Reason: ${note}.` : ""}`,
+      ...toolOk(`Refund of $${centsToMoney(totalRefunded)} issued successfully for order ${orderId}.${note ? ` Reason: ${note}.` : ""}`),
       refundedCents: totalRefunded,
     };
   } catch (err) {
-    return { message: formatShopifyToolError("failed to create refund", err), refundedCents: null };
+    return { ...toolError(formatShopifyToolError("failed to create refund", err)), refundedCents: null };
   }
 }

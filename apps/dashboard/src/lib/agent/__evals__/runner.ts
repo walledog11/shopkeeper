@@ -81,8 +81,9 @@ export async function probeSystemPromptCacheRead(): Promise<CacheProbeUsage> {
     });
     return readModelUsage(response);
   };
-  const first = await callOnce();
-  const second = await callOnce();
+  const [first, second] = await callOnce().then((first) =>
+    callOnce().then((second) => [first, second] as const)
+  );
   return {
     firstCreate: first.cacheCreationInputTokens,
     firstRead: first.cacheReadInputTokens,
@@ -91,7 +92,7 @@ export async function probeSystemPromptCacheRead(): Promise<CacheProbeUsage> {
   };
 }
 
-export function categoryOf(id: string): string {
+function categoryOf(id: string): string {
   return CATEGORY_PREFIXES.find((p) => id === p || id.startsWith(`${p}-`)) ?? id;
 }
 
@@ -349,6 +350,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   let spy: { mockRestore: () => void } | null = null;
   let executorSpy: { mockRestore: () => void } | null = null;
   let executorStatusSpy: { mockRestore: () => void } | null = null;
+  let executorStructuredSpy: { mockRestore: () => void } | null = null;
 
   try {
     const org = await createTestOrg();
@@ -421,6 +423,20 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
             };
           }
           return originalExecuteWithStatus(name, args, execCtx, settings);
+        });
+
+      const originalExecuteStructured = executor.executeToolStructured;
+      executorStructuredSpy = vi
+        .spyOn(executor, "executeToolStructured")
+        .mockImplementation(async (name, args, execCtx, settings) => {
+          if (simulatedResults.has(name)) {
+            const message = simulatedResults.get(name) as string;
+            return {
+              status: message.toLowerCase().startsWith("error:") ? "error" : "ok",
+              message,
+            };
+          }
+          return originalExecuteStructured(name, args, execCtx, settings);
         });
     }
 
@@ -542,6 +558,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   } catch (err) {
     failures.push(`runner threw: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
+    executorStructuredSpy?.mockRestore();
     executorStatusSpy?.mockRestore();
     executorSpy?.mockRestore();
     spy?.mockRestore();

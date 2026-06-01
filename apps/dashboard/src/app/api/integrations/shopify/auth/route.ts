@@ -6,6 +6,14 @@ import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 
+const SHOPIFY_OAUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 600,
+  path: '/',
+};
+
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Shopify');
 }
@@ -50,21 +58,13 @@ export async function POST(request: Request) {
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('state', state);
 
-  const cookieOpts = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    maxAge: 600,
-    path: '/',
-  };
-
   const cookieStore = await cookies();
-  cookieStore.set('shopify_oauth_state', state, cookieOpts);
-  cookieStore.set('shopify_oauth_org', orgId, cookieOpts);
-  cookieStore.set('shopify_oauth_user', userId, cookieOpts);
-  cookieStore.set('shopify_oauth_shop', shopDomain, cookieOpts);
+  cookieStore.set('shopify_oauth_state', state, SHOPIFY_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('shopify_oauth_org', orgId, SHOPIFY_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('shopify_oauth_user', userId, SHOPIFY_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('shopify_oauth_shop', shopDomain, SHOPIFY_OAUTH_COOKIE_OPTIONS);
   if (returnTo) {
-    cookieStore.set('shopify_oauth_return', returnTo, cookieOpts);
+    cookieStore.set('shopify_oauth_return', returnTo, SHOPIFY_OAUTH_COOKIE_OPTIONS);
   }
   return NextResponse.redirect(authUrl.toString());
 }

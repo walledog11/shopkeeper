@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { parseNextPageInfo, shopifyRest, ShopifyRequestError } from '@/lib/agent/shopify';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,7 +23,8 @@ export const GET = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    const { shop, token } = { shop: integration.externalAccountId, token: integration.accessToken };
+    const shop = integration.externalAccountId;
+    const ctx = { shop, accessToken: integration.accessToken };
     const { searchParams } = new URL(request.url);
 
     const fulfillmentStatus = searchParams.get('fulfillment_status') ?? 'any';
@@ -32,41 +33,37 @@ export const GET = withOrgRoute(
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '25', 10), 50);
 
-    // Build Shopify URL , cursor pagination (page_info) and search are mutually exclusive
-    let url: string;
-    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json`;
+    // Build the query , cursor pagination (page_info) and search are mutually exclusive
+    let query: Record<string, string | number>;
     if (pageInfo) {
-      url = `${base}?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${ORDER_FIELDS}`;
+      query = { page_info: pageInfo, limit, fields: ORDER_FIELDS };
     } else if (q) {
-      if (q.includes('@')) {
-        url = `${base}?status=any&limit=${limit}&fields=${ORDER_FIELDS}&email=${encodeURIComponent(q)}`;
-      } else {
-        const orderName = q.startsWith('#') ? q : `#${q}`;
-        url = `${base}?status=any&limit=${limit}&fields=${ORDER_FIELDS}&name=${encodeURIComponent(orderName)}`;
-      }
+      query = q.includes('@')
+        ? { status: 'any', limit, fields: ORDER_FIELDS, email: q }
+        : { status: 'any', limit, fields: ORDER_FIELDS, name: q.startsWith('#') ? q : `#${q}` };
     } else {
-      const fsParam = fulfillmentStatus !== 'any' ? `&fulfillment_status=${fulfillmentStatus}` : '';
-      const finParam = financialStatus !== 'any' ? `&financial_status=${financialStatus}` : '';
-      url = `${base}?status=any&limit=${limit}&fields=${ORDER_FIELDS}${fsParam}${finParam}`;
+      query = {
+        status: 'any',
+        limit,
+        fields: ORDER_FIELDS,
+        ...(fulfillmentStatus !== 'any' ? { fulfillment_status: fulfillmentStatus } : {}),
+        ...(financialStatus !== 'any' ? { financial_status: financialStatus } : {}),
+      };
     }
 
-    const res = await fetch(url, {
-      cache: 'no-store',
-      headers: { 'X-Shopify-Access-Token': token },
-    });
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    let data: { orders?: ShopifyOrderRaw[] };
+    let headers: Headers;
+    try {
+      ({ data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(ctx, 'orders.json', { query, maxRetries: 0 }));
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
+      }
+      throw err;
     }
 
-    const data = await res.json();
     const orders: ShopifyOrderRaw[] = data.orders ?? [];
-
-    // Extract next page cursor from Link header
-    const linkHeader = res.headers.get('link') ?? '';
-    const nextMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-    const nextPageInfo = nextMatch ? nextMatch[1] : null;
+    const nextPageInfo = parseNextPageInfo(headers);
 
     // Normalize to the shape the client needs
     const normalized = orders.map(normalizeOrder);

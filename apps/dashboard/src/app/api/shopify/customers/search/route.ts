@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
 
 export const GET = withOrgRoute(
   { context: 'Shopify Customer Search', errorMessage: 'server_error' },
@@ -22,18 +22,20 @@ export const GET = withOrgRoute(
       throw new NotFoundError('no_integration');
     }
 
-    const shop = integration.externalAccountId;
-    const token = integration.accessToken;
+    const ctx = { shop: integration.externalAccountId, accessToken: integration.accessToken };
 
-    const res = await fetch(
-      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
-      { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
-    );
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      return NextResponse.json({ error: 'shopify_error', details: errData }, { status: res.status });
+    let data: { customers?: unknown[] };
+    try {
+      data = await shopifyRestJson<{ customers?: unknown[] }>(ctx, 'customers/search.json', {
+        query: { query: q, limit: 8, fields: 'id,first_name,last_name,email' },
+        maxRetries: 0,
+      });
+    } catch (err) {
+      if (err instanceof ShopifyRequestError) {
+        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
+      }
+      throw err;
     }
-    const data = await res.json();
 
     return NextResponse.json({ customers: data.customers ?? [] });
   },

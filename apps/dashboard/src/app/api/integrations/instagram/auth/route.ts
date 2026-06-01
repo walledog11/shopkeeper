@@ -5,6 +5,14 @@ import crypto from 'crypto';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 
+const INSTAGRAM_OAUTH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 600,
+  path: '/',
+};
+
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Instagram');
 }
@@ -30,19 +38,12 @@ export async function POST(request: Request) {
   const returnTo = safeReturnTo(searchParams.get('returnTo'));
 
   const state = crypto.randomBytes(16).toString('hex');
-  const cookieOpts = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
-    maxAge: 600,
-    path: '/',
-  };
   const cookieStore = await cookies();
-  cookieStore.set('ig_oauth_state', state, cookieOpts);
-  cookieStore.set('ig_oauth_org', orgId, cookieOpts);
-  cookieStore.set('ig_oauth_user', userId, cookieOpts);
+  cookieStore.set('ig_oauth_state', state, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('ig_oauth_org', orgId, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
+  cookieStore.set('ig_oauth_user', userId, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
   if (returnTo) {
-    cookieStore.set('ig_oauth_return', returnTo, cookieOpts);
+    cookieStore.set('ig_oauth_return', returnTo, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
   }
 
   const redirectUri = `${appUrl}/api/integrations/instagram/callback`;

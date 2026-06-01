@@ -53,40 +53,50 @@ async function executePlaybook(
   threadId: string,
   actions: PlaybookAction[]
 ): Promise<void> {
-  for (const action of actions) {
-    try {
-      if (action.type === "apply_tag") {
-        await db.thread.update({ where: { id: threadId }, data: { tag: action.tag ?? null } });
-      } else if (action.type === "close_ticket") {
-        const updated = await db.thread.update({
-          where: { id: threadId },
-          data: { status: "closed", cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
-          select: { updatedAt: true },
-        });
-        await enqueueCustomerMemoryForClosedThreads({
-          organizationId: orgId,
-          threads: [{ threadId, closedAt: updated.updatedAt }],
-        });
-      } else if (action.type === "add_note") {
-        if (action.note) {
-          await createMessage({ threadId, senderType: SenderType.note, contentText: action.note });
-        }
-      } else if (action.type === "send_reply") {
-        if (!action.message) continue;
+  return executePlaybookAction(actions, 0, orgId, threadId);
+}
 
-        const thread = await db.thread.findUnique({
-          where: { id: threadId },
-          include: { customer: true },
-        });
-        if (!thread) continue;
+async function executePlaybookAction(
+  actions: PlaybookAction[],
+  index: number,
+  orgId: string,
+  threadId: string
+): Promise<void> {
+  if (index >= actions.length) return;
 
-        const org = await db.organization.findUnique({ where: { id: orgId } });
-        if (!org) continue;
-
-        await dispatchMessage(thread, org, action.message);
+  const action = actions[index];
+  try {
+    if (action.type === "apply_tag") {
+      await db.thread.update({ where: { id: threadId }, data: { tag: action.tag ?? null } });
+    } else if (action.type === "close_ticket") {
+      const updated = await db.thread.update({
+        where: { id: threadId },
+        data: { status: "closed", cachedPlan: Prisma.DbNull, cachedPlanMessageId: null },
+        select: { updatedAt: true },
+      });
+      await enqueueCustomerMemoryForClosedThreads({
+        organizationId: orgId,
+        threads: [{ threadId, closedAt: updated.updatedAt }],
+      });
+    } else if (action.type === "add_note") {
+      if (action.note) {
+        await createMessage({ threadId, senderType: SenderType.note, contentText: action.note });
       }
-    } catch (error) {
-      logger.error({ err: error, action }, "[playbook-runner] Action failed");
+    } else if (action.type === "send_reply" && action.message) {
+      const thread = await db.thread.findUnique({
+        where: { id: threadId },
+        include: { customer: true },
+      });
+      if (thread) {
+        const org = await db.organization.findUnique({ where: { id: orgId } });
+        if (org) {
+          await dispatchMessage(thread, org, action.message);
+        }
+      }
     }
+  } catch (error) {
+    logger.error({ err: error, action }, "[playbook-runner] Action failed");
   }
+
+  return executePlaybookAction(actions, index + 1, orgId, threadId);
 }

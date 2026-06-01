@@ -88,7 +88,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
 }
 
 beforeEach(async () => {
-  mockSendReply.mockResolvedValue('Reply sent to customer via email.');
+  mockSendReply.mockResolvedValue({ status: 'ok', message: 'Reply sent to customer via email.' });
   org = await createTestOrg();
   const customer = await createTestCustomer(org.id, 'jane@test.com', { name: 'Jane Test' });
   customerId = customer.id;

@@ -11,7 +11,6 @@ export {
   getEmailProviderLabel,
   getEmailReauthorizePath,
   isEmailAuthReauthorizationRequired,
-  isOAuthEmailProvider,
 } from './providers';
 
 interface IntegrationLike {

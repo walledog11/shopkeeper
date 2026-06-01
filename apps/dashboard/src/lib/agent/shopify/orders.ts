@@ -14,6 +14,7 @@ import {
   type ShopifyContext,
   type ShopifyGraphqlUserError,
 } from "./client";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
 import { formatAddressForMessage, serializeOrder } from "./serializers";
 import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types";
 import {
@@ -61,7 +62,7 @@ function orderFields(): string {
 export async function getShopifyOrders(
   input: GetShopifyOrdersInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const customerId = requireNumericId(input.customer_id, "customer_id");
     const data = await shopifyRestJson<{ orders?: ShopifyOrder[] }>(ctx, "orders.json", {
@@ -74,18 +75,18 @@ export async function getShopifyOrders(
     });
 
     const orders = data.orders ?? [];
-    if (orders.length === 0) return "No orders found for this customer.";
+    if (orders.length === 0) return toolNotFound("No orders found for this customer.");
 
-    return JSON.stringify(orders.map(serializeOrder));
+    return toolOk(JSON.stringify(orders.map(serializeOrder)));
   } catch (err) {
-    return formatShopifyToolError("could not fetch orders", err);
+    return toolError(formatShopifyToolError("could not fetch orders", err));
   }
 }
 
 export async function getOrderByName(
   input: GetOrderByNameInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const rawName = requireNonEmptyString(input.order_name, "order_name");
     const name = rawName.startsWith("#") ? rawName : `#${rawName}`;
@@ -99,18 +100,18 @@ export async function getOrderByName(
     });
 
     const orders = data.orders ?? [];
-    if (orders.length === 0) return `No order found with number ${name}.`;
+    if (orders.length === 0) return toolNotFound(`No order found with number ${name}.`);
 
-    return JSON.stringify(serializeOrder(orders[0]));
+    return toolOk(JSON.stringify(serializeOrder(orders[0])));
   } catch (err) {
-    return formatShopifyToolError("could not search orders", err);
+    return toolError(formatShopifyToolError("could not search orders", err));
   }
 }
 
 export async function updateShopifyOrderAddress(
   input: UpdateShopifyOrderAddressInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const customerId = requireNumericId(input.customer_id, "customer_id");
@@ -123,7 +124,7 @@ export async function updateShopifyOrderAddress(
 
     const addr = orderData.order?.shipping_address;
     if (!orderData.order || !addr) {
-      return `Error: order ${orderId} not found or shipping address was not returned after update.`;
+      return toolError(`Error: order ${orderId} not found or shipping address was not returned after update.`);
     }
 
     let customerSync = "Customer profile was not updated because no default address exists.";
@@ -150,16 +151,16 @@ export async function updateShopifyOrderAddress(
       customerSync = formatShopifyToolError("customer profile sync failed", syncErr).replace(/^Error: /, "");
     }
 
-    return `Order #${orderData.order.order_number ?? orderId} shipping address updated to: ${formatAddressForMessage(addr)}. ${customerSync}`;
+    return toolOk(`Order #${orderData.order.order_number ?? orderId} shipping address updated to: ${formatAddressForMessage(addr)}. ${customerSync}`);
   } catch (err) {
-    return formatShopifyToolError("failed to update order shipping address", err);
+    return toolError(formatShopifyToolError("failed to update order shipping address", err));
   }
 }
 
 export async function cancelOrder(
   input: CancelOrderInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const data = await shopifyRestJson<{ order?: ShopifyOrder }>(ctx, `orders/${orderId}/cancel.json`, {
@@ -172,12 +173,12 @@ export async function cancelOrder(
     });
 
     if (!data.order) {
-      return `Error: failed to cancel order - order ${orderId} was not returned by Shopify.`;
+      return toolError(`Error: failed to cancel order - order ${orderId} was not returned by Shopify.`);
     }
 
-    return `Order ${data.order.name ?? orderId} cancelled successfully. Reason: ${input.reason ?? "other"}. Items ${input.restock !== false ? "restocked" : "not restocked"}. Refund status: Shopify returned financial_status "${data.order.financial_status ?? "unknown"}".`;
+    return toolOk(`Order ${data.order.name ?? orderId} cancelled successfully. Reason: ${input.reason ?? "other"}. Items ${input.restock !== false ? "restocked" : "not restocked"}. Refund status: Shopify returned financial_status "${data.order.financial_status ?? "unknown"}".`);
   } catch (err) {
-    return formatShopifyToolError("failed to cancel order", err);
+    return toolError(formatShopifyToolError("failed to cancel order", err));
   }
 }
 
@@ -185,7 +186,7 @@ export async function createShopifyOrder(
   input: CreateShopifyOrderInput,
   ctx: ShopifyContext,
   options: CreateShopifyOrderOptions = {}
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const email = requireEmail(input.email, "email");
     const shippingAddress = buildAddress({
@@ -241,15 +242,15 @@ export async function createShopifyOrder(
     });
 
     if (!data.order) {
-      return "Error: failed to create order - Shopify did not return an order.";
+      return toolError("Error: failed to create order - Shopify did not return an order.");
     }
 
     const orderName = data.order.name ?? `#${data.order.id}`;
     const total = data.order.total_price ? `$${data.order.total_price}` : "unknown total";
     const adminUrl = `https://${ctx.shop}/admin/orders/${data.order.id}`;
-    return `Done , order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`;
+    return toolOk(`Done , order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`);
   } catch (err) {
-    return formatShopifyToolError("failed to create order", err);
+    return toolError(formatShopifyToolError("failed to create order", err));
   }
 }
 
@@ -298,14 +299,14 @@ interface OrderEditMutationData {
 export async function editShopifyOrder(
   input: EditShopifyOrderInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const addVariantId = optionalString(input.variant_id);
     const removeVariantId = optionalString(input.remove_variant_id);
 
     if (!addVariantId && !removeVariantId) {
-      return "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).";
+      return toolError("Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).");
     }
 
     const productVariantIdPrefix = "gid://shopify/ProductVariant/";
@@ -330,12 +331,12 @@ export async function editShopifyOrder(
 
     const beginPayload = beginData.orderEditBegin;
     const beginErrors = formatUserErrors(beginPayload?.userErrors);
-    if (beginErrors) return `Error: could not begin order edit - ${beginErrors}`;
+    if (beginErrors) return toolError(`Error: could not begin order edit - ${beginErrors}`);
 
     const calculatedOrder = beginPayload?.calculatedOrder;
     const calculatedOrderId = calculatedOrder?.id;
     if (!calculatedOrderId) {
-      return "Error: failed to begin order edit - Shopify did not return a calculated order.";
+      return toolError("Error: failed to begin order edit - Shopify did not return a calculated order.");
     }
 
     let itemToRemove: CalculatedLineItemEdge | undefined;
@@ -349,11 +350,11 @@ export async function editShopifyOrder(
         const paginationNote = calculatedOrder.lineItems.pageInfo.hasNextPage
           ? " The order has more than 250 line items, so the target item may be outside the fetched page."
           : "";
-        return `Error: could not remove old item - variant ${removeVariantId} was not found on order ${orderId}.${paginationNote}`;
+        return toolError(`Error: could not remove old item - variant ${removeVariantId} was not found on order ${orderId}.${paginationNote}`);
       }
 
       if (matches.length > 1) {
-        return `Error: could not remove old item - variant ${removeVariantId} appears multiple times on order ${orderId}; manual review is required.`;
+        return toolError(`Error: could not remove old item - variant ${removeVariantId} appears multiple times on order ${orderId}; manual review is required.`);
       }
 
       itemToRemove = matches[0];
@@ -377,9 +378,9 @@ export async function editShopifyOrder(
 
       const addPayload = addData.orderEditAddVariant;
       const addErrors = formatUserErrors(addPayload?.userErrors);
-      if (addErrors) return `Error: could not add item to order - ${addErrors}`;
+      if (addErrors) return toolError(`Error: could not add item to order - ${addErrors}`);
       if (!addPayload?.calculatedOrder) {
-        return "Error: could not add item to order - Shopify did not return a calculated order.";
+        return toolError("Error: could not add item to order - Shopify did not return a calculated order.");
       }
     }
 
@@ -397,9 +398,9 @@ export async function editShopifyOrder(
 
       const setQtyPayload = setQtyData.orderEditSetQuantity;
       const setQtyErrors = formatUserErrors(setQtyPayload?.userErrors);
-      if (setQtyErrors) return `Error: could not remove old item - ${setQtyErrors}`;
+      if (setQtyErrors) return toolError(`Error: could not remove old item - ${setQtyErrors}`);
       if (!setQtyPayload?.calculatedOrder) {
-        return "Error: could not remove old item - Shopify did not return a calculated order.";
+        return toolError("Error: could not remove old item - Shopify did not return a calculated order.");
       }
     }
 
@@ -421,10 +422,10 @@ export async function editShopifyOrder(
 
     const commitPayload = commitData.orderEditCommit;
     const commitErrors = formatUserErrors(commitPayload?.userErrors);
-    if (commitErrors) return `Error: could not commit order edit - ${commitErrors}`;
+    if (commitErrors) return toolError(`Error: could not commit order edit - ${commitErrors}`);
 
     const order = commitPayload?.order;
-    if (!order) return "Error: could not commit order edit - Shopify did not return the updated order.";
+    if (!order) return toolError("Error: could not commit order edit - Shopify did not return the updated order.");
 
     const itemList = order.lineItems.edges.flatMap(({ node }) => {
         if (node.quantity <= 0) return [];
@@ -441,8 +442,8 @@ export async function editShopifyOrder(
         ? "removed item from"
         : "added item to";
 
-    return `Successfully ${action} order ${order.name ?? `#${orderId}`}. Current order items: ${itemList || "none"}.`;
+    return toolOk(`Successfully ${action} order ${order.name ?? `#${orderId}`}. Current order items: ${itemList || "none"}.`);
   } catch (err) {
-    return formatShopifyToolError("failed to edit order", err);
+    return toolError(formatShopifyToolError("failed to edit order", err));
   }
 }

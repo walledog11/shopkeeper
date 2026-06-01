@@ -1,5 +1,6 @@
 import type { GetOrderTrackingInput } from "../tools";
 import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
 import type { ShopifyFulfillment } from "./types";
 import { requireNumericId } from "./validation";
 
@@ -100,7 +101,7 @@ async function getUspsAccessToken(): Promise<string | null> {
 export async function getOrderTracking(
   input: GetOrderTrackingInput,
   ctx: ShopifyContext
-): Promise<string> {
+): Promise<ToolResult> {
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const data = await shopifyRestJson<{ fulfillments?: ShopifyFulfillment[] }>(
@@ -110,7 +111,7 @@ export async function getOrderTracking(
 
     const fulfillments = data.fulfillments ?? [];
     if (fulfillments.length === 0) {
-      return "This order has not been fulfilled yet - no tracking information is available.";
+      return toolNotFound("This order has not been fulfilled yet - no tracking information is available.");
     }
 
     const shipments: TrackingShipment[] = fulfillments.flatMap((fulfillment): TrackingShipment[] => {
@@ -142,27 +143,27 @@ export async function getOrderTracking(
     );
 
     if (!uspsShipment?.tracking_number) {
-      return JSON.stringify({
+      return toolOk(JSON.stringify({
         shipments,
         note: "Live tracking events are only available for USPS shipments. Use each carrier tracking URL for carrier updates.",
-      });
+      }));
     }
 
     let accessToken: string | null;
     try {
       accessToken = await getUspsAccessToken();
     } catch {
-      return JSON.stringify({
+      return toolOk(JSON.stringify({
         shipments,
         note: "Live tracking unavailable - USPS authentication failed.",
-      });
+      }));
     }
 
     if (!accessToken) {
-      return JSON.stringify({
+      return toolOk(JSON.stringify({
         shipments,
         note: "Live tracking unavailable - USPS API is not configured.",
-      });
+      }));
     }
 
     try {
@@ -176,7 +177,7 @@ export async function getOrderTracking(
         trackingEvents?: USPSEvent[];
       };
 
-      return JSON.stringify({
+      return toolOk(JSON.stringify({
         shipments,
         live_usps_tracking: {
           tracking_number: uspsShipment.tracking_number,
@@ -188,14 +189,14 @@ export async function getOrderTracking(
             location: [event.eventCity, event.eventState, event.eventZIP].filter(Boolean).join(", ") || null,
           })),
         },
-      });
+      }));
     } catch {
-      return JSON.stringify({
+      return toolOk(JSON.stringify({
         shipments,
         note: "Live tracking lookup failed - USPS data unavailable.",
-      });
+      }));
     }
   } catch (err) {
-    return formatShopifyToolError("could not fetch fulfillments", err);
+    return toolError(formatShopifyToolError("could not fetch fulfillments", err));
   }
 }
