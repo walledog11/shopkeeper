@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 export const GET = withOrgRoute(
   { context: 'Shopify Customer Search', errorMessage: 'server_error' },
@@ -25,7 +26,7 @@ export const GET = withOrgRoute(
     const token = integration.accessToken;
 
     const res = await fetch(
-      `https://${shop}/admin/api/2026-04/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
+      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=${encodeURIComponent(q)}&limit=8&fields=id,first_name,last_name,email`,
       { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
     );
     if (!res.ok) {

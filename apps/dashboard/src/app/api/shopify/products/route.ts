@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 export const dynamic = 'force-dynamic';
 
 const PRODUCT_FIELDS = 'id,title,status,vendor,product_type,tags,images,variants';
-const API_VERSION = '2026-04';
 
 export const GET = withOrgRoute(
   {
@@ -32,7 +32,7 @@ export const GET = withOrgRoute(
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = 25;
 
-    const base = `https://${shop}/admin/api/${API_VERSION}/products.json`;
+    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json`;
     const statusParam = status !== 'any' ? `&status=${status}` : '';
     let url: string;
 

@@ -116,7 +116,8 @@ describe("shopify tools", () => {
       amount: "25.00",
       currency: "USD",
     });
-    expect(result).toContain("Refund of $25.00 issued successfully");
+    expect(result.message).toContain("Refund of $25.00 issued successfully");
+    expect(result.refundedCents).toBe(2500);
   });
 
   it("fails order removal when the requested variant is not on the order", async () => {

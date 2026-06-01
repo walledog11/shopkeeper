@@ -82,14 +82,6 @@ async function enforceToolPolicy(name: string, args: unknown, orgId: string, set
   return null;
 }
 
-// The format here is coupled to the success string returned by createRefund in lib/agent/shopify/refunds.ts.
-function parseSuccessfulRefundCents(result: string): number | null {
-  const match = /^Refund of \$(\d+(?:\.\d{1,2})?) issued successfully/.exec(result);
-  if (!match) return null;
-  const cents = Math.round(Number(match[1]) * 100);
-  return Number.isFinite(cents) && cents > 0 ? cents : null;
-}
-
 async function runToolBody(
   name: string,
   args: unknown,
@@ -130,12 +122,11 @@ async function runToolBody(
 
     case "create_refund": {
       if (!ctx.shopify) return noShopify;
-      const result = await createRefund(cast<CreateRefundInput>(args), ctx.shopify);
-      const refundedCents = parseSuccessfulRefundCents(result);
-      if (refundedCents !== null) {
+      const { message, refundedCents } = await createRefund(cast<CreateRefundInput>(args), ctx.shopify);
+      if (refundedCents !== null && refundedCents > 0) {
         await incrementDailyRefundSpendCents(ctx.orgId, refundedCents);
       }
-      return result;
+      return message;
     }
 
     case "cancel_order":

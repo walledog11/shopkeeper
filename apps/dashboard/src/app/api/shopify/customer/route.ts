@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 import logger from '@/lib/server/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';
@@ -36,7 +37,7 @@ export const GET = withOrgRoute(
 
     if (customerId) {
       const res = await fetch(
-        `https://${shop}/admin/api/2026-04/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
+        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/${customerId}.json?fields=${CUSTOMER_FIELDS}`,
         { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
@@ -47,7 +48,7 @@ export const GET = withOrgRoute(
       customer = data.customer ?? null;
     } else {
       const res = await fetch(
-        `https://${shop}/admin/api/2026-04/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
+        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=email:${encodeURIComponent(email!)}&fields=${CUSTOMER_FIELDS}`,
         { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!res.ok) {
@@ -67,7 +68,7 @@ export const GET = withOrgRoute(
     let orders: ShopifyOrder[] = [];
     if (orderLimit > 0) {
       const ordersRes = await fetch(
-        `https://${shop}/admin/api/2026-04/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
+        `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json?customer_id=${customer.id}&status=any&limit=${orderLimit}&fields=id,name,created_at,fulfillment_status,total_price,currency,line_items`,
         { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
       );
       if (!ordersRes.ok) {
@@ -125,7 +126,7 @@ export const PATCH = withOrgRoute(
       }];
     }
 
-    const res = await fetch(`https://${shop}/admin/api/2026-04/customers/${customerId}.json`, {
+    const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers/${customerId}.json`, {
       cache: 'no-store',
       method: 'PUT',
       headers: {
@@ -232,7 +233,7 @@ async function addProductImagesToOrders(orders: ShopifyOrder[], shop: string, to
 
   try {
     const productsRes = await fetch(
-      `https://${shop}/admin/api/2026-04/products.json?ids=${productIds.join(',')}&fields=id,images`,
+      `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/products.json?ids=${productIds.join(',')}&fields=id,images`,
       { cache: 'no-store', headers: { 'X-Shopify-Access-Token': token } }
     );
 

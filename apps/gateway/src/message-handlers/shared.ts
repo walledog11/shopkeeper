@@ -12,7 +12,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { isSpendCapError } from '@clerk/db';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
-import { JOB, MODEL, STATUS } from '../constants.js';
+import { JOB, MODEL, STATUS, SHOPIFY_API_VERSION } from '../constants.js';
 import { enforceSpendCap, readUsageFromAnthropic, recordSpend } from '../llm-spend.js';
 
 const MAX_INPUT_LENGTH = 4000;
@@ -67,7 +67,7 @@ export async function lookupShopifyCustomerName(organizationId: string, email: s
 
   try {
     const res = await fetch(
-      `https://${integration.externalAccountId}/admin/api/2026-04/customers/search.json?query=email:${encodeURIComponent(email)}&limit=1&fields=first_name,last_name`,
+      `https://${integration.externalAccountId}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=email:${encodeURIComponent(email)}&limit=1&fields=first_name,last_name`,
       { headers: { 'X-Shopify-Access-Token': integration.accessToken } },
     );
     if (!res.ok) return null;

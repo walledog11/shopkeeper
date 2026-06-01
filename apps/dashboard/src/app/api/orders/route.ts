@@ -2,11 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 export const dynamic = 'force-dynamic';
 
 const ORDER_FIELDS = 'id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,customer,line_items';
-const API_VERSION = '2026-04';
 
 export const GET = withOrgRoute(
   {
@@ -34,7 +34,7 @@ export const GET = withOrgRoute(
 
     // Build Shopify URL , cursor pagination (page_info) and search are mutually exclusive
     let url: string;
-    const base = `https://${shop}/admin/api/${API_VERSION}/orders.json`;
+    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json`;
     if (pageInfo) {
       url = `${base}?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${ORDER_FIELDS}`;
     } else if (q) {

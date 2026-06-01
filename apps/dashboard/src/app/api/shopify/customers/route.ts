@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
-const API_VERSION = '2026-04';
 
 export const GET = withOrgRoute(
   {
@@ -29,7 +29,7 @@ export const GET = withOrgRoute(
     const limit = 25;
 
     let url: string;
-    const base = `https://${shop}/admin/api/${API_VERSION}`;
+    const base = `https://${shop}/admin/api/${SHOPIFY_API_VERSION}`;
 
     if (pageInfo) {
       url = `${base}/customers.json?page_info=${encodeURIComponent(pageInfo)}&limit=${limit}&fields=${CUSTOMER_LIST_FIELDS}`;
@@ -76,7 +76,7 @@ export const POST = withOrgRoute(
     const shop = integration.externalAccountId;
     const token = integration.accessToken;
 
-    const res = await fetch(`https://${shop}/admin/api/${API_VERSION}/customers.json`, {
+    const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/customers.json`, {
       cache: 'no-store',
       method: 'POST',
       headers: {

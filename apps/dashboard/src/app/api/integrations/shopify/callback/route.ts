@@ -11,6 +11,7 @@ import { timingSafeIncludes } from '@/lib/auth-utils';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Shopify connection');
@@ -113,7 +114,7 @@ export async function POST(request: Request) {
     // ---------------------------------------------------------------
     // Step 4: Fetch shop info for display name
     // ---------------------------------------------------------------
-    const shopRes = await fetch(`https://${shopDomain}/admin/api/2026-04/shop.json`, {
+    const shopRes = await fetch(`https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/shop.json`, {
       cache: 'no-store',
       headers: { 'X-Shopify-Access-Token': accessToken },
     });
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
       const webhookTopics = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
       await Promise.allSettled(
         webhookTopics.map((topic) =>
-          fetch(`https://${shopDomain}/admin/api/2026-04/webhooks.json`, {
+          fetch(`https://${shopDomain}/admin/api/${SHOPIFY_API_VERSION}/webhooks.json`, {
             cache: 'no-store',
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': accessToken },

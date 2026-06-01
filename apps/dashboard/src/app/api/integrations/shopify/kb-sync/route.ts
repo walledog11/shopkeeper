@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { SHOPIFY_API_VERSION } from '@/lib/agent/shopify';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
@@ -21,8 +22,8 @@ export const POST = withOrgRoute(
     const headers = { 'X-Shopify-Access-Token': accessToken };
 
     const [policiesRes, pagesRes] = await Promise.all([
-      fetch(`https://${shop}/admin/api/2026-04/policies.json`, { cache: 'no-store', headers }),
-      fetch(`https://${shop}/admin/api/2026-04/pages.json?published_status=published&limit=250`, { cache: 'no-store', headers }),
+      fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/policies.json`, { cache: 'no-store', headers }),
+      fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/pages.json?published_status=published&limit=250`, { cache: 'no-store', headers }),
     ]);
 
     if (!policiesRes.ok || !pagesRes.ok) {

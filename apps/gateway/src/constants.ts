@@ -36,6 +36,8 @@ export const JOB = {
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
 
+export const SHOPIFY_API_VERSION = '2026-04';
+
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {
   attempts: 3,
