@@ -26,6 +26,53 @@ export const TOOL_CATEGORIES: Record<string, ToolCategory> = {
   escalate_to_human:            'internal',
 }
 
+// ── Tool module groups (the "module" axis; capability is TOOL_CATEGORIES) ─────
+// Per-module tool subsets. The capability axis (read/action/communication/
+// internal) lives in TOOL_CATEGORIES; this is the orthogonal domain axis. Feed
+// any group (or `toolNamesForGroups(...)`) to selectAgentTools as an allow-list
+// to scope a run to one or more modules. Support uses the full set; a future
+// module declares its own subset here rather than hand-listing tool names.
+export type ToolGroup =
+  | 'knowledge'
+  | 'product'
+  | 'customer'
+  | 'order'
+  | 'thread'
+  | 'messaging'
+
+export const TOOL_GROUPS: Record<ToolGroup, readonly string[]> = {
+  knowledge: ['search_kb'],
+  product:   ['search_shopify_products'],
+  customer: [
+    'search_shopify_customers',
+    'get_shopify_customer',
+    'update_shopify_customer_info',
+    'add_shopify_customer_note',
+  ],
+  order: [
+    'get_shopify_orders',
+    'get_order_by_name',
+    'get_order_tracking',
+    'update_shopify_order_address',
+    'create_refund',
+    'cancel_order',
+    'create_shopify_order',
+    'edit_shopify_order',
+  ],
+  thread: [
+    'add_internal_note',
+    'update_thread_status',
+    'update_thread_tag',
+    'escalate_to_human',
+  ],
+  messaging: ['send_reply', 'send_email'],
+}
+
+// Flatten one or more module groups into an allow-list for selectAgentTools.
+export function toolNamesForGroups(...groups: ToolGroup[]): string[] {
+  return groups.flatMap((g) => [...TOOL_GROUPS[g]])
+}
+
 // ── Human-readable labels for executed tool calls (past tense) ───────────────
 export const TOOL_LABELS: Record<string, string> = {
   search_kb:                    'Searched knowledge base',

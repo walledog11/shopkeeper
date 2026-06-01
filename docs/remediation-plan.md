@@ -90,9 +90,11 @@ Split `AgentContext` into a base (`org`, `settings`, `memory`, `channel`, `tools
 `prompt.ts` already has helpers; add the structural split: a shared skeleton (identity, autonomy, guardrails, voice, memory) + a **support instruction block** injected as a module. This is the change most likely to move eval scores — do it last in Phase 1, isolated, and diff the baseline before/after.
 - Files: `prompt.ts`.
 
-### 1.6 — Tool registry grouping *(S, low risk)*
+### 1.6 — Tool registry grouping *(S, low risk)* [COMPLETED]
 Group the 20 tools by capability/module and formalize per-module subsets through the existing `selectAgentTools` allow-list. The seam exists; this is organization, not new machinery.
 - Files: `tools/registry.ts`.
+
+**Done (2026-06-01).** Added the **module axis** to `registry.ts`, orthogonal to the existing capability axis (`TOOL_CATEGORIES` = read/action/communication/internal). New `ToolGroup` type + `TOOL_GROUPS` record partitions all 20 tools into six domain modules — `knowledge` (1), `product` (1), `customer` (4), `order` (8), `thread` (4), `messaging` (2) — and a one-line `toolNamesForGroups(...groups)` flattener so a module subset feeds straight into the existing `selectAgentTools(settings, allowList)` arg with no new selection machinery. No production behavior change: `AGENT_TOOLS` order, `TOOL_CATEGORIES`, and `intent.ts`'s curated cross-module allow-lists are untouched (the model-facing tool set is byte-identical), so no eval re-run needed for this item. A unit test in `prompting.unit.test.ts` asserts `TOOL_GROUPS` partitions `AGENT_TOOLS` exactly (no missing/duplicate/orphan tools), so adding a tool without grouping it now fails CI. Unit suite green (14/14); `tsc` clean.
 
 **Exit criteria:** eval baseline ≥ pre-Phase-1 score; zero raw Shopify `fetch` outside `client.ts`; Shopify calls throttle under concurrency; tool results structured; support context composes on a base; prompt split with no score regression.
 

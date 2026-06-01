@@ -3,7 +3,7 @@ import type { CustomerMemory } from '@clerk/db';
 import type { AgentContext } from './runner';
 import { selectToolNamesForInstruction } from './runner';
 import { buildComposerAskPrompt, buildSystemPrompt } from './prompt';
-import { AGENT_TOOLS } from './tools';
+import { AGENT_TOOLS, TOOL_GROUPS, toolNamesForGroups } from './tools';
 
 function makeMemory(overrides: Partial<CustomerMemory> = {}): CustomerMemory {
   return {
@@ -292,5 +292,23 @@ describe('AGENT_TOOLS', () => {
 
     expect(getTracking?.description).toMatch(/fulfilled or partially fulfilled/i);
     expect(getTracking?.description).toMatch(/unfulfilled orders/i);
+  });
+});
+
+describe('TOOL_GROUPS', () => {
+  it('partitions every agent tool into exactly one module group', () => {
+    const grouped = Object.values(TOOL_GROUPS).flat();
+    const toolNames = AGENT_TOOLS.map((t) => t.name);
+
+    expect([...grouped].sort()).toEqual([...toolNames].sort());
+    expect(grouped.length).toBe(new Set(grouped).size);
+  });
+
+  it('flattens groups into an allow-list for selectAgentTools', () => {
+    expect(toolNamesForGroups('product', 'messaging')).toEqual([
+      'search_shopify_products',
+      'send_reply',
+      'send_email',
+    ]);
   });
 });
