@@ -27,9 +27,19 @@ export interface ShopifyOrderSummary {
   } | null;
 }
 
-export interface AgentContext {
+// Module-agnostic agent context: the org identity, customer memory, and the
+// conversation any module's agent loop operates on. Future modules compose
+// their own context on top of this base.
+export interface BaseAgentContext {
   orgId: string;
   orgName: string;
+  customerMemory: CustomerMemory | null;
+  recentMessages: { senderType: string; contentText: string | null }[];
+}
+
+// Support module context: the base plus the ticket, customer, Shopify linkage,
+// recent orders, and KB articles the support agent needs.
+export interface SupportContext extends BaseAgentContext {
   thread: {
     id: string;
     status: string;
@@ -43,14 +53,14 @@ export interface AgentContext {
     name: string | null;
     platformId: string;
   };
-  customerMemory: CustomerMemory | null;
-  recentMessages: { senderType: string; contentText: string | null }[];
   openThreadCount: number;
   shopify: { shop: string; accessToken: string } | null;
   recentOrders: ShopifyOrderSummary[];
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
 }
+
+export type AgentContext = SupportContext;
 
 export type AgentActionStatus = "success" | "error" | "policy_block" | "escalated";
 export type AgentActionMode = "human_approved" | "auto_executed" | "read_only";

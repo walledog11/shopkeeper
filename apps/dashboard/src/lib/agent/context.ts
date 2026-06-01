@@ -1,6 +1,6 @@
 import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client";
-import type { AgentContext, ShopifyOrderSummary } from "./types";
+import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./types";
 
 function readCustomerMemory(memory: unknown): CustomerMemory | null {
   if (isEmptyMemory(memory)) return null;
@@ -171,9 +171,18 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     : allKbArticles;
   const kbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
 
-  return {
+  const base: BaseAgentContext = {
     orgId,
     orgName: org?.name ?? "Support",
+    customerMemory: readCustomerMemory(thread.customer.memory),
+    recentMessages: [...thread.messages].reverse().map((m) => ({
+      senderType: m.senderType,
+      contentText: m.contentText,
+    })),
+  };
+
+  return {
+    ...base,
     thread: {
       id: thread.id,
       status: thread.status,
@@ -187,11 +196,6 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       name: dbName ?? shopifyCustomerName,
       platformId: thread.customer.platformId,
     },
-    customerMemory: readCustomerMemory(thread.customer.memory),
-    recentMessages: [...thread.messages].reverse().map((m) => ({
-      senderType: m.senderType,
-      contentText: m.contentText,
-    })),
     openThreadCount,
     shopify:
       shopifyIntegration?.accessToken
@@ -203,4 +207,4 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
   };
 }
 
-export type { AgentContext, ShopifyOrderSummary } from "./types";
+export type { AgentContext, BaseAgentContext, SupportContext, ShopifyOrderSummary } from "./types";

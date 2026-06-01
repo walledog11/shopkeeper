@@ -82,7 +82,7 @@ Brittle today: `executor.ts` infers status via `result.toLowerCase().startsWith(
 - Have tool implementations return a structured result (`{ status, message, data }`) and let the executor/planner branch on `status`, keeping the string only for the model-facing text.
 - Files: `tools/executor.ts`, `tools/thread.ts`, `shopify/*.ts`, `planner.ts`.
 
-### 1.4 — `BaseAgentContext` extraction *(M, medium risk)*
+### 1.4 — `BaseAgentContext` extraction *(M, medium risk)* [COMPLETE]
 Split `AgentContext` into a base (`org`, `settings`, `memory`, `channel`, `tools`) + a composed `SupportContext` (thread, customer, recentOrders, kbArticles, shopify linkage). `buildContext()` becomes "build base, then compose support." No behavior change — pure shape refactor that unblocks future modules.
 - Files: `lib/agent/types.ts`, `context.ts`, consumers in `planner.ts`/`run.ts`/`prompt.ts`.
 

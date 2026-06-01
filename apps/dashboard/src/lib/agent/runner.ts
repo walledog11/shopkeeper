@@ -7,6 +7,8 @@ export { hashInstructionForLog } from "./usage";
 export type {
   ActionEntry,
   AgentContext,
+  BaseAgentContext,
+  SupportContext,
   AgentResult,
   ShopifyOrderSummary,
 } from "./types";
