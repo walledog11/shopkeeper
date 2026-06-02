@@ -1,5 +1,6 @@
 import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client";
+import { isOperatorChannel } from "@/lib/messaging/thread-constants";
 import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./types";
 
 function readCustomerMemory(memory: unknown): CustomerMemory | null {
@@ -97,13 +98,13 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     }
   }
 
-  const isOperatorChannel = thread.channelType === "dashboard_agent" || thread.channelType === "sms_agent";
+  const isOperator = isOperatorChannel(thread.channelType);
 
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
     const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
 
-    const nameFetch = (!shopifyCustomerName && (isOperatorChannel || !dbName))
+    const nameFetch = (!shopifyCustomerName && (isOperator || !dbName))
       ? shopifyRestJson<{ customer?: { first_name?: string | null; last_name?: string | null } }>(
           ctx,
           `customers/${shopifyCustomerId}.json`,
@@ -202,7 +203,7 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
         : null,
     recentOrders,
-    linkedShopifyCustomerName: isOperatorChannel ? shopifyCustomerName : null,
+    linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
   };
 }

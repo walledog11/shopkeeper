@@ -51,8 +51,7 @@ export function hashInstruction(instruction: string): string {
 }
 
 function deriveStatus(entry: ActionEntry): AgentActionStatus {
-  if (entry.status) return entry.status;
-  return entry.result.toLowerCase().startsWith("error:") ? "error" : "success";
+  return entry.status ?? "success";
 }
 
 function deriveErrorDetail(entry: ActionEntry, status: AgentActionStatus): string | null {

@@ -7,6 +7,7 @@ import useSWRInfinite from "swr/infinite"
 import { ArrowRight, Eye, Loader2, MessageSquare } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { getChannelInfo } from "@/lib/messaging/channels"
+import { isOperatorChannel } from "@/lib/messaging/thread-constants"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
 import type { ActionLogEntry, ChannelType } from "@/types"
 
@@ -115,13 +116,11 @@ const MODE_LABELS: Record<NonNullable<ActionLogEntry["mode"]>, string> = {
   read_only: "Read only",
 }
 
-const OPERATOR_CHANNELS = new Set(["dashboard_agent", "sms_agent"])
-
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function ReviewCard({ entry }: { entry: ActionLogEntry }) {
   const channel = getChannelInfo(entry.channelType as ChannelType)
-  const isOperator = OPERATOR_CHANNELS.has(entry.channelType)
+  const isOperator = isOperatorChannel(entry.channelType)
   const href = isOperator ? "/dashboard/agent" : `/dashboard/tickets?thread=${entry.threadId}`
   const headline = isOperator ? (entry.instruction ?? "Agent session") : entry.customerHandle
 

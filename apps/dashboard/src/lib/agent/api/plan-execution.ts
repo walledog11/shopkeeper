@@ -176,6 +176,6 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
 
 export function findFailedToolResult(result: AgentResult): { tool: string; result: string } | null {
   return result.actionsPerformed.find((action) => (
-    !action.result || action.result.toLowerCase().startsWith("error:")
+    action.status === "error" || action.status === "policy_block"
   )) ?? null;
 }

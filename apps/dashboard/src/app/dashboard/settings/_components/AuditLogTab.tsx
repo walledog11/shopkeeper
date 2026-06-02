@@ -7,6 +7,7 @@ import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X, Za
 import useSWRInfinite from "swr/infinite"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
 import { getChannelInfo } from "@/lib/messaging/channels"
+import { isOperatorChannel } from "@/lib/messaging/thread-constants"
 import { fetcher } from "@/lib/api/fetcher"
 import { formatDate, timeAgo } from "@/lib/format/date"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -27,8 +28,6 @@ interface Filters {
 }
 
 const EMPTY_FILTERS: Filters = { channels: [], tools: [], errorsOnly: false, from: "", to: "" }
-
-const OPERATOR_CHANNELS = new Set(["dashboard_agent", "sms_agent"])
 
 interface OptionGroup {
   label: string
@@ -105,7 +104,7 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
 
 function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
   const channel = getChannelInfo(entry.channelType as ChannelType)
-  const isOperator = OPERATOR_CHANNELS.has(entry.channelType)
+  const isOperator = isOperatorChannel(entry.channelType)
   const href = isOperator
     ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}`
     : `/dashboard/tickets?thread=${entry.threadId}`

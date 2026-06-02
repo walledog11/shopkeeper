@@ -55,7 +55,7 @@ function canExecuteBatchInParallel(toolNames: readonly string[]): boolean {
 function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEntry[]): boolean {
   if (toolName !== "update_thread_status") return false;
   return actionsPerformed.some((action) => (
-    action.tool === "send_reply" && action.result.toLowerCase().startsWith("error:")
+    action.tool === "send_reply" && action.status === "error"
   ));
 }
 
@@ -259,7 +259,7 @@ export async function runAgent(
     const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
     if (fastResult) {
       for (const action of fastResult.actionsPerformed) {
-        if (action.result.toLowerCase().startsWith("error:")) {
+        if (action.status === "error") {
           recordAgentFailureSafely("tool_result", action.tool, action.result);
         }
       }

@@ -108,7 +108,7 @@ describe("agent-actions writer", () => {
     expect(row.executedAt).toBeInstanceOf(Date);
   });
 
-  it("batches inserts and derives status, category, and errorDetail when entry fields are missing", async () => {
+  it("batches inserts, backfills category and errorDetail, and defaults a missing status", async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
@@ -125,6 +125,7 @@ describe("agent-actions writer", () => {
         result: "Error: refund amount exceeds policy cap.",
         input: { order_id: "gid://shopify/Order/2", amount: "999.00" },
         durationMs: 12,
+        status: "error",
       },
     ];
 

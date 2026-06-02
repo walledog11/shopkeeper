@@ -1,7 +1,7 @@
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 import { TOOL_CATEGORIES } from "./tools/registry";
-import { executeTool } from "./tools/executor";
+import { executeToolStructured } from "./tools/executor";
 import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./types";
 
@@ -19,19 +19,19 @@ async function runFastPathTool(
   actionsPerformed: ActionEntry[],
 ): Promise<string> {
   const startedAt = Date.now();
-  const result = await executeTool(tool, input, ctx, settings);
+  const { status, message } = await executeToolStructured(tool, input, ctx, settings);
   const durationMs = Date.now() - startedAt;
-  const isError = result.toLowerCase().startsWith("error:");
+  const isError = status === "error";
   actionsPerformed.push({
     tool,
-    result,
+    result: message,
     input,
     durationMs,
     status: isError ? "error" : "success",
     category: TOOL_CATEGORIES[tool],
-    ...(isError ? { errorDetail: result } : {}),
+    ...(isError ? { errorDetail: message } : {}),
   });
-  return result;
+  return message;
 }
 
 interface CustomerSearchResult {

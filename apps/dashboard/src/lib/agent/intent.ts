@@ -1,4 +1,7 @@
 import type { AgentContext } from "./types";
+import { isOperatorChannel } from "@/lib/messaging/thread-constants";
+
+export { isOperatorChannel };
 
 const ORDER_STATUS_PHRASES = [
   "status",
@@ -47,10 +50,6 @@ const ORDER_STATUS_ACTION_PHRASES = [
 
 export const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
-
-export function isOperatorChannel(channelType: string): boolean {
-  return channelType === "dashboard_agent" || channelType === "sms_agent";
-}
 
 function hasPhrase(text: string, phrases: readonly string[]): boolean {
   return phrases.some((phrase) => text.includes(phrase));

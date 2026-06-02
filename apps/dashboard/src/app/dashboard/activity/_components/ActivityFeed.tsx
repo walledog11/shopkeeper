@@ -8,6 +8,7 @@ import { ArrowRight, ChevronDown, ChevronRight, Eye, Loader2, ShieldCheck, X, Za
 import { fetcher } from "@/lib/api/fetcher"
 import { redactPii } from "@/lib/format/redact"
 import { getChannelInfo } from "@/lib/messaging/channels"
+import { isOperatorChannel } from "@/lib/messaging/thread-constants"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
 import type { ActionLogEntry, ChannelType, ToolCategory } from "@/types"
 
@@ -174,12 +175,10 @@ function SkeletonRow() {
   )
 }
 
-const OPERATOR_CHANNELS = new Set(["dashboard_agent", "sms_agent"])
-
 function EntryRow({ entry }: { entry: ActionLogEntry }) {
   const [expanded, setExpanded] = useState(false)
   const channel = getChannelInfo(entry.channelType as ChannelType)
-  const isOperator = OPERATOR_CHANNELS.has(entry.channelType)
+  const isOperator = isOperatorChannel(entry.channelType)
   const tagColor = entry.threadTag ? (TAG_COLORS[entry.threadTag] ?? TAG_COLORS["General"]) : null
   const visibleTools = entry.actions.flatMap(a => (TOOL_CATEGORIES[a.tool] ?? "internal") !== "read" ? [a.tool] : [])
   const uniqueTools = [...new Set(visibleTools)]

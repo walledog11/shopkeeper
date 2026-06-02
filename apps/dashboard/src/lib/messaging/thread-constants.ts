@@ -8,6 +8,17 @@ export const CHANNEL_TYPE = {
   DASHBOARD_AGENT: 'dashboard_agent',
 } as const;
 
+// Operator-facing channels (Concierge + Telegram). Single source of truth for
+// the operator-class predicate — do not re-spell `channelType === ...` for this.
+export const OPERATOR_CHANNEL_TYPES = new Set<string>([
+  CHANNEL_TYPE.DASHBOARD_AGENT,
+  CHANNEL_TYPE.SMS_AGENT,
+]);
+
+export function isOperatorChannel(channelType: string): boolean {
+  return OPERATOR_CHANNEL_TYPES.has(channelType);
+}
+
 export const THREAD_STATUS = {
   OPEN: 'open',
   PENDING: 'pending',

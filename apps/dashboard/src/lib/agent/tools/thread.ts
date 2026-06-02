@@ -1,5 +1,5 @@
 import { db, SenderType, createMessage } from "@clerk/db";
-import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@/lib/messaging/thread-constants";
+import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS, isOperatorChannel } from "@/lib/messaging/thread-constants";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
@@ -320,9 +320,7 @@ export async function updateThreadStatus(
     data: { status: input.status },
     select: { updatedAt: true, channelType: true },
   });
-  const isOperatorChannel = updated.channelType === CHANNEL_TYPE.SMS_AGENT
-    || updated.channelType === CHANNEL_TYPE.DASHBOARD_AGENT;
-  if (input.status === THREAD_STATUS.CLOSED && !isOperatorChannel) {
+  if (input.status === THREAD_STATUS.CLOSED && !isOperatorChannel(updated.channelType)) {
     await enqueueCustomerMemoryForClosedThreads({
       organizationId: ctx.orgId,
       threads: [{ threadId: ctx.threadId, closedAt: updated.updatedAt }],

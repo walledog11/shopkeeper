@@ -21,6 +21,7 @@ import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
 import { resolveClerkUserApprover } from "@/lib/agent/api/approver";
+import { isOperatorChannel } from "@/lib/messaging/thread-constants";
 import { formatApproverId } from "@/lib/agent/api/plan-execution";
 import { hashInstruction } from "@/lib/agent/api/agent-actions";
 import logger from "@/lib/server/logger";
@@ -52,9 +53,7 @@ export async function POST(request: Request) {
       ? await resolveClerkUserApprover(clerkUserId)
       : undefined;
 
-    const isOperatorThread =
-      resolvedThread.channelType === "sms_agent" || resolvedThread.channelType === "dashboard_agent";
-    const persistOperatorExchange = isOperatorThread && !approvedToolCalls?.length;
+    const persistOperatorExchange = isOperatorChannel(resolvedThread.channelType) && !approvedToolCalls?.length;
 
     const result = await executeAgentTurn({
       orgId: parsedOrgId,

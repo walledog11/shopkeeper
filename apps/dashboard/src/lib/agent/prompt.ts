@@ -1,5 +1,6 @@
 import type { OrgSettings, SampleReply } from "@/types";
 import { resolveAgentSettings } from "./settings";
+import { isOperatorChannel } from "@/lib/messaging/thread-constants";
 import type { AgentContext } from "./types";
 
 function pickSampleReplies(all: SampleReply[], threadTag: string | null, n: number): SampleReply[] {
@@ -187,7 +188,7 @@ const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When y
 
 export function buildSystemPrompt(ctx: AgentContext, settings?: Partial<OrgSettings>): string {
   const s = resolveAgentSettings(settings);
-  const isOperatorMode = ctx.thread.channelType === "dashboard_agent" || ctx.thread.channelType === "sms_agent";
+  const isOperatorMode = isOperatorChannel(ctx.thread.channelType);
 
   const shopifyNote = ctx.shopify
     ? `A Shopify integration is connected (shop: ${ctx.shopify.shop}).`
