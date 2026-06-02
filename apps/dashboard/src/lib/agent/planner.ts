@@ -9,7 +9,7 @@ import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeToolStructured } from "./tools/executor";
 import type { ToolStatus } from "./tools/result";
 import { buildMessageHistory } from "./message-history";
-import type { AgentContext } from "./types";
+import type { AgentContext, ShopifyOrderSummary } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 import { enforceSpendCap, recordSpend } from "./spend";
 import { resolveAgentSettings } from "./settings";
@@ -68,6 +68,27 @@ function describeTool(name: string, input: unknown): string {
     default:
       return name.replace(/_/g, " ");
   }
+}
+
+function normalizeOrderName(name: string): string {
+  return name.replace(/^#/, "").trim().toLowerCase();
+}
+
+// Whether the order a lookup tool was asked about is already in the planning
+// context. If so, a live not-found is fixture/timing noise, not a real "order
+// not found", and must not raise the warning that downgrades the auto-execute
+// classifier.
+function orderAlreadyInContext(block: Anthropic.ToolUseBlock, recentOrders: ShopifyOrderSummary[]): boolean {
+  if (recentOrders.length === 0) return false;
+  if (block.name === "get_order_by_name") {
+    const requested = (block.input as { order_name?: unknown }).order_name;
+    if (typeof requested !== "string" || !requested.trim()) return false;
+    const target = normalizeOrderName(requested);
+    return recentOrders.some(o => normalizeOrderName(o.name) === target);
+  }
+  // get_shopify_orders is a customer-wide fetch: if context already holds the
+  // customer's orders, the redundant live lookup failing is noise.
+  return true;
 }
 
 export async function planAgent(
@@ -186,7 +207,9 @@ export async function planAgent(
           warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
           hasShopifyCustomerWarning = true;
         } else if (block.name === "get_shopify_orders" || block.name === "get_order_by_name") {
-          warnings.push("No matching order found - confirm the order number with the customer before proceeding.");
+          if (!orderAlreadyInContext(block, ctx.recentOrders)) {
+            warnings.push("No matching order found - confirm the order number with the customer before proceeding.");
+          }
         } else if (block.name === "get_order_tracking") {
           warnings.push("No tracking information found - the order may not have been fulfilled yet.");
         } else if (block.name === "search_shopify_products") {

@@ -288,12 +288,12 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: "create_refund",
     description:
-      "Issue a full or partial refund on a Shopify order. If amount is omitted, issues a full refund of the order total.",
+      "Issue a refund on a Shopify order. Always pass an explicit amount (for a full refund, use the order's total from the orders context) so the refund can be validated against the workspace refund limit.",
     input_schema: {
       type: "object",
       properties: {
         order_id:  { type: "string", description: "Shopify order ID (numeric)." },
-        amount:    { type: "string", description: "Amount to refund in the store's currency (e.g. '19.99'). Omit for a full refund." },
+        amount:    { type: "string", description: "Amount to refund in the store's currency (e.g. '19.99'). For a full refund, use the order's total from context. Always provide this." },
         reason:    { type: "string", description: "Reason for the refund (e.g. 'Item not received', 'Wrong item sent')." },
       },
       required: ["order_id"],
