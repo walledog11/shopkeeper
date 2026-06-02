@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=clerk-dashboard",
+  "buildCommand": "npx prisma migrate deploy --schema=packages/db/prisma/schema.prisma && npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=clerk-dashboard",
   "outputDirectory": "apps/dashboard/.next",
   "installCommand": "npm install",
   "framework": "nextjs"
