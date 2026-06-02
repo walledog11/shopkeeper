@@ -81,7 +81,7 @@ export async function planAgent(
   const instructionHash = hashInstructionForLog(instruction);
   const operatorMode = isOperatorChannel(ctx.thread.channelType);
   const historyWindow = operatorMode ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
-  const baseMessages = buildMessageHistory(historyWindow, instruction);
+  const baseMessages = buildMessageHistory(historyWindow, instruction, { segregateUntrusted: !operatorMode });
   const systemPrompt = buildSystemPrompt(ctx, settings);
   const systemPromptBlocks = buildCachedSystemPrompt(systemPrompt);
   const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));

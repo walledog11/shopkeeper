@@ -3,6 +3,8 @@ import { db, SenderType, createMessage } from '@clerk/db';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
+import { captureVoiceEdit } from '@/lib/agent/voice-capture';
+import logger from '@/lib/server/logger';
 
 export const POST = withOrgRoute(
   {
@@ -53,6 +55,20 @@ export const POST = withOrgRoute(
           ...(thread.filterStatus === 'filtered' && { filterStatus: 'genuine' }),
         },
       });
+    }
+
+    // Brand-voice learning: if this reply diverges from the agent's drafted
+    // reply, record the edit for the synthesis loop. Never let it fail the send.
+    try {
+      await captureVoiceEdit({
+        organizationId: org.id,
+        threadId,
+        cachedPlan: thread.cachedPlan,
+        tag: thread.tag,
+        sentText: text,
+      });
+    } catch (err) {
+      logger.error({ err, threadId }, '[Messages POST] Failed to capture voice edit');
     }
 
     const message = await db.message.findFirst({

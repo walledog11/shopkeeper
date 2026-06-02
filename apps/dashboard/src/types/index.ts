@@ -20,6 +20,15 @@ export interface SampleReply {
   tag?: string;      // optional tag for matching against thread.tag
 }
 
+// Brand-voice update synthesized from operator edits, awaiting approval.
+// Stored on Organization.voiceProposal; mirrors @clerk/db's VoiceProposal.
+export interface VoiceProposal {
+  brief: string;
+  rationale: string;
+  basedOnCount: number;
+  createdAt: string;
+}
+
 export interface OrgSettings {
   // AI draft / summary
   aiContext: string;   // brand name / context fed into AI drafts

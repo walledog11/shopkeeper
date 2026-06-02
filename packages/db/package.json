@@ -23,7 +23,7 @@
     "postinstall": "prisma generate --schema=prisma/schema.prisma && tsc",
     "build": "tsc",
     "dev": "npm run db:generate && tsc --watch --preserveWatchOutput",
-    "lint": "cd ../.. && eslint packages/db/index.ts packages/db/test-helpers.ts packages/db/customer-memory.ts",
+    "lint": "cd ../.. && eslint packages/db/index.ts packages/db/test-helpers.ts packages/db/customer-memory.ts packages/db/voice.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

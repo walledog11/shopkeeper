@@ -55,6 +55,9 @@ model Organization {
   clerkOrgId String   @unique @map("clerk_org_id")
   name       String   @db.VarChar(255)
   settings   Json?    @default("{}") @map("settings") @db.JsonB
+  // Pending brand-voice update synthesized from operator edits, awaiting approval.
+  // Shape: { brief, rationale, basedOnCount, createdAt }. Cleared on approve/dismiss.
+  voiceProposal Json?  @map("voice_proposal") @db.JsonB
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -76,9 +79,30 @@ model Organization {
   feedbacks        Feedback[]
   playbooks        Playbook[]
   agentActions     AgentAction[]
+  voiceEdits       VoiceEdit[]
 
   @@index([clerkOrgId])
   @@map("organizations")
+}
+
+// Corpus for the brand-voice learning loop: each row is one case where the
+// operator sent a customer reply that meaningfully diverged from the agent's
+// drafted reply. A daily worker synthesizes these into a proposed brandVoice
+// update (Organization.voiceProposal), then marks the consumed rows.
+model VoiceEdit {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  threadId       String?   @map("thread_id") @db.Uuid
+  aiDraft        String    @map("ai_draft") @db.Text
+  finalText      String    @map("final_text") @db.Text
+  tag            String?   @db.VarChar(255)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, consumedAt, createdAt])
+  @@map("voice_edits")
 }
 
 // Stores a connected platform account for an organization.

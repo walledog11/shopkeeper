@@ -2,7 +2,7 @@
 
 import { useMemo, useReducer, useRef, useState } from "react"
 import { useSWRConfig } from "swr"
-import { Check, Loader2, Plus, Trash2 } from "lucide-react"
+import { Check, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
@@ -26,7 +26,7 @@ import {
 } from "./agent-tab-helpers"
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
 import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
-import type { OrgSettings } from "@/types"
+import type { OrgSettings, VoiceProposal } from "@/types"
 
 const SAMPLE_REPLY_CAP = 10
 const SAMPLE_REPLY_BODY_MAX = 300
@@ -35,6 +35,7 @@ interface Props {
   settings: OrgSettings
   rawSettings: Partial<OrgSettings>
   version: string
+  voiceProposal: VoiceProposal | null
 }
 
 function tierLabel(tier: AutonomyTier): string {
@@ -91,7 +92,7 @@ export default function AgentTab(props: Props) {
   return useAgentTabView(props)
 }
 
-function useAgentTabView({ settings, rawSettings, version }: Props) {
+function useAgentTabView({ settings, rawSettings, version, voiceProposal }: Props) {
   const { mutate } = useSWRConfig()
   const [state, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettings)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
@@ -108,6 +109,8 @@ function useAgentTabView({ settings, rawSettings, version }: Props) {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [staleVersion, setStaleVersion] = useState(false)
+  const [proposal, setProposal] = useState<VoiceProposal | null>(voiceProposal)
+  const [voiceBusy, setVoiceBusy] = useState<null | "approve" | "dismiss">(null)
   const [explicitOverridePaths, setExplicitOverridePaths] = useState<AutonomyOverridePath[]>(
     () => collectExplicitOverridePaths(rawSettings),
   )
@@ -243,6 +246,38 @@ function useAgentTabView({ settings, rawSettings, version }: Props) {
       setError('Failed to save. Please try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function resolveVoiceProposal(action: "approve" | "dismiss") {
+    if (!proposal || voiceBusy) return
+    setVoiceBusy(action)
+    try {
+      const res = await fetch('/api/agent/voice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      if (!res.ok) throw new Error('Failed')
+      if (action === 'approve') {
+        const body = await res.json().catch(() => ({})) as { settings?: Partial<OrgSettings>; version?: string }
+        if (body.version) currentVersionRef.current = body.version
+        if (body.settings) applyBaseline(body.settings)
+        void mutate(
+          '/api/org',
+          (current: { settings?: Partial<OrgSettings>; version?: string } | undefined) => ({
+            ...(current ?? {}),
+            ...(body.version ? { version: body.version } : {}),
+            ...(body.settings ? { settings: body.settings } : {}),
+          }),
+          { revalidate: false },
+        )
+      }
+      setProposal(null)
+    } catch {
+      setError('Could not update the voice suggestion. Please try again.')
+    } finally {
+      setVoiceBusy(null)
     }
   }
 
@@ -468,6 +503,49 @@ function useAgentTabView({ settings, rawSettings, version }: Props) {
             </span>
             <Input aria-label="Brand name" value={state.aiContext} onChange={e => dispatch({ type: 'set', patch: { aiContext: e.target.value } })} placeholder="e.g. Acme Store" className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25" />
           </div>
+          {proposal && (
+            <div className="rounded-md border border-violet-300/30 bg-violet-300/[0.06] p-3.5 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <div className="mt-0.5 size-6 shrink-0 rounded-md bg-violet-300/15 flex items-center justify-center">
+                  <Sparkles className="size-3.5 text-violet-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white/85">Suggested brand voice update</p>
+                  <p className="text-xs text-white/40 mt-0.5">
+                    Learned from {proposal.basedOnCount} {proposal.basedOnCount === 1 ? 'reply you edited' : 'replies you edited'}. Review before it takes effect.
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-white/80 leading-relaxed rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 whitespace-pre-wrap break-words">
+                {proposal.brief}
+              </p>
+              {proposal.rationale && (
+                <p className="text-xs text-white/45 leading-relaxed">
+                  <span className="font-semibold text-white/55">What changed: </span>{proposal.rationale}
+                </p>
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => resolveVoiceProposal('approve')}
+                  disabled={voiceBusy !== null}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md bg-violet-400 hover:bg-violet-300 disabled:opacity-50 text-black text-xs font-semibold transition-colors"
+                >
+                  {voiceBusy === 'approve' ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+                  Use this voice
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resolveVoiceProposal('dismiss')}
+                  disabled={voiceBusy !== null}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/[0.12] text-white/55 hover:text-white/80 hover:border-white/[0.22] disabled:opacity-50 text-xs font-semibold transition-colors"
+                >
+                  {voiceBusy === 'dismiss' ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
           <div className="space-y-1.5">
             <span className="block text-xs font-semibold text-white/60">
               Brand voice

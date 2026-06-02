@@ -10,7 +10,7 @@ import BillingTab from "./BillingTab"
 import AuditLogTab from "./AuditLogTab"
 import ConciergeSummary from "./ConciergeSummary"
 import { cn } from "@/lib/ui/cn"
-import type { OrgSettings } from "@/types"
+import type { OrgSettings, VoiceProposal } from "@/types"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,7 @@ interface Props {
   settings: OrgSettings
   rawSettings: Partial<OrgSettings>
   version: string
+  voiceProposal: VoiceProposal | null
 }
 
 const NAV_ITEMS = [
@@ -43,7 +44,7 @@ export default function SettingsPageClient(props: Props) {
   )
 }
 
-function SettingsPageContent({ orgName, settings, rawSettings, version }: Props) {
+function SettingsPageContent({ orgName, settings, rawSettings, version, voiceProposal }: Props) {
   const searchParams = useSearchParams()
   const { replace } = useRouter()
   const currentParams = new URLSearchParams(searchParams.toString())
@@ -128,7 +129,7 @@ function SettingsPageContent({ orgName, settings, rawSettings, version }: Props)
       <div className="flex-1 overflow-y-auto min-w-0">
         <div className="px-4 sm:px-8 py-6 sm:py-8 pb-20 max-w-3xl mx-auto w-full">
           <ConciergeSummary orgName={orgName} settings={settings} onJump={setTab} />
-          {activeTab === 'agent' && <AgentTab settings={settings} rawSettings={rawSettings} version={version} />}
+          {activeTab === 'agent' && <AgentTab settings={settings} rawSettings={rawSettings} version={version} voiceProposal={voiceProposal} />}
           {activeTab === 'workspace' && <WorkspaceTab orgName={orgName} version={version} />}
           {activeTab === 'billing' && <BillingTab />}
           {activeTab === 'audit' && <AuditLogTab />}

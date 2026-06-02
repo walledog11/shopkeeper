@@ -12,6 +12,7 @@ import {
   purgeFilteredThreads,
 } from './purge.js';
 import { checkGatewayQueueHealth } from './queue-health.js';
+import { runVoiceSynthesis } from './voice-synthesis.js';
 import type { OpsAlertCounterClient } from '../ops-alerts.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -240,6 +241,15 @@ export async function createMaintenanceWorkers(
   }, { connection: workerConn, ...workerOptions });
   registerWorkerFailure(digestWorker, 'Digest', 'whatsapp-digest');
 
+  const voiceSynthesisQueue = new Queue(QUEUE.VOICE_SYNTHESIS, { connection: producerConn });
+  await scheduleRepeatableJob(voiceSynthesisQueue, JOB.VOICE_SYNTHESIS, JOB.VOICE_SYNTHESIS_ID, ONE_DAY_MS);
+
+  const voiceSynthesisWorker = new Worker(QUEUE.VOICE_SYNTHESIS, async () => {
+    const result = await runVoiceSynthesis();
+    logger.info(result, '[VoiceSynthesis] Daily brand-voice synthesis complete');
+  }, { connection: workerConn, ...workerOptions });
+  registerWorkerFailure(voiceSynthesisWorker, 'VoiceSynthesis', 'voice-synthesis');
+
   const queueHealthQueue = new Queue(QUEUE.QUEUE_HEALTH, { connection: producerConn });
   const queueHealthInboundQueue = new Queue(QUEUE.INBOUND, { connection: producerConn });
   const queueHealthSummaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection: producerConn });
@@ -264,6 +274,7 @@ export async function createMaintenanceWorkers(
       archivalWorker,
       purgeWorker,
       digestWorker,
+      voiceSynthesisWorker,
       queueHealthWorker,
     ],
     queues: [
@@ -273,6 +284,7 @@ export async function createMaintenanceWorkers(
       archivalQueue,
       purgeQueue,
       digestQueue,
+      voiceSynthesisQueue,
       queueHealthQueue,
       queueHealthInboundQueue,
       queueHealthSummaryQueue,

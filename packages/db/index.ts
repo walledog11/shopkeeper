@@ -201,3 +201,13 @@ export type {
   CustomerMemoryInteraction,
   CustomerMemoryPolicyFlags,
 } from './customer-memory.js';
+export {
+  BRAND_VOICE_MAX_CHARS,
+  VOICE_RATIONALE_MAX_CHARS,
+  VOICE_SYNTHESIS_MIN_EDITS,
+  VOICE_SYNTHESIS_MAX_EDITS,
+  boundVoiceProposal,
+  isMeaningfulVoiceEdit,
+  parseVoiceProposal,
+} from './voice.js';
+export type { VoiceProposal } from './voice.js';

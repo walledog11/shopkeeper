@@ -44,16 +44,6 @@ export function getInternalApiSecret(): string {
   return secret;
 }
 
-const INJECTION_PATTERNS = [
-  /ignore (all |previous |prior )?(instructions?|prompts?|rules?|context)/i,
-  /system\s*:/i,
-  /assistant\s*:/i,
-  /<\/?system>/i,
-  /you are now/i,
-  /new instructions?:/i,
-  /disregard (everything|all)/i,
-];
-
 // Lazy init — dotenv runs in worker.ts before any job is processed
 let _anthropic: Anthropic | null = null;
 export const getAnthropic = () => (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
@@ -82,14 +72,14 @@ export async function lookupShopifyCustomerName(organizationId: string, email: s
   }
 }
 
+// Injection defense lives at the agent, not here: inbound text is wrapped in
+// <customer_message> boundaries and the system prompt treats it as untrusted
+// data (see apps/dashboard agent prompt). A denylist that drops lines only
+// corrupted the stored message, so this just bounds length and preserves the
+// customer's words faithfully.
 export function sanitizeUserInput(text: string): string {
   if (!text) return text;
-  return text
-    .slice(0, MAX_INPUT_LENGTH)
-    .split('\n')
-    .filter((line) => !INJECTION_PATTERNS.some((p) => p.test(line)))
-    .join('\n')
-    .trim();
+  return text.slice(0, MAX_INPUT_LENGTH).trim();
 }
 
 export function stripQuotedReply(text: string): string {

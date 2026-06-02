@@ -301,7 +301,7 @@ export async function runAgent(
   const messageInstruction = readOnly
     ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
     : instruction;
-  const messages = buildMessageHistory(history, messageInstruction);
+  const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
   const tools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)
     : selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));

@@ -75,6 +75,22 @@ function readAgentPlanCachePlan(value: unknown): AgentPlan | null {
   return readAgentPlanCacheRecordShape(value)?.plan ?? null
 }
 
+// The reply text the agent drafted for this thread, pulled from the cached
+// plan's send_reply call. Used as the "before" side of a brand-voice edit when
+// the operator sends a different reply. Returns null when no draft is cached.
+export function extractCachedDraftReply(cachedPlan: unknown): string | null {
+  const plan = readAgentPlanCachePlan(cachedPlan)
+  if (!plan) return null
+  for (const call of plan.rawToolCalls) {
+    if (call.name !== "send_reply") continue
+    const input = call.input
+    if (isRecord(input) && typeof input.text === "string" && input.text.trim()) {
+      return input.text
+    }
+  }
+  return null
+}
+
 export function getCurrentPlanForThread(
   thread: { cachedPlan: unknown; cachedPlanMessageId: string | null },
   lastCustomerMessageId: string | null,

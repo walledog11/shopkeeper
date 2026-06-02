@@ -22,6 +22,7 @@ const repoNodeTsFiles = [
   "packages/db/customer-memory.ts",
   "packages/db/index.ts",
   "packages/db/test-helpers.ts",
+  "packages/db/voice.ts",
   "playwright.browser.config.ts",
   "playwright.config.ts",
 ];
