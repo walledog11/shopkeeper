@@ -83,13 +83,13 @@ function buildCustomerMemorySection(ctx: AgentContext): string {
 function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): string[] {
   const clauses: string[] = [];
   if (s.blockCancellations) {
-    clauses.push("- Order cancellations are disabled by the workspace owner. Do NOT call cancel_order under any circumstances. Inform the operator that cancellations must be handled manually.");
+    clauses.push("- Order cancellations are disabled by the workspace owner. Do NOT call cancel_order under any circumstances. Call escalate_to_human so a person can handle the cancellation - do not reply to the customer in place of escalating.");
   }
   if (s.blockCustomLineItems) {
     clauses.push("- Custom line items are disabled by the workspace owner. Every line item in create_shopify_order MUST include a variant_id from the Shopify product catalog. Do NOT create line items with only a title and price.");
   }
   if (s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
-    clauses.push(`- The maximum refund you are authorized to issue is $${s.maxRefundAmount}. If the requested refund exceeds this amount, do NOT proceed - inform the operator that manual approval is required.`);
+    clauses.push(`- The maximum refund you are authorized to issue is $${s.maxRefundAmount}. If the requested refund exceeds this amount, do NOT call create_refund - call escalate_to_human so a person can handle it. Do not reply to the customer in place of escalating.`);
   }
   return clauses;
 }
@@ -103,13 +103,13 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
   let body: string;
   switch (effective) {
     case "watch":
-      body = "Draft replies and plan actions but never execute. Always require approval.";
+      body = "Every mutative action is held for the operator's approval before it runs - you are proposing a plan, not executing it. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing what you would do. If you lack the tools to fulfill it, a guardrail above forbids it, or the order's state makes it impossible, call escalate_to_human instead.";
       break;
     case "guarded":
-      body = "Auto-reply to information questions. For any mutative action (refund, cancel, edit, address change), present a plan for approval and do not execute until approved.";
+      body = "Auto-reply to information questions. For any mutative action (refund, cancel, edit, address change) you are allowed to take, include the tool call that performs it as a plan step - it is held for the operator's approval automatically before it runs. Propose the action with the tool rather than just describing it in a reply. If a guardrail above forbids it (over the refund cap, cancellations disabled) or the order's state makes it impossible (for example an already-fulfilled order), call escalate_to_human instead - never force a disallowed action and never quietly reply in its place.";
       break;
     case "trusted":
-      body = `Auto-reply to information questions. Auto-execute small refunds (≤ ${capLabel}), address changes before fulfillment, and shipping replies. For cancellations, refunds above ${capLabel}, or order edits, present a plan for approval.`;
+      body = `Auto-reply to information questions. Small refunds (≤ ${capLabel}), address changes before fulfillment, and shipping replies run automatically; cancellations, refunds above ${capLabel}, and order edits are held for the operator's approval. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing it. If a guardrail above forbids the action or the order's state makes it impossible, call escalate_to_human instead.`;
       break;
     default:
       return "";
@@ -155,6 +155,7 @@ ${parts.instructions}${parts.trailer}`;
 
 // ── Support module ──
 const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
+- Before planning a refund, cancellation, order edit, or address change, confirm it is permitted: the refund amount is within the cap stated above, cancellations are allowed, and the order's state supports the change (only change an address on an unfulfilled order). If it is not permitted, call escalate_to_human - do not call the action tool, and do not reply to the customer in its place.
 - Use the available tools to complete the requested task.
 - After taking any action (Shopify update, refund, cancellation, etc.), you MUST call send_reply to notify the customer what was done. Do not leave the customer without a response.
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," - never use the email address as a greeting.

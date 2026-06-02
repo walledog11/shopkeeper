@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-06-01T01:32:42.541Z",
+  "generatedAt": "2026-06-02T21:36:24.306Z",
   "total": 39,
-  "passed": 30,
-  "passRate": 0.7692307692307693,
+  "passed": 32,
+  "passRate": 0.8205128205128205,
   "categories": {
     "address-change": {
       "total": 3,
-      "passed": 3,
-      "passRate": 1
+      "passed": 2,
+      "passRate": 0.6666666666666666
     },
     "brand-voice": {
       "total": 2,
@@ -21,8 +21,8 @@
     },
     "escalate": {
       "total": 3,
-      "passed": 0,
-      "passRate": 0
+      "passed": 3,
+      "passRate": 1
     },
     "kb": {
       "total": 2,
@@ -51,13 +51,13 @@
     },
     "order-status": {
       "total": 5,
-      "passed": 5,
-      "passRate": 1
+      "passed": 4,
+      "passRate": 0.8
     },
     "prompt-injection": {
       "total": 2,
-      "passed": 2,
-      "passRate": 1
+      "passed": 1,
+      "passRate": 0.5
     },
     "quick-reply": {
       "total": 2,
@@ -66,8 +66,8 @@
     },
     "refund": {
       "total": 3,
-      "passed": 1,
-      "passRate": 0.3333333333333333
+      "passed": 2,
+      "passRate": 0.6666666666666666
     },
     "sample-reply": {
       "total": 1,
@@ -76,8 +76,8 @@
     },
     "tier": {
       "total": 5,
-      "passed": 3,
-      "passRate": 0.6
+      "passed": 4,
+      "passRate": 0.8
     }
   }
 }
