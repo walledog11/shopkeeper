@@ -1,22 +1,19 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, parseVoiceProposal } from '@clerk/db';
-import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { withOrgRoute } from '@/lib/api/route';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import type { OrgSettings } from '@/types';
 
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Voice proposal GET', errorMessage: 'Failed to fetch voice proposal' },
+  async ({ org }) => {
     return NextResponse.json({ proposal: parseVoiceProposal(org.voiceProposal) });
-  } catch (error) {
-    return handleApiError(error, 'Voice proposal GET', 'Failed to fetch voice proposal');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
+export const POST = withOrgRoute(
+  { context: 'Voice proposal POST', errorMessage: 'Failed to update voice proposal' },
+  async ({ org, request }) => {
     const { action } = (await request.json()) as { action?: string };
 
     if (action !== 'approve' && action !== 'dismiss') {
@@ -53,7 +50,5 @@ export async function POST(request: Request) {
       settings: updated.settings ?? {},
       version: updated.updatedAt.toISOString(),
     });
-  } catch (error) {
-    return handleApiError(error, 'Voice proposal POST', 'Failed to update voice proposal');
-  }
-}
+  },
+);

@@ -23,14 +23,14 @@ Current worktree note: the repo already has unrelated uncommitted changes in `ap
 
 ## Phase 2: API Cleanup
 
-- [ ] Extract settings patch, version-conflict, and delete helpers from `apps/dashboard/src/app/api/org/route.ts`.
-- [ ] Move Shopify customer route internals from `apps/dashboard/src/app/api/shopify/customer/route.ts` into a service module covering lookup, update, local customer-name persistence, and product image enrichment.
-- [ ] Review manual API routes that intentionally skipped `withOrgRoute`; migrate only routes that now match the shared helper shape without changing auth, webhook, OAuth, billing, or internal-secret semantics.
+- [x] Extract settings patch, version-conflict, and delete helpers from `apps/dashboard/src/app/api/org/route.ts`.
+- [x] Move Shopify customer route internals from `apps/dashboard/src/app/api/shopify/customer/route.ts` into a service module covering lookup, update, local customer-name persistence, and product image enrichment.
+- [x] Review manual API routes that intentionally skipped `withOrgRoute`; migrate only routes that now match the shared helper shape without changing auth, webhook, OAuth, billing, or internal-secret semantics.
 
 ## Phase 3: Agent Tool Registry
 
-- [ ] Split `apps/dashboard/src/lib/agent/tools/registry.ts` into focused modules: `tool-metadata.ts`, `tool-schemas.ts`, `tool-inputs.ts`, and `tool-selection.ts`.
-- [ ] Keep `registry.ts` as a thin compatibility export so existing agent imports do not churn.
+- [x] Split `apps/dashboard/src/lib/agent/tools/registry.ts` into focused modules: `tool-metadata.ts`, `tool-schemas.ts`, `tool-inputs.ts`, and `tool-selection.ts`.
+- [x] Keep `registry.ts` as a thin compatibility export so existing agent imports do not churn.
 
 ## Phase 4: Type Casts
 
