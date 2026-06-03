@@ -7,7 +7,7 @@ import { getRedis } from "@/lib/server/redis";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
-import { toolError, toolOk, type ToolResult } from "./result";
+import { toolError, toolEscalated, toolOk, type ToolResult } from "./result";
 import type {
   AddInternalNoteInput,
   SendReplyInput,
@@ -16,8 +16,6 @@ import type {
   UpdateThreadTagInput,
   EscalateToHumanInput,
 } from "./registry";
-
-export const ESCALATION_MARKER = "__ESCALATED__:";
 
 interface ThreadContext {
   threadId: string;
@@ -402,5 +400,5 @@ export async function escalateToHuman(
     threadId: ctx.threadId,
     reason,
   });
-  return toolOk(`${ESCALATION_MARKER} ${reason}`);
+  return toolEscalated(reason);
 }

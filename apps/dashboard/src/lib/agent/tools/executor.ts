@@ -220,13 +220,14 @@ export async function executeToolStructured(
 
 export interface ExecuteToolResult {
   result: string;
-  status: "success" | "error" | "policy_block";
+  status: "success" | "error" | "policy_block" | "escalated";
 }
 
-const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, "success" | "error"> = {
+const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["status"]> = {
   ok: "success",
   not_found: "success",
   error: "error",
+  escalated: "escalated",
 };
 
 export async function executeToolWithStatus(

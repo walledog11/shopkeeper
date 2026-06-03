@@ -8,7 +8,6 @@ import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeToolWithStatus } from "./tools/executor";
-import { ESCALATION_MARKER } from "./tools/thread";
 import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentActionMode, AgentActionStatus, AgentContext, AgentResult } from "./types";
@@ -204,9 +203,8 @@ export async function runAgent(
       recordAgentFailureSafely("tool_result", toolCall.name, result);
     }
 
-    if (result.startsWith(ESCALATION_MARKER)) {
-      escalationReason = result.slice(ESCALATION_MARKER.length).trim() || "No reason provided";
-      status = "escalated";
+    if (status === "escalated") {
+      escalationReason = result.trim() || "No reason provided";
       errorDetail = undefined;
     }
 
@@ -281,10 +279,9 @@ export async function runAgent(
       }, "approved_dashboard_actions_empty");
     }
 
-    const toolResults = await executeToolCalls(executableToolCalls);
-    const hasEscalation = toolResults.some((result) => result.content.startsWith(ESCALATION_MARKER));
+    await executeToolCalls(executableToolCalls);
 
-    if (hasEscalation && escalationReason) {
+    if (escalationReason) {
       return finish({
         summary: `Escalated to merchant: ${escalationReason}`,
         actionsPerformed,

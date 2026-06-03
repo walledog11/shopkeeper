@@ -18,7 +18,7 @@ const {
   mockRecordAgentFailure: vi.fn().mockResolvedValue({ emitted: false }),
   mockGetDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
   mockIncrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
-  mockEscalateToHuman: vi.fn().mockResolvedValue({ status: "ok", message: "__ESCALATED__: ran out of options" }),
+  mockEscalateToHuman: vi.fn().mockResolvedValue({ status: "escalated", message: "ran out of options" }),
 }));
 
 vi.mock("@/lib/ai/anthropic", () => ({
@@ -46,7 +46,6 @@ vi.mock("@/lib/agent/tools/thread", () => ({
   updateThreadStatus: mockUpdateThreadStatus,
   updateThreadTag: vi.fn().mockResolvedValue({ status: "ok", message: "Tag updated." }),
   escalateToHuman: mockEscalateToHuman,
-  ESCALATION_MARKER: "__ESCALATED__:",
 }));
 
 vi.mock("@/lib/server/refund-spend", () => ({
@@ -310,7 +309,7 @@ describe("runAgent policy enforcement", () => {
   it("halts the run loop after escalate_to_human and surfaces the reason in the summary", async () => {
     mockCreate.mockReset();
     mockEscalateToHuman.mockReset();
-    mockEscalateToHuman.mockResolvedValueOnce({ status: "ok", message: "__ESCALATED__: Customer is asking about wholesale pricing." });
+    mockEscalateToHuman.mockResolvedValueOnce({ status: "escalated", message: "Customer is asking about wholesale pricing." });
     mockCreate.mockResolvedValueOnce(singleToolUse("escalate_to_human", { reason: "Customer is asking about wholesale pricing." }));
 
     const result = await runAgent(
@@ -324,14 +323,14 @@ describe("runAgent policy enforcement", () => {
     expect(result.summary).toBe("Escalated to merchant: Customer is asking about wholesale pricing.");
     expect(result.actionsPerformed.at(-1)).toMatchObject({
       tool: "escalate_to_human",
-      result: "__ESCALATED__: Customer is asking about wholesale pricing.",
+      result: "Customer is asking about wholesale pricing.",
       status: "escalated",
     });
   });
 
   it("halts an approved-plan run when escalate_to_human is in the approved set", async () => {
     mockEscalateToHuman.mockReset();
-    mockEscalateToHuman.mockResolvedValueOnce({ status: "ok", message: "__ESCALATED__: Shopify is down." });
+    mockEscalateToHuman.mockResolvedValueOnce({ status: "escalated", message: "Shopify is down." });
 
     const result = await runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
