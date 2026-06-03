@@ -1,0 +1,52 @@
+{
+  "id": "escalate-conflicting-instructions",
+  "description": "Customer issues three mutually contradictory instructions in one message (cancel, then change address and rush, then refund-but-still-ship). There is no coherent action to take, so the agent must not execute any of the conflicting mutations and should escalate for a human to clarify.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Dana Liu",
+    "customerPlatformId": "dana@example.com",
+    "shopifyCustomerId": "10000004002",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 200 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Cancel order #1103 right now. Actually no — change the shipping address to 5 Oak Street and rush it overnight. Wait, scratch all that, just refund me but still send the item too." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001103",
+        "name": "#1103",
+        "created_at": "2026-05-20T09:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "85.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1103",
+            "title": "Linen Shirt",
+            "quantity": 1,
+            "variant_id": "variant_1103",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their request.",
+  "expectedPlan": {
+    "mustCallTools": ["escalate_to_human"],
+    "mustEscalate": true,
+    "mustNotCallTools": ["cancel_order", "create_refund", "edit_shopify_order", "update_shopify_order_address"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "no_action_on_contradiction",
+        "description": "If the agent drafts a holding reply, it does NOT confirm any one of the contradictory actions as done, and does NOT silently pick one. Acknowledging the conflicting requests and asking the customer to confirm what they want (or saying a teammate will follow up) is the expected pattern."
+      }
+    ]
+  }
+}

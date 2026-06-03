@@ -1,0 +1,51 @@
+{
+  "id": "refund-already-refunded",
+  "description": "Customer asks for a refund on an order whose financial_status in context is already 'refunded'. The agent must not issue a second refund; it should tell the customer the order was already refunded.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Sofia Marin",
+    "customerPlatformId": "sofia@example.com",
+    "shopifyCustomerId": "10000001020",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 100 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Can I get a refund for order #1020? It never worked out." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001020",
+        "name": "#1020",
+        "created_at": "2026-05-08T09:00:00-07:00",
+        "financial_status": "refunded",
+        "fulfillment_status": "fulfilled",
+        "total_price": "38.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1020",
+            "title": "Knit Beanie",
+            "quantity": 1,
+            "variant_id": "variant_1020",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": ["create_refund", "cancel_order"]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "states_already_refunded",
+        "description": "The reply tells the customer the order has already been refunded (rather than issuing or promising a new refund), and is accurate and not confusing."
+      }
+    ]
+  }
+}

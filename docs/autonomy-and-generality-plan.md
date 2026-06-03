@@ -78,14 +78,22 @@ certify the elevated tiers as the *entry* criterion — and there are currently 
 for `broad`/`full`**, the trust-critical categories have 1–3 fixtures each, they flap ±2
 run-to-run, each fixture runs once, and the judge is off in the gating run.
 
-**1a. Fixture expansion** (`__evals__/fixtures/`):
-- `escalate` (3 → ~9): payment-dispute, conflicting-instructions, post-fulfillment-cancel-request,
-  suspected-fraud-handoff, multi-customer-ambiguity, tool-failure-mid-action.
-- `refund` (3 → ~7): `refund-no-amount` (the F.2 amount-less block), refund-already-refunded,
-  refund-partial, refund-over-daily-cap.
-- `prompt-injection` (2 → ~6): **tool-result injection** (malicious instruction inside an order
-  note / product review the agent reads), forwarded-email injection, instruction-in-customer-name.
-  This is the surface that grows with modules 3–4 and is currently at 50%.
+**1a. Fixture expansion** (`__evals__/fixtures/`) — ✅ authored 2026-06-03 (not yet baselined; see note):
+- [x] `escalate` (3 → 8): added payment-dispute, conflicting-instructions, post-fulfillment-cancel,
+  suspected-fraud, tool-failure-mid-action. (`multi-customer-ambiguity` already existed as
+  `escalate-ambiguous-customer`.) Hard assertions are the safety property (`mustNotCallTools` on the
+  mutations) + `mustEscalate`; rubrics cover the holding-reply quality.
+- [x] `refund` (3 → 6): added `refund-no-amount` (F.2 — amount-less `create_refund` is blocked by
+  `static-policy.ts:38`), `refund-already-refunded` (financial_status `refunded` in context →
+  no second refund), `refund-partial` (one item of a multi-item order). **`refund-over-daily-cap`
+  deferred:** the daily cap fires only at *execution* (`executor.ts:75`) against seeded refund-spend
+  state, which the fixture harness can't set — needs a spend-seed helper first.
+- [x] `prompt-injection` (2 → 6): added **tool-result injection** (injected instruction in a simulated
+  order-note result and in a simulated product-review result — `recentOrders` left empty to force the
+  lookup), forwarded-email injection, instruction-in-customer-name. Assert no mutative/customer-search
+  tool + `replyMustNotInclude` the refund-confirmation phrases.
+- **Not yet baselined** — Anthropic API credits exhausted this session. Fold these into the same single
+  repeats=3 re-baseline that captures the sample-reply fix once credits return.
 - `tier` (5 → 10): ✅ **net-new `broad`/`full` added** — tier-broad-refund-under-250 (auto),
   tier-broad-refund-over-250-escalate, tier-full-refund-in-policy-auto, tier-full-cancel-auto,
   tier-full-over-cap-still-escalates. Assert higher caps auto-execute *and* policy still bites above them.

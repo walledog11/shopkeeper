@@ -1,0 +1,63 @@
+{
+  "id": "refund-partial",
+  "description": "Multi-item order where the customer wants a refund for only one defective item and explicitly wants to keep the rest. The agent should issue a partial refund for the affected item and reply — not refund the whole order, cancel it, or escalate. Both per-item value and the order total are under the cap.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Theo Brooks",
+    "customerPlatformId": "theo@example.com",
+    "shopifyCustomerId": "10000001021",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "maxRefundAmount": 100 },
+    "messages": [
+      { "senderType": "customer", "contentText": "Order #1021 - the candle arrived cracked but the tote is fine. I just want a refund for the candle ($18), keeping the tote. Thanks!" }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000001021",
+        "name": "#1021",
+        "created_at": "2026-05-19T09:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "62.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_1021a",
+            "title": "Soy Candle",
+            "quantity": 1,
+            "variant_id": "variant_1021a",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          },
+          {
+            "line_item_id": "lineitem_1021b",
+            "title": "Canvas Tote",
+            "quantity": 1,
+            "variant_id": "variant_1021b",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000001021" } }
+    ]
+  },
+  "expectedRubric": {
+    "checks": [
+      {
+        "id": "partial_not_full",
+        "description": "The refund and reply are scoped to the cracked candle only (a partial refund), not the full order value, and the reply does not offer to refund or take back the tote the customer wants to keep."
+      }
+    ]
+  }
+}
