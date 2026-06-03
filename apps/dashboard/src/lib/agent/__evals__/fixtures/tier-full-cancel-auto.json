@@ -1,0 +1,55 @@
+{
+  "id": "tier-full-cancel-auto",
+  "description": "Full-tier org with cancellations allowed: customer asks to cancel an unfulfilled order. At full autonomy a cancellation in policy runs automatically - the agent should cancel and reply, and the dashboard classifier marks the plan auto_execute.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Anand",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": "10000004302",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "autonomyTier": "full", "blockCancellations": false },
+    "messages": [
+      { "senderType": "customer", "contentText": "Please cancel order #4302 - I changed my mind and no longer need it." }
+    ],
+    "simulateToolResults": [
+      { "tool": "cancel_order", "result": "Order #4302 has been canceled." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000004302",
+        "name": "#4302",
+        "created_at": "2026-05-25T13:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": null,
+        "total_price": "75.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4302",
+            "title": "Ceramic Planter",
+            "quantity": 1,
+            "variant_id": "variant_4302",
+            "fulfillable_quantity": 1,
+            "current_quantity": 1,
+            "fulfillment_status": null
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their cancellation request.",
+  "expectedPlan": {
+    "mustCallTools": ["cancel_order", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "create_refund"],
+    "mustCallToolsWithInput": [
+      { "tool": "cancel_order", "inputIncludes": { "order_id": "9000004302" } }
+    ],
+    "mustClassifyAs": "auto_execute",
+    "expectedAgentActions": [
+      { "tool": "cancel_order", "status": "success", "mode": "auto_executed" },
+      { "tool": "send_reply", "status": "success", "mode": "auto_executed" }
+    ]
+  }
+}

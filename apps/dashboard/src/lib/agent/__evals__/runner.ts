@@ -29,6 +29,8 @@ import type {
   ToolInputExpectation,
   EvalBaseline,
   CategoryScore,
+  FixtureScore,
+  FixtureRunSummary,
 } from "./types";
 
 // Longest-prefix match groups fixtures into domains for per-category scoring.
@@ -96,33 +98,45 @@ function categoryOf(id: string): string {
   return CATEGORY_PREFIXES.find((p) => id === p || id.startsWith(`${p}-`)) ?? id;
 }
 
-export function summarizeResults(results: readonly EvalResult[]): EvalBaseline {
+export function summarizeResults(summaries: readonly FixtureRunSummary[]): EvalBaseline {
   const categories: Record<string, CategoryScore> = {};
-  for (const r of results) {
-    const cat = categoryOf(r.id);
+  const fixtures: Record<string, FixtureScore> = {};
+  for (const s of summaries) {
+    const cat = categoryOf(s.id);
     const score = categories[cat] ?? { total: 0, passed: 0, passRate: 0 };
-    score.total += 1;
-    if (r.pass) score.passed += 1;
+    score.total += s.repeats;
+    score.passed += s.passes;
     score.passRate = score.passed / score.total;
     categories[cat] = score;
+    fixtures[s.id] = { repeats: s.repeats, passes: s.passes, passRate: s.passRate };
   }
-  const total = results.length;
-  const passed = results.filter((r) => r.pass).length;
+  // `total`/`passed` count individual runs so passRate is run-weighted, not fixture-weighted.
+  const total = summaries.reduce((sum, s) => sum + s.repeats, 0);
+  const passed = summaries.reduce((sum, s) => sum + s.passes, 0);
   return {
     generatedAt: new Date().toISOString(),
+    repeats: summaries.reduce((max, s) => Math.max(max, s.repeats), 1),
     total,
     passed,
     passRate: total === 0 ? 0 : passed / total,
     categories: Object.fromEntries(Object.keys(categories).sort().map((k) => [k, categories[k]])),
+    fixtures: Object.fromEntries(Object.keys(fixtures).sort().map((k) => [k, fixtures[k]])),
   };
 }
 
 export function formatSummary(summary: EvalBaseline): string {
   const lines = [
-    `[eval:summary] aggregate ${summary.passed}/${summary.total} (${(summary.passRate * 100).toFixed(1)}%)`,
+    `[eval:summary] aggregate ${summary.passed}/${summary.total} (${(summary.passRate * 100).toFixed(1)}%) over ${summary.repeats} repeat(s)/fixture`,
   ];
   for (const [cat, score] of Object.entries(summary.categories)) {
     lines.push(`  ${cat}: ${score.passed}/${score.total} (${(score.passRate * 100).toFixed(1)}%)`);
+  }
+  // Surface flappy fixtures (passed some but not all repeats) — the signal repeats exist to expose.
+  if (summary.repeats > 1) {
+    const flappy = Object.entries(summary.fixtures).filter(([, f]) => f.passRate > 0 && f.passRate < 1);
+    for (const [id, f] of flappy) {
+      lines.push(`  ~ flappy ${id}: ${f.passes}/${f.repeats} (${(f.passRate * 100).toFixed(1)}%)`);
+    }
   }
   return lines.join("\n");
 }
@@ -141,6 +155,35 @@ export function regressionThreshold(): number {
   return Number.isFinite(parsed) ? parsed : DEFAULT_REGRESSION_THRESHOLD;
 }
 
+// Repeats per fixture. Default 1 (cheap local runs reduce to single-shot, exactly today's
+// behavior); set ≥3 in the gated CI job to turn each fixture's pass/fail into a pass-rate that
+// distinguishes a flappy fixture from a stable one. API spend scales linearly: EVAL_REPEATS=N
+// is N× the per-run token cost of the whole suite.
+const DEFAULT_EVAL_REPEATS = 1;
+export function evalRepeats(): number {
+  const raw = process.env.EVAL_REPEATS;
+  if (raw === undefined) return DEFAULT_EVAL_REPEATS;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_EVAL_REPEATS;
+  return Math.floor(parsed);
+}
+
+// Runs a fixture `repeats` times and folds the per-run results into one pass-rate.
+export async function runFixtureRepeated(fixture: Fixture, repeats: number): Promise<FixtureRunSummary> {
+  const results: EvalResult[] = [];
+  for (let i = 0; i < repeats; i += 1) {
+    results.push(await runFixture(fixture));
+  }
+  const passes = results.filter((r) => r.pass).length;
+  return {
+    id: fixture.id,
+    repeats,
+    passes,
+    passRate: repeats === 0 ? 0 : passes / repeats,
+    results,
+  };
+}
+
 export function writeBaseline(summary: EvalBaseline): void {
   writeFileSync(BASELINE_PATH, `${JSON.stringify(summary, null, 2)}\n`);
 }
@@ -157,7 +200,7 @@ export function compareToBaseline(
   current: EvalBaseline,
   baseline: EvalBaseline,
   threshold: number,
-): { aggregate: string | null; categories: string[] } {
+): { aggregate: string | null; categories: string[]; fixtures: string[] } {
   const drop = (cur: number, base: number) =>
     `${(cur * 100).toFixed(1)}% dropped > ${(threshold * 100).toFixed(1)} pts below baseline ${(base * 100).toFixed(1)}%`;
 
@@ -174,7 +217,16 @@ export function compareToBaseline(
       categories.push(`category "${cat}" pass rate ${drop(curScore.passRate, baseScore.passRate)}`);
     }
   }
-  return { aggregate, categories };
+
+  const fixtures: string[] = [];
+  for (const [id, baseScore] of Object.entries(baseline.fixtures ?? {})) {
+    const curScore = current.fixtures[id];
+    if (!curScore) continue;
+    if (curScore.passRate < baseScore.passRate - threshold) {
+      fixtures.push(`fixture "${id}" pass rate ${drop(curScore.passRate, baseScore.passRate)}`);
+    }
+  }
+  return { aggregate, categories, fixtures };
 }
 
 const SENDER_TYPE_MAP: Record<string, DbSenderType> = {

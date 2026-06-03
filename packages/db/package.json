@@ -4,18 +4,18 @@
   "type": "module",
   "private": true,
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./index.d.ts",
       "default": "./dist/index.js"
     },
     "./test-helpers": {
-      "types": "./dist/test-helpers.d.ts",
+      "types": "./test-helpers.d.ts",
       "default": "./dist/test-helpers.js"
     },
     "./customer-memory": {
-      "types": "./dist/customer-memory.d.ts",
+      "types": "./customer-memory.d.ts",
       "default": "./dist/customer-memory.js"
     }
   },

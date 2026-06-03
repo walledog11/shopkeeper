@@ -8,8 +8,11 @@ import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext"
 import { CommandPaletteProvider } from "./_components/CommandPaletteContext";
 import { getOrCreateOrg } from "@/lib/server/org";
 import { resolveAgentSettings } from "@/lib/agent/settings";
+import { getChannelInfo } from "@/lib/messaging/channels";
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const org = await getOrCreateOrg();
@@ -26,6 +29,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
       title: "Connect your first channel",
       message: "Start receiving support tickets from email, Instagram, SMS, and more.",
       action: { label: "Add integration", href: "/dashboard/integrations" },
+    });
+  }
+
+  // Integration token expired or expiring within 7 days
+  const expiringIntegrations = await db.integration.findMany({
+    where: {
+      organizationId: org.id,
+      tokenExpiresAt: { not: null, lt: new Date(Date.now() + SEVEN_DAYS_MS) },
+    },
+    select: { platform: true, tokenExpiresAt: true },
+  });
+  if (expiringIntegrations.length > 0) {
+    const now = Date.now();
+    const expired = expiringIntegrations.some((i) => i.tokenExpiresAt!.getTime() <= now);
+    const names = [...new Set(expiringIntegrations.map((i) => getChannelInfo(i.platform).name))].join(", ");
+    notifications.push({
+      id: "integration-expiry",
+      type: "warning",
+      title: expired ? `${names} disconnected` : `${names} connection expiring soon`,
+      message: expired
+        ? "Reconnect to keep receiving messages from this channel."
+        : "Reconnect soon to avoid missing messages.",
+      action: { label: "Reconnect", href: "/dashboard/integrations" },
     });
   }
 
