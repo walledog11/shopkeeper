@@ -6,7 +6,7 @@ Solo merchants and small teams. Multi-channel support inbox + AI agent that read
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel
 - `apps/gateway/` — Express + BullMQ worker → Railway
 - `packages/db/` — Prisma + Neon Postgres, exported as `@clerk/db`
-- Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway
+- Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway — **separate instances** (gateway needs a dedicated per-instance Redis for BullMQ, not Upstash). Daily LLM spend cap is shared across both apps via Postgres (`llm_daily_spend`), not Redis.
 - AI: Anthropic SDK (agent, plan, summary); OpenAI (embeddings)
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
 - Sentry inits in both apps if `SENTRY_DSN` is set.
