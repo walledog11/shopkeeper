@@ -1,20 +1,19 @@
 import {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,
-  SPEND_KEY_TTL_SECONDS,
   SpendCapError,
-  spendKey,
-  usageToNanoDollars,
+  getDailyLlmSpendNano,
+  recordDailyLlmSpend,
   usdToNanoDollars,
   type LlmUsageTokens,
 } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
-import { getRedis } from "@/lib/server/redis";
 
-// Backstop on per-org daily LLM spend. Tracked in Redis as integer nano-dollars.
-// Concurrent calls can briefly overshoot the cap by at most ~one call's worth
-// per parallel run , acceptable for a backstop whose job is to stop runaway
-// loops, not enforce a billing meter to the cent.
+// Backstop on per-org daily LLM spend. Persisted in Postgres (one row per org
+// per UTC day) as integer nano-dollars, shared with the gateway so the cap is
+// enforced per-org across both apps. Concurrent calls can briefly overshoot the
+// cap by at most ~one call's worth per parallel run , acceptable for a backstop
+// whose job is to stop runaway loops, not enforce a billing meter to the cent.
 
 function capNanoUsd(settings: OrgSettings): number {
   const usd = settings.dailyLLMSpendCapUsd ?? DEFAULT_DAILY_LLM_SPEND_CAP_USD;
@@ -23,10 +22,7 @@ function capNanoUsd(settings: OrgSettings): number {
 
 export async function getDailySpendNano(orgId: string): Promise<number> {
   try {
-    const raw = await getRedis().get<string | number | null>(spendKey(orgId));
-    if (raw === null || raw === undefined) return 0;
-    const parsed = typeof raw === "number" ? raw : Number(raw);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return await getDailyLlmSpendNano(orgId);
   } catch (err) {
     logger.warn({ err, orgId }, "[spend] read failed, treating as zero");
     return 0;
@@ -46,17 +42,9 @@ export async function recordSpend(
   usage: LlmUsageTokens,
   model: string,
 ): Promise<void> {
-  const delta = usageToNanoDollars(usage, model);
-  if (delta <= 0) return;
   try {
-    const redis = getRedis();
-    const key = spendKey(orgId);
-    const next = await redis.incrby(key, delta);
-    if (next === delta) {
-      // First increment of the day , set TTL so the key doesn't outlive the window.
-      await redis.expire(key, SPEND_KEY_TTL_SECONDS);
-    }
+    await recordDailyLlmSpend(orgId, usage, model);
   } catch (err) {
-    logger.warn({ err, orgId, delta, model }, "[spend] record failed");
+    logger.warn({ err, orgId, model }, "[spend] record failed");
   }
 }

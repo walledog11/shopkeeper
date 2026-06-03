@@ -25,7 +25,7 @@ clerk/
 - **Dashboard** — Vercel (Next.js 16 serverless)
 - **Gateway** — Railway (Express + BullMQ worker, single service)
 - **Database** — Neon PostgreSQL (pooled via pgbouncer)
-- **Redis** — Upstash (dashboard uses `@upstash/redis` REST client; gateway uses `ioredis` with `REDIS_URL`)
+- **Redis** — dashboard uses Upstash (`@upstash/redis` REST client) for rate limiting/locks/presence; gateway uses a dedicated per-instance Redis (e.g. Railway Redis) via `ioredis` with `REDIS_URL` for BullMQ. These are separate instances.
 - **Error tracking** — Sentry (required for production observability; apps init when `SENTRY_DSN` is set)
 
 ## Request Flow (Inbound Message)
@@ -283,7 +283,7 @@ Optional dashboard variables:
 ### Gateway (Railway)
 Required at production boot:
 - `DATABASE_URL` — Neon connection string with `?pgbouncer=true&connection_limit=1`
-- `REDIS_URL` — Upstash Redis URL using TLS, for example `rediss://...`
+- `REDIS_URL` — dedicated Redis for the BullMQ worker (e.g. Railway Redis), separate from the dashboard's Upstash. Railway private networking: `redis://...redis.railway.internal`; managed Redis over TLS: `rediss://...`
 - `ANTHROPIC_API_KEY` — Claude, used for AI summary and spam filtering in the worker
 - `INTERNAL_API_SECRET` — must match the dashboard value
 - `DASHBOARD_URL` — production dashboard URL used for internal API calls

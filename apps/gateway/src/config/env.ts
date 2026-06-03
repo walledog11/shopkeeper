@@ -59,6 +59,15 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: TOKEN_ENCRYPTION_KEY');
   }
 
+  const redisUrl = requireEnv('REDIS_URL');
+  try {
+    if (new URL(redisUrl).hostname.endsWith('upstash.io')) {
+      logger.warn('[Gateway] REDIS_URL points at an Upstash host. BullMQ holds a blocking connection per worker and polls continuously, so on Upstash pay-as-you-go (per-command) billing this produces runaway cost even with zero traffic. Use a dedicated per-instance Redis (Railway Redis, Redis Cloud, ElastiCache, or an Upstash fixed plan).');
+    }
+  } catch {
+    // URL parse failure is surfaced by the ioredis client; nothing to guard here.
+  }
+
   const dbUrl = requireEnv('DATABASE_URL');
   if (!dbUrl.includes('pgbouncer=true')) {
     logger.warn('[Gateway] DATABASE_URL is missing pgbouncer=true — add it to avoid connection exhaustion in production');

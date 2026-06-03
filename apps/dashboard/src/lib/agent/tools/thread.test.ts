@@ -11,7 +11,7 @@ import {
   createTestThread,
 } from '@clerk/db/test-helpers';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
-import { escalateToHuman, sendEmail, sendReply, updateThreadStatus, ESCALATION_MARKER } from './thread';
+import { escalateToHuman, sendEmail, sendReply, updateThreadStatus } from './thread';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 
 const { mockEnqueueCustomerMemory } = vi.hoisted(() => ({
@@ -212,7 +212,7 @@ describe('escalateToHuman', () => {
       { threadId: thread.id, orgId: org.id, orgName: org.name },
     );
 
-    expect(result.message.startsWith(ESCALATION_MARKER)).toBe(true);
+    expect(result.status).toBe('escalated');
     expect(result.message).toContain('Customer is asking about wholesale pricing.');
 
     const updated = await db.thread.findUnique({ where: { id: thread.id } });

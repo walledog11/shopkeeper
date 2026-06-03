@@ -1,27 +1,16 @@
 import {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,
-  SPEND_KEY_TTL_SECONDS,
   SpendCapError,
-  spendKey,
-  usageToNanoDollars,
+  getDailyLlmSpendNano,
+  recordDailyLlmSpend,
   usdToNanoDollars,
   type LlmUsageTokens,
 } from '@clerk/db';
-import type { Redis as IORedis } from 'ioredis';
-import { createGatewayRedisClient } from './clients/redis-client.js';
 import logger from './logger.js';
 
-// Mirror of apps/dashboard/src/lib/agent/spend.ts using ioredis. Shares the
-// same Redis key namespace so dashboard and gateway counters interop.
-
-let client: IORedis | null = null;
-function getClient(): IORedis {
-  if (!client) {
-    client = createGatewayRedisClient();
-    client.on('error', (err) => logger.warn({ err }, '[spend] redis error'));
-  }
-  return client;
-}
+// Per-org daily LLM spend backstop. Reads/writes the Postgres counter in
+// @clerk/db, shared with the dashboard so the cap is enforced per-org across
+// both apps.
 
 export interface GatewaySpendSettings {
   dailyLLMSpendCapUsd: number | null;
@@ -34,10 +23,7 @@ function capNanoUsd(settings: GatewaySpendSettings | null | undefined): number {
 
 export async function getDailySpendNano(orgId: string): Promise<number> {
   try {
-    const raw = await getClient().get(spendKey(orgId));
-    if (raw === null || raw === undefined) return 0;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return await getDailyLlmSpendNano(orgId);
   } catch (err) {
     logger.warn({ err, orgId }, '[spend] read failed, treating as zero');
     return 0;
@@ -60,17 +46,10 @@ export async function recordSpend(
   usage: LlmUsageTokens,
   model: string,
 ): Promise<void> {
-  const delta = usageToNanoDollars(usage, model);
-  if (delta <= 0) return;
   try {
-    const redis = getClient();
-    const key = spendKey(orgId);
-    const next = await redis.incrby(key, delta);
-    if (next === delta) {
-      await redis.expire(key, SPEND_KEY_TTL_SECONDS);
-    }
+    await recordDailyLlmSpend(orgId, usage, model);
   } catch (err) {
-    logger.warn({ err, orgId, delta, model }, '[spend] record failed');
+    logger.warn({ err, orgId, model }, '[spend] record failed');
   }
 }
 

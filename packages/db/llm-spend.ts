@@ -1,9 +1,8 @@
-// Per-org daily LLM spend backstop. Pricing, key shape, and shared types are
-// here so dashboard (Upstash REST) and gateway (ioredis) write to the same
-// Redis key namespace with the same accounting.
+// Per-org daily LLM spend backstop. Pricing and shared types live here; the
+// Postgres-backed counter that both apps read/write is in spend-store.ts.
 
 // All amounts are tracked in nano-dollars (1 USD = 1_000_000_000) so token
-// pricing stays integer-clean and Redis INCRBY operates on whole numbers.
+// pricing stays integer-clean and the running total stays a whole number.
 export const NANO_DOLLARS_PER_USD = 1_000_000_000;
 
 export interface LlmTokenPriceNanoUsd {
@@ -60,14 +59,6 @@ export function usageToNanoDollars(usage: LlmUsageTokens, model: string): number
 export function utcDayString(now: Date = new Date()): string {
   return now.toISOString().slice(0, 10);
 }
-
-export function spendKey(orgId: string, day: string = utcDayString()): string {
-  return `llm:spend:${orgId}:${day}`;
-}
-
-// 48h retention gives ~24h of history past rollover for debugging without
-// growing Redis unbounded. The active window is only ever the current UTC day.
-export const SPEND_KEY_TTL_SECONDS = 60 * 60 * 48;
 
 // Default cap when an org has no explicit dailyLLMSpendCapUsd set. Sized to
 // never bite normal usage (~300 typical agent runs on Haiku) but stop a

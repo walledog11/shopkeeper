@@ -5,9 +5,10 @@ This runbook covers the repo-side production deployment path for the dashboard o
 ## Prerequisites
 
 - Production Neon Postgres database created.
-- Production Upstash Redis created in the same region as Vercel and Railway.
+- Production Upstash Redis created for the dashboard (rate limiting, locks, presence) in the same region as Vercel.
+- Dedicated Redis created for the gateway's BullMQ queues (e.g. Railway Redis), **separate** from Upstash, with `maxmemory-policy=noeviction` and persistence enabled.
 - `DATABASE_URL` uses the production database and includes `pgbouncer=true&connection_limit=1`.
-- Gateway `REDIS_URL` uses the TLS form: `rediss://...`.
+- Gateway `REDIS_URL` points at its dedicated Redis: Railway private networking uses `redis://...redis.railway.internal`; managed Redis over the public internet uses the TLS form `rediss://...`. Do not point it at Upstash.
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.

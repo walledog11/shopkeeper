@@ -6,7 +6,8 @@
     "moduleResolution": "NodeNext",
     "outDir": "dist",
     "rootDir": ".",
-    "declaration": true
+    "declaration": true,
+    "types": ["node"]
   },
   "include": ["index.ts", "test-helpers.ts", "crypto.ts", "customer-memory.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist"]

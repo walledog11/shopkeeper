@@ -81,9 +81,26 @@ model Organization {
   playbooks        Playbook[]
   agentActions     AgentAction[]
   voiceEdits       VoiceEdit[]
+  llmDailySpend    LlmDailySpend[]
 
   @@index([clerkOrgId])
   @@map("organizations")
+}
+
+// Per-org daily LLM spend backstop. One row per (org, UTC day) holding the
+// running total in integer nano-dollars. Dashboard and gateway both upsert
+// here so the daily cap is enforced per-org across both apps.
+model LlmDailySpend {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  day            String   @map("day") @db.VarChar(10)
+  spentNanoUsd   BigInt   @default(0) @map("spent_nano_usd")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, day])
+  @@map("llm_daily_spend")
 }
 
 // Corpus for the brand-voice learning loop: each row is one case where the
