@@ -1,0 +1,55 @@
+{
+  "id": "tier-broad-refund-under-250",
+  "description": "Broad-tier org (default $250 cap): refund request well under the tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Harper Quinn",
+    "customerPlatformId": "harper@example.com",
+    "shopifyCustomerId": "10000004201",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "orgSettings": { "autonomyTier": "broad" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The jacket from order #4201 arrived with a broken zipper and I don't want a replacement. Please refund me the $180." }
+    ],
+    "simulateToolResults": [
+      { "tool": "create_refund", "result": "Refund of $180.00 USD issued for order #4201." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000004201",
+        "name": "#4201",
+        "created_at": "2026-05-18T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "180.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4201",
+            "title": "Quilted Jacket",
+            "quantity": 1,
+            "variant_id": "variant_4201",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and process their refund request.",
+  "expectedPlan": {
+    "mustCallTools": ["create_refund", "send_reply"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_refund", "inputIncludes": { "order_id": "9000004201" } }
+    ],
+    "mustClassifyAs": "auto_execute",
+    "expectedAgentActions": [
+      { "tool": "create_refund", "status": "success", "mode": "auto_executed" },
+      { "tool": "send_reply", "status": "success", "mode": "auto_executed" }
+    ]
+  }
+}

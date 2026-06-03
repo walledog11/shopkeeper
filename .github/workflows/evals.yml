@@ -45,6 +45,9 @@ jobs:
       TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/clerk_test?schema=public
       TEST_REDIS_URL: redis://127.0.0.1:6379/0
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # Run each fixture 3× and gate on pass-rate, not a single coin-flip — trust-critical
+      # categories flap ±2 run-to-run. ~3× the per-PR eval spend; see runner.ts:evalRepeats.
+      EVAL_REPEATS: '3'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

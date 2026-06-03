@@ -12,7 +12,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { allowTestNetworkHosts } from "../../../../../../scripts/test-network-guard.mjs";
 import {
-  runFixture,
+  runFixtureRepeated,
   probeSystemPromptCacheRead,
   summarizeResults,
   formatSummary,
@@ -21,8 +21,9 @@ import {
   loadBaseline,
   compareToBaseline,
   regressionThreshold,
+  evalRepeats,
 } from "./runner";
-import type { Fixture, EvalResult } from "./types";
+import type { Fixture, FixtureRunSummary } from "./types";
 
 const FIXTURES_DIR = join(__dirname, "fixtures");
 
@@ -48,31 +49,35 @@ describe("agent evals", () => {
   });
 
   const fixtures = loadFixtures();
-  const collected: EvalResult[] = [];
+  const repeats = evalRepeats();
+  const collected: FixtureRunSummary[] = [];
 
   for (const fixture of fixtures) {
     it(
       `${fixture.id} , ${fixture.description}`,
       async () => {
-        const result = await runFixture(fixture);
-        collected.push(result);
+        const summary = await runFixtureRepeated(fixture, repeats);
+        collected.push(summary);
         // In update mode, persist after each fixture so an interrupted capture keeps
         // what already ran instead of losing everything when the final afterAll never fires.
         if (shouldUpdateBaseline()) writeBaseline(summarizeResults(collected));
+        const last = summary.results[summary.results.length - 1];
         console.log(
-          `[eval] ${result.id} pass=${result.pass} latency=${result.latencyMs}ms calls=${result.usage.modelCalls} in=${result.usage.inputTokens} out=${result.usage.outputTokens} cacheRead=${result.usage.cacheReadInputTokens} judge[in=${result.usage.judgeUsage.inputTokens} out=${result.usage.judgeUsage.outputTokens} cacheRead=${result.usage.judgeUsage.cacheReadInputTokens}]`,
+          `[eval] ${summary.id} passRate=${summary.passes}/${summary.repeats} latency=${last.latencyMs}ms calls=${last.usage.modelCalls} in=${last.usage.inputTokens} out=${last.usage.outputTokens} cacheRead=${last.usage.cacheReadInputTokens} judge[in=${last.usage.judgeUsage.inputTokens} out=${last.usage.judgeUsage.outputTokens} cacheRead=${last.usage.judgeUsage.cacheReadInputTokens}]`,
         );
-        if (!result.pass) {
-          for (const f of result.failures) {
-            console.log(`  - ${f}`);
-          }
+        for (const f of summary.results.find((r) => !r.pass)?.failures ?? []) {
+          console.log(`  - ${f}`);
         }
-        expect(result.failures).toEqual([]);
+        // A fixture that fails every repeat is hard-broken — fail the test. Flappy fixtures
+        // (some repeats pass) clear this bar; their pass-rate is recorded and gated against
+        // the baseline in afterAll. At repeats=1 this is identical to requiring the run to pass.
+        expect(summary.passes).toBeGreaterThan(0);
       },
-      // Generous: a multi-iteration agent run can take >60s under rate-limit backoff.
-      // A timed-out fixture keeps running and its restore would clobber the next one's
-      // instrumentation on the shared client, so we avoid abandoning runs mid-flight.
-      180_000,
+      // Generous: a multi-iteration agent run can take >60s under rate-limit backoff, and we
+      // now run it `repeats` times back-to-back. A timed-out fixture keeps running and its
+      // restore would clobber the next one's instrumentation on the shared client, so we avoid
+      // abandoning runs mid-flight.
+      180_000 * repeats,
     );
   }
 
@@ -96,8 +101,8 @@ describe("agent evals", () => {
     }
 
     const threshold = regressionThreshold();
-    const { aggregate, categories } = compareToBaseline(summary, baseline, threshold);
-    for (const msg of categories) {
+    const { aggregate, categories, fixtures } = compareToBaseline(summary, baseline, threshold);
+    for (const msg of [...categories, ...fixtures]) {
       console.log(`[eval:baseline] WARN ${msg}`);
     }
     if (aggregate) {

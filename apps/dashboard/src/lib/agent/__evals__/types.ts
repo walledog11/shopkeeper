@@ -111,10 +111,30 @@ export interface CategoryScore {
   passRate: number;
 }
 
+export interface FixtureScore {
+  repeats: number;
+  passes: number;
+  passRate: number;
+}
+
+// Aggregates the N repeats of a single fixture into one pass-rate. `results` holds each
+// repeat so callers can surface latency/usage and the failures of the last failing run.
+export interface FixtureRunSummary {
+  id: string;
+  repeats: number;
+  passes: number;
+  passRate: number;
+  results: EvalResult[];
+}
+
 export interface EvalBaseline {
   generatedAt: string;
+  // Repeats-per-fixture used to generate this baseline. `total`/`passed` count individual
+  // runs (fixtures × repeats), so passRate = passed / total reduces to today's numbers at repeats=1.
+  repeats: number;
   total: number;
   passed: number;
   passRate: number;
   categories: Record<string, CategoryScore>;
+  fixtures: Record<string, FixtureScore>;
 }
