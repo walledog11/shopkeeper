@@ -7,11 +7,11 @@ import { usageToNanoDollars, utcDayString, type LlmUsageTokens } from './llm-spe
 // day's running total well within int8 even at high caps.
 
 export async function getDailyLlmSpendNano(orgId: string, day: string = utcDayString()): Promise<number> {
-  const row = await db.llmDailySpend.findUnique({
-    where: { organizationId_day: { organizationId: orgId, day } },
-    select: { spentNanoUsd: true },
+  const result = await db.llmDailySpend.aggregate({
+    where: { organizationId: orgId, day },
+    _sum: { spentNanoUsd: true },
   });
-  return row ? Number(row.spentNanoUsd) : 0;
+  return result._sum.spentNanoUsd ? Number(result._sum.spentNanoUsd) : 0;
 }
 
 export async function recordDailyLlmSpend(
@@ -24,8 +24,8 @@ export async function recordDailyLlmSpend(
   if (delta <= 0) return;
   const deltaBig = BigInt(delta);
   await db.llmDailySpend.upsert({
-    where: { organizationId_day: { organizationId: orgId, day } },
-    create: { organizationId: orgId, day, spentNanoUsd: deltaBig },
-    update: { spentNanoUsd: { increment: deltaBig } },
+    where: { organizationId_day_model: { organizationId: orgId, day, model } },
+    create: { organizationId: orgId, day, model, spentNanoUsd: deltaBig, calls: 1 },
+    update: { spentNanoUsd: { increment: deltaBig }, calls: { increment: 1 } },
   });
 }

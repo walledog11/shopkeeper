@@ -94,12 +94,14 @@ model LlmDailySpend {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
   day            String   @map("day") @db.VarChar(10)
+  model          String   @map("model") @db.VarChar(64)
   spentNanoUsd   BigInt   @default(0) @map("spent_nano_usd")
+  calls          Int      @default(0) @map("calls")
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
-  @@unique([organizationId, day])
+  @@unique([organizationId, day, model])
   @@map("llm_daily_spend")
 }
 

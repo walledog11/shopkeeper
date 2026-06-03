@@ -23,7 +23,7 @@ let orgId: string | null = null;
 
 async function seedSpend(organizationId: string, nano: number) {
   await db.llmDailySpend.create({
-    data: { organizationId, day: utcDayString(), spentNanoUsd: BigInt(nano) },
+    data: { organizationId, day: utcDayString(), model: MODEL, spentNanoUsd: BigInt(nano) },
   });
 }
 
