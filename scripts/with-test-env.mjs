@@ -33,6 +33,7 @@ export function getTestEnv(baseEnv = process.env) {
     ...env,
     NODE_ENV: 'test',
     DATABASE_URL: baseEnv.TEST_DATABASE_URL || DEFAULT_DATABASE_URL,
+    DIRECT_DATABASE_URL: baseEnv.DIRECT_DATABASE_URL || baseEnv.TEST_DATABASE_URL || DEFAULT_DATABASE_URL,
     REDIS_URL: baseEnv.TEST_REDIS_URL || DEFAULT_REDIS_URL,
     NEON_SERVERLESS_HTTP: 'false',
     APP_URL: baseEnv.APP_URL || 'http://127.0.0.1:3100',
