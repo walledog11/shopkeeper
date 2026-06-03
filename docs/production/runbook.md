@@ -78,7 +78,7 @@ npm run build -w apps/gateway
 - `UPSTASH_REDIS_REST_TOKEN`
 - `SENTRY_DSN`
 
-> Dashboard `UPSTASH_REDIS_REST_URL` (REST) and gateway `REDIS_URL` (Redis protocol) must point at the **same** Upstash database. Counters for the daily LLM spend cap (`llm:spend:{orgId}:{YYYY-MM-DD}`) are read/written from both apps and depend on a shared key namespace. If they point at different instances, the cap is enforced per-app, not per-org.
+> Dashboard `UPSTASH_REDIS_REST_URL` (Upstash REST — rate limiting, locks, presence) and gateway `REDIS_URL` (a dedicated per-instance Redis for BullMQ) are **separate** instances and must not point at the same database. BullMQ holds a blocking connection per worker and polls continuously, so running it against Upstash's per-command billing is very expensive. The daily LLM spend cap is shared across both apps via Postgres (the `llm_daily_spend` table), so it stays per-org regardless of the Redis split.
 
 Rules:
 
