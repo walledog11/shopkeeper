@@ -66,15 +66,17 @@ Several dashboard actions ignore non-OK responses, parse error payloads as succe
 
 Organization settings are currently cast from arbitrary request JSON and merged into persisted data without runtime validation. Dashboard and gateway behavior has already drifted for overnight business hours.
 
-- [ ] Define one runtime settings parser and normalizer shared by dashboard and gateway.
+Decision: Overnight business-hour windows are supported. Selected days are opening days, so a Wednesday `22:00–06:00` window remains open until Thursday at `06:00`. Equal opening and closing hours are invalid while business hours are enabled; an enabled schedule with no selected days is closed.
+
+- [x] Define one runtime settings parser and normalizer shared by dashboard and gateway.
   - Reject unknown keys and invalid field types at the API boundary.
   - Apply defaults and migration behavior for historical persisted settings.
   - Remove unsafe settings casts from gateway business-hours handling.
-- [ ] Validate `PATCH /api/org` before persisting settings.
-- [ ] Decide and document whether overnight business-hour windows are supported.
+- [x] Validate `PATCH /api/org` before persisting settings.
+- [x] Decide and document whether overnight business-hour windows are supported.
   - Align dashboard validation with gateway evaluation.
   - Add shared contract tests for normal, overnight, closed, and malformed schedules.
-- [ ] Add tests for invalid patches and malformed historical settings.
+- [x] Add tests for invalid patches and malformed historical settings.
 
 ## Phase 4: Use The Defensive Customer-Memory Parser
 
@@ -148,5 +150,5 @@ Complete these after the higher-risk behavioral work.
 - [x] Run targeted tests for every changed module and failure path.
 - [x] Run `npm run test:unit` and `npm run test:node` after shared contract changes.
 - [x] Run integration or end-to-end coverage for dashboard workflows, action logs, settings, and integration callbacks before completing their phases.
-- [ ] Run agent and gateway builds after shared package, settings, or gateway worker changes.
+- [x] Run agent and gateway builds after shared package, settings, or gateway worker changes.
 - [ ] Keep cleanup commits scoped by phase and do not modify unrelated user-owned work.

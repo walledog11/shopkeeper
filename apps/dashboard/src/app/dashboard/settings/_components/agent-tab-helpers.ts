@@ -1,5 +1,5 @@
 import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
-import type { OrgSettings } from "@/types"
+import type { OrgSettings, OrgSettingsPatch } from "@/types"
 
 export type AgentSettingsAction =
   | { type: "set"; patch: Partial<OrgSettings> }
@@ -30,9 +30,11 @@ const AUTONOMY_OVERRIDE_PATHS = [
 export type AutonomyOverridePath = typeof AUTONOMY_OVERRIDE_PATHS[number]
 
 export interface AgentSettingsPatch {
-  settings: Partial<OrgSettings>
+  settings: OrgSettingsPatch
   settingsUnset: AutonomyOverridePath[]
 }
+
+type SettingsLike = Partial<OrgSettings> | OrgSettingsPatch
 
 export function agentSettingsReducer(state: OrgSettings, action: AgentSettingsAction): OrgSettings {
   if (action.type === "reset") return action.payload
@@ -43,7 +45,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
-function hasSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): boolean {
+function hasSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): boolean {
   const [first, second] = path.split(".")
   const root = settings as Record<string, unknown>
   if (!second) return Object.prototype.hasOwnProperty.call(root, first)
@@ -51,7 +53,7 @@ function hasSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverrideP
   return isRecord(nested) && Object.prototype.hasOwnProperty.call(nested, second)
 }
 
-export function readSettingsPath(settings: Partial<OrgSettings>, path: AutonomyOverridePath): unknown {
+export function readSettingsPath(settings: SettingsLike, path: AutonomyOverridePath): unknown {
   const [first, second] = path.split(".")
   const root = settings as Record<string, unknown>
   if (!second) return root[first]
@@ -92,7 +94,7 @@ function deleteSettingsPath(settings: Record<string, unknown>, path: AutonomyOve
   if (Object.keys(nested).length === 0) delete settings[first]
 }
 
-export function collectExplicitOverridePaths(rawSettings: Partial<OrgSettings>): AutonomyOverridePath[] {
+export function collectExplicitOverridePaths(rawSettings: OrgSettingsPatch): AutonomyOverridePath[] {
   return AUTONOMY_OVERRIDE_PATHS.filter(path => hasSettingsPath(rawSettings, path))
 }
 
@@ -144,7 +146,7 @@ export function buildAgentSettingsPatch(
   }
 
   return {
-    settings: serialized as Partial<OrgSettings>,
+    settings: serialized as OrgSettingsPatch,
     settingsUnset,
   }
 }

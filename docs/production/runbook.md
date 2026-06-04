@@ -58,6 +58,7 @@ npm run start -w apps/gateway
 
 ```bash
 npm run build -w packages/db
+npm run build -w packages/agent
 npm run build -w apps/gateway
 ```
 

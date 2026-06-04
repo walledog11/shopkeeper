@@ -14,12 +14,12 @@ import {
   writeSettingsPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
-import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
-import type { OrgSettings, VoiceProposal } from "@/types"
+import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
+import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 
 interface UseAgentTabStateProps {
   settings: OrgSettings
-  rawSettings: Partial<OrgSettings>
+  rawSettings: OrgSettingsPatch
   version: string
   voiceProposal: VoiceProposal | null
 }
@@ -77,12 +77,13 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
   )
   const serializedPatch = useMemo(() => JSON.stringify(settingsPatch), [settingsPatch])
   const initialPatchRef = useRef<string>(serializedPatch)
-  const baselineRawRef = useRef<Partial<OrgSettings>>(rawSettings)
-  const freshBaselineRef = useRef<Partial<OrgSettings> | null>(null)
+  const baselineRawRef = useRef<OrgSettingsPatch>(rawSettings)
+  const freshBaselineRef = useRef<OrgSettingsPatch | null>(null)
   const explicitOverrideSet = useMemo(() => new Set(explicitOverridePaths), [explicitOverridePaths])
   const isDirty = serializedPatch !== initialPatchRef.current
   const autonomyTier = settingsState.autonomyTier ?? "guarded"
-  const businessHoursInvalid = payload.businessHoursEnabled && payload.businessHoursEnd <= payload.businessHoursStart
+  const businessHoursInvalid = payload.businessHoursEnabled
+    && !isValidBusinessHoursWindow(payload.businessHoursStart, payload.businessHoursEnd)
 
   function markExplicit(path: AutonomyOverridePath) {
     setExplicitOverridePaths(prev => prev.includes(path) ? prev : [...prev, path])
@@ -92,7 +93,7 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
     setExplicitOverridePaths(prev => prev.filter(item => item !== path))
   }
 
-  function applyBaseline(target: Partial<OrgSettings>) {
+  function applyBaseline(target: OrgSettingsPatch) {
     const hydrated = hydrateSettings(resolveAgentSettings(target))
     const explicit = collectExplicitOverridePaths(target)
     const raw = rawInputsFor(hydrated)
@@ -156,7 +157,7 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
       })
       if (res.status === 409) {
         const body = await res.json().catch(() => ({})) as {
-          current?: { version?: string; settings?: Partial<OrgSettings> }
+          current?: { version?: string; settings?: OrgSettingsPatch }
         }
         if (body.current?.version) currentVersionRef.current = body.current.version
         if (body.current?.settings) {
@@ -167,12 +168,12 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
         return
       }
       if (!res.ok) throw new Error("Failed")
-      const body = await res.json().catch(() => ({})) as { version?: string; settings?: Partial<OrgSettings> }
+      const body = await res.json().catch(() => ({})) as { version?: string; settings?: OrgSettingsPatch }
       if (body.version) currentVersionRef.current = body.version
       if (body.settings) baselineRawRef.current = body.settings
       void mutate(
         "/api/org",
-        (current: { settings?: Partial<OrgSettings>; version?: string } | undefined) => ({
+        (current: { settings?: OrgSettingsPatch; version?: string } | undefined) => ({
           ...(current ?? {}),
           ...(body.version ? { version: body.version } : {}),
           ...(body.settings ? { settings: body.settings } : {}),
@@ -201,12 +202,12 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
       })
       if (!res.ok) throw new Error("Failed")
       if (action === "approve") {
-        const body = await res.json().catch(() => ({})) as { settings?: Partial<OrgSettings>; version?: string }
+        const body = await res.json().catch(() => ({})) as { settings?: OrgSettingsPatch; version?: string }
         if (body.version) currentVersionRef.current = body.version
         if (body.settings) applyBaseline(body.settings)
         void mutate(
           "/api/org",
-          (current: { settings?: Partial<OrgSettings>; version?: string } | undefined) => ({
+          (current: { settings?: OrgSettingsPatch; version?: string } | undefined) => ({
             ...(current ?? {}),
             ...(body.version ? { version: body.version } : {}),
             ...(body.settings ? { settings: body.settings } : {}),

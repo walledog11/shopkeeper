@@ -1,5 +1,6 @@
 import { Worker, Queue } from 'bullmq';
 import { db } from '@clerk/db';
+import { resolveAgentSettings } from '@clerk/agent/settings';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { QUEUE, CHANNEL, PROCESSING_QUEUE_DEFAULTS } from './constants.js';
@@ -8,7 +9,7 @@ import { validateGatewayEnv } from './config/env.js';
 import { writeWorkerHeartbeat } from './health.js';
 import { handleIgDmJob, handleEmailJob, handleShopifyJob } from './message-handlers/channels.js';
 import { generateThreadIntelligence } from './message-handlers/intelligence.js';
-import { isWithinBusinessHours, resolveBusinessHoursSettings } from './message-handlers/business-hours.js';
+import { isWithinBusinessHours } from './message-handlers/business-hours.js';
 import {
   precomputeThreadPlan,
   sendAutoAck,
@@ -119,10 +120,10 @@ export async function startWorkerRuntime() {
       where: { id: organizationId },
       select: { settings: true },
     });
-    const rawSettings = (org?.settings ?? {}) as Record<string, unknown>;
-    const withinBusinessHours = isWithinBusinessHours(resolveBusinessHoursSettings(rawSettings));
+    const settings = resolveAgentSettings(org?.settings);
+    const withinBusinessHours = isWithinBusinessHours(settings);
 
-    const planPromise = precomputeThreadPlan(organizationId, threadId, rawSettings, {
+    const planPromise = precomputeThreadPlan(organizationId, threadId, settings, {
       allowAutoExecute: withinBusinessHours,
     });
 

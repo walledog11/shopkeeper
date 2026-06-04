@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, parseVoiceProposal } from '@clerk/db';
+import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
 import { withOrgRoute } from '@/lib/api/route';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
-import type { OrgSettings } from '@/types';
 
 export const GET = withOrgRoute(
   { context: 'Voice proposal GET', errorMessage: 'Failed to fetch voice proposal' },
@@ -35,7 +35,7 @@ export const POST = withOrgRoute(
 
     // approve: adopt the proposed brief as the brand voice, clear the proposal.
     assertBillingWriteAllowed(org);
-    const currentSettings = (org.settings as Partial<OrgSettings> | null) ?? {};
+    const currentSettings = normalizeStoredOrgSettings(org.settings);
     const updatedSettings = { ...currentSettings, brandVoice: proposal.brief };
 
     const updated = await db.organization.update({
@@ -47,7 +47,7 @@ export const POST = withOrgRoute(
     });
 
     return NextResponse.json({
-      settings: updated.settings ?? {},
+      settings: normalizeStoredOrgSettings(updated.settings),
       version: updated.updatedAt.toISOString(),
     });
   },

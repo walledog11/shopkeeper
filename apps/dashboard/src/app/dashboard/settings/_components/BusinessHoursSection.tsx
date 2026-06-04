@@ -22,7 +22,7 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
   } = controller
 
   return (
-    <SectionCard title="Business Hours" description="Automatically send an acknowledgment to customers who message outside your working hours.">
+    <SectionCard title="Business Hours" description="Automatically send an acknowledgment to customers who message outside your working hours. Overnight windows are supported.">
       <div className="space-y-5">
         <ToggleRow
           label="Enable business hours"
@@ -34,7 +34,7 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
         {settingsState.businessHoursEnabled && (
           <>
             <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-white/60">Days open</span>
+              <span className="block text-xs font-semibold text-white/60">Opening days</span>
               <div className="flex gap-1.5 flex-wrap">
                 {DAY_OPTIONS.map(([value, label]) => (
                   <button
@@ -86,7 +86,7 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
               />
             </div>
             {businessHoursInvalid && (
-              <p className="text-xs text-red-400">Closing time must be later than opening time.</p>
+              <p className="text-xs text-red-400">Opening and closing times must be different.</p>
             )}
 
             <div className="space-y-1.5">

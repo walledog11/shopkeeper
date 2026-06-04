@@ -1,13 +1,13 @@
 import { Suspense } from "react"
 import { parseVoiceProposal } from "@clerk/db"
+import { normalizeStoredOrgSettings } from "@clerk/agent/settings"
 import { getOrCreateOrg } from "@/lib/server/org"
 import { resolveAgentSettings } from "@/lib/agent/settings"
 import SettingsPageClient from "./_components/SettingsPageClient"
-import type { OrgSettings } from "@/types"
 
 export default async function SettingsPage() {
   const org = await getOrCreateOrg()
-  const rawSettings = (org.settings as Partial<OrgSettings> | null) ?? {}
+  const rawSettings = normalizeStoredOrgSettings(org.settings)
   const settings = resolveAgentSettings(rawSettings)
 
   return (

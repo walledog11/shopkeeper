@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
+import { BadRequestError, handleApiError } from '@/lib/api/errors';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import {
   buildSettingsUpdate,
   hasVersionConflict,
+  parseOrgPatchBody,
   versionConflictResponse,
 } from './_lib/settings';
 import {
@@ -15,7 +17,6 @@ import {
   LAST_WORKSPACE_MESSAGE,
   readWorkspaceDeleteConfirmation,
 } from './_lib/delete-workspace';
-import type { OrgSettings } from '@/types';
 
 function resolvePlanName(priceId: string | null): string {
   if (!priceId) return 'Free';
@@ -30,7 +31,7 @@ export async function GET() {
     return NextResponse.json({
       id: org.id,
       name: org.name,
-      settings: org.settings ?? {},
+      settings: normalizeStoredOrgSettings(org.settings),
       version: org.updatedAt.toISOString(),
       planName: resolvePlanName(org.stripePriceId),
       stripeStatus: org.stripeStatus,
@@ -45,23 +46,20 @@ export async function PATCH(request: Request) {
   try {
     const org = await getOrCreateOrg();
     assertBillingWriteAllowed(org);
-    const body = await request.json();
-    const { name, settings: newSettings, settingsUnset, version } = body as {
-      name?: string;
-      settings?: Partial<OrgSettings>;
-      settingsUnset?: unknown;
-      version?: string;
-    };
+    const body = await request.json().catch(() => {
+      throw new BadRequestError('Invalid JSON body');
+    });
+    const { name, settings: newSettings, settingsUnset, version } = parseOrgPatchBody(body);
 
     if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0 || name.length > 100)) {
       return NextResponse.json({ error: 'Invalid name' }, { status: 400 });
     }
 
+    const settingsUpdate = buildSettingsUpdate(org.settings, newSettings, settingsUnset);
+
     if (hasVersionConflict(version, org)) {
       return versionConflictResponse(org);
     }
-
-    const settingsUpdate = buildSettingsUpdate(org.settings, newSettings, settingsUnset);
 
     const updated = await db.organization.update({
       where: { id: org.id },
@@ -85,7 +83,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({
       id: updated.id,
       name: updated.name,
-      settings: updated.settings ?? {},
+      settings: normalizeStoredOrgSettings(updated.settings),
       version: updated.updatedAt.toISOString(),
     });
   } catch (error) {

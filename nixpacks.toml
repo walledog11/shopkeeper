@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20"]
 cmds = ["npm install"]
 
 [phases.build]
-cmds = ["npm run build -w packages/db", "npm run build -w apps/gateway"]
+cmds = ["npm run build -w packages/db", "npm run build -w packages/agent", "npm run build -w apps/gateway"]
 
 [start]
 cmd = "npm run start -w apps/gateway"

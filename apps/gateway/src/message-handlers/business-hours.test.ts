@@ -1,70 +1,60 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   isWithinBusinessHours,
-  resolveBusinessHoursSettings,
-  type BusinessHoursSettings,
+  resolveAgentSettings,
 } from './business-hours.js';
 
-const ENABLED_SETTINGS: BusinessHoursSettings = {
-  businessHoursEnabled: true,
-  businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
-  businessHoursStart: 9,
-  businessHoursEnd: 17,
-  businessHoursTimezone: 'UTC',
-  businessHoursTimezoneOffset: 0,
-};
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 describe('business hours', () => {
-  it('resolves the existing defaults and treats disabled hours as open', () => {
-    const settings = resolveBusinessHoursSettings({});
+  it('applies shared defaults and treats disabled hours as open', () => {
+    const settings = resolveAgentSettings({});
 
-    expect(settings).toEqual({
-      businessHoursEnabled: false,
-      businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
-      businessHoursStart: 9,
-      businessHoursEnd: 17,
-      businessHoursTimezone: '',
-      businessHoursTimezoneOffset: 0,
-    });
-    expect(isWithinBusinessHours(settings)).toBe(true);
+    expect(settings.businessHoursEnabled).toBe(false);
+    expect(settings.businessHoursDays).toEqual(['mon', 'tue', 'wed', 'thu', 'fri']);
+    expect(settings.businessHoursStart).toBe(9);
+    expect(settings.businessHoursEnd).toBe(17);
+    expect(isWithinBusinessHours(settings, new Date('2026-06-03T20:00:00Z'))).toBe(true);
   });
 
   it('evaluates weekday hours in the configured timezone', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-06-03T16:00:00Z'));
-    expect(isWithinBusinessHours(ENABLED_SETTINGS)).toBe(true);
+    const settings = resolveAgentSettings({
+      businessHoursEnabled: true,
+      businessHoursDays: ['wed'],
+      businessHoursStart: 9,
+      businessHoursEnd: 17,
+      businessHoursTimezone: 'UTC',
+    });
 
-    vi.setSystemTime(new Date('2026-06-03T20:00:00Z'));
-    expect(isWithinBusinessHours(ENABLED_SETTINGS)).toBe(false);
+    expect(isWithinBusinessHours(settings, new Date('2026-06-03T16:00:00Z'))).toBe(true);
+    expect(isWithinBusinessHours(settings, new Date('2026-06-03T20:00:00Z'))).toBe(false);
   });
 
-  it('supports business-hour windows that cross midnight', () => {
-    vi.useFakeTimers();
-    const overnight = {
-      ...ENABLED_SETTINGS,
+  it('supports the next-day portion of overnight windows', () => {
+    const overnight = resolveAgentSettings({
+      businessHoursEnabled: true,
       businessHoursDays: ['wed'],
       businessHoursStart: 22,
       businessHoursEnd: 6,
-    };
+      businessHoursTimezone: 'UTC',
+    });
 
-    vi.setSystemTime(new Date('2026-06-03T23:00:00Z'));
-    expect(isWithinBusinessHours(overnight)).toBe(true);
-
-    vi.setSystemTime(new Date('2026-06-03T12:00:00Z'));
-    expect(isWithinBusinessHours(overnight)).toBe(false);
+    expect(isWithinBusinessHours(overnight, new Date('2026-06-03T23:00:00Z'))).toBe(true);
+    expect(isWithinBusinessHours(overnight, new Date('2026-06-04T05:00:00Z'))).toBe(true);
+    expect(isWithinBusinessHours(overnight, new Date('2026-06-04T07:00:00Z'))).toBe(false);
   });
 
-  it('falls back to UTC evaluation for an invalid timezone', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-06-03T16:00:00Z'));
-
-    expect(isWithinBusinessHours({
-      ...ENABLED_SETTINGS,
+  it('repairs malformed historical schedules before evaluating them', () => {
+    const repaired = resolveAgentSettings({
+      businessHoursEnabled: true,
+      businessHoursDays: ['wed', 'noday'],
+      businessHoursStart: '9',
+      businessHoursEnd: 9,
       businessHoursTimezone: 'not-a-timezone',
-    })).toBe(true);
+    });
+
+    expect(repaired.businessHoursDays).toEqual(['mon', 'tue', 'wed', 'thu', 'fri']);
+    expect(repaired.businessHoursStart).toBe(9);
+    expect(repaired.businessHoursEnd).toBe(17);
+    expect(repaired.businessHoursTimezone).toBeUndefined();
+    expect(isWithinBusinessHours(repaired, new Date('2026-06-03T16:00:00Z'))).toBe(true);
   });
 });

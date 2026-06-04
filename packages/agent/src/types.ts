@@ -16,6 +16,8 @@ export interface SampleReply {
   tag?: string;      // optional tag for matching against thread.tag
 }
 
+export type BusinessHoursDay = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
 export interface OrgSettings {
   // AI draft / summary
   aiContext: string;   // brand name / context fed into AI drafts
@@ -61,7 +63,7 @@ export interface OrgSettings {
   businessHoursEnabled: boolean;
   businessHoursStart: number;          // 0–23 local hour open (inclusive)
   businessHoursEnd: number;            // 0–23 local hour close (exclusive)
-  businessHoursDays: string[];         // e.g. ['mon','tue','wed','thu','fri']
+  businessHoursDays: BusinessHoursDay[]; // selected days are opening days; overnight windows may end the next day
   businessHoursTimezone?: string;      // IANA tz. Preferred.
   businessHoursTimezoneOffset: number; // integer UTC offset (legacy fallback)
   autoAckMessage: string;
@@ -72,6 +74,10 @@ export interface OrgSettings {
   // Onboarding , chosen autonomy preset (see settings.ts mapping)
   autonomyTier?: 'watch' | 'guarded' | 'trusted' | 'broad' | 'full';
 }
+
+export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {
+  toolsEnabled?: Partial<AgentToolPermissions>;
+};
 
 // Agent plan , proposed steps before execution
 export type ToolCategory = 'action' | 'communication' | 'internal' | 'read'

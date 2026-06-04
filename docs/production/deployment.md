@@ -41,7 +41,7 @@ DATABASE_URL='postgresql://...' npm run db:migrate:deploy
   `GATEWAY_WORKER_HEARTBEAT_STALE_MS`,
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
-- Vercel builds `packages/db` before the dashboard so the shared package output is current during deploy.
+- Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
 

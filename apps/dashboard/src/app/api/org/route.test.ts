@@ -78,6 +78,14 @@ describe('/api/org billing access', () => {
 });
 
 describe('/api/org PATCH settings', () => {
+  function patchReq(body: unknown) {
+    return new Request('http://localhost:3000/api/org', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
   it('can unset explicit autonomy override fields while preserving other settings', async () => {
     await db.organization.update({
       where: { id: org.id },
@@ -94,13 +102,9 @@ describe('/api/org PATCH settings', () => {
       },
     });
 
-    const res = await PATCH(new Request('http://localhost:3000/api/org', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        settings: { autonomyTier: 'trusted' },
-        settingsUnset: ['maxRefundAmount', 'toolsEnabled.action'],
-      }),
+    const res = await PATCH(patchReq({
+      settings: { autonomyTier: 'trusted' },
+      settingsUnset: ['maxRefundAmount', 'toolsEnabled.action'],
     }));
 
     expect(res.status).toBe(200);
@@ -127,13 +131,97 @@ describe('/api/org PATCH settings', () => {
   });
 
   it('rejects unknown settingsUnset paths', async () => {
-    const res = await PATCH(new Request('http://localhost:3000/api/org', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settingsUnset: ['billing.status'] }),
+    const res = await PATCH(patchReq({ settingsUnset: ['billing.status'] }));
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects unknown settings keys and invalid field types without persisting them', async () => {
+    const res = await PATCH(patchReq({
+      settings: {
+        businessHoursEnabled: 'yes',
+        toolsEnabled: { action: true, deleteOrders: true },
+        unexpected: true,
+      },
     }));
 
     expect(res.status).toBe(400);
+    const body = await res.json() as { details: Array<{ field: string }> };
+    expect(body.details.map(detail => detail.field)).toEqual(expect.arrayContaining([
+      'businessHoursEnabled',
+      'toolsEnabled.deleteOrders',
+      'unexpected',
+    ]));
+
+    const saved = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(saved.settings).toEqual({});
+  });
+
+  it('accepts overnight business-hour windows', async () => {
+    const res = await PATCH(patchReq({
+      settings: {
+        businessHoursEnabled: true,
+        businessHoursDays: ['wed'],
+        businessHoursStart: 22,
+        businessHoursEnd: 6,
+        businessHoursTimezone: 'UTC',
+      },
+    }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { settings: Record<string, unknown> };
+    expect(body.settings).toMatchObject({
+      businessHoursEnabled: true,
+      businessHoursDays: ['wed'],
+      businessHoursStart: 22,
+      businessHoursEnd: 6,
+      businessHoursTimezone: 'UTC',
+    });
+  });
+
+  it('rejects equal opening and closing hours', async () => {
+    const res = await PATCH(patchReq({
+      settings: {
+        businessHoursEnabled: true,
+        businessHoursStart: 9,
+        businessHoursEnd: 9,
+      },
+    }));
+
+    expect(res.status).toBe(400);
+    const body = await res.json() as { details: Array<{ field: string }> };
+    expect(body.details).toContainEqual(expect.objectContaining({ field: 'businessHoursEnd' }));
+  });
+
+  it('normalizes malformed historical settings when applying a valid patch', async () => {
+    await db.organization.update({
+      where: { id: org.id },
+      data: {
+        settings: {
+          brandVoice: 'warm',
+          businessHoursEnabled: true,
+          businessHoursDays: ['noday'],
+          businessHoursStart: 9,
+          businessHoursEnd: 9,
+          toolsEnabled: { action: false, read: 'yes' },
+          unexpected: true,
+        },
+      },
+    });
+
+    const res = await PATCH(patchReq({ settings: { agentName: 'Ada' } }));
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { settings: Record<string, unknown> };
+    expect(body.settings).toEqual({
+      agentName: 'Ada',
+      brandVoice: 'warm',
+      businessHoursEnabled: true,
+      toolsEnabled: { action: false },
+    });
+
+    const saved = await db.organization.findUniqueOrThrow({ where: { id: org.id } });
+    expect(saved.settings).toEqual(body.settings);
   });
 });
 

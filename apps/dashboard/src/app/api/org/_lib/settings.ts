@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
+import {
+  AGENT_SETTINGS_DEFAULTS,
+  OrgSettingsValidationError,
+  isValidBusinessHoursWindow,
+  normalizeStoredOrgSettings,
+  parseOrgSettingsPatch,
+  type OrgSettingsPatch,
+} from '@clerk/agent/settings';
 import { BadRequestError } from '@/lib/api/errors';
-import type { OrgSettings } from '@/types';
 
 const ALLOWED_SETTINGS_UNSET = new Set([
   'requireApprovalForActions',
@@ -14,6 +21,8 @@ const ALLOWED_SETTINGS_UNSET = new Set([
   'toolsEnabled.read',
 ]);
 
+const ORG_PATCH_KEYS = new Set(['name', 'settings', 'settingsUnset', 'version']);
+
 export interface VersionedOrgSnapshot {
   id: string;
   name: string;
@@ -21,8 +30,59 @@ export interface VersionedOrgSnapshot {
   updatedAt: Date;
 }
 
+export interface OrgPatchBody {
+  name?: string;
+  settings?: OrgSettingsPatch;
+  settingsUnset: string[];
+  version?: string;
+}
+
 export function hasVersionConflict(version: string | undefined, org: VersionedOrgSnapshot): boolean {
   return version !== undefined && version !== org.updatedAt.toISOString();
+}
+
+export function parseOrgPatchBody(value: unknown): OrgPatchBody {
+  if (!isPlainObject(value)) {
+    throw new BadRequestError('Invalid request body');
+  }
+  const unknownKey = Object.keys(value).find(key => !ORG_PATCH_KEYS.has(key));
+  if (unknownKey) {
+    throw new BadRequestError('Invalid request body', [{
+      code: 'unknown_field',
+      field: unknownKey,
+      message: 'Unknown field',
+    }]);
+  }
+  if (value.name !== undefined && typeof value.name !== 'string') {
+    throw new BadRequestError('Invalid name');
+  }
+  if (value.version !== undefined && typeof value.version !== 'string') {
+    throw new BadRequestError('Invalid version');
+  }
+
+  let settings: OrgSettingsPatch | undefined;
+  if (value.settings !== undefined) {
+    try {
+      settings = parseOrgSettingsPatch(value.settings);
+    } catch (error) {
+      if (!(error instanceof OrgSettingsValidationError)) throw error;
+      throw new BadRequestError(
+        'Invalid settings',
+        error.issues.map(issue => ({
+          code: 'invalid_setting',
+          field: issue.path,
+          message: issue.message,
+        })),
+      );
+    }
+  }
+
+  return {
+    ...(value.name !== undefined ? { name: value.name } : {}),
+    ...(settings !== undefined ? { settings } : {}),
+    settingsUnset: parseSettingsUnset(value.settingsUnset),
+    ...(value.version !== undefined ? { version: value.version } : {}),
+  };
 }
 
 export function versionConflictResponse(org: VersionedOrgSnapshot): NextResponse {
@@ -33,7 +93,7 @@ export function versionConflictResponse(org: VersionedOrgSnapshot): NextResponse
       current: {
         id: org.id,
         name: org.name,
-        settings: org.settings ?? {},
+        settings: normalizeStoredOrgSettings(org.settings),
         version: org.updatedAt.toISOString(),
       },
     },
@@ -43,19 +103,20 @@ export function versionConflictResponse(org: VersionedOrgSnapshot): NextResponse
 
 export function buildSettingsUpdate(
   currentSettings: unknown,
-  newSettings: Partial<OrgSettings> | undefined,
-  settingsUnset: unknown,
+  newSettings: OrgSettingsPatch | undefined,
+  settingsUnset: string[],
 ): { changed: boolean; settings: Prisma.InputJsonObject } {
-  const unsetPaths = parseSettingsUnset(settingsUnset);
-  const settingsChanged = newSettings !== undefined || unsetPaths.length > 0;
+  const settingsChanged = newSettings !== undefined || settingsUnset.length > 0;
   const updatedSettings = mergeSettingsPatch(
-    toPlainRecord(currentSettings),
-    normalizeSettingsPatch(newSettings),
+    toPlainRecord(normalizeStoredOrgSettings(currentSettings)),
+    toPlainRecord(newSettings),
   );
 
-  for (const path of unsetPaths) {
+  for (const path of settingsUnset) {
     deleteSettingPath(updatedSettings, path);
   }
+
+  validateBusinessHoursWindow(updatedSettings);
 
   return {
     changed: settingsChanged,
@@ -74,10 +135,20 @@ function parseSettingsUnset(settingsUnset: unknown): string[] {
   return unsetPaths;
 }
 
-function normalizeSettingsPatch(newSettings: Partial<OrgSettings> | undefined): Record<string, unknown> {
-  return newSettings === undefined
-    ? {}
-    : JSON.parse(JSON.stringify(newSettings)) as Record<string, unknown>;
+function validateBusinessHoursWindow(settings: Record<string, unknown>): void {
+  if (settings.businessHoursEnabled !== true) return;
+  const start = typeof settings.businessHoursStart === 'number'
+    ? settings.businessHoursStart
+    : AGENT_SETTINGS_DEFAULTS.businessHoursStart;
+  const end = typeof settings.businessHoursEnd === 'number'
+    ? settings.businessHoursEnd
+    : AGENT_SETTINGS_DEFAULTS.businessHoursEnd;
+  if (isValidBusinessHoursWindow(start, end)) return;
+  throw new BadRequestError('Invalid settings', [{
+    code: 'invalid_setting',
+    field: 'businessHoursEnd',
+    message: 'Opening and closing times must be different',
+  }]);
 }
 
 function toPrismaJsonObject(value: Record<string, unknown>): Prisma.InputJsonObject {

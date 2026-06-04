@@ -10,7 +10,7 @@ import BillingTab from "./BillingTab"
 import AuditLogTab from "./AuditLogTab"
 import ConciergeSummary from "./ConciergeSummary"
 import { cn } from "@/lib/ui/cn"
-import type { OrgSettings, VoiceProposal } from "@/types"
+import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import {
 interface Props {
   orgName: string
   settings: OrgSettings
-  rawSettings: Partial<OrgSettings>
+  rawSettings: OrgSettingsPatch
   version: string
   voiceProposal: VoiceProposal | null
 }

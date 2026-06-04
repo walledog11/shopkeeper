@@ -1,6 +1,6 @@
 "use client"
 
-import type { OrgSettings, VoiceProposal } from "@/types"
+import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import {
   AgentAutonomySection,
   AgentDefaultBehaviorSection,
@@ -17,7 +17,7 @@ import { useAgentTabState } from "./useAgentTabState"
 
 interface Props {
   settings: OrgSettings
-  rawSettings: Partial<OrgSettings>
+  rawSettings: OrgSettingsPatch
   version: string
   voiceProposal: VoiceProposal | null
 }

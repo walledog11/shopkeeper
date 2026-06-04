@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.80.0",
+    "@clerk/agent": "*",
     "@clerk/db": "*",
     "@sentry/node": "10.47.0",
     "@vercel/blob": "2.3.3",

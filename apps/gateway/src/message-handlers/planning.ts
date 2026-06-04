@@ -1,4 +1,5 @@
 import { db } from '@clerk/db';
+import type { OrgSettings } from '@clerk/agent/types';
 import * as Sentry from '@sentry/node';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';
@@ -8,7 +9,7 @@ import type { PrecomputedPlanResult } from './planning-types.js';
 export async function precomputeThreadPlan(
   organizationId: string,
   threadId: string,
-  settings: Record<string, unknown>,
+  settings: Pick<OrgSettings, 'autoPlanOnOpen'>,
   options: { allowAutoExecute?: boolean } = {},
 ): Promise<PrecomputedPlanResult | null> {
   if (settings.autoPlanOnOpen === false) {
