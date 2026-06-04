@@ -1,14 +1,8 @@
 import Link from "next/link"
-
-interface RepeatCustomer {
-  customerId: string
-  name: string
-  initials: string
-  ticketCount: number
-}
+import type { HomeRepeatCustomer } from "@/lib/home/summary-contract"
 
 interface Props {
-  customers: RepeatCustomer[]
+  customers: HomeRepeatCustomer[]
 }
 
 const COLORS = [

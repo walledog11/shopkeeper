@@ -31,18 +31,18 @@ Complete this phase before broad cleanup work so later verification covers the f
 
 The home page currently fetches and polls the full open and closed inbox. Its reply metrics are also derived from only the latest message in each thread, which undercounts replies.
 
-- [ ] Define a server-side home summary contract.
+- [x] Define a server-side home summary contract.
   - Return aggregate metrics directly from the database.
   - Return small, bounded lists for needs-attention, overnight, and repeat-customer sections.
   - Reuse the canonical inbox filters, including deleted and filtered thread behavior.
-- [ ] Implement a home summary query service and API endpoint.
+- [x] Implement a home summary query service and API endpoint.
   - Calculate replies sent from messages or actions instead of one preview message per thread.
   - Calculate daily series and comparison-period metrics in the database.
   - Avoid loading complete thread collections into application memory.
-- [ ] Update the dashboard home page and `useHomeData` to consume the summary contract.
+- [x] Update the dashboard home page and `useHomeData` to consume the summary contract.
   - Remove full open/closed thread polling from the home page.
   - Keep refresh intervals bounded to the summary endpoint.
-- [ ] Add query and UI tests for metric correctness, filtering, limits, and empty states.
+- [x] Add query and UI tests for metric correctness, filtering, limits, and empty states.
 
 ## Phase 2: Standardize Client Request And Mutation Failures
 

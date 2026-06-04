@@ -12,6 +12,7 @@
     }
   },
   "scripts": {
+    "postinstall": "tsc",
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "test:unit": "vitest run --config vitest.config.ts",

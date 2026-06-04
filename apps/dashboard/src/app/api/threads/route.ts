@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType, ThreadFilterStatus } from '@clerk/db';
 import { withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
+import { canonicalInboxThreadWhere } from '@/lib/messaging/inbox-filter';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,10 +24,7 @@ export const GET = withOrgRoute(
     const wantsFiltered = filterStatusParam === ThreadFilterStatus.filtered;
     const needsReply = searchParams.get('needsReply') === 'true';
     const where = {
-      organizationId: org.id,
-      channelType: { notIn: [CHANNEL_TYPE.SMS_AGENT, CHANNEL_TYPE.DASHBOARD_AGENT] },
-      archivedAt: null,
-      deletedAt: null,
+      ...canonicalInboxThreadWhere(org.id),
       ...(wantsFiltered
         ? { filterStatus: ThreadFilterStatus.filtered }
         : { status, filterStatus: { not: ThreadFilterStatus.filtered } }),

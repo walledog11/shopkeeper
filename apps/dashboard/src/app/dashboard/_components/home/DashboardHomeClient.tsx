@@ -10,7 +10,7 @@ import TodayOrders from "./TodayOrders"
 import RepeatCustomers from "./RepeatCustomers"
 import WeekChart from "./WeekChart"
 import { useHomeData } from "./useHomeData"
-import type { Thread } from "@/types"
+import type { HomeSummary } from "@/lib/home/summary-contract"
 
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -21,12 +21,12 @@ function getGreeting(): string {
 
 interface Props {
   userName: string
-  initialOpenThreads: Thread[]
+  initialSummary: HomeSummary
 }
 
-export default function DashboardHomeClient({ userName, initialOpenThreads }: Props) {
+export default function DashboardHomeClient({ userName, initialSummary }: Props) {
   const greeting = getGreeting()
-  const data = useHomeData({ initialOpenThreads })
+  const data = useHomeData({ initialSummary })
 
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
@@ -66,7 +66,7 @@ export default function DashboardHomeClient({ userName, initialOpenThreads }: Pr
               <NeedsYou
                 items={data.needsYouItems}
                 agentName={data.agentName}
-                onApproved={data.refreshOpenThreads}
+                onApproved={data.refreshHomeSummary}
               />
 
               <ClearedOvernight

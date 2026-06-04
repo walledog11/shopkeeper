@@ -6,23 +6,10 @@ import { AlertCircle, Bot, Camera, Loader2, Mail, MessageSquare, ShoppingBag, Sm
 import type { LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
-
-interface NeedsYouItem {
-  threadId: string
-  kind: "quick_reply" | "needs_review"
-  customerName: string
-  channelName: string
-  timeAgo: string
-  headline: string
-  contextLine: string
-  proposalSummary: string
-  replyText: string | null
-  orderRef: string | null
-  tag: string | null
-}
+import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 
 interface Props {
-  items: NeedsYouItem[]
+  items: HomeNeedsAttentionItem[]
   agentName: string
   onApproved: () => void
 }
@@ -55,7 +42,7 @@ export default function NeedsYou({ items, agentName, onApproved }: Props) {
   )
 }
 
-function NeedsYouRow({ item, agentName, onApproved }: { item: NeedsYouItem; agentName: string; onApproved: () => void }) {
+function NeedsYouRow({ item, agentName, onApproved }: { item: HomeNeedsAttentionItem; agentName: string; onApproved: () => void }) {
   const channelMeta = CHANNEL_META[item.channelName] ?? { Icon: MessageSquare, className: "text-white/40" }
   const ChannelIcon = channelMeta.Icon
   const tagStyle = getTagStyle(item.tag)

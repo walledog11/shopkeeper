@@ -1,15 +1,10 @@
 import { Card } from "@/components/ui/card"
-
-interface ClearedTopic {
-  tag: string
-  count: number
-  subtitle: string
-}
+import type { HomeClearedTopic } from "@/lib/home/summary-contract"
 
 interface Props {
   agentName: string
   totalCount: number
-  topics: ClearedTopic[]
+  topics: HomeClearedTopic[]
   timeSavedHours: number
   repliesSent: number
 }
