@@ -27,11 +27,6 @@ export function requireNumericId(value: unknown, field: string): string {
   return id;
 }
 
-function optionalNumericId(value: unknown, field: string): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  return requireNumericId(value, field);
-}
-
 function requirePositiveInteger(value: unknown, field: string): number {
   const numberValue = typeof value === "number" ? value : Number(value);
   if (!Number.isInteger(numberValue) || numberValue <= 0) {
