@@ -1,7 +1,10 @@
 import { db } from '@clerk/db';
 import logger from '../../logger.js';
+import { sendMessage } from '../../clients/telegram-client.js';
 import { getRateLimitRedis } from '../webhooks-shared.js';
 import type { TelegramReply } from './types.js';
+
+const MAX_TELEGRAM_DEVICES = 3;
 
 export async function handleStartBinding(
   chatId: string,
@@ -32,25 +35,52 @@ export async function handleStartBinding(
     return;
   }
 
-  await db.orgMember.updateMany({
-    where: {
-      telegramChatId: chatId,
-      NOT: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId },
-    },
-    data: { telegramChatId: null },
+  // Resolve the target OrgMember
+  const member = await db.orgMember.findUnique({
+    where: { organizationId_clerkUserId: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId } },
+    include: { telegramChats: { select: { chatId: true } } },
   });
 
-  const updated = await db.orgMember.updateMany({
-    where: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId },
-    data: { telegramChatId: chatId },
-  });
-
-  if (updated.count === 0) {
+  if (!member) {
     logger.warn({ orgId: payload.orgId, clerkUserId: payload.clerkUserId }, '[Telegram] Bind target OrgMember not found');
     await reply('Could not link this chat — your workspace membership is missing. Open the Clerk dashboard and try again.');
     return;
   }
 
+  // Device cap: refuse if the member already has MAX_TELEGRAM_DEVICES bound
+  const existingChatIds = member.telegramChats.map((c) => c.chatId);
+  const alreadyBound = existingChatIds.includes(chatId);
+  if (!alreadyBound && existingChatIds.length >= MAX_TELEGRAM_DEVICES) {
+    await reply(
+      `You already have ${MAX_TELEGRAM_DEVICES} devices connected. Disconnect one from your Clerk dashboard under Integrations → Telegram before adding another.`,
+    );
+    return;
+  }
+
+  // If this chatId was previously bound to a different member, remove that binding
+  await db.orgMemberTelegramChat.deleteMany({
+    where: { chatId, NOT: { orgMemberId: member.id } },
+  });
+
+  // Upsert the binding for this member
+  await db.orgMemberTelegramChat.upsert({
+    where: { chatId },
+    create: { orgMemberId: member.id, chatId },
+    update: {},
+  });
+
   await redis.del(key);
+
+  // Security alert: notify all other already-bound devices
+  const otherChatIds = existingChatIds.filter((id) => id !== chatId);
+  for (const otherChatId of otherChatIds) {
+    sendMessage(
+      otherChatId,
+      'A new device was linked to your Clerk account. If this wasn\'t you, disconnect it from your dashboard under Integrations → Telegram.',
+    ).catch((err: unknown) =>
+      logger.warn({ err, chatId: otherChatId }, '[Telegram] Failed to send new-device alert'),
+    );
+  }
+
   await reply("Connected. Text SUMMARY for your inbox or HELP for commands. You can also reply to digests or send instructions like 'refund #1234'.");
 }

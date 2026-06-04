@@ -1,5 +1,2 @@
-export const AGENT_TURN_PREFIX = "__clerk_agent__";
-
-export function isAgentTurnContent(contentText: string | null | undefined): boolean {
-  return !!contentText?.startsWith(AGENT_TURN_PREFIX);
-}
+// Re-export shim — implementation moved to @clerk/agent (Track 2 extraction).
+export * from "@clerk/agent/tools";

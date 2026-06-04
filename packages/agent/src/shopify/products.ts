@@ -1,9 +1,9 @@
-import type { SearchShopifyProductsInput } from "../tools";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
-import { serializeProduct } from "./serializers";
-import type { ShopifyProduct } from "./types";
-import { clampLimit, requireNonEmptyString } from "./validation";
+import type { SearchShopifyProductsInput } from "../tools/index.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
+import { serializeProduct } from "./serializers.js";
+import type { ShopifyProduct } from "./types.js";
+import { clampLimit, requireNonEmptyString } from "./validation.js";
 
 export async function searchShopifyProducts(
   input: SearchShopifyProductsInput,

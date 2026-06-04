@@ -1,13 +1,13 @@
-import type { CreateRefundInput } from "../tools";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { toolError, toolOk, type ToolResult } from "../tools/result";
+import type { CreateRefundInput } from "../tools/index.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { toolError, toolOk, type ToolResult } from "../tools/result.js";
 import type {
   ShopifyCalculatedRefundLineItem,
   ShopifyOrder,
   ShopifyOrderLineItem,
   ShopifyTransaction,
-} from "./types";
-import { centsToMoney, moneyToCents, optionalString, requireAmount, requireNumericId, ShopifyInputError } from "./validation";
+} from "./types.js";
+import { centsToMoney, moneyToCents, optionalString, requireAmount, requireNumericId, ShopifyInputError } from "./validation.js";
 
 interface RefundCalculation {
   refund?: {

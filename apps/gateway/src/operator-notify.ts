@@ -11,7 +11,7 @@ import { isTelegramConfigured, sendMessage as telegramSend } from './clients/tel
 import { updateContext, type OperatorContext } from './operator-context.js';
 
 export interface OperatorMember {
-  telegramChatId: string | null;
+  chatId: string;
 }
 
 export interface OperatorNotifyResult {
@@ -24,15 +24,15 @@ export async function notifyOperator(
   body: string,
   contextPatch: Partial<OperatorContext>,
 ): Promise<OperatorNotifyResult | null> {
-  if (!member.telegramChatId || !isTelegramConfigured()) return null;
+  if (!isTelegramConfigured()) return null;
 
   try {
-    await telegramSend(member.telegramChatId, body);
-    await updateContext(organizationId, member.telegramChatId, contextPatch);
-    return { chatId: member.telegramChatId };
+    await telegramSend(member.chatId, body);
+    await updateContext(organizationId, member.chatId, contextPatch);
+    return { chatId: member.chatId };
   } catch (e) {
     logger.error(
-      { err: (e as Error).message, chatId: member.telegramChatId, organizationId },
+      { err: (e as Error).message, chatId: member.chatId, organizationId },
       '[OperatorNotify] Telegram send failed',
     );
     return null;

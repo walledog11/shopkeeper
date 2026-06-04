@@ -1,17 +1,2 @@
-export {
-  cancelOrder,
-  createRefund,
-  createShopifyOrder,
-  editShopifyOrder,
-  getOrderByName,
-  getOrderTracking,
-  getShopifyCustomer,
-  getShopifyOrders,
-  searchShopifyCustomers,
-  searchShopifyProducts,
-  updateShopifyCustomerInfo,
-  updateShopifyOrderAddress,
-  addShopifyCustomerNote,
-  SHOPIFY_API_VERSION,
-  type ShopifyContext,
-} from "../shopify";
+// Re-export shim — implementation moved to @clerk/agent (Track 2 extraction).
+export * from "@clerk/agent/shopify";

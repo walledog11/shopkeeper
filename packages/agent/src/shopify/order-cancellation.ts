@@ -1,8 +1,8 @@
-import type { CancelOrderInput } from "../tools";
-import { toolError, toolOk, type ToolResult } from "../tools/result";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import type { ShopifyOrder } from "./types";
-import { requireNumericId } from "./validation";
+import type { CancelOrderInput } from "../tools/index.js";
+import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import type { ShopifyOrder } from "./types.js";
+import { requireNumericId } from "./validation.js";
 
 export async function cancelOrder(
   input: CancelOrderInput,

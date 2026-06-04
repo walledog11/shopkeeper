@@ -1,9 +1,9 @@
-import type { UpdateShopifyOrderAddressInput } from "../tools";
-import { toolError, toolOk, type ToolResult } from "../tools/result";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { formatAddressForMessage } from "./serializers";
-import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types";
-import { optionalString, requireNonEmptyString, requireNumericId } from "./validation";
+import type { UpdateShopifyOrderAddressInput } from "../tools/index.js";
+import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { formatAddressForMessage } from "./serializers.js";
+import type { ShopifyCustomer, ShopifyCustomerAddress, ShopifyOrder } from "./types.js";
+import { optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
 interface OrderAddressInput {
   first_name?: unknown;

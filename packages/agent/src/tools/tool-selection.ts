@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { OrgSettings } from "@/types";
-import { resolveAgentSettings } from "../settings";
-import { TOOL_CATEGORIES } from "./tool-metadata";
-import { AGENT_TOOLS } from "./tool-schemas";
+import type { OrgSettings } from "../types.js";
+import { resolveAgentSettings } from "../settings.js";
+import { TOOL_CATEGORIES } from "./tool-metadata.js";
+import { AGENT_TOOLS } from "./tool-schemas.js";
 
 // Filter tools by org settings and optional allow-list.
 export function selectAgentTools(

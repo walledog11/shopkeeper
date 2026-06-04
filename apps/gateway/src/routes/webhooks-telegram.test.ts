@@ -205,9 +205,62 @@ describe('POST /webhooks/telegram — /start bind', () => {
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/connected/i);
 
-    const updated = await db.orgMember.findUnique({ where: { id: member.id } });
-    expect(updated?.telegramChatId).toBe('9001');
+    const chat = await db.orgMemberTelegramChat.findUnique({ where: { chatId: '9001' } });
+    expect(chat?.orgMemberId).toBe(member.id);
     expect(redisStore.has(`telegram:bind:${token}`)).toBe(false);
+  });
+
+  it('enforces the device cap and replies with a limit message', async () => {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: 'usr_cap' },
+    });
+    await db.orgMemberTelegramChat.createMany({
+      data: [
+        { orgMemberId: member.id, chatId: 'cap_chat_1' },
+        { orgMemberId: member.id, chatId: 'cap_chat_2' },
+        { orgMemberId: member.id, chatId: 'cap_chat_3' },
+      ],
+    });
+    const token = 'cap-token-xyz';
+    redisStore.set(
+      `telegram:bind:${token}`,
+      JSON.stringify({ orgId: org.id, clerkUserId: 'usr_cap' }),
+    );
+
+    const res = await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: 9100, type: 'private' }, text: `/start ${token}` } });
+
+    expect(res.status).toBe(200);
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/3 devices/i);
+    // Token should still be in Redis — it was not consumed
+    expect(redisStore.has(`telegram:bind:${token}`)).toBe(true);
+  });
+
+  it('sends a security alert to existing devices when a new one is added', async () => {
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: 'usr_alert' },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId: 'existing_chat' },
+    });
+    const token = 'alert-token-xyz';
+    redisStore.set(
+      `telegram:bind:${token}`,
+      JSON.stringify({ orgId: org.id, clerkUserId: 'usr_alert' }),
+    );
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: 9101, type: 'private' }, text: `/start ${token}` } });
+
+    await waitForReplies(2); // confirmation + alert to existing device
+    const calls = sendMessageSpy.mock.calls as [string, string][];
+    const alertCall = calls.find(([chatId]) => chatId === 'existing_chat');
+    expect(alertCall?.[1]).toMatch(/new device/i);
   });
 
   it('replies "expired" when token is not in Redis', async () => {
@@ -247,13 +300,13 @@ describe('POST /webhooks/telegram — unbound chat', () => {
 // ── Pending plan: yes / no / skip N ──────────────────────────────────────────
 describe('POST /webhooks/telegram — pending plan commands', () => {
   async function bindMember(chatId: string) {
-    return db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `usr_${chatId}`,
-        telegramChatId: chatId,
-      },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
     });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
+    });
+    return member;
   }
 
   it('"yes" runs the agent with rawToolCalls as approvedToolCalls', async () => {
@@ -361,12 +414,11 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 describe('POST /webhooks/telegram — digest commands', () => {
   async function setupDigest(opts: { customerName?: string; aiSummary?: string | null } = {}) {
     const chatId = `${6000000 + Math.floor(Math.random() * 999_999)}`;
-    await db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `usr_${chatId}`,
-        telegramChatId: chatId,
-      },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
     });
     const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, {
       name: opts.customerName ?? 'Jane',
@@ -456,9 +508,13 @@ describe('POST /webhooks/telegram — digest commands', () => {
 // ── HELP / SUMMARY commands ──────────────────────────────────────────────────
 describe('POST /webhooks/telegram — help & summary', () => {
   async function bindMember(chatId: string) {
-    return db.orgMember.create({
-      data: { organizationId: org.id, clerkUserId: `usr_${chatId}`, telegramChatId: chatId },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
     });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
+    });
+    return member;
   }
 
   it('"help" lists the available commands without touching the DB feed', async () => {
@@ -520,12 +576,11 @@ describe('POST /webhooks/telegram — help & summary', () => {
 describe('POST /webhooks/telegram — order lookup', () => {
   it('replies with thread context when #N matches an open thread', async () => {
     const chatId = '7000001';
-    await db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `usr_${chatId}`,
-        telegramChatId: chatId,
-      },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
     });
     const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, { name: 'Carol' });
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
@@ -551,12 +606,11 @@ describe('POST /webhooks/telegram — order lookup', () => {
 describe('POST /webhooks/telegram — free-form instruction', () => {
   it('forwards arbitrary text to /api/agent/internal and updates history', async () => {
     const chatId = '8000001';
-    await db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `usr_${chatId}`,
-        telegramChatId: chatId,
-      },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
     });
     const newThreadId = '00000000-0000-4000-8000-000000000099';
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
@@ -598,8 +652,11 @@ describe('POST /webhooks/telegram — per-chatId rate limit', () => {
 
   it('drops the request silently when the per-chat limit is exceeded', async () => {
     const chatId = '9100001';
-    await db.orgMember.create({
-      data: { organizationId: org.id, clerkUserId: `usr_${chatId}`, telegramChatId: chatId },
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId },
     });
     primeCounter(chatId, 30);
 

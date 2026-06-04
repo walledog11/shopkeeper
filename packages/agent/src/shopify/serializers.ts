@@ -4,7 +4,7 @@ import type {
   ShopifyOrder,
   ShopifyOrderLineItem,
   ShopifyProduct,
-} from "./types";
+} from "./types.js";
 
 export function customerName(customer: Pick<ShopifyCustomer, "first_name" | "last_name">): string {
   return [customer.first_name, customer.last_name].filter(Boolean).join(" ").trim();

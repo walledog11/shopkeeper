@@ -83,12 +83,12 @@ export async function sendOperatorAutoExecutionNotification(
   result: PrecomputedPlanResult,
 ): Promise<void> {
   try {
-    const members = await db.orgMember.findMany({
-      where: { organizationId, telegramChatId: { not: null } },
-      select: { telegramChatId: true },
+    const chats = await db.orgMemberTelegramChat.findMany({
+      where: { orgMember: { organizationId } },
+      select: { chatId: true },
     });
 
-    if (members.length === 0) {
+    if (chats.length === 0) {
       logger.info({ organizationId }, '[Worker] No bound operator members — skipping auto-execution notification');
       return;
     }
@@ -96,7 +96,7 @@ export async function sendOperatorAutoExecutionNotification(
     const summary = aiSummary || result.instruction;
     const message = formatAutoExecutionMessage(customerName, channelType, summary, result.plan, result);
 
-    for (const member of members) {
+    for (const member of chats) {
       const sent = await notifyOperator(organizationId, member, message, {
         lastThreadId: threadId,
         pendingPlan: null,
@@ -123,12 +123,12 @@ export async function sendOperatorPlanNotification(
   instruction: string,
 ): Promise<void> {
   try {
-    const members = await db.orgMember.findMany({
-      where: { organizationId, telegramChatId: { not: null } },
-      select: { telegramChatId: true },
+    const chats = await db.orgMemberTelegramChat.findMany({
+      where: { orgMember: { organizationId } },
+      select: { chatId: true },
     });
 
-    if (members.length === 0) {
+    if (chats.length === 0) {
       logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
       return;
     }
@@ -136,7 +136,7 @@ export async function sendOperatorPlanNotification(
     const summary = aiSummary || instruction;
     const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
 
-    for (const member of members) {
+    for (const member of chats) {
       const result = await notifyOperator(organizationId, member, message, {
         pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
       });

@@ -52,9 +52,9 @@ export function registerInternalOperatorRoutes(router: Router): void {
         return res.status(404).json({ error: 'Thread not found' });
       }
 
-      const members = await db.orgMember.findMany({
-        where: { organizationId, telegramChatId: { not: null } },
-        select: { telegramChatId: true },
+      const members = await db.orgMemberTelegramChat.findMany({
+        where: { orgMember: { organizationId } },
+        select: { chatId: true },
       });
 
       if (members.length === 0) {

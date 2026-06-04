@@ -205,13 +205,13 @@ export async function createMaintenanceWorkers(
     const currentHourUtc = now.getUTCHours();
 
     const orgs = await db.organization.findMany({
-      where: { members: { some: { telegramChatId: { not: null } } } },
+      where: { members: { some: { telegramChats: { some: {} } } } },
       select: {
         id: true,
         settings: true,
         members: {
-          where: { telegramChatId: { not: null } },
-          select: { telegramChatId: true },
+          where: { telegramChats: { some: {} } },
+          select: { telegramChats: { select: { chatId: true } } },
         },
       },
     });
@@ -227,7 +227,8 @@ export async function createMaintenanceWorkers(
       const digest = await buildOrgDigest(org.id, now);
       if (!digest) continue;
 
-      for (const member of org.members) {
+      const chats = org.members.flatMap((m) => m.telegramChats);
+      for (const member of chats) {
         const result = await notifyOperator(org.id, member, digest.message, {
           pendingDigest: digest.pendingDigest,
         });

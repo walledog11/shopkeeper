@@ -1,9 +1,9 @@
-import type { GetOrderByNameInput, GetShopifyOrdersInput } from "../tools";
-import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { serializeOrder } from "./serializers";
-import type { ShopifyOrder } from "./types";
-import { requireNonEmptyString, requireNumericId } from "./validation";
+import type { GetOrderByNameInput, GetShopifyOrdersInput } from "../tools/index.js";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { serializeOrder } from "./serializers.js";
+import type { ShopifyOrder } from "./types.js";
+import { requireNonEmptyString, requireNumericId } from "./validation.js";
 
 function orderFields(): string {
   return "id,name,created_at,financial_status,fulfillment_status,total_price,current_total_price,currency,line_items,shipping_address";

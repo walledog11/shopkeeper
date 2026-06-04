@@ -1,8 +1,8 @@
-import type { CreateShopifyOrderInput, CreateShopifyOrderLineItem } from "../tools";
-import { toolError, toolOk, type ToolResult } from "../tools/result";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { buildOrderAddress } from "./order-address";
-import type { ShopifyOrder } from "./types";
+import type { CreateShopifyOrderInput, CreateShopifyOrderLineItem } from "../tools/index.js";
+import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { buildOrderAddress } from "./order-address.js";
+import type { ShopifyOrder } from "./types.js";
 import {
   optionalPositiveInteger,
   optionalString,
@@ -11,7 +11,7 @@ import {
   requireNonEmptyString,
   requireNumericId,
   ShopifyInputError,
-} from "./validation";
+} from "./validation.js";
 
 export interface CreateShopifyOrderOptions {
   allowCustomLineItems?: boolean;

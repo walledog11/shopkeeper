@@ -117,19 +117,17 @@ describe('POST /internal/operator/escalate', () => {
     const customer = await createTestCustomer(org.id, 'two-members@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
-    await db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `user-${org.id}-1`,
-        telegramChatId: `chat-${org.id}-1`,
-      },
+    const member1 = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-1` },
     });
-    await db.orgMember.create({
-      data: {
-        organizationId: org.id,
-        clerkUserId: `user-${org.id}-2`,
-        telegramChatId: `chat-${org.id}-2`,
-      },
+    const member2 = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-2` },
+    });
+    await db.orgMemberTelegramChat.createMany({
+      data: [
+        { orgMemberId: member1.id, chatId: `chat-${org.id}-1` },
+        { orgMemberId: member2.id, chatId: `chat-${org.id}-2` },
+      ],
     });
 
     const res = await request(app)

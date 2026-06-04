@@ -3,12 +3,12 @@ import type {
   GetShopifyCustomerInput,
   SearchShopifyCustomersInput,
   UpdateShopifyCustomerInfoInput,
-} from "../tools";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
-import { customerName, serializeCustomer } from "./serializers";
-import type { ShopifyCustomer } from "./types";
-import { clampLimit, optionalString, requireNonEmptyString, requireNumericId } from "./validation";
+} from "../tools/index.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
+import { customerName, serializeCustomer } from "./serializers.js";
+import type { ShopifyCustomer } from "./types.js";
+import { clampLimit, optionalString, requireNonEmptyString, requireNumericId } from "./validation.js";
 
 export async function searchShopifyCustomers(
   input: SearchShopifyCustomersInput,

@@ -1,13 +1,13 @@
-import type { EditShopifyOrderInput } from "../tools";
-import { toolError, toolOk, type ToolResult } from "../tools/result";
+import type { EditShopifyOrderInput } from "../tools/index.js";
+import { toolError, toolOk, type ToolResult } from "../tools/result.js";
 import {
   formatShopifyToolError,
   formatUserErrors,
   shopifyGraphql,
   type ShopifyContext,
   type ShopifyGraphqlUserError,
-} from "./client";
-import { optionalPositiveInteger, optionalString, requireNumericId } from "./validation";
+} from "./client.js";
+import { optionalPositiveInteger, optionalString, requireNumericId } from "./validation.js";
 
 type CalculatedLineItemEdge = {
   node: {

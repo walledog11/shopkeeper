@@ -45,7 +45,11 @@ export async function handleTelegramMessage(
     return;
   }
 
-  const member = await db.orgMember.findFirst({ where: { telegramChatId: chatId } });
+  const chat = await db.orgMemberTelegramChat.findUnique({
+    where: { chatId },
+    include: { orgMember: true },
+  });
+  const member = chat?.orgMember ?? null;
   if (!member) {
     logger.warn({ chatId }, '[Telegram] Unbound sender');
     await reply(

@@ -1,5 +1,2 @@
-export { AGENT_TURN_PREFIX } from "./turn-content";
-export * from "./tool-inputs";
-export * from "./tool-metadata";
-export * from "./tool-schemas";
-export * from "./tool-selection";
+// Re-export shim — implementation moved to @clerk/agent (Track 2 extraction).
+export * from "@clerk/agent/tools";

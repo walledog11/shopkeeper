@@ -1,8 +1,8 @@
-import type { GetOrderTrackingInput } from "../tools";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client";
-import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result";
-import type { ShopifyFulfillment } from "./types";
-import { requireNumericId } from "./validation";
+import type { GetOrderTrackingInput } from "../tools/index.js";
+import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
+import { toolError, toolNotFound, toolOk, type ToolResult } from "../tools/result.js";
+import type { ShopifyFulfillment } from "./types.js";
+import { requireNumericId } from "./validation.js";
 
 type USPSAccessToken = {
   token: string;

@@ -1,4 +1,4 @@
-import type { ToolCategory } from "@/types";
+import type { ToolCategory } from "../types.js";
 
 // Tool category map, used for plan filtering and UI display.
 export const TOOL_CATEGORIES: Record<string, ToolCategory> = {

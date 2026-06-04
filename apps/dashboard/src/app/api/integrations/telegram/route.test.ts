@@ -48,22 +48,27 @@ describe('/api/integrations/telegram', () => {
   });
 
   it('reports the current user binding without exposing other members', async () => {
-    await db.orgMember.createMany({
+    const me = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_telegram' },
+    });
+    const other = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_other' },
+    });
+    await db.orgMemberTelegramChat.createMany({
       data: [
-        { organizationId: org!.id, clerkUserId: 'usr_telegram', telegramChatId: 'chat_current' },
-        { organizationId: org!.id, clerkUserId: 'usr_other', telegramChatId: 'chat_other' },
+        { orgMemberId: me.id, chatId: 'chat_current' },
+        { orgMemberId: other.id, chatId: 'chat_other' },
       ],
     });
 
     const res = await GET();
-    const body = await res.json() as { connected: boolean; chatId: string | null; botUsername: string | null };
+    const body = await res.json() as { connected: boolean; chats: { chatId: string; connectedAt: string }[]; botUsername: string | null };
 
     expect(res.status).toBe(200);
-    expect(body).toEqual({
-      connected: true,
-      chatId: 'chat_current',
-      botUsername: 'support_test_bot',
-    });
+    expect(body.connected).toBe(true);
+    expect(body.chats).toHaveLength(1);
+    expect(body.chats[0].chatId).toBe('chat_current');
+    expect(body.botUsername).toBe('support_test_bot');
   });
 
   it('returns 503 without creating a token when Telegram is not configured', async () => {
@@ -92,27 +97,55 @@ describe('/api/integrations/telegram', () => {
       { ex: 86_400 },
     );
 
-    await expect(db.orgMember.findUnique({
+    // Member should exist but have no telegram chats yet (binding happens via the bot)
+    const member = await db.orgMember.findUnique({
       where: { organizationId_clerkUserId: { organizationId: org!.id, clerkUserId: 'usr_telegram' } },
-    })).resolves.toEqual(expect.objectContaining({ telegramChatId: null }));
+      include: { telegramChats: true },
+    });
+    expect(member).not.toBeNull();
+    expect(member!.telegramChats).toHaveLength(0);
   });
 
   it('disconnects only the current user binding', async () => {
-    await db.orgMember.createMany({
+    const me = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_telegram' },
+    });
+    const other = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_other' },
+    });
+    await db.orgMemberTelegramChat.createMany({
       data: [
-        { organizationId: org!.id, clerkUserId: 'usr_telegram', telegramChatId: 'chat_current' },
-        { organizationId: org!.id, clerkUserId: 'usr_other', telegramChatId: 'chat_other' },
+        { orgMemberId: me.id, chatId: 'chat_current' },
+        { orgMemberId: other.id, chatId: 'chat_other' },
       ],
     });
 
     const res = await DELETE();
 
     expect(res.status).toBe(200);
-    await expect(db.orgMember.findUnique({
-      where: { organizationId_clerkUserId: { organizationId: org!.id, clerkUserId: 'usr_telegram' } },
-    })).resolves.toEqual(expect.objectContaining({ telegramChatId: null }));
-    await expect(db.orgMember.findUnique({
-      where: { organizationId_clerkUserId: { organizationId: org!.id, clerkUserId: 'usr_other' } },
-    })).resolves.toEqual(expect.objectContaining({ telegramChatId: 'chat_other' }));
+    await expect(
+      db.orgMemberTelegramChat.findMany({ where: { orgMemberId: me.id } }),
+    ).resolves.toHaveLength(0);
+    await expect(
+      db.orgMemberTelegramChat.findMany({ where: { orgMemberId: other.id } }),
+    ).resolves.toHaveLength(1);
+  });
+
+  it('returns 409 when device limit is reached', async () => {
+    const me = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_telegram' },
+    });
+    await db.orgMemberTelegramChat.createMany({
+      data: [
+        { orgMemberId: me.id, chatId: 'cap_chat_1' },
+        { orgMemberId: me.id, chatId: 'cap_chat_2' },
+        { orgMemberId: me.id, chatId: 'cap_chat_3' },
+      ],
+    });
+
+    const res = await POST();
+
+    expect(res.status).toBe(409);
+    expect(mockRedisSet).not.toHaveBeenCalled();
   });
 });
