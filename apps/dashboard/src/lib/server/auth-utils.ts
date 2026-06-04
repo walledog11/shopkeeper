@@ -1,19 +1,8 @@
-import crypto from 'crypto';
+import { timingSafeIncludes } from '@/lib/security/timing-safe';
 
-/**
- * Timing-safe check for whether `input` matches any string in `candidates`.
- * Prevents timing-oracle attacks on secret comparison.
- * Buffers of different lengths are handled safely (returns false, no throw).
- */
-export function timingSafeIncludes(candidates: string[], input: string): boolean {
-  return candidates.some((candidate) => {
-    try {
-      return crypto.timingSafeEqual(Buffer.from(candidate, 'utf8'), Buffer.from(input, 'utf8'));
-    } catch {
-      return false;
-    }
-  });
-}
+export { timingSafeIncludes };
+
+export const INTERNAL_SECRET_HEADER = 'x-internal-secret';
 
 /**
  * Resolve the set of valid internal API secrets from env vars.
@@ -22,4 +11,12 @@ export function timingSafeIncludes(candidates: string[], input: string): boolean
 export function getValidInternalSecrets(): string[] {
   return [process.env.INTERNAL_API_SECRET, process.env.INTERNAL_API_SECRET_PREV]
     .filter((s): s is string => typeof s === 'string' && s.length > 0);
+}
+
+export function isValidInternalSecret(secret: string | null | undefined): boolean {
+  return !!secret && timingSafeIncludes(getValidInternalSecrets(), secret);
+}
+
+export function hasValidInternalSecret(request: Request): boolean {
+  return isValidInternalSecret(request.headers.get(INTERNAL_SECRET_HEADER));
 }

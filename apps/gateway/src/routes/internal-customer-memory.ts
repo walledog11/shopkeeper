@@ -1,8 +1,8 @@
 import express, { type Request, type Response, type Router } from 'express';
-import { Queue, type ConnectionOptions } from 'bullmq';
+import { Queue } from 'bullmq';
 import logger from '../logger.js';
 import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
-import { createGatewayRedisClient } from '../clients/redis-client.js';
+import { createGatewayBullMqConnection } from '../clients/redis-client.js';
 import type { CustomerMemoryJobData } from '../types.js';
 import { enqueueCustomerMemoryThreadClose } from '../maintenance/customer-memory.js';
 import { authorizeInternalRequest } from './internal-auth.js';
@@ -22,7 +22,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function getCustomerMemoryQueue(): Queue<CustomerMemoryJobData> {
   if (!customerMemoryQueue) {
-    const redisConnection = createGatewayRedisClient() as unknown as ConnectionOptions;
+    const redisConnection = createGatewayBullMqConnection();
     customerMemoryQueue = new Queue<CustomerMemoryJobData>(QUEUE.CUSTOMER_MEMORY, {
       connection: redisConnection,
       defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,

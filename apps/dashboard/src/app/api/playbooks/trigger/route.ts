@@ -1,23 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
-import { BadRequestError, NotFoundError, handleApiError } from '@/lib/api/errors';
+import { BadRequestError, NotFoundError } from '@/lib/api/errors';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
-import { getValidInternalSecrets, timingSafeIncludes } from '@/lib/server/auth-utils';
-import type { PlaybookTrigger } from '@/types';
+import { requirePlaybookTrigger } from '@/app/api/playbooks/_lib/playbook-shape';
+import { withInternalRoute } from '@/lib/api/internal-route';
 
-export async function POST(request: Request) {
-  try {
-    const secret = request.headers.get('x-internal-secret') ?? '';
-    if (!timingSafeIncludes(getValidInternalSecrets(), secret)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const POST = withInternalRoute(
+  {
+    context: 'Playbooks trigger POST',
+    errorMessage: 'Failed to trigger playbooks',
+  },
+  async ({ request }) => {
     const body = await readJsonBody(request);
-    const { organizationId, threadId, trigger } = body as {
+    const { organizationId, threadId, trigger: rawTrigger } = body as {
       organizationId?: unknown;
       threadId?: unknown;
-      trigger?: Partial<PlaybookTrigger>;
+      trigger?: unknown;
     };
 
     if (typeof organizationId !== 'string' || !organizationId.trim()) {
@@ -26,9 +25,7 @@ export async function POST(request: Request) {
     if (typeof threadId !== 'string' || !threadId.trim()) {
       throw new BadRequestError('Missing required fields');
     }
-    if (!trigger || typeof trigger !== 'object' || typeof trigger.type !== 'string' || !trigger.type.trim()) {
-      throw new BadRequestError('Missing required fields');
-    }
+    const trigger = requirePlaybookTrigger(rawTrigger);
 
     const thread = await db.thread.findFirst({
       where: {
@@ -46,13 +43,11 @@ export async function POST(request: Request) {
     assertBillingWriteAllowed(thread.organization);
 
     // Fire in background; caller does not need to wait for playbook actions.
-    runPlaybooks(organizationId, trigger as PlaybookTrigger, threadId);
+    runPlaybooks(organizationId, trigger, threadId);
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Playbooks trigger POST', 'Failed to trigger playbooks');
-  }
-}
+  },
+);
 
 async function readJsonBody(request: Request): Promise<unknown> {
   try {

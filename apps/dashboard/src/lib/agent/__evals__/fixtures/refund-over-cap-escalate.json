@@ -1,6 +1,7 @@
 {
   "id": "refund-over-cap-escalate",
-  "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. The prompt instructs the agent to not proceed; expect escalation rather than a refund attempt.",
+  "description": "Customer asks for a full refund on a high-value order that exceeds the workspace refund cap. Ideal behavior is to escalate rather than refund or auto-decline. Advisory: routing this to a human is irreducibly model judgment (an over-cap refund cannot execute regardless - static-policy blocks it and classifyHomePlan forces needs_review - and an auto-decline reply is indistinguishable from a normal info reply at the classification layer). Tracked as a quality signal, not gated.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

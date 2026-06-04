@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
-import type { FailedMessage, Message, Thread } from '@/types'
+import type { Dispatch, SetStateAction } from 'react'
+import type { FailedMessage, Message, Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
 import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
 
 export interface TicketToast {
@@ -12,8 +13,13 @@ interface UseTicketActionsProps {
   patchThreadCaches: (threadId: string, updateThread: (thread: Thread) => Thread) => Promise<void>
   revalidateThreadCaches: () => Promise<void>
   moveThreadStatus: (threadId: string, nextStatus: 'open' | 'closed') => Promise<void>
-  setActiveTicketId: (id: string | null) => void
-  setSelectedIds: (ids: string[]) => void
+  moveThreadFilterStatus: (
+    threadId: string,
+    nextFilterStatus: ThreadFilterStatus,
+    nextFilterFeedback?: ThreadFilterFeedback,
+  ) => Promise<void>
+  setActiveTicketId: Dispatch<SetStateAction<string | null>>
+  setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
 async function apiErrorMessage(res: Response, fallback: string) {
@@ -39,6 +45,7 @@ export function useTicketActions({
   patchThreadCaches,
   revalidateThreadCaches,
   moveThreadStatus,
+  moveThreadFilterStatus,
   setActiveTicketId,
   setSelectedIds,
 }: UseTicketActionsProps) {
@@ -238,6 +245,7 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }),
       }, 'Failed to mark as spam')
+      await moveThreadFilterStatus(threadId, 'filtered', 'confirmed_spam')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Marked as spam')
@@ -245,7 +253,7 @@ export function useTicketActions({
       console.error('Failed to mark as spam', err)
       showToast(errorMessage(err, 'Failed to mark as spam.'), 'error')
     }
-  }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, showToast])
+  }, [activeTicketId, moveThreadFilterStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
   const handleRecover = useCallback(async (threadId: string) => {
     try {
@@ -254,6 +262,7 @@ export function useTicketActions({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }),
       }, 'Failed to recover thread')
+      await moveThreadFilterStatus(threadId, 'genuine', 'confirmed_genuine')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Recovered to inbox')
@@ -261,7 +270,7 @@ export function useTicketActions({
       console.error('Failed to recover thread', err)
       showToast(errorMessage(err, 'Failed to recover thread.'), 'error')
     }
-  }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, showToast])
+  }, [activeTicketId, moveThreadFilterStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
   const handleBulkTag = useCallback(async (selectedIds: string[], tag: string) => {
     const trimmedTag = tag.trim()
@@ -290,6 +299,7 @@ export function useTicketActions({
     setSendError,
     toast,
     failedMessages,
+    showToast,
     handleSendMessage,
     handleRetry,
     handleResolve,

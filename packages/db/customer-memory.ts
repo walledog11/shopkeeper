@@ -149,8 +149,8 @@ export function parseStoredMemory(value: unknown): CustomerMemory {
   });
 }
 
-// CustomerMemory is already JSON-safe (no Date/Map/class instances) — this is
-// a pure type launder to satisfy Prisma's InputJsonValue at the call site.
+// CustomerMemory is already JSON-safe; round-trip through JSON to return the
+// exact shape Prisma accepts for JSON fields.
 export function toCustomerMemoryJson(value: CustomerMemory): import('@prisma/client').Prisma.InputJsonValue {
-  return value as unknown as import('@prisma/client').Prisma.InputJsonValue;
+  return JSON.parse(JSON.stringify(value)) as import('@prisma/client').Prisma.InputJsonValue;
 }

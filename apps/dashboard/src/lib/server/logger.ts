@@ -1,7 +1,7 @@
 import pino from 'pino';
 import { PINO_REDACT_PATHS, REDACTED } from '../observability/redaction';
 
-const globalForLogger = globalThis as unknown as { clerkLogger: pino.Logger | undefined };
+const globalForLogger = globalThis as typeof globalThis & { clerkLogger: pino.Logger | undefined };
 
 function createLogger(): pino.Logger {
   return pino({

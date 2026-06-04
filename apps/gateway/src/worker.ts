@@ -1,5 +1,4 @@
-import { Worker, Queue, type ConnectionOptions } from 'bullmq';
-import type { Redis as IORedis } from 'ioredis';
+import { Worker, Queue } from 'bullmq';
 import { db } from '@clerk/db';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
@@ -19,15 +18,9 @@ import {
 } from './message-handlers/planning.js';
 import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
-import { createGatewayRedisClient } from './clients/redis-client.js';
+import { createGatewayBullMqConnection } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
 import { sentryBeforeSend } from './observability/redaction.js';
-
-type SharedRedisConnection = IORedis & ConnectionOptions;
-
-function createSharedRedisConnection(options?: Parameters<typeof createGatewayRedisClient>[0]): SharedRedisConnection {
-  return createGatewayRedisClient(options) as unknown as SharedRedisConnection;
-}
 
 export async function startWorkerRuntime() {
   validateGatewayEnv();
@@ -45,10 +38,10 @@ export async function startWorkerRuntime() {
 
   // Queues (producers) use non-blocking commands — maxRetriesPerRequest left at default (20) so
   // enqueue calls fail fast rather than hanging indefinitely if Redis is unavailable.
-  const sharedProducerConn = createSharedRedisConnection();
+  const sharedProducerConn = createGatewayBullMqConnection();
   // Workers use maxRetriesPerRequest: null so they wait for Redis to recover instead of erroring.
   // setMaxListeners raised to accommodate one listener per Worker (5) plus our own error handler.
-  const sharedWorkerConn = createSharedRedisConnection({ maxRetriesPerRequest: null });
+  const sharedWorkerConn = createGatewayBullMqConnection({ maxRetriesPerRequest: null });
   sharedProducerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis producer error'));
   sharedWorkerConn.setMaxListeners(20);
   sharedWorkerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis worker error'));

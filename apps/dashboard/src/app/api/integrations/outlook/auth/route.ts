@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
-import crypto from 'crypto';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import {
+  createOAuthSessionCookies,
+  requireAuthenticatedOAuthSession,
+} from '@/app/api/integrations/_lib/oauth-session';
 
 const OUTLOOK_SCOPES = [
   'openid',
@@ -13,21 +13,13 @@ const OUTLOOK_SCOPES = [
   'Mail.Send',
 ].join(' ');
 
-const OUTLOOK_OAUTH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 600,
-  path: '/',
-};
-
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Outlook');
 }
 
 export async function POST(request: Request) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const session = await requireAuthenticatedOAuthSession();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -41,17 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { searchParams } = new URL(request.url);
-  const returnTo = safeReturnTo(searchParams.get('returnTo'));
-
-  const state = crypto.randomBytes(16).toString('hex');
-  const cookieStore = await cookies();
-  cookieStore.set('outlook_oauth_state', state, OUTLOOK_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('outlook_oauth_org', orgId, OUTLOOK_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('outlook_oauth_user', userId, OUTLOOK_OAUTH_COOKIE_OPTIONS);
-  if (returnTo) {
-    cookieStore.set('outlook_oauth_return', returnTo, OUTLOOK_OAUTH_COOKIE_OPTIONS);
-  }
+  const { state } = await createOAuthSessionCookies(request, { prefix: 'outlook' }, session);
 
   const redirectUri = `${appUrl}/api/integrations/outlook/callback`;
 

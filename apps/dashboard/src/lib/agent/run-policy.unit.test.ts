@@ -127,7 +127,8 @@ function makeFailureCounterClient(): OpsAlertCounterClient {
 }
 
 describe("runAgent policy enforcement", () => {
-  it("blocks pre-approved cancellations when cancellations are disabled", async () => {
+  it("escalates a pre-approved cancellation when cancellations are disabled", async () => {
+    mockEscalateToHuman.mockClear();
     const result = await runAgent(
       makeCtx(),
       "Cancel order",
@@ -135,13 +136,16 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, blockCancellations: true }
     );
 
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      { reason: "order cancellations are disabled by the workspace owner." },
+      expect.objectContaining({ threadId: "thread_1", orgId: "org_1" }),
+    );
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "cancel_order",
-      result: "Error: order cancellations are disabled by the workspace owner.",
-      status: "policy_block",
+      status: "escalated",
     });
-    expect(result.summary).toBe("Error: order cancellations are disabled by the workspace owner.");
+    expect(result.summary).toBe("Escalated to merchant: order cancellations are disabled by the workspace owner.");
   });
 
   it("runs mixed non-read tool calls in order", async () => {
@@ -254,7 +258,8 @@ describe("runAgent policy enforcement", () => {
     }), expect.any(Object));
   });
 
-  it("blocks a refund when the daily cap is already exhausted", async () => {
+  it("escalates a refund when the daily cap is already exhausted", async () => {
+    mockEscalateToHuman.mockClear();
     mockGetDailyRefundSpendCents.mockResolvedValueOnce(9000); // $90 already spent
 
     const result = await runAgent(
@@ -264,12 +269,39 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 }
     );
 
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      { reason: "daily refund cap of $100 reached; $10.00 remaining today." },
+      expect.objectContaining({ threadId: "thread_1", orgId: "org_1" }),
+    );
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
-      result: "Error: daily refund cap of $100 reached; $10.00 remaining today.",
-      status: "policy_block",
+      status: "escalated",
     });
+    expect(result.summary).toBe("Escalated to merchant: daily refund cap of $100 reached; $10.00 remaining today.");
+    expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
+  });
+
+  it("escalates an over-cap refund instead of executing it or replying", async () => {
+    mockEscalateToHuman.mockClear();
+
+    const result = await runAgent(
+      makeCtx(),
+      "Refund the order",
+      [{ id: "pre_1", name: "create_refund", input: { order_id: "123", amount: "200.00" } }],
+      { ...AGENT_SETTINGS_DEFAULTS, maxRefundAmount: 50 }
+    );
+
+    expect(mockEscalateToHuman).toHaveBeenCalledWith(
+      { reason: "refund amount $200.00 exceeds the workspace limit of $50." },
+      expect.objectContaining({ threadId: "thread_1", orgId: "org_1" }),
+    );
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "create_refund",
+      status: "escalated",
+    });
+    expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.");
     expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
   });
 

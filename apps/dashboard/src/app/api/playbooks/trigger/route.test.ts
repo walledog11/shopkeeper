@@ -82,6 +82,19 @@ describe('POST /api/playbooks/trigger', () => {
     expect(mockRunPlaybooks).not.toHaveBeenCalled();
   });
 
+  it('returns 400 for unsupported trigger types without running playbooks', async () => {
+    const thread = await createEmailThread(org!.id);
+
+    const res = await POST(triggerRequest({
+      organizationId: org!.id,
+      threadId: thread.id,
+      trigger: { type: 'unknown_trigger' },
+    }, 'current-secret'));
+
+    expect(res.status).toBe(400);
+    expect(mockRunPlaybooks).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when the thread does not belong to the provided org', async () => {
     otherOrg = await createTestOrg();
     const foreignThread = await createEmailThread(otherOrg.id);

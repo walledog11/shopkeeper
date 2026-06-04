@@ -1,11 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
-import { timingSafeIncludes } from '@/lib/auth-utils';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
+import { upsertExclusiveEmailIntegration } from '@/app/api/integrations/_lib/email-integration';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const USERINFO_URL = 'https://openidconnect.googleapis.com/v1/userinfo';
@@ -38,26 +36,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
   }
 
-  const cookieStore = await cookies();
-  const savedState = cookieStore.get('gmail_oauth_state')?.value;
-  const clerkOrgId = cookieStore.get('gmail_oauth_org')?.value;
-  const savedUserId = cookieStore.get('gmail_oauth_user')?.value;
-  const returnTo = safeReturnTo(cookieStore.get('gmail_oauth_return')?.value);
-  cookieStore.delete('gmail_oauth_state');
-  cookieStore.delete('gmail_oauth_org');
-  cookieStore.delete('gmail_oauth_user');
-  cookieStore.delete('gmail_oauth_return');
-
-  if (!savedState || !timingSafeIncludes([savedState], state)) {
-    logger.error('[Gmail OAuth] State mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
-  }
-
-  const { userId: currentUserId } = await auth();
-  if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[Gmail OAuth] User session mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
-  }
+  const callbackSession = await validateOAuthCallbackSession({
+    appUrl,
+    logPrefix: 'Gmail OAuth',
+    prefix: 'gmail',
+    state,
+  });
+  if (!callbackSession.ok) return callbackSession.response;
+  const { clerkOrgId, returnTo } = callbackSession.session;
 
   try {
     const tokenRes = await fetch(TOKEN_URL, {
@@ -107,35 +93,13 @@ export async function POST(request: Request) {
     }
 
     const tokenExpiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
-    const integrationData = {
+    await upsertExclusiveEmailIntegration({
+      organizationId: org.id,
+      externalAccountId: userEmail,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       tokenExpiresAt,
-      fromEmail: userEmail,
-      metadata: { provider: 'gmail' as const },
-    };
-    const key = { organizationId: org.id, platform: 'email' as const, externalAccountId: userEmail };
-    const existing = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: key } });
-    let savedId: string;
-    if (existing) {
-      await db.integration.update({ where: { id: existing.id }, data: integrationData });
-      savedId = existing.id;
-    } else {
-      try {
-        const created = await db.integration.create({
-          data: { organizationId: org.id, platform: 'email', externalAccountId: userEmail, ...integrationData },
-        });
-        savedId = created.id;
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: key } }))!;
-        await db.integration.update({ where: { id: race.id }, data: integrationData });
-        savedId = race.id;
-      }
-    }
-
-    await db.integration.deleteMany({
-      where: { organizationId: org.id, platform: 'email', id: { not: savedId } },
+      provider: 'gmail',
     });
 
     logger.info({ userEmail, orgId: org.id }, '[Gmail OAuth] Integration saved');

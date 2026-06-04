@@ -6,6 +6,7 @@
  */
 
 import { db, Prisma } from '@clerk/db';
+import type { Prisma as PrismaTypes } from '@prisma/client';
 
 const MAX_HISTORY_TURNS = 20;
 
@@ -42,6 +43,67 @@ const EMPTY: OperatorContext = {
   pendingDigest: null,
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readHistory(value: unknown): OperatorContext['history'] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!isRecord(item) || typeof item.role !== 'string' || typeof item.content !== 'string') {
+        return null;
+      }
+      return { role: item.role, content: item.content };
+    })
+    .filter((item): item is OperatorContext['history'][number] => item !== null);
+}
+
+function readToolCall(value: unknown): ToolCall | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') {
+    return null;
+  }
+  return { ...value, id: value.id, name: value.name };
+}
+
+function readPendingPlan(value: unknown): PendingPlan | null {
+  if (
+    !isRecord(value) ||
+    typeof value.threadId !== 'string' ||
+    typeof value.instruction !== 'string' ||
+    !Array.isArray(value.rawToolCalls)
+  ) {
+    return null;
+  }
+
+  return {
+    threadId: value.threadId,
+    instruction: value.instruction,
+    rawToolCalls: value.rawToolCalls
+      .map(readToolCall)
+      .filter((toolCall): toolCall is ToolCall => toolCall !== null),
+  };
+}
+
+function readPendingDigest(value: unknown): PendingDigest | null {
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.threadIds) ||
+    typeof value.sentAt !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    threadIds: value.threadIds.filter((threadId): threadId is string => typeof threadId === 'string'),
+    sentAt: value.sentAt,
+  };
+}
+
+function toJsonObject(value: PendingPlan | PendingDigest): PrismaTypes.InputJsonObject {
+  return JSON.parse(JSON.stringify(value)) as PrismaTypes.InputJsonObject;
+}
+
 export async function getContext(organizationId: string, chatId: string): Promise<OperatorContext> {
   const row = await db.operatorContext.findUnique({
     where: { organizationId_chatId: { organizationId, chatId } },
@@ -50,9 +112,9 @@ export async function getContext(organizationId: string, chatId: string): Promis
   return {
     lastOrderNumber: row.lastOrderNumber ?? null,
     lastThreadId: row.lastThreadId ?? null,
-    history: Array.isArray(row.history) ? (row.history as { role: string; content: string }[]) : [],
-    pendingPlan: row.pendingPlan ? (row.pendingPlan as unknown as PendingPlan) : null,
-    pendingDigest: row.pendingDigest ? (row.pendingDigest as unknown as PendingDigest) : null,
+    history: readHistory(row.history),
+    pendingPlan: readPendingPlan(row.pendingPlan),
+    pendingDigest: readPendingDigest(row.pendingDigest),
   };
 }
 
@@ -72,8 +134,8 @@ export async function updateContext(
     lastOrderNumber: next.lastOrderNumber ?? null,
     lastThreadId: next.lastThreadId ?? null,
     history: next.history,
-    pendingPlan: next.pendingPlan ? (next.pendingPlan as object) : Prisma.DbNull,
-    pendingDigest: next.pendingDigest ? (next.pendingDigest as object) : Prisma.DbNull,
+    pendingPlan: next.pendingPlan ? toJsonObject(next.pendingPlan) : Prisma.DbNull,
+    pendingDigest: next.pendingDigest ? toJsonObject(next.pendingDigest) : Prisma.DbNull,
   };
 
   await db.operatorContext.upsert({

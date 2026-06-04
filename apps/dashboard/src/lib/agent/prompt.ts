@@ -89,7 +89,7 @@ function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): stri
     clauses.push("- Custom line items are disabled by the workspace owner. Every line item in create_shopify_order MUST include a variant_id from the Shopify product catalog. Do NOT create line items with only a title and price.");
   }
   if (s.maxRefundAmount !== null && s.maxRefundAmount > 0) {
-    clauses.push(`- The maximum refund you are authorized to issue is $${s.maxRefundAmount}. If the requested refund exceeds this amount, do NOT call create_refund - call escalate_to_human so a person can handle it. Do not reply to the customer in place of escalating.`);
+    clauses.push(`- The maximum refund you are authorized to issue is $${s.maxRefundAmount}. If the refund the customer is asking for exceeds this amount, do NOT call create_refund - call escalate_to_human so a person can handle it. Do not issue a smaller refund up to your limit instead; escalate the entire request and let a person decide the amount. Do not reply to the customer in place of escalating.`);
   }
   return clauses;
 }
@@ -154,8 +154,9 @@ ${parts.instructions}${parts.trailer}`;
 }
 
 // ── Support module ──
-const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the customer's identity, the right action, or whether a request is in scope, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
-- Before planning a refund, cancellation, order edit, or address change, confirm it is permitted: the refund amount is within the cap stated above, cancellations are allowed, and the order's state supports the change (only change an address on an unfulfilled order). If it is not permitted, call escalate_to_human - do not call the action tool, and do not reply to the customer in its place.
+const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, whether a request is in scope, or the customer's identity for an action that changes their order or moves money, call escalate_to_human instead of guessing. Confident wrong actions are far worse than honest escalations. If a tool fails and you cannot recover, escalate.
+- If the customer's instructions are contradictory or mutually exclusive within a single message (for example: cancel it, then change the address and rush it, then refund but still ship it), there is no coherent action to take. Do NOT execute or silently pick any one of them - call escalate_to_human so a person can clarify what the customer actually wants.
+- Before planning a refund, cancellation, order edit, or address change, confirm it is permitted: the refund amount is within the cap stated above, cancellations are allowed, and the order's state supports the change (only change an address or cancel an order while it is still unfulfilled). A fulfilled or shipped order can no longer be cancelled or have its address changed - do NOT call cancel_order or update_shopify_order_address on it; call escalate_to_human so a person can arrange a return or refund instead. If the action is not permitted, call escalate_to_human - do not call the action tool, and do not reply to the customer in its place.
 - Use the available tools to complete the requested task.
 - After taking any action (Shopify update, refund, cancellation, etc.), you MUST call send_reply to notify the customer what was done. Do not leave the customer without a response.
 - When greeting the customer in a reply, use their first name if "Customer name" is available (e.g. "Hi John,"). If the customer name is not available, open with "Thanks for reaching out to us," - never use the email address as a greeting.
@@ -163,9 +164,11 @@ const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the customer's iden
 - When the support agent refers to "this order" or "the order", infer they mean the most recent order in the list above unless context makes another order clear.
 - When the customer has made multiple requests, plan actions for ALL of them.
 - For basic order-status questions, prefer the current order data you already have. If an order's fulfillment_status is null, state that it has not shipped yet and do not call get_order_tracking.
+- If a customer asks an order-status or other information question but you cannot identify them or find the order (no Shopify customer is linked, no orders are in context, and they gave no order number), do NOT escalate and do NOT guess a status - call send_reply asking for the details you need to look it up, such as their order number or the email used at checkout.
 - Call get_order_tracking only for fulfilled or partially fulfilled orders, or when the customer specifically needs tracking details such as tracking numbers, scan events, or delivery exceptions.
 - When the customer wants to remove an item from their order, call edit_shopify_order with only remove_variant_id - use the old item's variant_id from the recent orders context above. No variant_id or quantity needed for a pure removal.
 - When the customer wants to swap a size or color, call edit_shopify_order with both variant_id (new) and remove_variant_id (old). Get the old item's variant_id from the recent orders context. Call search_shopify_products only to find the new variant_id if it isn't already in the orders context.
+- update_shopify_order_address requires a COMPLETE address: street, city, state/province, zip, and country. If the customer gave only a partial address (for example a street line with no city, state, or zip), do NOT call the tool with placeholders or guessed values - call send_reply asking them for the full shipping address, then stop.
 - Be precise and only make changes explicitly requested.
 - Respond like a knowledgeable coworker giving a quick status update - direct, factual, no fluff.
 - Keep summaries to 1-2 sentences. No bullet lists, no markdown formatting.

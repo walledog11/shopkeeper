@@ -52,6 +52,41 @@ interface CustomerDrawerContentProps {
   onCustomerUpdated: (c: Partial<CustomerRow>) => void
 }
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  try {
+    return await response.json() as T
+  } catch {
+    return null
+  }
+}
+
+function formatErrorValue(value: unknown): string | null {
+  if (typeof value === "string") return value
+  if (Array.isArray(value)) {
+    return value.map(formatErrorValue).filter(Boolean).join("; ") || null
+  }
+  if (value && typeof value === "object") {
+    const messages = Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) => {
+      const text = formatErrorValue(nested)
+      return text ? [`${key}: ${text}`] : []
+    })
+    return messages.join("; ") || null
+  }
+  return null
+}
+
+function errorMessageFromPayload(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object") {
+    const message = formatErrorValue((payload as { error?: unknown }).error)
+    if (message) return message
+  }
+  return fallback
+}
+
+function errorMessageFromUnknown(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 export function CustomerDrawerContent({
   customer: initial,
   shop,
@@ -118,29 +153,43 @@ export function CustomerDrawerContent({
           },
         }),
       })
-      const json = await res.json()
+      const json = await readJsonResponse<{ customer?: Partial<CustomerRow>; error?: unknown }>(res)
       if (!res.ok) {
-        setSaveError(typeof json.error === "string" ? json.error : "Failed to save.")
+        setSaveError(errorMessageFromPayload(json, "Failed to save customer."))
+        return
+      }
+      if (!json?.customer) {
+        setSaveError("Failed to save customer.")
         return
       }
       const updated = json.customer
-      mutate({ ...data!, customer: { ...customer, ...updated } }, false)
+      const nextCustomer = { ...customer, ...updated } as CustomerRow
+      mutate(
+        data
+          ? { ...data, customer: nextCustomer }
+          : { customer: nextCustomer, orders, shop: detailShop },
+        false,
+      )
       onCustomerUpdated({
-        first_name: updated.first_name,
-        last_name: updated.last_name,
-        email: updated.email,
-        phone: updated.phone ?? null,
+        first_name: nextCustomer.first_name,
+        last_name: nextCustomer.last_name,
+        email: nextCustomer.email,
+        phone: nextCustomer.phone ?? null,
       })
       setIsEditing(false)
+    } catch (error) {
+      setSaveError(errorMessageFromUnknown(error, "Failed to save customer."))
     } finally {
       setIsSaving(false)
     }
   }
 
   const [isStartingThread, setIsStartingThread] = useState(false)
+  const [threadError, setThreadError] = useState<string | null>(null)
 
   const handleStartThread = async () => {
     setIsStartingThread(true)
+    setThreadError(null)
     try {
       const res = await fetch("/api/threads/shopify", {
         method: "POST",
@@ -151,10 +200,18 @@ export function CustomerDrawerContent({
           customerName: fullName(customer as CustomerRow),
         }),
       })
-      const json = await res.json()
-      if (res.ok && json.threadId) {
-        push(`/dashboard/tickets?thread=${json.threadId}`)
+      const json = await readJsonResponse<{ threadId?: string; error?: unknown }>(res)
+      if (!res.ok) {
+        setThreadError(errorMessageFromPayload(json, "Failed to start support thread."))
+        return
       }
+      if (res.ok && json?.threadId) {
+        push(`/dashboard/tickets?thread=${json.threadId}`)
+        return
+      }
+      setThreadError("Failed to start support thread.")
+    } catch (error) {
+      setThreadError(errorMessageFromUnknown(error, "Failed to start support thread."))
     } finally {
       setIsStartingThread(false)
     }
@@ -414,6 +471,9 @@ export function CustomerDrawerContent({
             : <MessageSquare className="size-4" />}
           {isStartingThread ? "Opening…" : "Start Support Thread"}
         </button>
+        {threadError && (
+          <p className="mt-2 text-xs text-red-400" aria-live="polite">{threadError}</p>
+        )}
       </div>
     </div>
   )

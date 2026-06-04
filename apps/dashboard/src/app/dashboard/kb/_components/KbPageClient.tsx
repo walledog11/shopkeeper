@@ -8,6 +8,14 @@ import type { KnowledgeBase } from "@/types"
 import { ArticleCard } from "./ArticleCard"
 import { ArticleDetail } from "./ArticleDetail"
 import { SORT_OPTIONS, inputCls, parseTags, type ArticleWithBase, type MobileView, type SortKey } from "./kb-page-utils"
+import {
+  createArticle,
+  createKnowledgeBase,
+  deleteArticle,
+  deleteKnowledgeBase,
+  errorMessageFromUnknown,
+  updateArticle,
+} from "./kb-page-requests"
 
 export default function KbPageClient() {
   return useKbPageClientView()
@@ -27,16 +35,21 @@ function useKbPageClientView() {
   const [isCreatingKb, setIsCreatingKb] = useState(false)
   const [newKbName, setNewKbName] = useState('')
   const [isCreatingKbSaving, setIsCreatingKbSaving] = useState(false)
+  const [kbActionError, setKbActionError] = useState<string | null>(null)
 
   // New article
   const [isCreatingArticle, setIsCreatingArticle] = useState(false)
   const [articleDraft, setArticleDraft] = useState({ title: '', body: '', tags: '' })
   const [isArticleSaving, setIsArticleSaving] = useState(false)
+  const [articleCreateError, setArticleCreateError] = useState<string | null>(null)
 
   // Edit
   const [isEditing, setIsEditing] = useState(false)
   const [editDraft, setEditDraft] = useState({ title: '', body: '', tags: '' })
   const [isEditSaving, setIsEditSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [isArticleDeleting, setIsArticleDeleting] = useState(false)
+  const [articleDeleteError, setArticleDeleteError] = useState<string | null>(null)
 
   const userKbs = knowledgeBases.filter(kb => kb.source === 'user')
   const shopifyKb = knowledgeBases.find(kb => kb.source === 'shopify')
@@ -76,6 +89,8 @@ function useKbPageClientView() {
   const selectArticle = (id: string | null) => {
     setSelectedArticleId(id)
     setIsEditing(false)
+    setEditError(null)
+    setArticleDeleteError(null)
     setMobileView(id ? 'detail' : 'list')
   }
 
@@ -84,6 +99,9 @@ function useKbPageClientView() {
     setSelectedArticleId(null)
     setIsCreatingArticle(false)
     setIsEditing(false)
+    setArticleCreateError(null)
+    setEditError(null)
+    setArticleDeleteError(null)
     setMobileView('list')
   }
 
@@ -91,49 +109,48 @@ function useKbPageClientView() {
   const handleCreateKb = async () => {
     if (!newKbName.trim()) return
     setIsCreatingKbSaving(true)
+    setKbActionError(null)
     try {
-      const res = await fetch('/api/kb/bases', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newKbName.trim() }),
-      })
-      if (res.ok) {
-        const json = await res.json()
-        await mutate()
-        setIsCreatingKb(false)
-        setNewKbName('')
-        if (json?.knowledgeBase?.id) selectBase(json.knowledgeBase.id)
-      }
+      const json = await createKnowledgeBase(newKbName.trim())
+      await mutate()
+      setIsCreatingKb(false)
+      setNewKbName('')
+      if (json.knowledgeBase.id) selectBase(json.knowledgeBase.id)
+    } catch (error) {
+      setKbActionError(errorMessageFromUnknown(error, 'Failed to create collection.'))
     } finally {
       setIsCreatingKbSaving(false)
     }
   }
 
   const handleDeleteKb = async (id: string) => {
-    const res = await fetch(`/api/kb/bases/${id}`, { method: 'DELETE' })
-    if (res.ok) {
+    setKbActionError(null)
+    try {
+      await deleteKnowledgeBase(id)
       if (selectedBaseId === id) selectBase('all')
       else if (selectedArticle?.knowledgeBaseId === id) selectArticle(null)
       await mutate()
+    } catch (error) {
+      setKbActionError(errorMessageFromUnknown(error, 'Failed to delete collection.'))
     }
   }
 
   const handleCreateArticle = async () => {
     if (!articleTargetKb || !articleDraft.title.trim() || !articleDraft.body.trim()) return
     setIsArticleSaving(true)
+    setArticleCreateError(null)
     try {
-      const res = await fetch(`/api/kb/bases/${articleTargetKb.id}/articles`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: articleDraft.title, body: articleDraft.body, tags: parseTags(articleDraft.tags) }),
+      const json = await createArticle(articleTargetKb.id, {
+        title: articleDraft.title,
+        body: articleDraft.body,
+        tags: parseTags(articleDraft.tags),
       })
-      if (res.ok) {
-        const json = await res.json()
-        await mutate()
-        setIsCreatingArticle(false)
-        setArticleDraft({ title: '', body: '', tags: '' })
-        if (json?.article?.id) selectArticle(json.article.id)
-      }
+      await mutate()
+      setIsCreatingArticle(false)
+      setArticleDraft({ title: '', body: '', tags: '' })
+      if (json.article.id) selectArticle(json.article.id)
+    } catch (error) {
+      setArticleCreateError(errorMessageFromUnknown(error, 'Failed to create article.'))
     } finally {
       setIsArticleSaving(false)
     }
@@ -142,16 +159,17 @@ function useKbPageClientView() {
   const handleUpdateArticle = async () => {
     if (!selectedArticle) return
     setIsEditSaving(true)
+    setEditError(null)
     try {
-      const res = await fetch(`/api/kb/${selectedArticle.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: editDraft.title, body: editDraft.body, tags: parseTags(editDraft.tags) }),
+      await updateArticle(selectedArticle.id, {
+        title: editDraft.title,
+        body: editDraft.body,
+        tags: parseTags(editDraft.tags),
       })
-      if (res.ok) {
-        await mutate()
-        setIsEditing(false)
-      }
+      await mutate()
+      setIsEditing(false)
+    } catch (error) {
+      setEditError(errorMessageFromUnknown(error, 'Failed to update article.'))
     } finally {
       setIsEditSaving(false)
     }
@@ -159,16 +177,24 @@ function useKbPageClientView() {
 
   const handleDeleteArticle = async () => {
     if (!selectedArticle) return
-    const res = await fetch(`/api/kb/${selectedArticle.id}`, { method: 'DELETE' })
-    if (res.ok) {
+    setIsArticleDeleting(true)
+    setArticleDeleteError(null)
+    try {
+      await deleteArticle(selectedArticle.id)
       selectArticle(null)
       await mutate()
+    } catch (error) {
+      setArticleDeleteError(errorMessageFromUnknown(error, 'Failed to delete article.'))
+    } finally {
+      setIsArticleDeleting(false)
     }
   }
 
   const startEdit = () => {
     if (!selectedArticle) return
     setEditDraft({ title: selectedArticle.title, body: selectedArticle.body, tags: selectedArticle.tags.join(', ') })
+    setEditError(null)
+    setArticleDeleteError(null)
     setIsEditing(true)
   }
   const collectionsDropdown = useCollectionsDropdownView({
@@ -183,6 +209,8 @@ function useKbPageClientView() {
     setNewKbName,
     isCreatingKbSaving,
     onCreateKb: handleCreateKb,
+    actionError: kbActionError,
+    onClearActionError: () => setKbActionError(null),
   })
 
   // Render
@@ -193,14 +221,14 @@ function useKbPageClientView() {
         <h1 className="text-md font-semibold text-foreground">Memory</h1>
         <div className="flex items-center gap-2">
           <button type="button"
-            onClick={() => setIsCreatingKb(true)}
+            onClick={() => { setIsCreatingKb(true); setKbActionError(null) }}
             className="hidden md:flex items-center gap-1.5 text-xs font-medium text-white/70 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors"
           >
             <Plus className="size-3.5" />
             New collection
           </button>
           <button type="button"
-            onClick={() => { setIsCreatingArticle(true); setMobileView('list') }}
+            onClick={() => { setIsCreatingArticle(true); setArticleCreateError(null); setMobileView('list') }}
             disabled={!articleTargetKb || isCreatingArticle}
             title={!articleTargetKb ? 'Select or create a custom collection first' : undefined}
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] disabled:opacity-40 disabled:cursor-not-allowed px-2 md:px-3 py-1.5 rounded-md transition-colors"
@@ -255,13 +283,13 @@ function useKbPageClientView() {
                 onChange={e => setNewKbName(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') handleCreateKb()
-                  if (e.key === 'Escape') { setIsCreatingKb(false); setNewKbName('') }
+                  if (e.key === 'Escape') { setIsCreatingKb(false); setNewKbName(''); setKbActionError(null) }
                 }}
                 className={inputCls}
               />
               <div className="flex justify-end gap-1 mt-2">
                 <button type="button"
-                  onClick={() => { setIsCreatingKb(false); setNewKbName('') }}
+                  onClick={() => { setIsCreatingKb(false); setNewKbName(''); setKbActionError(null) }}
                   className="text-xs text-white/40 hover:text-white/70 px-2 py-1"
                 >
                   Cancel
@@ -276,6 +304,9 @@ function useKbPageClientView() {
                 </button>
               </div>
             </div>
+          )}
+          {kbActionError && (
+            <p className="mt-3 px-2 text-xs text-red-400" aria-live="polite">{kbActionError}</p>
           )}
         </aside>
 
@@ -340,9 +371,12 @@ function useKbPageClientView() {
                 onChange={e => setArticleDraft(d => ({ ...d, tags: e.target.value }))}
                 className={inputCls}
               />
+              {articleCreateError && (
+                <p className="text-xs text-red-400" aria-live="polite">{articleCreateError}</p>
+              )}
               <div className="flex justify-end gap-2">
                 <button type="button"
-                  onClick={() => { setIsCreatingArticle(false); setArticleDraft({ title: '', body: '', tags: '' }) }}
+                  onClick={() => { setIsCreatingArticle(false); setArticleDraft({ title: '', body: '', tags: '' }); setArticleCreateError(null) }}
                   className="text-xs text-white/40 hover:text-white/70 transition-colors px-3 py-1.5"
                 >
                   Cancel
@@ -387,8 +421,11 @@ function useKbPageClientView() {
               isEditing={isEditing}
               editDraft={editDraft}
               isEditSaving={isEditSaving}
+              editError={editError}
+              isDeleting={isArticleDeleting}
+              deleteError={articleDeleteError}
               onEditDraftChange={setEditDraft}
-              onCancelEdit={() => setIsEditing(false)}
+              onCancelEdit={() => { setIsEditing(false); setEditError(null) }}
               onSaveEdit={handleUpdateArticle}
               onStartEdit={startEdit}
               onDelete={handleDeleteArticle}
@@ -459,6 +496,8 @@ function useCollectionsDropdownView({
   setNewKbName,
   isCreatingKbSaving,
   onCreateKb,
+  actionError,
+  onClearActionError,
 }: {
   knowledgeBases: KnowledgeBase[]
   selectedBaseId: string
@@ -471,6 +510,8 @@ function useCollectionsDropdownView({
   setNewKbName: (v: string) => void
   isCreatingKbSaving: boolean
   onCreateKb: () => void
+  actionError: string | null
+  onClearActionError: () => void
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -550,13 +591,16 @@ function useCollectionsDropdownView({
                   onChange={e => setNewKbName(e.target.value)}
                   onKeyDown={e => {
                     if (e.key === 'Enter') onCreateKb()
-                    if (e.key === 'Escape') { setIsCreatingKb(false); setNewKbName('') }
+                    if (e.key === 'Escape') { setIsCreatingKb(false); setNewKbName(''); onClearActionError() }
                   }}
                   className={inputCls}
                 />
+                {actionError && (
+                  <p className="mt-2 text-xs text-red-400" aria-live="polite">{actionError}</p>
+                )}
                 <div className="flex justify-end gap-1 mt-2">
                   <button type="button"
-                    onClick={() => { setIsCreatingKb(false); setNewKbName('') }}
+                    onClick={() => { setIsCreatingKb(false); setNewKbName(''); onClearActionError() }}
                     className="text-xs text-white/40 hover:text-white/70 px-2 py-1"
                   >
                     Cancel
@@ -574,12 +618,15 @@ function useCollectionsDropdownView({
             ) : (
               <button
                 type="button"
-                onClick={() => setIsCreatingKb(true)}
+                onClick={() => { setIsCreatingKb(true); onClearActionError() }}
                 className="flex items-center gap-2 w-full px-2.5 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/[0.05] rounded transition-colors"
               >
                 <Plus className="size-3.5" />
                 New collection
               </button>
+            )}
+            {!isCreatingKb && actionError && (
+              <p className="mt-2 px-2 text-xs text-red-400" aria-live="polite">{actionError}</p>
             )}
           </div>
         </div>

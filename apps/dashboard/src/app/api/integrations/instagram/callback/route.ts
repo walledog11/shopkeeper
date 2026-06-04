@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
-import { timingSafeIncludes } from '@/lib/auth-utils';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -37,26 +34,14 @@ export async function POST(request: Request) {
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
   }
 
-  const cookieStore = await cookies();
-  const savedState = cookieStore.get('ig_oauth_state')?.value;
-  const clerkOrgId = cookieStore.get('ig_oauth_org')?.value;
-  const savedUserId = cookieStore.get('ig_oauth_user')?.value;
-  const returnTo = safeReturnTo(cookieStore.get('ig_oauth_return')?.value);
-  cookieStore.delete('ig_oauth_state');
-  cookieStore.delete('ig_oauth_org');
-  cookieStore.delete('ig_oauth_user');
-  cookieStore.delete('ig_oauth_return');
-
-  if (!savedState || !state || !timingSafeIncludes([savedState], state)) {
-    logger.error('[IG OAuth] State mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
-  }
-
-  const { userId: currentUserId } = await auth();
-  if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[IG OAuth] User session mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=state_mismatch`);
-  }
+  const callbackSession = await validateOAuthCallbackSession({
+    appUrl,
+    logPrefix: 'IG OAuth',
+    prefix: 'ig',
+    state,
+  });
+  if (!callbackSession.ok) return callbackSession.response;
+  const { clerkOrgId, returnTo } = callbackSession.session;
 
   try {
     // ---------------------------------------------------------------

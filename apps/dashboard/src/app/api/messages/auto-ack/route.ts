@@ -12,18 +12,15 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { resolveAgentSettings } from '@/lib/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
-import { handleApiError } from '@/lib/api/errors';
-import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/server/auth-utils';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { withInternalRoute } from '@/lib/api/internal-route';
 
-export async function POST(request: Request) {
-  try {
-    const secret = request.headers.get('x-internal-secret') ?? '';
-    const validSecrets = getValidInternalSecrets();
-    if (!timingSafeIncludes(validSecrets, secret)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const POST = withInternalRoute(
+  {
+    context: 'Messages auto-ack POST',
+    errorMessage: 'Failed to send auto-acknowledgment',
+  },
+  async ({ request }) => {
     const { threadId } = await request.json() as { threadId?: string };
     if (!threadId) {
       return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
@@ -56,7 +53,5 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Messages auto-ack POST', 'Failed to send auto-acknowledgment');
-  }
-}
+  },
+);

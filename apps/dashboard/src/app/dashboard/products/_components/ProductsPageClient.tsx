@@ -54,6 +54,26 @@ function ProductStatStrip({ products, isLoading }: { products: ProductRow[]; isL
   )
 }
 
+async function readJsonResponse<T>(response: Response): Promise<T | null> {
+  try {
+    return await response.json() as T
+  } catch {
+    return null
+  }
+}
+
+function errorMessageFromPayload(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === 'object') {
+    const error = (payload as { error?: unknown }).error
+    if (typeof error === 'string') return error
+  }
+  return fallback
+}
+
+function errorMessageFromUnknown(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 // ── Main page client ──────────────────────────────────────────────────────────
 
 export default function ProductsPageClient() {
@@ -68,6 +88,7 @@ function useProductsPageClientView() {
   const [nextPageInfo, setNextPageInfo] = useState<string | null>(null)
   const [shop, setShop] = useState('')
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<ProductRow | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -80,6 +101,7 @@ function useProductsPageClientView() {
       setDebouncedQuery(q)
       setPages([])
       setNextPageInfo(null)
+      setLoadMoreError(null)
     }, 250)
   }
 
@@ -109,16 +131,26 @@ function useProductsPageClientView() {
     setDebouncedQuery('')
     setPages([])
     setNextPageInfo(null)
+    setLoadMoreError(null)
   }
 
   const loadMore = useCallback(async () => {
     if (!nextPageInfo || isLoadingMore) return
     setIsLoadingMore(true)
+    setLoadMoreError(null)
     try {
       const res = await fetch(`/api/shopify/products?page_info=${encodeURIComponent(nextPageInfo)}`)
-      const d: ProductsResponse = await res.json()
+      const d = await readJsonResponse<ProductsResponse & { error?: unknown }>(res)
+      if (!res.ok) {
+        throw new Error(errorMessageFromPayload(d, 'Unable to load more products.'))
+      }
+      if (!d || !Array.isArray(d.products)) {
+        throw new Error('Unable to load more products.')
+      }
       setPages(prev => [...prev, d.products])
       setNextPageInfo(d.nextPageInfo)
+    } catch (error) {
+      setLoadMoreError(errorMessageFromUnknown(error, 'Unable to load more products.'))
     } finally {
       setIsLoadingMore(false)
     }
@@ -264,6 +296,9 @@ function useProductsPageClientView() {
 
             {nextPageInfo && !isSearchMode && (
               <div className="px-5 py-4">
+                {loadMoreError && (
+                  <p className="mb-2 text-center text-xs text-red-400" aria-live="polite">{loadMoreError}</p>
+                )}
                 <button type="button"
                   onClick={loadMore}
                   disabled={isLoadingMore}

@@ -11,18 +11,15 @@
 import { NextResponse } from 'next/server';
 import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
-import { handleApiError } from '@/lib/api/errors';
-import { timingSafeIncludes, getValidInternalSecrets } from '@/lib/server/auth-utils';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { withInternalRoute } from '@/lib/api/internal-route';
 
-export async function POST(request: Request) {
-  try {
-    const secret = request.headers.get('x-internal-secret') ?? '';
-    const validSecrets = getValidInternalSecrets();
-    if (!timingSafeIncludes(validSecrets, secret)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+export const POST = withInternalRoute(
+  {
+    context: 'Messages internal POST',
+    errorMessage: 'Failed to send message',
+  },
+  async ({ request }) => {
     const { threadId, text } = await request.json() as { threadId?: string; text?: string };
     if (!threadId || !text?.trim()) {
       return NextResponse.json({ error: 'Missing threadId or text' }, { status: 400 });
@@ -58,7 +55,5 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Messages internal POST', 'Failed to send message');
-  }
-}
+  },
+);

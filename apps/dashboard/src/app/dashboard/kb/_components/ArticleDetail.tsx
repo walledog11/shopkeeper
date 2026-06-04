@@ -6,6 +6,9 @@ export function ArticleDetail({
   isEditing,
   editDraft,
   isEditSaving,
+  editError,
+  isDeleting,
+  deleteError,
   onEditDraftChange,
   onCancelEdit,
   onSaveEdit,
@@ -17,6 +20,9 @@ export function ArticleDetail({
   isEditing: boolean
   editDraft: { title: string; body: string; tags: string }
   isEditSaving: boolean
+  editError: string | null
+  isDeleting: boolean
+  deleteError: string | null
   onEditDraftChange: React.Dispatch<React.SetStateAction<{ title: string; body: string; tags: string }>>
   onCancelEdit: () => void
   onSaveEdit: () => void
@@ -48,6 +54,9 @@ export function ArticleDetail({
           onChange={e => onEditDraftChange(d => ({ ...d, tags: e.target.value }))}
           className={inputCls}
         />
+        {editError && (
+          <p className="text-xs text-red-400" aria-live="polite">{editError}</p>
+        )}
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onCancelEdit} className="text-xs text-white/40 hover:text-white/70 transition-colors px-3 py-1.5">
             Cancel
@@ -97,14 +106,18 @@ export function ArticleDetail({
             </button>
             <button type="button"
               onClick={onDelete}
-              className="flex items-center gap-1.5 text-xs text-white/60 hover:text-red-400 bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] px-3 py-1.5 rounded transition-colors"
+              disabled={isDeleting}
+              className="flex items-center gap-1.5 text-xs text-white/60 hover:text-red-400 bg-white/[0.05] hover:bg-white/[0.10] border border-white/[0.08] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded transition-colors"
             >
-              <Trash2 className="size-3" />
-              Delete
+              {isDeleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
+              {isDeleting ? 'Deleting…' : 'Delete'}
             </button>
           </div>
         )}
       </div>
+      {deleteError && (
+        <p className="mt-3 text-xs text-red-400" aria-live="polite">{deleteError}</p>
+      )}
       <div className="text-sm text-white/65 leading-relaxed pt-6 whitespace-pre-wrap mb-6">
         {article.body}
       </div>

@@ -1,25 +1,17 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
-import crypto from 'crypto';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
-
-const INSTAGRAM_OAUTH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 600,
-  path: '/',
-};
+import {
+  createOAuthSessionCookies,
+  requireAuthenticatedOAuthSession,
+} from '@/app/api/integrations/_lib/oauth-session';
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Instagram');
 }
 
 export async function POST(request: Request) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const session = await requireAuthenticatedOAuthSession();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -34,17 +26,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { searchParams } = new URL(request.url);
-  const returnTo = safeReturnTo(searchParams.get('returnTo'));
-
-  const state = crypto.randomBytes(16).toString('hex');
-  const cookieStore = await cookies();
-  cookieStore.set('ig_oauth_state', state, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('ig_oauth_org', orgId, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('ig_oauth_user', userId, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
-  if (returnTo) {
-    cookieStore.set('ig_oauth_return', returnTo, INSTAGRAM_OAUTH_COOKIE_OPTIONS);
-  }
+  const { state } = await createOAuthSessionCookies(request, { prefix: 'ig' }, session);
 
   const redirectUri = `${appUrl}/api/integrations/instagram/callback`;
 

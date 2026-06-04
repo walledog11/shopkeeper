@@ -12,11 +12,10 @@
  * Response: { summary, actionsPerformed, threadId }
  */
 import { NextResponse } from "next/server";
-import { handleApiError } from "@/lib/api/errors";
+import { withInternalRoute } from "@/lib/api/internal-route";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { resolveInternalAgentThread } from "@/lib/agent/api/internal";
 import { parseAgentInternalBody } from "@/lib/agent/api/validation";
-import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
@@ -26,19 +25,34 @@ import { formatApproverId } from "@/lib/agent/api/plan-execution";
 import { hashInstruction } from "@/lib/agent/api/agent-actions";
 import logger from "@/lib/server/logger";
 
-export async function POST(request: Request) {
-  let orgId: string | null = null;
+interface AgentInternalRouteState {
+  orgId: string | null;
+}
 
-  try {
-    // Authenticate via shared secret (supports rotation via INTERNAL_API_SECRET_PREV)
-    const secret = request.headers.get("x-internal-secret");
-    if (!secret || !timingSafeIncludes(getValidInternalSecrets(), secret)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+export const POST = withInternalRoute<AgentInternalRouteState>(
+  {
+    context: "Agent internal POST",
+    errorMessage: "Failed to run agent",
+    createState: () => ({ orgId: null }),
+    onError: async (error, state) => {
+      logger.error({ err: error }, "[agent/internal] error");
 
+      await recordAgentRouteFailure({
+        route: "/api/agent/internal",
+        orgId: state.orgId,
+        error,
+      }, {
+        getCounterClient: getRedis,
+        onError: (alertError) => {
+          logger.error({ err: alertError }, "[agent/internal] failure alert error");
+        },
+      });
+    },
+  },
+  async ({ request, state }) => {
     const { orgId: parsedOrgId, instruction, orderNumber, senderPhone, clerkUserId, threadId, approvedToolCalls } =
       parseAgentInternalBody(await request.json());
-    orgId = parsedOrgId;
+    state.orgId = parsedOrgId;
     await assertBillingWriteAllowedForOrgId(parsedOrgId);
 
     const resolvedThread = await resolveInternalAgentThread({
@@ -82,20 +96,5 @@ export async function POST(request: Request) {
       actionsPerformed: result.actionsPerformed,
       threadId: resolvedThreadId,
     });
-  } catch (error) {
-    logger.error({ err: error }, "[agent/internal] error");
-
-    await recordAgentRouteFailure({
-      route: "/api/agent/internal",
-      orgId,
-      error,
-    }, {
-      getCounterClient: getRedis,
-      onError: (alertError) => {
-        logger.error({ err: alertError }, "[agent/internal] failure alert error");
-      },
-    });
-
-    return handleApiError(error, "Agent internal POST", "Failed to run agent");
-  }
-}
+  },
+);

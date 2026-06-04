@@ -1,15 +1,18 @@
 "use client"
 
-import { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react"
+import { Suspense, useState, useRef, useEffect, useMemo } from "react"
 import { useSearchParams } from "next/navigation"
 import { AlertCircle, CheckCircle2, Inbox } from "lucide-react"
 import useSWR from 'swr'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { useActiveThreadSelection } from '../_hooks/useActiveThreadSelection'
 import { useAgentTurns } from '../_hooks/useAgentTurns'
 import { usePaginatedThreads } from '../_hooks/usePaginatedThreads'
+import { useSummaryRefresh } from '../_hooks/useSummaryRefresh'
 import { useTicketActions } from '../_hooks/useTicketActions'
 import { useTicketSelection } from '../_hooks/useTicketSelection'
+import { useThreadCacheCoordinator } from '../_hooks/useThreadCacheCoordinator'
 import { threadToTicket } from '../_lib/thread-to-ticket'
 import { fetcher } from '@/lib/api/fetcher'
 import ThreadList from './thread-list/ThreadList'
@@ -17,7 +20,6 @@ import ConversationView from './conversation/ConversationView'
 import ContextPanel from './context-panel/ContextPanel'
 import ContextPanelSkeleton from './context-panel/ContextPanelSkeleton'
 import { getCurrentPlanForThread } from '@/lib/agent/plan-cache-shape'
-import type { AgentTurnAction } from '@/lib/agent/api/turns'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
 interface Props {
@@ -27,28 +29,6 @@ interface Props {
 }
 
 const EMPTY_SEARCH_THREADS: Thread[] = []
-
-function createLoadingTicket(threadId: string): Ticket {
-  return {
-    id: threadId,
-    channelType: 'email',
-    platform: 'Conversation',
-    logo: '',
-    customer: 'Loading conversation',
-    time: 'Now',
-    subject: 'Loading conversation',
-    preview: '',
-    tag: 'Support',
-    tagColor: 'text-slate-500 bg-slate-100 border-slate-200',
-    aiSummary: '',
-    status: 'open',
-    lastCustomerMessageAt: null,
-    hasPlan: false,
-    filterStatus: 'genuine',
-    filterReason: null,
-    messages: [],
-  }
-}
 
 export default function TicketsPageClient(props: Props) {
   return (
@@ -69,19 +49,15 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
   const [needsReply, setNeedsReply] = useState(false)
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [showContextDrawer, setShowContextDrawer] = useState(false)
-  const [refreshingSummaryId, setRefreshingSummaryId] = useState<string | null>(null)
-  const refreshingSummaryIdRef = useRef<string | null>(null)
-  const appliedQueryThreadRef = useRef<string | null>(null)
   const isDesktopContext = useMediaQuery('(min-width: 1280px)')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, removeThreadById: removeFromOpen, prependThread: prependToOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply)
   const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, removeThreadById: removeFromClosed, prependThread: prependToClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true)
-  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered')
+  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, removeThreadById: removeFromFiltered, prependThread: prependToFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered')
   const isSearchMode = searchQuery.length >= 2
 
   const { data: searchData, isLoading: isSearchLoading, mutate: mutateSearch } = useSWR<{ threads: Thread[] }>(
@@ -90,26 +66,29 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
     { keepPreviousData: true },
   )
   const searchThreads = searchData?.threads ?? EMPTY_SEARCH_THREADS
-  const activeThreadKey = activeTicketId ? `/api/threads/${activeTicketId}` : null
-  const {
-    data: activeThreadData,
-    error: activeThreadError,
-    mutate: mutateActiveThread,
-  } = useSWR<{ thread: Thread; agentActionsByTurnId?: Record<string, AgentTurnAction[]> }>(activeThreadKey, fetcher)
 
-  const activeThread = activeThreadData?.thread
-  const effectiveActiveTab = useMemo(() => {
-    if (queryThreadId) {
-      if (activeThread?.id === queryThreadId) {
-        if (activeThread.filterStatus === 'filtered') return 'filtered'
-        return activeThread.status === 'closed' ? 'closed' : 'open'
-      }
-      if (openThreads.some(t => t.id === queryThreadId)) return 'open'
-      if (closedThreads.some(t => t.id === queryThreadId)) return 'closed'
-      if (filteredThreads.some(t => t.id === queryThreadId)) return 'filtered'
-    }
-    return activeTab
-  }, [activeTab, activeThread, closedThreads, filteredThreads, openThreads, queryThreadId])
+  const {
+    activeTicketId,
+    setActiveTicketId,
+    activeThread,
+    activeThreadData,
+    activeThreadError,
+    activeThreadPreview,
+    activeTicket,
+    conversationTicket,
+    effectiveActiveTab,
+    isConversationLoading,
+    mutateActiveThread,
+  } = useActiveThreadSelection({
+    queryThreadId,
+    activeTab,
+    openThreads,
+    closedThreads,
+    filteredThreads,
+    searchThreads,
+    agentName,
+  })
+
   const dbThreads = useMemo(
     () => {
       if (isSearchMode) return []
@@ -135,31 +114,6 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
     [activeFilter, isSearchMode, liveTickets],
   )
 
-  const activeTicket = activeThread ? threadToTicket(activeThread, agentName) : undefined
-  const activeThreadPreview = useMemo(
-    () => {
-      if (!activeTicketId) return undefined
-      return openThreads.find(t => t.id === activeTicketId)
-        ?? closedThreads.find(t => t.id === activeTicketId)
-        ?? filteredThreads.find(t => t.id === activeTicketId)
-        ?? searchThreads.find(t => t.id === activeTicketId)
-    },
-    [activeTicketId, closedThreads, filteredThreads, openThreads, searchThreads],
-  )
-  const activeTicketPreview = useMemo(
-    () => activeThreadPreview ? threadToTicket(activeThreadPreview, agentName) : undefined,
-    [activeThreadPreview, agentName],
-  )
-  const isConversationLoading = Boolean(activeTicketId && !activeThread && !activeThreadError)
-  const conversationTicket = useMemo(
-    () => {
-      if (activeTicket) return activeTicket
-      if (!isConversationLoading || !activeTicketId) return undefined
-      return activeTicketPreview ?? createLoadingTicket(activeTicketId)
-    },
-    [activeTicket, activeTicketId, activeTicketPreview, isConversationLoading],
-  )
-
   const lastCustomerMessageId = useMemo(
     () => activeThread?.messages.filter(m => m.senderType === 'customer').at(-1)?.id ?? null,
     [activeThread?.messages],
@@ -172,66 +126,28 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
     [activeThread, lastCustomerMessageId],
   )
 
-  const patchThreadCaches = useCallback(async (threadId: string, updateThread: (thread: Thread) => Thread) => {
-    const updateIfMatch = (thread: Thread): Thread =>
-      thread.id === threadId ? updateThread(thread) : thread
-
-    await Promise.all([
-      mutateOpen(openThreads.map(updateIfMatch), false),
-      mutateClosed(closedThreads.map(updateIfMatch), false),
-      mutateFiltered(filteredThreads.map(updateIfMatch), false),
-      mutateSearch(
-        current => current
-          ? { ...current, threads: current.threads.map(updateIfMatch) }
-          : current,
-        { revalidate: false },
-      ),
-      mutateActiveThread(
-        current => current?.thread.id === threadId
-          ? { ...current, thread: updateThread(current.thread) }
-          : current,
-        { revalidate: false },
-      ),
-    ])
-  }, [closedThreads, filteredThreads, mutateActiveThread, mutateClosed, mutateFiltered, mutateOpen, mutateSearch, openThreads])
-
-  const moveThreadStatus = useCallback(async (threadId: string, nextStatus: 'open' | 'closed') => {
-    const source = nextStatus === 'closed' ? openThreads : closedThreads
-    const existing = source.find(t => t.id === threadId)
-      ?? (nextStatus === 'closed' ? closedThreads : openThreads).find(t => t.id === threadId)
-      ?? activeThreadData?.thread
-    if (!existing) return
-    const updated: Thread = { ...existing, status: nextStatus }
-
-    if (nextStatus === 'closed') {
-      await Promise.all([
-        removeFromOpen(threadId),
-        prependToClosed(updated),
-      ])
-    } else {
-      await Promise.all([
-        removeFromClosed(threadId),
-        prependToOpen(updated),
-      ])
-    }
-
-    await mutateActiveThread(
-      current => current?.thread.id === threadId
-        ? { ...current, thread: updated }
-        : current,
-      { revalidate: false },
-    )
-  }, [activeThreadData?.thread, closedThreads, mutateActiveThread, openThreads, prependToClosed, prependToOpen, removeFromClosed, removeFromOpen])
-
-  const revalidateThreadCaches = useCallback(async () => {
-    await Promise.all([
-      mutateOpen(),
-      mutateClosed(),
-      mutateFiltered(),
-      mutateSearch(),
-      mutateActiveThread(),
-    ])
-  }, [mutateActiveThread, mutateClosed, mutateFiltered, mutateOpen, mutateSearch])
+  const {
+    patchThreadCaches,
+    moveThreadStatus,
+    moveThreadFilterStatus,
+    revalidateThreadCaches,
+  } = useThreadCacheCoordinator({
+    openThreads,
+    closedThreads,
+    filteredThreads,
+    activeThread: activeThreadData?.thread,
+    mutateOpen,
+    mutateClosed,
+    mutateFiltered,
+    removeFromOpen,
+    removeFromClosed,
+    removeFromFiltered,
+    prependToOpen,
+    prependToClosed,
+    prependToFiltered,
+    mutateSearch,
+    mutateActiveThread,
+  })
 
   const { selectedIds, setSelectedIds, handleToggleSelect, handleClearSelection } = useTicketSelection()
 
@@ -244,11 +160,13 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
     handleLinkShopifyCustomer,
     handleBulkClose, handleBulkArchive, handleBulkTag,
     handleMarkAsSpam, handleRecover,
+    showToast,
   } = useTicketActions({
     activeTicketId,
     patchThreadCaches,
     revalidateThreadCaches,
     moveThreadStatus,
+    moveThreadFilterStatus,
     setActiveTicketId,
     setSelectedIds,
   })
@@ -264,51 +182,14 @@ function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }
     revalidateThreadCaches,
   })
 
-  // Pre-select thread from ?thread= query param, fetching details even when the
-  // thread is not in the currently loaded list page.
-  useEffect(() => {
-    if (!queryThreadId) {
-      appliedQueryThreadRef.current = null
-      return
-    }
-    if (appliedQueryThreadRef.current === queryThreadId) return
-    appliedQueryThreadRef.current = queryThreadId
-    setActiveTicketId(current => current === queryThreadId ? current : queryThreadId)
-  }, [queryThreadId])
-
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [activeTicket?.messages?.length, activeTicketId])
 
-  const patchThreadSummary = useCallback(async (threadId: string, summary: string | null) => {
-    await patchThreadCaches(threadId, thread => ({ ...thread, aiSummary: summary }))
-  }, [patchThreadCaches])
-
-  const handleRefreshSummary = useCallback(async (threadId: string) => {
-    if (refreshingSummaryIdRef.current === threadId) return
-    refreshingSummaryIdRef.current = threadId
-    setRefreshingSummaryId(threadId)
-
-    try {
-      const res = await fetch('/api/ai/summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data?.error || `Server error: ${res.status}`)
-      }
-
-      await patchThreadSummary(threadId, data.summary ?? null)
-    } catch (err) {
-      console.error('Failed to refresh summary', err)
-    } finally {
-      if (refreshingSummaryIdRef.current === threadId) refreshingSummaryIdRef.current = null
-      setRefreshingSummaryId(current => current === threadId ? null : current)
-    }
-  }, [patchThreadSummary])
+  const { refreshingSummaryId, handleRefreshSummary } = useSummaryRefresh({
+    patchThreadCaches,
+    showToast,
+  })
 
   const handleTabChange = (tab: 'open' | 'closed' | 'filtered') => {
     setActiveTab(tab)

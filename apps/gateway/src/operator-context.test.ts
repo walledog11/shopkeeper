@@ -67,6 +67,38 @@ describe('updateContext + getContext round-trip', () => {
     expect(ctx.pendingDigest).toEqual(digest);
   });
 
+  it('filters malformed JSON fields when reading stored context', async () => {
+    await db.operatorContext.create({
+      data: {
+        organizationId: org.id,
+        chatId: 'malformed',
+        history: [{ role: 'user', content: 'valid' }, { role: 'assistant' }],
+        pendingPlan: {
+          threadId: 'thread_1',
+          instruction: 'check status',
+          rawToolCalls: [{ id: 'tc_1', name: 'get_order' }, { id: 'tc_2' }],
+        },
+        pendingDigest: {
+          threadIds: ['thread_1', 123],
+          sentAt: '2026-06-03T00:00:00.000Z',
+        },
+      },
+    });
+
+    const ctx = await getContext(org.id, 'malformed');
+
+    expect(ctx.history).toEqual([{ role: 'user', content: 'valid' }]);
+    expect(ctx.pendingPlan).toEqual({
+      threadId: 'thread_1',
+      instruction: 'check status',
+      rawToolCalls: [{ id: 'tc_1', name: 'get_order' }],
+    });
+    expect(ctx.pendingDigest).toEqual({
+      threadIds: ['thread_1'],
+      sentAt: '2026-06-03T00:00:00.000Z',
+    });
+  });
+
   it('truncates history to the last 20 turns', async () => {
     const history = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
     await updateContext(org.id, '42', { history });

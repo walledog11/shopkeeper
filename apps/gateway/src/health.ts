@@ -2,6 +2,7 @@ import type { Redis as IORedis } from 'ioredis';
 import { Queue } from 'bullmq';
 import { QUEUE } from './constants.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
+import { toGatewayBullMqConnection } from './clients/redis-client.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
 
@@ -66,7 +67,7 @@ export async function getQueueDiagnostics(redis: IORedis): Promise<Record<string
 
   queueDiagnosticsPromise = (async () => {
     const { queueDiagnosticsCacheMs } = getGatewayWorkerRedisConfig();
-    const connection = redis as unknown as Record<string, unknown>;
+    const connection = toGatewayBullMqConnection(redis);
     const inboundQueue = new Queue(QUEUE.INBOUND, { connection });
     const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection });
 

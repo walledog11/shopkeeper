@@ -8,6 +8,7 @@ import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeToolWithStatus } from "./tools/executor";
+import { escalateToHuman } from "./tools/thread";
 import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
 import type { ActionEntry, AgentActionMode, AgentActionStatus, AgentContext, AgentResult } from "./types";
@@ -197,6 +198,17 @@ export async function runAgent(
         logger.error({ err, tool: toolCall.name }, "[agent] tool error");
         recordAgentFailureSafely("tool_exception", toolCall.name, errorMessage);
       }
+    }
+
+    // A hard policy block on a mutative action (over-cap refund, cancellations disabled,
+    // daily cap, custom line items) is not something the model should retry or talk its
+    // way around. Route it to a human deterministically instead of feeding the error back
+    // into the loop - the safe outcome no longer depends on the model choosing to escalate.
+    if (!threw && status === "policy_block" && TOOL_CATEGORIES[toolCall.name] === "action") {
+      const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
+      await escalateToHuman({ reason }, { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName });
+      result = reason;
+      status = "escalated";
     }
 
     if (!threw && status === "error") {

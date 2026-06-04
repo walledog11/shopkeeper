@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
-import crypto from 'crypto';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import {
+  createOAuthSessionCookies,
+  requireAuthenticatedOAuthSession,
+} from '@/app/api/integrations/_lib/oauth-session';
 
 const GMAIL_SCOPES = [
   'openid',
@@ -11,21 +11,13 @@ const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
 ].join(' ');
 
-const GMAIL_OAUTH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 600,
-  path: '/',
-};
-
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Gmail');
 }
 
 export async function POST(request: Request) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const session = await requireAuthenticatedOAuthSession();
+  if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -39,17 +31,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { searchParams } = new URL(request.url);
-  const returnTo = safeReturnTo(searchParams.get('returnTo'));
-
-  const state = crypto.randomBytes(16).toString('hex');
-  const cookieStore = await cookies();
-  cookieStore.set('gmail_oauth_state', state, GMAIL_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('gmail_oauth_org', orgId, GMAIL_OAUTH_COOKIE_OPTIONS);
-  cookieStore.set('gmail_oauth_user', userId, GMAIL_OAUTH_COOKIE_OPTIONS);
-  if (returnTo) {
-    cookieStore.set('gmail_oauth_return', returnTo, GMAIL_OAUTH_COOKIE_OPTIONS);
-  }
+  const { state } = await createOAuthSessionCookies(request, { prefix: 'gmail' }, session);
 
   const redirectUri = `${appUrl}/api/integrations/gmail/callback`;
 

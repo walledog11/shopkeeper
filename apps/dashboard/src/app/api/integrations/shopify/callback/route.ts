@@ -1,17 +1,15 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@clerk/db';
 import crypto from 'crypto';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
-import { timingSafeIncludes } from '@/lib/auth-utils';
-import { safeReturnTo } from '@/lib/security/safe-return-to';
+import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 import { shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
+import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 
 const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
 
@@ -38,28 +36,20 @@ export async function POST(request: Request) {
   // ---------------------------------------------------------------
   // Step 1: Verify CSRF state
   // ---------------------------------------------------------------
-  const cookieStore = await cookies();
-  const savedState = cookieStore.get('shopify_oauth_state')?.value;
-  const clerkOrgId = cookieStore.get('shopify_oauth_org')?.value;
-  const savedUserId = cookieStore.get('shopify_oauth_user')?.value;
-  const savedShop = cookieStore.get('shopify_oauth_shop')?.value;
-  const returnTo = safeReturnTo(cookieStore.get('shopify_oauth_return')?.value);
-  cookieStore.delete('shopify_oauth_state');
-  cookieStore.delete('shopify_oauth_org');
-  cookieStore.delete('shopify_oauth_user');
-  cookieStore.delete('shopify_oauth_shop');
-  cookieStore.delete('shopify_oauth_return');
-
-  if (!savedState || !state || !timingSafeIncludes([savedState], state)) {
-    logger.error('[Shopify OAuth] State mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_state_mismatch`);
-  }
-
-  const { userId: currentUserId } = await auth();
-  if (!currentUserId || currentUserId !== savedUserId) {
-    logger.error({ savedUserId, currentUserId }, '[Shopify OAuth] User session mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_state_mismatch`);
-  }
+  const callbackSession = await validateOAuthCallbackSession({
+    appUrl,
+    extraCookieKeys: ['shop'],
+    logPrefix: 'Shopify OAuth',
+    prefix: 'shopify',
+    state,
+    stateMismatchError: 'shopify_state_mismatch',
+  });
+  if (!callbackSession.ok) return callbackSession.response;
+  const {
+    clerkOrgId,
+    returnTo,
+    extra: { shop: savedShop },
+  } = callbackSession.session;
 
   if (!code || !shop || !hmac) {
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_invalid_callback`);

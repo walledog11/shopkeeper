@@ -71,7 +71,16 @@ describe("agent evals", () => {
         // A fixture that fails every repeat is hard-broken — fail the test. Flappy fixtures
         // (some repeats pass) clear this bar; their pass-rate is recorded and gated against
         // the baseline in afterAll. At repeats=1 this is identical to requiring the run to pass.
-        expect(summary.passes).toBeGreaterThan(0);
+        // Advisory fixtures are exempt: their pass-rate is still recorded (and baseline-gated),
+        // but a 0/N draw does not red CI — the property they probe is model judgment, not a
+        // safety gate. See Fixture.advisory.
+        if (fixture.advisory) {
+          if (summary.passes === 0) {
+            console.log(`  ~ advisory ${summary.id}: 0/${summary.repeats} (not gated)`);
+          }
+        } else {
+          expect(summary.passes).toBeGreaterThan(0);
+        }
       },
       // Generous: a multi-iteration agent run can take >60s under rate-limit backoff, and we
       // now run it `repeats` times back-to-back. A timed-out fixture keeps running and its

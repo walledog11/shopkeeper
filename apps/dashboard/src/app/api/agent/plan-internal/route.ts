@@ -21,18 +21,17 @@ import {
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
 } from "@/lib/agent/api/plan-execution";
-import { BadRequestError, handleApiError } from "@/lib/api/errors";
+import { BadRequestError } from "@/lib/api/errors";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
-import { timingSafeIncludes, getValidInternalSecrets } from "@/lib/server/auth-utils";
+import { withInternalRoute } from "@/lib/api/internal-route";
 import type { OrgSettings } from "@/types";
 
-export async function POST(request: Request) {
-  try {
-    const secret = request.headers.get("x-internal-secret");
-    if (!secret || !timingSafeIncludes(getValidInternalSecrets(), secret)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
+export const POST = withInternalRoute(
+  {
+    context: "Agent plan-internal POST",
+    errorMessage: "Failed to generate plan",
+  },
+  async ({ request }) => {
     const { orgId, threadId, allowAutoExecute } = parseAgentPlanInternalBody(await readJsonBody(request));
 
     const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
@@ -89,10 +88,8 @@ export async function POST(request: Request) {
       : {};
 
     return NextResponse.json({ plan, instruction, ...autoExecution });
-  } catch (error) {
-    return handleApiError(error, "Agent plan-internal POST", "Failed to generate plan");
-  }
-}
+  },
+);
 
 async function buildAutoExecutionResponse(
   orgId: string,

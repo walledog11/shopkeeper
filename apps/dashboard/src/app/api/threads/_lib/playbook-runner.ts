@@ -3,6 +3,7 @@ import type { PlaybookAction, PlaybookTrigger } from "@/types";
 import { dispatchMessage } from "@/lib/messaging/dispatch-message";
 import logger from "@/lib/server/logger";
 import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
+import { parsePlaybookActions, parsePlaybookTrigger } from "@/app/api/playbooks/_lib/playbook-shape";
 
 export async function runPlaybooks(
   orgId: string,
@@ -15,7 +16,8 @@ export async function runPlaybooks(
     });
 
     const matching = playbooks.filter((playbook) => {
-      const playbookTrigger = playbook.trigger as unknown as PlaybookTrigger;
+      const playbookTrigger = parsePlaybookTrigger(playbook.trigger);
+      if (!playbookTrigger) return false;
       if (playbookTrigger.type !== trigger.type) return false;
       if (playbookTrigger.type === "tag_applied") return playbookTrigger.tag === trigger.tag;
       return true;
@@ -36,7 +38,7 @@ export async function runPlaybooks(
         return;
       }
 
-      await executePlaybook(orgId, threadId, playbook.actions as unknown as PlaybookAction[]);
+      await executePlaybook(orgId, threadId, parsePlaybookActions(playbook.actions));
 
       await db.playbook.update({
         where: { id: playbook.id },

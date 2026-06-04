@@ -1,4 +1,7 @@
+import type { ConnectionOptions } from 'bullmq';
 import { Redis as IORedis, type RedisOptions } from 'ioredis';
+
+export type GatewayBullMqConnection = ConnectionOptions & IORedis;
 
 export function getGatewayRedisUrl(db = 0): string {
   const rawUrl = process.env.REDIS_URL;
@@ -17,4 +20,12 @@ export function createGatewayRedisClient(options?: RedisOptions): IORedis {
   }
 
   return new IORedis(getGatewayRedisUrl());
+}
+
+export function createGatewayBullMqConnection(options?: RedisOptions): GatewayBullMqConnection {
+  return createGatewayRedisClient(options) as GatewayBullMqConnection;
+}
+
+export function toGatewayBullMqConnection(redis: IORedis): GatewayBullMqConnection {
+  return redis as GatewayBullMqConnection;
 }

@@ -20,7 +20,7 @@ type DbThreadFilterFeedback = (typeof ThreadFilterFeedbackRuntime)[keyof typeof 
 
 type ClerkDb = ReturnType<typeof createClient>;
 
-const globalForPrisma = globalThis as unknown as {
+const globalForPrisma = globalThis as typeof globalThis & {
   prisma: ClerkDb | undefined;
 };
 
