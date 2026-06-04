@@ -1,7 +1,14 @@
 import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client";
 import { isOperatorChannel } from "@/lib/messaging/thread-constants";
-import { escalateToHuman } from "./tools/thread";
+import {
+  escalateToHuman,
+  addInternalNote,
+  sendReply,
+  sendEmail,
+  updateThreadStatus,
+  updateThreadTag,
+} from "./tools/thread";
 import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./types";
 
 function readCustomerMemory(memory: unknown): CustomerMemory | null {
@@ -173,6 +180,8 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
     : allKbArticles;
   const kbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
 
+  const threadIo = { threadId: thread.id, orgId, orgName: org?.name ?? "Support" };
+
   const base: BaseAgentContext = {
     orgId,
     orgName: org?.name ?? "Support",
@@ -186,10 +195,14 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
         ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
         : null,
     escalate: (reason) =>
-      escalateToHuman(
-        { reason },
-        { threadId: thread.id, orgId, orgName: org?.name ?? "Support" }
-      ).then(() => {}),
+      escalateToHuman({ reason }, threadIo).then(() => {}),
+    io: {
+      addInternalNote: (input) => addInternalNote(input, threadIo),
+      sendReply: (input) => sendReply(input, threadIo),
+      sendEmail: (input) => sendEmail(input, threadIo),
+      updateThreadStatus: (input) => updateThreadStatus(input, threadIo),
+      updateThreadTag: (input) => updateThreadTag(input, threadIo),
+    },
   };
 
   return {

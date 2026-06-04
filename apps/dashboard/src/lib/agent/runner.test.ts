@@ -34,7 +34,14 @@ vi.mock('@/lib/agent/spend', () => ({
 }));
 
 import { runAgent } from './runner';
-import { escalateToHuman } from './tools/thread';
+import {
+  escalateToHuman,
+  addInternalNote,
+  sendReply,
+  sendEmail,
+  updateThreadStatus,
+  updateThreadTag,
+} from './tools/thread';
 import type { AgentContext } from './runner';
 
 // ── Response factories ────────────────────────────────────────────────────────
@@ -93,6 +100,18 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
         { reason },
         { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName }
       ).then(() => {});
+  }
+  // Mirror buildContext's support io sink so the injected I/O seam routes through
+  // the (partially mocked) thread module functions.
+  if (!overrides.io) {
+    const threadIo = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
+    ctx.io = {
+      addInternalNote: (input) => addInternalNote(input, threadIo),
+      sendReply: (input) => sendReply(input, threadIo),
+      sendEmail: (input) => sendEmail(input, threadIo),
+      updateThreadStatus: (input) => updateThreadStatus(input, threadIo),
+      updateThreadTag: (input) => updateThreadTag(input, threadIo),
+    };
   }
   return ctx;
 }

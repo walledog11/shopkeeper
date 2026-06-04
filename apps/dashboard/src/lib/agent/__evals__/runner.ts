@@ -18,7 +18,14 @@ import { resolveAgentSettings } from "../settings";
 import * as executor from "../tools/executor";
 import { readModelUsage } from "../usage";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "../api/agent-actions";
-import { escalateToHuman } from "../tools/thread";
+import {
+  escalateToHuman,
+  addInternalNote,
+  sendReply,
+  sendEmail,
+  updateThreadStatus,
+  updateThreadTag,
+} from "../tools/thread";
 import type { AgentActionMode, AgentContext } from "../types";
 import type { AgentPlan, OrgSettings } from "@/types";
 import { judgeReply } from "./judge";
@@ -267,6 +274,13 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
     kbArticles: setup.kbArticles ?? [],
     escalate: (reason) =>
       escalateToHuman({ reason }, { threadId, orgId, orgName: "Test Store" }).then(() => {}),
+    io: {
+      addInternalNote: (input) => addInternalNote(input, { threadId, orgId, orgName: "Test Store" }),
+      sendReply: (input) => sendReply(input, { threadId, orgId, orgName: "Test Store" }),
+      sendEmail: (input) => sendEmail(input, { threadId, orgId, orgName: "Test Store" }),
+      updateThreadStatus: (input) => updateThreadStatus(input, { threadId, orgId, orgName: "Test Store" }),
+      updateThreadTag: (input) => updateThreadTag(input, { threadId, orgId, orgName: "Test Store" }),
+    },
   };
 }
 

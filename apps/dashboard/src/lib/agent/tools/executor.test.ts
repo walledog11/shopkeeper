@@ -67,6 +67,35 @@ describe('executeToolWithStatus on a thread-less BaseAgentContext', () => {
     expect(citations).toBe(0);
   });
 
+  it('returns the no-thread error for a thread-coupled tool when no io sink is injected', async () => {
+    const ctx = threadlessCtx(vi.fn());
+
+    const result = await executeToolWithStatus('send_reply', { text: 'hello' }, ctx);
+
+    expect(result.status).toBe('error');
+    expect(result.result).toBe('Error: this tool requires a conversation thread.');
+  });
+
+  it('routes a thread-coupled tool through the injected io sink when present', async () => {
+    const sendReply = vi.fn().mockResolvedValue({ status: 'ok', message: 'Reply sent.' });
+    const ctx: BaseAgentContext = {
+      ...threadlessCtx(vi.fn()),
+      io: {
+        addInternalNote: vi.fn(),
+        sendReply,
+        sendEmail: vi.fn(),
+        updateThreadStatus: vi.fn(),
+        updateThreadTag: vi.fn(),
+      },
+    };
+
+    const result = await executeToolWithStatus('send_reply', { text: 'hello' }, ctx);
+
+    expect(result.status).toBe('success');
+    expect(result.result).toBe('Reply sent.');
+    expect(sendReply).toHaveBeenCalledWith({ text: 'hello' });
+  });
+
   it('routes escalate_to_human through the injected sink', async () => {
     const escalate = vi.fn().mockResolvedValue(undefined);
     const ctx = threadlessCtx(escalate);

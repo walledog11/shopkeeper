@@ -2,13 +2,6 @@ import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";
 import { resolveAgentSettings } from "../settings";
 import {
-  addInternalNote,
-  sendReply,
-  sendEmail,
-  updateThreadStatus,
-  updateThreadTag,
-} from "./thread";
-import {
   searchShopifyProducts,
   searchShopifyCustomers,
   getShopifyCustomer,
@@ -55,10 +48,10 @@ function cast<T>(v: unknown): T {
   return v as T;
 }
 
-// Lazily resolve the thread-shaped context the thread-coupled tools need. A
-// thread-less module (order-ops) has no thread, so this returns null and those
-// tools defensively error — they are filtered out of any thread-less tool set,
-// so the support path never hits the null branch.
+// Lazily resolve the thread id for search_kb's citation write. A thread-less
+// module (order-ops) has no thread, so this returns null and the citation is
+// skipped. The thread-coupled write tools route through the injected `ctx.io`
+// sink instead; this is only the read-side citation linkage.
 function threadContextOf(
   ctx: BaseAgentContext
 ): { threadId: string; orgId: string; orgName: string } | null {
@@ -155,30 +148,20 @@ async function runToolBody(
     case "edit_shopify_order":
       return ctx.shopify ? editShopifyOrder(cast<EditShopifyOrderInput>(args), ctx.shopify) : noShopify;
 
-    case "add_internal_note": {
-      const tc = threadContextOf(ctx);
-      return tc ? addInternalNote(cast<AddInternalNoteInput>(args), tc) : noThread;
-    }
+    case "add_internal_note":
+      return ctx.io ? ctx.io.addInternalNote(cast<AddInternalNoteInput>(args)) : noThread;
 
-    case "send_reply": {
-      const tc = threadContextOf(ctx);
-      return tc ? sendReply(cast<SendReplyInput>(args), tc) : noThread;
-    }
+    case "send_reply":
+      return ctx.io ? ctx.io.sendReply(cast<SendReplyInput>(args)) : noThread;
 
-    case "send_email": {
-      const tc = threadContextOf(ctx);
-      return tc ? sendEmail(cast<SendEmailInput>(args), tc) : noThread;
-    }
+    case "send_email":
+      return ctx.io ? ctx.io.sendEmail(cast<SendEmailInput>(args)) : noThread;
 
-    case "update_thread_status": {
-      const tc = threadContextOf(ctx);
-      return tc ? updateThreadStatus(cast<UpdateThreadStatusInput>(args), tc) : noThread;
-    }
+    case "update_thread_status":
+      return ctx.io ? ctx.io.updateThreadStatus(cast<UpdateThreadStatusInput>(args)) : noThread;
 
-    case "update_thread_tag": {
-      const tc = threadContextOf(ctx);
-      return tc ? updateThreadTag(cast<UpdateThreadTagInput>(args), tc) : noThread;
-    }
+    case "update_thread_tag":
+      return ctx.io ? ctx.io.updateThreadTag(cast<UpdateThreadTagInput>(args)) : noThread;
 
     case "escalate_to_human": {
       const reason = cast<EscalateToHumanInput>(args).reason.trim() || "No reason provided";

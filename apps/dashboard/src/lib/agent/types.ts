@@ -1,4 +1,25 @@
 import type { CustomerMemory } from "@clerk/db";
+import type { ToolResult } from "./tools/result";
+import type {
+  AddInternalNoteInput,
+  SendReplyInput,
+  SendEmailInput,
+  UpdateThreadStatusInput,
+  UpdateThreadTagInput,
+} from "./tools/tool-inputs";
+
+// Module-supplied I/O sink for the thread-coupled tools. Support wires this to
+// the dashboard messaging stack (Postmark/IG/email); a thread-less module leaves
+// it absent and these tools are filtered out of its tool set. Keeping it injected
+// is what lets the executor live in a shared package that cannot import a message
+// provider.
+export interface AgentIO {
+  addInternalNote(input: AddInternalNoteInput): Promise<ToolResult>;
+  sendReply(input: SendReplyInput): Promise<ToolResult>;
+  sendEmail(input: SendEmailInput): Promise<ToolResult>;
+  updateThreadStatus(input: UpdateThreadStatusInput): Promise<ToolResult>;
+  updateThreadTag(input: UpdateThreadTagInput): Promise<ToolResult>;
+}
 
 export interface ShopifyOrderSummary {
   id: string;
@@ -39,6 +60,9 @@ export interface BaseAgentContext {
   // Module-supplied escalation/flag sink. Support routes a thread to a human;
   // a thread-less module records a finding. Every module must declare its path.
   escalate: (reason: string) => Promise<void>;
+  // Module-supplied I/O sink for the thread-coupled tools. Absent for thread-less
+  // modules, whose tool sets exclude these tools.
+  io?: AgentIO;
 }
 
 // Support module context: the base plus the ticket, customer, Shopify linkage,
