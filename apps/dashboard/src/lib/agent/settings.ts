@@ -77,6 +77,16 @@ export const TIERS_THAT_AUTO_EXECUTE: ReadonlySet<AutonomyTier> = new Set<Autono
   "full",
 ]);
 
+export type AutoExecuteMode = NonNullable<OrgSettings["autoExecuteMode"]>;
+
+// Effective auto-execute mode, migrating the legacy boolean `autoExecuteEnabled`
+// (true → live, false/unset → off) for orgs that predate `autoExecuteMode`.
+export function resolveAutoExecuteMode(settings: Partial<OrgSettings> | null | undefined): AutoExecuteMode {
+  const mode = settings?.autoExecuteMode;
+  if (mode === "off" || mode === "shadow" || mode === "live") return mode;
+  return settings?.autoExecuteEnabled === true ? "live" : "off";
+}
+
 export function resolveAgentSettings(settings: Partial<OrgSettings> | null | undefined): OrgSettings {
   const base = settings ?? {};
   const requested = base.autonomyTier;

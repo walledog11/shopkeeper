@@ -9,6 +9,7 @@ import { fetcher } from "@/lib/api/fetcher"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { isOperatorChannel } from "@/lib/messaging/thread-constants"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
+import AutonomyReadinessCard from "./AutonomyReadinessCard"
 import type { ActionLogEntry, ChannelType } from "@/types"
 
 // ── Focus lenses ─────────────────────────────────────────────────────────────
@@ -247,6 +248,8 @@ export default function ReviewFeed() {
       <div className="p-5 border-b border-white/[0.06]">
         <h1 className="text-lg font-semibold text-white">Review</h1>
         <p className="text-sm text-white/40 mt-0.5">Read what the AI actually drafted and sent. Spot-check quality.</p>
+
+        <AutonomyReadinessCard />
 
         <div className="flex flex-wrap items-center gap-1.5 mt-3">
           {FOCUS_OPTIONS.map((opt) => {

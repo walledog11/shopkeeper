@@ -2,11 +2,12 @@ import { db, SenderType, createMessage } from "@clerk/db";
 import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS, isOperatorChannel } from "@/lib/messaging/thread-constants";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
-import { recordProviderSendFailure } from "@/lib/server/provider-send-alerts";
-import { getRedis } from "@/lib/server/redis";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
+import { buildThreadReplyHeaders, formatReplySubject } from "@/lib/messaging/email/reply";
+import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
+import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
 import { toolError, toolEscalated, toolOk, type ToolResult } from "./result";
 import type {
   AddInternalNoteInput,
@@ -23,14 +24,27 @@ interface ThreadContext {
   orgName: string;
 }
 
-function replySubject(subject: string | null | undefined, fallback = "Your inquiry"): string {
-  const raw = subject?.trim() || fallback;
-  return /^re:\s/i.test(raw) ? raw : `Re: ${raw}`;
-}
+function agentReplyDispatchError(
+  channelType: string,
+  result: Extract<DispatchMessageResult, { ok: false }>,
+): ToolResult {
+  if (channelType === CHANNEL_TYPE.IG_DM && result.providerStatus !== undefined) {
+    return toolError(`Error: Instagram dispatch failed (${result.providerStatus}).`);
+  }
+  if (result.error === "Email not configured" && result.detail) {
+    return toolError(`Error: email not configured , ${result.detail}`);
+  }
+  if (result.error === "Email dispatch failed" && result.detail) {
+    return toolError(`Error: email dispatch failed , ${result.detail}`);
+  }
 
-function threadMessageId(threadId: string): string {
-  const inboundDomain = process.env.INBOUND_EMAIL_DOMAIN || "mail.clerkapp.com";
-  return `<thread-${threadId}@${inboundDomain}>`;
+  const agentMessage = {
+    "No Instagram integration configured": "no Instagram integration configured",
+    "No email integration configured": "no email integration configured",
+    "Email not configured": "email not configured",
+    "Email dispatch failed": "email dispatch failed",
+  }[result.error] ?? result.error;
+  return toolError(`Error: ${agentMessage}.`);
 }
 
 // ── add_internal_note ─────────────────────────────────────────────────────────
@@ -53,138 +67,30 @@ export async function sendReply(
   input: SendReplyInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  const thread = await db.thread.update({
+  const thread = await db.thread.findUnique({
     where: { id: ctx.threadId },
-    data: { status: "open" },
     include: { customer: true },
   }).catch(() => null);
 
   if (!thread) return toolError("Error: thread not found.");
-
-  const recipientId = thread.customer.platformId;
-
-  // ── Instagram dispatch ──
-  if (thread.channelType === CHANNEL_TYPE.IG_DM) {
-    const igIntegration = await db.integration.findFirst({
-      where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.IG_DM },
-    });
-    if (!igIntegration?.externalAccountId) {
-      return toolError("Error: no Instagram integration configured.");
-    }
-    const recorded = await recordOutboundCall({
-      source: "agent_send_reply",
-      provider: "meta",
-      channel: "ig_dm",
-      organizationId: ctx.orgId,
-      threadId: ctx.threadId,
-      to: recipientId,
-      from: igIntegration.externalAccountId,
-      text: input.text,
-      metadata: { igAccountId: igIntegration.externalAccountId },
-    });
-    if (!recorded) {
-      if (!igIntegration.accessToken) return toolError("Error: no Instagram integration configured.");
-      const igRes = await fetch(
-        `https://graph.facebook.com/v22.0/${igIntegration.externalAccountId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${igIntegration.accessToken}`,
-          },
-          body: JSON.stringify({
-            recipient: { id: recipientId },
-            message: { text: input.text },
-          }),
-        }
-      );
-      if (!igRes.ok) {
-        const errBody = await igRes.text().catch(() => "");
-        logger.error({ status: igRes.status, body: errBody }, '[sendReply] Instagram dispatch error');
-        void recordProviderSendFailure('meta', 'ig_dm', ctx.orgId, {
-          counterClient: getRedis(),
-          threadId: ctx.threadId,
-          integrationId: igIntegration.id,
-          detail: `Instagram dispatch failed (${igRes.status})`,
-        });
-        return toolError(`Error: Instagram dispatch failed (${igRes.status}).`);
-      }
-    }
-    await createMessage({
-      threadId: ctx.threadId,
-      senderType: SenderType.agent,
-      contentText: input.text,
-    });
-    return toolOk(`Reply sent to customer via Instagram DM.`);
+  if (thread.channelType !== CHANNEL_TYPE.IG_DM && thread.channelType !== CHANNEL_TYPE.EMAIL) {
+    return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
   }
 
-  // ── Email dispatch ──
-  if (thread.channelType === CHANNEL_TYPE.EMAIL) {
-    const emailIntegration = await db.integration.findFirst({
-      where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.EMAIL },
-    });
-    if (!emailIntegration) return toolError("Error: no email integration configured.");
-    const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
-    const syntheticMessageId = threadMessageId(ctx.threadId);
-    const lastCustomerMsg = await db.message.findFirst({
-      where: { threadId: ctx.threadId, senderType: SenderType.customer, externalMessageId: { not: null } },
-      orderBy: { sentAt: "desc" },
-      select: { externalMessageId: true },
-    });
-    const inReplyTo = lastCustomerMsg?.externalMessageId ?? syntheticMessageId;
-    const headers = [
-      { name: "Message-ID", value: syntheticMessageId },
-      { name: "In-Reply-To", value: inReplyTo },
-      { name: "References", value: inReplyTo },
-    ];
-    const provider = getEmailProvider(emailIntegration);
-    const subject = replySubject(thread.subject, thread.tag || "Your inquiry");
-    const recorded = await recordOutboundCall({
+  const result = await dispatchMessage(
+    thread,
+    { id: ctx.orgId, name: ctx.orgName },
+    input.text,
+    {
       source: "agent_send_reply",
-      provider,
-      channel: "email",
-      organizationId: ctx.orgId,
-      threadId: ctx.threadId,
-      to: recipientId,
-      from: fromEmail,
-      subject,
-      text: input.text,
-      headers,
-      metadata: { replyTo: emailIntegration.externalAccountId },
-    });
-    try {
-      if (!recorded) {
-        await getEmailSender(emailIntegration).send({
-          to: recipientId,
-          fromAddress: fromEmail,
-          fromName: ctx.orgName,
-          replyTo: emailIntegration.externalAccountId,
-          subject,
-          text: input.text,
-          headers,
-        });
-      }
-    } catch (err) {
-      if (err instanceof EmailNotConfiguredError) return toolError(`Error: email not configured , ${err.message}`);
-      const msg = err instanceof Error ? err.message : String(err);
-      logger.error({ err: msg, provider }, '[sendReply] Email dispatch error');
-      void recordProviderSendFailure(provider, 'email', ctx.orgId, {
-        counterClient: getRedis(),
-        threadId: ctx.threadId,
-        integrationId: emailIntegration.id,
-        detail: msg,
-      });
-      return toolError(`Error: email dispatch failed , ${msg}`);
-    }
-    await createMessage({
-      threadId: ctx.threadId,
-      senderType: SenderType.agent,
-      contentText: input.text,
-    });
-    return toolOk(`Reply sent to customer via email.`);
-  }
+      emailSubjectFallback: thread.tag || "Your inquiry",
+    },
+  );
+  if (!result.ok) return agentReplyDispatchError(thread.channelType, result);
 
-  return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
+  return thread.channelType === CHANNEL_TYPE.IG_DM
+    ? toolOk(`Reply sent to customer via Instagram DM.`)
+    : toolOk(`Reply sent to customer via email.`);
 }
 
 // ── send_email ────────────────────────────────────────────────────────────────
@@ -243,13 +149,8 @@ export async function sendEmail(
     targetThreadId = newThread.id;
   }
 
-  const subject = existingThread ? replySubject(input.subject) : input.subject;
-  const syntheticMessageId = threadMessageId(targetThreadId);
-  const headers = [
-    { name: "Message-ID", value: syntheticMessageId },
-    { name: "In-Reply-To", value: syntheticMessageId },
-    { name: "References", value: syntheticMessageId },
-  ];
+  const subject = existingThread ? formatReplySubject(input.subject) : input.subject;
+  const headers = buildThreadReplyHeaders(targetThreadId);
   const recorded = await recordOutboundCall({
     source: "agent_send_email",
     provider,
@@ -286,8 +187,9 @@ export async function sendEmail(
     if (err instanceof EmailNotConfiguredError) return toolError(`Error: email not configured , ${err.message}`);
     const msg = err instanceof Error ? err.message : String(err);
     logger.error({ err: msg, threadId: targetThreadId, provider }, '[sendEmail] Email dispatch error');
-    void recordProviderSendFailure(provider, 'email', ctx.orgId, {
-      counterClient: getRedis(),
+    await recordEmailSendFailure({
+      provider,
+      organizationId: ctx.orgId,
       threadId: targetThreadId,
       integrationId: emailIntegration.id,
       detail: msg,

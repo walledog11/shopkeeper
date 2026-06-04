@@ -11,6 +11,7 @@ import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { hashInstruction, hashPlan } from "@/lib/agent/api/agent-actions";
+import { resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
 import { formatApproverId } from "@/lib/agent/api/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
 import type { OrgSettings } from "@/types";
@@ -106,6 +107,12 @@ export const POST = withOrgRoute(
         },
       } : {}),
     });
+    await resolveShadowDecisionOnApproval({
+      orgId: org.id,
+      threadId,
+      approvedToolCalls,
+    });
+
     logger.info({
       orgId: org.id,
       threadId,

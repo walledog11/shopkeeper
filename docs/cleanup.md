@@ -85,17 +85,17 @@ The first cleanup split the settings page, but left one large section bucket.
 
 The dashboard has a shared dispatch path, but agent tools still duplicate provider-send behavior.
 
-- [ ] Align agent reply sending with `apps/dashboard/src/lib/messaging/dispatch-message.ts`.
+- [x] Align agent reply sending with `apps/dashboard/src/lib/messaging/dispatch-message.ts`.
   - Remove duplicated Instagram dispatch logic from `apps/dashboard/src/lib/agent/tools/thread.ts`.
   - Remove duplicated email reply dispatch logic where the shared dispatcher can preserve behavior.
   - Preserve agent-specific tool result messages.
-- [ ] Extract shared email header/subject helpers.
+- [x] Extract shared email header/subject helpers.
   - Centralize synthetic message IDs, `In-Reply-To`, `References`, and `Re:` subject formatting.
   - Use the helper from dashboard sends and agent sends.
-- [ ] Extract provider failure recording helpers.
+- [x] Extract provider failure recording helpers.
   - Keep current provider-specific failure details.
   - Avoid divergent behavior between dashboard sends and agent sends.
-- [ ] Add targeted tests for dispatch behavior before broad refactors.
+- [x] Add targeted tests for dispatch behavior before broad refactors.
   - Email success/failure.
   - Instagram token/window failures.
   - Outbound recorder short-circuit behavior.

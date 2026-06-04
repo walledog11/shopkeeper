@@ -62,6 +62,11 @@ export interface RubricCheck {
   id: string;
   description: string;
   required?: boolean;
+  // Gating subset (Track 1c). When true, this check is judged even in the PR gate, where the
+  // judge is otherwise off (CI without RUN_JUDGE_EVALS) — it fires a single cheap Sonnet call
+  // for just the gating checks. Reserve for objective, high-signal, stable checks; leave
+  // expensive/subjective checks ungated (nightly-only via RUN_JUDGE_EVALS=1).
+  gate?: boolean;
 }
 
 export interface JudgeResult {

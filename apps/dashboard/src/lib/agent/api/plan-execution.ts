@@ -4,7 +4,9 @@ import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "@/lib/agent/api/agent-actions";
+import { recordShadowDecision, resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
 import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "@/lib/agent/plan-preview";
+import { resolveAutoExecuteMode } from "@/lib/agent/settings";
 import { TOOL_CATEGORIES } from "@/lib/agent/tools/registry";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { AgentResult } from "@/lib/agent/types";
@@ -35,7 +37,7 @@ interface ExecutedCachedPlan extends CurrentCachedPlan {
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
 
 export function isAutoExecuteEnabled(settings: OrgSettings): boolean {
-  return settings.autoExecuteEnabled === true;
+  return resolveAutoExecuteMode(settings) === "live";
 }
 
 export function getExecutablePlanToolCalls(plan: AgentPlan): RawToolCall[] {
@@ -145,6 +147,14 @@ export async function executeCurrentCachedHomePlan(params: {
     lastCustomerMessageId: current.lastCustomerMessageId,
   }));
 
+  if (auditMode === "human_approved") {
+    await resolveShadowDecisionOnApproval({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      approvedToolCalls,
+    });
+  }
+
   return {
     ...current,
     plan: current.plan,
@@ -159,12 +169,24 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
   settings: OrgSettings;
   failureRoute: AgentFailureAlertRoute;
 }): Promise<ExecutedCachedPlan | null> {
-  if (!isAutoExecuteEnabled(params.settings)) {
+  const mode = resolveAutoExecuteMode(params.settings);
+  if (mode === "off") {
     return null;
   }
 
   const current = await loadCurrentCachedHomePlan(params);
   if (!current.plan || current.classification.kind !== "auto_execute") {
+    return null;
+  }
+
+  if (mode === "shadow") {
+    // Record what we would have auto-executed; still route to human approval.
+    await recordShadowDecision({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      settings: params.settings,
+      plan: current.plan,
+    });
     return null;
   }
 

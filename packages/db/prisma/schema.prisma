@@ -82,6 +82,7 @@ model Organization {
   agentActions     AgentAction[]
   voiceEdits       VoiceEdit[]
   llmDailySpend    LlmDailySpend[]
+  shadowDecisions  AutonomyShadowDecision[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -197,6 +198,7 @@ model Thread {
   playbookRuns PlaybookRun[]
   kbCitations  KbCitation[]
   agentActions AgentAction[]
+  shadowDecisions AutonomyShadowDecision[]
 
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
@@ -415,4 +417,33 @@ model AgentAction {
   @@index([organizationId, status])
   @@index([turnId])
   @@map("agent_actions")
+}
+
+// Shadow/canary record for the autonomy raise. One row per plan ("turn") that
+// the classifier would have auto-executed at the org's tier while autoExecuteMode
+// is "shadow": the action still routes to human approval, and we record what the
+// agent *would* have auto-done so it can be compared against what the human did.
+// The shadow unit is per-plan (turnId), unlike per-tool-call AgentAction.
+model AutonomyShadowDecision {
+  id                    String    @id @default(uuid()) @db.Uuid
+  turnId                String    @unique @map("turn_id") @db.Uuid
+  organizationId        String    @map("organization_id") @db.Uuid
+  threadId              String?   @map("thread_id") @db.Uuid
+  tier                  String    @db.VarChar(16)
+  proposedMutationsHash String    @map("proposed_mutations_hash") @db.VarChar(64)
+  proposedTools         String[]  @map("proposed_tools")
+  wouldAutoExecute      Boolean   @map("would_auto_execute")
+  // pending | approved_unchanged | edited | rejected | escalated
+  humanDecision         String    @default("pending") @map("human_decision") @db.VarChar(32)
+  agreement             Boolean?  @map("agreement")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([organizationId, humanDecision])
+  @@index([organizationId, threadId, humanDecision])
+  @@map("autonomy_shadow_decisions")
 }

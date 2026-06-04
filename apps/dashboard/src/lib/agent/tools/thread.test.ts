@@ -14,12 +14,31 @@ import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 import { escalateToHuman, sendEmail, sendReply, updateThreadStatus } from './thread';
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@/lib/messaging/thread-constants';
 
-const { mockEnqueueCustomerMemory } = vi.hoisted(() => ({
+const {
+  mockEnqueueCustomerMemory,
+  mockPostmarkSend,
+  mockRecordEmailSendFailure,
+  mockRecordInstagramSendFailure,
+} = vi.hoisted(() => ({
   mockEnqueueCustomerMemory: vi.fn(),
+  mockPostmarkSend: vi.fn(),
+  mockRecordEmailSendFailure: vi.fn(),
+  mockRecordInstagramSendFailure: vi.fn(),
 }));
 
 vi.mock('@/lib/server/customer-memory', () => ({
   enqueueCustomerMemoryForClosedThreads: mockEnqueueCustomerMemory,
+}));
+
+vi.mock('postmark', () => ({
+  ServerClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.sendEmail = mockPostmarkSend;
+  }),
+}));
+
+vi.mock('@/lib/messaging/provider-send-failures', () => ({
+  recordEmailSendFailure: mockRecordEmailSendFailure,
+  recordInstagramSendFailure: mockRecordInstagramSendFailure,
 }));
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -37,6 +56,9 @@ beforeEach(async () => {
   process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
   delete process.env.POSTMARK_API_KEY;
   mockEnqueueCustomerMemory.mockClear();
+  mockPostmarkSend.mockReset().mockResolvedValue({ MessageID: 'mock-message-id' });
+  mockRecordEmailSendFailure.mockReset().mockResolvedValue(undefined);
+  mockRecordInstagramSendFailure.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(async () => {
@@ -124,6 +146,74 @@ describe('sendReply outbound recording', () => {
         text: 'Recorded Gmail reply.',
       },
     ]);
+  });
+});
+
+describe('sendReply provider failures', () => {
+  it('preserves the agent-specific Instagram provider error message', async () => {
+    process.env.E2E_OUTBOUND_MODE = 'live';
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: `ig_${org.id.slice(0, 8)}`,
+      accessToken: 'test-ig-token',
+    });
+    const customer = await createTestCustomer(org.id, 'ig-provider-failure');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { code: 190 } }), { status: 400 }),
+    );
+
+    try {
+      const result = await sendReply(
+        { text: 'This will fail.' },
+        { threadId: thread.id, orgId: org.id, orgName: org.name },
+      );
+
+      expect(result).toEqual({
+        status: 'error',
+        message: 'Error: Instagram dispatch failed (400).',
+      });
+      expect(mockRecordInstagramSendFailure).toHaveBeenCalledWith({
+        organizationId: org.id,
+        threadId: thread.id,
+        integrationId: integration.id,
+        detail: 'Instagram token expired',
+      });
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('preserves the agent-specific email provider error message', async () => {
+    process.env.E2E_OUTBOUND_MODE = 'live';
+    process.env.POSTMARK_API_KEY = 'test-postmark-key';
+    mockPostmarkSend.mockRejectedValueOnce(new Error('postmark down'));
+    const emailAddress = `email_fail_${org.id.slice(0, 8)}@example.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+    const customer = await createTestCustomer(org.id, 'email-provider-failure@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await sendReply(
+      { text: 'This will fail.' },
+      { threadId: thread.id, orgId: org.id, orgName: org.name },
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      message: 'Error: email dispatch failed , postmark down',
+    });
+    expect(mockRecordEmailSendFailure).toHaveBeenCalledWith({
+      provider: 'postmark',
+      organizationId: org.id,
+      threadId: thread.id,
+      integrationId: integration.id,
+      detail: 'postmark down',
+      originalChannel: undefined,
+    });
   });
 });
 

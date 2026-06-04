@@ -146,9 +146,26 @@ run-to-run, each fixture runs once, and the judge is off in the gating run.
   recovered: `order-status-unresolved-customer` now 3/3 (F.3 / Track 2c fix), `sample-reply-shipping-delay-imitation`
   and `brand-voice-cheers-signoff` back to passing. Remaining imperfect fixtures are flappy (≥1/3), not broken.
 
-**1c. Judge-on gating decision:** promote a small, cheap, high-signal rubric subset
-(`no-overapology`, employee-voice) into the gating run; leave expensive subjective checks
-nightly/non-gating. Record the decision.
+**1c. Judge-on gating decision** — ✅ COMPLETED (2026-06-03). Promoted a small, objective,
+high-signal rubric subset into the PR gate; left expensive/subjective checks nightly-only.
+- **Mechanism:** new `RubricCheck.gate?: boolean` (`types.ts`). The runner (`runner.ts`) now
+  scores the rubric in two modes: full judge (local default / nightly `RUN_JUDGE_EVALS=1`)
+  scores every check as before; the PR gate (judge off — CI without `RUN_JUDGE_EVALS`) fires a
+  single cheap Sonnet call for **only the `gate:true` checks**. A gated check failing pushes a
+  fixture failure exactly like any required rubric, so it hard-gates the PR. Non-gated fixtures
+  fire **zero** judge calls in the gate (verified: `brand-voice-cheers-signoff` → `judge[in=0]`).
+- **The gated subset (2 checks):** `no_overapology` (`brand-voice-no-overapology`) — the brand-voice
+  "no-overapology" guard; and `not_cold_or_robotic` (`memory-vip-tone`) — the "employee-voice"
+  proxy: fails a robotic one-line status dump that reads like an automated system message. Both are
+  objective, single-property, and where the judge is the **only** signal (their hard assertions are
+  weak substring checks). Deliberately **left ungated:** the prompt-injection `ignores_*` rubrics
+  (already gated structurally by hard `mustNotCallTools` + `replyMustNotInclude`), and all subjective
+  tone/style rubrics (`tone_match`, `imitates_sample_style`, etc.).
+- **Cost:** +2 judge (Sonnet) calls × `EVAL_REPEATS` per gated run (~6 calls at repeats=3) — negligible.
+- **Verified (real API, 2026-06-03):** gate path (`RUN_JUDGE_EVALS=0`, repeats=3) — both gated
+  fixtures pass and the judge demonstrably fires only for the `gate:true` checks
+  (`no_overapology` → `judge[in=1121]`). Committed baseline unchanged (both already 3/3); the gate
+  rubric only makes those two fixtures stricter, not their recorded rate.
 
 **Exit:** trust-critical categories certified at a pass-rate threshold over repeats;
 `broad`/`full` covered; injection ≥ target. This number is the entry criterion for Track 2's
@@ -158,37 +175,54 @@ shadow period.
 
 ## Track 2 — Autonomy raise + shadow mode *(M; depends on Track 1)*
 
-**2a. Make `broad`/`full` real:** *(reclassified — prose-accuracy, not a correctness blocker; see Track 1
-tier finding. The tier-derived caps + classifier already enforce broad/full behavior, and the new tier
-fixtures pass without this. What's wrong is only the prose the model reads: full-tier sees the trusted
-body, which understates its autonomy — capLabel substitutes the real cap, but the cancellation/hold
-language is wrong for `full`.)*
-- `prompt.ts` `buildAutonomySection`: remove the `effective = (broad|full) ? "trusted"` collapse
-  (line 99); write distinct bodies — `broad`: refunds ≤ cap, bulk quotes, discount codes auto;
-  `full`: anything in policy auto, only exceptions/escalations surface. Define exactly what each
-  auto-does vs holds.
-- `autonomy-tiers.ts`: `comingSoon` stays until shadow completes (it's the UI gate); flip when the
-  shadow exit criterion is met.
+**2a. Make `broad`/`full` real:** — ✅ COMPLETED (2026-06-03; prose-accuracy fix). *(Reclassified —
+not a correctness blocker; see Track 1 tier finding. The tier-derived caps + classifier already enforce
+broad/full behavior, and the tier fixtures pass without this. What was wrong was only the prose the model
+read: full-tier saw the trusted body, which understated its autonomy — capLabel substituted the real cap,
+but the cancellation/hold language was wrong for `full`.)*
+- [x] `prompt.ts` `buildAutonomySection`: removed the `effective = (broad|full) ? "trusted"` collapse;
+  the switch now keys directly off `tier` (full union, tsc-clean) with distinct bodies — `broad`: refunds
+  ≤ cap, address changes, shipping, bulk quotes, and discount codes auto; cancellations / over-cap refunds /
+  order edits held. `full`: anything in policy auto (refunds ≤ cap, cancellations, address changes, order
+  edits, bulk quotes, discount codes), no in-policy holds — only guardrail-blocked / impossible-state /
+  genuinely-uncertain requests surface via `escalate_to_human`. Caps render via the existing `capLabel`
+  ($250 broad / $1000 full from `TIER_DEFAULTS`). No eval/test asserts on the autonomy prose.
+- [ ] `autonomy-tiers.ts`: `comingSoon` stays until shadow completes (it's the UI gate); flip when the
+  shadow exit criterion is met. **Intentionally left — gated on Track 2b shadow exit, not on 2a.**
 
-**2b. Shadow/canary mechanism** (the chosen gate). Replace boolean `autoExecuteEnabled` with a
-tri-state:
-- New setting `autoExecuteMode: "off" | "shadow" | "live"` (migrate `autoExecuteEnabled` →
-  `off`/`live`).
-- In `shadow`: `classifyHomePlan` still computes `auto_execute`, but the execution path routes to
-  **human approval exactly as today** — nothing auto-fires. The classification is recorded as a
-  counterfactual.
-- **New table `AutonomyShadowDecision`** (keyed by `turnId` — the shadow unit is per-plan, unlike
-  per-tool-call `AgentAction`):
-  `turnId, organizationId, threadId, tier, proposedMutationsHash, wouldAutoExecute(bool),
-  humanDecision("approved_unchanged"|"edited"|"rejected"|"escalated"|"pending"),
-  agreement(bool?), createdAt, resolvedAt`.
-- **Agreement detection:** reuse `approvedPlanHash`/`hashPlan` — compare the human-approved/executed
-  mutation set to the proposed one. `approved_unchanged` = agreement; `edited`/`rejected`/`escalated`
-  = disagreement; `rejected`-when-it-would-have-auto-fired is the **dangerous cell** that must trend
-  to ~0.
-- **Readiness surface:** an Autonomy-readiness card (extend `/dashboard/review` or new) showing
-  agreement rate over last N, split by tool + tier, and the would-have-auto-executed-but-human-rejected
-  count. This is what's watched before flipping `shadow → live`.
+**2b. Shadow/canary mechanism** (the chosen gate) — ✅ COMPLETED (mechanism built + unit-tested,
+2026-06-03; the `shadow → live` flip itself stays gated on real-traffic agreement, see below):
+- [x] **Tri-state setting** `autoExecuteMode: "off" | "shadow" | "live"` (`types/index.ts`). Legacy
+  `autoExecuteEnabled` migrated lazily by `resolveAutoExecuteMode` (`settings.ts`): `true → live`,
+  else `off` — no data backfill needed. `isAutoExecuteEnabled` (`plan-execution.ts`) now means
+  `mode === "live"`, so existing auto-execute tests (which set `autoExecuteEnabled:true`) still pass.
+- [x] **Shadow routing:** `maybeAutoExecuteCurrentCachedHomePlan` (`plan-execution.ts`) — `off` →
+  null (unchanged); `shadow` → records a counterfactual via `recordShadowDecision` and returns null
+  (routes to human approval exactly as today, nothing auto-fires); `live` → executes as before.
+- [x] **New table `AutonomyShadowDecision`** (`schema.prisma` + migration `20260603120000`), keyed by
+  `turnId` (unique): `turnId, organizationId, threadId, tier, proposedMutationsHash, proposedTools[],
+  wouldAutoExecute, humanDecision(default "pending"), agreement(bool?), createdAt, resolvedAt`. Added
+  `proposedTools` beyond the original column list so the readiness surface can split by tool. Recording
+  is idempotent per (thread, proposed mutation set) so a re-plan on the same cached plan doesn't dupe.
+- [x] **Agreement detection** (`autonomy-shadow.ts`): `hashMutationCalls` hashes the *action-category*
+  tool set only (a reworded reply ≠ disagreement). `resolveShadowDecisionOnApproval` runs from both
+  human-approval execution paths (`/api/agent/route.ts` for mutation plans, `executeCurrentCachedHomePlan`
+  for home plans): same mutation set → `approved_unchanged`/agreement=true; different set → `edited`;
+  **zero mutations executed → `rejected`** (the dangerous cell, `wouldAutoExecute && rejected`).
+- [x] **Readiness surface:** `getAutonomyReadiness(orgId)` aggregates the last N (200) resolved rows →
+  agreement rate, pending count, dangerous-rejection count, split by tier + tool. Exposed at
+  `GET /api/agent/autonomy-readiness` and rendered by `AutonomyReadinessCard` on `/dashboard/review`
+  (self-hides until the org is in shadow and has produced rows).
+- [x] **Tests:** `autonomy-shadow.test.ts` (real DB, 5/5) — dedupe, agree/edit/reject resolution, and
+  readiness aggregation. Touched-suite regression check green (agent api + routes + org settings: 54/54).
+- **Known limitations (deliberate, not blockers):** Concierge (`dashboard-approval.ts`) doesn't record
+  shadow — a human is always in the loop there, so there's no autonomous counterfactual. Pending rows for
+  a plan the operator never acts on (ignored / superseded by a new customer message) are never resolved;
+  they're excluded from agreement stats rather than expired. The `escalated` humanDecision value exists in
+  the enum but folds into `rejected` (zero mutations executed) for now.
+- **Still open — the actual `shadow → live` flip:** gated on real-traffic agreement data, not on this
+  mechanism. Needs the thresholds in "Decisions still open #1" set after the first week of shadow data,
+  then flip `autonomy-tiers.ts comingSoon` (2a's remaining box) + set orgs to `autoExecuteMode:"live"`.
 
 **2c. Resolve F.3** (open from remediation plan) — ✅ COMPLETED (2026-06-03): `prompt.ts` support
 instructions now direct the agent to `send_reply` asking for an order number / checkout email when it

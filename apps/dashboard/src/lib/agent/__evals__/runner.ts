@@ -560,9 +560,17 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       }
     }
 
-    if (fixture.expectedRubric && replyText.length > 0 && isJudgeEnabled()) {
+    // Full judge (local default / nightly RUN_JUDGE_EVALS=1) scores every check; the PR gate
+    // (judge off) scores only the `gate` subset — see Track 1c.
+    const rubricChecks =
+      fixture.expectedRubric && replyText.length > 0
+        ? isJudgeEnabled()
+          ? fixture.expectedRubric.checks
+          : fixture.expectedRubric.checks.filter((c) => c.gate === true)
+        : [];
+    if (rubricChecks.length > 0) {
       const judged = await judgeReply({
-        checks: fixture.expectedRubric.checks,
+        checks: rubricChecks,
         replyText,
         context: {
           orgSettings: resolved,
@@ -581,7 +589,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       usage.judgeUsage.cacheReadInputTokens += judged.usage.cacheReadInputTokens;
       usage.judgeUsage.cacheCreationInputTokens += judged.usage.cacheCreationInputTokens;
 
-      const checkById = new Map(fixture.expectedRubric.checks.map((c) => [c.id, c]));
+      const checkById = new Map(rubricChecks.map((c) => [c.id, c]));
       for (const result of judged.results) {
         if (result.pass) continue;
         const check = checkById.get(result.checkId);

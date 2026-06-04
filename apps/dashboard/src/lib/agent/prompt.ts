@@ -96,12 +96,11 @@ function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): stri
 
 function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): string {
   const tier = s.autonomyTier ?? "guarded";
-  const effective = tier === "broad" || tier === "full" ? "trusted" : tier;
   const cap = s.maxRefundAmount;
   const capLabel = cap !== null && cap > 0 ? `$${cap}` : "the workspace cap";
 
   let body: string;
-  switch (effective) {
+  switch (tier) {
     case "watch":
       body = "Every mutative action is held for the operator's approval before it runs - you are proposing a plan, not executing it. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing what you would do. If you lack the tools to fulfill it, a guardrail above forbids it, or the order's state makes it impossible, call escalate_to_human instead.";
       break;
@@ -110,6 +109,12 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
       break;
     case "trusted":
       body = `Auto-reply to information questions. Small refunds (≤ ${capLabel}), address changes before fulfillment, and shipping replies run automatically; cancellations, refunds above ${capLabel}, and order edits are held for the operator's approval. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing it. If a guardrail above forbids the action or the order's state makes it impossible, call escalate_to_human instead.`;
+      break;
+    case "broad":
+      body = `Auto-reply to information questions. Refunds (≤ ${capLabel}), address changes before fulfillment, shipping replies, bulk quotes, and discount codes run automatically; cancellations, refunds above ${capLabel}, and order edits are held for the operator's approval. When the request is allowed, include the tool call that fulfills it as a plan step rather than just describing it. If a guardrail above forbids the action or the order's state makes it impossible, call escalate_to_human instead.`;
+      break;
+    case "full":
+      body = `Anything within policy runs automatically - refunds up to ${capLabel}, cancellations, address changes before fulfillment, order edits, bulk quotes, and discount codes. You do not hold in-policy actions for the operator's approval. The only things that surface are exceptions: a refund above ${capLabel} or another guardrail-blocked action, an order whose state makes the change impossible, or a request you are genuinely uncertain about - for those, call escalate_to_human instead of acting. When an action is in policy, include the tool call that fulfills it as a plan step rather than just describing it.`;
       break;
     default:
       return "";
