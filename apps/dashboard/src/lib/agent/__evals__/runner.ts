@@ -18,6 +18,7 @@ import { resolveAgentSettings } from "../settings";
 import * as executor from "../tools/executor";
 import { readModelUsage } from "../usage";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "../api/agent-actions";
+import { escalateToHuman } from "../tools/thread";
 import type { AgentActionMode, AgentContext } from "../types";
 import type { AgentPlan, OrgSettings } from "@/types";
 import { judgeReply } from "./judge";
@@ -264,6 +265,8 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,
     kbArticles: setup.kbArticles ?? [],
+    escalate: (reason) =>
+      escalateToHuman({ reason }, { threadId, orgId, orgName: "Test Store" }).then(() => {}),
   };
 }
 

@@ -38,11 +38,7 @@ export default function TicketsPageClient(props: Props) {
   )
 }
 
-function TicketsPageContent(props: Props) {
-  return useTicketsPageContentView(props)
-}
-
-function useTicketsPageContentView({ initialOpenThreads, hasShopify, agentName }: Props) {
+function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props) {
   const searchParams = useSearchParams()
   const queryThreadId = new URLSearchParams(searchParams.toString()).get('thread')
 

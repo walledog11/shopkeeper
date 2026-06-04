@@ -1,7 +1,11 @@
-# Clerk — AI Helpdesk for Shopify Merchants
+# Clerk — AI Operating Layer for Shopify Merchants
 
 ## What This Is
-A SaaS helpdesk platform built for Shopify merchants — solo owners and small teams who need to handle customer support across multiple channels without a large support staff. Think Zendesk but AI-first, purpose-built for Shopify. The AI agent can read and act on Shopify data (orders, customers, refunds, etc.) directly inside the support workflow.
+Clerk is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram today; WhatsApp next; the dashboard is one surface, not *the* surface).
+
+**Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
+
+Roadmap: [`docs/core-extraction-and-module-expansion-plan.md`](docs/core-extraction-and-module-expansion-plan.md) and [`docs/autonomy-and-generality-plan.md`](docs/autonomy-and-generality-plan.md).
 
 ## Docs
 - Production checklist: [`docs/production/checklist.md`](docs/production/checklist.md)

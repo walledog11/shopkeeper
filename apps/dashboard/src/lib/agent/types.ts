@@ -35,6 +35,10 @@ export interface BaseAgentContext {
   orgName: string;
   customerMemory: CustomerMemory | null;
   recentMessages: { senderType: string; contentText: string | null }[];
+  shopify: { shop: string; accessToken: string } | null;
+  // Module-supplied escalation/flag sink. Support routes a thread to a human;
+  // a thread-less module records a finding. Every module must declare its path.
+  escalate: (reason: string) => Promise<void>;
 }
 
 // Support module context: the base plus the ticket, customer, Shopify linkage,
@@ -54,7 +58,6 @@ export interface SupportContext extends BaseAgentContext {
     platformId: string;
   };
   openThreadCount: number;
-  shopify: { shop: string; accessToken: string } | null;
   recentOrders: ShopifyOrderSummary[];
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];

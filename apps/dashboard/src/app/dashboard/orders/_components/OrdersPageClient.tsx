@@ -64,11 +64,7 @@ function ordersToCsv(orders: OrderRow[]): string {
 
 // ── Main client ───────────────────────────────────────────────────────────────
 
-export default function OrdersPageClient() {
-  return useOrdersPageClientView()
-}
-
-function useOrdersPageClientView() {
+function useOrdersPageState() {
   const [filter, setFilter] = useState<FilterId>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -155,6 +151,46 @@ function useOrdersPageClientView() {
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
+
+  return {
+    allOrders,
+    error,
+    filter,
+    handleExport,
+    handleFilterChange,
+    handleSearchChange,
+    isLoading,
+    isLoadingMore,
+    isSearchMode,
+    isValidating,
+    lastSyncedAt,
+    loadMore,
+    mutate,
+    nextPageInfo,
+    pages,
+    searchQuery,
+  }
+}
+
+export default function OrdersPageClient() {
+  const {
+    allOrders,
+    error,
+    filter,
+    handleExport,
+    handleFilterChange,
+    handleSearchChange,
+    isLoading,
+    isLoadingMore,
+    isSearchMode,
+    isValidating,
+    lastSyncedAt,
+    loadMore,
+    mutate,
+    nextPageInfo,
+    pages,
+    searchQuery,
+  } = useOrdersPageState()
 
   // ── No integration ────────────────────────────────────────────────────────
 

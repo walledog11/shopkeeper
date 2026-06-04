@@ -8,6 +8,7 @@ const dashboardSourceFiles = ["apps/dashboard/src/**/*.{js,jsx,mjs,ts,tsx,mts,ct
 const repoNodeJsFiles = [
   "apps/dashboard/next.config.js",
   "apps/dashboard/postcss.config.mjs",
+  "e2e/**/*.{js,mjs,cjs}",
   "eslint.config.mjs",
   "scripts/**/*.{js,mjs,cjs}",
 ];
@@ -18,13 +19,13 @@ const repoNodeTsFiles = [
   "apps/dashboard/vitest.unit.config.ts",
   "apps/gateway/src/**/*.ts",
   "apps/gateway/vitest.config.ts",
-  "e2e/**/*.ts",
-  "packages/db/customer-memory.ts",
-  "packages/db/index.ts",
-  "packages/db/test-helpers.ts",
-  "packages/db/voice.ts",
+  "e2e/**/*.{ts,mts,cts}",
+  "packages/agent/src/**/*.ts",
+  "packages/db/*.ts",
+  "packages/db/scripts/*.ts",
   "playwright.browser.config.ts",
   "playwright.config.ts",
+  "scripts/**/*.{ts,mts,cts}",
 ];
 
 function withFiles(config, files) {

@@ -56,11 +56,7 @@ export default function TeamPageClient(props: Props) {
   );
 }
 
-function TeamPageContent(props: Props) {
-  return useTeamPageContentView(props)
-}
-
-function useTeamPageContentView({ initialMembers, initialInvitations, currentUserId }: Props) {
+function useTeamPageState({ initialMembers, initialInvitations }: Props) {
   const searchParams = useSearchParams();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
@@ -124,6 +120,43 @@ function useTeamPageContentView({ initialMembers, initialInvitations, currentUse
       setRemoving(null);
     }
   }
+
+  return {
+    handleInvite,
+    handleRemoveMember,
+    handleRevokeInvite,
+    invitations,
+    inviteEmail,
+    inviteError,
+    inviteRole,
+    inviting,
+    members,
+    removing,
+    setInviteEmail,
+    setInviteRole,
+    setShowInviteModal,
+    showInviteModal,
+  };
+}
+
+function TeamPageContent(props: Props) {
+  const {
+    handleInvite,
+    handleRemoveMember,
+    handleRevokeInvite,
+    invitations,
+    inviteEmail,
+    inviteError,
+    inviteRole,
+    inviting,
+    members,
+    removing,
+    setInviteEmail,
+    setInviteRole,
+    setShowInviteModal,
+    showInviteModal,
+  } = useTeamPageState(props);
+  const { currentUserId } = props;
 
   return (
     <div className="h-full overflow-y-auto bg-background">

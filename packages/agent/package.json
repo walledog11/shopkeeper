@@ -1,0 +1,27 @@
+{
+  "name": "@clerk/agent",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "lint": "cd ../.. && eslint packages/agent/src --max-warnings 0"
+  },
+  "devDependencies": {
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.80.0",
+    "@clerk/db": "*"
+  }
+}

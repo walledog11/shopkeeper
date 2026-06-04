@@ -1,13 +1,2 @@
-import Anthropic from "@anthropic-ai/sdk";
-
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
-
-export function buildCachedSystemPrompt(text: string): Anthropic.TextBlockParam[] {
-  return [{
-    type: "text",
-    text,
-    cache_control: { type: "ephemeral" },
-  }];
-}
+// Re-export shim: the Anthropic client moved to @clerk/agent (Track 2 extraction).
+export * from "@clerk/agent";

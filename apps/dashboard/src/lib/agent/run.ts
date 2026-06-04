@@ -8,10 +8,9 @@ import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry";
 import { buildSystemPrompt, buildComposerAskPrompt } from "./prompt";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent";
 import { executeToolWithStatus } from "./tools/executor";
-import { escalateToHuman } from "./tools/thread";
 import { buildMessageHistory } from "./message-history";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path";
-import type { ActionEntry, AgentActionMode, AgentActionStatus, AgentContext, AgentResult } from "./types";
+import type { ActionEntry, AgentActionMode, AgentActionStatus, BaseAgentContext, SupportContext, AgentResult } from "./types";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage";
 import { enforceSpendCap, recordSpend } from "./spend";
 import {
@@ -59,8 +58,14 @@ function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEn
   ));
 }
 
+// A context carries a support thread iff it has a `thread`. Thread-less modules
+// (order-ops, Track 3) supply a BaseAgentContext with no thread/customer.
+function isSupportContext(ctx: BaseAgentContext): ctx is SupportContext {
+  return (ctx as Partial<SupportContext>).thread != null;
+}
+
 export async function runAgent(
-  ctx: AgentContext,
+  ctx: BaseAgentContext,
   instruction: string,
   approvedToolCalls?: RawToolCall[],
   settings?: OrgSettings,
@@ -80,7 +85,11 @@ export async function runAgent(
     ? READ_ONLY_MAX_ITERATIONS
     : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
   const actionsPerformed: ActionEntry[] = [];
-  const operatorMode = isOperatorChannel(ctx.thread.channelType);
+  // Thread/customer are present only on a SupportContext; capture them once so the
+  // thread-less path (Track 3) logs/audits with nulls instead of dereferencing.
+  const supportThread = isSupportContext(ctx) ? ctx.thread : null;
+  const supportCustomer = isSupportContext(ctx) ? ctx.customer : null;
+  const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
   const failureAlertPromises: Promise<unknown>[] = [];
   let escalationReason: string | null = null;
 
@@ -93,8 +102,8 @@ export async function runAgent(
       try {
         await recordAgentActionsBatch({
           orgId: ctx.orgId,
-          threadId: ctx.thread.id,
-          customerId: ctx.customer.id,
+          threadId: supportThread?.id ?? null,
+          customerId: supportCustomer?.id ?? null,
           mode: effectiveMode,
           actions: result.actionsPerformed,
           instruction,
@@ -106,7 +115,7 @@ export async function runAgent(
         logger.error({
           err,
           orgId: ctx.orgId,
-          threadId: ctx.thread.id,
+          threadId: supportThread?.id ?? null,
           actionCount: result.actionsPerformed.length,
         }, "[agent] failed to persist agent action audit rows");
       }
@@ -114,8 +123,8 @@ export async function runAgent(
 
     logger.info({
       orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      channelType: ctx.thread.channelType,
+      threadId: supportThread?.id ?? null,
+      channelType: supportThread?.channelType ?? null,
       outcome,
       readOnly,
       durationMs: Date.now() - startedAt,
@@ -152,7 +161,7 @@ export async function runAgent(
       logger.error({
         err: error,
         orgId: ctx.orgId,
-        threadId: ctx.thread.id,
+        threadId: supportThread?.id ?? null,
         tool,
         route: failureRoute,
       }, "[agent] failure alert error");
@@ -163,7 +172,7 @@ export async function runAgent(
   const executeToolCall = async (toolCall: { id: string; name: string; input: unknown }) => {
     logger.info({
       orgId: ctx.orgId,
-      threadId: ctx.thread.id,
+      threadId: supportThread?.id ?? null,
       tool: toolCall.name,
       inputKeys: inputKeys(toolCall.input),
       inputChars: inputChars(toolCall.input),
@@ -206,7 +215,7 @@ export async function runAgent(
     // into the loop - the safe outcome no longer depends on the model choosing to escalate.
     if (!threw && status === "policy_block" && TOOL_CATEGORIES[toolCall.name] === "action") {
       const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
-      await escalateToHuman({ reason }, { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName });
+      await ctx.escalate(reason);
       result = reason;
       status = "escalated";
     }
@@ -224,7 +233,7 @@ export async function runAgent(
 
     logger.info({
       orgId: ctx.orgId,
-      threadId: ctx.thread.id,
+      threadId: supportThread?.id ?? null,
       tool: toolCall.name,
       resultChars: result.length,
       isError: status === "error" || status === "policy_block",
@@ -265,7 +274,7 @@ export async function runAgent(
     return executeSequentially(0, []);
   };
 
-  if (!readOnly && !approvedToolCalls?.length) {
+  if (!readOnly && !approvedToolCalls?.length && isSupportContext(ctx)) {
     const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
     if (fastResult) {
       for (const action of fastResult.actionsPerformed) {
@@ -280,11 +289,11 @@ export async function runAgent(
   }
 
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
-    const executableToolCalls = ctx.thread.channelType === "dashboard_agent"
+    const executableToolCalls = supportThread?.channelType === "dashboard_agent"
       ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
       : approvedToolCalls;
 
-    if (ctx.thread.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
+    if (supportThread?.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
       return finish({
         summary: "No approved dashboard action was available to execute.",
         actionsPerformed,
@@ -303,7 +312,7 @@ export async function runAgent(
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
       actionsPerformed,
-    }, ctx.thread.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
+    }, supportThread?.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
   }
 
   const history = operatorMode || readOnly ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
@@ -311,6 +320,11 @@ export async function runAgent(
     ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
     : instruction;
   const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
+  // The model loop needs a module-supplied system prompt + tool set. Only support
+  // (tickets + composer-ask) supplies one today; thread-less module loops are Track 3.
+  if (!isSupportContext(ctx)) {
+    throw new Error("runAgent: thread-less module loops are not wired until Track 3");
+  }
   const tools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)
     : selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));

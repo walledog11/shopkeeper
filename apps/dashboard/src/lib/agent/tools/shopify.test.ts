@@ -153,6 +153,112 @@ describe("shopify tools", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("edits an order by adding a variant, removing the old item, and committing the result", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          orderEditBegin: {
+            calculatedOrder: {
+              id: "gid://shopify/CalculatedOrder/1",
+              lineItems: {
+                edges: [{
+                  node: {
+                    id: "gid://shopify/CalculatedLineItem/1",
+                    quantity: 1,
+                    title: "Old shirt",
+                    variant: { id: "gid://shopify/ProductVariant/123" },
+                  },
+                }],
+                pageInfo: { hasNextPage: false },
+              },
+            },
+            userErrors: [],
+          },
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          orderEditAddVariant: {
+            calculatedOrder: { id: "gid://shopify/CalculatedOrder/1" },
+            userErrors: [],
+          },
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          orderEditSetQuantity: {
+            calculatedOrder: { id: "gid://shopify/CalculatedOrder/1" },
+            userErrors: [],
+          },
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          orderEditCommit: {
+            order: {
+              name: "#1001",
+              lineItems: {
+                edges: [
+                  { node: { title: "Old shirt", quantity: 0, variant: { title: "Red" } } },
+                  { node: { title: "New shirt", quantity: 2, variant: { title: "Blue" } } },
+                  { node: { title: "Sticker", quantity: 1, variant: { title: "Default Title" } } },
+                ],
+              },
+            },
+            userErrors: [],
+          },
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editShopifyOrder({
+      order_id: "456",
+      variant_id: "789",
+      remove_variant_id: "123",
+      quantity: 2,
+    }, ctx);
+
+    const requestBodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body as string));
+    expect(requestBodies.map(({ query }) => query)).toEqual([
+      expect.stringContaining("mutation orderEditBegin"),
+      expect.stringContaining("mutation orderEditAddVariant"),
+      expect.stringContaining("mutation orderEditSetQuantity"),
+      expect.stringContaining("mutation orderEditCommit"),
+    ]);
+    expect(requestBodies.map(({ variables }) => variables)).toEqual([
+      { id: "gid://shopify/Order/456" },
+      {
+        id: "gid://shopify/CalculatedOrder/1",
+        variantId: "gid://shopify/ProductVariant/789",
+        quantity: 2,
+      },
+      {
+        id: "gid://shopify/CalculatedOrder/1",
+        lineItemId: "gid://shopify/CalculatedLineItem/1",
+        quantity: 0,
+      },
+      { id: "gid://shopify/CalculatedOrder/1" },
+    ]);
+    expect(result).toEqual({
+      status: "ok",
+      message: "Successfully swapped item on order #1001. Current order items: 2x New shirt (Blue), 1x Sticker.",
+    });
+  });
+
+  it("does not begin an order edit without an item to add or remove", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await editShopifyOrder({ order_id: "456" }, ctx);
+
+    expect(result).toEqual({
+      status: "error",
+      message: "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("blocks custom line items unless explicitly allowed", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

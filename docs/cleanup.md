@@ -1,165 +1,152 @@
 # Project Cleanup Plan
 
-## Current Cleanup Plan (2026-06-03)
+## Current Cleanup Plan (2026-06-04)
 
-This plan replaces the previous completed cleanup tracker. The prior plan is done; this list comes from a follow-up read-only audit looking for remaining cleanup outside that work.
+This plan replaces the completed cleanup tracker. It covers issues found in a follow-up audit and intentionally excludes work from the previous plan.
 
-Verification at audit time:
+Audit baseline:
 
-- `npm run lint` passed.
-- No code changes were made during the audit.
-- The worktree already had unrelated uncommitted changes. Treat existing uncommitted work as user-owned unless a task below explicitly needs the same file.
+- `npm run lint` fails because `packages/agent/src` is ignored by the ESLint configuration.
+- Dashboard, gateway, and DB workspace lint commands pass, but DB lint coverage is incomplete.
+- `npm run test:unit` passes: 15 files and 101 tests.
+- `npm run test:node` passes: 23 tests.
+- Agent and gateway builds pass.
+- Integration and end-to-end tests were not run during the audit.
+- The worktree contains user-owned uncommitted changes. Do not revert or rewrite unrelated work.
 
-## Phase 0: Immediate Workflow Fixes
+## Phase 0: Restore Trustworthy Lint Coverage
 
-These are cleanup tasks with direct user-facing failure modes.
+Complete this phase before broad cleanup work so later verification covers the files being changed.
 
-- [x] Fix `apps/dashboard/src/app/dashboard/customers/_components/CustomerDrawerContent.tsx`.
-  - Avoid `data!` in the save path; editing can happen before the detail SWR request resolves.
-  - Add visible error handling for failed customer save responses.
-  - Add visible error handling for failed "Start Support Thread" responses.
-- [x] Fix silent action failures in `apps/dashboard/src/app/dashboard/kb/_components/KbPageClient.tsx`.
-  - Surface create/update/delete errors for knowledge bases and articles.
-  - Keep draft/edit state coherent after failed writes.
-  - Extract request helpers so the page component is not manually handling every fetch.
-- [x] Fix pagination/request failure behavior in `apps/dashboard/src/app/dashboard/products/_components/ProductsPageClient.tsx`.
-  - Check non-OK `loadMore` responses before appending products.
-  - Surface failures to the UI instead of silently clearing the loading state.
+- [x] Fix the root lint failure for `packages/agent`.
+  - Add `packages/agent/src/**/*.ts` to the ESLint flat configuration.
+  - Ensure the package lint script targets files covered by that configuration.
+- [x] Expand `packages/db` lint coverage.
+  - Replace the explicit four-file list with globs covering all intended source and script files.
+  - Include `crypto.ts`, `llm-spend.ts`, `spend-store.ts`, and `scripts/*.ts`.
+- [x] Make lint fail when a package script targets ignored source files.
+- [x] Verify the root and workspace lint commands all pass and inspect their resolved file coverage.
 
-## Phase 1: Shared API Helpers
+## Phase 1: Replace Dashboard Home Full-Inbox Fetches
 
-These reduce repeated security and request-handling code.
+The home page currently fetches and polls the full open and closed inbox. Its reply metrics are also derived from only the latest message in each thread, which undercounts replies.
 
-- [x] Consolidate `timingSafeIncludes`.
-  - Remove the duplicate implementation split between `apps/dashboard/src/lib/auth-utils.ts` and `apps/dashboard/src/lib/server/auth-utils.ts`.
-  - Keep internal-secret helpers in a server-only module.
-  - Update OAuth routes and internal routes to import from the right place.
-- [x] Add a shared internal-route helper for `x-internal-secret` endpoints.
-  - Cover `apps/dashboard/src/app/api/messages/internal/route.ts`.
-  - Cover `apps/dashboard/src/app/api/messages/auto-ack/route.ts`.
-  - Cover `apps/dashboard/src/app/api/agent/internal/route.ts`.
-  - Cover `apps/dashboard/src/app/api/agent/plan-internal/route.ts`.
-  - Cover `apps/dashboard/src/app/api/playbooks/trigger/route.ts`.
-  - Preserve billing-write checks and route-specific error messages.
-- [x] Extract OAuth session/cookie helpers for integration auth and callback routes.
-  - Share state cookie creation, return-to handling, session validation, and cookie cleanup.
-  - Start with Gmail and Outlook because their callback bodies are nearly identical.
-  - Reuse the same primitives for Instagram and Shopify where provider-specific behavior allows it.
-- [x] Extract email integration upsert logic.
-  - Share the race-safe create/update flow used by Gmail and Outlook.
-  - Keep the current behavior that removes other email rows for the org after the selected integration is saved.
+- [ ] Define a server-side home summary contract.
+  - Return aggregate metrics directly from the database.
+  - Return small, bounded lists for needs-attention, overnight, and repeat-customer sections.
+  - Reuse the canonical inbox filters, including deleted and filtered thread behavior.
+- [ ] Implement a home summary query service and API endpoint.
+  - Calculate replies sent from messages or actions instead of one preview message per thread.
+  - Calculate daily series and comparison-period metrics in the database.
+  - Avoid loading complete thread collections into application memory.
+- [ ] Update the dashboard home page and `useHomeData` to consume the summary contract.
+  - Remove full open/closed thread polling from the home page.
+  - Keep refresh intervals bounded to the summary endpoint.
+- [ ] Add query and UI tests for metric correctness, filtering, limits, and empty states.
 
-## Phase 2: Tickets Workspace State
+## Phase 2: Standardize Client Request And Mutation Failures
 
-The tickets page has the highest frontend state complexity left after the completed cleanup.
+Several dashboard actions ignore non-OK responses, parse error payloads as success data, or update local state after failed writes.
 
-- [x] Extract SWR cache coordination from `apps/dashboard/src/app/dashboard/tickets/_components/TicketsPageClient.tsx`.
-  - Move `patchThreadCaches`, `moveThreadStatus`, and `revalidateThreadCaches` into a focused hook.
-  - Cover open, closed, filtered, search, and active-thread caches in one tested module.
-- [x] Extract active-thread selection/query-param behavior.
-  - Move `?thread=` application, active preview fallback, and conversation loading state into a dedicated hook.
-  - Keep behavior for threads that are not in the currently loaded list page.
-- [x] Extract summary refresh handling.
-  - Replace the local `console.error` with UI-visible feedback or a shared logging/toast path.
-  - Prevent concurrent refreshes per thread as the current ref-based guard does.
-- [x] Add focused tests around the extracted cache coordinator.
-  - Include close/reopen, filtered recovery, active thread mutation, and search cache updates.
+- [ ] Adopt one shared client request/error contract.
+  - Extend or consistently use `apps/dashboard/src/lib/api/fetcher.ts`.
+  - Standardize typed success payloads, API error extraction, and visible action errors.
+  - Decide on a shared mutation helper only if it removes repeated loading/error state.
+- [ ] Migrate canned response create, update, duplicate, and delete actions.
+- [ ] Migrate playbook toggle, save, and delete actions.
+- [ ] Migrate team member and invitation deletion actions.
+  - Do not remove local state until the server confirms success.
+- [ ] Migrate order and customer pagination.
+  - Check response status before appending data.
+  - Preserve the current list when loading another page fails.
+- [ ] Migrate the order-page "Start Support Thread" action.
+- [ ] Add focused failure-path tests for each migrated workflow.
 
-## Phase 3: Settings UI Second Pass
+## Phase 3: Enforce A Shared Organization Settings Contract
 
-The first cleanup split the settings page, but left one large section bucket.
+Organization settings are currently cast from arbitrary request JSON and merged into persisted data without runtime validation. Dashboard and gateway behavior has already drifted for overnight business hours.
 
-- [x] Split `apps/dashboard/src/app/dashboard/settings/_components/agent-tab-sections.tsx`.
-  - Move autonomy controls into their own module.
-  - Move identity and voice proposal UI into their own module.
-  - Move sample replies into their own module.
-  - Move guardrails, response language, digest, business hours, spam filter, and sticky save bar into focused modules.
-- [x] Extract repeated settings form primitives.
-  - Shared labeled text input.
-  - Shared money/number input.
-  - Shared select field styling.
-  - Shared character-count textarea.
-- [x] Keep `AgentTab` imports stable or add a thin barrel only if it does not conflict with `scripts/check-module-structure.mjs`.
+- [ ] Define one runtime settings parser and normalizer shared by dashboard and gateway.
+  - Reject unknown keys and invalid field types at the API boundary.
+  - Apply defaults and migration behavior for historical persisted settings.
+  - Remove unsafe settings casts from gateway business-hours handling.
+- [ ] Validate `PATCH /api/org` before persisting settings.
+- [ ] Decide and document whether overnight business-hour windows are supported.
+  - Align dashboard validation with gateway evaluation.
+  - Add shared contract tests for normal, overnight, closed, and malformed schedules.
+- [ ] Add tests for invalid patches and malformed historical settings.
 
-## Phase 4: Messaging And Agent Tool Dispatch
+## Phase 4: Use The Defensive Customer-Memory Parser
 
-The dashboard has a shared dispatch path, but agent tools still duplicate provider-send behavior.
+Agent context currently casts persisted customer-memory JSON directly even though the DB package provides a parser that repairs and bounds historical data.
 
-- [x] Align agent reply sending with `apps/dashboard/src/lib/messaging/dispatch-message.ts`.
-  - Remove duplicated Instagram dispatch logic from `apps/dashboard/src/lib/agent/tools/thread.ts`.
-  - Remove duplicated email reply dispatch logic where the shared dispatcher can preserve behavior.
-  - Preserve agent-specific tool result messages.
-- [x] Extract shared email header/subject helpers.
-  - Centralize synthetic message IDs, `In-Reply-To`, `References`, and `Re:` subject formatting.
-  - Use the helper from dashboard sends and agent sends.
-- [x] Extract provider failure recording helpers.
-  - Keep current provider-specific failure details.
-  - Avoid divergent behavior between dashboard sends and agent sends.
-- [x] Add targeted tests for dispatch behavior before broad refactors.
-  - Email success/failure.
-  - Instagram token/window failures.
-  - Outbound recorder short-circuit behavior.
+- [ ] Replace the raw customer-memory cast in agent context with `parseStoredMemory`.
+- [ ] Convert parsed empty memory to `null` before prompt rendering.
+- [ ] Ensure oversized strings, arrays, and malformed policy flags cannot enter prompts unbounded.
+- [ ] Add context tests for malformed, oversized, empty, and valid stored memory.
 
-## Phase 5: Shopify Agent Order Modules
+## Phase 5: Split And Correct The Action-Log Read Model
 
-`apps/dashboard/src/lib/agent/shopify/orders.ts` mixes read, update, cancel, create, and GraphQL edit flows.
+The action-log reader drops threadless actions, report generation silently caps reads at 50,000 rows, and four dashboard views duplicate pagination and error handling.
 
-- [ ] Split read-only order lookup functions from mutating order functions.
-- [ ] Move order address update and customer-address sync into a focused module.
-- [ ] Move order creation and line-item validation into a focused module.
-- [ ] Move GraphQL order-edit begin/add/remove/commit flow into a focused module.
-- [ ] Keep user-facing tool result text behavior stable.
-- [ ] Add or expand targeted tests before moving the GraphQL edit flow.
+- [ ] Make the action-log read model support threadless actions.
+  - Update `ActionLogEntry` so `threadId` and thread metadata can be absent.
+  - Preserve module and order-operation audit records without inventing a thread.
+  - Add tests covering threadless order-operation actions.
+- [ ] Move report aggregation into database queries.
+  - Remove the silent 50,000-row reporting cap.
+  - Keep report results correct for large date ranges.
+- [ ] Extract a shared action-log query hook for Activity, Review, Audit Log, and Agent views.
+  - Centralize pagination, loading, error, and refresh behavior.
+  - Keep each view's filters and presentation separate.
+- [ ] Review `GET /api/org/audit-log`.
+  - Remove it if there is no external compatibility requirement.
+  - Otherwise, route it through the canonical action-log query and streaming CSV implementation.
 
-## Phase 6: Gateway Route And Worker Cleanup
+## Phase 6: Consolidate Analytics And Reporting Queries
 
-Gateway behavior is correct enough to pass lint, but several files mix parsing, side effects, and formatting.
+Analytics and reports duplicate date parsing and several expensive status, channel, tag, and first-reply queries.
 
-- [ ] Split `apps/gateway/src/routes/webhooks-telegram.ts`.
-  - Extract webhook signature/rate-limit validation from message handling.
-  - Extract `/start` binding.
-  - Extract command parsing into a typed parser.
-  - Extract digest commands: `REVIEW`, `OPEN`, `SPAM`, `REPLY`.
-  - Extract pending-plan commands: `yes`, `no`, `skip`.
-  - Extract order lookup and free-form agent execution.
-- [ ] Add parser tests for Telegram commands.
-  - Include malformed indexes, mixed casing, empty reply text, and free-form fallback.
-- [ ] Split `apps/gateway/src/message-handlers/planning.ts`.
-  - Move dashboard internal API calls into a small client helper.
-  - Move operator notification formatting/sending into its own module.
-  - Move business-hours settings and evaluation into its own module.
-  - Keep auto-ack dispatch behavior unchanged.
+- [ ] Extract a shared, validated reporting date-range parser.
+- [ ] Extract shared query primitives for status, channel, tag, and first-reply metrics.
+- [ ] Keep intentional differences, such as result limits, explicit and parameterized.
+- [ ] Add query-level tests that compare analytics and report results for the same range.
+- [ ] Inspect query plans and add indexes only where measured queries require them.
 
-## Phase 7: Component Naming And Hook Boundaries
+## Phase 7: Modularize Gateway Maintenance Workers
 
-Several components use hook-like names for functions that return JSX. This passes lint but blurs component/hook boundaries.
+`apps/gateway/src/maintenance/workers.ts` manually assembles queues, repeat schedules, workers, failure handlers, and shutdown resources for every maintenance job.
 
-- [ ] Rename `use*View` functions that return JSX into regular component names.
-  - `apps/dashboard/src/app/dashboard/kb/_components/KbPageClient.tsx`
-  - `apps/dashboard/src/app/dashboard/products/_components/ProductsPageClient.tsx`
-  - `apps/dashboard/src/app/dashboard/tickets/_components/TicketsPageClient.tsx`
-  - `apps/dashboard/src/components/agent/AgentChatClient.tsx`
-  - `apps/dashboard/src/app/dashboard/settings/_components/workspace/WorkspaceTab.tsx`
-  - `apps/dashboard/src/app/dashboard/canned-responses/page.tsx`
-  - `apps/dashboard/src/app/dashboard/orders/_components/OrdersPageClient.tsx`
-  - `apps/dashboard/src/app/dashboard/team/_components/TeamPageClient.tsx`
-  - `apps/dashboard/src/app/dashboard/feedback/page.tsx`
-- [ ] Where state logic is substantial, extract actual hooks that return state/actions instead of JSX.
+- [ ] Define a small job registration contract returning its workers and queues.
+- [ ] Move token-health, retention, digest, and other job orchestration into focused modules.
+- [ ] Build maintenance resources from one composition registry.
+  - Ensure newly registered resources are automatically included in shutdown handling.
+  - Preserve existing queue names, schedules, concurrency, and failure logging.
+- [ ] Add registration and shutdown tests.
 
-## Phase 8: Packaging And Artifact Hygiene
+## Phase 8: Consolidate Race-Safe Integration Upserts
 
-- [ ] Clean ignored local artifacts when appropriate.
-  - `packages/db/dist`
-  - `apps/gateway/coverage`
-  - Other ignored build/test outputs found by `npm run clean`
-- [ ] Review `@clerk/db` type exports.
-  - Current package exports point runtime code at `dist/*.js` but type entries at source-level `.d.ts` stubs.
-  - Decide whether to keep the stubs intentionally or switch exports to generated `dist/*.d.ts`.
-  - If keeping source-level stubs, document why and ensure new exported modules get matching stubs.
+The same find/update/create/P2002/re-fetch/update flow is duplicated across generic integrations, email, Instagram, and Shopify.
+
+- [ ] Extract a typed race-safe integration upsert primitive.
+- [ ] Add a focused Prisma unique-constraint guard instead of broad error casting.
+- [ ] Migrate the generic integration route and provider callbacks.
+- [ ] Preserve provider-specific cleanup and post-save behavior.
+- [ ] Add concurrency and provider-specific behavior tests.
+
+## Phase 9: Small Consistency Cleanup
+
+Complete these after the higher-risk behavioral work.
+
+- [ ] Fix the Activity feed approver label so missing approvers cannot render as `By ,`.
+- [ ] Consolidate duplicated relative-time formatting in Activity and Review with the shared date-formatting utilities.
+- [ ] Remove `useOpenThreads` if it remains unused after the dashboard home changes.
 
 ## Verification Policy
 
 - [ ] Run `npm run lint` after each cleanup batch.
-- [ ] Run targeted tests for each touched module.
-- [ ] Run broader coverage after phases that touch shared API helpers, dispatch behavior, or gateway message handling.
-- [ ] Avoid unrelated refactors in files already modified by user-owned work.
+- [ ] Run targeted tests for every changed module and failure path.
+- [ ] Run `npm run test:unit` and `npm run test:node` after shared contract changes.
+- [ ] Run integration or end-to-end coverage for dashboard workflows, action logs, settings, and integration callbacks before completing their phases.
+- [ ] Run agent and gateway builds after shared package, settings, or gateway worker changes.
+- [ ] Keep cleanup commits scoped by phase and do not modify unrelated user-owned work.

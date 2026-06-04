@@ -48,6 +48,10 @@ const NOINDEX_PATH_GROUP =
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
+  experimental: {
+    // Next 16.2's Turbopack persistence can race compaction and delete its live cache.
+    turbopackFileSystemCacheForDev: false,
+  },
   async headers() {
     return [
       { source: '/(.*)', headers: SECURITY_HEADERS },

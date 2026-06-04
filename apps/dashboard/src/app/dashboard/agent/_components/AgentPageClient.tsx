@@ -55,7 +55,6 @@ export default function AgentPageClient({ agentName }: Props) {
           <AgentChatClient
             key={sessionResetKey}
             agentName={agentName}
-            hideHeader
             restoreSession={sessionResetKey === 0}
           />
         </div>

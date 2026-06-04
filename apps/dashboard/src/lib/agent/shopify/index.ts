@@ -14,13 +14,12 @@ export {
   updateShopifyCustomerInfo,
 } from "./customers";
 export {
-  cancelOrder,
-  createShopifyOrder,
-  editShopifyOrder,
   getOrderByName,
   getShopifyOrders,
-  updateShopifyOrderAddress,
-  type CreateShopifyOrderOptions,
 } from "./orders";
+export { updateShopifyOrderAddress } from "./order-address";
+export { cancelOrder } from "./order-cancellation";
+export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation";
+export { editShopifyOrder } from "./order-edit";
 export { createRefund } from "./refunds";
 export { getOrderTracking } from "./tracking";

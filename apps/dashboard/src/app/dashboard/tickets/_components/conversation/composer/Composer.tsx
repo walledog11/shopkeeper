@@ -37,11 +37,7 @@ interface Props {
   onSend: (isNote: boolean) => void
 }
 
-export default function Composer(props: Props) {
-  return useComposerView(props)
-}
-
-function useComposerView({
+function useComposerState({
   customerName,
   agentName = "Clerk",
   channelType,
@@ -51,13 +47,9 @@ function useComposerView({
   value,
   isClerkMode = false,
   viewTab,
-  noteCount,
   onViewTabChange,
   isSending,
-  error,
   onChange,
-  onClearClerk,
-  onSend,
 }: Props) {
   const { organization } = useOrganization()
 
@@ -211,6 +203,58 @@ function useComposerView({
 
     shouldRestoreTextareaFocusRef.current = false
   }
+
+  return {
+    filteredCanned,
+    handleTextChange,
+    handleViewTabSelect,
+    igWindowExpired,
+    insertCanned,
+    isEmailLike,
+    isNoteTab,
+    listRef,
+    placeholder,
+    rememberTextareaFocus,
+    selectedCannedIdx,
+    senderEmail,
+    sendDisabled,
+    setSelectedIdx,
+    setSlashQuery,
+    slashQuery,
+    textareaRef,
+  }
+}
+
+export default function Composer(props: Props) {
+  const {
+    agentName = "Clerk",
+    error,
+    isClerkMode = false,
+    isSending,
+    noteCount,
+    onClearClerk,
+    onSend,
+    value,
+  } = props
+  const {
+    filteredCanned,
+    handleTextChange,
+    handleViewTabSelect,
+    igWindowExpired,
+    insertCanned,
+    isEmailLike,
+    isNoteTab,
+    listRef,
+    placeholder,
+    rememberTextareaFocus,
+    selectedCannedIdx,
+    senderEmail,
+    sendDisabled,
+    setSelectedIdx,
+    setSlashQuery,
+    slashQuery,
+    textareaRef,
+  } = useComposerState(props)
 
   return (
     <div className="bg-background border-t border-border shrink-0 pb-[max(0rem,env(safe-area-inset-bottom))]">

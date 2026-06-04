@@ -71,6 +71,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       aiSummary: null,
       shopifyCustomerId: null,
     },
+    escalate: () => Promise.resolve(),
     ...overrides,
   };
 }

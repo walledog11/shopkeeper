@@ -13,6 +13,7 @@ import {
 } from './purge.js';
 import { checkGatewayQueueHealth } from './queue-health.js';
 import { runVoiceSynthesis } from './voice-synthesis.js';
+import { runOrderRiskMonitor } from './order-risk-monitor.js';
 import type { OpsAlertCounterClient } from '../ops-alerts.js';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -250,6 +251,20 @@ export async function createMaintenanceWorkers(
   }, { connection: workerConn, ...workerOptions });
   registerWorkerFailure(voiceSynthesisWorker, 'VoiceSynthesis', 'voice-synthesis');
 
+  // Track 4 spike: thread-less fraud-risk monitor. Gated by ORDER_RISK_MONITOR_ENABLED
+  // inside runOrderRiskMonitor - the queue/worker exist but the scan is a no-op unless
+  // the flag is set, so it never runs for merchants.
+  const orderRiskQueue = new Queue(QUEUE.ORDER_RISK, { connection: producerConn });
+  await scheduleRepeatableJob(orderRiskQueue, JOB.ORDER_RISK_SCAN, JOB.ORDER_RISK_ID, ONE_HOUR_MS);
+
+  const orderRiskWorker = new Worker(QUEUE.ORDER_RISK, async () => {
+    const result = await runOrderRiskMonitor();
+    if (result.ordersReviewed > 0) {
+      logger.info(result, '[OrderRiskMonitor] Scan complete');
+    }
+  }, { connection: workerConn, ...workerOptions });
+  registerWorkerFailure(orderRiskWorker, 'OrderRiskMonitor', 'order-risk-monitor');
+
   const queueHealthQueue = new Queue(QUEUE.QUEUE_HEALTH, { connection: producerConn });
   const queueHealthInboundQueue = new Queue(QUEUE.INBOUND, { connection: producerConn });
   const queueHealthSummaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection: producerConn });
@@ -275,6 +290,7 @@ export async function createMaintenanceWorkers(
       purgeWorker,
       digestWorker,
       voiceSynthesisWorker,
+      orderRiskWorker,
       queueHealthWorker,
     ],
     queues: [
@@ -285,6 +301,7 @@ export async function createMaintenanceWorkers(
       purgeQueue,
       digestQueue,
       voiceSynthesisQueue,
+      orderRiskQueue,
       queueHealthQueue,
       queueHealthInboundQueue,
       queueHealthSummaryQueue,

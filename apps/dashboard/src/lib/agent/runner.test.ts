@@ -34,6 +34,7 @@ vi.mock('@/lib/agent/spend', () => ({
 }));
 
 import { runAgent } from './runner';
+import { escalateToHuman } from './tools/thread';
 import type { AgentContext } from './runner';
 
 // ── Response factories ────────────────────────────────────────────────────────
@@ -64,7 +65,7 @@ let thread: Awaited<ReturnType<typeof createTestThread>>;
 let customerId: string;
 
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
-  return {
+  const ctx: AgentContext = {
     orgId: org.id,
     orgName: 'Test Store',
     customer: { id: customerId, name: 'Jane', platformId: 'jane@test.com' },
@@ -83,8 +84,17 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       aiSummary: null,
       shopifyCustomerId: null,
     },
+    escalate: () => Promise.resolve(),
     ...overrides,
   };
+  if (!overrides.escalate) {
+    ctx.escalate = (reason: string) =>
+      escalateToHuman(
+        { reason },
+        { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName }
+      ).then(() => {});
+  }
+  return ctx;
 }
 
 beforeEach(async () => {

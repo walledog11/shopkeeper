@@ -12,7 +12,7 @@ const MODULE_EXTENSIONS = new Set([
   ".cts",
 ]);
 
-const SCAN_ROOTS = ["apps/dashboard/src/lib"];
+const SCAN_ROOTS = ["apps/dashboard/src/lib", "packages/agent/src"];
 
 function scanDirectory(directory, violations) {
   const entries = readdirSync(directory, { withFileTypes: true });

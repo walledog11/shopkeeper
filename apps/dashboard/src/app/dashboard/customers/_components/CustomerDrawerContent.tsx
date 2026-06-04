@@ -14,7 +14,12 @@ import {
   X,
 } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/api/fetcher"
+import {
+  errorMessageFromPayload,
+  errorMessageFromUnknown,
+  fetcher,
+  readJsonResponse,
+} from "@/lib/api/fetcher"
 import { CustomerAvatar } from "./CustomerAvatar"
 import {
   formatDate,
@@ -50,41 +55,6 @@ interface CustomerDrawerContentProps {
   shop: string
   onClose: () => void
   onCustomerUpdated: (c: Partial<CustomerRow>) => void
-}
-
-async function readJsonResponse<T>(response: Response): Promise<T | null> {
-  try {
-    return await response.json() as T
-  } catch {
-    return null
-  }
-}
-
-function formatErrorValue(value: unknown): string | null {
-  if (typeof value === "string") return value
-  if (Array.isArray(value)) {
-    return value.map(formatErrorValue).filter(Boolean).join("; ") || null
-  }
-  if (value && typeof value === "object") {
-    const messages = Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) => {
-      const text = formatErrorValue(nested)
-      return text ? [`${key}: ${text}`] : []
-    })
-    return messages.join("; ") || null
-  }
-  return null
-}
-
-function errorMessageFromPayload(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === "object") {
-    const message = formatErrorValue((payload as { error?: unknown }).error)
-    if (message) return message
-  }
-  return fallback
-}
-
-function errorMessageFromUnknown(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback
 }
 
 export function CustomerDrawerContent({

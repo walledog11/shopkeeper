@@ -4,18 +4,18 @@
   "type": "module",
   "private": true,
   "main": "dist/index.js",
-  "types": "index.d.ts",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
+      "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./test-helpers": {
-      "types": "./test-helpers.d.ts",
+      "types": "./dist/test-helpers.d.ts",
       "default": "./dist/test-helpers.js"
     },
     "./customer-memory": {
-      "types": "./customer-memory.d.ts",
+      "types": "./dist/customer-memory.d.ts",
       "default": "./dist/customer-memory.js"
     }
   },
@@ -23,7 +23,7 @@
     "postinstall": "prisma generate --schema=prisma/schema.prisma && tsc",
     "build": "tsc",
     "dev": "npm run db:generate && tsc --watch --preserveWatchOutput",
-    "lint": "cd ../.. && eslint packages/db/index.ts packages/db/test-helpers.ts packages/db/customer-memory.ts packages/db/voice.ts",
+    "lint": "cd ../.. && eslint packages/db/*.ts packages/db/scripts/*.ts --max-warnings 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

@@ -13,15 +13,11 @@ import {
   createKnowledgeBase,
   deleteArticle,
   deleteKnowledgeBase,
-  errorMessageFromUnknown,
   updateArticle,
 } from "./kb-page-requests"
+import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 
-export default function KbPageClient() {
-  return useKbPageClientView()
-}
-
-function useKbPageClientView() {
+function useKbPageState() {
   const { data, isLoading, mutate } = useSWR<{ knowledgeBases: KnowledgeBase[] }>('/api/kb', fetcher)
   const knowledgeBases = useMemo(() => data?.knowledgeBases ?? [], [data])
 
@@ -197,21 +193,126 @@ function useKbPageClientView() {
     setArticleDeleteError(null)
     setIsEditing(true)
   }
-  const collectionsDropdown = useCollectionsDropdownView({
-    knowledgeBases,
-    selectedBaseId,
-    allArticlesCount: allArticles.length,
-    onSelectBase: selectBase,
-    onDeleteKb: handleDeleteKb,
+
+  return {
+    allArticles,
+    articleCreateError,
+    articleDeleteError,
+    articleDraft,
+    articleTargetKb,
+    editDraft,
+    editError,
+    handleCreateArticle,
+    handleCreateKb,
+    handleDeleteArticle,
+    handleDeleteKb,
+    handleUpdateArticle,
+    isArticleDeleting,
+    isArticleSaving,
+    isCreatingArticle,
     isCreatingKb,
-    setIsCreatingKb,
-    newKbName,
-    setNewKbName,
     isCreatingKbSaving,
-    onCreateKb: handleCreateKb,
-    actionError: kbActionError,
-    onClearActionError: () => setKbActionError(null),
-  })
+    isEditing,
+    isEditSaving,
+    isLoading,
+    kbActionError,
+    knowledgeBases,
+    mobileView,
+    newKbName,
+    search,
+    selectArticle,
+    selectBase,
+    selectedArticle,
+    selectedArticleId,
+    selectedBaseId,
+    setArticleCreateError,
+    setArticleDraft,
+    setEditDraft,
+    setEditError,
+    setIsCreatingArticle,
+    setIsCreatingKb,
+    setIsEditing,
+    setKbActionError,
+    setMobileView,
+    setNewKbName,
+    setSearch,
+    setSort,
+    shopifyKb,
+    sort,
+    startEdit,
+    userKbs,
+    visibleArticles,
+  }
+}
+
+export default function KbPageClient() {
+  const {
+    allArticles,
+    articleCreateError,
+    articleDeleteError,
+    articleDraft,
+    articleTargetKb,
+    editDraft,
+    editError,
+    handleCreateArticle,
+    handleCreateKb,
+    handleDeleteArticle,
+    handleDeleteKb,
+    handleUpdateArticle,
+    isArticleDeleting,
+    isArticleSaving,
+    isCreatingArticle,
+    isCreatingKb,
+    isCreatingKbSaving,
+    isEditing,
+    isEditSaving,
+    isLoading,
+    kbActionError,
+    knowledgeBases,
+    mobileView,
+    newKbName,
+    search,
+    selectArticle,
+    selectBase,
+    selectedArticle,
+    selectedArticleId,
+    selectedBaseId,
+    setArticleCreateError,
+    setArticleDraft,
+    setEditDraft,
+    setEditError,
+    setIsCreatingArticle,
+    setIsCreatingKb,
+    setIsEditing,
+    setKbActionError,
+    setMobileView,
+    setNewKbName,
+    setSearch,
+    setSort,
+    shopifyKb,
+    sort,
+    startEdit,
+    userKbs,
+    visibleArticles,
+  } = useKbPageState()
+
+  const collectionsDropdown = (
+    <CollectionsDropdown
+      knowledgeBases={knowledgeBases}
+      selectedBaseId={selectedBaseId}
+      allArticlesCount={allArticles.length}
+      onSelectBase={selectBase}
+      onDeleteKb={handleDeleteKb}
+      isCreatingKb={isCreatingKb}
+      setIsCreatingKb={setIsCreatingKb}
+      newKbName={newKbName}
+      setNewKbName={setNewKbName}
+      isCreatingKbSaving={isCreatingKbSaving}
+      onCreateKb={handleCreateKb}
+      actionError={kbActionError}
+      onClearActionError={() => setKbActionError(null)}
+    />
+  )
 
   // Render
   return (
@@ -484,7 +585,7 @@ function CollectionRow({
   )
 }
 
-function useCollectionsDropdownView({
+function CollectionsDropdown({
   knowledgeBases,
   selectedBaseId,
   allArticlesCount,

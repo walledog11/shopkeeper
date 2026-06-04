@@ -7,7 +7,6 @@ import {
   sendEmail,
   updateThreadStatus,
   updateThreadTag,
-  escalateToHuman,
 } from "./thread";
 import {
   searchShopifyProducts,
@@ -25,9 +24,9 @@ import {
   editShopifyOrder,
 } from "./shopify";
 import { checkStaticToolPolicy } from "./static-policy";
-import { toolError, toolNotFound, toolOk, type ToolResult, type ToolStatus } from "./result";
+import { toolError, toolNotFound, toolOk, toolEscalated, type ToolResult, type ToolStatus } from "./result";
 import { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@/lib/server/refund-spend";
-import type { AgentContext } from "../types";
+import type { BaseAgentContext, SupportContext } from "../types";
 import type {
   SearchShopifyProductsInput,
   SearchShopifyCustomersInput,
@@ -55,6 +54,20 @@ export type { StaticPolicyResult } from "./static-policy";
 function cast<T>(v: unknown): T {
   return v as T;
 }
+
+// Lazily resolve the thread-shaped context the thread-coupled tools need. A
+// thread-less module (order-ops) has no thread, so this returns null and those
+// tools defensively error — they are filtered out of any thread-less tool set,
+// so the support path never hits the null branch.
+function threadContextOf(
+  ctx: BaseAgentContext
+): { threadId: string; orgId: string; orgName: string } | null {
+  const thread = (ctx as Partial<SupportContext>).thread;
+  if (!thread) return null;
+  return { threadId: thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
+}
+
+const noThread = toolError("Error: this tool requires a conversation thread.");
 
 function formatPolicyError(message: string): string {
   return `Error: ${message}`;
@@ -86,11 +99,10 @@ async function enforceToolPolicy(name: string, args: unknown, orgId: string, set
 async function runToolBody(
   name: string,
   args: unknown,
-  ctx: AgentContext,
+  ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<ToolResult> {
   const noShopify = toolError("Error: no Shopify integration connected.");
-  const threadCtx = { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName };
   const resolvedSettings = resolveAgentSettings(settings);
 
   switch (name) {
@@ -143,23 +155,36 @@ async function runToolBody(
     case "edit_shopify_order":
       return ctx.shopify ? editShopifyOrder(cast<EditShopifyOrderInput>(args), ctx.shopify) : noShopify;
 
-    case "add_internal_note":
-      return addInternalNote(cast<AddInternalNoteInput>(args), threadCtx);
+    case "add_internal_note": {
+      const tc = threadContextOf(ctx);
+      return tc ? addInternalNote(cast<AddInternalNoteInput>(args), tc) : noThread;
+    }
 
-    case "send_reply":
-      return sendReply(cast<SendReplyInput>(args), threadCtx);
+    case "send_reply": {
+      const tc = threadContextOf(ctx);
+      return tc ? sendReply(cast<SendReplyInput>(args), tc) : noThread;
+    }
 
-    case "send_email":
-      return sendEmail(cast<SendEmailInput>(args), threadCtx);
+    case "send_email": {
+      const tc = threadContextOf(ctx);
+      return tc ? sendEmail(cast<SendEmailInput>(args), tc) : noThread;
+    }
 
-    case "update_thread_status":
-      return updateThreadStatus(cast<UpdateThreadStatusInput>(args), threadCtx);
+    case "update_thread_status": {
+      const tc = threadContextOf(ctx);
+      return tc ? updateThreadStatus(cast<UpdateThreadStatusInput>(args), tc) : noThread;
+    }
 
-    case "update_thread_tag":
-      return updateThreadTag(cast<UpdateThreadTagInput>(args), threadCtx);
+    case "update_thread_tag": {
+      const tc = threadContextOf(ctx);
+      return tc ? updateThreadTag(cast<UpdateThreadTagInput>(args), tc) : noThread;
+    }
 
-    case "escalate_to_human":
-      return escalateToHuman(cast<EscalateToHumanInput>(args), threadCtx);
+    case "escalate_to_human": {
+      const reason = cast<EscalateToHumanInput>(args).reason.trim() || "No reason provided";
+      await ctx.escalate(reason);
+      return toolEscalated(reason);
+    }
 
     case "search_kb": {
       const { query } = cast<SearchKbInput>(args);
@@ -178,13 +203,16 @@ async function runToolBody(
       });
       if (articles.length === 0) return toolNotFound("No knowledge base articles found for that query.");
 
-      await db.kbCitation.createMany({
-        data: articles.map(a => ({
-          organizationId: ctx.orgId,
-          kbArticleId: a.id,
-          threadId: ctx.thread.id,
-        })),
-      });
+      const kbThreadCtx = threadContextOf(ctx);
+      if (kbThreadCtx) {
+        await db.kbCitation.createMany({
+          data: articles.map(a => ({
+            organizationId: ctx.orgId,
+            kbArticleId: a.id,
+            threadId: kbThreadCtx.threadId,
+          })),
+        });
+      }
 
       return toolOk(JSON.stringify(articles.map(a => ({ title: a.title, body: a.body, tags: a.tags }))));
     }
@@ -197,7 +225,7 @@ async function runToolBody(
 export async function executeTool(
   name: string,
   args: unknown,
-  ctx: AgentContext,
+  ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<string> {
   const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
@@ -210,7 +238,7 @@ export async function executeTool(
 export async function executeToolStructured(
   name: string,
   args: unknown,
-  ctx: AgentContext,
+  ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<ToolResult> {
   const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);
@@ -233,7 +261,7 @@ const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["statu
 export async function executeToolWithStatus(
   name: string,
   args: unknown,
-  ctx: AgentContext,
+  ctx: BaseAgentContext,
   settings?: OrgSettings
 ): Promise<ExecuteToolResult> {
   const policyError = await enforceToolPolicy(name, args, ctx.orgId, settings);

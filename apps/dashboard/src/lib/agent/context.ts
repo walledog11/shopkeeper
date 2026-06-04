@@ -1,6 +1,7 @@
 import { db, isEmptyMemory, type CustomerMemory } from "@clerk/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client";
 import { isOperatorChannel } from "@/lib/messaging/thread-constants";
+import { escalateToHuman } from "./tools/thread";
 import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./types";
 
 function readCustomerMemory(memory: unknown): CustomerMemory | null {
@@ -180,6 +181,15 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       senderType: m.senderType,
       contentText: m.contentText,
     })),
+    shopify:
+      shopifyIntegration?.accessToken
+        ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
+        : null,
+    escalate: (reason) =>
+      escalateToHuman(
+        { reason },
+        { threadId: thread.id, orgId, orgName: org?.name ?? "Support" }
+      ).then(() => {}),
   };
 
   return {
@@ -198,10 +208,6 @@ export async function buildContext(threadId: string, orgId: string): Promise<Age
       platformId: thread.customer.platformId,
     },
     openThreadCount,
-    shopify:
-      shopifyIntegration?.accessToken
-        ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
-        : null,
     recentOrders,
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),

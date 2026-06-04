@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useMemo } from 'react'
 import type { KeyedMutator } from 'swr'
 import type { AgentTurnAction } from '@/lib/agent/api/turns'
 import type { Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
@@ -205,118 +205,7 @@ export function useThreadCacheCoordinator({
   mutateSearch,
   mutateActiveThread,
 }: ThreadCacheCoordinatorDeps): ThreadCacheCoordinator {
-  const patchThreadCaches = useCallback(
-    (threadId: string, updateThread: ThreadListUpdater) =>
-      createThreadCacheCoordinator({
-        openThreads,
-        closedThreads,
-        filteredThreads,
-        activeThread,
-        mutateOpen,
-        mutateClosed,
-        mutateFiltered,
-        removeFromOpen,
-        removeFromClosed,
-        removeFromFiltered,
-        prependToOpen,
-        prependToClosed,
-        prependToFiltered,
-        mutateSearch,
-        mutateActiveThread,
-      }).patchThreadCaches(threadId, updateThread),
-    [
-      activeThread,
-      closedThreads,
-      filteredThreads,
-      mutateActiveThread,
-      mutateClosed,
-      mutateFiltered,
-      mutateOpen,
-      mutateSearch,
-      openThreads,
-      prependToClosed,
-      prependToFiltered,
-      prependToOpen,
-      removeFromClosed,
-      removeFromFiltered,
-      removeFromOpen,
-    ],
-  )
-  const moveThreadStatus = useCallback(
-    (threadId: string, nextStatus: 'open' | 'closed') =>
-      createThreadCacheCoordinator({
-        openThreads,
-        closedThreads,
-        filteredThreads,
-        activeThread,
-        mutateOpen,
-        mutateClosed,
-        mutateFiltered,
-        removeFromOpen,
-        removeFromClosed,
-        removeFromFiltered,
-        prependToOpen,
-        prependToClosed,
-        prependToFiltered,
-        mutateSearch,
-        mutateActiveThread,
-      }).moveThreadStatus(threadId, nextStatus),
-    [
-      activeThread,
-      closedThreads,
-      filteredThreads,
-      mutateActiveThread,
-      mutateClosed,
-      mutateFiltered,
-      mutateOpen,
-      mutateSearch,
-      openThreads,
-      prependToClosed,
-      prependToFiltered,
-      prependToOpen,
-      removeFromClosed,
-      removeFromFiltered,
-      removeFromOpen,
-    ],
-  )
-  const moveThreadFilterStatus = useCallback(
-    (threadId: string, nextFilterStatus: ThreadFilterStatus, nextFilterFeedback?: ThreadFilterFeedback) =>
-      createThreadCacheCoordinator({
-        openThreads,
-        closedThreads,
-        filteredThreads,
-        activeThread,
-        mutateOpen,
-        mutateClosed,
-        mutateFiltered,
-        removeFromOpen,
-        removeFromClosed,
-        removeFromFiltered,
-        prependToOpen,
-        prependToClosed,
-        prependToFiltered,
-        mutateSearch,
-        mutateActiveThread,
-      }).moveThreadFilterStatus(threadId, nextFilterStatus, nextFilterFeedback),
-    [
-      activeThread,
-      closedThreads,
-      filteredThreads,
-      mutateActiveThread,
-      mutateClosed,
-      mutateFiltered,
-      mutateOpen,
-      mutateSearch,
-      openThreads,
-      prependToClosed,
-      prependToFiltered,
-      prependToOpen,
-      removeFromClosed,
-      removeFromFiltered,
-      removeFromOpen,
-    ],
-  )
-  const revalidateThreadCaches = useCallback(
+  return useMemo(
     () => createThreadCacheCoordinator({
       openThreads,
       closedThreads,
@@ -333,7 +222,7 @@ export function useThreadCacheCoordinator({
       prependToFiltered,
       mutateSearch,
       mutateActiveThread,
-    }).revalidateThreadCaches(),
+    }),
     [
       activeThread,
       closedThreads,
@@ -352,11 +241,4 @@ export function useThreadCacheCoordinator({
       removeFromOpen,
     ],
   )
-
-  return {
-    patchThreadCaches,
-    moveThreadStatus,
-    moveThreadFilterStatus,
-    revalidateThreadCaches,
-  }
 }

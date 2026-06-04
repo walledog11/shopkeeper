@@ -23,11 +23,7 @@ interface Props {
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024
 
-export default function WorkspaceTab(props: Props) {
-  return useWorkspaceTabView(props)
-}
-
-function useWorkspaceTabView({ orgName, version }: Props) {
+function useWorkspaceTabState({ orgName, version }: Props) {
   const { organization, membership } = useOrganization()
   const { setActive, userMemberships } = useOrganizationList({
     userMemberships: { infinite: false },
@@ -182,6 +178,77 @@ function useWorkspaceTabView({ orgName, version }: Props) {
       setDeleting(false)
     }
   }
+
+  return {
+    clearError,
+    clearSuccess,
+    clearTickets,
+    clearing,
+    confirmClear,
+    deleteConfirmName,
+    deleteError,
+    deleteOpen,
+    deleteWorkspace,
+    deleting,
+    error,
+    exportData,
+    exportError,
+    exporting,
+    fileInputRef,
+    isAdmin,
+    isOnlyWorkspace,
+    logoBusy,
+    logoError,
+    organization,
+    removeLogo,
+    save,
+    saved,
+    saving,
+    setConfirmClear,
+    setDeleteConfirmName,
+    setDeleteError,
+    setDeleteOpen,
+    setWorkspaceName,
+    uploadLogo,
+    workspaceName,
+  }
+}
+
+export default function WorkspaceTab(props: Props) {
+  const { orgName } = props
+  const {
+    clearError,
+    clearSuccess,
+    clearTickets,
+    clearing,
+    confirmClear,
+    deleteConfirmName,
+    deleteError,
+    deleteOpen,
+    deleteWorkspace,
+    deleting,
+    error,
+    exportData,
+    exportError,
+    exporting,
+    fileInputRef,
+    isAdmin,
+    isOnlyWorkspace,
+    logoBusy,
+    logoError,
+    organization,
+    removeLogo,
+    save,
+    saved,
+    saving,
+    setConfirmClear,
+    setDeleteConfirmName,
+    setDeleteError,
+    setDeleteOpen,
+    setWorkspaceName,
+    uploadLogo,
+    workspaceName,
+  } = useWorkspaceTabState(props)
 
   return (
     <div className="space-y-6">

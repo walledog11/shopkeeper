@@ -23,11 +23,7 @@ const EMPTY_RESPONSES: CannedResponse[] = []
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-export default function CannedResponsesPage() {
-  return useCannedResponsesPageView()
-}
-
-function useCannedResponsesPageView() {
+function useCannedResponsesPageState() {
   const { data, isLoading, mutate } = useSWR<{ responses: CannedResponse[] }>("/api/canned-responses", fetcher)
   const responses = data?.responses ?? EMPTY_RESPONSES
 
@@ -124,6 +120,74 @@ function useCannedResponsesPageView() {
   }
 
   const hasFilters = !!(search || activeTag)
+
+  return {
+    activeTag,
+    allTags,
+    editForm,
+    editingId,
+    filtered,
+    handleCreate,
+    handleDelete,
+    handleDuplicate,
+    handleUpdate,
+    hasFilters,
+    isAdding,
+    isLoading,
+    isSavingEdit,
+    isSavingNew,
+    newForm,
+    responses,
+    search,
+    setActiveTag,
+    setEditForm,
+    setEditingId,
+    setIsAdding,
+    setNewForm,
+    setSearch,
+    setSort,
+    setSortOpen,
+    sort,
+    sortOpen,
+    sortRef,
+    startEdit,
+    startNew,
+  }
+}
+
+export default function CannedResponsesPage() {
+  const {
+    activeTag,
+    allTags,
+    editForm,
+    editingId,
+    filtered,
+    handleCreate,
+    handleDelete,
+    handleDuplicate,
+    handleUpdate,
+    hasFilters,
+    isAdding,
+    isLoading,
+    isSavingEdit,
+    isSavingNew,
+    newForm,
+    responses,
+    search,
+    setActiveTag,
+    setEditForm,
+    setEditingId,
+    setIsAdding,
+    setNewForm,
+    setSearch,
+    setSort,
+    setSortOpen,
+    sort,
+    sortOpen,
+    sortRef,
+    startEdit,
+    startNew,
+  } = useCannedResponsesPageState()
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

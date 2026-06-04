@@ -20,10 +20,6 @@ function getPlaceholder(r: number) {
 }
 
 export default function FeedbackPage() {
-  return useFeedbackPageView()
-}
-
-function useFeedbackPageView() {
   const [rating, setRating] = useState(0)
   const [hovered, setHovered] = useState(0)
   const hoverTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)

@@ -8,14 +8,15 @@ import { validateGatewayEnv } from './config/env.js';
 import { writeWorkerHeartbeat } from './health.js';
 import { handleIgDmJob, handleEmailJob, handleShopifyJob } from './message-handlers/channels.js';
 import { generateThreadIntelligence } from './message-handlers/intelligence.js';
+import { isWithinBusinessHours, resolveBusinessHoursSettings } from './message-handlers/business-hours.js';
+import {
+  precomputeThreadPlan,
+  sendAutoAck,
+} from './message-handlers/planning.js';
 import {
   sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
-  precomputeThreadPlan,
-  isWithinBusinessHours,
-  sendAutoAck,
-  resolveBusinessHoursSettings,
-} from './message-handlers/planning.js';
+} from './message-handlers/planning-notifications.js';
 import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { createGatewayBullMqConnection } from './clients/redis-client.js';

@@ -18,6 +18,7 @@ export const QUEUE = {
   DIGEST: 'whatsapp-digest',
   QUEUE_HEALTH: 'queue-health',
   VOICE_SYNTHESIS: 'voice-synthesis',
+  ORDER_RISK: 'order-risk-monitor',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -39,6 +40,8 @@ export const JOB = {
   QUEUE_HEALTH_ID: 'queue-health-5min',
   VOICE_SYNTHESIS: 'run-voice-synthesis',
   VOICE_SYNTHESIS_ID: 'voice-synthesis-daily',
+  ORDER_RISK_SCAN: 'scan-order-risk',
+  ORDER_RISK_ID: 'order-risk-monitor-hourly',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
 

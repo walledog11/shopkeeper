@@ -69,7 +69,7 @@ vi.mock("@/lib/agent/api/agent-actions", () => ({
 import { runAgent } from "./runner";
 
 function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
-  return {
+  const ctx: AgentContext = {
     orgId: "org_1",
     orgName: "Test Store",
     customer: { id: "customer_1", name: "Jane", platformId: "jane@test.com" },
@@ -88,8 +88,19 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       aiSummary: null,
       shopifyCustomerId: null,
     },
+    // Mirror buildContext's support escalate sink so the injected Seam 2 path
+    // still routes through escalateToHuman (the mocked module function).
+    escalate: () => Promise.resolve(),
     ...overrides,
   };
+  if (!overrides.escalate) {
+    ctx.escalate = (reason: string) =>
+      mockEscalateToHuman(
+        { reason },
+        { threadId: ctx.thread.id, orgId: ctx.orgId, orgName: ctx.orgName }
+      ).then(() => {});
+  }
+  return ctx;
 }
 
 function toolUseBatch() {

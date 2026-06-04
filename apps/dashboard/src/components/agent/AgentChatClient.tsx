@@ -21,7 +21,6 @@ interface Props {
   agentName: string
   compact?: boolean
   embedded?: boolean
-  hideHeader?: boolean
   onClose?: () => void
   restoreSession?: boolean
 }
@@ -52,11 +51,7 @@ function messageKey(message: ChatMessage): string {
     : `agent-${time}-${message.summary}`
 }
 
-export default function AgentChatClient(props: Props) {
-  return useAgentChatClientView(props)
-}
-
-function useAgentChatClientView({ agentName, compact, embedded, hideHeader, onClose, restoreSession = true }: Props) {
+function useAgentChatState({ restoreSession = true }: Pick<Props, "restoreSession">) {
   const { user } = useUser()
   const firstName = user?.firstName ?? "there"
   const initial = (user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "U").toUpperCase()
@@ -233,6 +228,46 @@ function useAgentChatClientView({ agentName, compact, embedded, hideHeader, onCl
       // silent
     }
   }, [handleNewSession])
+
+  return {
+    fillerPhrase,
+    firstName,
+    greeting,
+    handleClearHistory,
+    handleKeyDown,
+    handleNewSession,
+    handleSend,
+    initial,
+    input,
+    isRunning,
+    messages,
+    messagesEndRef,
+    setInput,
+    setShowClearConfirm,
+    showClearConfirm,
+    textareaRef,
+  }
+}
+
+export default function AgentChatClient({ agentName, compact, embedded, onClose, restoreSession = true }: Props) {
+  const {
+    fillerPhrase,
+    firstName,
+    greeting,
+    handleClearHistory,
+    handleKeyDown,
+    handleNewSession,
+    handleSend,
+    initial,
+    input,
+    isRunning,
+    messages,
+    messagesEndRef,
+    setInput,
+    setShowClearConfirm,
+    showClearConfirm,
+    textareaRef,
+  } = useAgentChatState({ restoreSession })
 
   return (
     <div className="flex flex-col h-full">

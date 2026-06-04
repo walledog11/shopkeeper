@@ -1,6 +1,16 @@
-# Clerk — AI helpdesk for Shopify merchants
+# Clerk — AI operating layer for solo & small e-commerce businesses
 
-Solo merchants and small teams. Multi-channel support inbox + AI agent that reads/writes Shopify directly.
+**Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram now; WhatsApp next; the dashboard is one surface, not *the* surface). Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
+
+**V1 wedge = customer support.** Only the support module is built today. The architecture assumes more modules will share one *general-purpose* core, not a support-coupled one — support remains the V1 focus and the thing that must ship. Solo merchants and small teams. Multi-channel support inbox + AI agent that reads/writes Shopify directly.
+
+**Product principles** (the rubric for agent work):
+1. The agent should feel like an employee, not a chatbot — real memory, judgment, brand-voice consistency, and the honesty to say "you handle this" instead of hallucinating confidence.
+2. The merchant interacts from wherever they are (mobile, messaging), not just the dashboard.
+3. Trust is binary — one bad refund undoes months of goodwill. Bias toward escalation over confident wrong action; failure modes matter more than success modes.
+4. Every workflow module shares one general-purpose agent core. The core must not couple to support specifically.
+
+**Direction & roadmap:** `docs/autonomy-and-generality-plan.md` (chassis generalization + autonomy raise) and `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read these before assuming the support-only framing when touching agent architecture. Note the current state vs. the direction: agent execution today lives in the dashboard (Vercel) and the orchestration (`run.ts`, executor) is thread-coupled; the roadmap moves execution into the gateway worker and makes the core thread-optional.
 
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel

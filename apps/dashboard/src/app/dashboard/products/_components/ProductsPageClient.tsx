@@ -6,7 +6,12 @@ import {
   Search, X, Package, ShoppingBag,
 } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/api/fetcher"
+import {
+  errorMessageFromPayload,
+  errorMessageFromUnknown,
+  fetcher,
+  readJsonResponse,
+} from "@/lib/api/fetcher"
 import { ProductDrawer } from "./ProductDrawer"
 import { ProductListRow } from "./ProductListRow"
 import { ProductListSkeleton } from "./ProductListSkeleton"
@@ -54,33 +59,9 @@ function ProductStatStrip({ products, isLoading }: { products: ProductRow[]; isL
   )
 }
 
-async function readJsonResponse<T>(response: Response): Promise<T | null> {
-  try {
-    return await response.json() as T
-  } catch {
-    return null
-  }
-}
-
-function errorMessageFromPayload(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const error = (payload as { error?: unknown }).error
-    if (typeof error === 'string') return error
-  }
-  return fallback
-}
-
-function errorMessageFromUnknown(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback
-}
-
 // ── Main page client ──────────────────────────────────────────────────────────
 
-export default function ProductsPageClient() {
-  return useProductsPageClientView()
-}
-
-function useProductsPageClientView() {
+function useProductsPageState() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -175,6 +156,56 @@ function useProductsPageClientView() {
 
   const allProducts = pages.flat()
   const isSearchMode = debouncedQuery.length > 0
+
+  return {
+    allProducts,
+    closeDrawer,
+    data,
+    debouncedQuery,
+    drawerProduct: selectedProduct ?? drawerProductRef.current,
+    error,
+    handleFilterChange,
+    handleSearchChange,
+    isDrawerOpen,
+    isLoading,
+    isLoadingMore,
+    isSearchMode,
+    loadMore,
+    loadMoreError,
+    nextPageInfo,
+    openDrawer,
+    pages,
+    searchQuery,
+    selectedProduct,
+    shop,
+    statusFilter,
+  }
+}
+
+export default function ProductsPageClient() {
+  const {
+    allProducts,
+    closeDrawer,
+    data,
+    debouncedQuery,
+    drawerProduct,
+    error,
+    handleFilterChange,
+    handleSearchChange,
+    isDrawerOpen,
+    isLoading,
+    isLoadingMore,
+    isSearchMode,
+    loadMore,
+    loadMoreError,
+    nextPageInfo,
+    openDrawer,
+    pages,
+    searchQuery,
+    selectedProduct,
+    shop,
+    statusFilter,
+  } = useProductsPageState()
 
   // ── No integration ────────────────────────────────────────────────────────
 
@@ -313,9 +344,9 @@ function useProductsPageClientView() {
       </div>
 
       {/* Drawer */}
-      {(selectedProduct || drawerProductRef.current) && (
+      {drawerProduct && (
         <ProductDrawer
-          product={(selectedProduct ?? drawerProductRef.current)!}
+          product={drawerProduct}
           isOpen={isDrawerOpen}
           onClose={closeDrawer}
           shop={shop || data?.shop || ''}

@@ -231,28 +231,68 @@ cannot identify the customer or find the order, instead of escalating or guessin
 
 ---
 
-## Track 4 — Fraud-risk flag monitor spike *(L, time-boxed ~1 week; parallel)*
+## Track 4 — Fraud-risk flag monitor spike *(L, time-boxed ~1 week; parallel)* — ✅ COMPLETED (spike built + finding written, 2026-06-03)
 
 **Purpose: answer the deferred remediation-plan 3.4 — does the generalized core carry
 non-conversational, entity/monitoring work, or is it thread-locked?** Validation, not a shipped
 feature. Throwaway, flag-gated, never reaches merchants.
 
-- `gateway/maintenance/order-risk-monitor.ts`: scheduled worker; query recent unfulfilled orders per
-  org (batch, window); per order, gather risk signals from the Shopify payload (billing/shipping
-  mismatch, high-value new customer, repeated failed payments).
-- **The crux — a thread-less agent run.** Today `buildContext(threadId, orgId)` requires a thread and
-  `AgentContext = SupportContext` carries `thread`/`customer`; `run.ts` reads `ctx.thread.id`,
-  `ctx.thread.channelType`, `ctx.customer.id` throughout, and the planner's forced-`send_reply` phase
-  is support-shaped. The spike constructs a `BaseAgentContext`-only run (new
-  `buildOrderOpsContext(orderId, orgId)` + an `OrderOpsContext` with no thread) and routes it through a
-  run path that doesn't assume `ctx.thread`. **Where that breaks is the deliverable.**
-- Tools: a minimal `order` group + reuse `escalate_to_human`; action is "flag/escalate," no new schema
-  (log the finding; don't build an `OrderFlag` entity for a spike).
-- Governance: runs through autonomy/spend/policy/audit per the 3.3 ruling (judgment work uses the
-  agent stack).
-- **Deliverable: a written finding** — "the core carried it with these N changes" *or* "the core is
-  thread-locked at these files/lines." This is the data point that tells you whether the five-module
-  roadmap rests on solid ground or needs a `buildContext` refactor first.
+**What was built (all flag-gated behind `ORDER_RISK_MONITOR_ENABLED`):**
+- `apps/dashboard/src/lib/agent/order-ops/context.ts` — `OrderOpsContext extends BaseAgentContext`
+  (no `thread`, no `customer`; carries `shopify` + the order with pre-scanned risk signals) +
+  `buildOrderOpsContext(orderId, orgId)` (the thread-less analogue of `buildContext`). Risk signals:
+  billing/shipping country mismatch, high-value new customer, payment-not-captured.
+- `order-ops/run.ts` — `runOrderOps`, a thread-less model loop. `order-ops/prompt.ts` — a thread-less
+  system prompt. Tools: `get_shopify_customer` + `get_order_tracking` (reused as-is) + a new `flag_order`
+  sink (no new schema — the finding is logged as an audit row).
+- `apps/dashboard/src/app/api/agent/order-risk-internal/route.ts` — gateway-only internal route
+  (`INTERNAL_API_SECRET`), 404 unless the flag is set.
+- `apps/gateway/src/maintenance/order-risk-monitor.ts` — scheduled hourly worker (no-op unless the flag
+  is set); discovers recent unfulfilled+paid orders per org and POSTs each to the dashboard route.
+- `order-ops/audit.test.ts` (real DB, 1/1) — proves the load-bearing finding: a thread-less `flag_order`
+  action persists with `threadId`/`customerId` null. Both apps `tsc`-clean (0 new errors).
+
+### Finding — the verdict
+
+**The generalized core is NOT thread-locked at the substrate level, but IS thread-coupled at the
+orchestration layer. It carried a thread-less run via a parallel path, with zero changes to governance,
+execution, or persistence — but `run.ts` itself could not be reused as-is.**
+
+**Reused as-is, zero changes (the substrate is genuinely module-agnostic):**
+- `spend.ts` (`enforceSpendCap`/`recordSpend`) — org-keyed, no thread. ✅
+- `usage.ts`, `pickModel`, the Anthropic client + `buildCachedSystemPrompt` — pure. ✅
+- Shopify tool implementations (`tools/shopify.ts`) — read only `ctx.shopify` + `orgId`. ✅
+- `recordAgentActionsBatch` + the `AgentAction` schema — `threadId`/`customerId` are `String?`
+  (`onDelete: SetNull`); the audit log accepted the order-ops run with nulls (verified by test). ✅
+- `BaseAgentContext` (the remediation-plan 1.4 split) carried the run. **`buildContext` did NOT need a
+  refactor** — the base type was already the right seam.
+
+**Thread-locked — forced a fork instead of reuse (files/lines):**
+- `tools/executor.ts:93` — `const threadCtx = { threadId: ctx.thread.id, ... }` is built **eagerly for
+  every tool call**, so a thread-less ctx throws there before any Shopify-only tool runs. (Plus
+  `executor.ts:186`, `search_kb` writing `threadId: ctx.thread.id` into `kbCitation`.) This is the single
+  line that blocks reusing the shared executor for a thread-less run.
+- `tools/thread.ts:286` `escalateToHuman` — sets the thread → `pending`, tags `needs_human`, pushes the
+  gateway operator queue. All thread-shaped; an order-ops "flag" has no thread to move, so it needed a
+  separate `flag_order` sink (a structured audit finding).
+- `run.ts` — `ctx.thread.*`/`ctx.customer.*` at ~10 sites: `isOperatorChannel(ctx.thread.channelType)`
+  (`:83`), the audit call site (`:98`), logging (`:108–118`), the `escalateToHuman` call (`:209`), the
+  approved-plan channel gating (`:283–306`), the order-status fast-path (`:269`), and prompt/intent
+  selection (`:316–319`).
+- `prompt.ts` `buildSystemPrompt` / `intent.ts` `selectToolNamesForInstruction` /
+  `order-status-fast-path.ts` — entirely thread/customer-shaped. (Prompt builders are *already*
+  per-module by design — `buildSystemPrompt` vs `buildComposerAskPrompt` — so a new `buildOrderRiskPrompt`
+  is the intended extension point, not a breakage. Intent/fast-path are support-only and were simply not
+  reused.)
+
+**Answers Decision #3:** a real module #2 does **not** need a `buildContext`/`AgentContext` refactor
+*before* it lands — the parallel thread-less path works today and the base context is sound. The minimal
+refactor that would let a second module *reuse `run.ts` + the shared executor* (rather than fork ~150 lines)
+is making three things thread-optional: (1) `executor.ts:93` `threadCtx` lazy + its ctx type widened to
+`BaseAgentContext`, (2) a pluggable escalate/flag sink instead of the hard-wired `escalateToHuman`, and
+(3) the `run.ts` thread/customer reads guarded. **Recommendation: keep the fork for the spike (it must
+never reach merchants); do the small thread-optional refactor when the second real module is committed —
+not speculatively.** The five-module roadmap rests on solid ground.
 
 ---
 
@@ -278,5 +318,7 @@ Track 4 (fraud spike, L) ──────────┘   (independent; paral
    `shadow → live`. Set after the first week of real agreement data.
 2. **`full` vs `broad` behavioral delta:** exact auto/hold split in the prompt — easier to pin once
    Track 4 reveals whether there's an order-ops surface wanting its own tier semantics.
-3. **Fraud-spike follow-through:** if Track 4 finds the core is thread-locked, whether that triggers a
-   `buildContext`/`AgentContext` refactor *before* module #2 or accepts a thread-shim. Decide on the finding.
+3. **Fraud-spike follow-through:** ✅ **Resolved by the Track 4 finding (2026-06-03).** The core is not
+   thread-locked at the substrate level; no `buildContext`/`AgentContext` refactor is needed before
+   module #2. Accept the parallel thread-less path; do the small thread-optional refactor of
+   `run.ts` + `executor.ts:93` only when the second real module lands. See Track 4 finding.
