@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.80.0",
+    "@clerk/agent": "*",
     "@clerk/db": "*",
     "@clerk/nextjs": "7.3.3",
     "@sentry/nextjs": "10.47.0",

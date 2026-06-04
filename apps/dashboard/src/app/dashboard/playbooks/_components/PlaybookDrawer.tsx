@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { ChevronDown, Loader2, Plus, X } from "lucide-react"
 import type { Playbook, PlaybookAction, PlaybookActionType, PlaybookTrigger, PlaybookTriggerType } from "@/types"
+import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import {
   ACTION_LABELS,
   TICKET_TAGS,
@@ -10,11 +11,12 @@ import {
   emptyAction,
   emptyTrigger,
 } from "./playbook-helpers"
+import { savePlaybook } from "./playbook-requests"
 
 interface PlaybookDrawerProps {
   initial?: Playbook | null
   onClose: () => void
-  onSave: () => void
+  onSave: (playbook: Playbook) => Promise<unknown> | unknown
 }
 
 export function PlaybookDrawer({ initial, onClose, onSave }: PlaybookDrawerProps) {
@@ -22,6 +24,7 @@ export function PlaybookDrawer({ initial, onClose, onSave }: PlaybookDrawerProps
   const [trigger, setTrigger] = useState<PlaybookTrigger>(initial?.trigger ?? emptyTrigger())
   const [actions, setActions] = useState<PlaybookAction[]>(initial?.actions ?? [emptyAction()])
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -53,18 +56,15 @@ export function PlaybookDrawer({ initial, onClose, onSave }: PlaybookDrawerProps
   const handleSave = async () => {
     if (!name.trim()) return
     setSaving(true)
+    setSaveError(null)
     try {
-      const url = isEditing ? `/api/playbooks/${initial!.id}` : "/api/playbooks"
-      const method = isEditing ? "PATCH" : "POST"
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, trigger, actions }),
-      })
-      if (res.ok) {
-        onSave()
-        handleClose()
-      }
+      const playbook = await savePlaybook(isEditing ? initial!.id : null, { name, trigger, actions })
+      await onSave(playbook)
+      handleClose()
+    } catch (error) {
+      setSaveError(errorMessageFromUnknown(error, isEditing
+        ? "Failed to update playbook."
+        : "Failed to create playbook."))
     } finally {
       setSaving(false)
     }
@@ -216,6 +216,9 @@ export function PlaybookDrawer({ initial, onClose, onSave }: PlaybookDrawerProps
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-white/[0.08]">
+          {saveError && (
+            <p className="mr-auto text-xs text-red-400" aria-live="polite">{saveError}</p>
+          )}
           <button type="button"
             onClick={handleClose}
             className="text-xs text-white/40 hover:text-white/70 px-3 py-1.5 transition-colors"

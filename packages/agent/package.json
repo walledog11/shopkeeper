@@ -9,10 +9,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./settings": {
+      "types": "./dist/settings.d.ts",
+      "default": "./dist/settings.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
     }
   },
   "scripts": {
-    "postinstall": "tsc",
     "build": "tsc",
     "dev": "tsc --watch --preserveWatchOutput",
     "test:unit": "vitest run --config vitest.config.ts",

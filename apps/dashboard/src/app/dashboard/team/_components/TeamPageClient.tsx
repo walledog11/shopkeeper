@@ -4,30 +4,20 @@ import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
 import { timeAgo } from "@/lib/format/date";
+import { errorMessageFromUnknown } from "@/lib/api/fetcher";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";
-
-interface Member {
-  id: string;
-  userId: string;
-  firstName: string | null;
-  lastName: string | null;
-  imageUrl: string | null;
-  identifier: string;
-  role: string;
-  createdAt: number;
-}
-
-interface Invitation {
-  id: string;
-  emailAddress: string;
-  role: string;
-  createdAt: number;
-}
+import {
+  deleteTeamMember,
+  inviteTeamMember,
+  revokeTeamInvitation,
+  type TeamInvitation,
+  type TeamMember,
+} from "./team-page-requests";
 
 interface Props {
-  initialMembers: Member[];
-  initialInvitations: Invitation[];
+  initialMembers: TeamMember[];
+  initialInvitations: TeamInvitation[];
   currentUserId: string;
 }
 
@@ -74,6 +64,7 @@ function useTeamPageState({ initialMembers, initialInvitations }: Props) {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const [removalError, setRemovalError] = useState<string | null>(null);
 
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
@@ -81,21 +72,12 @@ function useTeamPageState({ initialMembers, initialInvitations }: Props) {
     setInviting(true);
     setInviteError("");
     try {
-      const res = await fetch("/api/team", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ emailAddress: inviteEmail.trim(), role: inviteRole }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error ?? "Failed to invite");
-      }
-      const newInvite = await res.json();
+      const newInvite = await inviteTeamMember(inviteEmail.trim(), inviteRole);
       setInvitations(prev => [newInvite, ...prev]);
       setInviteEmail("");
       setShowInviteModal(false);
     } catch (err) {
-      setInviteError(err instanceof Error ? err.message : "Something went wrong");
+      setInviteError(errorMessageFromUnknown(err, "Failed to invite member."));
     } finally {
       setInviting(false);
     }
@@ -103,9 +85,12 @@ function useTeamPageState({ initialMembers, initialInvitations }: Props) {
 
   async function handleRemoveMember(userId: string) {
     setRemoving(userId);
+    setRemovalError(null);
     try {
-      await fetch(`/api/team?userId=${userId}`, { method: "DELETE" });
+      await deleteTeamMember(userId);
       setMembers(prev => prev.filter(m => m.userId !== userId));
+    } catch (error) {
+      setRemovalError(errorMessageFromUnknown(error, "Failed to remove member."));
     } finally {
       setRemoving(null);
     }
@@ -113,9 +98,12 @@ function useTeamPageState({ initialMembers, initialInvitations }: Props) {
 
   async function handleRevokeInvite(invitationId: string) {
     setRemoving(invitationId);
+    setRemovalError(null);
     try {
-      await fetch(`/api/team?invitationId=${invitationId}`, { method: "DELETE" });
+      await revokeTeamInvitation(invitationId);
       setInvitations(prev => prev.filter(i => i.id !== invitationId));
+    } catch (error) {
+      setRemovalError(errorMessageFromUnknown(error, "Failed to revoke invitation."));
     } finally {
       setRemoving(null);
     }
@@ -131,6 +119,7 @@ function useTeamPageState({ initialMembers, initialInvitations }: Props) {
     inviteRole,
     inviting,
     members,
+    removalError,
     removing,
     setInviteEmail,
     setInviteRole,
@@ -150,6 +139,7 @@ function TeamPageContent(props: Props) {
     inviteRole,
     inviting,
     members,
+    removalError,
     removing,
     setInviteEmail,
     setInviteRole,
@@ -175,6 +165,10 @@ function TeamPageContent(props: Props) {
             <UserPlus className="size-4" /> Invite member
           </button>
         </div>
+
+        {removalError && (
+          <p className="text-xs text-red-400" aria-live="polite">{removalError}</p>
+        )}
 
         {/* Members list */}
         <div className="bg-card rounded-md border border-white/[0.08] overflow-hidden">

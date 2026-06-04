@@ -2,6 +2,17 @@ type ApiErrorPayload = {
   error?: unknown;
 };
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly payload: unknown,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 export async function readJsonResponse<T>(response: Response): Promise<T | null> {
   try {
     return await response.json() as T;
@@ -37,25 +48,27 @@ export function errorMessageFromUnknown(error: unknown, fallback: string): strin
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
-export async function requestJson<T>(url: string, init: RequestInit, fallbackError: string): Promise<T> {
+export function isApiRequestError(error: unknown, status?: number): error is ApiRequestError {
+  return error instanceof ApiRequestError && (status === undefined || error.status === status);
+}
+
+export async function requestJson<T>(
+  url: string,
+  init: RequestInit = {},
+  fallbackError?: string,
+): Promise<T> {
   const response = await fetch(url, init);
   const payload = await readJsonResponse<T & ApiErrorPayload>(response);
+  const fallback = fallbackError ?? `API error: ${response.status} ${response.statusText}`.trim();
 
   if (!response.ok) {
-    throw new Error(errorMessageFromPayload(payload, fallbackError));
+    throw new ApiRequestError(errorMessageFromPayload(payload, fallback), response.status, payload);
   }
   if (!payload) {
-    throw new Error(fallbackError);
+    throw new ApiRequestError(fallbackError ?? 'API response was not valid JSON.', response.status, payload);
   }
 
   return payload;
 }
 
-export const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const error = new Error(`API error: ${res.status} ${res.statusText}`);
-    throw error;
-  }
-  return res.json();
-};
+export const fetcher = <T>(url: string) => requestJson<T>(url);

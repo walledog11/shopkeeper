@@ -4,9 +4,10 @@ import { useCallback, useRef, useState } from "react"
 import Link from "next/link"
 import { Search, Users, X } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/api/fetcher"
+import { errorMessageFromUnknown, fetcher, isApiRequestError } from "@/lib/api/fetcher"
 import { CustomerDrawer } from "./CustomerDrawer"
 import { CustomerDrawerContent } from "./CustomerDrawerContent"
+import { fetchCustomersPage } from "./customer-requests"
 import { CustomerListRow } from "./CustomerListRow"
 import { CustomerListSkeleton } from "./CustomerListSkeleton"
 import { CustomersEmptyState } from "./CustomersEmptyState"
@@ -19,6 +20,7 @@ export default function CustomersPageClient() {
   const [nextPageInfo, setNextPageInfo] = useState<string | null>(null)
   const [shop, setShop] = useState("")
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -31,6 +33,7 @@ export default function CustomersPageClient() {
       setDebouncedQuery(q)
       setPages([])
       setNextPageInfo(null)
+      setLoadMoreError(null)
     }, 150)
   }
 
@@ -75,11 +78,13 @@ export default function CustomersPageClient() {
   const loadMore = useCallback(async () => {
     if (!nextPageInfo || isLoadingMore) return
     setIsLoadingMore(true)
+    setLoadMoreError(null)
     try {
-      const res = await fetch(`/api/shopify/customers?page_info=${encodeURIComponent(nextPageInfo)}`)
-      const d: CustomersResponse = await res.json()
+      const d = await fetchCustomersPage(nextPageInfo)
       setPages(prev => [...prev, d.customers])
       setNextPageInfo(d.nextPageInfo)
+    } catch (error) {
+      setLoadMoreError(errorMessageFromUnknown(error, "Unable to load more customers."))
     } finally {
       setIsLoadingMore(false)
     }
@@ -95,7 +100,7 @@ export default function CustomersPageClient() {
   const allCustomers = pages.flat()
   const isSearchMode = debouncedQuery.length >= 1
 
-  if (error?.message?.includes("404")) {
+  if (isApiRequestError(error, 404)) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
         <div className="size-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
@@ -170,6 +175,9 @@ export default function CustomersPageClient() {
 
             {nextPageInfo && !isSearchMode && (
               <div className="px-5 py-4">
+                {loadMoreError && (
+                  <p className="mb-2 text-center text-xs text-red-400" aria-live="polite">{loadMoreError}</p>
+                )}
                 <button type="button"
                   onClick={loadMore}
                   disabled={isLoadingMore}

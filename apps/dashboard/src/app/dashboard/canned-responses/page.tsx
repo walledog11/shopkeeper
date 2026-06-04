@@ -3,8 +3,14 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { MessageSquare, Plus, Search, X, ArrowUpDown } from "lucide-react"
-import { fetcher } from "@/lib/api/fetcher"
+import { errorMessageFromUnknown, fetcher } from "@/lib/api/fetcher"
 import { ReplyForm } from "./_components/ReplyForm"
+import {
+  createCannedResponse,
+  deleteCannedResponse,
+  duplicateCannedResponse,
+  updateCannedResponse,
+} from "./_components/canned-response-requests"
 import { emptyForm, formFrom, type FormState } from "./_components/reply-form-state"
 import { ReplyCard } from "./_components/ReplyCard"
 import type { CannedResponse } from "@/types"
@@ -40,6 +46,7 @@ function useCannedResponsesPageState() {
   const [editingId, setEditingId]         = useState<string | null>(null)
   const [editForm, setEditForm]           = useState<FormState>(() => emptyForm())
   const [isSavingEdit, setIsSavingEdit]   = useState(false)
+  const [actionError, setActionError]      = useState<string | null>(null)
 
   // Close sort dropdown on outside click
   useEffect(() => {
@@ -73,47 +80,86 @@ function useCannedResponsesPageState() {
   const handleCreate = async () => {
     if (!newForm.title.trim() || !newForm.body.trim()) return
     setIsSavingNew(true)
+    setActionError(null)
     try {
-      const res = await fetch("/api/canned-responses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newForm.title, body: newForm.body, tags: newForm.tags }),
+      const created = await createCannedResponse({
+        title: newForm.title,
+        body: newForm.body,
+        tags: newForm.tags,
       })
-      if (res.ok) { await mutate(); setIsAdding(false); setNewForm(emptyForm()) }
+      await mutate(
+        current => ({ responses: [...(current?.responses ?? []), created] }),
+        false,
+      )
+      setIsAdding(false)
+      setNewForm(emptyForm())
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to create saved reply."))
     } finally { setIsSavingNew(false) }
   }
 
   const handleUpdate = async () => {
     if (!editingId || !editForm.title.trim() || !editForm.body.trim()) return
     setIsSavingEdit(true)
+    setActionError(null)
     try {
-      const res = await fetch(`/api/canned-responses/${editingId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: editForm.title, body: editForm.body, tags: editForm.tags }),
+      const updated = await updateCannedResponse(editingId, {
+        title: editForm.title,
+        body: editForm.body,
+        tags: editForm.tags,
       })
-      if (res.ok) { await mutate(); setEditingId(null) }
+      await mutate(
+        current => ({
+          responses: (current?.responses ?? []).map(response => (
+            response.id === updated.id ? updated : response
+          )),
+        }),
+        false,
+      )
+      setEditingId(null)
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to update saved reply."))
     } finally { setIsSavingEdit(false) }
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/canned-responses/${id}`, { method: "DELETE" })
-    if (editingId === id) setEditingId(null)
-    await mutate()
+    setActionError(null)
+    try {
+      await deleteCannedResponse(id)
+      await mutate(
+        current => ({
+          responses: (current?.responses ?? []).filter(response => response.id !== id),
+        }),
+        false,
+      )
+      if (editingId === id) setEditingId(null)
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to delete saved reply."))
+    }
   }
 
   const handleDuplicate = async (id: string) => {
-    const res = await fetch(`/api/canned-responses/${id}/duplicate`, { method: "POST" })
-    if (res.ok) await mutate()
+    setActionError(null)
+    try {
+      const duplicate = await duplicateCannedResponse(id)
+      await mutate(
+        current => ({ responses: [...(current?.responses ?? []), duplicate] }),
+        false,
+      )
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to duplicate saved reply."))
+    }
   }
 
   const startEdit = (r: CannedResponse) => {
+    setActionError(null)
     setEditingId(r.id)
     setEditForm(formFrom(r))
     setIsAdding(false)
   }
 
   const startNew = () => {
+    setActionError(null)
     setIsAdding(true)
     setNewForm(emptyForm())
     setEditingId(null)
@@ -122,6 +168,7 @@ function useCannedResponsesPageState() {
   const hasFilters = !!(search || activeTag)
 
   return {
+    actionError,
     activeTag,
     allTags,
     editForm,
@@ -157,6 +204,7 @@ function useCannedResponsesPageState() {
 
 export default function CannedResponsesPage() {
   const {
+    actionError,
     activeTag,
     allTags,
     editForm,
@@ -298,6 +346,9 @@ export default function CannedResponsesPage() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <div className="p-5 space-y-3">
+          {actionError && (
+            <p className="text-xs text-red-400" aria-live="polite">{actionError}</p>
+          )}
 
           {isAdding && (
             <ReplyForm

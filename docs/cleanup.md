@@ -48,19 +48,19 @@ The home page currently fetches and polls the full open and closed inbox. Its re
 
 Several dashboard actions ignore non-OK responses, parse error payloads as success data, or update local state after failed writes.
 
-- [ ] Adopt one shared client request/error contract.
+- [x] Adopt one shared client request/error contract.
   - Extend or consistently use `apps/dashboard/src/lib/api/fetcher.ts`.
   - Standardize typed success payloads, API error extraction, and visible action errors.
   - Decide on a shared mutation helper only if it removes repeated loading/error state.
-- [ ] Migrate canned response create, update, duplicate, and delete actions.
-- [ ] Migrate playbook toggle, save, and delete actions.
-- [ ] Migrate team member and invitation deletion actions.
+- [x] Migrate canned response create, update, duplicate, and delete actions.
+- [x] Migrate playbook toggle, save, and delete actions.
+- [x] Migrate team member and invitation deletion actions.
   - Do not remove local state until the server confirms success.
-- [ ] Migrate order and customer pagination.
+- [x] Migrate order and customer pagination.
   - Check response status before appending data.
   - Preserve the current list when loading another page fails.
-- [ ] Migrate the order-page "Start Support Thread" action.
-- [ ] Add focused failure-path tests for each migrated workflow.
+- [x] Migrate the order-page "Start Support Thread" action.
+- [x] Add focused failure-path tests for each migrated workflow.
 
 ## Phase 3: Enforce A Shared Organization Settings Contract
 
@@ -144,9 +144,9 @@ Complete these after the higher-risk behavioral work.
 
 ## Verification Policy
 
-- [ ] Run `npm run lint` after each cleanup batch.
-- [ ] Run targeted tests for every changed module and failure path.
-- [ ] Run `npm run test:unit` and `npm run test:node` after shared contract changes.
-- [ ] Run integration or end-to-end coverage for dashboard workflows, action logs, settings, and integration callbacks before completing their phases.
+- [x] Run `npm run lint` after each cleanup batch.
+- [x] Run targeted tests for every changed module and failure path.
+- [x] Run `npm run test:unit` and `npm run test:node` after shared contract changes.
+- [x] Run integration or end-to-end coverage for dashboard workflows, action logs, settings, and integration callbacks before completing their phases.
 - [ ] Run agent and gateway builds after shared package, settings, or gateway worker changes.
 - [ ] Keep cleanup commits scoped by phase and do not modify unrelated user-owned work.

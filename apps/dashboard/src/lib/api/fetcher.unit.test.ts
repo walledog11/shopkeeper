@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ApiRequestError,
   errorMessageFromPayload,
   errorMessageFromUnknown,
+  fetcher,
+  isApiRequestError,
   readJsonResponse,
   requestJson,
 } from './fetcher';
@@ -34,5 +37,32 @@ describe('client API response helpers', () => {
 
     await expect(requestJson('/api/example', { method: 'POST' }, 'Fallback'))
       .rejects.toThrow('Could not save');
+  });
+
+  it('preserves response status and payload on request errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Not found' }), { status: 404 }),
+    ));
+
+    const error = await requestJson('/api/example').catch(value => value);
+
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(isApiRequestError(error, 404)).toBe(true);
+    expect(error).toMatchObject({ message: 'Not found', payload: { error: 'Not found' }, status: 404 });
+  });
+
+  it('uses the same API error extraction contract for SWR fetches', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { email: ['is invalid'] } }), { status: 422 }),
+    ));
+
+    await expect(fetcher('/api/example')).rejects.toThrow('email: is invalid');
+  });
+
+  it('rejects successful responses that do not contain JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await expect(requestJson('/api/example', {}, 'Invalid response'))
+      .rejects.toThrow('Invalid response');
   });
 });

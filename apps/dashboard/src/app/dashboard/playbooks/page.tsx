@@ -3,13 +3,14 @@
 import { useState } from "react"
 import useSWR from "swr"
 import { Plus } from "lucide-react"
-import { fetcher } from "@/lib/api/fetcher"
+import { errorMessageFromUnknown, fetcher } from "@/lib/api/fetcher"
 import type { Playbook } from "@/types"
 import { EmptyState } from "./_components/EmptyState"
 import { PlaybookCard } from "./_components/PlaybookCard"
 import { PlaybookDrawer } from "./_components/PlaybookDrawer"
 import { TemplatesModal } from "./_components/TemplatesModal"
 import type { PlaybookTemplate } from "./_components/playbook-helpers"
+import { deletePlaybook, togglePlaybook } from "./_components/playbook-requests"
 
 function templateToDraft(template: PlaybookTemplate): Playbook {
   return {
@@ -30,14 +31,17 @@ export default function PlaybooksPage() {
   const [editing, setEditing] = useState<Playbook | null>(null)
   const [templateDraft, setTemplateDraft] = useState<PlaybookTemplate | null>(null)
   const [templatesOpen, setTemplatesOpen] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const openNew = () => {
+    setActionError(null)
     setEditing(null)
     setTemplateDraft(null)
     setDrawerOpen(true)
   }
 
   const openEdit = (playbook: Playbook) => {
+    setActionError(null)
     setEditing(playbook)
     setTemplateDraft(null)
     setDrawerOpen(true)
@@ -56,17 +60,43 @@ export default function PlaybooksPage() {
   }
 
   const handleToggle = async (playbook: Playbook) => {
-    await fetch(`/api/playbooks/${playbook.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled: !playbook.enabled }),
-    })
-    mutate()
+    setActionError(null)
+    try {
+      const updated = await togglePlaybook(playbook.id, !playbook.enabled)
+      await updateCachedPlaybook(updated)
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to update playbook."))
+    }
   }
 
   const handleDelete = async (id: string) => {
-    await fetch(`/api/playbooks/${id}`, { method: "DELETE" })
-    mutate()
+    setActionError(null)
+    try {
+      await deletePlaybook(id)
+      await mutate(
+        current => ({
+          playbooks: (current?.playbooks ?? []).filter(playbook => playbook.id !== id),
+        }),
+        false,
+      )
+    } catch (error) {
+      setActionError(errorMessageFromUnknown(error, "Failed to delete playbook."))
+    }
+  }
+
+  const updateCachedPlaybook = (updated: Playbook) => {
+    return mutate(
+      current => {
+        const currentPlaybooks = current?.playbooks ?? []
+        const exists = currentPlaybooks.some(playbook => playbook.id === updated.id)
+        return {
+          playbooks: exists
+            ? currentPlaybooks.map(playbook => playbook.id === updated.id ? updated : playbook)
+            : [...currentPlaybooks, updated],
+        }
+      },
+      false,
+    )
   }
 
   const active = playbooks.filter(playbook => playbook.enabled)
@@ -95,6 +125,10 @@ export default function PlaybooksPage() {
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <p className="mb-4 text-xs text-red-400" aria-live="polite">{actionError}</p>
+      )}
 
       {isLoading ? (
         <div className="space-y-3">
@@ -157,7 +191,7 @@ export default function PlaybooksPage() {
         <PlaybookDrawer
           initial={editing ?? (templateDraft ? templateToDraft(templateDraft) : null)}
           onClose={closeDrawer}
-          onSave={() => mutate()}
+          onSave={updateCachedPlaybook}
         />
       )}
     </div>

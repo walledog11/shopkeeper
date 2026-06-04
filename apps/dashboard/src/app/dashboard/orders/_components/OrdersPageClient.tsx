@@ -4,15 +4,10 @@ import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
 import { Search, X, ShoppingBag, RefreshCw, Download } from "lucide-react"
 import useSWR from "swr"
-import { fetcher } from "@/lib/api/fetcher"
+import { errorMessageFromUnknown, fetcher, isApiRequestError } from "@/lib/api/fetcher"
 import OrdersTable, { OrdersTableSkeleton } from "./OrdersTable"
 import type { OrderRow } from "./OrdersTable"
-
-interface OrdersResponse {
-  orders: OrderRow[]
-  nextPageInfo: string | null
-  shop: string
-}
+import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
 
 const FILTERS = [
   { id: 'all',         label: 'All' },
@@ -73,6 +68,7 @@ function useOrdersPageState() {
   const [pages, setPages] = useState<OrderRow[][]>([])
   const [nextPageInfo, setNextPageInfo] = useState<string | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
   const [, setTick] = useState(0)
 
@@ -89,6 +85,7 @@ function useOrdersPageState() {
       setDebouncedQuery(q)
       setPages([])
       setNextPageInfo(null)
+      setLoadMoreError(null)
     }, 250)
   }
 
@@ -120,16 +117,19 @@ function useOrdersPageState() {
     setDebouncedQuery('')
     setPages([])
     setNextPageInfo(null)
+    setLoadMoreError(null)
   }
 
   const loadMore = useCallback(async () => {
     if (!nextPageInfo || isLoadingMore) return
     setIsLoadingMore(true)
+    setLoadMoreError(null)
     try {
-      const res = await fetch(`/api/orders?page_info=${encodeURIComponent(nextPageInfo)}`)
-      const d: OrdersResponse = await res.json()
+      const d = await fetchOrdersPage(nextPageInfo)
       setPages(prev => [...prev, d.orders])
       setNextPageInfo(d.nextPageInfo)
+    } catch (error) {
+      setLoadMoreError(errorMessageFromUnknown(error, "Unable to load more orders."))
     } finally {
       setIsLoadingMore(false)
     }
@@ -165,6 +165,7 @@ function useOrdersPageState() {
     isValidating,
     lastSyncedAt,
     loadMore,
+    loadMoreError,
     mutate,
     nextPageInfo,
     pages,
@@ -186,6 +187,7 @@ export default function OrdersPageClient() {
     isValidating,
     lastSyncedAt,
     loadMore,
+    loadMoreError,
     mutate,
     nextPageInfo,
     pages,
@@ -194,7 +196,7 @@ export default function OrdersPageClient() {
 
   // ── No integration ────────────────────────────────────────────────────────
 
-  if (error?.message?.includes('404')) {
+  if (isApiRequestError(error, 404)) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
         <div className="size-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
@@ -306,6 +308,7 @@ export default function OrdersPageClient() {
                   orders={allOrders}
                   hasMore={!!nextPageInfo}
                   isLoadingMore={isLoadingMore}
+                  loadMoreError={loadMoreError}
                   onLoadMore={loadMore}
                 />
             }

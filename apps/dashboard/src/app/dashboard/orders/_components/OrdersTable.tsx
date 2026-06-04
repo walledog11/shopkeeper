@@ -3,6 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Loader2 } from "lucide-react"
+import { errorMessageFromUnknown } from "@/lib/api/fetcher"
+import { startOrderSupportThread } from "./order-requests"
 
 export interface OrderRow {
   id: number
@@ -19,6 +21,7 @@ interface Props {
   orders: OrderRow[]
   hasMore: boolean
   isLoadingMore: boolean
+  loadMoreError: string | null
   onLoadMore: () => void
 }
 
@@ -53,26 +56,23 @@ function formatDate(iso: string) {
 function StartThreadButton({ order }: { order: OrderRow }) {
   const { push } = useRouter()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const startSupportThread = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!order.customer) return
     setLoading(true)
+    setError(null)
     try {
-      const res = await fetch('/api/threads/shopify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shopifyCustomerId: String(order.customer.id),
-          customerEmail: order.customer.email,
-          customerName: order.customer.name,
-          orderName: order.name,
-        }),
+      const threadId = await startOrderSupportThread({
+        shopifyCustomerId: String(order.customer.id),
+        customerEmail: order.customer.email,
+        customerName: order.customer.name,
+        orderName: order.name,
       })
-      const data = await res.json()
-      if (res.ok && data.threadId) {
-        push(`/dashboard/tickets?thread=${data.threadId}`)
-      }
+      push(`/dashboard/tickets?thread=${threadId}`)
+    } catch (requestError) {
+      setError(errorMessageFromUnknown(requestError, "Failed to start support thread."))
     } finally {
       setLoading(false)
     }
@@ -81,15 +81,20 @@ function StartThreadButton({ order }: { order: OrderRow }) {
   if (!order.customer) return null
 
   return (
-    <button type="button"
-      onClick={startSupportThread}
-      disabled={loading}
-      className="inline-flex items-center justify-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/65 hover:bg-white/[0.06] hover:text-white hover:border-white/[0.18] disabled:opacity-40 transition-colors shrink-0"
-      title="New support thread"
-    >
-      {loading && <Loader2 className="size-3 animate-spin" />}
-      New thread
-    </button>
+    <div className="flex flex-col items-end gap-1">
+      <button type="button"
+        onClick={startSupportThread}
+        disabled={loading}
+        className="inline-flex items-center justify-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/65 hover:bg-white/[0.06] hover:text-white hover:border-white/[0.18] disabled:opacity-40 transition-colors shrink-0"
+        title="New support thread"
+      >
+        {loading && <Loader2 className="size-3 animate-spin" />}
+        New thread
+      </button>
+      {error && (
+        <p className="max-w-28 text-right text-xs text-red-400" aria-live="polite">{error}</p>
+      )}
+    </div>
   )
 }
 
@@ -118,7 +123,7 @@ export function OrdersTableSkeleton() {
 
 // ── Main table ────────────────────────────────────────────────────────────────
 
-export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore }: Props) {
+export default function OrdersTable({ orders, hasMore, isLoadingMore, loadMoreError, onLoadMore }: Props) {
   if (orders.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -218,6 +223,9 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, onLoadMore
 
       {hasMore && (
         <div className="px-5 py-4 border-t border-white/[0.05]">
+          {loadMoreError && (
+            <p className="mb-2 text-center text-xs text-red-400" aria-live="polite">{loadMoreError}</p>
+          )}
           <button type="button"
             onClick={onLoadMore}
             disabled={isLoadingMore}

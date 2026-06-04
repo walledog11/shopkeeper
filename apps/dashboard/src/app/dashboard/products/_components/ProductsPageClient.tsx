@@ -10,6 +10,7 @@ import {
   errorMessageFromPayload,
   errorMessageFromUnknown,
   fetcher,
+  isApiRequestError,
   readJsonResponse,
 } from "@/lib/api/fetcher"
 import { ProductDrawer } from "./ProductDrawer"
@@ -209,7 +210,7 @@ export default function ProductsPageClient() {
 
   // ── No integration ────────────────────────────────────────────────────────
 
-  if (error?.message?.includes('404')) {
+  if (isApiRequestError(error, 404)) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
         <div className="size-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
