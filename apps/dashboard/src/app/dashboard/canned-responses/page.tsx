@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo } from "react"
 import useSWR from "swr"
 import { MessageSquare, Plus, Search, X, ArrowUpDown } from "lucide-react"
 import { errorMessageFromUnknown, fetcher } from "@/lib/api/fetcher"
@@ -13,6 +13,7 @@ import {
 } from "./_components/canned-response-requests"
 import { emptyForm, formFrom, type FormState } from "./_components/reply-form-state"
 import { ReplyCard } from "./_components/ReplyCard"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { CannedResponse } from "@/types"
 
 // ── Types & constants ──────────────────────────────────────────────────────────
@@ -36,8 +37,6 @@ function useCannedResponsesPageState() {
   const [search, setSearch]       = useState("")
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [sort, setSort]           = useState<SortId>("most_used")
-  const [sortOpen, setSortOpen]   = useState(false)
-  const sortRef = useRef<HTMLDivElement>(null)
 
   const [isAdding, setIsAdding]       = useState(false)
   const [newForm, setNewForm]         = useState<FormState>(() => emptyForm())
@@ -47,16 +46,6 @@ function useCannedResponsesPageState() {
   const [editForm, setEditForm]           = useState<FormState>(() => emptyForm())
   const [isSavingEdit, setIsSavingEdit]   = useState(false)
   const [actionError, setActionError]      = useState<string | null>(null)
-
-  // Close sort dropdown on outside click
-  useEffect(() => {
-    if (!sortOpen) return
-    const h = (e: MouseEvent) => {
-      if (sortRef.current && !sortRef.current.contains(e.target as Node)) setSortOpen(false)
-    }
-    document.addEventListener("mousedown", h)
-    return () => document.removeEventListener("mousedown", h)
-  }, [sortOpen])
 
   const allTags = useMemo(() => {
     const set = new Set<string>()
@@ -193,10 +182,7 @@ function useCannedResponsesPageState() {
     setNewForm,
     setSearch,
     setSort,
-    setSortOpen,
     sort,
-    sortOpen,
-    sortRef,
     startEdit,
     startNew,
   }
@@ -229,10 +215,7 @@ export default function CannedResponsesPage() {
     setNewForm,
     setSearch,
     setSort,
-    setSortOpen,
     sort,
-    sortOpen,
-    sortRef,
     startEdit,
     startNew,
   } = useCannedResponsesPageState()
@@ -285,32 +268,31 @@ export default function CannedResponsesPage() {
             )}
           </div>
 
-          <div className="relative" ref={sortRef}>
-            <button type="button"
-              onClick={() => setSortOpen(o => !o)}
-              className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs text-white/40 hover:text-white/70 font-medium transition-colors"
-            >
-              <ArrowUpDown className="size-3" />
-              {SORT_OPTIONS.find(s => s.id === sort)?.label}
-            </button>
-            {sortOpen && (
-              <div className="absolute top-full right-0 mt-1 w-36 rounded-md border border-white/[0.12] bg-popover shadow-lg z-10 overflow-hidden">
-                {SORT_OPTIONS.map(opt => (
-                  <button type="button"
-                    key={opt.id}
-                    onClick={() => { setSort(opt.id); setSortOpen(false) }}
-                    className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
-                      sort === opt.id
-                        ? "text-white bg-white/[0.08]"
-                        : "text-white/50 hover:bg-white/[0.05] hover:text-white/70"
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button type="button"
+                className="flex items-center gap-1.5 h-8 px-2.5 rounded-md border border-border text-xs text-white/40 hover:text-white/70 font-medium transition-colors"
+              >
+                <ArrowUpDown className="size-3" />
+                {SORT_OPTIONS.find(s => s.id === sort)?.label}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-36 p-1">
+              {SORT_OPTIONS.map(opt => (
+                <button type="button"
+                  key={opt.id}
+                  onClick={() => setSort(opt.id)}
+                  className={`w-full text-left px-3 py-2 text-xs font-medium transition-colors ${
+                    sort === opt.id
+                      ? "text-white bg-white/[0.08]"
+                      : "text-white/50 hover:bg-white/[0.05] hover:text-white/70"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* Tag filters */}

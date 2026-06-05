@@ -92,7 +92,6 @@ export function CustomerDrawerContent({
       province: addr?.province ?? "",
       zip: addr?.zip ?? "",
       country: addr?.country_name ?? "",
-      note: "",
     }
   }
 
@@ -112,7 +111,6 @@ export function CustomerDrawerContent({
             last_name: draft.last_name,
             email: draft.email,
             phone: draft.phone || null,
-            note: draft.note || null,
             address: {
               address1: draft.address1 || null,
               city: draft.city || null,

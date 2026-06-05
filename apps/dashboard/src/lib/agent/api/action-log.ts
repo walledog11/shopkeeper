@@ -5,16 +5,6 @@ import { TOOL_LABELS } from "@/lib/agent/tools";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry, AgentTurn } from "@/types";
 
-// Legacy note helpers , agent turns also write a slim summary note for inline
-// thread rendering. These exports stay so callers that filter/exclude those
-// notes (threads UI, page-level message counters, GDPR export) keep working.
-export { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
-export {
-  agentTurnMessageFilter,
-  excludeAgentTurnMessages,
-  extractAgentTurnsFromMessages,
-} from "@/lib/agent/api/turns";
-
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_EXPORT_BATCH_SIZE = 250;
 
@@ -279,18 +269,6 @@ export async function* iterateAgentActionLogEntries(params: {
   }
 }
 
-export async function listAllAgentActionLogEntries(params: {
-  orgId: string;
-  filters?: ActionLogFilters;
-  batchSize?: number;
-}): Promise<ActionLogEntry[]> {
-  const out: ActionLogEntry[] = [];
-  for await (const entry of iterateAgentActionLogEntries(params)) {
-    out.push(entry);
-  }
-  return out;
-}
-
 function escapeCsvCell(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
@@ -332,11 +310,6 @@ export function actionLogEntryToCsvRow(entry: ActionLogEntry): string {
     actions,
     actionResults,
   ].map((cell) => escapeCsvCell(normalizeCsvText(cell))).join(",");
-}
-
-export function serializeAgentActionLogCsv(entries: ActionLogEntry[]): string {
-  const rows = entries.map(actionLogEntryToCsvRow);
-  return [ACTION_LOG_CSV_HEADERS.join(","), ...rows].join("\n");
 }
 
 export function streamAgentActionLogCsv(params: {

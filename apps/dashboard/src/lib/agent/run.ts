@@ -262,16 +262,11 @@ export async function runAgent(
       return Promise.all(toolCalls.map(executeToolCall));
     }
 
-    const executeSequentially = async (
-      index: number,
-      results: Awaited<ReturnType<typeof executeToolCall>>[],
-    ): Promise<Awaited<ReturnType<typeof executeToolCall>>[]> => {
-      if (index >= toolCalls.length) return results;
-      results.push(await executeToolCall(toolCalls[index]));
-      return executeSequentially(index + 1, results);
-    };
-
-    return executeSequentially(0, []);
+    const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
+    for (const toolCall of toolCalls) {
+      results.push(await executeToolCall(toolCall));
+    }
+    return results;
   };
 
   if (!readOnly && !approvedToolCalls?.length && isSupportContext(ctx)) {

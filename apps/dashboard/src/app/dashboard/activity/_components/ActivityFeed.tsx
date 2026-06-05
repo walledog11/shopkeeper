@@ -85,7 +85,7 @@ function totalDurationMs(entry: ActionLogEntry): number {
 }
 
 function approverLabel(entry: ActionLogEntry): string {
-  if (!entry.approver) return ","
+  if (!entry.approver) return "—"
   return entry.approver.displayName ?? entry.approver.id
 }
 

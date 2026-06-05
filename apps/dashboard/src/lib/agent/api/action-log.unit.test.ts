@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   ACTION_LOG_CSV_HEADERS,
   actionLogEntryToCsvRow,
-  agentTurnMessageFilter,
   decodeAgentActionCursor,
   encodeAgentActionCursor,
+} from "@/lib/agent/api/action-log";
+import {
+  agentTurnMessageFilter,
   excludeAgentTurnMessages,
   extractAgentTurnsFromMessages,
-  isAgentTurnContent,
-  serializeAgentActionLogCsv,
-} from "@/lib/agent/api/action-log";
-import { serializeAgentTurn } from "@/lib/agent/api/turns";
+  serializeAgentTurn,
+} from "@/lib/agent/api/turns";
+import { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
 import type { ActionLogEntry } from "@/types";
 
 describe("agent action-log note helpers", () => {
@@ -97,14 +98,6 @@ describe("agent action-log CSV", () => {
     mode: "auto_executed",
     approver: null,
   };
-
-  it("renders headers + ordered cells in serializeAgentActionLogCsv", () => {
-    const csv = serializeAgentActionLogCsv([entry]);
-    expect(csv).toContain(ACTION_LOG_CSV_HEADERS.join(","));
-    expect(csv).toContain('"Taylor","email","Returns","thread_1","auto_executed","Refund the order"');
-    expect(csv).toContain('"Issued refund | Updated thread status"');
-    expect(csv).toContain('"Issued refund: Refunded $25.00. || Updated thread status: Status set to closed."');
-  });
 
   it("actionLogEntryToCsvRow escapes quotes inside cells", () => {
     const tricky: ActionLogEntry = {

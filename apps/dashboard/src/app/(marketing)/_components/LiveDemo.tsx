@@ -273,17 +273,13 @@ function ProposedPlan({ conv }: { conv: Conv }) {
   );
 }
 
-function useTypewriter(text: string) {
-  return text;
-}
-
 function DemoCard() {
   const [tickets, setTickets] = useState<Ticket[]>(INIT_TICKETS);
   const [activeId, setActiveId] = useState("t1");
   const [convs, setConvs] = useState<Record<string, Conv>>(CONVS);
   const conv = convs[activeId];
   const active = tickets.find(t => t.id === activeId) ?? tickets[0];
-  const draftText = useTypewriter(conv.draft);
+  const draftText = conv.draft;
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -437,7 +433,7 @@ function DemoCard() {
 
 function MobileDemoCard() {
   const conv = CONVS["t1"];
-  const draftText = useTypewriter(conv.draft);
+  const draftText = conv.draft;
   return (
     <div className="bg-stone-900 text-stone-100" style={{ margin: "10px", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 50px -10px rgba(0,0,0,0.3)" }}>
       <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)", fontSize: 12 }}>

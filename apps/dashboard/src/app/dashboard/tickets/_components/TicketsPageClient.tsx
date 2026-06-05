@@ -40,7 +40,7 @@ export default function TicketsPageClient(props: Props) {
 
 function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props) {
   const searchParams = useSearchParams()
-  const queryThreadId = new URLSearchParams(searchParams.toString()).get('thread')
+  const queryThreadId = searchParams.get('thread')
 
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')

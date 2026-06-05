@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@clerk/db'
 import { BadRequestError, NotFoundError } from '@/lib/api/errors'
 import { withOrgRoute } from '@/lib/api/route'
-import { agentTurnMessageFilter } from '@/lib/agent/api/action-log'
+import { agentTurnMessageFilter } from '@/lib/agent/api/turns'
 
 export const dynamic = 'force-dynamic'
 

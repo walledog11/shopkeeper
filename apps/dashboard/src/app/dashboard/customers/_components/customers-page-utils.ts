@@ -50,7 +50,6 @@ export interface EditState {
   province: string
   zip: string
   country: string
-  note: string
 }
 
 export function fullName(c: CustomerRow) {
