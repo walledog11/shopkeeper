@@ -23,15 +23,31 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **0** | Decide how the worker runs an agent (A vs B) | ✅ decided → **B** (extract core, run in-process) | — |
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@clerk/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
-| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | ⬜ not started — **now unblocked** | start here |
-| **4** | Repoint support to in-process worker | ⬜ not started | blocked on Tracks 2, 3 |
+| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 code-complete + eval-confirmed (2026-06-05) | manual live e2e; Telegram notify; eval fixtures |
+| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-05) — 4.0 LockProvider seam ✅; auto-plan first | 4.1 move orchestration into `@clerk/agent` |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
-wired, eval gate green at **94.6%**, baseline regenerated to **156/168**. The whole extraction (incl. the strict
-removal + new baseline) is still **uncommitted WIP** (~187 files, partly staged) and needs committing.
-**Resuming work = start Track 3 (order-ops module #2), now unblocked.** History of the gate saga is in the
+wired, eval gate green at **94.6%**, baseline regenerated to **156/168**. History of the gate saga is in the
 **2026-06-05 update** directly below.
+
+**Track 3 is code-complete + eval-confirmed (2026-06-05).** The order-ops module was rebuilt on the real Track 1/2
+seams and now runs **in-process in the gateway worker**: the module moved into `@clerk/agent` (new
+`@clerk/agent/order-ops` subpath — `buildOrderOpsContext(orderId, orgId, escalate)` takes the injected Seam-2 sink;
+`runOrderOps` gained a deterministic **pre-filter** that skips the model when there are no risk signals, and routes
+`flag_order` through `ctx.escalate`); the gateway gained `QUEUE.ORDER_REVIEW`/`JOB.ORDER_REVIEW`, an
+`orders/created`-webhook enqueue with a stable per-order jobId, and a new in-process `workers/order-review.ts`
+(registered in `workers/core.ts`); the hourly sweep (`order-risk-monitor.ts`) was **demoted to a backstop** that
+enqueues into the same queue instead of HTTP-hopping the dashboard; the dashboard `order-risk-internal` route +
+`parseAgentOrderRiskInternalBody` parser were **deleted** (no more gateway→dashboard hop). v1 output is
+**persist-finding-only** (the escalate sink is a quiet recorder; the finding is the `AgentAction` row already shown in
+`/dashboard/review`) — **Telegram notify is deferred** as a later sink swap (no core change). The support eval safety
+net confirms no regression: `EVAL_REPEATS=1` ran **53/56 ≈ 94.6% ≥ 93.5%**; the 3 per-fixture failures
+(`escalate-out-of-scope`, `address-change-post-fulfillment-escalate`, `order-status-basic`) are the known flappy/under-
+escalation set and **all pass at `repeats=3`** (targeted rerun, exit 0) — Track 3 touched zero support-core files.
+**Remaining before Track 3 is fully closed:** the manual `ORDER_RISK_MONITOR_ENABLED=1` live-gateway/Shopify e2e
+(unrun locally — needs the live env), the Telegram-notify sink swap, and the deferred order-ops eval fixtures (Step 5).
+**Resuming work = start Track 4 (repoint support to the in-process worker), now unblocked.**
 
 **Update (2026-06-05, later) — gate PASSED, Track 2 complete.** With credits added, the confirming `EVAL_REPEATS=1`
 run came back **53/56 (94.6%) ≥ 93.5%** — the aggregate gate did not throw. The executor-mock fix is confirmed
@@ -349,28 +365,34 @@ owning a thin pino; (2) the eval suite (`__evals__`) — stay in `apps/dashboard
 
 ---
 
-## Track 3 — Order operations (module #2), Shape B *(M · ⬜ · depends on Track 2)*
+## Track 3 — Order operations (module #2), Shape B *(M · 🔶 code-complete + eval-confirmed 2026-06-05 · depends on Track 2)*
 
 Event-driven, thread-less, flag/notify-only. Runs **in-process in the gateway worker**, not via the
 prior spike's HTTP hop. Rebuild the spike (`order-ops/*`, `order-risk-monitor.ts`) on the real Track 1
 seams; delete the forked dispatch.
 
-- [ ] **Trigger: event-driven per order.** Enqueue one review job on the Shopify `orders/create` webhook
-  (already ingested by `webhooks-shopify.ts`). Idempotent on order id (review each order once). Keep a
-  low-frequency scheduled sweep only as a backstop for missed webhooks — not the primary path.
-- [ ] **Run `runOrderOps`** on the extracted core via the injected finding sink (Seam 2). Cheap
-  deterministic pre-filter on risk signals (billing/shipping mismatch, high-value new customer,
-  payment-not-captured); the model only runs on flagged candidates.
-- [ ] **Output: flag/notify only.** A finding → an `AgentAction` row (`threadId`/`customerId` null, already
-  supported) + a merchant notification (Telegram / a dashboard review surface). **No Shopify mutations.**
-  No customer contact in v1.
-- [ ] **Autonomy: live behind `ORDER_RISK_MONITOR_ENABLED` with monitoring, no shadow.** Blast radius is a
-  dismissed flag → the "ship behind a flag" bucket (Decision #6).
-- [ ] **Evals: a handful of order-ops fixtures, written when the behavior is worth gating** — not a
-  generalized fixture-schema rework. Let the schema's shape emerge from 2–3 concrete fixtures.
+- [x] **Trigger: event-driven per order.** ✅ `orders/created` webhook (`webhooks-shopify.ts`) enqueues one
+  review job into `QUEUE.ORDER_REVIEW` with a stable per-order jobId (`order-review:${shop}:${orderId}`),
+  flag-gated by `ORDER_RISK_MONITOR_ENABLED`. The hourly sweep (`order-risk-monitor.ts`) is demoted to a
+  backstop that enqueues into the same queue (no more dashboard HTTP hop).
+- [x] **Run `runOrderOps`** on the extracted core via the injected sink (Seam 2). ✅ Module moved into
+  `@clerk/agent` (`@clerk/agent/order-ops`); the new in-process `workers/order-review.ts` builds the context
+  with an injected `escalate` and runs the loop. `runOrderOps` has a deterministic pre-filter (skips the
+  model when `riskSignals` is empty); `flag_order` routes through `ctx.escalate`.
+- [x] **Output: flag/notify only.** ✅ A finding → an `AgentAction` row (`threadId`/`customerId` null). v1 is
+  **persist-only** — the escalate sink is a quiet recorder; the row already renders in `/dashboard/review`.
+  **Telegram notify deferred** (later sink swap, no core change). No Shopify mutations, no customer contact.
+- [x] **Autonomy: live behind `ORDER_RISK_MONITOR_ENABLED` with monitoring, no shadow.** ✅ Both the webhook
+  enqueue and the worker processor gate on the flag.
+- [ ] **Evals: a handful of order-ops fixtures, written when the behavior is worth gating** — deferred (Step 5).
+  Support suite re-confirmed green (53/56 ≈ 94.6%; the 3 repeats=1 failures are the known flappy set, all pass
+  at repeats=3). No order-ops fixtures yet.
+- [ ] **Manual live e2e** (`ORDER_RISK_MONITOR_ENABLED=1`, real gateway + Shopify): benign→no-model,
+  risky→finding, idempotency, backstop. **Not yet run** — needs the live env.
 
 **Exit:** order-ops reviews real `orders/create` events in-process in the worker, persists findings,
-notifies the merchant; the support suite is untouched.
+notifies the merchant; the support suite is untouched. *(Met in code + eval; the live-e2e leg and Telegram
+notify remain.)*
 
 **When order-ops later gains its first *mutating* action** (auto-cancel suspected fraud, auto-correct an
 address): *that action* — not the whole module — inherits the redefined per-module shadow→live ramp
@@ -378,23 +400,75 @@ address): *that action* — not the whole module — inherits the redefined per-
 
 ---
 
-## Track 4 — Repoint support to the in-process worker *(M · ⬜ · last, incremental)*
+## Track 4 — Repoint support to the in-process worker *(M · 🔶 in progress · last, incremental)*
 
 Once the core is a package and the worker runs order-ops in-process, migrate support's
 **gateway-triggered** paths off the HTTP hop — one trigger at a time, never big-bang.
 
-- [ ] **Support auto-plan:** the worker calls the core in-process instead of `POST /api/agent/plan-internal`.
-- [ ] **Telegram operator runs:** call the core in-process instead of `POST /api/agent/internal`.
-- [ ] **Leave dashboard UI-initiated paths** (composer-ask, concierge, UI approve/quick-approve) calling the
-  core in Next, or have them call the gateway — a minor, later choice. No urgency; minority of traffic, and
-  they already work.
-- [ ] Retire the internal HTTP routes only after their callers are migrated.
+**The finding (2026-06-05).** The two gateway-triggered routes (`/api/agent/plan-internal` for auto-plan,
+`/api/agent/internal` for Telegram operator runs) don't sit on thin route glue — they sit on a stack of
+`lib/agent/api/*` **orchestration** (`executeAgentTurn`, plan-cache read/write, auto-execute, audit-note
+serialization, thread resolution) that Track 2 deliberately left in the dashboard. That orchestration is
+genuinely shared, not Next-specific, but it drags three host-coupled things into the package boundary:
+**Upstash Redis** (thread lock `agent-lock.ts` + failure counter), **Clerk** (approver resolution), and the
+**billing gate**. Auto-execute is live on the auto-plan path (`ai-summary.ts:44` passes
+`allowAutoExecute: withinBusinessHours`), so repointing auto-plan needs the full plan→run path, not just
+`planAgent`.
+
+**Decision (2026-06-05): promote the shared orchestration into `@clerk/agent` with injected infra seams**
+(not re-implement it gateway-side). Both the dashboard route and the worker call the *same*
+`executeAgentTurn`; the host-coupled bits become injected seams (the Tracks 1–2 pattern). This keeps the
+byte-for-byte support invariant (one source of truth, no drift) and honors the "repoint the trigger, don't
+rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator runs.
+
+### Seam inventory (move / inject / leave)
+
+| `lib/agent/api` dep | Nature | Resolution |
+|---|---|---|
+| `buildContext` / `runAgent` / `planAgent` | ✅ already `@clerk/agent` | call directly (order-review already does) |
+| `acquireThreadLock` (`agent-lock.ts`) | Upstash `.set({nx,ex})` / `.eval` | **inject `LockProvider`** — gateway is ioredis (`REDIS_URL`), different API; logic moves, client injected |
+| `serializeAgentTurn` (`turns.ts`), plan-cache (`plan-cache.ts`) | pure | **move** to package |
+| auto-execute (`plan-execution.ts`) | drags shadow recorder + approver | **move** core; **inject `ShadowRecorder`** (frozen/dashboard-rollout-only per trim list → no-op in worker) |
+| `resolveInternalAgentThread` (`internal.ts`), `requireOrgThread` (`auth.ts`) | DB (+ `@clerk/agent/shopify`) | **move** to package |
+| route failure counter (Upstash) | host I/O | collapse into the existing injected `recordToolFailure` seam (Track 2); host builds the closure |
+| billing gate, Clerk approver | host I/O | **leave** host-side; pass resolved values in (operator path only) |
+| `rateLimit` (Upstash), `parse*Body` | Next route I/O | **leave** — the HTTP route keeps them; the in-process path skips them (BullMQ jobId-dedup + concurrency already serialize) |
+
+### Phasing
+
+- [x] **4.0 — `LockProvider` seam ✅ (2026-06-05).** New `@clerk/agent/lock` subpath exports the
+  `LockProvider`/`ThreadLock` interface (`acquire(threadId, ttlSeconds?) → {release} | null`).
+  `executeAgentTurn` gained an optional `lock?: LockProvider` param defaulting to the dashboard's Upstash
+  provider — **zero churn at the 5 callers** now; the optional→required flip lands in 4.1 when the function
+  moves and the host wrapper supplies the lock. Dashboard `agent-lock.ts` exposes `upstashLockProvider`
+  (wraps existing `acquireThreadLock`, behavior unchanged); gateway `clients/agent-lock.ts` adds
+  `createGatewayLockProvider(redis)` — ioredis (`set k v EX ttl NX` + numkeys-form `eval` release), same
+  fail-open posture, **wired in 4.2**. Verified: package + gateway build clean, dashboard 0 production type
+  errors, `agent-lock` test 7/7, lint clean.
+- [ ] **4.1 — Move orchestration into `@clerk/agent`.** `git mv` `execution.ts`, `plan-cache.ts`, `turns.ts`,
+  the auto-execute core of `plan-execution.ts`, `internal.ts`, `auth.ts` → `packages/agent/src`; rewrite `@/`
+  imports; inject `LockProvider` + `ShadowRecorder`. Dashboard routes become thin host wrappers (inject
+  Upstash lock + real shadow + Clerk approver); re-export shims keep existing dashboard call sites unchanged.
+  **Gate: eval suite green** (byte-for-byte invariant — same safety net as Tracks 1/2).
+- [ ] **4.2 — Worker auto-plan in-process.** Replace `planning-dashboard-client.ts`'s `requestThreadPlan`
+  fetch with an in-process `generateThreadPlan(orgId, threadId, { allowAutoExecute })` that calls the moved
+  orchestration with the gateway's ioredis lock + no-op shadow. `precomputeThreadPlan`'s outer shape +
+  `PrecomputedPlanResult` return are unchanged. (`requestAutoAck → /api/messages/auto-ack` is message
+  dispatch, not core — **stays a hop**.)
+- [ ] **4.3 — Operator runs in-process.** Point `executeFreeFormInstruction` + `handlePendingPlanCommand`
+  (Telegram) at an in-process `executeAgentTurn` + `resolveInternalAgentThread`. Billing gate + Clerk approver
+  resolve gateway-side (move billing check to `@clerk/db` or a gateway copy; approver passed pre-resolved).
+- [ ] **4.4 — Leave dashboard UI-initiated paths** (composer-ask, concierge, UI approve/quick-approve) calling
+  the core in Next — minor, later choice. No urgency; minority of traffic, already work.
+- [ ] **4.5 — Retire the internal HTTP routes** only after their callers are migrated. (Note: `plan-internal`
+  also has a non-worker caller — `scripts/backfill-plans.ts`; keep the route or repoint the script.)
 
 **Exit:** the majority of agent runs (channel-triggered) execute in the durable worker with no network hop;
 the dashboard keeps working throughout.
 
 **Anti-overbuild guard:** this is "repoint the trigger," not "rewrite the runtime." If a step looks like a
-rewrite, the Track 2 package boundary is wrong — fix that, don't power through.
+rewrite, the Track 2 package boundary is wrong — fix that, don't power through. (This is exactly why 4.1
+*moves* the orchestration rather than re-implementing it in the worker.)
 
 ---
 

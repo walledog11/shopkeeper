@@ -93,6 +93,10 @@
     "./order-ops": {
       "types": "./dist/order-ops/index.d.ts",
       "default": "./dist/order-ops/index.js"
+    },
+    "./lock": {
+      "types": "./dist/lock.d.ts",
+      "default": "./dist/lock.js"
     }
   },
   "scripts": {

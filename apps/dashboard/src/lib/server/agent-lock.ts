@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { LockProvider, ThreadLock } from '@clerk/agent/lock';
 import { getRedis } from './redis';
 import logger from './logger';
 
@@ -14,10 +15,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof TIM
     timer = setTimeout(() => resolve(TIMED_OUT), ms);
   });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-export interface ThreadLock {
-  release(): Promise<void>;
 }
 
 // Fails open: if Redis is unreachable or test env points at a fake host, return a no-op lock so
@@ -59,3 +56,9 @@ export async function acquireThreadLock(threadId: string, ttlSeconds = 90): Prom
     },
   };
 }
+
+// LockProvider seam (Track 4.0): the dashboard's Upstash-backed implementation,
+// injected into executeAgentTurn so the package core stays Redis-agnostic.
+export const upstashLockProvider: LockProvider = {
+  acquire: (threadId, ttlSeconds) => acquireThreadLock(threadId, ttlSeconds),
+};

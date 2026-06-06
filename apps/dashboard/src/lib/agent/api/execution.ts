@@ -5,7 +5,8 @@ import { resolveAgentSettings } from "@clerk/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
 import type { AgentActionApproval } from "@clerk/agent/agent-actions";
 import { getRedis } from "@/lib/server/redis";
-import { acquireThreadLock } from "@/lib/server/agent-lock";
+import { upstashLockProvider } from "@/lib/server/agent-lock";
+import type { LockProvider } from "@clerk/agent/lock";
 import { ConflictError } from "@/lib/api/errors";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
@@ -16,6 +17,7 @@ interface ExecuteAgentTurnParams {
   threadId: string;
   instruction: string;
   failureRoute?: AgentFailureAlertRoute;
+  lock?: LockProvider;
   orgSettings?: Partial<OrgSettings> | null;
   approvedToolCalls?: RawToolCall[];
   persistUserMessage?: boolean;
@@ -31,7 +33,7 @@ interface ExecuteAgentTurnParams {
 }
 
 export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
-  const lock = await acquireThreadLock(params.threadId);
+  const lock = await (params.lock ?? upstashLockProvider).acquire(params.threadId);
   if (!lock) {
     throw new ConflictError("Agent is already running on this thread. Try again in a few seconds.");
   }
