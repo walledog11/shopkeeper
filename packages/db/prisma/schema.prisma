@@ -82,6 +82,7 @@ model Organization {
   agentActions     AgentAction[]
   voiceEdits       VoiceEdit[]
   llmDailySpend    LlmDailySpend[]
+  refundDailySpend RefundDailySpend[]
   shadowDecisions  AutonomyShadowDecision[]
 
   @@index([clerkOrgId])
@@ -104,6 +105,23 @@ model LlmDailySpend {
 
   @@unique([organizationId, day, model])
   @@map("llm_daily_spend")
+}
+
+// Per-org daily refund-cap backstop. One row per (org, UTC day) holding the
+// running refund total in integer cents. Dashboard and gateway both upsert here
+// so the daily refund cap is enforced per-org across both apps (the same reason
+// llm_daily_spend lives in Postgres rather than per-instance Redis).
+model RefundDailySpend {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  day            String   @map("day") @db.VarChar(10)
+  spentCents     Int      @default(0) @map("spent_cents")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, day])
+  @@map("refund_daily_spend")
 }
 
 // Corpus for the brand-voice learning loop: each row is one case where the

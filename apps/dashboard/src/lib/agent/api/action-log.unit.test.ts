@@ -11,7 +11,7 @@ import {
   extractAgentTurnsFromMessages,
   serializeAgentTurn,
 } from "@/lib/agent/api/turns";
-import { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
+import { isAgentTurnContent } from "@clerk/agent/tools";
 import type { ActionLogEntry } from "@/types";
 
 describe("agent action-log note helpers", () => {
@@ -107,6 +107,20 @@ describe("agent action-log CSV", () => {
     };
     const row = actionLogEntryToCsvRow(tricky);
     expect(row).toContain('"He said ""hello"""');
+  });
+
+  it("actionLogEntryToCsvRow leaves thread metadata blank for workspace actions", () => {
+    const row = actionLogEntryToCsvRow({
+      ...entry,
+      threadId: null,
+      channelType: null,
+      threadTag: null,
+      customerHandle: null,
+      instruction: "order-risk-review:998877",
+      summary: "Flagged order.",
+    });
+
+    expect(row).toBe('"2026-04-21T12:00:00.000Z","","","","","auto_executed","order-risk-review:998877","Flagged order.","Issued refund | Updated thread status","Issued refund: Refunded $25.00. || Updated thread status: Status set to closed."');
   });
 });
 

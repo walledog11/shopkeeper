@@ -67,6 +67,26 @@ describe('boundMemory', () => {
     expect(result.recentInteractions[0].outcome).toHaveLength(OUTCOME_MAX_CHARS);
   });
 
+  it('trims rendered interaction metadata to a bounded size', () => {
+    const long = 'm'.repeat(OUTCOME_MAX_CHARS + 50);
+    const result = boundMemory(
+      memory({
+        recentInteractions: [{
+          ...interaction(0),
+          threadId: long,
+          channel: long,
+          tag: long,
+          closedAt: long,
+        }],
+      }),
+    );
+
+    expect(result.recentInteractions[0].threadId).toHaveLength(OUTCOME_MAX_CHARS);
+    expect(result.recentInteractions[0].channel).toHaveLength(OUTCOME_MAX_CHARS);
+    expect(result.recentInteractions[0].tag).toHaveLength(OUTCOME_MAX_CHARS);
+    expect(result.recentInteractions[0].closedAt).toHaveLength(OUTCOME_MAX_CHARS);
+  });
+
   it('keeps only known policyFlags fields with valid types', () => {
     const result = boundMemory(
       memory({

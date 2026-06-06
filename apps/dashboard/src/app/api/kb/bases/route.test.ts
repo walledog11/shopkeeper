@@ -36,6 +36,13 @@ describe('/api/kb/bases write routes', () => {
     await expect(db.knowledgeBase.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
   });
 
+  it('rejects malformed knowledge-base create JSON without persisting', async () => {
+    const res = await createBase(rawRequest('http://localhost/api/kb/bases', '{'));
+
+    expect(res.status).toBe(400);
+    await expect(db.knowledgeBase.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
+  });
+
   it('creates trimmed user knowledge bases scoped to the active org', async () => {
     const res = await createBase(jsonRequest('http://localhost/api/kb/bases', { name: '  Returns ' }));
     const body = await res.json() as { knowledgeBase: { id: string; name: string; source: string } };
@@ -150,6 +157,14 @@ function jsonRequest(url: string, body: unknown, method = 'POST') {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  });
+}
+
+function rawRequest(url: string, body: string, method = 'POST') {
+  return new Request(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body,
   });
 }
 

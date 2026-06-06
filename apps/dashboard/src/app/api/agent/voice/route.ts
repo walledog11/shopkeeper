@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, parseVoiceProposal } from '@clerk/db';
 import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
+import { readRequiredJsonObject } from '@/lib/api/body';
+import { parseAgentVoiceBody } from '@/lib/agent/api/validation';
 import { withOrgRoute } from '@/lib/api/route';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 
@@ -14,7 +16,7 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: 'Voice proposal POST', errorMessage: 'Failed to update voice proposal' },
   async ({ org, request }) => {
-    const { action } = (await request.json()) as { action?: string };
+    const { action } = parseAgentVoiceBody(await readRequiredJsonObject(request));
 
     if (action !== 'approve' && action !== 'dismiss') {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

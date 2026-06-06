@@ -12,6 +12,7 @@
  * Response: { summary, actionsPerformed, threadId }
  */
 import { NextResponse } from "next/server";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withInternalRoute } from "@/lib/api/internal-route";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { resolveInternalAgentThread } from "@/lib/agent/api/internal";
@@ -20,9 +21,9 @@ import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
 import { resolveClerkUserApprover } from "@/lib/agent/api/approver";
-import { isOperatorChannel } from "@/lib/messaging/thread-constants";
+import { isOperatorChannel } from "@clerk/agent/thread-constants";
 import { formatApproverId } from "@/lib/agent/api/plan-execution";
-import { hashInstruction } from "@/lib/agent/api/agent-actions";
+import { hashInstruction } from "@clerk/agent/agent-actions";
 import logger from "@/lib/server/logger";
 
 interface AgentInternalRouteState {
@@ -51,7 +52,7 @@ export const POST = withInternalRoute<AgentInternalRouteState>(
   },
   async ({ request, state }) => {
     const { orgId: parsedOrgId, instruction, orderNumber, senderPhone, clerkUserId, threadId, approvedToolCalls } =
-      parseAgentInternalBody(await request.json());
+      parseAgentInternalBody(await readRequiredJsonObject(request));
     state.orgId = parsedOrgId;
     await assertBillingWriteAllowedForOrgId(parsedOrgId);
 

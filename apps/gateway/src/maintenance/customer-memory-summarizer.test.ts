@@ -17,23 +17,17 @@ const { mockAnthropicCreate, mockEnforceSpendCap, mockLogger, mockRecordSpend } 
   mockRecordSpend: vi.fn(),
 }));
 
-vi.mock('../message-handlers/shared.js', () => ({
-  getAnthropic: () => ({
+vi.mock('@clerk/agent/ai', () => ({
+  anthropic: {
     messages: {
       create: mockAnthropicCreate,
     },
-  }),
+  },
 }));
 
-vi.mock('../llm-spend.js', () => ({
+vi.mock('@clerk/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
   recordSpend: mockRecordSpend,
-  readUsageFromAnthropic: (response: { usage?: Record<string, number | null | undefined> }) => ({
-    inputTokens: response.usage?.input_tokens ?? 0,
-    outputTokens: response.usage?.output_tokens ?? 0,
-    cacheCreationInputTokens: response.usage?.cache_creation_input_tokens ?? 0,
-    cacheReadInputTokens: response.usage?.cache_read_input_tokens ?? 0,
-  }),
 }));
 
 vi.mock('../logger.js', () => ({
@@ -131,6 +125,7 @@ describe('summarizeCustomerMemory', () => {
         outputTokens: 45,
         cacheCreationInputTokens: 10,
         cacheReadInputTokens: 20,
+        totalTokens: 198,
       },
       MODEL.CUSTOMER_MEMORY,
     );

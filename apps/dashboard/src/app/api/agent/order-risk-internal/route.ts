@@ -9,11 +9,12 @@
  */
 import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import { buildOrderOpsContext } from "@/lib/agent/order-ops/context";
 import { runOrderOps } from "@/lib/agent/order-ops/run";
-import { BadRequestError } from "@/lib/api/errors";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withInternalRoute } from "@/lib/api/internal-route";
+import { parseAgentOrderRiskInternalBody } from "@/lib/agent/api/validation";
 import type { OrgSettings } from "@/types";
 
 export const maxDuration = 60;
@@ -28,8 +29,20 @@ export const POST = withInternalRoute(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const body = await readJsonBody(request);
-    const { orgId, orderId } = parseBody(body);
+    const { orgId, orderId } = parseAgentOrderRiskInternalBody(await readRequiredJsonObject(request, {
+      malformed: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+      empty: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+      object: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+    }));
 
     const org = await db.organization.findUnique({
       where: { id: orgId },
@@ -47,28 +60,3 @@ export const POST = withInternalRoute(
     });
   },
 );
-
-function parseBody(body: unknown): { orgId: string; orderId: string } {
-  if (typeof body !== "object" || body === null) {
-    throw new BadRequestError("Validation failed", [
-      { code: "invalid_body", message: "Request body must be a JSON object" },
-    ]);
-  }
-  const { orgId, orderId } = body as Record<string, unknown>;
-  if (typeof orgId !== "string" || !orgId || typeof orderId !== "string" || !orderId) {
-    throw new BadRequestError("Validation failed", [
-      { code: "invalid_body", message: "orgId and orderId are required" },
-    ]);
-  }
-  return { orgId, orderId };
-}
-
-async function readJsonBody(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    throw new BadRequestError("Validation failed", [
-      { code: "invalid_body", message: "Request body must be a JSON object" },
-    ]);
-  }
-}

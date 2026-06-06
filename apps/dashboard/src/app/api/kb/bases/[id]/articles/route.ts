@@ -1,16 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError, ForbiddenError, NotFoundError } from '@/lib/api/errors';
+import { ForbiddenError, NotFoundError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
-
-function normalizeTags(tags: unknown): string[] {
-  if (!Array.isArray(tags)) return [];
-  return tags.flatMap((tag) => {
-    if (typeof tag !== 'string') return [];
-    const trimmed = tag.trim();
-    return trimmed ? [trimmed] : [];
-  });
-}
+import { parseCreateKbArticleBody } from '@/app/api/kb/_lib/validation';
 
 export const POST = withOrgRoute<{ id: string }>(
   { context: 'KB article POST', errorMessage: 'Failed to create article' },
@@ -26,25 +19,15 @@ export const POST = withOrgRoute<{ id: string }>(
       throw new ForbiddenError('Synced knowledge bases are read-only');
     }
 
-    const { title, body, tags } = await request.json() as {
-      title?: unknown;
-      body?: unknown;
-      tags?: unknown;
-    };
-    if (typeof title !== 'string' || !title.trim() || typeof body !== 'string' || !body.trim()) {
-      throw new BadRequestError('title and body are required');
-    }
-    if (tags !== undefined && !Array.isArray(tags)) {
-      throw new BadRequestError('tags must be an array');
-    }
+    const { title, body, tags } = parseCreateKbArticleBody(await readRequiredJsonObject(request));
 
     const article = await db.kbArticle.create({
       data: {
         organizationId: org.id,
         knowledgeBaseId,
-        title: title.trim(),
-        body: body.trim(),
-        tags: normalizeTags(tags),
+        title,
+        body,
+        tags,
       },
     });
     return NextResponse.json({ article }, { status: 201 });

@@ -3,6 +3,7 @@ import { db } from '@clerk/db';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
+import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -134,20 +135,13 @@ export async function POST(request: Request) {
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
-    const igCbKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
     const integrationData = { accessToken: pageToken, refreshToken: userToken, fromEmail: igUsername, tokenExpiresAt };
-    const existingIgCb = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } });
-    if (existingIgCb) {
-      await db.integration.update({ where: { id: existingIgCb.id }, data: integrationData });
-    } else {
-      try {
-        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, ...integrationData } });
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igCbKey } }))!;
-        await db.integration.update({ where: { id: race.id }, data: integrationData });
-      }
-    }
+    await upsertRaceSafeIntegration({
+      organizationId: org.id,
+      platform: 'ig_dm',
+      externalAccountId: igAccountId,
+      data: integrationData,
+    });
 
     logger.info({ igUsername, igAccountId, orgId: org.id }, '[IG OAuth] Integration saved');
     const successUrl = returnTo

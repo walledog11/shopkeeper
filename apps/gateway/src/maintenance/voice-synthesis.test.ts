@@ -10,19 +10,13 @@ const { mockAnthropicCreate, mockEnforceSpendCap, mockRecordSpend, mockLogger, m
   mockCaptureException: vi.fn(),
 }));
 
-vi.mock('../message-handlers/shared.js', () => ({
-  getAnthropic: () => ({ messages: { create: mockAnthropicCreate } }),
+vi.mock('@clerk/agent/ai', () => ({
+  anthropic: { messages: { create: mockAnthropicCreate } },
 }));
 
-vi.mock('../llm-spend.js', () => ({
+vi.mock('@clerk/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
   recordSpend: mockRecordSpend,
-  readUsageFromAnthropic: () => ({
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheCreationInputTokens: 0,
-    cacheReadInputTokens: 0,
-  }),
 }));
 
 vi.mock('../logger.js', () => ({ default: mockLogger }));

@@ -15,7 +15,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors'
-import { resolveAgentSettings } from '@/lib/agent/settings'
+import { resolveAgentSettings } from '@clerk/agent/settings'
 import type { OrgSettings } from '@/types'
 import { getOrCreateOrg } from './org'
 

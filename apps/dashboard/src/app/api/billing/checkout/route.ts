@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOrCreateOrg } from '@/lib/server/org'
 import { handleApiError } from '@/lib/api/errors'
+import { readRequiredJsonObject } from '@/lib/api/body'
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
 import stripe from '@/lib/billing/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
 import { getDashboardAppUrl } from '@/lib/env'
+import { parseCheckoutBody } from '@/app/api/billing/_lib/validation'
 
 // Map tier slugs to env-var price IDs so the client never controls which price is used
 const TIER_PRICE_IDS: Record<string, string | undefined> = {
@@ -14,7 +16,7 @@ const TIER_PRICE_IDS: Record<string, string | undefined> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const { tier } = await req.json() as { tier: string }
+    const { tier } = parseCheckoutBody(await readRequiredJsonObject(req))
 
     const priceId = TIER_PRICE_IDS[tier]
     if (!priceId) {

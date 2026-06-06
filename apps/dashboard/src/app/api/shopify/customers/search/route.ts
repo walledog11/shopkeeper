@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
 
 export const GET = withOrgRoute(
   { context: 'Shopify Customer Search', errorMessage: 'server_error' },

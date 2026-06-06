@@ -2,6 +2,7 @@ import type { EmailIntegrationProvider } from './email-integration';
 
 type ClientIdEnv = 'GOOGLE_CLIENT_ID' | 'MICROSOFT_CLIENT_ID';
 type ClientSecretEnv = 'GOOGLE_CLIENT_SECRET' | 'MICROSOFT_CLIENT_SECRET';
+type EmailOAuthProvider = Extract<EmailIntegrationProvider, 'gmail' | 'outlook'>;
 
 export interface EmailOAuthProviderConfig {
   authorizationParams: Record<string, string>;
@@ -10,7 +11,7 @@ export interface EmailOAuthProviderConfig {
   clientSecretEnv: ClientSecretEnv;
   displayName: string;
   extractEmail: (userinfo: unknown) => string | null;
-  provider: EmailIntegrationProvider;
+  provider: EmailOAuthProvider;
   scopes: readonly string[];
   tokenUrl: string;
   userinfoUrl: string;

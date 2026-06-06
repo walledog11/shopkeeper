@@ -6,7 +6,6 @@ import {
   usdToNanoDollars,
   type LlmUsageTokens,
 } from "@clerk/db";
-import type { OrgSettings } from "./types.js";
 import logger from "./logger.js";
 
 // Backstop on per-org daily LLM spend. Persisted in Postgres (one row per org
@@ -15,8 +14,12 @@ import logger from "./logger.js";
 // cap by at most ~one call's worth per parallel run , acceptable for a backstop
 // whose job is to stop runaway loops, not enforce a billing meter to the cent.
 
-function capNanoUsd(settings: OrgSettings): number {
-  const usd = settings.dailyLLMSpendCapUsd ?? DEFAULT_DAILY_LLM_SPEND_CAP_USD;
+// Only field the cap needs. A full OrgSettings satisfies this; the gateway can
+// pass a bare `{ dailyLLMSpendCapUsd }` or null (→ default cap).
+export type SpendCapSettings = { dailyLLMSpendCapUsd?: number | null };
+
+function capNanoUsd(settings: SpendCapSettings | null | undefined): number {
+  const usd = settings?.dailyLLMSpendCapUsd ?? DEFAULT_DAILY_LLM_SPEND_CAP_USD;
   return usdToNanoDollars(usd);
 }
 
@@ -29,7 +32,10 @@ export async function getDailySpendNano(orgId: string): Promise<number> {
   }
 }
 
-export async function enforceSpendCap(orgId: string, settings: OrgSettings): Promise<void> {
+export async function enforceSpendCap(
+  orgId: string,
+  settings: SpendCapSettings | null | undefined,
+): Promise<void> {
   const cap = capNanoUsd(settings);
   const current = await getDailySpendNano(orgId);
   if (current >= cap) {

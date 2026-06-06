@@ -1,97 +1,65 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import type {
-  getDailyRefundSpendCents as GetDailyRefundSpendCentsFn,
-  incrementDailyRefundSpendCents as IncrementDailyRefundSpendCentsFn,
-} from './refund-spend';
-import type { getRedis as GetRedisFn } from './redis';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  cleanupTestData,
+  createTestOrg,
+} from '@clerk/db/test-helpers';
+import {
+  getDailyRefundSpendCents,
+  incrementDailyRefundSpendCents,
+} from '@clerk/db';
 
-vi.mock('@/lib/server/redis', () => ({
-  getRedis: vi.fn(),
-}));
-
-let getDailyRefundSpendCents: typeof GetDailyRefundSpendCentsFn;
-let incrementDailyRefundSpendCents: typeof IncrementDailyRefundSpendCentsFn;
-let mockedGetRedis: ReturnType<typeof vi.mocked<GetRedisFn>>;
-
-function makeFakeRedis() {
-  const store = new Map<string, number>();
-  return {
-    store,
-    get: vi.fn(async (key: string) => {
-      const value = store.get(key);
-      return value === undefined ? null : String(value);
-    }),
-    incrby: vi.fn(async (key: string, delta: number) => {
-      const next = (store.get(key) ?? 0) + delta;
-      store.set(key, next);
-      return next;
-    }),
-    expire: vi.fn(async () => 1),
-  };
-}
+let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
 
 describe('refund-spend', () => {
-  beforeAll(async () => {
-    ({ getDailyRefundSpendCents, incrementDailyRefundSpendCents } = await import('./refund-spend'));
-    ({ getRedis: mockedGetRedis } = await import('./redis').then(({ getRedis }) => ({
-      getRedis: vi.mocked(getRedis),
-    })));
+  beforeEach(async () => {
+    org = await createTestOrg();
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
+  afterEach(async () => {
+    await cleanupTestData(org?.id);
+    org = null;
   });
 
-  it('returns 0 when no spend is recorded today', async () => {
-    const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
-
-    const spent = await getDailyRefundSpendCents('org_1');
+  it('returns 0 when no spend is recorded for the day', async () => {
+    const spent = await getDailyRefundSpendCents(org!.id, '2026-06-05');
 
     expect(spent).toBe(0);
   });
 
-  it('returns the current total after an increment', async () => {
-    const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+  it('returns the current total after increments', async () => {
+    await incrementDailyRefundSpendCents(org!.id, 1500, '2026-06-05');
+    await incrementDailyRefundSpendCents(org!.id, 750, '2026-06-05');
 
-    await incrementDailyRefundSpendCents('org_1', 1500);
-    await incrementDailyRefundSpendCents('org_1', 750);
-
-    const spent = await getDailyRefundSpendCents('org_1');
+    const spent = await getDailyRefundSpendCents(org!.id, '2026-06-05');
     expect(spent).toBe(2250);
   });
 
-  it('sets TTL only on the first increment of the day', async () => {
-    const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+  it('keeps separate daily totals', async () => {
+    await incrementDailyRefundSpendCents(org!.id, 100, '2026-06-05');
+    await incrementDailyRefundSpendCents(org!.id, 200, '2026-06-06');
 
-    await incrementDailyRefundSpendCents('org_2', 100);
-    await incrementDailyRefundSpendCents('org_2', 200);
-
-    expect(fake.expire).toHaveBeenCalledTimes(1);
+    expect(await getDailyRefundSpendCents(org!.id, '2026-06-05')).toBe(100);
+    expect(await getDailyRefundSpendCents(org!.id, '2026-06-06')).toBe(200);
   });
 
   it('ignores non-positive or non-finite deltas', async () => {
-    const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    await incrementDailyRefundSpendCents(org!.id, 0, '2026-06-05');
+    await incrementDailyRefundSpendCents(org!.id, -50, '2026-06-05');
+    await incrementDailyRefundSpendCents(org!.id, NaN, '2026-06-05');
 
-    await incrementDailyRefundSpendCents('org_3', 0);
-    await incrementDailyRefundSpendCents('org_3', -50);
-    await incrementDailyRefundSpendCents('org_3', NaN);
-
-    expect(fake.incrby).not.toHaveBeenCalled();
-    expect(await getDailyRefundSpendCents('org_3')).toBe(0);
+    expect(await getDailyRefundSpendCents(org!.id, '2026-06-05')).toBe(0);
   });
 
   it('isolates spend by org', async () => {
-    const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    const otherOrg = await createTestOrg();
+    try {
+      await incrementDailyRefundSpendCents(org!.id, 100, '2026-06-05');
+      await incrementDailyRefundSpendCents(otherOrg.id, 500, '2026-06-05');
 
-    await incrementDailyRefundSpendCents('org_a', 100);
-    await incrementDailyRefundSpendCents('org_b', 500);
-
-    expect(await getDailyRefundSpendCents('org_a')).toBe(100);
-    expect(await getDailyRefundSpendCents('org_b')).toBe(500);
+      expect(await getDailyRefundSpendCents(org!.id, '2026-06-05')).toBe(100);
+      expect(await getDailyRefundSpendCents(otherOrg.id, '2026-06-05')).toBe(500);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
   });
 });

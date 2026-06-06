@@ -98,4 +98,16 @@ describe('POST /api/billing/portal', () => {
       return_url: 'http://dashboard.test/dashboard/settings?tab=billing',
     });
   });
+
+  it('rejects non-empty request bodies', async () => {
+    const res = await POST(new Request('http://localhost/api/billing/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ extra: true }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled();
+    expect(mockPortalCreate).not.toHaveBeenCalled();
+  });
 });

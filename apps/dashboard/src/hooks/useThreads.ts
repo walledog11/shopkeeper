@@ -61,8 +61,6 @@ export function useThreads(
   };
 }
 
-const useOpenThreads = () => useThreads('open', undefined, true, true);
-
 export function useOpenThreadCountQuery(enabled = true) {
   const isVisible = useIsDocumentVisible();
   const { data, error, isLoading, mutate } = useSWR<ThreadCount>(

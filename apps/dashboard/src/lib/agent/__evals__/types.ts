@@ -1,6 +1,6 @@
 import type { CustomerMemory } from "@clerk/db";
 import type { OrgSettings } from "@/types";
-import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "../types";
+import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@clerk/agent/context";
 
 export interface FixtureMessage {
   senderType: "customer" | "agent" | "ai" | "note";
@@ -92,18 +92,25 @@ export interface Fixture {
   advisory?: boolean;
 }
 
+export interface PhaseUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+}
+
 export interface EvalUsage {
   modelCalls: number;
   inputTokens: number;
   outputTokens: number;
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
-  judgeUsage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadInputTokens: number;
-    cacheCreationInputTokens: number;
-  };
+  // Per-phase token splits so the suite can report where tokens (and cache
+  // hits) actually land. `inputTokens`/`cache*` above are the agent total
+  // (planner + run, judge already subtracted out).
+  plannerUsage: PhaseUsage;
+  runUsage: PhaseUsage;
+  judgeUsage: PhaseUsage;
 }
 
 export interface EvalResult {

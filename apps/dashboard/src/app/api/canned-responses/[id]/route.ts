@@ -1,45 +1,27 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-
-function normalizeOptionalString(value: unknown, field: string): string | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new BadRequestError(`${field} must be a non-empty string`);
-  }
-  return value.trim();
-}
-
-function normalizeOptionalStringArray(value: unknown, field: string): string[] | undefined {
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value)) {
-    throw new BadRequestError(`${field} must be an array`);
-  }
-  return value.flatMap((item) => {
-    if (typeof item !== 'string') return [];
-    const trimmed = item.trim();
-    return trimmed ? [trimmed] : [];
-  });
-}
+import { parseUpdateCannedResponseBody } from '@/app/api/canned-responses/_lib/validation';
 
 export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Canned Responses PATCH', errorMessage: 'Failed to update canned response' },
   async ({ org, request, params }) => {
     const { id } = params;
-    const [{ title, body, tags, channels }, existing] = await Promise.all([
-      request.json(),
+    const [requestBody, existing] = await Promise.all([
+      readRequiredJsonObject(request),
       db.cannedResponse.findUnique({ where: { id } }),
     ]);
+    const { title, body, tags, channels } = parseUpdateCannedResponseBody(requestBody);
     assertEntityInOrg(existing, org.id);
 
     const updated = await db.cannedResponse.update({
       where: { id },
       data: {
-        ...(title !== undefined && { title: normalizeOptionalString(title, 'title') }),
-        ...(body !== undefined && { body: normalizeOptionalString(body, 'body') }),
-        ...(tags !== undefined && { tags: normalizeOptionalStringArray(tags, 'tags') }),
-        ...(channels !== undefined && { channels: normalizeOptionalStringArray(channels, 'channels') }),
+        ...(title !== undefined && { title }),
+        ...(body !== undefined && { body }),
+        ...(tags !== undefined && { tags }),
+        ...(channels !== undefined && { channels }),
       },
     });
     return NextResponse.json({ response: updated });

@@ -13,9 +13,10 @@ export const maxDuration = 60;
 import { db } from "@clerk/db";
 import { auth } from "@clerk/nextjs/server";
 import { UnauthorizedError } from "@/lib/api/errors";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import {
   buildRevisedDashboardInstruction,
   clearDashboardPendingApproval,
@@ -80,7 +81,7 @@ export const POST = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const { instruction, sessionId } = parseAgentChatBody(await request.json());
+    const { instruction, sessionId } = parseAgentChatBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
 
     let resolvedSessionId: string;

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
-import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { NotFoundError } from '@/lib/api/errors';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
-import { requirePlaybookTrigger } from '@/app/api/playbooks/_lib/playbook-shape';
+import { readRequiredJsonObject } from '@/lib/api/body';
+import { parseTriggerPlaybooksBody } from '@/app/api/playbooks/_lib/playbook-shape';
 import { withInternalRoute } from '@/lib/api/internal-route';
 
 export const POST = withInternalRoute(
@@ -12,20 +13,11 @@ export const POST = withInternalRoute(
     errorMessage: 'Failed to trigger playbooks',
   },
   async ({ request }) => {
-    const body = await readJsonBody(request);
-    const { organizationId, threadId, trigger: rawTrigger } = body as {
-      organizationId?: unknown;
-      threadId?: unknown;
-      trigger?: unknown;
-    };
-
-    if (typeof organizationId !== 'string' || !organizationId.trim()) {
-      throw new BadRequestError('Missing required fields');
-    }
-    if (typeof threadId !== 'string' || !threadId.trim()) {
-      throw new BadRequestError('Missing required fields');
-    }
-    const trigger = requirePlaybookTrigger(rawTrigger);
+    const { organizationId, threadId, trigger } = parseTriggerPlaybooksBody(await readRequiredJsonObject(request, {
+      malformed: { message: 'Missing required fields' },
+      empty: { message: 'Missing required fields' },
+      object: { message: 'Missing required fields' },
+    }));
 
     const thread = await db.thread.findFirst({
       where: {
@@ -48,11 +40,3 @@ export const POST = withInternalRoute(
     return NextResponse.json({ ok: true });
   },
 );
-
-async function readJsonBody(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    throw new BadRequestError('Missing required fields');
-  }
-}

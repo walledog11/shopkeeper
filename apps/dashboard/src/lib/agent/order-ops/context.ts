@@ -1,6 +1,6 @@
 import { db } from "@clerk/db";
-import { shopifyRestJson, type ShopifyContext } from "../shopify/client";
-import type { BaseAgentContext } from "../types";
+import { shopifyRestJson, type ShopifyContext } from "@clerk/agent/shopify";
+import type { BaseAgentContext } from "@clerk/agent/context";
 
 // Track 4 spike (fraud-risk monitor): a thread-less agent context. Unlike
 // SupportContext this carries no thread and no customer row - the unit of work

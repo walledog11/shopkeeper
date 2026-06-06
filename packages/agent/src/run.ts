@@ -1,0 +1,409 @@
+import type Anthropic from "@anthropic-ai/sdk";
+import { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
+import { pickModel } from "./ai/index.js";
+import logger from "./logger.js";
+import type { OrgSettings, RawToolCall } from "./types.js";
+import { resolveAgentSettings } from "./settings.js";
+import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry.js";
+import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
+import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
+import { executeToolWithStatus } from "./tools/executor.js";
+import { buildMessageHistory } from "./message-history.js";
+import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path.js";
+import type { ActionEntry, AgentActionMode, AgentActionStatus, BaseAgentContext, SupportContext, AgentResult } from "./agent-context.js";
+import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
+import { enforceSpendCap, recordSpend } from "./spend.js";
+import { recordAgentActionsBatch, type AgentActionApproval } from "./agent-actions.js";
+
+const DEFAULT_MAX_ITERATIONS = 10;
+const READ_ONLY_MAX_ITERATIONS = 4;
+const TOKEN_BUDGET = 20_000;
+
+const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES).flatMap(([name, category]) => (
+  category === "read" ? [name] : []
+));
+
+export interface RunAgentOptions {
+  readOnly?: boolean;
+  // Injected tool-failure recorder. The dashboard wires this to its ops-alert
+  // counter + Sentry; a thread-less / gateway host may omit it. Keeping it
+  // injected is what keeps alerting infra (env, Sentry) out of the shared core.
+  recordToolFailure?: (
+    kind: "tool_result" | "tool_exception",
+    tool: string,
+    detail: string,
+  ) => Promise<unknown> | void;
+  mode?: AgentActionMode;
+  approval?: AgentActionApproval;
+  // Pre-generated turn id so the caller can embed it in the agent-turn note
+  // and join AgentAction rows back to the note when rendering inline.
+  turnId?: string;
+}
+
+function inputKeys(input: unknown): string[] {
+  return input && typeof input === "object" ? Object.keys(input) : [];
+}
+
+function inputChars(input: unknown): number {
+  return JSON.stringify(input ?? null).length;
+}
+
+function canExecuteBatchInParallel(toolNames: readonly string[]): boolean {
+  return toolNames.every((name) => TOOL_CATEGORIES[name] === "read");
+}
+
+function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEntry[]): boolean {
+  if (toolName !== "update_thread_status") return false;
+  return actionsPerformed.some((action) => (
+    action.tool === "send_reply" && action.status === "error"
+  ));
+}
+
+// A context carries a support thread iff it has a `thread`. Thread-less modules
+// (order-ops, Track 3) supply a BaseAgentContext with no thread/customer.
+function isSupportContext(ctx: BaseAgentContext): ctx is SupportContext {
+  return (ctx as Partial<SupportContext>).thread != null;
+}
+
+export async function runAgent(
+  ctx: BaseAgentContext,
+  instruction: string,
+  approvedToolCalls?: RawToolCall[],
+  settings?: OrgSettings,
+  options?: RunAgentOptions,
+): Promise<AgentResult> {
+  const startedAt = Date.now();
+  const usageTotals = createModelUsageMetrics();
+  const executedToolCalls: string[] = [];
+  const instructionHash = hashInstructionForLog(instruction);
+  const s = resolveAgentSettings(settings);
+  const readOnly = options?.readOnly ?? false;
+  const recordToolFailure = options?.recordToolFailure;
+  const effectiveMode: AgentActionMode = options?.mode ?? (readOnly ? "read_only" : "human_approved");
+  const approval = effectiveMode === "human_approved" ? options?.approval : undefined;
+  const maxIterations = readOnly
+    ? READ_ONLY_MAX_ITERATIONS
+    : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
+  const actionsPerformed: ActionEntry[] = [];
+  // Thread/customer are present only on a SupportContext; capture them once so the
+  // thread-less path (Track 3) logs/audits with nulls instead of dereferencing.
+  const supportThread = isSupportContext(ctx) ? ctx.thread : null;
+  const supportCustomer = isSupportContext(ctx) ? ctx.customer : null;
+  const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
+  const failureAlertPromises: Promise<unknown>[] = [];
+  let escalationReason: string | null = null;
+
+  const finish = async (result: AgentResult, outcome: string): Promise<AgentResult> => {
+    if (failureAlertPromises.length > 0) {
+      await Promise.allSettled(failureAlertPromises);
+    }
+
+    if (result.actionsPerformed.length > 0) {
+      try {
+        await recordAgentActionsBatch({
+          orgId: ctx.orgId,
+          threadId: supportThread?.id ?? null,
+          customerId: supportCustomer?.id ?? null,
+          mode: effectiveMode,
+          actions: result.actionsPerformed,
+          instruction,
+          summary: result.summary,
+          ...(options?.turnId ? { turnId: options.turnId } : {}),
+          ...(approval ? { approval } : {}),
+        });
+      } catch (err) {
+        logger.error({
+          err,
+          orgId: ctx.orgId,
+          threadId: supportThread?.id ?? null,
+          actionCount: result.actionsPerformed.length,
+        }, "[agent] failed to persist agent action audit rows");
+      }
+    }
+
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: supportThread?.id ?? null,
+      channelType: supportThread?.channelType ?? null,
+      outcome,
+      readOnly,
+      durationMs: Date.now() - startedAt,
+      modelCalls: usageTotals.modelCalls,
+      usageTotals,
+      approvedToolCallCount: approvedToolCalls?.length ?? 0,
+      executedToolCallCount: executedToolCalls.length,
+      executedToolCalls,
+      actionCount: result.actionsPerformed.length,
+      summaryChars: result.summary.length,
+      instructionHash,
+    }, "[agent] run complete");
+    return result;
+  };
+
+  const recordAgentFailureSafely = (
+    kind: "tool_result" | "tool_exception",
+    tool: string,
+    detail: string,
+  ) => {
+    if (readOnly || !recordToolFailure) {
+      return;
+    }
+
+    const alertPromise = Promise.resolve(recordToolFailure(kind, tool, detail)).catch((error) => {
+      logger.error({
+        err: error,
+        orgId: ctx.orgId,
+        threadId: supportThread?.id ?? null,
+        tool,
+      }, "[agent] failure alert error");
+    });
+    failureAlertPromises.push(alertPromise);
+  };
+
+  const executeToolCall = async (toolCall: { id: string; name: string; input: unknown }) => {
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: supportThread?.id ?? null,
+      tool: toolCall.name,
+      inputKeys: inputKeys(toolCall.input),
+      inputChars: inputChars(toolCall.input),
+    }, "[agent] tool call");
+
+    const startedAt = Date.now();
+    let result: string;
+    let status: AgentActionStatus;
+    let errorDetail: string | undefined;
+    let threw = false;
+
+    if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
+      result = `Error: ${toolCall.name} is not available in private ask mode.`;
+      status = "error";
+      errorDetail = result;
+    } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
+      result = "Error: skipped status update because send_reply failed.";
+      status = "error";
+      errorDetail = result;
+    } else {
+      try {
+        const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings);
+        result = executed.result;
+        status = executed.status;
+        if (status !== "success") errorDetail = result;
+      } catch (err) {
+        threw = true;
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        result = `Error: tool "${toolCall.name}" threw - ${errorMessage}`;
+        status = "error";
+        errorDetail = errorMessage;
+        logger.error({ err, tool: toolCall.name }, "[agent] tool error");
+        recordAgentFailureSafely("tool_exception", toolCall.name, errorMessage);
+      }
+    }
+
+    // A hard policy block on a mutative action (over-cap refund, cancellations disabled,
+    // daily cap, custom line items) is not something the model should retry or talk its
+    // way around. Route it to a human deterministically instead of feeding the error back
+    // into the loop - the safe outcome no longer depends on the model choosing to escalate.
+    if (!threw && status === "policy_block" && TOOL_CATEGORIES[toolCall.name] === "action") {
+      const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
+      await ctx.escalate(reason);
+      result = reason;
+      status = "escalated";
+    }
+
+    if (!threw && status === "error") {
+      recordAgentFailureSafely("tool_result", toolCall.name, result);
+    }
+
+    if (status === "escalated") {
+      escalationReason = result.trim() || "No reason provided";
+      errorDetail = undefined;
+    }
+
+    const durationMs = Date.now() - startedAt;
+
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: supportThread?.id ?? null,
+      tool: toolCall.name,
+      resultChars: result.length,
+      isError: status === "error" || status === "policy_block",
+      status,
+      durationMs,
+    }, "[agent] tool result");
+    executedToolCalls.push(toolCall.name);
+    actionsPerformed.push({
+      tool: toolCall.name,
+      result,
+      input: toolCall.input,
+      durationMs,
+      status,
+      category: TOOL_CATEGORIES[toolCall.name],
+      ...(errorDetail ? { errorDetail } : {}),
+    });
+    return {
+      type: "tool_result" as const,
+      tool_use_id: toolCall.id,
+      content: result,
+    };
+  };
+
+  const executeToolCalls = async (toolCalls: { id: string; name: string; input: unknown }[]) => {
+    if (canExecuteBatchInParallel(toolCalls.map((toolCall) => toolCall.name))) {
+      return Promise.all(toolCalls.map(executeToolCall));
+    }
+
+    const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
+    for (const toolCall of toolCalls) {
+      results.push(await executeToolCall(toolCall));
+    }
+    return results;
+  };
+
+  if (!readOnly && !approvedToolCalls?.length && isSupportContext(ctx)) {
+    const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
+    if (fastResult) {
+      for (const action of fastResult.actionsPerformed) {
+        if (action.status === "error") {
+          recordAgentFailureSafely("tool_result", action.tool, action.result);
+        }
+      }
+      logger.info({ actionCount: fastResult.actionsPerformed.length }, "[agent] fast order-status result");
+      executedToolCalls.push(...fastResult.actionsPerformed.map(action => action.tool));
+      return finish(fastResult, "fast_order_status");
+    }
+  }
+
+  if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
+    const executableToolCalls = supportThread?.channelType === "dashboard_agent"
+      ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
+      : approvedToolCalls;
+
+    if (supportThread?.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
+      return finish({
+        summary: "No approved dashboard action was available to execute.",
+        actionsPerformed,
+      }, "approved_dashboard_actions_empty");
+    }
+
+    await executeToolCalls(executableToolCalls);
+
+    if (escalationReason) {
+      return finish({
+        summary: `Escalated to merchant: ${escalationReason}`,
+        actionsPerformed,
+      }, "escalated");
+    }
+
+    return finish({
+      summary: summarizeApprovedDashboardActions(actionsPerformed),
+      actionsPerformed,
+    }, supportThread?.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
+  }
+
+  const history = operatorMode || readOnly ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  const messageInstruction = readOnly
+    ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
+    : instruction;
+  const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
+  // The model loop needs a module-supplied system prompt + tool set. Only support
+  // (tickets + composer-ask) supplies one today; thread-less module loops are Track 3.
+  if (!isSupportContext(ctx)) {
+    throw new Error("runAgent: thread-less module loops are not wired until Track 3");
+  }
+  const tools = readOnly
+    ? selectAgentTools(settings, READ_TOOL_NAMES)
+    : selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
+  let systemPromptBlocks;
+  if (readOnly) {
+    systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));
+  } else {
+    const { stable, volatile } = buildSystemPromptParts(ctx, settings);
+    systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
+  }
+  // The read-only composer-ask loop stays on Haiku; the mutative agent loop
+  // (operator + end-to-end runs) is a judgment/mutative path, so it runs on Sonnet.
+  const iterationModel = pickModel(readOnly ? "composer_ask" : "agent_run");
+
+  const runModelIteration = async (i: number): Promise<AgentResult> => {
+    if (i >= maxIterations) {
+      return finish({
+        summary: readOnly
+          ? "I could not finish answering that. Try asking a narrower question."
+          : "Reached maximum steps without completing the task.",
+        actionsPerformed,
+      }, "max_iterations");
+    }
+
+    logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
+
+    await enforceSpendCap(ctx.orgId, s);
+
+    const response = await anthropic.messages.create({
+      model: iterationModel,
+      max_tokens: readOnly ? 2048 : 4096,
+      system: systemPromptBlocks,
+      messages,
+      tools,
+    });
+
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+    );
+    const usage = recordModelUsage(usageTotals, response);
+    await recordSpend(ctx.orgId, usage, iterationModel);
+    logger.info({
+      iteration: i,
+      model: iterationModel,
+      stopReason: response.stop_reason,
+      tools: toolUseBlocks.map(b => b.name),
+      usage,
+      totalTokens: usageTotals.totalTokens,
+    }, "[agent] iteration end");
+
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "max_tokens") {
+      return finish({
+        summary: readOnly
+          ? "The answer was cut off because the request was too large. Try asking a more specific question."
+          : "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.",
+        actionsPerformed,
+      }, "max_tokens");
+    }
+
+    if (!readOnly && usageTotals.totalTokens >= TOKEN_BUDGET) {
+      return finish({ summary: "Agent stopped - this request required too many steps. Please try a more specific instruction.", actionsPerformed }, "token_budget");
+    }
+
+    if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
+      let textBlock: Anthropic.TextBlock | undefined;
+      for (const block of response.content) {
+        if (block.type === "text") {
+          textBlock = block;
+          break;
+        }
+      }
+      return finish({
+        summary: readOnly
+          ? (textBlock?.text?.trim() || "I do not have enough information to answer that.")
+          : (textBlock?.text ?? "Done."),
+        actionsPerformed,
+      }, "end_turn");
+    }
+
+    const toolResults = await executeToolCalls(toolUseBlocks);
+    messages.push({ role: "user", content: toolResults });
+
+    if (escalationReason) {
+      return finish({
+        summary: `Escalated to merchant: ${escalationReason}`,
+        actionsPerformed,
+      }, "escalated");
+    }
+
+    return runModelIteration(i + 1);
+  };
+
+  return runModelIteration(0);
+}

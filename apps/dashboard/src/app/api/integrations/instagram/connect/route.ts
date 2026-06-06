@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
 import { getOrCreateOrg } from '@/lib/server/org';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -41,19 +41,12 @@ export async function POST() {
     }
 
     const org = await getOrCreateOrg();
-    const igKey = { organizationId: org.id, platform: 'ig_dm' as const, externalAccountId: igAccountId };
-    const existingIg = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igKey } });
-    if (existingIg) {
-      await db.integration.update({ where: { id: existingIg.id }, data: { accessToken: pageAccessToken, fromEmail: accountName } });
-    } else {
-      try {
-        await db.integration.create({ data: { organizationId: org.id, platform: 'ig_dm', externalAccountId: igAccountId, accessToken: pageAccessToken, fromEmail: accountName } });
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: igKey } }))!;
-        await db.integration.update({ where: { id: race.id }, data: { accessToken: pageAccessToken, fromEmail: accountName } });
-      }
-    }
+    await upsertRaceSafeIntegration({
+      organizationId: org.id,
+      platform: 'ig_dm',
+      externalAccountId: igAccountId,
+      data: { accessToken: pageAccessToken, fromEmail: accountName },
+    });
 
     logger.info({ accountName, igAccountId, orgId: org.id }, '[IG Setup] Connected');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?connected=instagram`);

@@ -1,26 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
-
-function requireNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new BadRequestError(`${field} is required`);
-  }
-  return value.trim();
-}
-
-function normalizeStringArray(value: unknown, field: string): string[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    throw new BadRequestError(`${field} must be an array`);
-  }
-  return value.flatMap((item) => {
-    if (typeof item !== 'string') return [];
-    const trimmed = item.trim();
-    return trimmed ? [trimmed] : [];
-  });
-}
+import { parseCreateCannedResponseBody } from '@/app/api/canned-responses/_lib/validation';
 
 export const GET = withOrgRoute(
   { context: 'Canned Responses GET', errorMessage: 'Failed to fetch canned responses' },
@@ -36,14 +18,14 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: 'Canned Responses POST', errorMessage: 'Failed to create canned response' },
   async ({ org, request }) => {
-    const { title, body, tags, channels } = await request.json();
+    const { title, body, tags, channels } = parseCreateCannedResponseBody(await readRequiredJsonObject(request));
     const response = await db.cannedResponse.create({
       data: {
         organizationId: org.id,
-        title: requireNonEmptyString(title, 'title'),
-        body: requireNonEmptyString(body, 'body'),
-        tags: normalizeStringArray(tags, 'tags'),
-        channels: normalizeStringArray(channels, 'channels'),
+        title,
+        body,
+        tags,
+        channels,
       },
     });
     return NextResponse.json({ response }, { status: 201 });

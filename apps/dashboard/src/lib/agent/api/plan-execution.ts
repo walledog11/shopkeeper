@@ -3,13 +3,13 @@ import { BadRequestError } from "@/lib/api/errors";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
-import { hashInstruction, hashPlan, type AgentActionApproval } from "@/lib/agent/api/agent-actions";
+import { hashInstruction, hashPlan, type AgentActionApproval } from "@clerk/agent/agent-actions";
 import { recordShadowDecision, resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
-import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "@/lib/agent/plan-preview";
-import { resolveAutoExecuteMode } from "@/lib/agent/settings";
-import { TOOL_CATEGORIES } from "@/lib/agent/tools/registry";
+import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "@clerk/agent/plan-preview";
+import { resolveAutoExecuteMode } from "@clerk/agent/settings";
+import { TOOL_CATEGORIES } from "@clerk/agent/tools";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
-import type { AgentResult } from "@/lib/agent/types";
+import type { AgentResult } from "@clerk/agent/context";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 
 export interface ApproverIdentity {

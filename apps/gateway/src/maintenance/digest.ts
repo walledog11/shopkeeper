@@ -1,4 +1,13 @@
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@clerk/db';
+import { JOB, QUEUE } from '../constants.js';
+import logger from '../logger.js';
+import { notifyOperator } from '../operator-notify.js';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
@@ -145,6 +154,61 @@ export async function buildOrgDigest(organizationId: string, now: Date): Promise
     flaggedCount: buckets.questionable.length,
   };
 }
+
+export async function sendScheduledDigests(): Promise<void> {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const currentHourUtc = now.getUTCHours();
+
+  const orgs = await db.organization.findMany({
+    where: { members: { some: { telegramChats: { some: {} } } } },
+    select: {
+      id: true,
+      settings: true,
+      members: {
+        where: { telegramChats: { some: {} } },
+        select: { telegramChats: { select: { chatId: true } } },
+      },
+    },
+  });
+
+  const eligibleOrgs = orgs.filter(org => {
+    const settings = (org.settings as Record<string, unknown> | null) ?? {};
+    return settings.digestEnabled === true && shouldSendDigest(settings, currentHourUtc, nowMs);
+  });
+
+  if (eligibleOrgs.length === 0) return;
+
+  for (const org of eligibleOrgs) {
+    const digest = await buildOrgDigest(org.id, now);
+    if (!digest) continue;
+
+    const chats = org.members.flatMap((m) => m.telegramChats);
+    for (const member of chats) {
+      const result = await notifyOperator(org.id, member, digest.message, {
+        pendingDigest: digest.pendingDigest,
+      });
+      if (result) {
+        logger.info(
+          { organizationId: org.id, chatId: result.chatId, flagged: digest.flaggedCount },
+          '[Digest] Sent digest',
+        );
+      }
+    }
+  }
+}
+
+export const registerDigestMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const queue = createMaintenanceQueue(context, QUEUE.DIGEST);
+  await scheduleRepeatableJob(queue, JOB.DIGEST, JOB.DIGEST_ID, ONE_HOUR_MS);
+
+  const worker = createMaintenanceWorker(context, QUEUE.DIGEST, sendScheduledDigests, {
+    label: 'Digest',
+    sentryQueue: 'whatsapp-digest',
+  });
+
+  return { workers: [worker], queues: [queue] };
+};
 
 function normalizeHour(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {

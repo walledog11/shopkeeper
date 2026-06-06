@@ -15,8 +15,9 @@ import {
 } from '@clerk/db';
 import { MODEL } from '../constants.js';
 import logger from '../logger.js';
-import { enforceSpendCap, readUsageFromAnthropic, recordSpend, type GatewaySpendSettings } from '../llm-spend.js';
-import { getAnthropic } from '../message-handlers/shared.js';
+import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@clerk/agent/spend';
+import { readModelUsage } from '@clerk/agent/usage';
+import { anthropic } from '@clerk/agent/ai';
 
 const MAX_THREAD_MESSAGES = 50;
 const MAX_MESSAGE_CHARS = 2_000;
@@ -117,7 +118,7 @@ export interface SummarizeCustomerMemoryParams {
   customer: CustomerMemoryCustomerInput;
   closedThread: CustomerMemoryClosedThreadInput;
   messages: CustomerMemoryMessageInput[];
-  spendSettings?: GatewaySpendSettings | null;
+  spendSettings?: SpendCapSettings | null;
 }
 
 interface SerializedMessage {
@@ -325,7 +326,7 @@ export async function summarizeCustomerMemory({
   }
 
   const payload = buildSummarizerPayload({ priorMemory, customer, closedThread, messages, spendSettings });
-  const response = await getAnthropic().messages.create({
+  const response = await anthropic.messages.create({
     model: MODEL.CUSTOMER_MEMORY,
     max_tokens: MAX_OUTPUT_TOKENS,
     temperature: 0,
@@ -346,7 +347,7 @@ export async function summarizeCustomerMemory({
     }],
   });
 
-  await recordSpend(closedThread.organizationId, readUsageFromAnthropic(response), MODEL.CUSTOMER_MEMORY);
+  await recordSpend(closedThread.organizationId, readModelUsage(response), MODEL.CUSTOMER_MEMORY);
 
   const nextMemory = extractMemoryFromResponse(response);
   return boundMemory(upsertClosedThreadInteraction(nextMemory, closedThread));

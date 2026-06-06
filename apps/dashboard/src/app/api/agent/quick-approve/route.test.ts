@@ -9,7 +9,7 @@ import {
 } from "@clerk/db/test-helpers";
 import { buildAgentPlanCacheRecord } from "@/lib/agent/api/plan-cache";
 import { AGENT_PLAN_CACHE_VERSION } from "@/lib/agent/plan-cache-shape";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 vi.mock("@clerk/nextjs/server", () => ({

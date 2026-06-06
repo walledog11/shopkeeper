@@ -10,7 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { resolveAgentSettings } from '@/lib/agent/settings';
+import { resolveAgentSettings } from '@clerk/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import { withInternalRoute } from '@/lib/api/internal-route';

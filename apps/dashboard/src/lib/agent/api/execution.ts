@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { createMessage } from "@clerk/db";
 import { buildContext, runAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
-import type { AgentActionApproval } from "@/lib/agent/api/agent-actions";
+import type { AgentActionApproval } from "@clerk/agent/agent-actions";
 import { getRedis } from "@/lib/server/redis";
 import { acquireThreadLock } from "@/lib/server/agent-lock";
 import { ConflictError } from "@/lib/api/errors";

@@ -7,7 +7,7 @@ import AgentPanelRoot from "./_components/agent-panel/AgentPanelRoot";
 import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext";
 import { CommandPaletteProvider } from "./_components/CommandPaletteContext";
 import { getOrCreateOrg } from "@/lib/server/org";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { db } from "@clerk/db";
 import type { OrgSettings } from "@/types";

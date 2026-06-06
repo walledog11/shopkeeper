@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { FailedMessage, Message, Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
-import { SENDER_TYPE } from '@/lib/messaging/thread-constants'
+import { SENDER_TYPE } from '@clerk/agent/thread-constants'
 
 export interface TicketToast {
   message: string

@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import useSWRInfinite from "swr/infinite"
 import { ArrowRight, ChevronDown, ChevronRight, Eye, Loader2, ShieldCheck, X, Zap } from "lucide-react"
-import { fetcher } from "@/lib/api/fetcher"
+import { useActionLogEntries } from "@/hooks/useActionLogEntries"
+import { formatRelativeTime } from "@/lib/format/date"
 import { redactPii } from "@/lib/format/redact"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { isOperatorChannel } from "@/lib/messaging/thread-constants"
-import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
-import type { ActionLogEntry, ChannelType, ToolCategory } from "@/types"
+import { isOperatorChannel } from "@clerk/agent/thread-constants"
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@clerk/agent/tools"
+import type { ActionLogEntry, ToolCategory } from "@/types"
 
 const PILL_STYLES: Record<ToolCategory, string> = {
   action:        "bg-amber-900/40 text-amber-400 border-amber-800/50",
@@ -61,19 +61,6 @@ const MODE_META: Record<Mode, (typeof MODE_OPTIONS)[number]> = Object.fromEntrie
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  if (mins < 1)  return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24)  return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days === 1) return "yesterday"
-  if (days < 7)  return `${days}d ago`
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-}
-
 function formatDuration(ms: number): string {
   if (ms < 1) return "0ms"
   if (ms < 1000) return `${ms}ms`
@@ -84,9 +71,21 @@ function totalDurationMs(entry: ActionLogEntry): number {
   return entry.actions.reduce((sum, a) => sum + (a.durationMs ?? 0), 0)
 }
 
-function approverLabel(entry: ActionLogEntry): string {
-  if (!entry.approver) return "—"
-  return entry.approver.displayName ?? entry.approver.id
+function cleanApproverLabel(value: string | null | undefined): string | null {
+  const label = value?.trim()
+  if (!label || /^[\s,.;:|/_-]+$/.test(label)) return null
+  return label
+}
+
+function approverLabel(entry: ActionLogEntry): string | null {
+  if (!entry.approver) return null
+  return cleanApproverLabel(entry.approver.displayName) ?? cleanApproverLabel(entry.approver.id)
+}
+
+function entryHref(entry: ActionLogEntry): string | null {
+  if (!entry.threadId) return null
+  if (isOperatorChannel(entry.channelType)) return "/dashboard/agent"
+  return `/dashboard/tickets?thread=${entry.threadId}`
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -177,18 +176,19 @@ function SkeletonRow() {
 
 function EntryRow({ entry }: { entry: ActionLogEntry }) {
   const [expanded, setExpanded] = useState(false)
-  const channel = getChannelInfo(entry.channelType as ChannelType)
+  const channel = getChannelInfo(entry.channelType)
   const isOperator = isOperatorChannel(entry.channelType)
   const tagColor = entry.threadTag ? (TAG_COLORS[entry.threadTag] ?? TAG_COLORS["General"]) : null
   const visibleTools = entry.actions.flatMap(a => (TOOL_CATEGORIES[a.tool] ?? "internal") !== "read" ? [a.tool] : [])
   const uniqueTools = [...new Set(visibleTools)]
 
-  const href = isOperator ? "/dashboard/agent" : `/dashboard/tickets?thread=${entry.threadId}`
+  const href = entryHref(entry)
   const headline = isOperator
     ? (entry.instruction ?? "Agent session")
-    : entry.customerHandle
+    : (entry.customerHandle ?? entry.instruction ?? "Workspace action")
 
   const totalMs = totalDurationMs(entry)
+  const approver = approverLabel(entry)
 
   return (
     <div className="border-b border-white/[0.05]">
@@ -201,9 +201,13 @@ function EntryRow({ entry }: { entry: ActionLogEntry }) {
         {/* Main content */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <Link href={href} className="text-sm font-semibold text-white/80 truncate hover:text-white">
-              {headline}
-            </Link>
+            {href ? (
+              <Link href={href} className="text-sm font-semibold text-white/80 truncate hover:text-white">
+                {headline}
+              </Link>
+            ) : (
+              <span className="text-sm font-semibold text-white/80 truncate">{headline}</span>
+            )}
             {entry.mode && <ModeChip mode={entry.mode} compact />}
             {isOperator ? (
               <span className="text-xs font-semibold text-white/30 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
@@ -228,11 +232,15 @@ function EntryRow({ entry }: { entry: ActionLogEntry }) {
 
           {/* Metadata row: approver · duration · expander */}
           <div className="flex items-center gap-3 pt-1 text-xs text-white/35">
-            <span title="Approver">
-              <span className="text-white/25">By </span>
-              <span className="font-medium text-white/55">{approverLabel(entry)}</span>
-            </span>
-            <span className="text-white/15">·</span>
+            {approver && (
+              <>
+                <span title="Approver">
+                  <span className="text-white/25">By </span>
+                  <span className="font-medium text-white/55">{approver}</span>
+                </span>
+                <span className="text-white/15">·</span>
+              </>
+            )}
             <span title="Total tool runtime" className="tabular-nums">{formatDuration(totalMs)}</span>
             <button
               type="button"
@@ -246,10 +254,14 @@ function EntryRow({ entry }: { entry: ActionLogEntry }) {
         </div>
 
         {/* Timestamp + arrow */}
-        <Link href={href} className="flex items-center gap-1.5 shrink-0 mt-0.5">
-          <span className="text-xs text-white/25">{formatRelative(entry.sentAt)}</span>
-          <ArrowRight className="size-3 text-white/15 group-hover:text-white/40 transition-colors" />
-        </Link>
+        {href ? (
+          <Link href={href} className="flex items-center gap-1.5 shrink-0 mt-0.5">
+            <span className="text-xs text-white/25">{formatRelativeTime(entry.sentAt)}</span>
+            <ArrowRight className="size-3 text-white/15 group-hover:text-white/40 transition-colors" />
+          </Link>
+        ) : (
+          <span className="text-xs text-white/25 shrink-0 mt-0.5">{formatRelativeTime(entry.sentAt)}</span>
+        )}
       </div>
 
       {expanded && (
@@ -265,34 +277,19 @@ function EntryRow({ entry }: { entry: ActionLogEntry }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-interface ApiResponse {
-  entries: ActionLogEntry[]
-  nextCursor: string | null
-}
-
-function buildKey(modes: Mode[]) {
-  return (_pageIndex: number, previousPage: ApiResponse | null): string | null => {
-    if (previousPage && !previousPage.nextCursor) return null
-    const params = new URLSearchParams()
-    if (modes.length) params.set("mode", modes.join(","))
-    if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor)
-    const qs = params.toString()
-    return qs ? `/api/agent/actions?${qs}` : "/api/agent/actions"
-  }
-}
-
 export default function ActivityFeed() {
   const [modes, setModes] = useState<Mode[]>([])
-  const getKey = useMemo(() => buildKey(modes), [modes])
-  const { data, isLoading, error, size, setSize, isValidating } = useSWRInfinite<ApiResponse>(getKey, fetcher, {
-    revalidateOnFocus: false,
-  })
-
-  const allEntries = data?.flatMap((page) => page.entries) ?? []
-  const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
+  const filters = useMemo(() => ({ modes }), [modes])
+  const {
+    entries: allEntries,
+    isLoading,
+    error,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+  } = useActionLogEntries(filters)
 
   const toggleMode = (id: Mode) => {
-    void setSize(1)
     setModes((prev) => (prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]))
   }
 
@@ -374,12 +371,12 @@ export default function ActivityFeed() {
           <div className="flex justify-center py-6">
             {hasMore ? (
               <button type="button"
-                onClick={() => setSize(current => current + 1)}
-                disabled={isValidating}
+                onClick={loadMore}
+                disabled={isLoadingMore}
                 className="text-xs font-medium text-white/35 hover:text-white/60 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
               >
-                {isValidating ? <Loader2 className="size-3 animate-spin" /> : null}
-                {isValidating ? "Loading…" : "Load more"}
+                {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
+                {isLoadingMore ? "Loading…" : "Load more"}
               </button>
             ) : (
               <p className="text-xs text-white/20">All caught up</p>

@@ -10,8 +10,8 @@ import {
   hashInstruction,
   hashPlan,
   recordAgentActionsBatch,
-} from "@/lib/agent/api/agent-actions";
-import type { ActionEntry } from "@/lib/agent/types";
+} from "@clerk/agent/agent-actions";
+import type { ActionEntry } from "@clerk/agent/context";
 import type { AgentPlan } from "@/types";
 
 const refundPlan: AgentPlan = {

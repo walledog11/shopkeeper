@@ -1,10 +1,18 @@
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from '../config/runtime-config.js';
+import { JOB, QUEUE } from '../constants.js';
 import {
   emitOpsAlert,
   incrementOpsAlertWindow,
   type IncrementOpsAlertWindowResult,
   type OpsAlertCounterClient,
 } from '../ops-alerts.js';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  FIVE_MINUTES_MS,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 
 export const QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT = 20;
 
@@ -154,6 +162,31 @@ export async function checkGatewayQueueHealth(
 
   return { snapshots, alerts };
 }
+
+export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const queueHealthQueue = createMaintenanceQueue(context, QUEUE.QUEUE_HEALTH);
+  const inboundQueue = createMaintenanceQueue(context, QUEUE.INBOUND);
+  const summaryQueue = createMaintenanceQueue(context, QUEUE.AI_SUMMARY);
+
+  await scheduleRepeatableJob(queueHealthQueue, JOB.QUEUE_HEALTH_CHECK, JOB.QUEUE_HEALTH_ID, FIVE_MINUTES_MS);
+
+  const worker = createMaintenanceWorker(context, QUEUE.QUEUE_HEALTH, async () => {
+    await checkGatewayQueueHealth([
+      { label: 'inbound', queueName: QUEUE.INBOUND, queue: inboundQueue },
+      { label: 'aiSummary', queueName: QUEUE.AI_SUMMARY, queue: summaryQueue },
+    ], {
+      counterClient: context.producerConn,
+    });
+  }, {
+    label: 'QueueHealth',
+    sentryQueue: 'queue-health',
+  });
+
+  return {
+    workers: [worker],
+    queues: [queueHealthQueue, inboundQueue, summaryQueue],
+  };
+};
 
 export async function readQueueHealthSnapshot(
   monitoredQueue: QueueHealthMonitoredQueue,

@@ -8,12 +8,14 @@ import {
   type DbChannelType,
   type DbThreadFilterStatus,
 } from '@clerk/db';
-import Anthropic from '@anthropic-ai/sdk';
+import { anthropic } from '@clerk/agent/ai';
+import { shopifyRestJson } from '@clerk/agent/shopify';
 import { isSpendCapError } from '@clerk/db';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
-import { JOB, MODEL, STATUS, SHOPIFY_API_VERSION } from '../constants.js';
-import { enforceSpendCap, readUsageFromAnthropic, recordSpend } from '../llm-spend.js';
+import { JOB, MODEL, STATUS } from '../constants.js';
+import { enforceSpendCap, recordSpend } from '@clerk/agent/spend';
+import { readModelUsage } from '@clerk/agent/usage';
 
 const MAX_INPUT_LENGTH = 4000;
 
@@ -44,10 +46,6 @@ export function getInternalApiSecret(): string {
   return secret;
 }
 
-// Lazy init — dotenv runs in worker.ts before any job is processed
-let _anthropic: Anthropic | null = null;
-export const getAnthropic = () => (_anthropic ??= new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }));
-
 export async function lookupShopifyCustomerName(organizationId: string, email: string): Promise<string | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
@@ -56,12 +54,11 @@ export async function lookupShopifyCustomerName(organizationId: string, email: s
   if (!integration?.accessToken || !integration.externalAccountId) return null;
 
   try {
-    const res = await fetch(
-      `https://${integration.externalAccountId}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json?query=email:${encodeURIComponent(email)}&limit=1&fields=first_name,last_name`,
-      { headers: { 'X-Shopify-Access-Token': integration.accessToken } },
+    const data = await shopifyRestJson<{ customers?: Array<{ first_name?: string | null; last_name?: string | null }> }>(
+      { shop: integration.externalAccountId, accessToken: integration.accessToken },
+      'customers/search.json',
+      { query: { query: `email:${email}`, limit: 1, fields: 'first_name,last_name' } },
     );
-    if (!res.ok) return null;
-    const data = (await res.json()) as { customers?: Array<{ first_name?: string | null; last_name?: string | null }> };
     const c = data.customers?.[0];
     if (!c) return null;
     const name = `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
@@ -166,13 +163,13 @@ export async function classifyAndSummarizeNewEmail(
     // Gateway uses default cap (per-org override applies on dashboard agent runs).
     await enforceSpendCap(organizationId, null);
 
-    const response = await getAnthropic().messages.create({
+    const response = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 256,
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: `Subject: ${subject}\n\nBody: ${body}` }],
     });
-    await recordSpend(organizationId, readUsageFromAnthropic(response), MODEL.CLAUDE);
+    await recordSpend(organizationId, readModelUsage(response), MODEL.CLAUDE);
     const block = response.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');
     return parseClassifierJson(block.text);

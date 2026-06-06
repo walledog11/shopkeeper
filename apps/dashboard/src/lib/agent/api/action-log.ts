@@ -1,14 +1,15 @@
 import { Buffer } from "node:buffer";
 import type { Prisma } from "@prisma/client";
-import { db, type DbChannelType as ChannelType } from "@clerk/db";
-import { TOOL_LABELS } from "@/lib/agent/tools";
+import { db, Prisma as PrismaRuntime } from "@clerk/db";
+import { TOOL_LABELS } from "@clerk/agent/tools";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
-import type { ActionLogEntry, AgentTurn } from "@/types";
+import type { ActionLogEntry } from "@/types";
 
 const DEFAULT_PAGE_SIZE = 50;
 const DEFAULT_EXPORT_BATCH_SIZE = 250;
 
 const OPERATOR_DASHBOARD_PLATFORM_PREFIX = "dashboard:";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface AgentActionCursor {
   executedAt: string;
@@ -24,49 +25,39 @@ export function decodeAgentActionCursor(cursor: string): AgentActionCursor | nul
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<AgentActionCursor>;
     if (!parsed.executedAt || !parsed.turnId) return null;
     if (Number.isNaN(new Date(parsed.executedAt).getTime())) return null;
+    if (!UUID_RE.test(parsed.turnId)) return null;
     return { executedAt: parsed.executedAt, turnId: parsed.turnId };
   } catch {
     return null;
   }
 }
 
-function buildActionWhere(orgId: string, filters?: ActionLogFilters): Prisma.AgentActionWhereInput {
-  const where: Prisma.AgentActionWhereInput = { organizationId: orgId };
+function buildTurnGroupWhereSql(orgId: string, filters?: ActionLogFilters): Prisma.Sql {
+  const clauses: Prisma.Sql[] = [PrismaRuntime.sql`a.organization_id = ${orgId}::uuid`];
 
-  if (filters?.from || filters?.to) {
-    where.executedAt = {
-      ...(filters.from ? { gte: filters.from } : {}),
-      ...(filters.to ? { lte: filters.to } : {}),
-    };
-  }
+  if (filters?.from) clauses.push(PrismaRuntime.sql`a.executed_at >= ${filters.from}`);
+  if (filters?.to) clauses.push(PrismaRuntime.sql`a.executed_at <= ${filters.to}`);
   if (filters?.channels?.length) {
-    where.thread = { channelType: { in: filters.channels as ChannelType[] } };
+    clauses.push(PrismaRuntime.sql`t.channel_type::text IN (${PrismaRuntime.join(filters.channels)})`);
+  }
+  if (filters?.tools?.length) {
+    clauses.push(PrismaRuntime.sql`a.tool IN (${PrismaRuntime.join(filters.tools)})`);
+  }
+  if (filters?.modes?.length) {
+    clauses.push(PrismaRuntime.sql`a.mode IN (${PrismaRuntime.join(filters.modes)})`);
+  }
+  if (filters?.errorsOnly) {
+    clauses.push(PrismaRuntime.sql`a.status IN (${PrismaRuntime.join(["error", "policy_block"])})`);
   }
 
-  return where;
+  return PrismaRuntime.sql`WHERE ${PrismaRuntime.join(clauses, " AND ")}`;
 }
 
-function buildTurnSelectionWhere(orgId: string, filters?: ActionLogFilters): Prisma.AgentActionWhereInput {
-  const where = buildActionWhere(orgId, filters);
-  if (filters?.tools?.length) where.tool = { in: filters.tools };
-  if (filters?.modes?.length) where.mode = { in: filters.modes };
-  if (filters?.errorsOnly) where.status = { in: ["error", "policy_block"] };
-  return where;
-}
-
-function applyCursor(
-  where: Prisma.AgentActionWhereInput,
-  cursor: AgentActionCursor | null,
-): Prisma.AgentActionWhereInput {
-  if (!cursor) return where;
-  const at = new Date(cursor.executedAt);
-  return {
-    ...where,
-    OR: [
-      { executedAt: { lt: at } },
-      { executedAt: at, turnId: { lt: cursor.turnId } },
-    ],
-  };
+function buildTurnCursorSql(cursor: AgentActionCursor | null): Prisma.Sql {
+  if (!cursor) return PrismaRuntime.empty;
+  return PrismaRuntime.sql`
+    WHERE (max_executed_at, turn_id) < (${new Date(cursor.executedAt)}, ${cursor.turnId}::uuid)
+  `;
 }
 
 interface RawActionRow {
@@ -115,6 +106,17 @@ const ACTION_LOG_SELECT = {
   },
 } satisfies Prisma.AgentActionSelect;
 
+export interface AgentActionReportStats {
+  totalRuns: number;
+  toolCounts: Record<string, number>;
+  topTools: { tool: string; count: number }[];
+}
+
+interface TurnGroupRow {
+  turnId: string;
+  maxExecutedAt: Date;
+}
+
 function customerHandle(customer: { name: string | null; platformId: string } | null): string {
   if (!customer) return "Unknown";
   if (customer.name) return customer.name;
@@ -145,7 +147,6 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
   if (rows.length === 0) return null;
   // Within a turn every row shares the turn-level fields; first row is canonical.
   const first = rows[0];
-  if (!first.thread) return null;
 
   const actions = rows.map((row) => ({
     tool: row.tool,
@@ -160,10 +161,10 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
   return {
     id: turnId,
     sentAt: first.executedAt.toISOString(),
-    threadId: first.thread.id,
-    channelType: first.thread.channelType,
-    threadTag: first.thread.tag,
-    customerHandle: customerHandle(first.thread.customer),
+    threadId: first.thread?.id ?? first.threadId,
+    channelType: (first.thread?.channelType as ActionLogEntry["channelType"]) ?? null,
+    threadTag: first.thread?.tag ?? null,
+    customerHandle: first.thread ? customerHandle(first.thread.customer) : null,
     instruction: first.instruction ?? null,
     summary,
     actions,
@@ -181,15 +182,22 @@ async function fetchTurnsPage(params: {
   const { orgId, cursor, filters, pageSize } = params;
 
   // Phase 1: select which turn IDs go on this page. We filter at row level (so
-  // tool/errorsOnly narrow the turn set) and then group up to pageSize turns.
-  const selectionWhere = applyCursor(buildTurnSelectionWhere(orgId, filters), cursor);
-  const turnGroups = await db.agentAction.groupBy({
-    by: ["turnId"],
-    where: selectionWhere,
-    _max: { executedAt: true },
-    orderBy: [{ _max: { executedAt: "desc" } }, { turnId: "desc" }],
-    take: pageSize + 1,
-  });
+  // tool/errorsOnly narrow the turn set), then page by the grouped turn sort
+  // key. Applying a cursor before grouping can duplicate multi-action turns.
+  const turnGroups = await db.$queryRaw<TurnGroupRow[]>`
+    WITH turn_groups AS (
+      SELECT a.turn_id, MAX(a.executed_at) AS max_executed_at
+      FROM agent_actions a
+      LEFT JOIN threads t ON t.id = a.thread_id
+      ${buildTurnGroupWhereSql(orgId, filters)}
+      GROUP BY a.turn_id
+    )
+    SELECT turn_id AS "turnId", max_executed_at AS "maxExecutedAt"
+    FROM turn_groups
+    ${buildTurnCursorSql(cursor)}
+    ORDER BY max_executed_at DESC, turn_id DESC
+    LIMIT ${pageSize + 1}
+  `;
 
   if (turnGroups.length === 0) {
     return { turns: [], nextCursor: null };
@@ -197,12 +205,12 @@ async function fetchTurnsPage(params: {
 
   const hasMore = turnGroups.length > pageSize;
   const pageTurns = hasMore ? turnGroups.slice(0, pageSize) : turnGroups;
-  const turnIds = pageTurns.map((g) => g.turnId);
+  const turnIds = pageTurns.map((group) => group.turnId);
 
-  // Phase 2: load every row for the selected turns (unfiltered at row level ,
+  // Phase 2: load every row for the selected turns (unfiltered at row level,
   // we want the full action breakdown even when the user filters by one tool).
   const rows = await db.agentAction.findMany({
-    where: { ...buildActionWhere(orgId, filters), turnId: { in: turnIds } },
+    where: { organizationId: orgId, turnId: { in: turnIds } },
     select: ACTION_LOG_SELECT,
     orderBy: [{ executedAt: "asc" }, { id: "asc" }],
   });
@@ -221,8 +229,8 @@ async function fetchTurnsPage(params: {
   }
 
   const last = pageTurns[pageTurns.length - 1];
-  const nextCursor = hasMore && last._max.executedAt
-    ? { executedAt: last._max.executedAt.toISOString(), turnId: last.turnId }
+  const nextCursor = hasMore
+    ? { executedAt: last.maxExecutedAt.toISOString(), turnId: last.turnId }
     : null;
 
   return { turns: entries, nextCursor };
@@ -300,10 +308,10 @@ export function actionLogEntryToCsvRow(entry: ActionLogEntry): string {
 
   return [
     entry.sentAt,
-    entry.customerHandle,
-    entry.channelType,
+    entry.customerHandle ?? "",
+    entry.channelType ?? "",
     entry.threadTag ?? "",
-    entry.threadId,
+    entry.threadId ?? "",
     entry.mode ?? "",
     entry.instruction ?? "",
     entry.summary,
@@ -341,43 +349,42 @@ export function streamAgentActionLogCsv(params: {
   });
 }
 
-export async function listAgentTurnsForOrgInRange(orgId: string, from: Date, to: Date): Promise<AgentTurn[]> {
-  const rows = await db.agentAction.findMany({
-    where: {
-      organizationId: orgId,
-      executedAt: { gte: from, lte: to },
-    },
-    select: {
-      turnId: true,
-      tool: true,
-      output: true,
-      instruction: true,
-      summary: true,
-      mode: true,
-      executedAt: true,
-    },
-    orderBy: [{ executedAt: "asc" }, { id: "asc" }],
-    take: 50_000,
-  });
+export async function getAgentActionReportStatsForOrgInRange(
+  orgId: string,
+  from: Date,
+  to: Date,
+): Promise<AgentActionReportStats> {
+  const where: Prisma.AgentActionWhereInput = {
+    organizationId: orgId,
+    executedAt: { gte: from, lte: to },
+  };
 
-  const byTurn = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const bucket = byTurn.get(row.turnId);
-    if (bucket) bucket.push(row);
-    else byTurn.set(row.turnId, [row]);
-  }
+  const [runCountRows, toolRows] = await Promise.all([
+    db.$queryRaw<{ total_runs: bigint }[]>`
+      SELECT COUNT(DISTINCT turn_id)::bigint AS total_runs
+      FROM agent_actions
+      WHERE organization_id = ${orgId}::uuid
+        AND executed_at >= ${from}
+        AND executed_at <= ${to}
+    `,
+    db.agentAction.groupBy({
+      by: ["tool"],
+      where,
+      _count: { id: true },
+      orderBy: [{ _count: { id: "desc" } }, { tool: "asc" }],
+    }),
+  ]);
 
-  const turns: AgentTurn[] = [];
-  for (const turnRows of byTurn.values()) {
-    const first = turnRows[0];
-    turns.push({
-      instruction: first.instruction ?? "",
-      actions: turnRows.map((row) => ({ tool: row.tool, result: row.output ?? "" })),
-      summary: first.summary,
-      error: null,
-      ...(isValidMode(first.mode) ? { mode: first.mode } : {}),
-    });
-  }
+  const toolCounts = Object.fromEntries(
+    toolRows.map((row) => [row.tool, row._count.id]),
+  );
 
-  return turns;
+  return {
+    totalRuns: Number(runCountRows[0]?.total_runs ?? 0),
+    toolCounts,
+    topTools: toolRows.slice(0, 5).map((row) => ({
+      tool: row.tool,
+      count: row._count.id,
+    })),
+  };
 }

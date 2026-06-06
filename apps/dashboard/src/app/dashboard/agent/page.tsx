@@ -1,5 +1,5 @@
 import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@/lib/agent/settings"
+import { resolveAgentSettings } from "@clerk/agent/settings"
 import type { OrgSettings } from "@/types"
 import AgentPageClient from "./_components/AgentPageClient"
 

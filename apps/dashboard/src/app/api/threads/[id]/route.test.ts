@@ -33,6 +33,13 @@ const makeReq = (id: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 
+const makeRawReq = (id: string, body: string) =>
+  new Request(`http://localhost:3000/api/threads/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+
 const callPatch = (id: string, body: unknown) =>
   PATCH(makeReq(id, body), { params: Promise.resolve({ id }) });
 
@@ -172,6 +179,26 @@ describe('PATCH /api/threads/[id]', () => {
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
     const res = await callPatch(thread.id, { filterStatus: 'totally-bogus' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects malformed JSON without updating the thread', async () => {
+    const customer = await createTestCustomer(org.id, 'malformed@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const res = await PATCH(makeRawReq(thread.id, '{'), { params: Promise.resolve({ id: thread.id }) });
+
+    expect(res.status).toBe(400);
+    const unchanged = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+    expect(unchanged.status).toBe('open');
+  });
+
+  it('rejects unknown patch fields', async () => {
+    const customer = await createTestCustomer(org.id, 'unknown_field@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const res = await callPatch(thread.id, { status: 'open', surprise: true });
+
     expect(res.status).toBe(400);
   });
 

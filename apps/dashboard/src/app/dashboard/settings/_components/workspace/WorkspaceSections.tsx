@@ -1,0 +1,325 @@
+import { Download, Loader2, Trash2, Upload } from "lucide-react"
+import { OrgAvatar } from "@/components/OrgAvatar"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { SaveButton, SectionCard } from "../shared"
+import type { WorkspaceTabProps, WorkspaceTabState } from "./useWorkspaceTabState"
+
+interface WorkspaceTabViewProps extends WorkspaceTabProps {
+  state: WorkspaceTabState
+}
+
+export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-lg font-bold text-white/80">Workspace</h1>
+        <p className="text-sm text-white/35 mt-0.5">Manage your workspace settings.</p>
+      </div>
+
+      <GeneralSection orgName={orgName} state={state} />
+      <BrandingSection orgName={orgName} state={state} />
+      <DataExportSection state={state} />
+      <DangerZone orgName={orgName} state={state} />
+      <DeleteWorkspaceDialog orgName={orgName} state={state} />
+    </div>
+  )
+}
+
+function GeneralSection({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
+  const {
+    error,
+    save,
+    saved,
+    saving,
+    setWorkspaceName,
+    workspaceName,
+  } = state
+
+  return (
+    <SectionCard title="General" description="How your workspace is identified across the dashboard.">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <span className="block text-xs font-semibold text-white/60">Workspace name</span>
+          <Input
+            aria-label="Workspace name"
+            value={workspaceName}
+            onChange={e => setWorkspaceName(e.target.value)}
+            placeholder="My Store"
+            className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-3">
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <SaveButton
+            saving={saving}
+            saved={saved}
+            onClick={save}
+            disabled={!workspaceName.trim() || workspaceName === orgName}
+          />
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function BrandingSection({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
+  const {
+    fileInputRef,
+    logoBusy,
+    logoError,
+    organization,
+    removeLogo,
+    uploadLogo,
+  } = state
+
+  return (
+    <SectionCard title="Branding" description="Logo shown in the sidebar and the org switcher.">
+      <div className="flex items-center gap-4">
+        <OrgAvatar
+          name={organization?.name ?? orgName}
+          imageUrl={organization?.imageUrl}
+          className="size-14 rounded-md bg-white/[0.06] border border-white/[0.10] text-white/60 font-semibold text-sm shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              aria-label="Workspace logo"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) void uploadLogo(file)
+                if (fileInputRef.current) fileInputRef.current.value = ""
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoBusy || !organization}
+              className="h-8 text-xs font-semibold border-white/[0.10] text-white/60 hover:bg-white/[0.08]"
+            >
+              {logoBusy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
+              {organization?.imageUrl ? "Replace" : "Upload"}
+            </Button>
+            {organization?.imageUrl && (
+              <button type="button"
+                onClick={removeLogo}
+                disabled={logoBusy}
+                className="text-xs text-white/40 hover:text-white/70 transition-colors disabled:opacity-40"
+              >
+                Remove
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-white/30 mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
+          {logoError && <p className="text-xs text-red-400 mt-1">{logoError}</p>}
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function DataExportSection({ state }: { state: WorkspaceTabState }) {
+  const {
+    exportData,
+    exportError,
+    exporting,
+  } = state
+
+  return (
+    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, threads, messages, knowledge base, and canned responses.">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+        <p className="text-xs text-white/35 max-w-md">
+          Useful for backups or migrating off Clerk. Doesn&apos;t include integration tokens, billing data, or audit logs.
+        </p>
+        <div className="flex items-center gap-2 shrink-0">
+          {exportError && <p className="text-xs text-red-400">{exportError}</p>}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportData}
+            disabled={exporting}
+            className="h-8 text-xs font-semibold border-white/[0.10] text-white/60 hover:bg-white/[0.08]"
+          >
+            {exporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+            Export JSON
+          </Button>
+        </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
+  const {
+    clearError,
+    clearSuccess,
+    clearTickets,
+    clearing,
+    confirmClear,
+    isAdmin,
+    isOnlyWorkspace,
+    setConfirmClear,
+    setDeleteConfirmName,
+    setDeleteError,
+    setDeleteOpen,
+  } = state
+
+  return (
+    <div className="rounded-md border border-red-500/20 overflow-hidden">
+      <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
+        <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
+        <p className="text-xs text-white/35 mt-0.5">These actions are permanent and cannot be undone.</p>
+      </div>
+      <div className="p-5 sm:p-6 space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+          <div>
+            <p className="text-sm font-semibold text-white/70">Clear all ticket history</p>
+            <p className="text-xs text-white/35 mt-0.5">Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
+            {clearError && <p className="text-xs text-red-400 mt-1">{clearError}</p>}
+            {clearSuccess && <p className="text-xs text-green-400 mt-1">All ticket history has been cleared.</p>}
+          </div>
+          {confirmClear ? (
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-white/35">Are you sure?</span>
+              <Button
+                size="sm"
+                onClick={clearTickets}
+                disabled={clearing}
+                className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+              >
+                {clearing ? <Loader2 className="size-3 animate-spin" /> : "Yes, clear"}
+              </Button>
+              <button type="button"
+                onClick={() => setConfirmClear(false)}
+                className="text-xs text-white/30 hover:text-white/70 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmClear(true)}
+              className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
+            >
+              Clear history
+            </Button>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="pt-5 border-t border-red-500/15 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+            <div>
+              <p className="text-sm font-semibold text-white/70">Delete workspace</p>
+              <p className="text-xs text-white/35 mt-0.5">
+                Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data , conversations, customers, integrations, knowledge base, and billing. Every member will lose access.
+              </p>
+              {isOnlyWorkspace && (
+                <p className="text-xs text-amber-400/80 mt-1.5">
+                  This is your only workspace. Create another workspace first, or delete your account in Settings → Account to leave Clerk.
+                </p>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setDeleteConfirmName("")
+                setDeleteError(null)
+                setDeleteOpen(true)
+              }}
+              disabled={isOnlyWorkspace}
+              className="h-7 px-3 text-xs font-semibold text-red-400 border-red-500/30 bg-red-500/[0.06] hover:bg-red-500/[0.12] hover:text-red-300 self-start shrink-0"
+            >
+              <Trash2 className="size-3" />
+              Delete workspace
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
+  const {
+    deleteConfirmName,
+    deleteError,
+    deleteOpen,
+    deleteWorkspace,
+    deleting,
+    setDeleteConfirmName,
+    setDeleteError,
+    setDeleteOpen,
+  } = state
+
+  return (
+    <Dialog
+      open={deleteOpen}
+      onOpenChange={(open) => {
+        if (deleting) return
+        setDeleteOpen(open)
+        if (!open) {
+          setDeleteConfirmName("")
+          setDeleteError(null)
+        }
+      }}
+    >
+      <DialogContent className="border-white/10">
+        <DialogHeader>
+          <DialogTitle className="text-white">Delete {orgName}?</DialogTitle>
+          <DialogDescription>
+            This permanently removes the workspace, all conversations, customers, integrations, and knowledge base. Any active subscription will be cancelled. This cannot be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2">
+          <span className="block text-xs font-semibold text-white/60">
+            Type <span className="text-white/85 font-mono">{orgName}</span> to confirm
+          </span>
+          <Input
+            aria-label="Confirm workspace name"
+            autoFocus
+            value={deleteConfirmName}
+            onChange={(e) => setDeleteConfirmName(e.target.value)}
+            placeholder={orgName}
+            disabled={deleting}
+            className="h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/85 placeholder:text-white/25"
+          />
+          {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setDeleteOpen(false)}
+            disabled={deleting}
+            className="border-white/[0.12] text-white/70 hover:bg-white/[0.06]"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={deleteWorkspace}
+            disabled={deleting || deleteConfirmName !== orgName}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+            Delete forever
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}

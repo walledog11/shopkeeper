@@ -111,6 +111,14 @@ describe('POST /api/billing/checkout', () => {
     expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled();
     expect(mockCheckoutCreate).not.toHaveBeenCalled();
   });
+
+  it('rejects malformed JSON before creating a Stripe customer', async () => {
+    const res = await POST(rawReq('{'));
+
+    expect(res.status).toBe(400);
+    expect(mockGetOrCreateStripeCustomer).not.toHaveBeenCalled();
+    expect(mockCheckoutCreate).not.toHaveBeenCalled();
+  });
 });
 
 function jsonReq(body: unknown) {
@@ -118,5 +126,13 @@ function jsonReq(body: unknown) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  });
+}
+
+function rawReq(body: string) {
+  return new Request('http://localhost/api/billing/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
   });
 }

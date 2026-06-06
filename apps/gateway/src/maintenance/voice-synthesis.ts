@@ -10,10 +10,18 @@ import {
   type VoiceProposal,
 } from '@clerk/db';
 import * as Sentry from '@sentry/node';
-import { MODEL } from '../constants.js';
+import { JOB, MODEL, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { enforceSpendCap, readUsageFromAnthropic, recordSpend, type GatewaySpendSettings } from '../llm-spend.js';
-import { getAnthropic } from '../message-handlers/shared.js';
+import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@clerk/agent/spend';
+import { readModelUsage } from '@clerk/agent/usage';
+import { anthropic } from '@clerk/agent/ai';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  ONE_DAY_MS,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 
 const MAX_OUTPUT_TOKENS = 512;
 const MAX_EDIT_CHARS = 600;
@@ -72,7 +80,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-function readSpendSettings(settings: unknown): GatewaySpendSettings | null {
+function readSpendSettings(settings: unknown): SpendCapSettings | null {
   if (!isRecord(settings)) return null;
   const raw = settings.dailyLLMSpendCapUsd;
   if (raw === null || typeof raw === 'number') {
@@ -113,7 +121,7 @@ export async function synthesizeVoiceBrief({
   currentBrief,
   edits,
 }: SynthesizeVoiceBriefParams): Promise<SynthesizedBrief> {
-  const response = await getAnthropic().messages.create({
+  const response = await anthropic.messages.create({
     model: MODEL.VOICE_SYNTHESIS,
     max_tokens: MAX_OUTPUT_TOKENS,
     temperature: 0,
@@ -134,7 +142,7 @@ export async function synthesizeVoiceBrief({
     }],
   });
 
-  await recordSpend(organizationId, readUsageFromAnthropic(response), MODEL.VOICE_SYNTHESIS);
+  await recordSpend(organizationId, readModelUsage(response), MODEL.VOICE_SYNTHESIS);
 
   const text = response.content.find((block): block is Anthropic.TextBlock => block.type === 'text')?.text;
   if (!text) throw new Error('Voice synthesis returned no JSON text');
@@ -240,3 +248,18 @@ export async function runVoiceSynthesis(options: { now?: Date } = {}): Promise<R
 
   return result;
 }
+
+export const registerVoiceSynthesisMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const queue = createMaintenanceQueue(context, QUEUE.VOICE_SYNTHESIS);
+  await scheduleRepeatableJob(queue, JOB.VOICE_SYNTHESIS, JOB.VOICE_SYNTHESIS_ID, ONE_DAY_MS);
+
+  const worker = createMaintenanceWorker(context, QUEUE.VOICE_SYNTHESIS, async () => {
+    const result = await runVoiceSynthesis();
+    logger.info(result, '[VoiceSynthesis] Daily brand-voice synthesis complete');
+  }, {
+    label: 'VoiceSynthesis',
+    sentryQueue: 'voice-synthesis',
+  });
+
+  return { workers: [worker], queues: [queue] };
+};

@@ -2,7 +2,7 @@ import { Suspense } from "react"
 import { parseVoiceProposal } from "@clerk/db"
 import { normalizeStoredOrgSettings } from "@clerk/agent/settings"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@/lib/agent/settings"
+import { resolveAgentSettings } from "@clerk/agent/settings"
 import SettingsPageClient from "./_components/SettingsPageClient"
 
 export default async function SettingsPage() {

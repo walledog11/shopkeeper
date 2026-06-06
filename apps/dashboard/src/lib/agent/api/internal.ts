@@ -1,7 +1,7 @@
 import { db } from "@clerk/db";
 import { BadRequestError } from "@/lib/api/errors";
 import { requireOrgThread } from "@/lib/agent/api/auth";
-import { shopifyRestJson } from "@/lib/agent/shopify";
+import { shopifyRestJson } from "@clerk/agent/shopify";
 import logger from "@/lib/server/logger";
 
 interface ResolveInternalAgentThreadParams {

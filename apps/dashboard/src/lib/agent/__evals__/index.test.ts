@@ -16,6 +16,7 @@ import {
   probeSystemPromptCacheRead,
   summarizeResults,
   formatSummary,
+  formatUsageBreakdown,
   shouldUpdateBaseline,
   writeBaseline,
   loadBaseline,
@@ -94,6 +95,7 @@ describe("agent evals", () => {
     if (collected.length === 0) return;
     const summary = summarizeResults(collected);
     console.log(formatSummary(summary));
+    console.log(formatUsageBreakdown(collected));
 
     if (shouldUpdateBaseline()) {
       writeBaseline(summary);

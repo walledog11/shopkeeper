@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { parseAgentQuickApproveBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import {
   executeCurrentCachedHomePlan,
   findFailedToolResult,
@@ -38,7 +39,7 @@ export const POST = withOrgRoute(
   },
   async ({ org, request }) => {
     const startedAt = Date.now();
-    const { threadId } = parseAgentQuickApproveBody(await request.json());
+    const { threadId } = parseAgentQuickApproveBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const approver = await resolveSessionApprover();
     const executed = await executeCurrentCachedHomePlan({

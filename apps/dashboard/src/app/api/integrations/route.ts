@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db, type DbChannelType } from '@clerk/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
+import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
+import { saveForwardingEmailIntegration } from './_lib/email-integration';
+import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
+
+type ChannelTypeValue = (typeof CHANNEL_TYPE)[keyof typeof CHANNEL_TYPE];
 
 function serializeIntegration<T extends {
   accessToken?: string | null;
@@ -61,11 +65,12 @@ export const POST = withOrgRoute(
       throw new BadRequestError('Missing platform or externalAccountId');
     }
 
-    if (!Object.values(CHANNEL_TYPE).includes(platform)) {
+    if (typeof platform !== 'string' || !Object.values(CHANNEL_TYPE).includes(platform as ChannelTypeValue)) {
       throw new BadRequestError('Invalid platform');
     }
+    const platformValue = platform as DbChannelType;
 
-    if (platform === CHANNEL_TYPE.EMAIL) {
+    if (platformValue === CHANNEL_TYPE.EMAIL) {
       const normalizedEmail = String(externalAccountId).trim().toLowerCase();
       if (!normalizedEmail) {
         throw new BadRequestError('Missing platform or externalAccountId');
@@ -74,86 +79,23 @@ export const POST = withOrgRoute(
         ? normalizedEmail
         : String(fromEmail).trim().toLowerCase() || normalizedEmail;
 
-      const emailRows = await db.integration.findMany({
-        where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-        orderBy: { createdAt: 'asc' },
+      const integration = await saveForwardingEmailIntegration({
+        organizationId: org.id,
+        externalAccountId: normalizedEmail,
+        fromEmail: normalizedFromEmail,
       });
-      const keeper = emailRows.find(row => row.externalAccountId.toLowerCase() === normalizedEmail) ?? emailRows[0];
-
-      let integration;
-      if (keeper) {
-        await db.integration.deleteMany({
-          where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL, id: { not: keeper.id } },
-        });
-        integration = await db.integration.update({
-          where: { id: keeper.id },
-          data: {
-            externalAccountId: normalizedEmail,
-            fromEmail: normalizedFromEmail,
-            accessToken: null,
-            refreshToken: null,
-            tokenExpiresAt: null,
-            metadata: { provider: 'postmark' },
-          },
-        });
-      } else {
-        try {
-          integration = await db.integration.create({
-            data: {
-              organizationId: org.id,
-              platform: CHANNEL_TYPE.EMAIL,
-              externalAccountId: normalizedEmail,
-              fromEmail: normalizedFromEmail,
-              metadata: { provider: 'postmark' },
-            },
-          });
-        } catch (err) {
-          if ((err as { code?: string }).code !== 'P2002') throw err;
-          const race = (await db.integration.findFirst({
-            where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-            orderBy: { createdAt: 'asc' },
-          }))!;
-          await db.integration.deleteMany({
-            where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL, id: { not: race.id } },
-          });
-          integration = await db.integration.update({
-            where: { id: race.id },
-            data: {
-              externalAccountId: normalizedEmail,
-              fromEmail: normalizedFromEmail,
-              accessToken: null,
-              refreshToken: null,
-              tokenExpiresAt: null,
-              metadata: { provider: 'postmark' },
-            },
-          });
-        }
-      }
 
       return NextResponse.json(serializeIntegration(integration), { status: 201 });
     }
 
-    const uniqueKey = { organizationId: org.id, platform, externalAccountId };
-    let existing = await db.integration.findUnique({
-      where: { organizationId_platform_externalAccountId: uniqueKey },
+    const integration = await upsertRaceSafeIntegration({
+      organizationId: org.id,
+      platform: platformValue,
+      externalAccountId: String(externalAccountId),
+      data: {
+        ...(fromEmail !== undefined && { fromEmail: fromEmail === null ? null : String(fromEmail) }),
+      },
     });
-    let integration;
-    if (existing) {
-      integration = await db.integration.update({
-        where: { id: existing.id },
-        data: { ...(fromEmail !== undefined && { fromEmail }) },
-      });
-    } else {
-      try {
-        integration = await db.integration.create({
-          data: { organizationId: org.id, platform, externalAccountId, ...(fromEmail && { fromEmail }) },
-        });
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        existing = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: uniqueKey } }))!;
-        integration = await db.integration.update({ where: { id: existing.id }, data: { ...(fromEmail !== undefined && { fromEmail }) } });
-      }
-    }
 
     return NextResponse.json(serializeIntegration(integration), { status: 201 });
   },

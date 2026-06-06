@@ -156,6 +156,21 @@ export function parseAgentPlanInternalBody(body: unknown) {
   };
 }
 
+export function parseAgentOrderRiskInternalBody(body: unknown) {
+  const candidate = requireObject(body);
+  return {
+    orgId: requireNonEmptyString(candidate.orgId, "orgId"),
+    orderId: requireNonEmptyString(candidate.orderId, "orderId"),
+  };
+}
+
+export function parseAgentVoiceBody(body: unknown) {
+  const candidate = requireObject(body);
+  return {
+    action: parseOptionalString(candidate.action, "action"),
+  };
+}
+
 export type ActionLogMode = "human_approved" | "auto_executed" | "read_only";
 
 const VALID_MODES: ActionLogMode[] = ["human_approved", "auto_executed", "read_only"];

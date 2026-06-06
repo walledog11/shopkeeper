@@ -1,4 +1,4 @@
-import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@/lib/agent/tools/turn-content";
+import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@clerk/agent/tools";
 import type { AgentTurn } from "@/types";
 
 export type AgentTurnAction = AgentTurn["actions"][number];

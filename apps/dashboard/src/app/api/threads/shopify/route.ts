@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
+import { parseShopifyThreadBody } from '@/app/api/threads/_lib/validation';
 
 /**
  * POST /api/threads/shopify
@@ -15,11 +16,8 @@ import { withOrgRoute } from '@/lib/api/route';
 export const POST = withOrgRoute(
   { context: 'Threads Shopify POST', errorMessage: 'Failed to create thread' },
   async ({ org, request }) => {
-    const { shopifyCustomerId, customerEmail, customerName, orderName } = await request.json();
-
-    if (!shopifyCustomerId || !customerEmail) {
-      throw new BadRequestError('Missing shopifyCustomerId or customerEmail');
-    }
+    const { shopifyCustomerId, customerEmail, customerName, orderName } =
+      parseShopifyThreadBody(await readRequiredJsonObject(request));
 
     // Upsert the customer keyed by email (the canonical platformId for email threads)
     const platformId = customerEmail.toLowerCase();
@@ -31,9 +29,9 @@ export const POST = withOrgRoute(
       try {
         customer = await db.customer.create({
           data: {
-            organizationId: org.id,
-            platformId,
-            name: customerName ?? null,
+        organizationId: org.id,
+        platformId,
+        name: customerName ?? null,
           },
         });
       } catch (err) {
@@ -73,7 +71,7 @@ export const POST = withOrgRoute(
         customerId: customer.id,
         channelType: 'email',
         status: 'open',
-        shopifyCustomerId: String(shopifyCustomerId),
+        shopifyCustomerId,
         tag: orderName ? `Order ${orderName}` : 'Support',
       },
     });

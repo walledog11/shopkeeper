@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { handleApiError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { getDashboardAppUrl } from '@/lib/env';
-
-const ALLOWED_ROLES = ['org:admin', 'org:member'];
+import { parseTeamInviteBody } from '@/app/api/team/_lib/validation';
 
 export async function GET() {
   try {
@@ -44,16 +44,13 @@ export async function POST(request: Request) {
     const { orgId, userId } = await auth();
     if (!orgId || !userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { emailAddress, role } = await request.json();
-    if (!emailAddress) return NextResponse.json({ error: 'Email required' }, { status: 400 });
-
-    const resolvedRole = ALLOWED_ROLES.includes(role) ? role : 'org:member';
+    const { emailAddress, role } = parseTeamInviteBody(await readRequiredJsonObject(request));
 
     const client = await clerkClient();
     const invitation = await client.organizations.createOrganizationInvitation({
       organizationId: orgId,
       emailAddress,
-      role: resolvedRole,
+      role,
       inviterUserId: userId,
       redirectUrl: `${getDashboardAppUrl()}/dashboard`,
     });

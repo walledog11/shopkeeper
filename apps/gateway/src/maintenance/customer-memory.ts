@@ -6,11 +6,18 @@ import {
   toCustomerMemoryJson,
 } from '@clerk/db';
 import * as Sentry from '@sentry/node';
-import { JOB } from '../constants.js';
+import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { enforceSpendCap, type GatewaySpendSettings } from '../llm-spend.js';
+import { enforceSpendCap, type SpendCapSettings } from '@clerk/agent/spend';
 import type { CustomerMemoryJobData } from '../types.js';
 import { summarizeCustomerMemory } from './customer-memory-summarizer.js';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  ONE_DAY_MS,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 
 export const CUSTOMER_MEMORY_STALE_AFTER_DAYS = 30;
 export const CUSTOMER_MEMORY_STALE_BATCH_PER_ORG = 50;
@@ -28,12 +35,13 @@ export interface RefreshStaleCustomerMemoryResult {
 
 interface RefreshStaleCustomerMemoryOptions {
   now?: Date;
+  organizationIds?: string[];
   staleAfterDays?: number;
   recentThreadWindowDays?: number;
   batchPerOrg?: number;
 }
 
-function readSpendSettings(settings: unknown): GatewaySpendSettings | null {
+function readSpendSettings(settings: unknown): SpendCapSettings | null {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) return null;
   const raw = (settings as Record<string, unknown>).dailyLLMSpendCapUsd;
   if (raw === null || typeof raw === 'number') {
@@ -82,6 +90,50 @@ export async function enqueueCustomerMemoryThreadClose(
   });
 }
 
+export const registerCustomerMemoryMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const customerMemoryQueue = createMaintenanceQueue<CustomerMemoryJobData>(context, QUEUE.CUSTOMER_MEMORY, {
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+  });
+
+  const customerMemoryWorker = createMaintenanceWorker<CustomerMemoryJobData>(
+    context,
+    QUEUE.CUSTOMER_MEMORY,
+    async (job) => {
+      await updateCustomerMemoryOnThreadClose(job.data.threadId, {
+        closedAt: job.data.closedAt,
+        organizationId: job.data.organizationId,
+      });
+    },
+    {
+      label: 'CustomerMemory',
+      sentryQueue: 'customer-memory',
+    },
+  );
+
+  const customerMemoryRefreshQueue = createMaintenanceQueue(context, QUEUE.CUSTOMER_MEMORY_REFRESH, {
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+  });
+  await scheduleRepeatableJob(
+    customerMemoryRefreshQueue,
+    JOB.REFRESH_STALE_CUSTOMER_MEMORY,
+    JOB.REFRESH_STALE_CUSTOMER_MEMORY_ID,
+    ONE_DAY_MS,
+  );
+
+  const customerMemoryRefreshWorker = createMaintenanceWorker(context, QUEUE.CUSTOMER_MEMORY_REFRESH, async () => {
+    const result = await refreshStaleCustomerMemory();
+    logger.info(result, '[CustomerMemory] Stale refresh complete');
+  }, {
+    label: 'CustomerMemoryRefresh',
+    sentryQueue: 'customer-memory-refresh',
+  });
+
+  return {
+    workers: [customerMemoryWorker, customerMemoryRefreshWorker],
+    queues: [customerMemoryQueue, customerMemoryRefreshQueue],
+  };
+};
+
 export async function refreshStaleCustomerMemory(
   options: RefreshStaleCustomerMemoryOptions = {},
 ): Promise<RefreshStaleCustomerMemoryResult> {
@@ -113,7 +165,10 @@ export async function refreshStaleCustomerMemory(
   };
 
   const organizations = await db.organization.findMany({
-    where: { customers: { some: staleCustomerWhere } },
+    where: {
+      ...(options.organizationIds ? { id: { in: options.organizationIds } } : {}),
+      customers: { some: staleCustomerWhere },
+    },
     select: { id: true, settings: true },
     orderBy: { createdAt: 'asc' },
   });

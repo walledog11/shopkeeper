@@ -4,6 +4,7 @@ import { useState } from "react"
 import Image from "next/image"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
+import { formatLastActivityTime } from "@/lib/format/date"
 import { getEmailReauthorizePath } from "@/lib/messaging/email/providers"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
@@ -17,7 +18,6 @@ import {
   ShopifyConnectBody,
 } from "./connect-bodies"
 import {
-  formatLastActivity,
   isPostmarkEmail,
   isTokenExpired,
   isTokenExpiringSoon,
@@ -156,7 +156,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           <div className="flex items-center gap-3 shrink-0 mt-1">
             {isConnected && lastActivity && !needsReauth && (
               <span className="text-xs text-white/30 hidden sm:block">
-                synced {formatLastActivity(lastActivity)}
+                synced {formatLastActivityTime(lastActivity)}
               </span>
             )}
             <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />

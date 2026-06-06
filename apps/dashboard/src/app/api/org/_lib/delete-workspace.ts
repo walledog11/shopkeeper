@@ -1,4 +1,5 @@
 import stripe from '@/lib/billing/stripe';
+import { readOptionalJsonObject } from '@/lib/api/body';
 import logger from '@/lib/server/logger';
 
 export const LAST_WORKSPACE_MESSAGE =
@@ -9,8 +10,11 @@ export interface ClerkMembershipList {
 }
 
 export async function readWorkspaceDeleteConfirmation(request: Request): Promise<string | undefined> {
-  const body = await request.json().catch(() => ({})) as { confirmName?: unknown };
-  return typeof body.confirmName === 'string' ? body.confirmName : undefined;
+  const body = await readOptionalJsonObject(request, {
+    malformed: { message: 'Invalid JSON body' },
+    object: { message: 'Invalid request body' },
+  });
+  return typeof body?.confirmName === 'string' ? body.confirmName : undefined;
 }
 
 export function hasOtherWorkspace(memberships: ClerkMembershipList, clerkOrgId: string): boolean {

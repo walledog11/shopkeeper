@@ -1,5 +1,5 @@
 import type { OrgSettings } from "@/types";
-import { resolveAgentSettings } from "../settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import type { OrderOpsContext } from "./context";
 
 // Thread-less system prompt for the fraud-risk monitor spike. Note what it does

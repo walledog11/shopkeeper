@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@clerk/db";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -20,7 +21,7 @@ export const POST = withOrgRoute(
   },
   async ({ org, request }) => {
     const startedAt = Date.now();
-    const { threadId, instruction, force } = parseAgentPlanBody(await request.json());
+    const { threadId, instruction, force } = parseAgentPlanBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
     const instructionHash = hashInstructionForLog(instruction);
 

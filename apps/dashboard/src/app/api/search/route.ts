@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@/lib/messaging/thread-constants';
+import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
 
 export const dynamic = 'force-dynamic';
 

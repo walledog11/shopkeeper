@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings";
+import { AGENT_SETTINGS_DEFAULTS } from "@clerk/agent/settings";
 import type { OrgSettings } from "@/types";
 import {
   applyTierDefaultsToInheritedSettings,

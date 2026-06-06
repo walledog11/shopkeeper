@@ -8,13 +8,13 @@ import {
 } from "@clerk/db/test-helpers";
 import {
   decodeAgentActionCursor,
+  getAgentActionReportStatsForOrgInRange,
   iterateAgentActionLogEntries,
   listAgentActionLogEntries,
-  listAgentTurnsForOrgInRange,
   streamAgentActionLogCsv,
 } from "@/lib/agent/api/action-log";
-import { recordAgentActionsBatch } from "@/lib/agent/api/agent-actions";
-import type { ActionEntry } from "@/lib/agent/types";
+import { recordAgentActionsBatch } from "@clerk/agent/agent-actions";
+import type { ActionEntry } from "@clerk/agent/context";
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
 
@@ -29,8 +29,8 @@ afterEach(async () => {
 
 async function seedTurn(params: {
   orgId: string;
-  threadId: string;
-  customerId: string;
+  threadId?: string | null;
+  customerId?: string | null;
   instruction: string;
   summary: string;
   actions: ActionEntry[];
@@ -38,8 +38,8 @@ async function seedTurn(params: {
 }) {
   await recordAgentActionsBatch({
     orgId: params.orgId,
-    threadId: params.threadId,
-    customerId: params.customerId,
+    threadId: params.threadId ?? null,
+    customerId: params.customerId ?? null,
     mode: params.mode ?? "human_approved",
     actions: params.actions,
     instruction: params.instruction,
@@ -90,6 +90,48 @@ describe("action-log reader (AgentAction-sourced)", () => {
     expect(entries[0].actions.map((a) => a.tool)).toEqual(["create_refund", "update_thread_status"]);
   });
 
+  it("keeps threadless order-operation actions in the read model", async () => {
+    org = await createTestOrg();
+
+    await seedTurn({
+      orgId: org.id,
+      threadId: null,
+      customerId: null,
+      mode: "auto_executed",
+      instruction: "order-risk-review:998877",
+      summary: "Flagged order #1001 for review: billing/shipping country mismatch.",
+      actions: [
+        {
+          tool: "flag_order",
+          result: "Order flagged for human review: billing/shipping country mismatch.",
+          input: { reason: "billing/shipping country mismatch" },
+          durationMs: 5,
+          status: "success",
+          category: "action",
+        },
+      ],
+    });
+
+    const { entries, nextCursor } = await listAgentActionLogEntries({ orgId: org.id });
+    expect(nextCursor).toBeNull();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      threadId: null,
+      channelType: null,
+      threadTag: null,
+      customerHandle: null,
+      instruction: "order-risk-review:998877",
+      summary: "Flagged order #1001 for review: billing/shipping country mismatch.",
+      mode: "auto_executed",
+    });
+    expect(entries[0].actions).toHaveLength(1);
+    expect(entries[0].actions[0]).toMatchObject({
+      tool: "flag_order",
+      result: "Order flagged for human review: billing/shipping country mismatch.",
+      status: "success",
+    });
+  });
+
   it("paginates turns with the (executedAt, turnId) cursor", async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
@@ -120,6 +162,48 @@ describe("action-log reader (AgentAction-sourced)", () => {
 
     const seenIds = new Set([...first.entries, ...second.entries].map((e) => e.id));
     expect(seenIds.size).toBe(3);
+  });
+
+  it("does not duplicate multi-action turns on cursor pages", async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      instruction: "Older single-action turn",
+      summary: "Replied.",
+      actions: [{ tool: "send_reply", result: "Reply sent.", status: "success" }],
+    });
+
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      instruction: "Latest multi-action turn",
+      summary: "Refunded and replied.",
+      actions: [
+        { tool: "create_refund", result: "Refunded $10.00.", status: "success" },
+        { tool: "send_reply", result: "Reply sent.", status: "success" },
+      ],
+    });
+
+    const first = await listAgentActionLogEntries({ orgId: org.id, pageSize: 1 });
+    expect(first.entries).toHaveLength(1);
+    expect(first.entries[0].instruction).toBe("Latest multi-action turn");
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = await listAgentActionLogEntries({
+      orgId: org.id,
+      pageSize: 1,
+      cursor: decodeAgentActionCursor(first.nextCursor!),
+    });
+
+    expect(second.entries).toHaveLength(1);
+    expect(second.entries[0].instruction).toBe("Older single-action turn");
+    expect(second.entries[0].id).not.toBe(first.entries[0].id);
   });
 
   it("applies tool/status filters at the turn level but still returns the full action breakdown", async () => {
@@ -179,7 +263,7 @@ describe("action-log reader (AgentAction-sourced)", () => {
     expect(lines[1]).toContain('"human_approved"');
   });
 
-  it("listAgentTurnsForOrgInRange reconstructs turns for the reports page", async () => {
+  it("getAgentActionReportStatsForOrgInRange aggregates report metrics in the database", async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
@@ -195,15 +279,29 @@ describe("action-log reader (AgentAction-sourced)", () => {
         { tool: "send_reply", result: "Reply sent.", status: "success" },
       ],
     });
+    await seedTurn({
+      orgId: org.id,
+      threadId: null,
+      customerId: null,
+      mode: "auto_executed",
+      instruction: "order-risk-review:998877",
+      summary: "Flagged order.",
+      actions: [{ tool: "flag_order", result: "Flagged.", status: "success", category: "action" }],
+    });
 
     const now = new Date();
-    const turns = await listAgentTurnsForOrgInRange(
+    const stats = await getAgentActionReportStatsForOrgInRange(
       org.id,
       new Date(now.getTime() - 60 * 60 * 1000),
       new Date(now.getTime() + 60 * 60 * 1000),
     );
-    expect(turns).toHaveLength(1);
-    expect(turns[0].actions.map((a) => a.tool).sort()).toEqual(["create_refund", "send_reply"]);
+    expect(stats.totalRuns).toBe(2);
+    expect(stats.toolCounts).toMatchObject({
+      create_refund: 1,
+      send_reply: 1,
+      flag_order: 1,
+    });
+    expect(stats.topTools.map((tool) => tool.tool).sort()).toEqual(["create_refund", "flag_order", "send_reply"]);
   });
 
   it("iterateAgentActionLogEntries yields every turn across multiple batches", async () => {

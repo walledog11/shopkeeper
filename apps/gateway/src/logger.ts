@@ -1,4 +1,5 @@
 import pino from 'pino';
+import { installAgentLogger } from '@clerk/agent/logger';
 import { PINO_REDACT_PATHS, REDACTED } from './observability/redaction.js';
 
 const logger = pino({
@@ -11,5 +12,7 @@ const logger = pino({
     },
   }),
 });
+
+installAgentLogger(logger);
 
 export default logger;

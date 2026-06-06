@@ -182,6 +182,7 @@ export {
 } from './llm-spend.js';
 export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
 export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
+export { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from './refund-spend.js';
 export {
   CUSTOMER_MEMORY_VERSION,
   EMPTY_MEMORY,

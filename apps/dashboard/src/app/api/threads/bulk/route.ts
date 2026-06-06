@@ -1,23 +1,15 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { NotFoundError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
+import { parseBulkThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 
 export const PATCH = withOrgRoute(
   { context: 'Threads Bulk PATCH', errorMessage: 'Failed to bulk update threads' },
   async ({ org, request }) => {
-    const { ids, action, tag } = await request.json();
-
-    if (!ids || !Array.isArray(ids) || ids.length === 0) {
-      throw new BadRequestError('Missing ids');
-    }
-    if (ids.length > 100) {
-      throw new BadRequestError('Too many ids , max 100 per request');
-    }
-    if (!['close', 'open', 'tag', 'archive'].includes(action)) {
-      throw new BadRequestError('Invalid action');
-    }
+    const { ids, action, tag } = parseBulkThreadPatchBody(await readRequiredJsonObject(request));
 
     // Verify all threads belong to this org
     const threads = await db.thread.findMany({
@@ -34,7 +26,7 @@ export const PATCH = withOrgRoute(
     const data: Record<string, unknown> = {};
     if (action === 'close') data.status = 'closed';
     if (action === 'open') data.status = 'open';
-    if (action === 'tag' && tag !== undefined) data.tag = tag || null;
+    if (action === 'tag') data.tag = tag;
     if (action === 'archive') data.archivedAt = new Date();
 
     await db.thread.updateMany({

@@ -14,6 +14,8 @@ export const KEY_FACTS_MAX = 10;
 export const RECENT_INTERACTIONS_MAX = 10;
 export const OUTCOME_MAX_CHARS = 120;
 
+const INTERACTION_FIELD_MAX_CHARS = 120;
+
 export interface CustomerMemoryPolicyFlags {
   vip?: boolean;
   complaintPattern?: boolean;
@@ -60,10 +62,10 @@ function boundPolicyFlags(f: CustomerMemoryPolicyFlags): CustomerMemoryPolicyFla
 
 function boundInteraction(i: CustomerMemoryInteraction): CustomerMemoryInteraction {
   return {
-    threadId: i.threadId,
-    channel: i.channel,
-    tag: i.tag,
-    closedAt: i.closedAt,
+    threadId: i.threadId.slice(0, INTERACTION_FIELD_MAX_CHARS),
+    channel: i.channel.slice(0, INTERACTION_FIELD_MAX_CHARS),
+    tag: typeof i.tag === 'string' ? i.tag.slice(0, INTERACTION_FIELD_MAX_CHARS) : i.tag,
+    closedAt: i.closedAt.slice(0, INTERACTION_FIELD_MAX_CHARS),
     outcome: i.outcome.slice(0, OUTCOME_MAX_CHARS),
   };
 }

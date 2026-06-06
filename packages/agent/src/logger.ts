@@ -1,14 +1,53 @@
-// Minimal console-backed logger for the shared agent core. Mirrors the pino
-// `(obj, msg)` call shape used across the codebase so moved modules log the
-// same way. The host app may install its own logger via the runtime-deps seam
-// in a later extraction step; until then failure-path warnings still surface.
-type LogFn = (obj: unknown, msg?: string) => void;
+export type AgentLogPayload = Record<string, unknown> | string;
+export type AgentLogFn = (obj: AgentLogPayload, msg?: string) => void;
 
-const logger: { warn: LogFn; info: LogFn; error: LogFn; debug: LogFn } = {
-  warn: (obj, msg) => console.warn(msg ?? "", obj),
-  info: (obj, msg) => console.info(msg ?? "", obj),
-  error: (obj, msg) => console.error(msg ?? "", obj),
-  debug: (obj, msg) => console.debug(msg ?? "", obj),
+export interface AgentLogger {
+  warn: AgentLogFn;
+  info: AgentLogFn;
+  error: AgentLogFn;
+  debug: AgentLogFn;
+}
+
+function consoleLog(
+  write: (message?: unknown, ...optionalParams: unknown[]) => void,
+  obj: AgentLogPayload,
+  msg?: string,
+): void {
+  if (typeof obj === "string") {
+    write(obj);
+    return;
+  }
+
+  if (msg) {
+    write(msg, obj);
+    return;
+  }
+
+  write(obj);
+}
+
+const consoleLogger: AgentLogger = {
+  warn: (obj, msg) => consoleLog(console.warn, obj, msg),
+  info: (obj, msg) => consoleLog(console.info, obj, msg),
+  error: (obj, msg) => consoleLog(console.error, obj, msg),
+  debug: (obj, msg) => consoleLog(console.debug, obj, msg),
+};
+
+let installedLogger: AgentLogger = consoleLogger;
+
+export function installAgentLogger(logger: AgentLogger): void {
+  installedLogger = logger;
+}
+
+export function resetAgentLoggerForTests(): void {
+  installedLogger = consoleLogger;
+}
+
+const logger: AgentLogger = {
+  warn: (obj, msg) => installedLogger.warn(obj, msg),
+  info: (obj, msg) => installedLogger.info(obj, msg),
+  error: (obj, msg) => installedLogger.error(obj, msg),
+  debug: (obj, msg) => installedLogger.debug(obj, msg),
 };
 
 export default logger;

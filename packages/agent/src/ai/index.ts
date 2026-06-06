@@ -1,5 +1,7 @@
 import { anthropic } from "./anthropic.js";
 import type Anthropic from "@anthropic-ai/sdk";
+
+export { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./anthropic.js";
 import type { OrgSettings } from "../types.js";
 import { enforceSpendCap, recordSpend } from "../spend.js";
 import { resolveAgentSettings } from "../settings.js";

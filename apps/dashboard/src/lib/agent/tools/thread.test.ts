@@ -12,7 +12,7 @@ import {
 } from '@clerk/db/test-helpers';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 import { escalateToHuman, sendEmail, sendReply, updateThreadStatus } from './thread';
-import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@/lib/messaging/thread-constants';
+import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@clerk/agent/thread-constants';
 
 const {
   mockEnqueueCustomerMemory,

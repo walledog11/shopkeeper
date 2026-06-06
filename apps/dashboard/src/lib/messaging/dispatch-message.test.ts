@@ -76,12 +76,13 @@ describe('dispatchMessage', () => {
     const customer = await createTestCustomer(org.id, 'customer@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
     await db.thread.update({ where: { id: thread.id }, data: { subject: 'Order status' } });
+    const incomingMessageId = `<incoming-${thread.id}@example.test>`;
     await db.message.create({
       data: {
         threadId: thread.id,
         senderType: SenderType.customer,
         contentText: 'Where is it?',
-        externalMessageId: '<incoming@example.test>',
+        externalMessageId: incomingMessageId,
       },
     });
 
@@ -92,8 +93,8 @@ describe('dispatchMessage', () => {
       Subject: 'Re: Order status',
       Headers: [
         { Name: 'Message-ID', Value: `<thread-${thread.id}@mail.test>` },
-        { Name: 'In-Reply-To', Value: '<incoming@example.test>' },
-        { Name: 'References', Value: '<incoming@example.test>' },
+        { Name: 'In-Reply-To', Value: incomingMessageId },
+        { Name: 'References', Value: incomingMessageId },
       ],
     }));
     const saved = await db.message.findFirst({

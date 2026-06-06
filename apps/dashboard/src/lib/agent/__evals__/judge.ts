@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { CustomerMemory } from "@clerk/db";
-import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
+import { anthropic, buildCachedSystemPrompt } from "@clerk/agent/ai";
 import type { OrgSettings } from "@/types";
-import { readModelUsage } from "../usage";
+import { readModelUsage } from "@clerk/agent/usage";
 import type { JudgeResult, RubricCheck } from "./types";
 
 const JUDGE_MODEL = "claude-sonnet-4-6";

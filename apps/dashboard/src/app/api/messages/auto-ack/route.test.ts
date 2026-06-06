@@ -15,7 +15,7 @@ vi.mock('@/lib/messaging/dispatch-message', () => ({
   dispatchMessage: mockDispatchMessage,
 }));
 
-import { AGENT_SETTINGS_DEFAULTS } from '@/lib/agent/settings';
+import { AGENT_SETTINGS_DEFAULTS } from '@clerk/agent/settings';
 import { POST } from './route';
 
 const originalEnv = {

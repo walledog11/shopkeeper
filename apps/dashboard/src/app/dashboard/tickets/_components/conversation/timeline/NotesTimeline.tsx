@@ -2,7 +2,7 @@
 
 import { AlertCircle, Bot, Check, RefreshCw, Smartphone, Users } from "lucide-react"
 import type { AgentTurn, Ticket } from "@/types"
-import { TOOL_LABELS } from "@/lib/agent/tools"
+import { TOOL_LABELS } from "@clerk/agent/tools"
 
 interface Props {
   agentName: string

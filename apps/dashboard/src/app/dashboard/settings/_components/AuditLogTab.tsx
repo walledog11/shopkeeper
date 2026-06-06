@@ -4,20 +4,14 @@ import Link from "next/link"
 import Image from "next/image"
 import { useMemo, useState } from "react"
 import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X, Zap } from "lucide-react"
-import useSWRInfinite from "swr/infinite"
-import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
-import { getChannelInfo } from "@/lib/messaging/channels"
-import { isOperatorChannel } from "@/lib/messaging/thread-constants"
-import { fetcher } from "@/lib/api/fetcher"
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@clerk/agent/tools"
+import { getChannelInfo, getChannelOptions } from "@/lib/messaging/channels"
+import { isOperatorChannel } from "@clerk/agent/thread-constants"
+import { buildActionLogSearchParams, useActionLogEntries, type ActionLogQueryFilters } from "@/hooks/useActionLogEntries"
 import { formatDate, timeAgo } from "@/lib/format/date"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Input } from "@/components/ui/input"
-import type { ActionLogEntry, ChannelType, ToolCategory } from "@/types"
-
-interface Page {
-  entries: ActionLogEntry[]
-  nextCursor: string | null
-}
+import type { ActionLogEntry, ToolCategory } from "@/types"
 
 interface Filters {
   channels: string[]
@@ -34,15 +28,7 @@ interface OptionGroup {
   options: { id: string; label: string }[]
 }
 
-const CHANNEL_OPTIONS: { id: ChannelType; label: string }[] = [
-  { id: "email", label: "Email" },
-  { id: "ig_dm", label: "Instagram" },
-  { id: "sms", label: "SMS" },
-  { id: "shopify", label: "Shopify" },
-  { id: "tiktok", label: "TikTok" },
-  { id: "dashboard_agent", label: "Concierge" },
-  { id: "sms_agent", label: "WhatsApp ops" },
-]
+const CHANNEL_OPTIONS = getChannelOptions()
 
 const CATEGORY_LABELS: Record<ToolCategory, string> = {
   action: "Actions",
@@ -60,24 +46,13 @@ const TOOL_GROUPS: OptionGroup[] = (Object.keys(CATEGORY_LABELS) as ToolCategory
   )),
 }))
 
-function buildFilterParams(filters: Filters): URLSearchParams {
-  const params = new URLSearchParams()
-  if (filters.channels.length) params.set("channel", filters.channels.join(","))
-  if (filters.tools.length) params.set("tool", filters.tools.join(","))
-  if (filters.errorsOnly) params.set("errorsOnly", "true")
-  if (filters.from) params.set("from", new Date(filters.from).toISOString())
-  if (filters.to) params.set("to", new Date(`${filters.to}T23:59:59.999Z`).toISOString())
-  return params
-}
-
-function buildKey(filters: Filters): (pageIndex: number, previousPage: Page | null) => string | null {
-  const baseParams = buildFilterParams(filters)
-  return (_pageIndex, previousPage) => {
-    if (previousPage && !previousPage.nextCursor) return null
-    const params = new URLSearchParams(baseParams)
-    if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor)
-    const qs = params.toString()
-    return qs ? `/api/agent/actions?${qs}` : "/api/agent/actions"
+function toQueryFilters(filters: Filters): ActionLogQueryFilters {
+  return {
+    channels: filters.channels,
+    tools: filters.tools,
+    errorsOnly: filters.errorsOnly,
+    from: filters.from ? new Date(filters.from).toISOString() : null,
+    to: filters.to ? new Date(`${filters.to}T23:59:59.999Z`).toISOString() : null,
   }
 }
 
@@ -103,12 +78,15 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
 }
 
 function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
-  const channel = getChannelInfo(entry.channelType as ChannelType)
+  const channel = getChannelInfo(entry.channelType)
   const isOperator = isOperatorChannel(entry.channelType)
-  const href = isOperator
-    ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}`
-    : `/dashboard/tickets?thread=${entry.threadId}`
+  const href = entry.threadId
+    ? (isOperator
+      ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}`
+      : `/dashboard/tickets?thread=${entry.threadId}`)
+    : null
   const linkLabel = isOperator ? "View Concierge" : "View thread"
+  const title = entry.customerHandle ?? entry.instruction ?? "Workspace action"
 
   return (
     <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-4 py-3">
@@ -126,7 +104,7 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="truncate text-sm font-semibold text-white/80">{entry.customerHandle}</span>
+                <span className="truncate text-sm font-semibold text-white/80">{title}</span>
                 {entry.mode === "auto_executed" && (
                   <span
                     title="Auto-executed by the agent without merchant approval"
@@ -148,13 +126,19 @@ function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
                 {timeAgo(entry.sentAt)} · {formatDate(entry.sentAt)}
               </p>
             </div>
-            <Link
-              href={href}
-              className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-white/35 transition-colors hover:text-white/65"
-            >
-              {linkLabel}
-              <ExternalLink className="size-3" />
-            </Link>
+            {href ? (
+              <Link
+                href={href}
+                className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-white/35 transition-colors hover:text-white/65"
+              >
+                {linkLabel}
+                <ExternalLink className="size-3" />
+              </Link>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-white/25">
+                Workspace action
+              </span>
+            )}
           </div>
 
           {entry.instruction && (
@@ -241,12 +225,18 @@ function MultiSelectPopover({
 
 export default function AuditLogTab() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
-  const getKey = useMemo(() => buildKey(filters), [filters])
-  const { data, isLoading, size, setSize } = useSWRInfinite<Page>(getKey, fetcher)
+  const queryFilters = useMemo(() => toQueryFilters(filters), [filters])
+  const {
+    entries: allEntries,
+    isLoading,
+    error,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+    refresh,
+  } = useActionLogEntries(queryFilters)
   const [isExporting, setIsExporting] = useState(false)
 
-  const allEntries = data?.flatMap((page) => page.entries) ?? []
-  const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
   const hasActiveFilters: boolean =
     filters.channels.length > 0 ||
     filters.tools.length > 0 ||
@@ -255,7 +245,6 @@ export default function AuditLogTab() {
     filters.to !== ""
 
   const updateFilters = (updater: (filters: Filters) => Filters) => {
-    void setSize(1)
     setFilters(updater)
   }
 
@@ -268,7 +257,7 @@ export default function AuditLogTab() {
   const handleExport = async () => {
     setIsExporting(true)
     try {
-      const params = buildFilterParams(filters)
+      const params = buildActionLogSearchParams(queryFilters)
       params.set("format", "csv")
       const res = await fetch(`/api/agent/actions?${params}`)
       if (!res.ok) return
@@ -369,6 +358,17 @@ export default function AuditLogTab() {
             <div key={key} className="h-24 rounded-md border border-white/[0.06] bg-white/[0.04]" />
           ))}
         </div>
+      ) : error && allEntries.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <p className="text-sm font-semibold text-white/40">Failed to load audit log</p>
+          <button
+            type="button"
+            onClick={refresh}
+            className="mt-3 text-xs font-semibold text-white/35 transition-colors hover:text-white/65"
+          >
+            Try again
+          </button>
+        </div>
       ) : allEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <p className="text-sm font-semibold text-white/40">
@@ -389,11 +389,11 @@ export default function AuditLogTab() {
           {hasMore && (
             <div className="flex justify-center pt-2">
               <button type="button"
-                onClick={() => setSize(current => current + 1)}
-                disabled={isLoading}
+                onClick={loadMore}
+                disabled={isLoadingMore}
                 className="text-xs font-semibold text-white/40 transition-colors hover:text-white/70 disabled:opacity-40"
               >
-                {isLoading ? <Loader2 className="size-3.5 animate-spin" /> : "Load more"}
+                {isLoadingMore ? <Loader2 className="size-3.5 animate-spin" /> : "Load more"}
               </button>
             </div>
           )}

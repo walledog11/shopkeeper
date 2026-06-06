@@ -118,10 +118,10 @@ export interface KnowledgeBase {
 export interface ActionLogEntry {
   id: string;
   sentAt: string;
-  threadId: string;
-  channelType: string;
+  threadId: string | null;
+  channelType: ChannelType | null;
   threadTag: string | null;
-  customerHandle: string;
+  customerHandle: string | null;
   instruction: string | null;
   summary: string;
   actions: Array<{

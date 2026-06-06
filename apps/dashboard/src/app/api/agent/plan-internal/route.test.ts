@@ -107,6 +107,20 @@ describe('POST /api/agent/plan-internal', () => {
     expect(unchanged.cachedPlan).toBeNull();
   });
 
+  it('returns 400 for malformed JSON without planning', async () => {
+    const res = await POST(new Request('http://localhost/api/agent/plan-internal', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': 'current-secret',
+      },
+      body: '{',
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+  });
+
   it('returns 404 when threadId does not belong to orgId and leaves the foreign thread untouched', async () => {
     otherOrg = await createTestOrg();
     const foreignThread = await createThreadWithCustomerMessage(otherOrg.id);

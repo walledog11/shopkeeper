@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getOrCreateOrg } from '@/lib/server/org'
 import { handleApiError } from '@/lib/api/errors'
+import { readEmptyJsonBody } from '@/lib/api/body'
 import { rateLimit, tooManyRequests } from '@/lib/server/rate-limit'
 import stripe from '@/lib/billing/stripe'
 import { getOrCreateStripeCustomer } from '@/lib/billing/stripe-customer'
 import { getDashboardAppUrl } from '@/lib/env'
 
-export async function POST() {
+export async function POST(request?: Request) {
   try {
+    if (request) await readEmptyJsonBody(request)
+
     const org = await getOrCreateOrg()
 
     // 5 portal sessions per hour per org , each call creates a Stripe session

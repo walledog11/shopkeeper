@@ -1,35 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withOrgRoute } from '@/lib/api/route';
-
-function requireNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !value.trim()) {
-    throw new BadRequestError(`${field} is required`);
-  }
-  return value.trim();
-}
-
-function requireTrigger(value: unknown): object {
-  if (
-    !value ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    typeof (value as { type?: unknown }).type !== 'string' ||
-    !(value as { type: string }).type.trim()
-  ) {
-    throw new BadRequestError('trigger is required');
-  }
-  return value;
-}
-
-function normalizeActions(value: unknown): unknown[] {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) {
-    throw new BadRequestError('actions must be an array');
-  }
-  return value;
-}
+import { parseCreatePlaybookBody } from '@/app/api/playbooks/_lib/playbook-shape';
 
 export const GET = withOrgRoute(
   { context: 'Playbooks GET', errorMessage: 'Failed to fetch playbooks' },
@@ -45,14 +18,14 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: 'Playbooks POST', errorMessage: 'Failed to create playbook' },
   async ({ org, request }) => {
-    const { name, trigger, actions } = await request.json();
+    const { name, trigger, actions } = parseCreatePlaybookBody(await readRequiredJsonObject(request));
 
     const playbook = await db.playbook.create({
       data: {
         organizationId: org.id,
-        name: requireNonEmptyString(name, 'name'),
-        trigger: requireTrigger(trigger),
-        actions: normalizeActions(actions),
+        name,
+        trigger,
+        actions,
       },
     });
 

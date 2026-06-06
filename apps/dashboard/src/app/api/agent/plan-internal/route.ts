@@ -16,12 +16,12 @@ import { requireOrgThread } from "@/lib/agent/api/auth";
 import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { parseAgentPlanInternalBody } from "@/lib/agent/api/validation";
 import { buildContext, planAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import {
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
 } from "@/lib/agent/api/plan-execution";
-import { BadRequestError } from "@/lib/api/errors";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { withInternalRoute } from "@/lib/api/internal-route";
 import type { OrgSettings } from "@/types";
@@ -32,7 +32,20 @@ export const POST = withInternalRoute(
     errorMessage: "Failed to generate plan",
   },
   async ({ request }) => {
-    const { orgId, threadId, allowAutoExecute } = parseAgentPlanInternalBody(await readJsonBody(request));
+    const { orgId, threadId, allowAutoExecute } = parseAgentPlanInternalBody(await readRequiredJsonObject(request, {
+      malformed: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+      empty: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+      object: {
+        message: "Validation failed",
+        details: [{ code: "invalid_body", message: "Request body must be a JSON object" }],
+      },
+    }));
 
     const rl = await rateLimit(`plan-internal:${orgId}`, 30, 60);
     if (!rl.success) {
@@ -115,14 +128,4 @@ async function buildAutoExecutionResponse(
     autoExecutionActions: executed.result.actionsPerformed,
     ...(failed ? { autoExecutionError: failed.result, autoExecutionFailedTool: failed.tool } : {}),
   };
-}
-
-async function readJsonBody(request: Request): Promise<unknown> {
-  try {
-    return await request.json();
-  } catch {
-    throw new BadRequestError("Validation failed", [
-      { code: "invalid_body", message: "Request body must be a JSON object" },
-    ]);
-  }
 }

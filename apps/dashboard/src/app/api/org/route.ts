@@ -3,7 +3,8 @@ import { db } from '@clerk/db';
 import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { BadRequestError, handleApiError } from '@/lib/api/errors';
+import { handleApiError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import {
   buildSettingsUpdate,
@@ -46,8 +47,10 @@ export async function PATCH(request: Request) {
   try {
     const org = await getOrCreateOrg();
     assertBillingWriteAllowed(org);
-    const body = await request.json().catch(() => {
-      throw new BadRequestError('Invalid JSON body');
+    const body = await readRequiredJsonObject(request, {
+      malformed: { message: 'Invalid JSON body' },
+      empty: { message: 'Invalid JSON body' },
+      object: { message: 'Invalid request body' },
     });
     const { name, settings: newSettings, settingsUnset, version } = parseOrgPatchBody(body);
 

@@ -1,4 +1,4 @@
-import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings"
+import { resolveAgentSettings, type AutonomyTier } from "@clerk/agent/settings"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
 
 export type AgentSettingsAction =

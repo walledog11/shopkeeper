@@ -3,8 +3,10 @@ name: Evals
 on:
   pull_request:
     paths:
+      - 'packages/agent/**'
       - 'apps/dashboard/src/lib/agent/**'
       - 'apps/dashboard/src/lib/messaging/**'
+      - 'packages/db/refund-spend.ts'
       - '.github/workflows/evals.yml'
   # Judge-scored run (Phase 0.2): nightly drift tracking + on-demand.
   schedule:

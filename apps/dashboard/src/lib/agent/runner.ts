@@ -1,9 +1,11 @@
+import "@/lib/server/logger";
+
 export { buildContext } from "./context";
-export { buildSystemPrompt } from "./prompt";
-export { selectToolNamesForInstruction } from "./intent";
-export { planAgent } from "./planner";
+export { buildSystemPrompt } from "@clerk/agent/prompt";
+export { selectToolNamesForInstruction } from "@clerk/agent/intent";
+export { planAgent } from "@clerk/agent/planner";
 export { runAgent } from "./run";
-export { hashInstructionForLog } from "./usage";
+export { hashInstructionForLog } from "@clerk/agent/usage";
 export type {
   ActionEntry,
   AgentContext,
@@ -11,4 +13,4 @@ export type {
   SupportContext,
   AgentResult,
   ShopifyOrderSummary,
-} from "./types";
+} from "@clerk/agent/context";

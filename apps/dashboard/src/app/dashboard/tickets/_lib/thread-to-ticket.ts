@@ -1,9 +1,9 @@
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
-import { isAgentTurnContent } from "@/lib/agent/tools/turn-content";
+import { isAgentTurnContent } from "@clerk/agent/tools";
 import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape";
-import { AGENT_NOTE_PREFIX, SENDER_TYPE } from "@/lib/messaging/thread-constants";
+import { AGENT_NOTE_PREFIX, SENDER_TYPE } from "@clerk/agent/thread-constants";
 import type { Thread, Ticket } from "@/types";
 
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {

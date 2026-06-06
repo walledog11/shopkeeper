@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createMessage } from "@clerk/db";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { parseAgentAskBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, runAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
 import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";
@@ -23,7 +24,7 @@ export const POST = withOrgRoute(
   },
   async ({ org, request }) => {
     const startedAt = Date.now();
-    const { threadId, instruction } = parseAgentAskBody(await request.json());
+    const { threadId, instruction } = parseAgentAskBody(await readRequiredJsonObject(request));
     const instructionHash = hashInstructionForLog(instruction);
     await requireOrgThread(threadId, org.id);
 

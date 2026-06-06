@@ -1,8 +1,15 @@
 import { db } from '@clerk/db';
 import logger from '../logger.js';
-import { SHOPIFY_API_VERSION } from '../constants.js';
+import { JOB, QUEUE, SHOPIFY_API_VERSION } from '../constants.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { getInternalApiSecret } from '../message-handlers/shared.js';
+import {
+  createMaintenanceQueue,
+  createMaintenanceWorker,
+  ONE_HOUR_MS,
+  scheduleRepeatableJob,
+  type MaintenanceJobRegistration,
+} from './registration.js';
 
 // Track 4 spike (fraud-risk monitor). Scheduled, thread-less, flag-gated by
 // ORDER_RISK_MONITOR_ENABLED so it never runs for merchants. The gateway only
@@ -75,3 +82,20 @@ export async function runOrderRiskMonitor(): Promise<{ orgsScanned: number; orde
 
   return { orgsScanned: integrations.length, ordersReviewed };
 }
+
+export const registerOrderRiskMaintenanceJob: MaintenanceJobRegistration = async (context) => {
+  const queue = createMaintenanceQueue(context, QUEUE.ORDER_RISK);
+  await scheduleRepeatableJob(queue, JOB.ORDER_RISK_SCAN, JOB.ORDER_RISK_ID, ONE_HOUR_MS);
+
+  const worker = createMaintenanceWorker(context, QUEUE.ORDER_RISK, async () => {
+    const result = await runOrderRiskMonitor();
+    if (result.ordersReviewed > 0) {
+      logger.info(result, '[OrderRiskMonitor] Scan complete');
+    }
+  }, {
+    label: 'OrderRiskMonitor',
+    sentryQueue: 'order-risk-monitor',
+  });
+
+  return { workers: [worker], queues: [queue] };
+};

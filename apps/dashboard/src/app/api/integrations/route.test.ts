@@ -94,4 +94,29 @@ describe('/api/integrations', () => {
     expect(rows[0].tokenExpiresAt).toBeNull();
     expect(rows[0].metadata).toMatchObject({ provider: 'postmark' });
   });
+
+  it('handles concurrent saves for the same integration key', async () => {
+    const requests = Array.from({ length: 8 }, (_, index) => POST(new Request('http://localhost/api/integrations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        platform: 'shopify',
+        externalAccountId: 'fixture-shop.myshopify.com',
+        fromEmail: `Fixture Shop ${index}`,
+      }),
+    })));
+
+    const responses = await Promise.all(requests);
+
+    expect(responses.map((response) => response.status)).toEqual(Array(8).fill(201));
+    const rows = await db.integration.findMany({
+      where: {
+        organizationId: org.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'fixture-shop.myshopify.com',
+      },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].fromEmail).toMatch(/^Fixture Shop [0-7]$/);
+  });
 });

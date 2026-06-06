@@ -1,6 +1,6 @@
 import { db, SenderType, createMessage } from '@clerk/db';
 import logger from '@/lib/server/logger';
-import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
+import { CHANNEL_TYPE, THREAD_STATUS } from '@clerk/agent/thread-constants';
 import { recordOutboundCall } from '@/lib/server/outbound-recorder';
 import { getEmailSender, getEmailProvider, EmailNotConfiguredError } from '@/lib/messaging/email';
 import { buildThreadReplyHeaders, formatReplySubject } from '@/lib/messaging/email/reply';

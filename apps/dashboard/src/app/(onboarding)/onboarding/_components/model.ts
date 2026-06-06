@@ -1,5 +1,5 @@
 import { AtSign, Camera, ShoppingBag } from "lucide-react";
-import type { AutonomyTier } from "@/lib/agent/settings";
+import type { AutonomyTier } from "@clerk/agent/settings";
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers";
 
 export type { AutonomyTier };

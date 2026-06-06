@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { ShopifyRequestError } from '@/lib/agent/shopify';
+import { ShopifyRequestError } from '@clerk/agent/shopify';
 import logger from '@/lib/server/logger';
 import {
   lookupShopifyCustomer,

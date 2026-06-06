@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@clerk/db";
 import { createTestOrg, cleanupTestData } from "@clerk/db/test-helpers";
-import { recordAgentActionsBatch } from "@/lib/agent/api/agent-actions";
+import { recordAgentActionsBatch } from "@clerk/agent/agent-actions";
 
 vi.mock("@/lib/server/logger", () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },

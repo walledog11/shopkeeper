@@ -9,15 +9,14 @@ import {
   cleanupTestData,
 } from "@clerk/db/test-helpers";
 import { vi } from "vitest";
-import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
-import { HAIKU_MODEL } from "@/lib/ai";
-import { planAgent } from "../planner";
+import { anthropic, buildCachedSystemPrompt } from "@clerk/agent/ai";
+import { HAIKU_MODEL } from "@clerk/agent/ai";
+import { planAgent } from "@clerk/agent/planner";
 import { runAgent, type RunAgentOptions } from "../run";
-import { classifyHomePlan } from "../plan-preview";
-import { resolveAgentSettings } from "../settings";
-import * as executor from "../tools/executor";
-import { readModelUsage } from "../usage";
-import { hashInstruction, hashPlan, type AgentActionApproval } from "../api/agent-actions";
+import { classifyHomePlan } from "@clerk/agent/plan-preview";
+import { resolveAgentSettings } from "@clerk/agent/settings";
+import { readModelUsage } from "@clerk/agent/usage";
+import { hashInstruction, hashPlan, type AgentActionApproval } from "@clerk/agent/agent-actions";
 import {
   escalateToHuman,
   addInternalNote,
@@ -26,7 +25,7 @@ import {
   updateThreadStatus,
   updateThreadTag,
 } from "../tools/thread";
-import type { AgentActionMode, AgentContext } from "../types";
+import type { AgentActionMode, AgentContext } from "@clerk/agent/context";
 import type { AgentPlan, OrgSettings } from "@/types";
 import { judgeReply } from "./judge";
 import type {
@@ -34,12 +33,48 @@ import type {
   Fixture,
   EvalResult,
   EvalUsage,
+  PhaseUsage,
   ToolInputExpectation,
   EvalBaseline,
   CategoryScore,
   FixtureScore,
   FixtureRunSummary,
 } from "./types";
+
+// The executor now lives in @clerk/agent; run.ts calls it through the
+// package-internal import, so a namespace spy on the dashboard shim never
+// intercepts it. Mock the shared module instead (run.ts's relative
+// "./tools/executor.js" and "@clerk/agent/executor" resolve to the same file),
+// delegating to a mutable per-fixture handler for simulated tool results.
+const simState = vi.hoisted(() => ({ current: null as Map<string, string> | null }));
+
+vi.mock("@clerk/agent/executor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@clerk/agent/executor")>();
+  return {
+    ...actual,
+    executeTool: (async (...a: Parameters<typeof actual.executeTool>) => {
+      const sim = simState.current;
+      if (sim?.has(a[0])) return sim.get(a[0]) as string;
+      return actual.executeTool(...a);
+    }) as typeof actual.executeTool,
+    executeToolWithStatus: (async (...a: Parameters<typeof actual.executeToolWithStatus>) => {
+      const sim = simState.current;
+      if (sim?.has(a[0])) {
+        const result = sim.get(a[0]) as string;
+        return { result, status: result.toLowerCase().startsWith("error:") ? "error" : "success" };
+      }
+      return actual.executeToolWithStatus(...a);
+    }) as typeof actual.executeToolWithStatus,
+    executeToolStructured: (async (...a: Parameters<typeof actual.executeToolStructured>) => {
+      const sim = simState.current;
+      if (sim?.has(a[0])) {
+        const message = sim.get(a[0]) as string;
+        return { status: message.toLowerCase().startsWith("error:") ? "error" : "ok", message };
+      }
+      return actual.executeToolStructured(...a);
+    }) as typeof actual.executeToolStructured,
+  };
+});
 
 // Longest-prefix match groups fixtures into domains for per-category scoring.
 // A fixture whose id matches no prefix becomes its own category (visible, not silently dropped).
@@ -284,7 +319,7 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
   };
 }
 
-function recordEvalUsage(usage: EvalUsage, response: unknown) {
+function recordEvalUsage(usage: EvalUsage, response: unknown, phase: PhaseUsage | null) {
   if (!response || typeof response !== "object" || !("usage" in response)) {
     return;
   }
@@ -295,6 +330,60 @@ function recordEvalUsage(usage: EvalUsage, response: unknown) {
   usage.outputTokens += modelUsage.outputTokens;
   usage.cacheReadInputTokens += modelUsage.cacheReadInputTokens;
   usage.cacheCreationInputTokens += modelUsage.cacheCreationInputTokens;
+  if (phase) {
+    phase.inputTokens += modelUsage.inputTokens;
+    phase.outputTokens += modelUsage.outputTokens;
+    phase.cacheReadInputTokens += modelUsage.cacheReadInputTokens;
+    phase.cacheCreationInputTokens += modelUsage.cacheCreationInputTokens;
+  }
+}
+
+function zeroPhaseUsage(): PhaseUsage {
+  return { inputTokens: 0, outputTokens: 0, cacheReadInputTokens: 0, cacheCreationInputTokens: 0 };
+}
+
+function addPhaseUsage(into: PhaseUsage, from: PhaseUsage): void {
+  into.inputTokens += from.inputTokens;
+  into.outputTokens += from.outputTokens;
+  into.cacheReadInputTokens += from.cacheReadInputTokens;
+  into.cacheCreationInputTokens += from.cacheCreationInputTokens;
+}
+
+// Anthropic prices cache reads at 0.1x and cache writes at 1.25x of base input.
+// We report a cost-vs-uncached multiplier so a low number = caching is paying off.
+function phaseUsageLine(label: string, p: PhaseUsage): string {
+  const prompt = p.inputTokens + p.cacheCreationInputTokens + p.cacheReadInputTokens;
+  const hitRatio = prompt > 0 ? p.cacheReadInputTokens / prompt : 0;
+  const weighted = p.inputTokens + p.cacheCreationInputTokens * 1.25 + p.cacheReadInputTokens * 0.1;
+  const costMultiplier = prompt > 0 ? weighted / prompt : 1;
+  return `  ${label.padEnd(8)} prompt=${prompt} (input=${p.inputTokens} cacheWrite=${p.cacheCreationInputTokens} cacheRead=${p.cacheReadInputTokens}) out=${p.outputTokens} cacheHit=${(hitRatio * 100).toFixed(1)}% costVsUncached=${costMultiplier.toFixed(2)}x`;
+}
+
+// Suite-level token + cache-efficiency breakdown by phase. Surfaces whether the
+// shared-prefix caching is actually landing reads (the lever behind splitting the
+// system prompt into a stable prefix + volatile suffix).
+export function formatUsageBreakdown(summaries: readonly FixtureRunSummary[]): string {
+  const planner = zeroPhaseUsage();
+  const run = zeroPhaseUsage();
+  const judge = zeroPhaseUsage();
+  for (const s of summaries) {
+    for (const r of s.results) {
+      addPhaseUsage(planner, r.usage.plannerUsage);
+      addPhaseUsage(run, r.usage.runUsage);
+      addPhaseUsage(judge, r.usage.judgeUsage);
+    }
+  }
+  const total = zeroPhaseUsage();
+  addPhaseUsage(total, planner);
+  addPhaseUsage(total, run);
+  addPhaseUsage(total, judge);
+  return [
+    "[eval:usage] prompt-token + cache breakdown by phase (tokens, not $):",
+    phaseUsageLine("planner", planner),
+    phaseUsageLine("run", run),
+    phaseUsageLine("judge", judge),
+    phaseUsageLine("TOTAL", total),
+  ].join("\n");
 }
 
 function isSubsequence(needle: readonly string[], haystack: readonly string[]): boolean {
@@ -407,19 +496,16 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     outputTokens: 0,
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
-    judgeUsage: {
-      inputTokens: 0,
-      outputTokens: 0,
-      cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
-    },
+    plannerUsage: zeroPhaseUsage(),
+    runUsage: zeroPhaseUsage(),
+    judgeUsage: zeroPhaseUsage(),
   };
+  // Which phase the wrapped anthropic client attributes its next call to.
+  // Judge calls run with this null (their usage is captured + subtracted below).
+  let currentPhase: PhaseUsage | null = null;
   const startedAt = Date.now();
   let orgId: string | null = null;
   let spy: { mockRestore: () => void } | null = null;
-  let executorSpy: { mockRestore: () => void } | null = null;
-  let executorStatusSpy: { mockRestore: () => void } | null = null;
-  let executorStructuredSpy: { mockRestore: () => void } | null = null;
 
   try {
     const org = await createTestOrg();
@@ -460,7 +546,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     const originalCreate = messages.create;
     const wrappedCreate = (async (body: unknown, options: unknown) => {
       const response = await (originalCreate as CreateFn).call(messages, body as never, options as never);
-      recordEvalUsage(usage, response);
+      recordEvalUsage(usage, response, currentPhase);
       return response;
     }) as CreateFn;
     messages.create = wrappedCreate;
@@ -471,47 +557,13 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     const simulatedResults = new Map<string, string>(
       (fixture.setup.simulateToolResults ?? []).map((r) => [r.tool, r.result]),
     );
-    if (simulatedResults.size > 0) {
-      const originalExecute = executor.executeTool;
-      executorSpy = vi
-        .spyOn(executor, "executeTool")
-        .mockImplementation(async (name, args, execCtx, settings) => {
-          if (simulatedResults.has(name)) return simulatedResults.get(name) as string;
-          return originalExecute(name, args, execCtx, settings);
-        });
-
-      const originalExecuteWithStatus = executor.executeToolWithStatus;
-      executorStatusSpy = vi
-        .spyOn(executor, "executeToolWithStatus")
-        .mockImplementation(async (name, args, execCtx, settings) => {
-          if (simulatedResults.has(name)) {
-            const result = simulatedResults.get(name) as string;
-            return {
-              result,
-              status: result.toLowerCase().startsWith("error:") ? "error" : "success",
-            };
-          }
-          return originalExecuteWithStatus(name, args, execCtx, settings);
-        });
-
-      const originalExecuteStructured = executor.executeToolStructured;
-      executorStructuredSpy = vi
-        .spyOn(executor, "executeToolStructured")
-        .mockImplementation(async (name, args, execCtx, settings) => {
-          if (simulatedResults.has(name)) {
-            const message = simulatedResults.get(name) as string;
-            return {
-              status: message.toLowerCase().startsWith("error:") ? "error" : "ok",
-              message,
-            };
-          }
-          return originalExecuteStructured(name, args, execCtx, settings);
-        });
-    }
+    simState.current = simulatedResults.size > 0 ? simulatedResults : null;
 
     const ctx = buildContext(fixture, org.id, thread.id, customer.id);
     const resolved = resolveAgentSettings(fixture.setup.orgSettings ?? null);
+    currentPhase = usage.plannerUsage;
     const plan = await planAgent(ctx, fixture.instruction, resolved);
+    currentPhase = null;
 
     const calledTools = plan.rawToolCalls.map((tc) => tc.name);
     const calledToolSet = new Set(calledTools);
@@ -623,7 +675,9 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
 
     if (expected.expectedAgentActions) {
       const runMode = inferRunMode(expected.expectedAgentActions);
+      currentPhase = usage.runUsage;
       await executeRunForFixture({ ctx, fixture, plan, mode: runMode, settings: resolved });
+      currentPhase = null;
 
       const observed = await fetchObservedAgentActions(org.id, thread.id);
       if (!isAgentActionSubsequence(expected.expectedAgentActions, observed)) {
@@ -635,9 +689,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
   } catch (err) {
     failures.push(`runner threw: ${err instanceof Error ? err.message : String(err)}`);
   } finally {
-    executorStructuredSpy?.mockRestore();
-    executorStatusSpy?.mockRestore();
-    executorSpy?.mockRestore();
+    simState.current = null;
     spy?.mockRestore();
     if (orgId) {
       await cleanupTestData(orgId).catch(() => {});

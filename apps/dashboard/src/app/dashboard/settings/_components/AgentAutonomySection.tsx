@@ -1,7 +1,7 @@
 "use client"
 
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
-import type { AutonomyTier } from "@/lib/agent/settings"
+import type { AutonomyTier } from "@clerk/agent/settings"
 import type { OrgSettings } from "@/types"
 import {
   readSettingsPath,

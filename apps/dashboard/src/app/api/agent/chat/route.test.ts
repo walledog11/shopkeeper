@@ -47,8 +47,8 @@ vi.mock("@/lib/agent/api/execution", () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 
-vi.mock("@/lib/agent/settings", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/agent/settings")>("@/lib/agent/settings");
+vi.mock("@clerk/agent/settings", async () => {
+  const actual = await vi.importActual<typeof import("@clerk/agent/settings")>("@clerk/agent/settings");
   return {
     ...actual,
     resolveAgentSettings: mockResolveAgentSettings,

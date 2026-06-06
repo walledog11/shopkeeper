@@ -1,63 +1,72 @@
 import { db } from '@clerk/db';
+import { upsertRaceSafeIntegration } from './integration-upsert';
 
-export type EmailIntegrationProvider = 'gmail' | 'outlook';
+export type EmailIntegrationProvider = 'gmail' | 'outlook' | 'postmark';
 
-export interface UpsertExclusiveEmailIntegrationArgs {
-  accessToken: string;
+export type UpsertExclusiveEmailIntegrationArgs = {
   externalAccountId: string;
+  fromEmail?: string;
   organizationId: string;
   provider: EmailIntegrationProvider;
-  refreshToken: string;
-  tokenExpiresAt: Date;
-}
+} & (
+  | {
+      accessToken: string;
+      provider: 'gmail' | 'outlook';
+      refreshToken: string;
+      tokenExpiresAt: Date;
+    }
+  | {
+      accessToken?: null;
+      provider: 'postmark';
+      refreshToken?: null;
+      tokenExpiresAt?: null;
+    }
+);
 
 export async function upsertExclusiveEmailIntegration(
   args: UpsertExclusiveEmailIntegrationArgs,
 ): Promise<string> {
-  const integrationData = {
-    accessToken: args.accessToken,
-    refreshToken: args.refreshToken,
-    tokenExpiresAt: args.tokenExpiresAt,
-    fromEmail: args.externalAccountId,
-    metadata: { provider: args.provider },
-  };
-  const key = {
+  const saved = await upsertRaceSafeIntegration({
     organizationId: args.organizationId,
-    platform: 'email' as const,
+    platform: 'email',
     externalAccountId: args.externalAccountId,
-  };
-  const existing = await db.integration.findUnique({
-    where: { organizationId_platform_externalAccountId: key },
+    data: {
+      accessToken: args.accessToken ?? null,
+      refreshToken: args.refreshToken ?? null,
+      tokenExpiresAt: args.tokenExpiresAt ?? null,
+      fromEmail: args.fromEmail ?? args.externalAccountId,
+      metadata: { provider: args.provider },
+    },
   });
-  let savedId: string;
-
-  if (existing) {
-    await db.integration.update({ where: { id: existing.id }, data: integrationData });
-    savedId = existing.id;
-  } else {
-    try {
-      const created = await db.integration.create({
-        data: {
-          organizationId: args.organizationId,
-          platform: 'email',
-          externalAccountId: args.externalAccountId,
-          ...integrationData,
-        },
-      });
-      savedId = created.id;
-    } catch (err) {
-      if ((err as { code?: string }).code !== 'P2002') throw err;
-      const race = (await db.integration.findUnique({
-        where: { organizationId_platform_externalAccountId: key },
-      }))!;
-      await db.integration.update({ where: { id: race.id }, data: integrationData });
-      savedId = race.id;
-    }
-  }
 
   await db.integration.deleteMany({
-    where: { organizationId: args.organizationId, platform: 'email', id: { not: savedId } },
+    where: { organizationId: args.organizationId, platform: 'email', id: { not: saved.id } },
   });
 
-  return savedId;
+  return saved.id;
+}
+
+export async function saveForwardingEmailIntegration(args: {
+  externalAccountId: string;
+  fromEmail: string;
+  organizationId: string;
+}) {
+  const integration = await upsertRaceSafeIntegration({
+    organizationId: args.organizationId,
+    platform: 'email',
+    externalAccountId: args.externalAccountId,
+    data: {
+      accessToken: null,
+      refreshToken: null,
+      tokenExpiresAt: null,
+      fromEmail: args.fromEmail,
+      metadata: { provider: 'postmark' },
+    },
+  });
+
+  await db.integration.deleteMany({
+    where: { organizationId: args.organizationId, platform: 'email', id: { not: integration.id } },
+  });
+
+  return integration;
 }

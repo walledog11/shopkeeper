@@ -8,8 +8,9 @@ import { getRedis } from '@/lib/server/redis';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
-import { shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
+import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 
 const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
 
@@ -129,22 +130,13 @@ export async function POST(request: Request) {
       logger.error({ clerkOrgId }, '[Shopify OAuth] Org not found');
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
     }
-    const shopifyKey = { organizationId: org.id, platform: 'shopify' as const, externalAccountId: shopDomain };
-    const existingShopify = await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } });
-    let shopifyIntegrationId: string | null = existingShopify?.id ?? null;
-    if (existingShopify) {
-      await db.integration.update({ where: { id: existingShopify.id }, data: { accessToken, fromEmail: shopName } });
-    } else {
-      try {
-        const created = await db.integration.create({ data: { organizationId: org.id, platform: 'shopify', externalAccountId: shopDomain, accessToken, fromEmail: shopName } });
-        shopifyIntegrationId = created.id;
-      } catch (err) {
-        if ((err as { code?: string }).code !== 'P2002') throw err;
-        const race = (await db.integration.findUnique({ where: { organizationId_platform_externalAccountId: shopifyKey } }))!;
-        await db.integration.update({ where: { id: race.id }, data: { accessToken, fromEmail: shopName } });
-        shopifyIntegrationId = race.id;
-      }
-    }
+    const shopifyIntegration = await upsertRaceSafeIntegration({
+      organizationId: org.id,
+      platform: 'shopify',
+      externalAccountId: shopDomain,
+      data: { accessToken, fromEmail: shopName },
+    });
+    const shopifyIntegrationId = shopifyIntegration.id;
 
     logger.info({ shopName, shop: shopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
 

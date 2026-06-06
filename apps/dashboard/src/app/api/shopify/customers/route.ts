@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@/lib/agent/shopify';
+import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 

@@ -35,7 +35,7 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('../llm-spend.js', () => ({
+vi.mock('@clerk/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
 }));
 
@@ -181,7 +181,7 @@ describe('refreshStaleCustomerMemory', () => {
       }],
     }));
 
-    const result = await refreshStaleCustomerMemory({ now });
+    const result = await refreshStaleCustomerMemory({ now, organizationIds: [org.id] });
 
     expect(result).toEqual({
       organizationsChecked: 1,
@@ -204,7 +204,7 @@ describe('refreshStaleCustomerMemory', () => {
     });
 
     mockSummarizeCustomerMemory.mockClear();
-    const rerun = await refreshStaleCustomerMemory({ now });
+    const rerun = await refreshStaleCustomerMemory({ now, organizationIds: [org.id] });
 
     expect(rerun.customersMatched).toBe(0);
     expect(rerun.customersRefreshed).toBe(0);
@@ -231,7 +231,7 @@ describe('refreshStaleCustomerMemory', () => {
     });
     mockEnforceSpendCap.mockRejectedValueOnce(new SpendCapError(1_000, 1_000));
 
-    const result = await refreshStaleCustomerMemory({ now });
+    const result = await refreshStaleCustomerMemory({ now, organizationIds: [org.id] });
 
     expect(result).toEqual({
       organizationsChecked: 1,

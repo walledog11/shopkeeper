@@ -1,10 +1,11 @@
 import { db, isSpendCapError, SenderType } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, MODEL } from '../constants.js';
-import { enforceSpendCap, readUsageFromAnthropic, recordSpend } from '../llm-spend.js';
+import { enforceSpendCap, recordSpend } from '@clerk/agent/spend';
+import { readModelUsage } from '@clerk/agent/usage';
+import { anthropic } from '@clerk/agent/ai';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
-  getAnthropic,
   parseClassifierJson,
   triggerPlaybooks,
 } from './shared.js';
@@ -35,13 +36,13 @@ export async function generateThreadIntelligence(
 
     await enforceSpendCap(fullThread.organizationId, null);
 
-    const aiResponse = await getAnthropic().messages.create({
+    const aiResponse = await anthropic.messages.create({
       model: MODEL.CLAUDE,
       max_tokens: 256,
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: conversationText }],
     });
-    await recordSpend(fullThread.organizationId, readUsageFromAnthropic(aiResponse), MODEL.CLAUDE);
+    await recordSpend(fullThread.organizationId, readModelUsage(aiResponse), MODEL.CLAUDE);
 
     const block = aiResponse.content[0];
     if (!block || block.type !== 'text') throw new Error('Unexpected AI response type');

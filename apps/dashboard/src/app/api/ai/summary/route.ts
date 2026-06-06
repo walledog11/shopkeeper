@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
-import { generateText } from '@/lib/ai';
+import { generateText } from '@clerk/agent/ai';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 

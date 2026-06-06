@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { BadRequestError } from "@/lib/api/errors";
+import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@/lib/agent/settings";
+import { resolveAgentSettings } from "@clerk/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
-import { hashInstruction, hashPlan } from "@/lib/agent/api/agent-actions";
+import { hashInstruction, hashPlan } from "@clerk/agent/agent-actions";
 import { resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
 import { formatApproverId } from "@/lib/agent/api/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
@@ -47,7 +48,7 @@ export const POST = withOrgRoute(
       forceForE2E: request.headers.get("x-e2e-rate-limit") === "enforce",
     });
     if (!rl.success) return tooManyRequests(rl.reset);
-    const { threadId, instruction, approvedToolCalls } = parseAgentRouteBody(await request.json());
+    const { threadId, instruction, approvedToolCalls } = parseAgentRouteBody(await readRequiredJsonObject(request));
     const instructionHash = hashInstructionForLog(instruction);
     const thread = await requireOrgThread(threadId, org.id);
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);

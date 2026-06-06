@@ -1,6 +1,6 @@
 import { db } from '@clerk/db';
 import { NotFoundError } from '@/lib/api/errors';
-import { shopifyRestJson, type ShopifyContext } from '@/lib/agent/shopify';
+import { shopifyRestJson, type ShopifyContext } from '@clerk/agent/shopify';
 import logger from '@/lib/server/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';

@@ -8,7 +8,7 @@ import {
   cleanupTestData,
 } from '@clerk/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@/lib/agent/api/plan-cache';
-import { resolveAgentSettings } from '@/lib/agent/settings';
+import { resolveAgentSettings } from '@clerk/agent/settings';
 import type { AgentPlan } from '@/types';
 
 vi.mock('@clerk/nextjs/server', () => ({

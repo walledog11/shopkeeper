@@ -31,7 +31,7 @@ vi.mock('@/lib/agent/runner', () => ({
   planAgent: mockPlanAgent,
 }));
 
-vi.mock('@/lib/agent/settings', () => ({
+vi.mock('@clerk/agent/settings', () => ({
   resolveAgentSettings: vi.fn().mockReturnValue({}),
 }));
 

@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
-import { BadRequestError, NotFoundError } from '@/lib/api/errors';
+import { NotFoundError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE, THREAD_STATUS } from '@/lib/messaging/thread-constants';
+import { CHANNEL_TYPE, THREAD_STATUS } from '@clerk/agent/thread-constants';
 import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
+import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 import type { AgentTurnAction } from '@/lib/agent/api/turns';
 
@@ -58,24 +60,8 @@ export const PATCH = withOrgRoute<{ id: string }>(
   { context: 'Threads PATCH', errorMessage: 'Failed to update thread' },
   async ({ org, request, params }) => {
     const { id } = params;
-    const body = await request.json();
-    const { status, tag, shopifyCustomerId, filterStatus, filterFeedback } = body;
-
-    if (!status && tag === undefined && shopifyCustomerId === undefined && filterStatus === undefined && filterFeedback === undefined) {
-      throw new BadRequestError('Missing status, tag, shopifyCustomerId, filterStatus, or filterFeedback');
-    }
-
-    if (status && !Object.values(THREAD_STATUS).includes(status)) {
-      throw new BadRequestError('Invalid status');
-    }
-
-    if (filterStatus !== undefined && !Object.values(ThreadFilterStatus).includes(filterStatus)) {
-      throw new BadRequestError('Invalid filterStatus');
-    }
-
-    if (filterFeedback !== undefined && !Object.values(ThreadFilterFeedback).includes(filterFeedback)) {
-      throw new BadRequestError('Invalid filterFeedback');
-    }
+    const { status, tag, shopifyCustomerId, filterStatus, filterFeedback } =
+      parseThreadPatchBody(await readRequiredJsonObject(request));
 
     const thread = await db.thread.findUnique({
       where: { id },
@@ -93,8 +79,8 @@ export const PATCH = withOrgRoute<{ id: string }>(
       where: { id },
       data: {
         ...(status && { status, cachedPlan: Prisma.DbNull, cachedPlanMessageId: null }),
-        ...(tag !== undefined && { tag: tag || null }),
-        ...(shopifyCustomerId !== undefined && { shopifyCustomerId: shopifyCustomerId || null }),
+        ...(tag !== undefined && { tag }),
+        ...(shopifyCustomerId !== undefined && { shopifyCustomerId }),
         ...(filterStatus !== undefined && { filterStatus }),
         ...(resolvedFeedback !== undefined && { filterFeedback: resolvedFeedback }),
       },

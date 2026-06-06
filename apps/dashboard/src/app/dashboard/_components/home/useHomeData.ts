@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react"
 import useSWR from "swr"
 import { useOrganization } from "@clerk/nextjs"
-import { AGENT_SETTINGS_DEFAULTS } from "@/lib/agent/settings"
+import { AGENT_SETTINGS_DEFAULTS } from "@clerk/agent/settings"
 import { fetcher } from "@/lib/api/fetcher"
 import {
   HOME_SUMMARY_REFRESH_INTERVAL_MS,
@@ -9,7 +9,7 @@ import {
   type HomeSummary,
 } from "@/lib/home/summary-contract"
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
-import { CHANNEL_TYPE } from "@/lib/messaging/thread-constants"
+import { CHANNEL_TYPE } from "@clerk/agent/thread-constants"
 import type { Integration, OrgSettings, KnowledgeBase } from "@/types"
 
 interface OrdersResponse {

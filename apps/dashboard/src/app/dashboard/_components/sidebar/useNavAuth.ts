@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 import useSWR from "swr";
 import { fetcher } from "@/lib/api/fetcher";
-import { resolveAgentSettings, type AutonomyTier } from "@/lib/agent/settings";
+import { resolveAgentSettings, type AutonomyTier } from "@clerk/agent/settings";
 import { formatRole } from "@/lib/format/role";
 import type { OrgSettings } from "@/types";
 

@@ -3,14 +3,14 @@
 import { useMemo, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import useSWRInfinite from "swr/infinite"
 import { ArrowRight, Eye, Loader2, MessageSquare } from "lucide-react"
-import { fetcher } from "@/lib/api/fetcher"
+import { useActionLogEntries } from "@/hooks/useActionLogEntries"
+import { formatRelativeTime } from "@/lib/format/date"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { isOperatorChannel } from "@/lib/messaging/thread-constants"
-import { TOOL_CATEGORIES, TOOL_LABELS } from "@/lib/agent/tools"
+import { isOperatorChannel } from "@clerk/agent/thread-constants"
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@clerk/agent/tools"
 import AutonomyReadinessCard from "./AutonomyReadinessCard"
-import type { ActionLogEntry, ChannelType } from "@/types"
+import type { ActionLogEntry } from "@/types"
 
 // ── Focus lenses ─────────────────────────────────────────────────────────────
 // Each lens maps to the action-log API's `tool` filter so the sample is built
@@ -98,32 +98,27 @@ function outcomeActions(entry: ActionLogEntry): ActionLogEntry["actions"] {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatRelative(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diffMs / 60_000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  if (days === 1) return "yesterday"
-  if (days < 7) return `${days}d ago`
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-}
-
 const MODE_LABELS: Record<NonNullable<ActionLogEntry["mode"]>, string> = {
   auto_executed: "Auto-sent",
   human_approved: "Approved",
   read_only: "Read only",
 }
 
+function entryHref(entry: ActionLogEntry): string | null {
+  if (!entry.threadId) return null
+  if (isOperatorChannel(entry.channelType)) return "/dashboard/agent"
+  return `/dashboard/tickets?thread=${entry.threadId}`
+}
+
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function ReviewCard({ entry }: { entry: ActionLogEntry }) {
-  const channel = getChannelInfo(entry.channelType as ChannelType)
+  const channel = getChannelInfo(entry.channelType)
   const isOperator = isOperatorChannel(entry.channelType)
-  const href = isOperator ? "/dashboard/agent" : `/dashboard/tickets?thread=${entry.threadId}`
-  const headline = isOperator ? (entry.instruction ?? "Agent session") : entry.customerHandle
+  const href = entryHref(entry)
+  const headline = isOperator
+    ? (entry.instruction ?? "Agent session")
+    : (entry.customerHandle ?? entry.instruction ?? "Workspace action")
 
   const outputs = entry.actions.map(toOutputBlock).filter((b): b is OutputBlock => b !== null)
   const outcomes = outcomeActions(entry)
@@ -135,9 +130,13 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
         <div className="size-6 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0">
           <Image src={channel.logo} alt={channel.name} width={13} height={13} className="object-contain" />
         </div>
-        <Link href={href} className="text-sm font-semibold text-white/80 truncate hover:text-white">
-          {headline}
-        </Link>
+        {href ? (
+          <Link href={href} className="text-sm font-semibold text-white/80 truncate hover:text-white">
+            {headline}
+          </Link>
+        ) : (
+          <span className="text-sm font-semibold text-white/80 truncate">{headline}</span>
+        )}
         {entry.mode && (
           <span className="text-xs font-bold uppercase tracking-wide text-white/40 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
             {MODE_LABELS[entry.mode]}
@@ -148,10 +147,14 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
             {entry.threadTag}
           </span>
         )}
-        <Link href={href} className="ml-auto flex items-center gap-1.5 shrink-0">
-          <span className="text-xs text-white/25">{formatRelative(entry.sentAt)}</span>
-          <ArrowRight className="size-3 text-white/15 group-hover:text-white/40 transition-colors" />
-        </Link>
+        {href ? (
+          <Link href={href} className="ml-auto flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-white/25">{formatRelativeTime(entry.sentAt)}</span>
+            <ArrowRight className="size-3 text-white/15 group-hover:text-white/40 transition-colors" />
+          </Link>
+        ) : (
+          <span className="ml-auto text-xs text-white/25 shrink-0">{formatRelativeTime(entry.sentAt)}</span>
+        )}
       </div>
 
       {/* Prose outputs , what the agent actually said */}
@@ -210,35 +213,20 @@ function SkeletonCard() {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
-interface ApiResponse {
-  entries: ActionLogEntry[]
-  nextCursor: string | null
-}
-
-function buildKey(tools: string[]) {
-  return (_pageIndex: number, previousPage: ApiResponse | null): string | null => {
-    if (previousPage && !previousPage.nextCursor) return null
-    const params = new URLSearchParams()
-    if (tools.length) params.set("tool", tools.join(","))
-    if (previousPage?.nextCursor) params.set("cursor", previousPage.nextCursor)
-    const qs = params.toString()
-    return qs ? `/api/agent/actions?${qs}` : "/api/agent/actions"
-  }
-}
-
 export default function ReviewFeed() {
   const [focus, setFocus] = useState<Focus>("replies")
   const tools = useMemo(() => FOCUS_OPTIONS.find((o) => o.id === focus)?.tools ?? [], [focus])
-  const getKey = useMemo(() => buildKey(tools), [tools])
-  const { data, isLoading, error, setSize, isValidating } = useSWRInfinite<ApiResponse>(getKey, fetcher, {
-    revalidateOnFocus: false,
-  })
-
-  const allEntries = data?.flatMap((page) => page.entries) ?? []
-  const hasMore = data ? !!data[data.length - 1]?.nextCursor : false
+  const filters = useMemo(() => ({ tools }), [tools])
+  const {
+    entries: allEntries,
+    isLoading,
+    error,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+  } = useActionLogEntries(filters)
 
   const changeFocus = (id: Focus) => {
-    void setSize(1)
     setFocus(id)
   }
 
@@ -308,12 +296,12 @@ export default function ReviewFeed() {
             {hasMore ? (
               <button
                 type="button"
-                onClick={() => setSize((current) => current + 1)}
-                disabled={isValidating}
+                onClick={loadMore}
+                disabled={isLoadingMore}
                 className="text-xs font-medium text-white/35 hover:text-white/60 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
               >
-                {isValidating ? <Loader2 className="size-3 animate-spin" /> : null}
-                {isValidating ? "Loading…" : "Load more"}
+                {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
+                {isLoadingMore ? "Loading…" : "Load more"}
               </button>
             ) : (
               <p className="text-xs text-white/20">All caught up</p>

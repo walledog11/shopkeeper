@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Menu } from "lucide-react";
 import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { useOpenThreadCountQuery } from "@/hooks/useThreads";
-import type { AutonomyTier } from "@/lib/agent/settings";
+import type { AutonomyTier } from "@clerk/agent/settings";
 import { cn } from "@/lib/ui/cn";
 import AutonomyPill from "./AutonomyPill";
 import { Logo } from "./sidebar/Logo";

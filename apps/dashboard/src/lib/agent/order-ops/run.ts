@@ -1,16 +1,15 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic, buildCachedSystemPrompt } from "@/lib/ai/anthropic";
-import { pickModel } from "@/lib/ai";
+import { anthropic, buildCachedSystemPrompt } from "@clerk/agent/ai";
+import { pickModel } from "@clerk/agent/ai";
 import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";
-import { resolveAgentSettings } from "../settings";
-import { selectAgentTools } from "../tools/registry";
-import { getShopifyCustomer, getOrderTracking } from "../tools/shopify";
-import type { GetShopifyCustomerInput, GetOrderTrackingInput } from "../tools/registry";
-import { createModelUsageMetrics, recordModelUsage } from "../usage";
-import { enforceSpendCap, recordSpend } from "../spend";
-import { recordAgentActionsBatch } from "../api/agent-actions";
-import type { ActionEntry } from "../types";
+import { resolveAgentSettings } from "@clerk/agent/settings";
+import { selectAgentTools, type GetShopifyCustomerInput, type GetOrderTrackingInput } from "@clerk/agent/tools";
+import { getShopifyCustomer, getOrderTracking } from "@clerk/agent/shopify";
+import { createModelUsageMetrics, recordModelUsage } from "@clerk/agent/usage";
+import { enforceSpendCap, recordSpend } from "@clerk/agent/spend";
+import { recordAgentActionsBatch } from "@clerk/agent/agent-actions";
+import type { ActionEntry } from "@clerk/agent/context";
 import { buildOrderRiskPrompt } from "./prompt";
 import type { OrderOpsContext } from "./context";
 

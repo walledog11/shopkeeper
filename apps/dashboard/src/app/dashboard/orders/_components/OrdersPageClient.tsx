@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Search, X, ShoppingBag, RefreshCw, Download } from "lucide-react"
 import useSWR from "swr"
 import { errorMessageFromUnknown, fetcher, isApiRequestError } from "@/lib/api/fetcher"
+import { formatSyncRelativeTime } from "@/lib/format/date"
 import OrdersTable, { OrdersTableSkeleton } from "./OrdersTable"
 import type { OrderRow } from "./OrdersTable"
 import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
@@ -27,17 +28,6 @@ function filterToQuery(id: FilterId): string {
     case 'refunded':    return 'financial_status=refunded'
     default:            return ''
   }
-}
-
-function relativeTime(ms: number): string {
-  const seconds = Math.floor((Date.now() - ms) / 1000)
-  if (seconds < 30) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
 }
 
 function ordersToCsv(orders: OrderRow[]): string {
@@ -227,7 +217,7 @@ export default function OrdersPageClient() {
               <h1 className="text-2xl font-bold text-white">Orders</h1>
               <p className="text-xs text-white/35">
                 Live from Shopify
-                {lastSyncedAt && <> · synced {relativeTime(lastSyncedAt)}</>}
+                {lastSyncedAt && <> · synced {formatSyncRelativeTime(lastSyncedAt)}</>}
               </p>
             </div>
             <div className="flex items-center gap-2">

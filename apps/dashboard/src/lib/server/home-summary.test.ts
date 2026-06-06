@@ -6,7 +6,7 @@ import {
   createTestOrg,
 } from "@clerk/db/test-helpers"
 import { buildAgentPlanCacheRecord } from "@/lib/agent/api/plan-cache"
-import { resolveAgentSettings } from "@/lib/agent/settings"
+import { resolveAgentSettings } from "@clerk/agent/settings"
 import {
   HOME_NEEDS_ATTENTION_LIMIT,
   HOME_OVERNIGHT_TOPIC_LIMIT,

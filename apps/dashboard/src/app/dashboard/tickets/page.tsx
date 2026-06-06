@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import { db, SenderType } from "@clerk/db"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@/lib/agent/settings"
+import { resolveAgentSettings } from "@clerk/agent/settings"
 import { canonicalInboxThreadWhere } from "@/lib/messaging/inbox-filter"
 import TicketsPageClient from "./_components/TicketsPageClient"
 import type { Thread, OrgSettings } from "@/types"
