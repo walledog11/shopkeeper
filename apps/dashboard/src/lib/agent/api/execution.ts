@@ -1,106 +1,21 @@
-import { randomUUID } from "node:crypto";
-import { createMessage } from "@clerk/db";
-import { buildContext, runAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@clerk/agent/settings";
-import { serializeAgentTurn } from "@/lib/agent/api/turns";
-import type { AgentActionApproval } from "@clerk/agent/agent-actions";
-import { getRedis } from "@/lib/server/redis";
-import { upstashLockProvider } from "@/lib/server/agent-lock";
+// Host wrapper — core executeAgentTurn moved to @clerk/agent/turn (Track 4.1).
+// The dashboard's injected seams live in ./turn-deps (shared with plan-execution).
+import {
+  executeAgentTurn as coreExecuteAgentTurn,
+  type ExecuteAgentTurnParams as CoreExecuteAgentTurnParams,
+} from "@clerk/agent/turn";
+import type { AgentResult } from "@clerk/agent/context";
 import type { LockProvider } from "@clerk/agent/lock";
-import { ConflictError } from "@/lib/api/errors";
-import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
-import type { OrgSettings, RawToolCall } from "@/types";
+import { buildDashboardTurnDeps } from "@/lib/agent/api/turn-deps";
 
-interface ExecuteAgentTurnParams {
-  orgId: string;
-  threadId: string;
-  instruction: string;
+export interface ExecuteAgentTurnParams extends Omit<CoreExecuteAgentTurnParams, "failureRoute"> {
   failureRoute?: AgentFailureAlertRoute;
   lock?: LockProvider;
-  orgSettings?: Partial<OrgSettings> | null;
-  approvedToolCalls?: RawToolCall[];
-  persistUserMessage?: boolean;
-  persistAgentMessage?: boolean;
-  persistAuditNote?: boolean;
-  persistAuditNoteWhenNoActions?: boolean;
-  auditMode?: "human_approved" | "auto_executed" | "read_only";
-  approval?: AgentActionApproval;
-  auditMetadata?: {
-    senderPhone?: string | null;
-    clerkUserId?: string | null;
-  };
 }
 
-export async function executeAgentTurn(params: ExecuteAgentTurnParams) {
-  const lock = await (params.lock ?? upstashLockProvider).acquire(params.threadId);
-  if (!lock) {
-    throw new ConflictError("Agent is already running on this thread. Try again in a few seconds.");
-  }
-
-  try {
-    const settings = resolveAgentSettings(params.orgSettings ?? null);
-    let failureCounterClient: OpsAlertCounterClient | undefined;
-
-    if (params.failureRoute) {
-      try {
-        failureCounterClient = getRedis();
-      } catch {
-        failureCounterClient = undefined;
-      }
-    }
-
-    if (params.persistUserMessage) {
-      await createMessage({
-        threadId: params.threadId,
-        senderType: "customer",
-        contentText: params.instruction,
-      });
-    }
-
-    const turnId = randomUUID();
-    const ctx = await buildContext(params.threadId, params.orgId);
-    const result = await runAgent(
-      ctx,
-      params.instruction,
-      params.approvedToolCalls,
-      settings,
-      {
-        failureRoute: params.failureRoute,
-        failureCounterClient,
-        turnId,
-        ...(params.auditMode ? { mode: params.auditMode } : {}),
-        ...(params.approval ? { approval: params.approval } : {}),
-      }
-    );
-
-    if (params.persistAgentMessage) {
-      await createMessage({
-        threadId: params.threadId,
-        senderType: "agent",
-        contentText: result.summary,
-      });
-    }
-
-    if ((params.persistAuditNote ?? true) && ((params.persistAuditNoteWhenNoActions ?? true) || result.actionsPerformed.length > 0)) {
-      await createMessage({
-        threadId: params.threadId,
-        senderType: "note",
-        contentText: serializeAgentTurn({
-          id: turnId,
-          instruction: params.instruction,
-          actions: result.actionsPerformed,
-          summary: result.summary,
-          error: null,
-          ...(params.auditMode ? { mode: params.auditMode } : {}),
-          senderPhone: params.auditMetadata?.senderPhone ?? null,
-          clerkUserId: params.auditMetadata?.clerkUserId ?? null,
-        }),
-      });
-    }
-
-    return result;
-  } finally {
-    await lock.release();
-  }
+export function executeAgentTurn(params: ExecuteAgentTurnParams): Promise<AgentResult> {
+  const { lock, ...core } = params;
+  const deps = buildDashboardTurnDeps();
+  return coreExecuteAgentTurn(core, lock ? { ...deps, lock } : deps);
 }

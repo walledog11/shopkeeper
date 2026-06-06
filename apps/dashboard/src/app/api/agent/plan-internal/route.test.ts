@@ -20,7 +20,10 @@ vi.mock('@/lib/agent/runner', () => ({
   planAgent: mockPlanAgent,
 }));
 
-vi.mock('@/lib/agent/api/execution', () => ({
+// plan-internal auto-execute runs through @clerk/agent/plan-execution, which
+// calls the package-internal executeAgentTurn — mock the package (Track 4.1),
+// not the dashboard execution shim.
+vi.mock('@clerk/agent/turn', () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 
@@ -217,7 +220,7 @@ describe('POST /api/agent/plan-internal', () => {
         { id: 'send_1', name: 'send_reply', input: { text: 'I issued the refund.' } },
       ],
       auditMode: 'auto_executed',
-    }));
+    }), expect.anything());
 
     const updated = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
     expect(updated.cachedPlan).toBeNull();

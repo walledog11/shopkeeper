@@ -104,3 +104,15 @@ export interface AgentPlan {
   readResults?: Record<string, string> // tool_use.id → raw result string, for read-only tools
   warnings?: string[]
 }
+
+// Agent turn in the notes tab
+export interface AgentTurn {
+  id?: string
+  instruction: string
+  actions: { tool: string; result: string; status?: 'success' | 'error' | 'policy_block' | 'escalated' }[]
+  summary: string | null
+  error: string | null
+  mode?: 'human_approved' | 'auto_executed' | 'read_only'
+  senderPhone?: string | null
+  clerkUserId?: string | null
+}

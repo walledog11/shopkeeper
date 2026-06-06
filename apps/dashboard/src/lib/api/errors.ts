@@ -1,65 +1,22 @@
 import { NextResponse } from 'next/server';
 import { isSpendCapError, nanoDollarsToUsd } from '@clerk/db';
+import { ApiError } from '@clerk/agent/errors';
 import logger from '@/lib/server/logger';
 
-export interface ApiErrorDetail {
-  code: string;
-  field?: string;
-  message: string;
-}
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public readonly status: number,
-    public readonly details?: ApiErrorDetail[],
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-export class UnauthorizedError extends ApiError {
-  constructor(message = 'Unauthorized') {
-    super(message, 401);
-    this.name = 'UnauthorizedError';
-  }
-}
-
-export class ForbiddenError extends ApiError {
-  constructor(message = 'Forbidden') {
-    super(message, 403);
-    this.name = 'ForbiddenError';
-  }
-}
-
-export class NoActiveOrganizationError extends ApiError {
-  constructor(message = 'No active organization') {
-    super(message, 403);
-    this.name = 'NoActiveOrganizationError';
-  }
-}
-
-export class NotFoundError extends ApiError {
-  constructor(message = 'Not found') {
-    super(message, 404);
-    this.name = 'NotFoundError';
-  }
-}
-
-export class BadRequestError extends ApiError {
-  constructor(message = 'Bad request', details?: ApiErrorDetail[]) {
-    super(message, 400, details);
-    this.name = 'BadRequestError';
-  }
-}
-
-export class ConflictError extends ApiError {
-  constructor(message = 'Conflict') {
-    super(message, 409);
-    this.name = 'ConflictError';
-  }
-}
+// The error classes moved to @clerk/agent/errors (Track 4.1) so the shared
+// orchestration can throw/catch one class identity across hosts. Re-exported
+// here so the ~56 dashboard importers stay unchanged; the Next-coupled mapper
+// below stays dashboard-side.
+export {
+  ApiError,
+  UnauthorizedError,
+  ForbiddenError,
+  NoActiveOrganizationError,
+  NotFoundError,
+  BadRequestError,
+  ConflictError,
+} from '@clerk/agent/errors';
+export type { ApiErrorDetail } from '@clerk/agent/errors';
 
 export function handleApiError(error: unknown, context: string, message: string): NextResponse {
   if (isSpendCapError(error)) {

@@ -7,6 +7,7 @@ import type {
   RawToolCall,
   PlanStep,
   AgentPlan,
+  AgentTurn,
 } from "@clerk/agent";
 import type {
   ChannelType as DbChannelType,
@@ -36,6 +37,7 @@ export type {
   RawToolCall,
   PlanStep,
   AgentPlan,
+  AgentTurn,
 };
 
 export type VoiceProposal = DbVoiceProposal;
@@ -158,18 +160,6 @@ export interface Thread {
   filterFeedback: ThreadFilterFeedback;
   customer: Customer;
   messages: Message[];
-}
-
-// Agent turn in the notes tab
-export interface AgentTurn {
-  id?: string
-  instruction: string
-  actions: { tool: string; result: string; status?: 'success' | 'error' | 'policy_block' | 'escalated' }[]
-  summary: string | null
-  error: string | null
-  mode?: 'human_approved' | 'auto_executed' | 'read_only'
-  senderPhone?: string | null
-  clerkUserId?: string | null
 }
 
 // UI-mapped ticket shape used in the tickets page

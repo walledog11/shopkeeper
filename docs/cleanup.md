@@ -315,11 +315,15 @@ Phase 8 verification completed on 2026-06-06:
 - `npm run lint -w @clerk/db`
 - `npm run lint -w apps/dashboard`
 - `npm run test:unit -w apps/dashboard`
-- `npm run test:unit`
+- `npm run test:unit` (rerun with network access after the sandbox blocked the configured test database)
 - `npm run test:node`
 - `npm run build -w packages/agent`
 - `npm run build -w apps/gateway`
 - `npm run lint`
+
+Additional verification note:
+
+- `./node_modules/.bin/tsc -p apps/dashboard/tsconfig.json --noEmit --pretty false` was attempted after the type cleanup. It still fails on unrelated existing dashboard typecheck issues: missing `@/lib/agent/order-ops/*` modules referenced by `order-risk-internal`, route tests passing `Request` where `NextRequest` is expected, a Clerk ServerClient mock constructor type, `GetRedisFn` value/type usage in server tests, and readonly or widened `NODE_ENV` test assignments. The rerun did not report Phase 7 or Phase 8 files after fixing the initial `Ticket["filterFeedback"]` assertion in the new type-boundary test.
 
 ## Phase 9: Review Inbound Idempotency Fallbacks
 

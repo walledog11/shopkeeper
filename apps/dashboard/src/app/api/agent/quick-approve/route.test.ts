@@ -21,12 +21,19 @@ const { mockExecuteAgentTurn } = vi.hoisted(() => ({
   mockExecuteAgentTurn: vi.fn(),
 }));
 
-vi.mock("@/lib/agent/api/execution", () => ({
+// quick-approve runs the turn through @clerk/agent/plan-execution, which calls
+// the package-internal executeAgentTurn — so the mock must target the package
+// (Track 4.1), not the dashboard execution shim.
+vi.mock("@clerk/agent/turn", () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 
 vi.mock("@/lib/agent/runner", () => ({
   hashInstructionForLog: vi.fn(() => "test-hash"),
+  // The turn deps now reference the runner's buildContext/runAgent (Track 4.1);
+  // stubbed so the lazy deps builder resolves (never invoked — the turn is mocked).
+  buildContext: vi.fn(),
+  runAgent: vi.fn(),
 }));
 
 import { POST } from "./route";
@@ -112,7 +119,7 @@ describe("POST /api/agent/quick-approve", () => {
       threadId: thread.id,
       instruction: "Handle this",
       approvedToolCalls: [{ id: "send_1", name: "send_reply", input: { text: "Yes, we ship to the UK." } }],
-    }));
+    }), expect.anything());
 
     const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updatedThread?.cachedPlan).toBeNull();

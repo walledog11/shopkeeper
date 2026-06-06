@@ -97,6 +97,38 @@
     "./lock": {
       "types": "./dist/lock.d.ts",
       "default": "./dist/lock.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "default": "./dist/errors.js"
+    },
+    "./plan-cache-shape": {
+      "types": "./dist/plan-cache-shape.d.ts",
+      "default": "./dist/plan-cache-shape.js"
+    },
+    "./plan-cache": {
+      "types": "./dist/plan-cache.d.ts",
+      "default": "./dist/plan-cache.js"
+    },
+    "./turns": {
+      "types": "./dist/turns.d.ts",
+      "default": "./dist/turns.js"
+    },
+    "./thread-auth": {
+      "types": "./dist/thread-auth.d.ts",
+      "default": "./dist/thread-auth.js"
+    },
+    "./internal-thread": {
+      "types": "./dist/internal-thread.d.ts",
+      "default": "./dist/internal-thread.js"
+    },
+    "./turn": {
+      "types": "./dist/turn.d.ts",
+      "default": "./dist/turn.js"
+    },
+    "./plan-execution": {
+      "types": "./dist/plan-execution.d.ts",
+      "default": "./dist/plan-execution.js"
     }
   },
   "scripts": {

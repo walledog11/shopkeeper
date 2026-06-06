@@ -30,8 +30,8 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
 
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
-      <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex flex-col min-h-full px-5 md:px-6 pt-3 pb-6 gap-3">
+      <div className="dashboard-home-scroll flex-1 overflow-y-auto overflow-x-scroll">
+        <div className="dashboard-home-content flex flex-col min-h-full px-5 md:px-6 pt-3 pb-6 gap-3 min-w-[620px]">
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}

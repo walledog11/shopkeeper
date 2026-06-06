@@ -24,7 +24,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@clerk/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
 | **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 code-complete + eval-confirmed (2026-06-05) | manual live e2e; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-05) — 4.0 LockProvider seam ✅; auto-plan first | 4.1 move orchestration into `@clerk/agent` |
+| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-06) — 4.0 LockProvider seam ✅; 4.1 orchestration moved ✅ | 4.2 worker auto-plan in-process |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -445,11 +445,24 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   `createGatewayLockProvider(redis)` — ioredis (`set k v EX ttl NX` + numkeys-form `eval` release), same
   fail-open posture, **wired in 4.2**. Verified: package + gateway build clean, dashboard 0 production type
   errors, `agent-lock` test 7/7, lint clean.
-- [ ] **4.1 — Move orchestration into `@clerk/agent`.** `git mv` `execution.ts`, `plan-cache.ts`, `turns.ts`,
-  the auto-execute core of `plan-execution.ts`, `internal.ts`, `auth.ts` → `packages/agent/src`; rewrite `@/`
-  imports; inject `LockProvider` + `ShadowRecorder`. Dashboard routes become thin host wrappers (inject
-  Upstash lock + real shadow + Clerk approver); re-export shims keep existing dashboard call sites unchanged.
-  **Gate: eval suite green** (byte-for-byte invariant — same safety net as Tracks 1/2).
+- [x] **4.1 — Move orchestration into `@clerk/agent` ✅ (2026-06-06).** Moved into `packages/agent/src`:
+  `errors.ts` (the pure `ApiError` + subclasses — Next-free, dashboard `@/lib/api/errors` re-exports them and
+  keeps `handleApiError`), `plan-cache-shape.ts`, `plan-cache.ts`, `turns.ts` (+ `AgentTurn` into `types.ts`),
+  `thread-auth.ts` (was `auth.ts`), `internal-thread.ts` (was `internal.ts`), `turn.ts` (`executeAgentTurn`),
+  `plan-execution.ts` (auto-execute core). New subpaths + barrel exports for the gateway's eventual in-process
+  call. **Seams:** `executeAgentTurn(params, deps)` takes injected `{ lock: LockProvider; buildContext; runAgent }`
+  (the host wrappers); `plan-execution` adds an injected `ShadowRecorder` (`PlanExecutionDeps`); `failureRoute`
+  relaxed to `string`. The `getRedis()` failure-counter construction stays host-side in a new
+  `lib/agent/api/turn-deps.ts` (a **lazy** `buildDashboardTurnDeps()` shared by the execution + plan-execution
+  shims, so partial-mock tests don't trip an eager runner access). Dashboard shims at the old paths keep the
+  ~15 route/component call sites unchanged. **Test note (the Track 2 mock-targeting class):** quick-approve +
+  plan-internal route tests reach the turn *through* plan-execution → retargeted their `executeAgentTurn` mock
+  from `@/lib/agent/api/execution` to `@clerk/agent/turn`, and the 2-arg `(params, deps)` signature needed
+  `expect.anything()` for the deps arg. **Gate met:** dashboard 0 production type errors; package units 170/170,
+  dashboard units 119/119, agent-surface integration 92/92, gateway 231/1-skip, lint clean; eval suite
+  `EVAL_REPEATS=1` **54/56 (96.4%) ≥ 93.5%** (above the 92.9% baseline) — the 2 repeats=1 failures
+  (`memory-empty-no-regression`, `tier-watch-refund-draft-only`) are the known flappy/under-escalation set and
+  both pass at `repeats=3`. Refactor touched orchestration plumbing only, not the prompt/model path.
 - [ ] **4.2 — Worker auto-plan in-process.** Replace `planning-dashboard-client.ts`'s `requestThreadPlan`
   fetch with an in-process `generateThreadPlan(orgId, threadId, { allowAutoExecute })` that calls the moved
   orchestration with the gateway's ioredis lock + no-op shadow. `precomputeThreadPlan`'s outer shape +

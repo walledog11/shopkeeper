@@ -26,3 +26,9 @@ export * from "./context.js";
 export * from "./planner.js";
 export * from "./run.js";
 export * from "./logger.js";
+// Orchestration (Track 4.1) — server-safe; exposed for the gateway's eventual
+// in-process call. The dashboard reaches these through subpaths/shims.
+export * from "./thread-auth.js";
+export * from "./internal-thread.js";
+export * from "./turn.js";
+export * from "./plan-execution.js";
