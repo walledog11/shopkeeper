@@ -2,19 +2,26 @@ import { BadRequestError } from '@/lib/api/errors';
 import { requireJsonObject } from '@/lib/api/body';
 import type { ShopifyCustomerUpdates } from './customer-service';
 
+function parseCustomerId(value: unknown): string | number {
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value.trim();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  throw new BadRequestError('Missing customerId or updates');
+}
+
 export function parseShopifyCustomerUpdateBody(body: unknown) {
   const candidate = requireJsonObject(body, { message: 'Validation failed' });
   const { customerId, updates } = candidate;
 
-  if (customerId === undefined || customerId === null || customerId === '') {
-    throw new BadRequestError('Missing customerId or updates');
-  }
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
     throw new BadRequestError('Missing customerId or updates');
   }
 
   return {
-    customerId,
+    customerId: parseCustomerId(customerId),
     updates: updates as ShopifyCustomerUpdates,
   };
 }
