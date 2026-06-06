@@ -62,3 +62,9 @@ export interface CustomerMemoryJobData {
   organizationId?: string;
   closedAt?: string;
 }
+
+export interface OrderReviewJobData {
+  organizationId: string;
+  orderId: string;
+  traceId?: string;
+}

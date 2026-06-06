@@ -5,7 +5,6 @@ import {
   parseActionLogCursorQuery,
   parseAgentAskBody,
   parseAgentInternalBody,
-  parseAgentOrderRiskInternalBody,
   parseAgentRouteBody,
 } from "@/lib/agent/api/validation";
 
@@ -62,21 +61,6 @@ describe("agent api validation", () => {
       expect(error).toBeInstanceOf(BadRequestError);
       expect((error as BadRequestError).details).toEqual([
         { code: "invalid", field: "senderPhone", message: "senderPhone must be a string" },
-      ]);
-    }
-  });
-
-  it("rejects malformed order-risk internal payloads", () => {
-    try {
-      parseAgentOrderRiskInternalBody({
-        orgId: "org_123",
-        orderId: 12345,
-      });
-      throw new Error("Expected parseAgentOrderRiskInternalBody to throw");
-    } catch (error) {
-      expect(error).toBeInstanceOf(BadRequestError);
-      expect((error as BadRequestError).details).toEqual([
-        { code: "invalid", field: "orderId", message: "orderId must be a string" },
       ]);
     }
   });

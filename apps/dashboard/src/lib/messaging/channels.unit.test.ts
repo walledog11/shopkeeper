@@ -26,6 +26,12 @@ describe("channel metadata", () => {
       logo: "/logos/default.png",
       badgeClassName: "bg-muted text-muted-foreground",
     });
+    expect(getChannelInfo("whatsapp")).toEqual({
+      name: "WhatsApp",
+      label: "WhatsApp",
+      logo: "/logos/default.png",
+      badgeClassName: "bg-muted text-muted-foreground",
+    });
     expect(getChannelInfo("custom")).toEqual({
       name: "custom",
       label: "custom",
@@ -40,5 +46,11 @@ describe("channel metadata", () => {
       { id: "dashboard_agent", label: "Concierge" },
       { id: "sms_agent", label: "SMS Agent" },
     ]);
+  });
+
+  it("can group operator channels for report labels", () => {
+    expect(getChannelLabel("dashboard_agent", { operatorLabel: "internal" })).toBe("Internal");
+    expect(getChannelLabel("sms_agent", { operatorLabel: "internal" })).toBe("Internal");
+    expect(getChannelLabel("email", { operatorLabel: "internal" })).toBe("Email");
   });
 });

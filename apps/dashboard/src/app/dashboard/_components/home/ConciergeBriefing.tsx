@@ -4,6 +4,7 @@ import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { GridPattern } from "@/components/ui/grid-pattern"
+import { formatClockTime } from "@/lib/format/date"
 
 interface Props {
   greeting: string
@@ -39,7 +40,7 @@ export default function ConciergeBriefing({
   repliesSent,
 }: Props) {
   const channelText = formatChannelList(briefingChannels)
-  const now = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  const now = formatClockTime(Date.now(), { hour: 'numeric' })
 
   let narrative: React.ReactNode
   if (overnightClearedCount === 0 && needsYouCount === 0) {

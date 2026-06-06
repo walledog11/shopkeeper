@@ -4,12 +4,13 @@ import { useState } from "react"
 import { DateRangeSelector } from "@/components/dashboard/DateRangeSelector"
 import { useReports } from "@/hooks/useReports"
 import { getDateRangeFrom, getDateRangeTo, type DateRangePreset as Preset } from "@/lib/analytics/date-range"
+import { formatShortDate } from "@/lib/format/date"
 import { AgentActivityCard } from "./_components/AgentActivityCard"
 import { CustomerContactCard } from "./_components/CustomerContactCard"
 import { GdprExportSection } from "./_components/GdprExportSection"
 import { SupportSummaryCard } from "./_components/SupportSummaryCard"
 import { TopTopicsCard } from "./_components/TopTopicsCard"
-import { BADGE_LABELS, shortDate } from "./_components/reports-helpers"
+import { BADGE_LABELS } from "./_components/reports-helpers"
 
 export default function ReportsPage() {
   const [preset, setPreset] = useState<Preset>("30d")
@@ -24,7 +25,7 @@ export default function ReportsPage() {
   const rangeTo = getDateRangeTo(preset, customTo)
 
   const rangeLabel = preset === "custom"
-    ? `${shortDate(rangeFrom.toISOString())} – ${shortDate(rangeTo.toISOString())}`
+    ? `${formatShortDate(rangeFrom.toISOString())} – ${formatShortDate(rangeTo.toISOString())}`
     : BADGE_LABELS[preset]
 
   const today = new Date().toISOString().split("T")[0]

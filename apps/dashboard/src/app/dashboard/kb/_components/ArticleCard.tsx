@@ -1,4 +1,5 @@
-import { formatDate, type ArticleWithBase } from "./kb-page-utils"
+import { formatDate } from "@/lib/format/date"
+import type { ArticleWithBase } from "./kb-page-utils"
 
 export function ArticleCard({
   article, active, onClick,

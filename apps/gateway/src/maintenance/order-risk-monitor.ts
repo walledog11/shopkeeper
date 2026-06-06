@@ -1,8 +1,8 @@
+import type { Queue } from 'bullmq';
 import { db } from '@clerk/db';
 import logger from '../logger.js';
 import { JOB, QUEUE, SHOPIFY_API_VERSION } from '../constants.js';
-import { getGatewayDashboardUrl } from '../config/env.js';
-import { getInternalApiSecret } from '../message-handlers/shared.js';
+import type { OrderReviewJobData } from '../types.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -11,11 +11,12 @@ import {
   type MaintenanceJobRegistration,
 } from './registration.js';
 
-// Track 4 spike (fraud-risk monitor). Scheduled, thread-less, flag-gated by
-// ORDER_RISK_MONITOR_ENABLED so it never runs for merchants. The gateway only
-// does order DISCOVERY here (a raw Shopify list, bypassing the seam - the same
-// crack flagged for module #2); the per-order agent judgment runs in the
-// dashboard via the thread-less order-ops path.
+// Order-ops (module #2) backstop. Scheduled, thread-less, flag-gated by
+// ORDER_RISK_MONITOR_ENABLED so it never runs for merchants. This is the
+// BACKSTOP trigger only — the orders/created webhook is primary. The sweep does
+// order DISCOVERY here (a raw Shopify list, bypassing the seam — acceptable at
+// solo-merchant volume) and enqueues each order into the in-process
+// order-review queue, the same path the webhook feeds. No more dashboard hop.
 
 const ORDERS_PER_ORG = 10;
 
@@ -36,31 +37,9 @@ async function listRecentUnfulfilledOrderIds(shop: string, accessToken: string):
   return (data.orders ?? []).map((o) => String(o.id));
 }
 
-async function reviewOrder(orgId: string, orderId: string): Promise<void> {
-  try {
-    const res = await fetch(`${getGatewayDashboardUrl()}/api/agent/order-risk-internal`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-internal-secret': getInternalApiSecret() },
-      body: JSON.stringify({ orgId, orderId }),
-    });
-    if (!res.ok) {
-      const responseBody = await res.text().catch(() => '');
-      logger.warn(
-        { orgId, orderId, status: res.status, body: responseBody.slice(0, 200) },
-        '[OrderRiskMonitor] order-risk-internal failed',
-      );
-      return;
-    }
-    const data = (await res.json()) as { flagged?: boolean; flagReason?: string | null };
-    if (data.flagged) {
-      logger.info({ orgId, orderId, reason: data.flagReason }, '[OrderRiskMonitor] order flagged for review');
-    }
-  } catch (err) {
-    logger.warn({ err: (err as Error).message, orgId, orderId }, '[OrderRiskMonitor] review call errored');
-  }
-}
-
-export async function runOrderRiskMonitor(): Promise<{ orgsScanned: number; ordersReviewed: number }> {
+export async function runOrderRiskMonitor(
+  reviewQueue: Queue<OrderReviewJobData>,
+): Promise<{ orgsScanned: number; ordersReviewed: number }> {
   if (!process.env.ORDER_RISK_MONITOR_ENABLED) {
     return { orgsScanned: 0, ordersReviewed: 0 };
   }
@@ -73,9 +52,16 @@ export async function runOrderRiskMonitor(): Promise<{ orgsScanned: number; orde
   let ordersReviewed = 0;
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
-    const orderIds = await listRecentUnfulfilledOrderIds(integration.externalAccountId, integration.accessToken);
+    const shop = integration.externalAccountId;
+    const orderIds = await listRecentUnfulfilledOrderIds(shop, integration.accessToken);
     for (const orderId of orderIds) {
-      await reviewOrder(integration.organizationId, orderId);
+      // Same stable jobId as the webhook path — dedupes a webhook-reviewed order
+      // against this backstop within the queue's retention window.
+      await reviewQueue.add(
+        JOB.ORDER_REVIEW,
+        { organizationId: integration.organizationId, orderId },
+        { jobId: `order-review:${shop}:${orderId}` },
+      );
       ordersReviewed += 1;
     }
   }
@@ -87,8 +73,10 @@ export const registerOrderRiskMaintenanceJob: MaintenanceJobRegistration = async
   const queue = createMaintenanceQueue(context, QUEUE.ORDER_RISK);
   await scheduleRepeatableJob(queue, JOB.ORDER_RISK_SCAN, JOB.ORDER_RISK_ID, ONE_HOUR_MS);
 
+  const reviewQueue = createMaintenanceQueue<OrderReviewJobData>(context, QUEUE.ORDER_REVIEW);
+
   const worker = createMaintenanceWorker(context, QUEUE.ORDER_RISK, async () => {
-    const result = await runOrderRiskMonitor();
+    const result = await runOrderRiskMonitor(reviewQueue);
     if (result.ordersReviewed > 0) {
       logger.info(result, '[OrderRiskMonitor] Scan complete');
     }
@@ -97,5 +85,5 @@ export const registerOrderRiskMaintenanceJob: MaintenanceJobRegistration = async
     sentryQueue: 'order-risk-monitor',
   });
 
-  return { workers: [worker], queues: [queue] };
+  return { workers: [worker], queues: [queue, reviewQueue] };
 };

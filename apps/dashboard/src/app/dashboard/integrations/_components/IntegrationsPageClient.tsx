@@ -7,9 +7,9 @@ import { CheckCircle2, AlertCircle, AlertTriangle, X, Zap } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
-import { isEmailAuthReauthorizationRequired } from "@/lib/messaging/email/providers"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import TelegramCard from "@/components/integrations/TelegramCard"
+import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
 import type { Integration } from "@/types"
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -71,12 +71,7 @@ function IntegrationsPageContent() {
   // Stat strip
   const activePlatforms = PLATFORM_CONFIG.filter(p => p.connectType !== 'coming-soon')
   const connectedCount = activePlatforms.filter(p => p.platform && getConnected(p.platform).length > 0).length
-  const alertCount = integrations.filter(i => {
-    if (i.platform === 'email') return isEmailAuthReauthorizationRequired(i)
-    const expired = !!i.tokenExpiresAt && new Date(i.tokenExpiresAt).getTime() < Date.now()
-    const expiringSoon = !expired && !!i.tokenExpiresAt && (new Date(i.tokenExpiresAt).getTime() - Date.now()) / 86_400_000 < 10
-    return expired || expiringSoon
-  }).length
+  const alertCount = integrations.filter(hasIntegrationTokenAlert).length
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">

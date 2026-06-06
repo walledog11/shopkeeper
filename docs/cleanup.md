@@ -260,11 +260,25 @@ Relevant files:
 
 Tasks:
 
-- [ ] Expand the shared date-formatting utilities to cover current local helpers.
-- [ ] Expand channel metadata helpers to cover dashboard labels consistently.
-- [ ] Remove local channel label maps where shared metadata is sufficient.
-- [ ] Remove local relative-time helpers from orders, integrations, and action log views.
-- [ ] Add focused tests for channel label and date formatting edge cases.
+- [x] Expand the shared date-formatting utilities to cover current local helpers.
+- [x] Expand channel metadata helpers to cover dashboard labels consistently.
+- [x] Remove local channel label maps where shared metadata is sufficient.
+- [x] Remove local relative-time helpers from orders, integrations, and action log views.
+- [x] Add focused tests for channel label and date formatting edge cases.
+
+Phase 7 implementation notes:
+
+- Shared date formatting now covers full dates, short dates, month-year labels, Unix timestamps, clock times, relative timestamps, sync labels, and activity labels with fallback and timezone options.
+- Orders, KB, customers, billing, Telegram, agent chat, home briefing, reports, analytics, and context-panel date call sites now use the shared date helpers instead of local date wrappers.
+- Reports channel labels now use shared channel metadata, including the report-specific internal operator grouping. Reports tool labels now use the agent tool registry instead of a local map.
+- Integration token alert counting now uses the existing integration-card token helpers instead of duplicating expiry thresholds in the integrations page.
+
+Phase 7 verification completed on 2026-06-06:
+
+- `npm run test:unit -w apps/dashboard -- src/lib/format/date.unit.test.ts src/lib/messaging/channels.unit.test.ts`
+- `npm run lint -w apps/dashboard`
+- `npm run test:unit -w apps/dashboard`
+- `npm run lint`
 
 ## Phase 8: Clarify Dashboard Types And DB Package Surface
 
@@ -279,12 +293,33 @@ Relevant files:
 
 Tasks:
 
-- [ ] Replace manually mirrored enum-like dashboard types with generated DB types or shared constants where practical.
-- [ ] Keep API DTO types explicit and separate from persistence model types.
-- [ ] Document which DB modules are public root exports and which are private implementation details.
-- [ ] Add subpath exports only for DB modules that should be imported directly.
-- [ ] Align `packages/db` TypeScript include patterns with the intended package surface.
-- [ ] Add type-level or compile-time tests for important shared DTO boundaries where useful.
+- [x] Replace manually mirrored enum-like dashboard types with generated DB types or shared constants where practical.
+- [x] Keep API DTO types explicit and separate from persistence model types.
+- [x] Document which DB modules are public root exports and which are private implementation details.
+- [x] Add subpath exports only for DB modules that should be imported directly.
+- [x] Align `packages/db` TypeScript include patterns with the intended package surface.
+- [x] Add type-level or compile-time tests for important shared DTO boundaries where useful.
+
+Phase 8 implementation notes:
+
+- `@clerk/db` now exports the `ThreadStatus` Prisma enum runtime and value type alongside the existing channel, sender, and filter enum exports.
+- Dashboard enum-like types and `VoiceProposal` now alias `@clerk/db` contracts while keeping dashboard API DTO object shapes explicit with string dates.
+- `packages/db/README.md` documents the public root surface, the only direct public subpaths (`customer-memory` and `test-helpers`), and the private implementation modules that should stay behind the root export.
+- `packages/db/tsconfig.json` now includes every intentional root package module used by the public root surface. No new subpath exports were added because no callers import those narrower modules directly.
+- `apps/dashboard/src/types/db-types.unit.test.ts` adds compile-time assertions for the DB enum aliases and important dashboard DTO boundaries.
+
+Phase 8 verification completed on 2026-06-06:
+
+- `npm run build -w @clerk/db`
+- `npm run test:unit -w apps/dashboard -- src/types/db-types.unit.test.ts`
+- `npm run lint -w @clerk/db`
+- `npm run lint -w apps/dashboard`
+- `npm run test:unit -w apps/dashboard`
+- `npm run test:unit`
+- `npm run test:node`
+- `npm run build -w packages/agent`
+- `npm run build -w apps/gateway`
+- `npm run lint`
 
 ## Phase 9: Review Inbound Idempotency Fallbacks
 

@@ -7,6 +7,10 @@ export interface ChannelInfo {
   badgeClassName: string
 }
 
+interface ChannelLabelOptions {
+  operatorLabel?: "canonical" | "internal"
+}
+
 const DEFAULT_CHANNEL_INFO: ChannelInfo = {
   name: 'Workspace',
   label: 'Workspace',
@@ -59,6 +63,15 @@ const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = {
   },
 }
 
+const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
+  whatsapp: {
+    name: 'WhatsApp',
+    label: 'WhatsApp',
+    logo: '/logos/default.png',
+    badgeClassName: 'bg-muted text-muted-foreground',
+  },
+}
+
 export const DASHBOARD_CHANNEL_TYPES = [
   'email',
   'ig_dm',
@@ -71,14 +84,20 @@ export const DASHBOARD_CHANNEL_TYPES = [
 
 export function getChannelInfo(channelType: ChannelType | string | null | undefined): ChannelInfo {
   if (!channelType) return DEFAULT_CHANNEL_INFO
-  return CHANNEL_INFO[channelType as ChannelType] ?? {
+  return CHANNEL_INFO[channelType as ChannelType] ?? EXTRA_CHANNEL_INFO[channelType] ?? {
     ...DEFAULT_CHANNEL_INFO,
     name: channelType,
     label: channelType,
   }
 }
 
-export function getChannelLabel(channelType: ChannelType | string | null | undefined): string {
+export function getChannelLabel(
+  channelType: ChannelType | string | null | undefined,
+  { operatorLabel = "canonical" }: ChannelLabelOptions = {},
+): string {
+  if (operatorLabel === "internal" && (channelType === "dashboard_agent" || channelType === "sms_agent")) {
+    return "Internal"
+  }
   return getChannelInfo(channelType).label
 }
 

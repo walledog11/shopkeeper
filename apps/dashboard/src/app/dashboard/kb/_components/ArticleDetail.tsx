@@ -1,5 +1,6 @@
 import { Check, ChevronLeft, Pencil, Trash2, Loader2 } from "lucide-react"
-import { formatDate, inputCls, type ArticleWithBase } from "./kb-page-utils"
+import { formatDate } from "@/lib/format/date"
+import { inputCls, type ArticleWithBase } from "./kb-page-utils"
 
 export function ArticleDetail({
   article,

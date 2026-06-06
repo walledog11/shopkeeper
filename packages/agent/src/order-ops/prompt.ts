@@ -1,6 +1,6 @@
-import type { OrgSettings } from "@/types";
-import { resolveAgentSettings } from "@clerk/agent/settings";
-import type { OrderOpsContext } from "./context";
+import type { OrgSettings } from "../types.js";
+import { resolveAgentSettings } from "../settings.js";
+import type { OrderOpsContext } from "./context.js";
 
 // Thread-less system prompt for the fraud-risk monitor spike. Note what it does
 // NOT use: no ctx.thread, no ctx.customer, no thread tag for sample-reply

@@ -89,6 +89,10 @@
     "./shopify": {
       "types": "./dist/shopify/index.d.ts",
       "default": "./dist/shopify/index.js"
+    },
+    "./order-ops": {
+      "types": "./dist/order-ops/index.d.ts",
+      "default": "./dist/order-ops/index.js"
     }
   },
   "scripts": {

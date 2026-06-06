@@ -3,6 +3,7 @@
 import useSWR from "swr"
 import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
+import { formatUnixDate } from "@/lib/format/date"
 import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react"
 
 interface BillingInfo {
@@ -26,10 +27,6 @@ const STATUS_CONFIG = {
 
 function formatAmount(cents: number) {
   return `$${(cents / 100).toFixed(2)}`
-}
-
-function formatDate(unix: number) {
-  return new Date(unix * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 function CardBrandIcon({ brand }: { brand: string }) {
@@ -114,7 +111,7 @@ export default function BillingTab() {
                 )}
                 {data.nextInvoice && isActive && (
                   <p className="text-xs text-muted-foreground">
-                    Next invoice {formatAmount(data.nextInvoice.amount)} on {formatDate(data.nextInvoice.date)}
+                    Next invoice {formatAmount(data.nextInvoice.amount)} on {formatUnixDate(data.nextInvoice.date)}
                   </p>
                 )}
               </div>
@@ -179,7 +176,7 @@ export default function BillingTab() {
             <tbody className="divide-y divide-border">
               {data.invoices.map(inv => (
                 <tr key={inv.id} className="hover:bg-muted transition-colors">
-                  <td className="px-5 sm:px-6 py-3.5 text-muted-foreground">{formatDate(inv.date)}</td>
+                  <td className="px-5 sm:px-6 py-3.5 text-muted-foreground">{formatUnixDate(inv.date)}</td>
                   <td className="px-5 sm:px-6 py-3.5 font-medium text-foreground">{formatAmount(inv.amount)}</td>
                   <td className="px-5 sm:px-6 py-3.5 hidden sm:table-cell">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${

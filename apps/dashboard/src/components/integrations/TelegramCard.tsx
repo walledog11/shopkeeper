@@ -5,6 +5,7 @@ import useSWR from "swr"
 import { ChevronDown, Loader2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { fetcher } from "@/lib/api/fetcher"
+import { formatDate } from "@/lib/format/date"
 import { cn } from "@/lib/ui/cn"
 
 const MAX_TELEGRAM_DEVICES = 3
@@ -123,7 +124,7 @@ export default function TelegramCard() {
                     </p>
                     <p className="text-xs font-mono font-medium text-white/60">chat {chat.chatId}</p>
                     <p className="text-[10px] text-white/25 mt-0.5">
-                      Connected {new Date(chat.connectedAt).toLocaleDateString()}
+                      Connected {formatDate(chat.connectedAt)}
                     </p>
                   </div>
                   <button type="button"

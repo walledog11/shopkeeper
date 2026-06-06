@@ -14,6 +14,19 @@ interface ShortRelativeTimeOptions {
   minuteUnit?: "m" | "min";
 }
 
+interface DateFormatOptions {
+  fallback?: string;
+  timeZone?: string;
+}
+
+interface ShortDateFormatOptions extends DateFormatOptions {
+  includeYear?: boolean;
+}
+
+interface ClockTimeFormatOptions extends DateFormatOptions {
+  hour?: "numeric" | "2-digit";
+}
+
 function dateFromInput(input: DateInput): Date | null {
   if (input == null || input === "") return null;
   const date = input instanceof Date ? input : new Date(input);
@@ -49,7 +62,7 @@ export function formatTime(dateString: string): string {
     date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth() &&
     date.getDate() === now.getDate();
-  const time = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const time = formatClockTime(date);
 
   if (isToday) return time;
 
@@ -57,14 +70,62 @@ export function formatTime(dateString: string): string {
   return `${dateLabel} · ${time}`;
 }
 
-export function formatDate(iso: string): string {
-  const date = dateFromInput(iso);
-  if (!date) return "Unknown date";
+export function formatDate(input: DateInput, { fallback = "Unknown date", timeZone }: DateFormatOptions = {}): string {
+  const date = dateFromInput(input);
+  if (!date) return fallback;
 
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+export function formatShortDate(
+  input: DateInput,
+  { fallback = "Unknown date", includeYear = false, timeZone }: ShortDateFormatOptions = {},
+): string {
+  const date = dateFromInput(input);
+  if (!date) return fallback;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" } : {}),
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+export function formatMonthYear(input: DateInput, { fallback = "Unknown date", timeZone }: DateFormatOptions = {}): string {
+  const date = dateFromInput(input);
+  if (!date) return fallback;
+
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+    ...(timeZone ? { timeZone } : {}),
+  });
+}
+
+export function formatUnixDate(unixSeconds: number | null | undefined, options?: DateFormatOptions): string {
+  if (typeof unixSeconds !== "number" || !Number.isFinite(unixSeconds)) {
+    return options?.fallback ?? "Unknown date";
+  }
+  return formatDate(unixSeconds * 1000, options);
+}
+
+export function formatClockTime(
+  input: DateInput,
+  { fallback = "Just now", hour = "2-digit", timeZone }: ClockTimeFormatOptions = {},
+): string {
+  const date = dateFromInput(input);
+  if (!date) return fallback;
+
+  return date.toLocaleTimeString([], {
+    hour,
+    minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 

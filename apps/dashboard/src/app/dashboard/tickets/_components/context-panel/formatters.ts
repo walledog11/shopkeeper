@@ -1,7 +1,8 @@
+import {
+  formatMonthYear as formatSharedMonthYear,
+  formatShortDate as formatSharedShortDate,
+} from "@/lib/format/date"
 import type { ShopifyAddress, ShopifyCustomer } from "@/types/shopify"
-
-const monthYearFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric', timeZone: 'UTC' })
-const shortDateFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 
 export function fulfillmentLabel(status: string | null): { label: string; textClass: string; dotClass: string } {
   switch (status) {
@@ -26,17 +27,11 @@ export function formatMoney(value: string | number | null | undefined, currency?
 }
 
 export function formatMonthYear(iso: string | null | undefined) {
-  if (!iso) return '-'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '-'
-  return monthYearFormatter.format(d)
+  return formatSharedMonthYear(iso, { fallback: '-', timeZone: 'UTC' })
 }
 
 export function formatShortDate(iso: string | null | undefined) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return shortDateFormatter.format(d)
+  return formatSharedShortDate(iso, { fallback: '', timeZone: 'UTC' })
 }
 
 export function locationString(addr: ShopifyAddress | null | undefined) {

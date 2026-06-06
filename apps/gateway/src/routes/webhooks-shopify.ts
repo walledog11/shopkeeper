@@ -4,7 +4,7 @@ import { db } from '@clerk/db';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
-import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
+import { getMessageQueue, getOrderReviewQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
@@ -110,6 +110,18 @@ export function registerShopifyWebhookRoutes(router: Router): void {
         inboundMessageId: webhookId ? `shopify:${shopDomain}:${webhookId}` : null,
         traceId,
       });
+
+      // Order-ops (module #2): a new order also enters the risk-review queue.
+      // Flag-gated; the stable jobId dedupes webhook retries so each order is
+      // reviewed once. The per-order agent run happens in-process in the worker.
+      const orderId = (req.body as { id?: number | string } | undefined)?.id;
+      if (topic === 'orders/created' && process.env.ORDER_RISK_MONITOR_ENABLED && orderId != null) {
+        await getOrderReviewQueue().add(
+          JOB.ORDER_REVIEW,
+          { organizationId, orderId: String(orderId), traceId },
+          { jobId: `order-review:${shopDomain}:${orderId}` },
+        );
+      }
 
       logger.info({ organizationId, topic, traceId }, '[Webhook] Shopify order event queued');
       return res.status(200).send('OK');

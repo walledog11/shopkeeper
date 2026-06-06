@@ -68,10 +68,6 @@ export function formatLTV(val: string) {
   return `$${n.toFixed(2)}`
 }
 
-export function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-}
-
 export function locationString(addr: ShopifyAddress | null) {
   if (!addr) return null
   return [addr.city, addr.country_name].filter(Boolean).join(", ") || null

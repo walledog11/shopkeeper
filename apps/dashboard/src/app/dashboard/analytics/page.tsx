@@ -5,6 +5,7 @@ import { Bot, Clock, CheckCircle2, MessageSquare } from "lucide-react"
 import { useAnalytics } from "@/hooks/useAnalytics"
 import { DateRangeSelector } from "@/components/dashboard/DateRangeSelector"
 import { getDateRangeFrom, getDateRangeTo, type DateRangePreset as Preset } from "@/lib/analytics/date-range"
+import { formatShortDate } from "@/lib/format/date"
 import { AuditSection } from "./_components/AuditSection"
 import { OverviewStats } from "./_components/OverviewStats"
 import { TicketChart } from "./_components/TicketChart"
@@ -14,10 +15,6 @@ import { ChannelBreakdown } from "./_components/ChannelBreakdown"
 type KpiStatus = 'excellent' | 'good' | 'needs_work' | 'no_data'
 type Tip = { text: string; ok: boolean; benchmark: string }
 type Bucket = { label: string; count: number }
-
-function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
 
 function formatResponseTime(mins: number) {
   if (mins < 60) return `${mins}m`
@@ -56,7 +53,7 @@ export default function AnalyticsPage() {
   const rangeDays  = Math.max(1, Math.ceil((rangeTo.getTime() - rangeFrom.getTime()) / (1000 * 60 * 60 * 24)))
   const auditLabel = AUDIT_LABELS[preset]
   const badgeLabel = preset === 'custom'
-    ? `${shortDate(rangeFrom.toISOString())} – ${shortDate(rangeTo.toISOString())}`
+    ? `${formatShortDate(rangeFrom.toISOString())} – ${formatShortDate(rangeTo.toISOString())}`
     : BADGE_LABELS[preset]
 
   const { data, isLoading } = useAnalytics(rangeFrom, rangeTo)
@@ -193,7 +190,7 @@ export default function AnalyticsPage() {
       const date = new Date(rangeFrom)
       date.setDate(date.getDate() + i)
       const dateStr = date.toISOString().slice(0, 10)
-      return { label: shortDate(date.toISOString()), count: dayMap.get(dateStr) ?? 0 }
+      return { label: formatShortDate(date.toISOString()), count: dayMap.get(dateStr) ?? 0 }
     })
   } else if (rangeDays <= 91) {
     chartTitle = 'Tickets , Weekly'
@@ -206,7 +203,7 @@ export default function AnalyticsPage() {
         const d = new Date(day)
         if (d >= start && d <= end) count += c
       }
-      return { label: shortDate(start.toISOString()), count }
+      return { label: formatShortDate(start.toISOString()), count }
     })
   } else {
     chartTitle = 'Tickets , Monthly'

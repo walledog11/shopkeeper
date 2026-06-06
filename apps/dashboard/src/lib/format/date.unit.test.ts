@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  formatClockTime,
   formatDate,
   formatLastActivityTime,
+  formatMonthYear,
   formatRelativeTime,
   formatRelativeTimestamp,
+  formatShortDate,
   formatShortRelativeTime,
   formatSyncRelativeTime,
+  formatUnixDate,
 } from "./date";
 
 describe("formatRelativeTime", () => {
@@ -46,8 +50,18 @@ describe("formatRelativeTime", () => {
 
   it("handles invalid and future dates predictably", () => {
     expect(formatDate("not-a-date")).toBe("Unknown date");
+    expect(formatShortDate("not-a-date", { fallback: "" })).toBe("");
+    expect(formatUnixDate(null, { fallback: "-" })).toBe("-");
     expect(formatRelativeTime("not-a-date")).toBe("just now");
     expect(formatRelativeTimestamp(null)).toBe("just now");
     expect(formatShortRelativeTime("2026-06-05T12:01:00.000Z")).toBe("just now");
+  });
+
+  it("formats canonical dashboard date variants", () => {
+    expect(formatShortDate("2026-06-05T12:00:00.000Z", { timeZone: "UTC" })).toBe("Jun 5");
+    expect(formatShortDate("2026-06-05T12:00:00.000Z", { includeYear: true, timeZone: "UTC" })).toBe("Jun 5, 2026");
+    expect(formatMonthYear("2026-06-05T12:00:00.000Z", { timeZone: "UTC" })).toBe("Jun 2026");
+    expect(formatUnixDate(Date.UTC(2026, 5, 5) / 1000, { timeZone: "UTC" })).toBe("Jun 5, 2026");
+    expect(formatClockTime("2026-06-05T09:05:00.000Z", { timeZone: "UTC" })).toBe("09:05 AM");
   });
 });

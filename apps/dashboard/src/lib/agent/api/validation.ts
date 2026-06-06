@@ -156,14 +156,6 @@ export function parseAgentPlanInternalBody(body: unknown) {
   };
 }
 
-export function parseAgentOrderRiskInternalBody(body: unknown) {
-  const candidate = requireObject(body);
-  return {
-    orgId: requireNonEmptyString(candidate.orgId, "orgId"),
-    orderId: requireNonEmptyString(candidate.orderId, "orderId"),
-  };
-}
-
 export function parseAgentVoiceBody(body: unknown) {
   const candidate = requireObject(body);
   return {

@@ -12,9 +12,9 @@ import {
   ShoppingBag,
   X,
 } from "lucide-react"
+import { formatDate } from "@/lib/format/date"
 import { CustomerAvatar } from "./CustomerAvatar"
 import {
-  formatDate,
   fulfillmentStyle,
   type CustomerRow,
 } from "./customers-page-utils"

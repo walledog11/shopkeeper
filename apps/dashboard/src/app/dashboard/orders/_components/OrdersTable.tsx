@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Check, Loader2 } from "lucide-react"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
+import { formatShortDate } from "@/lib/format/date"
 import { startOrderSupportThread } from "./order-requests"
 
 export interface OrderRow {
@@ -45,10 +46,6 @@ function financialStyle(status: string): { label: string; cls: string; dot: stri
     case 'voided':     return { label: 'Voided',         cls: 'text-white/35',  dot: 'bg-white/25' }
     default:           return { label: status,           cls: 'text-white/45',  dot: 'bg-white/30' }
   }
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 // ── StartThreadButton ─────────────────────────────────────────────────────────
@@ -158,7 +155,7 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, loadMoreEr
               <div className="lg:hidden px-4 py-3.5 space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs font-semibold text-white/75">{order.name}</span>
-                  <span className="text-xs text-white/40">{formatDate(order.created_at)}</span>
+                  <span className="text-xs text-white/40">{formatShortDate(order.created_at)}</span>
                 </div>
                 {order.customer ? (
                   <p className="text-xs text-white/75 truncate">{order.customer.name || order.customer.email || ','}</p>
@@ -194,7 +191,7 @@ export default function OrdersTable({ orders, hasMore, isLoadingMore, loadMoreEr
                     <p className="text-xs text-white/30 italic">Guest</p>
                   )}
                 </div>
-                <span className="text-xs text-white/40">{formatDate(order.created_at)}</span>
+                <span className="text-xs text-white/40">{formatShortDate(order.created_at)}</span>
                 <div className="min-w-0">
                   <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${fn.cls}`}>
                     <span className={`size-1.5 rounded-full shrink-0 ${fn.dot}`} />

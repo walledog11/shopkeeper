@@ -15,6 +15,3 @@ export const SORT_OPTIONS = [
   { value: 'recent', label: 'Recently updated' },
   { value: 'alpha', label: 'Alphabetical (A-Z)' },
 ]
-
-export const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: "numeric" })

@@ -1,11 +1,12 @@
 import { db } from "@clerk/db";
-import { shopifyRestJson, type ShopifyContext } from "@clerk/agent/shopify";
-import type { BaseAgentContext } from "@clerk/agent/context";
+import { shopifyRestJson, type ShopifyContext } from "../shopify/index.js";
+import type { BaseAgentContext } from "../agent-context.js";
 
-// Track 4 spike (fraud-risk monitor): a thread-less agent context. Unlike
-// SupportContext this carries no thread and no customer row - the unit of work
-// is a Shopify order, not a conversation. buildOrderOpsContext is the order-ops
-// analogue of buildContext(threadId, orgId).
+// Order-ops (module #2): a thread-less agent context. Unlike SupportContext this
+// carries no thread and no customer row - the unit of work is a Shopify order,
+// not a conversation. buildOrderOpsContext is the order-ops analogue of
+// buildContext(threadId, orgId): the caller injects the escalate sink (Seam 2),
+// just as buildContext takes a ThreadSink.
 
 export interface OrderRiskSignal {
   code: string;
@@ -89,7 +90,11 @@ function computeRiskSignals(order: Omit<OrderForReview, "riskSignals">): OrderRi
   return signals;
 }
 
-export async function buildOrderOpsContext(orderId: string, orgId: string): Promise<OrderOpsContext> {
+export async function buildOrderOpsContext(
+  orderId: string,
+  orgId: string,
+  escalate: (reason: string) => Promise<void>,
+): Promise<OrderOpsContext> {
   const [org, shopifyIntegration] = await Promise.all([
     db.organization.findUnique({ where: { id: orgId } }),
     db.integration.findFirst({ where: { organizationId: orgId, platform: "shopify" } }),
@@ -157,9 +162,10 @@ export async function buildOrderOpsContext(orderId: string, orgId: string): Prom
     customerMemory: null,
     recentMessages: [],
     shopify: shopifyCtx,
-    // Spike no-op: runOrderOps uses its own forked flag_order sink, not
-    // ctx.escalate. Rebuilt on the real Seam 2 sink in Track 3.
-    escalate: async () => {},
+    // Seam 2: the injected flag sink. runOrderOps routes flag_order through
+    // ctx.escalate; the host (gateway worker) decides what a flag does (record
+    // a finding now, Telegram-notify later) without the core importing it.
+    escalate,
   };
 
   return {

@@ -17,6 +17,18 @@ export function getMessageQueue(): Queue {
   return _messageQueue;
 }
 
+let _orderReviewQueue: Queue | null = null;
+export function getOrderReviewQueue(): Queue {
+  if (!_orderReviewQueue) {
+    const redisConnection = createGatewayBullMqConnection();
+    _orderReviewQueue = new Queue(QUEUE.ORDER_REVIEW, {
+      connection: redisConnection,
+      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+    });
+  }
+  return _orderReviewQueue;
+}
+
 let _rateLimitRedis: IORedis | null = null;
 export function getRateLimitRedis(): IORedis {
   if (!_rateLimitRedis) {

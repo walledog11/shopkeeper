@@ -17,6 +17,10 @@ export function isTokenExpiringSoon(integration: Integration) {
   return msLeft > 0 && msLeft / 86_400_000 < 10
 }
 
+export function hasIntegrationTokenAlert(integration: Integration) {
+  return isTokenExpired(integration) || isTokenExpiringSoon(integration)
+}
+
 export function isPostmarkEmail(integration: Integration): boolean {
   if (integration.platform !== "email") return false
   return getEmailProvider(integration) === "postmark"

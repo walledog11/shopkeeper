@@ -1,13 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@clerk/db";
 import { createTestOrg, cleanupTestData } from "@clerk/db/test-helpers";
-import { recordAgentActionsBatch } from "@clerk/agent/agent-actions";
+import { recordAgentActionsBatch } from "../agent-actions.js";
 
-vi.mock("@/lib/server/logger", () => ({
-  default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() },
-}));
-
-// Track 4 finding, substantiated: the audit log is NOT thread-locked. The
+// Order-ops finding, substantiated: the audit log is NOT thread-locked. The
 // order-ops run records its flag action with threadId/customerId null and the
 // row persists and is queryable. The only place that forced a thread was
 // run.ts's call site (it passed ctx.thread.id / ctx.customer.id), not the schema

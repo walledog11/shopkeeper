@@ -1,5 +1,7 @@
+import { TOOL_LABELS } from "@clerk/agent/tools"
 import type { useReports } from "@/hooks/useReports"
 import type { DateRangePreset as Preset } from "@/lib/analytics/date-range"
+import { getChannelLabel } from "@/lib/messaging/channels"
 
 export type ReportsData = ReturnType<typeof useReports>["data"]
 
@@ -35,40 +37,11 @@ export function formatMinutes(mins: number | null): string {
 }
 
 export function formatChannel(ch: string): string {
-  const map: Record<string, string> = {
-    email: "Email",
-    ig_dm: "Instagram",
-    whatsapp: "WhatsApp",
-    sms: "SMS",
-    shopify: "Shopify",
-    dashboard_agent: "Internal",
-    sms_agent: "Internal",
-  }
-  return map[ch] ?? ch
+  return getChannelLabel(ch, { operatorLabel: "internal" })
 }
 
 export function formatTool(tool: string): string {
-  const map: Record<string, string> = {
-    send_reply: "Send reply",
-    get_shopify_orders: "Fetch orders",
-    get_shopify_customer: "Fetch customer",
-    search_shopify_customers: "Search customers",
-    search_shopify_products: "Search products",
-    get_order_by_name: "Look up order",
-    search_kb: "Search knowledge base",
-    create_refund: "Issue refund",
-    cancel_order: "Cancel order",
-    edit_shopify_order: "Edit order",
-    create_shopify_order: "Create order",
-    update_shopify_order_address: "Update address",
-    update_shopify_customer_info: "Update customer",
-    add_shopify_customer_note: "Add Shopify note",
-    add_internal_note: "Add internal note",
-    send_email: "Send email",
-    update_thread_status: "Update status",
-    update_thread_tag: "Update tag",
-  }
-  return map[tool] ?? tool
+  return TOOL_LABELS[tool] ?? tool
 }
 
 export function triggerDownload(blob: Blob, filename: string) {
@@ -85,8 +58,4 @@ export function downloadCSV(filename: string, rows: (string | number)[][]) {
     row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")
   ).join("\n")
   triggerDownload(new Blob([csv], { type: "text/csv" }), filename)
-}
-
-export function shortDate(iso: string) {
-  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }

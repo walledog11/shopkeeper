@@ -2,6 +2,7 @@ import { AlertCircle, ArrowUp, Check, Loader2, Plus, Sparkles, X } from "lucide-
 import { TOOL_LABELS } from "@clerk/agent/tools"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { formatClockTime } from "@/lib/format/date"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import type { ChatMessage } from "./agent-chat-session"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
@@ -12,10 +13,6 @@ export interface AgentChatClientProps {
   embedded?: boolean
   onClose?: () => void
   restoreSession?: boolean
-}
-
-function formatTime(d: Date) {
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 }
 
 function getToolResultHint(tool: string, result: string): string | null {
@@ -49,7 +46,7 @@ function AgentMessage({
       <div className="flex-1 min-w-0 max-w-[75%]">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-foreground">{agentName}</span>
-          <span className="text-xs text-muted-foreground">{formatTime(message.timestamp)}</span>
+          <span className="text-xs text-muted-foreground">{formatClockTime(message.timestamp)}</span>
         </div>
         {visibleActions.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2.5">
@@ -172,7 +169,7 @@ export function AgentChatView({
             return (
               <div key={messageKey(msg)} className="flex justify-end items-end gap-2.5">
                 <div className="flex flex-col items-end gap-1 max-w-[70%]">
-                  <span className="text-xs text-muted-foreground">{formatTime(msg.timestamp)}</span>
+                  <span className="text-xs text-muted-foreground">{formatClockTime(msg.timestamp)}</span>
                   <div className="bg-card border border-border text-foreground text-sm rounded-2xl rounded-tr-sm px-4 py-2.5 shadow-sm">
                     {msg.text}
                   </div>

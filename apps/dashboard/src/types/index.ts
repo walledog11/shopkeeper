@@ -1,12 +1,3 @@
-// Enums matching the Prisma schema
-export type ChannelType = "ig_dm" | "email" | "tiktok" | "shopify" | "sms" | "sms_agent" | "dashboard_agent";
-export type ThreadStatus = "open" | "pending" | "closed";
-export type SenderType = "customer" | "agent" | "ai" | "note";
-export type ThreadFilterStatus = "genuine" | "questionable" | "filtered";
-export type ThreadFilterFeedback = "none" | "confirmed_genuine" | "confirmed_spam";
-
-// Agent-domain types now live in @clerk/agent (Track 2 extraction); re-exported
-// here so existing `@/types` imports are unchanged.
 import type {
   AgentToolPermissions,
   SampleReply,
@@ -17,6 +8,25 @@ import type {
   PlanStep,
   AgentPlan,
 } from "@clerk/agent";
+import type {
+  ChannelType as DbChannelType,
+  SenderType as DbSenderType,
+  ThreadFilterFeedback as DbThreadFilterFeedback,
+  ThreadFilterStatus as DbThreadFilterStatus,
+  ThreadStatus as DbThreadStatus,
+  VoiceProposal as DbVoiceProposal,
+} from "@clerk/db";
+
+// DB enum value types come from @clerk/db so dashboard DTOs cannot drift from
+// Prisma enum changes.
+export type ChannelType = DbChannelType;
+export type ThreadStatus = DbThreadStatus;
+export type SenderType = DbSenderType;
+export type ThreadFilterStatus = DbThreadFilterStatus;
+export type ThreadFilterFeedback = DbThreadFilterFeedback;
+
+// Agent-domain types now live in @clerk/agent (Track 2 extraction); re-exported
+// here so existing `@/types` imports are unchanged.
 export type {
   AgentToolPermissions,
   SampleReply,
@@ -28,14 +38,7 @@ export type {
   AgentPlan,
 };
 
-// Brand-voice update synthesized from operator edits, awaiting approval.
-// Stored on Organization.voiceProposal; mirrors @clerk/db's VoiceProposal.
-export interface VoiceProposal {
-  brief: string;
-  rationale: string;
-  basedOnCount: number;
-  createdAt: string;
-}
+export type VoiceProposal = DbVoiceProposal;
 
 // Database models
 export interface Organization {
