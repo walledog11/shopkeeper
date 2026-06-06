@@ -3,7 +3,8 @@ import type { OrgSettings } from '@clerk/agent/types';
 import * as Sentry from '@sentry/node';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';
-import { requestAutoAck, requestThreadPlan } from './planning-dashboard-client.js';
+import { requestAutoAck } from './planning-dashboard-client.js';
+import { generateThreadPlan } from './generate-thread-plan.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
 
 export async function precomputeThreadPlan(
@@ -26,24 +27,6 @@ export async function precomputeThreadPlan(
       return null;
     }
 
-    const response = await requestThreadPlan(
-      organizationId,
-      threadId,
-      options.allowAutoExecute === true,
-    );
-    if (!response.ok) {
-      logger.warn(
-        {
-          status: response.status,
-          threadId,
-          organizationId,
-          responseBody: response.responseBody.slice(0, 500),
-        },
-        '[Worker] plan-internal failed during precompute',
-      );
-      throw new Error(`plan-internal returned ${response.status}: ${response.responseBody.slice(0, 200)}`);
-    }
-
     const {
       plan,
       instruction,
@@ -52,7 +35,11 @@ export async function precomputeThreadPlan(
       autoExecutionSummary,
       autoExecutionActions,
       autoExecutionError,
-    } = response.data;
+    } = await generateThreadPlan(
+      organizationId,
+      threadId,
+      options.allowAutoExecute === true,
+    );
     if (!plan?.steps || plan.steps.length === 0) {
       return null;
     }

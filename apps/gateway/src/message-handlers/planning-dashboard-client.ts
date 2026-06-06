@@ -1,7 +1,5 @@
 import { getGatewayDashboardUrl } from '../config/env.js';
-import type { AgentPlan } from '../types.js';
 import { getInternalApiSecret } from './shared.js';
-import type { AgentActionResult } from './planning-types.js';
 
 interface DashboardApiSuccess<T> {
   ok: true;
@@ -15,16 +13,6 @@ interface DashboardApiFailure {
 }
 
 type DashboardApiResult<T> = DashboardApiSuccess<T> | DashboardApiFailure;
-
-export interface PlanInternalResponse {
-  plan: AgentPlan | null;
-  instruction: string;
-  autoExecuted?: boolean;
-  autoExecutionStatus?: 'success' | 'error';
-  autoExecutionSummary?: string;
-  autoExecutionActions?: AgentActionResult[];
-  autoExecutionError?: string;
-}
 
 interface AutoAckResponse {
   ok: boolean;
@@ -53,18 +41,6 @@ async function postDashboardInternal<T>(
   }
 
   return { ok: true, data: await response.json() as T };
-}
-
-export function requestThreadPlan(
-  organizationId: string,
-  threadId: string,
-  allowAutoExecute: boolean,
-): Promise<DashboardApiResult<PlanInternalResponse>> {
-  return postDashboardInternal('/api/agent/plan-internal', {
-    orgId: organizationId,
-    threadId,
-    allowAutoExecute,
-  });
 }
 
 export function requestAutoAck(threadId: string): Promise<DashboardApiResult<AutoAckResponse>> {

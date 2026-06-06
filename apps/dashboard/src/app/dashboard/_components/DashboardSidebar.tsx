@@ -46,7 +46,7 @@ export default function DashboardSidebar({
         </div>
       )}
 
-      <SidebarProvider className="flex-1 min-h-0 w-full">
+      <SidebarProvider className="flex-1 min-h-0 w-full overflow-x-hidden">
         <Sidebar className="max-md:hidden border-r-0 bg-background" collapsible="offcanvas">
           <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} navAuth={navAuth} />
         </Sidebar>
@@ -72,7 +72,7 @@ export default function DashboardSidebar({
 
           <div
             className={cn(
-              "dashboard-content flex-1 min-h-0 overflow-y-hidden overflow-x-auto flex flex-col md:pb-0",
+              "dashboard-content flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0",
               "pb-16",
             )}
           >

@@ -24,7 +24,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@clerk/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
 | **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 code-complete + eval-confirmed (2026-06-05) | manual live e2e; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-06) — 4.0 LockProvider seam ✅; 4.1 orchestration moved ✅ | 4.2 worker auto-plan in-process |
+| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-06) — 4.0 LockProvider ✅; 4.1 orchestration moved ✅; 4.2 worker auto-plan in-process ✅ | 4.3 operator runs in-process |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -463,11 +463,32 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   `EVAL_REPEATS=1` **54/56 (96.4%) ≥ 93.5%** (above the 92.9% baseline) — the 2 repeats=1 failures
   (`memory-empty-no-regression`, `tier-watch-refund-draft-only`) are the known flappy/under-escalation set and
   both pass at `repeats=3`. Refactor touched orchestration plumbing only, not the prompt/model path.
-- [ ] **4.2 — Worker auto-plan in-process.** Replace `planning-dashboard-client.ts`'s `requestThreadPlan`
-  fetch with an in-process `generateThreadPlan(orgId, threadId, { allowAutoExecute })` that calls the moved
-  orchestration with the gateway's ioredis lock + no-op shadow. `precomputeThreadPlan`'s outer shape +
-  `PrecomputedPlanResult` return are unchanged. (`requestAutoAck → /api/messages/auto-ack` is message
-  dispatch, not core — **stays a hop**.)
+- [x] **4.2 — Worker auto-plan in-process ✅ (2026-06-06).** `planning-dashboard-client.ts`'s
+  `requestThreadPlan` HTTP hop is gone; `precomputeThreadPlan` now calls a new in-process
+  `generateThreadPlan(orgId, threadId, allowAutoExecute)` (`message-handlers/generate-thread-plan.ts`) that
+  mirrors the `plan-internal` route: `requireOrgThread` → settings → plan-cache hit/miss → `planAgent` →
+  cache write → (within business hours) `maybeAutoExecuteCurrentCachedHomePlan` with the gateway's injected
+  deps. `precomputeThreadPlan`'s shape + `PrecomputedPlanResult` are unchanged (one localized `as unknown`
+  widening at the boundary — the gateway keeps its looser JSON-shaped `AgentPlan`, exactly what `JSON.parse`
+  did before). (`requestAutoAck → /api/messages/auto-ack` still **stays a hop**.)
+  - **Injected gateway deps (`agent-turn-deps.ts`):** ioredis `LockProvider` (4.0), `buildContext` +
+    in-process `ThreadSink`, core `runAgent` (no ops-alert counter yet — `recordToolFailure` omitted; failures
+    still land as `AgentAction` rows + BullMQ/Sentry job-failure logging), **no-op `ShadowRecorder`** (rig is
+    dashboard-rollout-only).
+  - **Gateway `ThreadSink` (`agent-thread-sink.ts`) — hop-back sink (decided 2026-06-06):** DB-only ops run
+    in-process — `add_internal_note` / `update_thread_tag` (pure DB), `update_thread_status` (+ in-process
+    customer-memory enqueue on close), `escalate_to_human` (+ in-process operator-notify via the extracted
+    `pushOperatorEscalation`; the dashboard sink *hops to the gateway* for exactly this, so in-process is the
+    terminus). The two provider-coupled tools `send_reply` / `send_email` **hop back** to a new internal
+    dashboard route `POST /api/agent/io-send-internal`, which runs the unchanged `tools/thread` dispatch
+    (Postmark/IG stays in the dashboard per the package boundary). Lazy process-singletons in
+    `clients/agent-runtime.ts` (lock client + customer-memory queue).
+  - **Verified:** package + gateway build clean; gateway typecheck 0 errors; dashboard 0 production type errors
+    (only pre-existing `*.test.ts` quirks); lint + `check-module-structure` clean; gateway suite 231 pass / 1
+    skip (incl. refactored `internal-operator` 404-path + unchanged `sendAutoAck`). The support eval net is not
+    implicated — the dashboard `plan-internal` path is byte-for-byte unchanged and the package core was not
+    touched. **Remaining:** manual live e2e (in-process auto-plan + auto-execute through the hop-back sink,
+    needs the live env, like Track 3's); optionally wire the gateway `recordToolFailure` closure.
 - [ ] **4.3 — Operator runs in-process.** Point `executeFreeFormInstruction` + `handlePendingPlanCommand`
   (Telegram) at an in-process `executeAgentTurn` + `resolveInternalAgentThread`. Billing gate + Clerk approver
   resolve gateway-side (move billing check to `@clerk/db` or a gateway copy; approver passed pre-resolved).

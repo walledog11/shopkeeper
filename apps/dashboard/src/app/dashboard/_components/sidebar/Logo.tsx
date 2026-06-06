@@ -15,10 +15,10 @@ export function Logo() {
       }}
     >
       <Image
-      src="/logos/shopkeeper-neon-2.png"
+      src="/logos/shopkeeper-underline-logo.png"
       alt="shopkeeper-logo"
-      width={100}
-      height={100}
+      width={150}
+      height={150}
     />
     </Link>
   );

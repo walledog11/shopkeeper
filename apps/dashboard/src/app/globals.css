@@ -156,48 +156,8 @@
 html.dashboard-locked,
 body.dashboard-locked {
   height: 100%;
-  overflow-y: hidden;
-  overflow-x: auto;
+  overflow: hidden;
   overscroll-behavior: none;
-}
-
-/* Marketing page: allow horizontal scroll and use visible scrollbars on white background */
-html:has([data-page="marketing"]) {
-  overflow-x: auto;
-  scrollbar-color: rgba(0, 0, 0, 0.2) rgba(0, 0, 0, 0.05);
-}
-
-/* On desktop (pointer: fine = mouse), prevent the layout from collapsing when
-   the user zooms in — instead let it scroll horizontally. Mobile (touch) stays
-   fully responsive and is unaffected by this rule. */
-@media (hover: hover), (pointer: fine) {
-  [data-page="marketing"] {
-    min-width: 1024px;
-  }
-
-  .dashboard-home-scroll {
-    scrollbar-gutter: stable both-edges;
-  }
-
-  /* Keep dashboard home wide on desktop so browser zoom creates horizontal overflow. */
-  .dashboard-home-content {
-    width: 1280px;
-    max-width: none;
-  }
-
-  /* Ensure dashboard pages can overflow horizontally when zoomed on desktop. */
-  .dashboard-shell {
-    min-width: 1360px;
-  }
-}
-html:has([data-page="marketing"])::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-}
-html:has([data-page="marketing"])::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
-}
-html:has([data-page="marketing"])::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.35);
 }
 
 html,

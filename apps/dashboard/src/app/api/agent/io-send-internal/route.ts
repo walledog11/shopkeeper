@@ -1,0 +1,64 @@
+/**
+ * Internal agent send hop , called by the gateway worker's in-process ThreadSink
+ * (Track 4.2) for the two provider-coupled tools, send_reply and send_email.
+ * Postmark / Instagram delivery stays in the dashboard (the package boundary:
+ * touches a message provider , dashboard), so the worker hops here to dispatch.
+ *
+ * Auth: x-internal-secret header. No Clerk session.
+ *
+ * Body: { orgId, threadId, orgName, op: "send_reply" | "send_email", input }
+ * Response: ToolResult ({ status, message })
+ */
+import { NextResponse } from "next/server";
+import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
+import type { SendReplyInput, SendEmailInput } from "@clerk/agent/tools";
+import { readRequiredJsonObject } from "@/lib/api/body";
+import { BadRequestError } from "@/lib/api/errors";
+import { withInternalRoute } from "@/lib/api/internal-route";
+
+export const maxDuration = 60;
+
+interface IoSendBody {
+  orgId: string;
+  threadId: string;
+  orgName: string;
+  op: "send_reply" | "send_email";
+  input: unknown;
+}
+
+function parseBody(value: Record<string, unknown>): IoSendBody {
+  const { orgId, threadId, orgName, op, input } = value;
+  if (typeof orgId !== "string" || typeof threadId !== "string") {
+    throw new BadRequestError("orgId and threadId are required");
+  }
+  if (op !== "send_reply" && op !== "send_email") {
+    throw new BadRequestError("op must be send_reply or send_email");
+  }
+  if (!input || typeof input !== "object") {
+    throw new BadRequestError("input is required");
+  }
+  return { orgId, threadId, orgName: typeof orgName === "string" ? orgName : "", op, input };
+}
+
+export const POST = withInternalRoute(
+  {
+    context: "Agent io-send-internal POST",
+    errorMessage: "Failed to dispatch agent message",
+  },
+  async ({ request }) => {
+    const { orgId, threadId, orgName, op, input } = parseBody(
+      await readRequiredJsonObject(request, {
+        malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
+        empty: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
+        object: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
+      }),
+    );
+
+    const ctx = { threadId, orgId, orgName };
+    const result = op === "send_reply"
+      ? await sendReply(input as SendReplyInput, ctx)
+      : await sendEmail(input as SendEmailInput, ctx);
+
+    return NextResponse.json(result);
+  },
+);

@@ -95,18 +95,7 @@ export default function ConciergeBriefing({
       />
 
       <div className="relative px-6 pt-5 pb-5">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-center gap-2">
-            <div className="size-6 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 border border-blue-800 flex items-center justify-center">
-              <Sparkles className="size-3.5 text-blue-800" />
-            </div>
-            <span className="text-xs uppercase tracking-wider font-semibold text-white/45">
-              Daily briefing
-            </span>
-            <span className="text-white/15">·</span>
-            <span className="text-xs text-white/35 tabular-nums">{now}</span>
-          </div>
-        </div>
+
 
         <h1 className="text-2xl font-bold tracking-tight text-white leading-tight">
           {greeting}, {userName}.
