@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { dispatchNavProgressStart } from "./sidebar-helpers";
+import Image from "next/image";
 
 export function Logo() {
   return (
@@ -13,8 +14,12 @@ export function Logo() {
         if (pathname !== "/dashboard") dispatchNavProgressStart();
       }}
     >
-      <span className="text-xl font-black text-white tracking-tight">clerk</span>
-      <span className="size-2 rounded-full bg-green-400 self-start mt-1.5 shrink-0" />
+      <Image
+      src="/logos/shopkeeper-neon-2.png"
+      alt="shopkeeper-logo"
+      width={100}
+      height={100}
+    />
     </Link>
   );
 }
