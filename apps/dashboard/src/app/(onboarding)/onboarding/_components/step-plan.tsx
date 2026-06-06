@@ -95,7 +95,7 @@ export function StepPlan({ data, connected, onStart, onBack }: {
         <div className="grid grid-cols-3 gap-3">
           <Waiting k="Inbox"     v="0 tickets" hint="filling up as I watch" />
           <Waiting k="Memory"    v="0 articles" hint="builds from your replies" />
-          <Waiting k="Playbooks" v="3 starters" hint="VIP, WISMO, returns" />
+          <Waiting k="Concierge" v="ready" hint="your AI teammate" />
         </div>
       </div>
     </div>

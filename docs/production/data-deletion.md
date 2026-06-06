@@ -4,7 +4,7 @@ This process covers v1 launch operations for merchant workspace deletion and mer
 
 ## Scope
 
-Clerk stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, playbook runs, and local team-member metadata. Clerk authentication records live in Clerk.com, billing records live in Stripe, inbound/outbound email records live in Postmark, and connected commerce records live in Shopify.
+Clerk stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, and local team-member metadata. Clerk authentication records live in Clerk.com, billing records live in Stripe, inbound/outbound email records live in Postmark, and connected commerce records live in Shopify.
 
 ## Intake
 

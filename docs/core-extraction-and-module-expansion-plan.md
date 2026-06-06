@@ -535,8 +535,8 @@ the move is to stop pouring in, not rip out (except where noted).
 - **Voice-learning loop** (`VoiceEdit` → synthesis → `voiceProposal`): keep, do not extend (no per-tag voice
   models etc.) until merchants are correcting drafts at volume. The manual path (`brandVoice` +
   `sampleReplies`) already delivers most of the value.
-- **Playbooks** (`Playbook` / `PlaybookRun` + routes): **evaluate for deletion.** The agent is the
-  automation; a parallel rules-engine table is redundant surface. (Confirm unused first.)
+- **Playbooks** (`Playbook` / `PlaybookRun` + routes): **deleted (2026-06-06).** The agent is the
+  automation; the parallel rules-engine was redundant surface.
 
 ## Explicitly deferred (not in this plan)
 

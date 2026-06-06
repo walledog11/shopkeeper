@@ -32,7 +32,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { name: "Concierge", href: "/dashboard/agent", icon: Bot },
       { name: "Memory", href: "/dashboard/kb", icon: BrainCircuit },
-      { name: "Playbooks", href: "/dashboard/playbooks", icon: Play },
     ],
   },
   {

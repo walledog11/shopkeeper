@@ -220,9 +220,9 @@ describe('assertEntityInOrg', () => {
 
   it('uses the provided message on the NotFoundError', () => {
     try {
-      assertEntityInOrg(null, 'org_1', 'Playbook not found');
+      assertEntityInOrg(null, 'org_1', 'Entity not found');
     } catch (err) {
-      expect((err as NotFoundError).message).toBe('Playbook not found');
+      expect((err as NotFoundError).message).toBe('Entity not found');
       return;
     }
     throw new Error('expected throw');

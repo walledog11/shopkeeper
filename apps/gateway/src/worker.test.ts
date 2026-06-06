@@ -220,14 +220,8 @@ describe('Message worker — email branch', () => {
     expect(thread?.tag).toBe('Shipping');
   });
 
-  it('persists spam as filtered (no playbooks fired)', async () => {
+  it('persists spam as filtered', async () => {
     mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('filtered', { reason: 'Promotional newsletter.' }));
-
-    const playbookCalls: string[] = [];
-    mockFetch.mockImplementation((url: string) => {
-      if (String(url).includes('/api/playbooks/trigger')) playbookCalls.push(String(url));
-      return Promise.resolve({ ok: true, json: vi.fn().mockResolvedValue({}), text: vi.fn().mockResolvedValue('') });
-    });
 
     const handler = capturedHandlers.get('inbound-messages');
     await handler!(makeEmailJob(org.id));
@@ -235,17 +229,10 @@ describe('Message worker — email branch', () => {
     const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
     expect(thread?.filterStatus).toBe('filtered');
     expect(thread?.filterReason).toBe('Promotional newsletter.');
-    expect(playbookCalls).toHaveLength(0);
   });
 
-  it('persists ambiguous email as questionable (playbooks fire)', async () => {
+  it('persists ambiguous email as questionable', async () => {
     mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('questionable', { reason: 'Cold pitch — unclear if real customer.' }));
-
-    const playbookCalls: string[] = [];
-    mockFetch.mockImplementation((url: string) => {
-      if (String(url).includes('/api/playbooks/trigger')) playbookCalls.push(String(url));
-      return Promise.resolve({ ok: true, json: vi.fn().mockResolvedValue({}), text: vi.fn().mockResolvedValue('') });
-    });
 
     const handler = capturedHandlers.get('inbound-messages');
     await handler!(makeEmailJob(org.id));
@@ -253,7 +240,6 @@ describe('Message worker — email branch', () => {
     const thread = await db.thread.findFirst({ where: { organizationId: org.id, channelType: ChannelType.email } });
     expect(thread?.filterStatus).toBe('questionable');
     expect(thread?.filterReason).toBe('Cold pitch — unclear if real customer.');
-    expect(playbookCalls).toHaveLength(1);
   });
 
   it('skips classifier and inherits status when customer already has an open thread', async () => {

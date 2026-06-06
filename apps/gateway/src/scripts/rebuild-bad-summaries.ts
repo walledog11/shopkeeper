@@ -70,7 +70,7 @@ async function main() {
   for (let i = 0; i < targets.length; i += CONCURRENCY) {
     const batch = targets.slice(i, i + CONCURRENCY);
     const results = await Promise.allSettled(
-      batch.map(t => generateThreadIntelligence(t.id, { triggerPlaybooks: false })),
+      batch.map(t => generateThreadIntelligence(t.id)),
     );
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value) succeeded++;

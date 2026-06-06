@@ -7,12 +7,11 @@ import { anthropic } from '@clerk/agent/ai';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
   parseClassifierJson,
-  triggerPlaybooks,
 } from './shared.js';
 
 export async function generateThreadIntelligence(
   threadId: string,
-  opts?: { triggerPlaybooks?: boolean; skipSummary?: boolean },
+  opts?: { skipSummary?: boolean },
 ) {
   try {
     // skipSummary path: email worker already classified pre-persistence; the
@@ -69,12 +68,6 @@ export async function generateThreadIntelligence(
     });
 
     logger.info({ tag: aiData.tag, summary: aiData.summary, classification: updated.filterStatus, threadId }, '[Worker] AI Summary saved');
-
-    // Skip on backfills (don't re-run automation on historical tickets) and on
-    // filtered threads (no automation on spam).
-    if (opts?.triggerPlaybooks !== false && updated.filterStatus !== 'filtered') {
-      void triggerPlaybooks(updated.organizationId, threadId, { type: 'tag_applied', tag: aiData.tag });
-    }
 
     return updated;
   } catch (aiError) {

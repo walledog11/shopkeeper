@@ -4,7 +4,6 @@ import { NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@clerk/agent/thread-constants';
-import { runPlaybooks } from '@/app/api/threads/_lib/playbook-runner';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 import type { AgentTurnAction } from '@/lib/agent/api/turns';
@@ -86,16 +85,11 @@ export const PATCH = withOrgRoute<{ id: string }>(
       },
     });
 
-    // Fire playbooks in background (never await , don't block the response)
-    if (tag !== undefined && tag) {
-      runPlaybooks(org.id, { type: 'tag_applied', tag }, id);
-    }
     if (status === THREAD_STATUS.CLOSED) {
       await enqueueCustomerMemoryForClosedThreads({
         organizationId: org.id,
         threads: [{ threadId: id, closedAt: updated.updatedAt }],
       });
-      runPlaybooks(org.id, { type: 'ticket_closed' }, id);
     }
 
     return NextResponse.json(updated);

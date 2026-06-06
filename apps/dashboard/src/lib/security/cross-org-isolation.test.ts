@@ -37,10 +37,6 @@ import {
 } from '@/app/api/kb/[id]/route';
 import { DELETE as deleteKbBase } from '@/app/api/kb/bases/[id]/route';
 import { POST as createKbArticle } from '@/app/api/kb/bases/[id]/articles/route';
-import {
-  PATCH as patchPlaybook,
-  DELETE as deletePlaybook,
-} from '@/app/api/playbooks/[id]/route';
 import { DELETE as deleteIntegration } from '@/app/api/integrations/[id]/route';
 import { POST as aiSummary } from '@/app/api/ai/summary/route';
 
@@ -187,46 +183,6 @@ describe('cross-org isolation , id-style routes return 404 for foreign resources
 
     const articleCount = await db.kbArticle.count({ where: { knowledgeBaseId: foreignKb.id } });
     expect(articleCount).toBe(0);
-  });
-
-  it('PATCH /api/playbooks/[id] returns 404 for another org playbook id', async () => {
-    const foreign = await db.playbook.create({
-      data: {
-        organizationId: otherOrg.id,
-        name: 'pb',
-        enabled: true,
-        trigger: { type: 'tag', tag: 'x' },
-        actions: [],
-      },
-    });
-    const res = await patchPlaybook(
-      jsonReq(`http://x/api/playbooks/${foreign.id}`, { enabled: false }, 'PATCH'),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-
-    const unchanged = await db.playbook.findUnique({ where: { id: foreign.id } });
-    expect(unchanged?.enabled).toBe(true);
-  });
-
-  it('DELETE /api/playbooks/[id] returns 404 for another org playbook id', async () => {
-    const foreign = await db.playbook.create({
-      data: {
-        organizationId: otherOrg.id,
-        name: 'pb',
-        enabled: true,
-        trigger: { type: 'tag', tag: 'x' },
-        actions: [],
-      },
-    });
-    const res = await deletePlaybook(
-      new Request(`http://x/api/playbooks/${foreign.id}`, { method: 'DELETE' }),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-
-    const stillThere = await db.playbook.findUnique({ where: { id: foreign.id } });
-    expect(stillThere).not.toBeNull();
   });
 
   it('DELETE /api/integrations/[id] returns 404 for another org integration id', async () => {

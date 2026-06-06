@@ -5,9 +5,9 @@ Use this checklist before adding or changing high-risk dashboard or gateway rout
 ## Applies To
 
 - Money paths: billing, Stripe webhooks, subscription gates, checkout, portal.
-- Tenant data paths: customers, threads, messages, KB, playbooks, reports, analytics, exports, data deletion, team, integrations.
+- Tenant data paths: customers, threads, messages, KB, reports, analytics, exports, data deletion, team, integrations.
 - External provider paths: Shopify, Postmark, Meta, Twilio, Clerk webhooks, gateway webhooks.
-- Merchant workflow writes: outbound messages, agent actions, approvals, playbook execution, integration creation/deletion.
+- Merchant workflow writes: outbound messages, agent actions, approvals, integration creation/deletion.
 
 ## Required Coverage
 

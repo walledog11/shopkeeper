@@ -116,9 +116,6 @@ API routes still duplicate hand-written JSON parsing and request validation. Sev
 Relevant files:
 
 - `apps/dashboard/src/lib/api/route.ts`
-- `apps/dashboard/src/app/api/playbooks/route.ts`
-- `apps/dashboard/src/app/api/playbooks/[id]/route.ts`
-- `apps/dashboard/src/app/api/playbooks/trigger/route.ts`
 - `apps/dashboard/src/app/api/canned-responses/route.ts`
 - `apps/dashboard/src/app/api/kb/[id]/route.ts`
 - `apps/dashboard/src/app/api/agent/plan-internal/route.ts`
@@ -128,15 +125,15 @@ Tasks:
 
 - [x] Add a shared JSON body reader that maps malformed JSON to `BadRequestError`.
 - [x] Add route-friendly helpers for required objects, optional objects, and empty-body handling.
-- [x] Centralize validators for playbooks, canned responses, KB articles, agent internals, threads, billing, and team routes.
+- [x] Centralize validators for canned responses, KB articles, agent internals, threads, billing, and team routes.
 - [x] Remove local duplicate helpers such as repeated `readJsonBody`, `requireNonEmptyString`, and tag normalizers.
 - [x] Add failure-path tests for malformed JSON, invalid field types, empty bodies, and unknown fields where relevant.
 
 Phase 3 verification completed on 2026-06-05:
 
 - `npm run test:unit -w apps/dashboard -- src/lib/api/body.unit.test.ts src/lib/agent/api/validation.unit.test.ts src/app/api/threads/_lib/validation.unit.test.ts src/app/api/team/_lib/validation.unit.test.ts src/app/api/billing/_lib/validation.unit.test.ts`
-- `npm run test:integration -w apps/dashboard -- src/app/api/playbooks/route.test.ts src/app/api/canned-responses/route.test.ts src/app/api/kb/bases/route.test.ts 'src/app/api/threads/[id]/route.test.ts' src/app/api/billing/checkout/route.test.ts src/app/api/billing/portal/route.test.ts src/app/api/agent/plan-internal/route.test.ts`
-- `npm run test:integration -w apps/dashboard -- src/app/api/agent/route.test.ts src/app/api/agent/chat/route.test.ts src/app/api/agent/internal/route.test.ts src/app/api/agent/plan/route.test.ts src/app/api/agent/quick-approve/route.test.ts src/app/api/playbooks/trigger/route.test.ts src/app/api/org/route.test.ts src/lib/security/tenant-data-surfaces.test.ts`
+- `npm run test:integration -w apps/dashboard -- src/app/api/canned-responses/route.test.ts src/app/api/kb/bases/route.test.ts 'src/app/api/threads/[id]/route.test.ts' src/app/api/billing/checkout/route.test.ts src/app/api/billing/portal/route.test.ts src/app/api/agent/plan-internal/route.test.ts`
+- `npm run test:integration -w apps/dashboard -- src/app/api/agent/route.test.ts src/app/api/agent/chat/route.test.ts src/app/api/agent/internal/route.test.ts src/app/api/agent/plan/route.test.ts src/app/api/agent/quick-approve/route.test.ts src/app/api/org/route.test.ts src/lib/security/tenant-data-surfaces.test.ts`
 - `npm run lint -w apps/dashboard`
 - `npm run lint`
 - `npm run test:unit`

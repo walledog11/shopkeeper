@@ -65,7 +65,6 @@ Conversations
 Automation
   Concierge              /dashboard/agent         — standalone AI agent chat
   Memory                 /dashboard/kb            — knowledge base
-  Playbooks              /dashboard/playbooks     — trigger-based automation rules
 Storefront
   Orders                 /dashboard/orders        — Shopify order browser
   Customers              /dashboard/customers     — Shopify customer browser
@@ -178,13 +177,6 @@ Configurable per org via Settings → Agent tab:
 - `/dashboard/customers` — Shopify customer browser
 - `/dashboard/products` — Shopify product browser with search, status filters (active/draft/archived), stat strip (total/active/out-of-stock), per-product drawer showing variants/SKUs/pricing/inventory, Shopify admin deep-link, load-more pagination
 - Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
-
-### Playbooks (Automation)
-- `/dashboard/playbooks` — trigger-based automation rules; create/edit via slide-over drawer, enable/disable toggle per playbook
-- Triggers: `new_ticket`, `tag_applied` (with specific tag selector), `ticket_closed`
-- Actions (chainable): `send_reply`, `apply_tag`, `close_ticket`, `add_note`
-- Pre-built templates: WISMO Auto-Reply, Returns & Refunds, Auto-close Resolved
-- Active/inactive grouping in list view
 
 ### Reports
 - `/dashboard/reports` — exportable reports with date range selector (7d / 30d / 90d / all time / custom range)

@@ -198,32 +198,3 @@ export interface FailedMessage {
   text: string;
   isNote: boolean;
 }
-
-// Playbooks
-export type PlaybookTriggerType = 'new_ticket' | 'tag_applied' | 'ticket_closed'
-
-export interface PlaybookTrigger {
-  type: PlaybookTriggerType
-  tag?: string   // for tag_applied
-}
-
-export type PlaybookActionType = 'send_reply' | 'apply_tag' | 'close_ticket' | 'add_note'
-
-export interface PlaybookAction {
-  type: PlaybookActionType
-  message?: string  // for send_reply
-  tag?: string      // for apply_tag
-  note?: string     // for add_note
-}
-
-export interface Playbook {
-  id: string
-  organizationId: string
-  name: string
-  enabled: boolean
-  trigger: PlaybookTrigger
-  actions: PlaybookAction[]
-  runCount: number
-  createdAt: string
-  updatedAt: string
-}

@@ -7,7 +7,6 @@ import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import TodayShape from "./TodayShape"
 import TodayOrders from "./TodayOrders"
-import RepeatCustomers from "./RepeatCustomers"
 import WeekChart from "./WeekChart"
 import { useHomeData } from "./useHomeData"
 import type { HomeSummary } from "@/lib/home/summary-contract"
@@ -85,7 +84,6 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
                 vipsInQueue={data.vipsInQueue}
               />
               <TodayOrders orders={data.todaysOrders} hasShopify={data.hasShopify} />
-              <RepeatCustomers customers={data.repeatCustomers} />
               <WeekChart data={data.yourWeek} />
             </div>
           </div>

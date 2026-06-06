@@ -177,6 +177,8 @@ Lean (a): the skeleton fields (`summary`/`keyFacts`/`recentInteractions`) are cu
 ### 3.3 — Decide agent-vs-playbook ownership of proactive work *(S, decision)* [COMPLETED]
 Decide who owns proactive work before a module forces it — two automation mental models (the rules engine and the agent) will confuse the architecture otherwise.
 
+**Update (2026-06-06):** Playbooks were removed entirely; the agent is the sole automation surface. The decision below is retained as historical context.
+
 **The two models, named (verified in code).** They are not "two ways to do the same thing" — they sit at opposite ends of a determinism/judgment axis, with different safety stacks:
 
 1. **Playbook = deterministic rules engine.** A merchant-authored `condition → action` row. **Triggers** are a closed enum of events — `new_ticket | tag_applied | ticket_closed` (`types/index.ts:284`), fired fire-and-forget from the gateway (`channels.ts` → `triggerPlaybooks(new_ticket)`) and the dashboard thread route (`threads/[id]/route.ts:105,112`). **Actions** are four fixed, model-free operations — `apply_tag | close_ticket | add_note | send_reply` with a **literal** canned message (`playbook-runner.ts:59-101`). No LLM, no context read, no judgment, **no autonomy tier, no spend cap, no policy check, no escalation, no audit row** — just dedup by unique `(playbookId, threadId)` (`PlaybookRun`) and a `runCount` bump. Its entire value is that it is *predictable and free*: the merchant states an explicit rule and it runs verbatim.

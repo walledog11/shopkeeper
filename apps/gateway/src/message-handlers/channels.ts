@@ -9,7 +9,6 @@ import {
   lookupShopifyCustomerName,
   processInboundMessage,
   stripQuotedReply,
-  triggerPlaybooks,
   type ClassificationResult,
 } from './shared.js';
 
@@ -87,9 +86,6 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       attachments: attachmentUrls,
       traceId,
     });
-    if (result?.isNew) {
-      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
-    }
     logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved IG DM');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for IG DM');
@@ -175,9 +171,6 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       precomputed,
       lockAsGenuine: !spamFilterEnabled,
     });
-    if (result?.isNew && precomputed?.filterStatus !== 'filtered') {
-      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
-    }
     logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
@@ -217,9 +210,6 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
       externalMessageId: job.data.inboundMessageId,
       traceId,
     });
-    if (result?.isNew) {
-      void triggerPlaybooks(organizationId, result.thread.id, { type: 'new_ticket' });
-    }
     logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Shopify order event');

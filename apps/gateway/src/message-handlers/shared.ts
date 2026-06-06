@@ -19,25 +19,6 @@ import { readModelUsage } from '@clerk/agent/usage';
 
 const MAX_INPUT_LENGTH = 4000;
 
-export async function triggerPlaybooks(
-  organizationId: string,
-  threadId: string,
-  trigger: { type: string; tag?: string },
-): Promise<void> {
-  try {
-    await fetch(`${getGatewayDashboardUrl()}/api/playbooks/trigger`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': getInternalApiSecret(),
-      },
-      body: JSON.stringify({ organizationId, threadId, trigger }),
-    });
-  } catch (err) {
-    logger.warn({ err: (err as Error).message, threadId, trigger }, '[Worker] triggerPlaybooks call failed');
-  }
-}
-
 export function getInternalApiSecret(): string {
   const secret = process.env.INTERNAL_API_SECRET;
   if (!secret) {

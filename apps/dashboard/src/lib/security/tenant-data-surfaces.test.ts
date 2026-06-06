@@ -48,7 +48,6 @@ import { GET as getIntegrations } from '@/app/api/integrations/route';
 import { GET as getKb } from '@/app/api/kb/route';
 import { GET as getOrders } from '@/app/api/orders/route';
 import { GET as getOrgData, DELETE as deleteOrgData } from '@/app/api/org/data/route';
-import { GET as getPlaybooks } from '@/app/api/playbooks/route';
 import { GET as getReports } from '@/app/api/reports/route';
 import { GET as getGdprReport } from '@/app/api/reports/gdpr/route';
 import { GET as getShopifyCustomer } from '@/app/api/shopify/customer/route';
@@ -86,7 +85,7 @@ afterEach(async () => {
 });
 
 describe('tenant data surfaces', () => {
-  it('lists only the active organization data for KB, playbooks, integrations, and org export', async () => {
+  it('lists only the active organization data for KB, integrations, and org export', async () => {
     const callerCustomer = await createTestCustomer(callerOrg.id, 'caller-list@example.com', { name: 'Caller List' });
     const callerThread = await createTestThread(callerOrg.id, callerCustomer.id, ChannelType.email, { tag: 'CallerTag' });
     await createTestMessage(callerThread.id, 'caller export message');
@@ -106,12 +105,6 @@ describe('tenant data surfaces', () => {
     await db.kbArticle.create({
       data: { organizationId: otherOrg.id, knowledgeBaseId: otherKb.id, title: 'Foreign Article', body: 'foreign body' },
     });
-    await db.playbook.create({
-      data: { organizationId: callerOrg.id, name: 'Caller Playbook', trigger: { type: 'new_ticket' }, actions: [] },
-    });
-    await db.playbook.create({
-      data: { organizationId: otherOrg.id, name: 'Foreign Playbook', trigger: { type: 'new_ticket' }, actions: [] },
-    });
     await createTestIntegration(callerOrg.id, { platform: ChannelType.email, externalAccountId: 'caller@example.com' });
     await createTestIntegration(otherOrg.id, { platform: ChannelType.email, externalAccountId: 'foreign@example.com' });
     await db.cannedResponse.create({
@@ -124,9 +117,6 @@ describe('tenant data surfaces', () => {
     const kbBody = await json<{ knowledgeBases: Array<{ name: string; articles: Array<{ title: string }> }> }>(await getKb());
     expect(kbBody.knowledgeBases.map(kb => kb.name)).toEqual(['Caller KB']);
     expect(kbBody.knowledgeBases[0].articles.map(article => article.title)).toEqual(['Caller Article']);
-
-    const playbooksBody = await json<{ playbooks: Array<{ name: string }> }>(await getPlaybooks());
-    expect(playbooksBody.playbooks.map(playbook => playbook.name)).toEqual(['Caller Playbook']);
 
     const integrationsBody = await json<Array<{ externalAccountId: string }>>(await getIntegrations());
     expect(integrationsBody.map(integration => integration.externalAccountId)).toEqual(['caller@example.com']);

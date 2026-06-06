@@ -11,11 +11,6 @@ import {
   startOrderSupportThread,
 } from "./orders/_components/order-requests"
 import {
-  deletePlaybook,
-  savePlaybook,
-  togglePlaybook,
-} from "./playbooks/_components/playbook-requests"
-import {
   deleteTeamMember,
   revokeTeamInvitation,
 } from "./team/_components/team-page-requests"
@@ -39,21 +34,6 @@ describe("saved reply requests", () => {
     await expect(updateCannedResponse("reply_1", input)).rejects.toThrow("Saved reply write failed")
     await expect(duplicateCannedResponse("reply_1")).rejects.toThrow("Saved reply write failed")
     await expect(deleteCannedResponse("reply_1")).rejects.toThrow("Saved reply write failed")
-  })
-})
-
-describe("playbook requests", () => {
-  it("rejects save, toggle, and delete failures", async () => {
-    stubApiError("Playbook write failed")
-    const input = {
-      name: "Auto close",
-      trigger: { type: "ticket_closed" as const },
-      actions: [{ type: "add_note" as const, note: "Closed" }],
-    }
-
-    await expect(savePlaybook(null, input)).rejects.toThrow("Playbook write failed")
-    await expect(togglePlaybook("playbook_1", false)).rejects.toThrow("Playbook write failed")
-    await expect(deletePlaybook("playbook_1")).rejects.toThrow("Playbook write failed")
   })
 })
 

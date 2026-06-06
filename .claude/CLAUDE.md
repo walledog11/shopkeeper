@@ -88,7 +88,7 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 - `apps/dashboard/src/instrumentation.ts` — env validation + Sentry init
 
 ## Dashboard routes
-`/dashboard/{tickets, canned-responses, agent, kb, playbooks, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
+`/dashboard/{tickets, canned-responses, agent, kb, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
 
 ## Env (names only — values in Vercel/Railway)
 **Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `SENTRY_DSN`, `TOKEN_ENCRYPTION_KEY`

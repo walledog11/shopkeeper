@@ -6,12 +6,8 @@ const { ChannelType, SenderType, db, disconnectDb, getE2EOrg } = dbHelpers;
 
 const createdCustomerIds = new Set<string>();
 const createdKnowledgeBaseIds = new Set<string>();
-const createdPlaybookIds = new Set<string>();
 
 test.afterAll(async () => {
-  if (createdPlaybookIds.size > 0) {
-    await db.playbook.deleteMany({ where: { id: { in: [...createdPlaybookIds] } } });
-  }
   if (createdKnowledgeBaseIds.size > 0) {
     await db.knowledgeBase.deleteMany({ where: { id: { in: [...createdKnowledgeBaseIds] } } });
   }
@@ -25,18 +21,17 @@ test.afterAll(async () => {
   await disconnectDb();
 });
 
-test('browser smoke creates KB article and playbook through authenticated app APIs', async ({ page }) => {
+test('browser smoke creates KB article through authenticated app APIs', async ({ page }) => {
   test.skip(process.env.E2E_AUTH_BYPASS !== 'true', 'E2E auth bypass is disabled');
 
   const runId = randomUUID();
   const kbName = `Risk KB ${runId}`;
   const articleTitle = `Risk KB Article ${runId}`;
-  const playbookName = `Risk Playbook ${runId}`;
 
   await page.goto('/dashboard/kb');
   await expect(page.getByRole('heading', { name: 'Memory' })).toBeVisible();
 
-  const result = await page.evaluate(async ({ kbName, articleTitle, playbookName }) => {
+  const result = await page.evaluate(async ({ kbName, articleTitle }) => {
     const kbRes = await fetch('/api/kb/bases', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -55,38 +50,20 @@ test('browser smoke creates KB article and playbook through authenticated app AP
     });
     const articleBody = await articleRes.json();
 
-    const playbookRes = await fetch('/api/playbooks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: playbookName,
-        trigger: { type: 'new_ticket' },
-        actions: [{ type: 'add_note', note: 'Risk smoke note' }],
-      }),
-    });
-    const playbookBody = await playbookRes.json();
-
     return {
       articleId: articleBody.article?.id,
       articleStatus: articleRes.status,
       kbId: kbBody.knowledgeBase?.id,
       kbStatus: kbRes.status,
-      playbookId: playbookBody.playbook?.id,
-      playbookStatus: playbookRes.status,
     };
-  }, { kbName, articleTitle, playbookName });
+  }, { kbName, articleTitle });
 
   expect(result.kbStatus).toBe(201);
   expect(result.articleStatus).toBe(201);
-  expect(result.playbookStatus).toBe(201);
   createdKnowledgeBaseIds.add(result.kbId);
-  createdPlaybookIds.add(result.playbookId);
 
   await page.goto('/dashboard/kb');
   await expect(page.getByText(articleTitle)).toBeVisible();
-
-  await page.goto('/dashboard/playbooks');
-  await expect(page.getByText(playbookName)).toBeVisible();
 });
 
 test('browser smoke blocks billing-gated message writes without persistence', async ({ page }) => {

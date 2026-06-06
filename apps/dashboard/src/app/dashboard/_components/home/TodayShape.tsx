@@ -54,9 +54,7 @@ export default function TodayShape({ ordersToShip, refundsPending, vipsInQueue }
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center gap-2">
-        <p className="text-xs uppercase tracking-wider font-semibold text-white/40">Today&apos;s shape</p>
-        <span className="text-white/15">·</span>
-        <p className="text-xs text-white/40">{dateLabel}</p>
+        <p className="text-xs uppercase tracking-wider font-semibold text-white/40">{dateLabel}</p>
       </div>
       <div className="space-y-1.5">
         {rows.map(row => (
