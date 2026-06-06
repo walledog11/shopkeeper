@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType } from '@clerk/db';
 import { generateText } from '@clerk/agent/ai';
-import { ApiError, BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
+import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
+import { parseAiSummaryBody } from '@/app/api/ai/summary/_lib/validation';
 
 export const POST = withOrgRoute(
   {
@@ -11,11 +13,7 @@ export const POST = withOrgRoute(
     rateLimit: { key: 'ai-summary', limit: 10, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { threadId } = await request.json();
-
-    if (!threadId) {
-      throw new BadRequestError('Missing threadId');
-    }
+    const { threadId } = parseAiSummaryBody(await readRequiredJsonObject(request));
 
     const thread = await db.thread.findUnique({
       where: { id: threadId },

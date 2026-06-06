@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db, SenderType, createMessage } from '@clerk/db';
-import { ApiError, BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
+import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
+import { parseSendMessageBody } from '@/app/api/messages/_lib/validation';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { captureVoiceEdit } from '@/lib/agent/voice-capture';
 import logger from '@/lib/server/logger';
@@ -15,15 +17,7 @@ export const POST = withOrgRoute(
     rateLimit: { key: 'messages:send', limit: 60, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { threadId, text, isNote } = await request.json();
-
-    if (!threadId || !text) {
-      throw new BadRequestError('Missing threadId or text');
-    }
-
-    if (text.length > 4000) {
-      throw new BadRequestError('Message too long');
-    }
+    const { threadId, text, isNote } = parseSendMessageBody(await readRequiredJsonObject(request));
 
     const thread = await db.thread.findUnique({
       where: { id: threadId },

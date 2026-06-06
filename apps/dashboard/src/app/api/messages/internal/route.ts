@@ -12,7 +12,9 @@ import { NextResponse } from 'next/server';
 import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withInternalRoute } from '@/lib/api/internal-route';
+import { parseInternalSendMessageBody } from '@/app/api/messages/_lib/validation';
 
 export const POST = withInternalRoute(
   {
@@ -20,10 +22,7 @@ export const POST = withInternalRoute(
     errorMessage: 'Failed to send message',
   },
   async ({ request }) => {
-    const { threadId, text } = await request.json() as { threadId?: string; text?: string };
-    if (!threadId || !text?.trim()) {
-      return NextResponse.json({ error: 'Missing threadId or text' }, { status: 400 });
-    }
+    const { threadId, text } = parseInternalSendMessageBody(await readRequiredJsonObject(request));
 
     const thread = await db.thread.findUnique({
       where: { id: threadId },

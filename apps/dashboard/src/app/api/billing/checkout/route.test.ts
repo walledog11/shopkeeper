@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
 
@@ -122,7 +123,7 @@ describe('POST /api/billing/checkout', () => {
 });
 
 function jsonReq(body: unknown) {
-  return new Request('http://localhost/api/billing/checkout', {
+  return new NextRequest('http://localhost/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -130,7 +131,7 @@ function jsonReq(body: unknown) {
 }
 
 function rawReq(body: string) {
-  return new Request('http://localhost/api/billing/checkout', {
+  return new NextRequest('http://localhost/api/billing/checkout', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body,

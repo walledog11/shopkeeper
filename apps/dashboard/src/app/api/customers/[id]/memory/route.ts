@@ -6,34 +6,13 @@ import {
   parseStoredMemory,
   toCustomerMemoryJson,
 } from '@clerk/db';
-import { BadRequestError } from '@/lib/api/errors';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function normalizeSummary(value: unknown, fallback: string): string {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'string') {
-    throw new BadRequestError('summary must be a string');
-  }
-  return value.trim();
-}
-
-function normalizeKeyFacts(value: unknown, fallback: string[]): string[] {
-  if (value === undefined) return fallback;
-  if (!Array.isArray(value)) {
-    throw new BadRequestError('keyFacts must be an array');
-  }
-  return value.flatMap((item) => {
-      if (typeof item !== 'string') {
-        throw new BadRequestError('keyFacts must contain only strings');
-      }
-      const trimmed = item.trim();
-      return trimmed ? [trimmed] : [];
-    });
-}
+import {
+  normalizeMemoryKeyFacts,
+  normalizeMemorySummary,
+  parseCustomerMemoryPatchBody,
+} from '@/app/api/customers/_lib/validation';
 
 export const GET = withOrgRoute<{ id: string }>(
   {
@@ -62,15 +41,7 @@ export const PATCH = withOrgRoute<{ id: string }>(
     rateLimit: { key: 'customer-memory:patch', limit: 60, windowSecs: 60 },
   },
   async ({ org, request, params }) => {
-    const body = await request.json().catch(() => {
-      throw new BadRequestError('Invalid JSON');
-    });
-    if (!isRecord(body)) {
-      throw new BadRequestError('Request body must be an object');
-    }
-    if (body.summary === undefined && body.keyFacts === undefined) {
-      throw new BadRequestError('Missing summary or keyFacts');
-    }
+    const body = parseCustomerMemoryPatchBody(await readRequiredJsonObject(request));
 
     const customer = await db.customer.findFirst({
       where: { id: params.id, deletedAt: null },
@@ -81,8 +52,8 @@ export const PATCH = withOrgRoute<{ id: string }>(
     const current = parseStoredMemory(customer.memory);
     const next = boundMemory({
       ...current,
-      summary: normalizeSummary(body.summary, current.summary),
-      keyFacts: normalizeKeyFacts(body.keyFacts, current.keyFacts),
+      summary: normalizeMemorySummary(body.summary, current.summary),
+      keyFacts: normalizeMemoryKeyFacts(body.keyFacts, current.keyFacts),
       version: CUSTOMER_MEMORY_VERSION,
     });
 

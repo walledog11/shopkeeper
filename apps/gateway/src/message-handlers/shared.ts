@@ -11,7 +11,6 @@ import {
 import { anthropic } from '@clerk/agent/ai';
 import { shopifyRestJson } from '@clerk/agent/shopify';
 import { isSpendCapError } from '@clerk/db';
-import { getGatewayDashboardUrl } from '../config/env.js';
 import logger from '../logger.js';
 import { JOB, MODEL, STATUS } from '../constants.js';
 import { enforceSpendCap, recordSpend } from '@clerk/agent/spend';

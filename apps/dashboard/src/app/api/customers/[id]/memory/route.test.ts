@@ -152,6 +152,24 @@ describe('/api/customers/[id]/memory', () => {
     expect(persisted.memoryUpdatedAt?.getTime()).toBe(storedAt.getTime());
   });
 
+  it('rejects malformed JSON without updating customer memory', async () => {
+    const customer = await createTestCustomer(org!.id, 'memory-malformed@test.com');
+    const stored = memory({ summary: 'Keep me.' });
+    await db.customer.update({
+      where: { id: customer.id },
+      data: { memory: stored },
+    });
+
+    const res = await PATCH(
+      rawRequest(`http://localhost/api/customers/${customer.id}/memory`, '{', 'PATCH'),
+      params(customer.id),
+    );
+
+    expect(res.status).toBe(400);
+    const unchanged = await db.customer.findUniqueOrThrow({ where: { id: customer.id } });
+    expect((unchanged.memory as unknown as CustomerMemory).summary).toBe('Keep me.');
+  });
+
   it('rejects invalid keyFacts without mutating the customer', async () => {
     const customer = await createTestCustomer(org!.id, 'memory-invalid@test.com');
     await db.customer.update({
@@ -186,6 +204,14 @@ function jsonRequest(url: string, body: unknown, method = 'POST') {
     method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  });
+}
+
+function rawRequest(url: string, body: string, method = 'POST') {
+  return new Request(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body,
   });
 }
 

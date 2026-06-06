@@ -141,14 +141,13 @@ describe('getOrCreateOrg', () => {
   })
 
   it('does not use the E2E bypass outside NODE_ENV=test', async () => {
-    const originalNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
-    process.env.E2E_AUTH_BYPASS = 'true'
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('E2E_AUTH_BYPASS', 'true')
     mockAuth.mockResolvedValue({ userId: null, orgId: null } as unknown as AuthResult)
 
     await expect(getOrCreateOrg()).rejects.toBeInstanceOf(UnauthorizedError)
     expect(auth).toHaveBeenCalled()
 
-    process.env.NODE_ENV = originalNodeEnv
+    vi.unstubAllEnvs()
   })
 })

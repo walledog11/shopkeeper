@@ -350,3 +350,87 @@ Phase 9 verification completed on 2026-06-06:
 - `npm run lint -w apps/gateway`
 - `npm run build -w apps/gateway`
 - `npm run lint`
+
+## Other Cleanup Items [PENDING]
+
+
+  apps/dashboard typecheck currently fails on mechanical test typings:
+  apps/dashboard/src/app/api/billing/checkout/route.test.ts:76 pass plain Request where the route expects NextRequest; apps/dashboard/src/app/api/messages/
+  route.test.ts:384 has a bad ServerClient mock this type; apps/dashboard/src/lib/server/agent-lock.test.ts:14 and apps/dashboard/src/lib/server/rate-
+  limit.test.ts:16 use GetRedisFn as a value/type incorrectly.
+
+  This is high payoff because it turns tsc --noEmit back into a useful cleanup/build gate.
+
+  2. Finish the API body-validation pass [DONE 2026-06-06]
+
+  Phase 3 missed several write routes that still call request.json() directly:
+  apps/dashboard/src/app/api/messages/route.ts:18, apps/dashboard/src/app/api/messages/internal/route.ts:23, apps/dashboard/src/app/api/messages/auto-ack/
+  route.ts:24, apps/dashboard/src/app/api/ai/summary/route.ts:14, apps/dashboard/src/app/api/integrations/route.ts:62, apps/dashboard/src/app/api/shopify/
+  customer/route.ts:51, apps/dashboard/src/app/api/shopify/customers/route.ts:63, and apps/dashboard/src/app/api/customers/[id]/memory/route.ts:65.
+
+  Use readRequiredJsonObject/route validators consistently and add malformed JSON tests for these routes.
+
+  Phase 3 follow-up implementation notes:
+
+  - Shared route validators now live beside each route group: `messages/_lib/validation.ts`, `ai/summary/_lib/validation.ts`, `integrations/_lib/validation.ts`, `shopify/customer/_lib/validation.ts`, and `customers/_lib/validation.ts`.
+  - All eight write routes now parse bodies through `readRequiredJsonObject` plus route validators instead of direct `request.json()` calls.
+  - Malformed JSON failure-path tests were added for every updated route.
+
+  Phase 3 follow-up verification completed on 2026-06-06:
+
+  - `npm run test:integration -w apps/dashboard -- src/app/api/messages/route.test.ts src/app/api/messages/internal/route.test.ts src/app/api/messages/auto-ack/route.test.ts src/app/api/ai/summary/route.test.ts src/app/api/integrations/route.test.ts src/app/api/shopify/customer/route.test.ts src/app/api/shopify/customers/route.test.ts src/app/api/customers/[id]/memory/route.test.ts`
+  - `npm run lint -w apps/dashboard`
+
+  3. Collapse duplicated client request/workflow code
+
+  There is already a shared client API helper in apps/dashboard/src/lib/api/fetcher.ts:55, but apps/dashboard/src/app/dashboard/tickets/_hooks/
+  useTicketActions.ts:25 defines its own requestOk path and repeats optimistic mutation/error handling across many handlers. apps/dashboard/src/app/dashboard/
+  tickets/_hooks/useConversationAgentFlow.ts:111 also repeats direct fetch/JSON/error-to-turn conversion for /api/agent, /ask, and /plan.
+
+  Also, Products/Orders/Customers repeat the same debounced search + cursor pagination shape:
+  apps/dashboard/src/app/dashboard/products/_components/ProductsPageClient.tsx:65, apps/dashboard/src/app/dashboard/orders/_components/OrdersPageClient.tsx:52,
+  apps/dashboard/src/app/dashboard/customers/_components/CustomersPageClient.tsx:16.
+
+  4. Split the agent tool registry without losing the registry contract
+
+  packages/agent/src/tools/registry.ts:1 is now 886 lines and mixes input interfaces, schema DSL, validation parser, tool definitions, policy metadata, labels,
+  and derived maps. Keep the single registry contract, but split the definitions by domain: knowledge, product, customer, order, thread, messaging. The derived
+  maps at packages/agent/src/tools/registry.ts:820 can remain centralized.
+
+  5. Centralize observability redaction and fix OAuth logging
+
+  Dashboard and gateway have duplicated redaction modules:
+  apps/dashboard/src/lib/observability/redaction.ts:6, apps/gateway/src/observability/redaction.ts:6.
+
+  OAuth callbacks also still log raw provider payloads:
+  apps/dashboard/src/app/api/integrations/_lib/email-oauth.ts:111, apps/dashboard/src/app/api/integrations/instagram/callback/route.ts:58, apps/dashboard/src/app/
+  api/integrations/shopify/callback/route.ts:97.
+
+  This overlaps docs/to-do-list.md, but it is also clean duplication to remove.
+
+  6. Consolidate lock-provider implementation
+
+  Current WIP introduces a shared @clerk/agent/lock interface, but dashboard and gateway duplicate timeout/release/no-op lock logic:
+  apps/dashboard/src/lib/server/agent-lock.ts:6, apps/gateway/src/clients/agent-lock.ts:6.
+
+  Extract common token-lock behavior behind tiny adapter functions for Upstash vs ioredis.
+
+  7. Clean stale package-surface comments and barrels
+
+  packages/agent/src/index.ts:1 still says “Track 2 extraction, in progress” and exports a broad root barrel at packages/agent/src/index.ts:13. After the
+  extraction work, tighten the public surface or at least update the comment to reflect current ownership.
+
+  8. Move remaining provider fetches behind small clients
+
+  The Shopify order-risk backstop explicitly bypasses the Shopify seam at apps/gateway/src/maintenance/order-risk-monitor.ts:17 and builds a raw Admin API URL at
+  apps/gateway/src/maintenance/order-risk-monitor.ts:28. Meta token health also builds token-bearing URLs directly at apps/gateway/src/maintenance/token-
+  health.ts:31. This is lower priority than API validation/typecheck, but worth cleaning once the bigger gates are green.
+
+  Suggested Order
+
+  1. Typecheck cleanup.
+  2. Remaining API body validation.
+  3. Client request/pagination hook cleanup.
+  4. Agent registry split.
+  5. Redaction/OAuth logging and lock-provider consolidation.
+  6. Provider-client cleanup.

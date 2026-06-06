@@ -1,3 +1,4 @@
+import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHmac, randomUUID } from 'node:crypto'
 import { db } from '@clerk/db'
@@ -23,7 +24,7 @@ function createSignedRequest(event: Record<string, unknown>) {
     .update(`${msgId}.${timestamp}.${payload}`)
     .digest('base64')
 
-  return new Request(WEBHOOK_URL, {
+  return new NextRequest(WEBHOOK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ describe('POST /api/webhooks/clerk', () => {
   })
 
   it('rejects missing signatures', async () => {
-    const response = await POST(new Request(WEBHOOK_URL, {
+    const response = await POST(new NextRequest(WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'user.deleted', data: { id: 'user_deleted' } }),
@@ -153,7 +154,7 @@ describe('POST /api/webhooks/clerk', () => {
   })
 
   it('rejects invalid signatures', async () => {
-    const response = await POST(new Request(WEBHOOK_URL, {
+    const response = await POST(new NextRequest(WEBHOOK_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

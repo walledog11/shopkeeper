@@ -62,6 +62,13 @@ describe('POST /api/messages/auto-ack', () => {
     );
   });
 
+  it('returns 400 for malformed JSON without dispatching', async () => {
+    const res = await POST(autoAckRequest('{', 'current-secret'));
+
+    expect(res.status).toBe(400);
+    expect(mockDispatchMessage).not.toHaveBeenCalled();
+  });
+
   it('returns 400 and does not dispatch when threadId is missing', async () => {
     const res = await POST(autoAckRequest({}, 'current-secret'));
 
@@ -129,7 +136,7 @@ function autoAckRequest(body: unknown, secret?: string) {
       'Content-Type': 'application/json',
       ...(secret ? { 'x-internal-secret': secret } : {}),
     },
-    body: JSON.stringify(body),
+    body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
 

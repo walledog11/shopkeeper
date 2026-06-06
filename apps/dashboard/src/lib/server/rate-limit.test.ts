@@ -4,7 +4,7 @@ import type {
   isE2ERateLimitBypassEnabled as IsE2ERateLimitBypassEnabledFn,
   isE2ERateLimitForceEnabled as IsE2ERateLimitForceEnabledFn,
 } from './rate-limit';
-import type { getRedis as GetRedisFn } from '@/lib/server/redis';
+import type { getRedis } from '@/lib/server/redis';
 
 vi.mock('@/lib/server/redis', () => ({
   getRedis: vi.fn(),
@@ -13,7 +13,11 @@ vi.mock('@/lib/server/redis', () => ({
 let rateLimit: typeof RateLimitFn;
 let isE2ERateLimitBypassEnabled: typeof IsE2ERateLimitBypassEnabledFn;
 let isE2ERateLimitForceEnabled: typeof IsE2ERateLimitForceEnabledFn;
-let mockedGetRedis: ReturnType<typeof vi.mocked<GetRedisFn>>;
+let mockedGetRedis: ReturnType<typeof vi.mocked<typeof getRedis>>;
+
+function testEnv(vars: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  return vars as NodeJS.ProcessEnv;
+}
 
 describe('server rateLimit', () => {
   beforeAll(async () => {
@@ -53,21 +57,21 @@ describe('server rateLimit', () => {
   });
 
   it('only enables the E2E bypass when the flag is explicit', () => {
-    expect(isE2ERateLimitBypassEnabled({ NODE_ENV: 'development' })).toBe(false);
-    expect(isE2ERateLimitBypassEnabled({ NODE_ENV: 'production', E2E_TEST_RUN: 'true' })).toBe(false);
-    expect(isE2ERateLimitBypassEnabled({ NODE_ENV: 'test', E2E_TEST_RUN: 'true' })).toBe(true);
+    expect(isE2ERateLimitBypassEnabled(testEnv({ NODE_ENV: 'development' }))).toBe(false);
+    expect(isE2ERateLimitBypassEnabled(testEnv({ NODE_ENV: 'production', E2E_TEST_RUN: 'true' }))).toBe(false);
+    expect(isE2ERateLimitBypassEnabled(testEnv({ NODE_ENV: 'test', E2E_TEST_RUN: 'true' }))).toBe(true);
     expect(isE2ERateLimitBypassEnabled(
-      { NODE_ENV: 'test', E2E_TEST_RUN: 'true', E2E_RATE_LIMIT_TEST_MODE: 'force-header' },
+      testEnv({ NODE_ENV: 'test', E2E_TEST_RUN: 'true', E2E_RATE_LIMIT_TEST_MODE: 'force-header' }),
       { forceForE2E: true },
     )).toBe(false);
   });
 
   it('only forces E2E rate limits for the guarded test mode and explicit option', () => {
-    const enabledEnv = { NODE_ENV: 'test', E2E_TEST_RUN: 'true', E2E_RATE_LIMIT_TEST_MODE: 'force-header' };
+    const enabledEnv = testEnv({ NODE_ENV: 'test', E2E_TEST_RUN: 'true', E2E_RATE_LIMIT_TEST_MODE: 'force-header' });
 
     expect(isE2ERateLimitForceEnabled(enabledEnv, { forceForE2E: true })).toBe(true);
     expect(isE2ERateLimitForceEnabled(enabledEnv)).toBe(false);
-    expect(isE2ERateLimitForceEnabled({ ...enabledEnv, NODE_ENV: 'production' }, { forceForE2E: true })).toBe(false);
-    expect(isE2ERateLimitForceEnabled({ ...enabledEnv, E2E_RATE_LIMIT_TEST_MODE: 'off' }, { forceForE2E: true })).toBe(false);
+    expect(isE2ERateLimitForceEnabled(testEnv({ ...enabledEnv, NODE_ENV: 'production' }), { forceForE2E: true })).toBe(false);
+    expect(isE2ERateLimitForceEnabled(testEnv({ ...enabledEnv, E2E_RATE_LIMIT_TEST_MODE: 'off' }), { forceForE2E: true })).toBe(false);
   });
 });

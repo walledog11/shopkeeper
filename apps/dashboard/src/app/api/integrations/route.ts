@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { db, type DbChannelType } from '@clerk/db';
+import { db } from '@clerk/db';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { parseCreateIntegrationBody } from '@/app/api/integrations/_lib/validation';
 import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
 import { saveForwardingEmailIntegration } from './_lib/email-integration';
 import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
-
-type ChannelTypeValue = (typeof CHANNEL_TYPE)[keyof typeof CHANNEL_TYPE];
 
 function serializeIntegration<T extends {
   accessToken?: string | null;
@@ -59,16 +59,8 @@ export const POST = withOrgRoute(
     rateLimit: { key: 'integrations:create', limit: 20, windowSecs: 60 },
   },
   async ({ org, request }) => {
-    const { platform, externalAccountId, fromEmail } = await request.json();
-
-    if (!platform || !externalAccountId) {
-      throw new BadRequestError('Missing platform or externalAccountId');
-    }
-
-    if (typeof platform !== 'string' || !Object.values(CHANNEL_TYPE).includes(platform as ChannelTypeValue)) {
-      throw new BadRequestError('Invalid platform');
-    }
-    const platformValue = platform as DbChannelType;
+    const { platform, externalAccountId, fromEmail } = parseCreateIntegrationBody(await readRequiredJsonObject(request));
+    const platformValue = platform;
 
     if (platformValue === CHANNEL_TYPE.EMAIL) {
       const normalizedEmail = String(externalAccountId).trim().toLowerCase();

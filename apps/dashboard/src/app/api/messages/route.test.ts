@@ -71,6 +71,17 @@ afterEach(async () => {
 });
 
 describe('POST /api/messages', () => {
+  it('returns 400 for malformed JSON without dispatching', async () => {
+    const req = new Request('http://localhost:3000/api/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{',
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+  });
+
   it('returns 400 when threadId or text is missing', async () => {
     const req = new Request('http://localhost:3000/api/messages', {
       method: 'POST',
@@ -381,9 +392,9 @@ describe('POST /api/messages', () => {
   });
 
   it('records provider send failures without saving a successful agent message', async () => {
-    vi.mocked(ServerClient).mockImplementationOnce(function (this: Record<string, unknown>) {
+    vi.mocked(ServerClient).mockImplementationOnce(function (this: { sendEmail: ReturnType<typeof vi.fn> }) {
       this.sendEmail = vi.fn().mockRejectedValue(new Error('postmark down'));
-    });
+    } as unknown as typeof ServerClient);
 
     const emailAddress = `support_fail_${org.id.slice(0, 8)}@acme.com`;
     const integration = await createTestIntegration(org.id, {

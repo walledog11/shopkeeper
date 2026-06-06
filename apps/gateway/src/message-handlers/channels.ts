@@ -79,7 +79,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       logger.warn({ err: (profileErr as Error).message, senderId }, '[Worker] Failed to fetch IG profile');
     }
 
-    const result = await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, aiSummaryQueue, {
+    await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, aiSummaryQueue, {
       customerName: igName,
       profilePicUrl: igProfilePic,
       externalMessageId: messagingEvent.message.mid ?? null,
@@ -162,7 +162,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       ),
     )).filter((url): url is string => url !== null);
 
-    const result = await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
+    await processInboundMessage(organizationId, senderEmail!, CHANNEL.EMAIL, stripQuotedReply(body!), aiSummaryQueue, {
       customerName: resolvedName,
       subject: subject?.trim() || null,
       externalMessageId: job.data.inboundMessageId,
@@ -204,7 +204,7 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
   const messageText = EVENT_MESSAGES[topic] ?? `Shopify event '${topic}' for order ${orderName}.`;
 
   try {
-    const result = await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
+    await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
       customerName,
       initialTag: 'Order Status',
       externalMessageId: job.data.inboundMessageId,

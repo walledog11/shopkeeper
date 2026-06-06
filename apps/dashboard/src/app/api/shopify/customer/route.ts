@@ -6,8 +6,9 @@ import logger from '@/lib/server/logger';
 import {
   lookupShopifyCustomer,
   updateShopifyCustomer,
-  type ShopifyCustomerUpdates,
 } from './_lib/customer-service';
+import { parseShopifyCustomerUpdateBody } from './_lib/validation';
+import { readRequiredJsonObject } from '@/lib/api/body';
 
 function shopifyErrorResponse(err: unknown): NextResponse {
   if (err instanceof ShopifyRequestError) {
@@ -48,14 +49,7 @@ export const GET = withOrgRoute(
 export const PATCH = withOrgRoute(
   { context: 'Shopify Customer PATCH', errorMessage: 'server_error' },
   async ({ org, request }) => {
-    const { customerId, updates } = await request.json() as {
-      customerId?: string | number;
-      updates?: ShopifyCustomerUpdates;
-    };
-
-    if (!customerId || !updates) {
-      throw new BadRequestError('Missing customerId or updates');
-    }
+    const { customerId, updates } = parseShopifyCustomerUpdateBody(await readRequiredJsonObject(request));
 
     let customer: unknown | null;
     try {

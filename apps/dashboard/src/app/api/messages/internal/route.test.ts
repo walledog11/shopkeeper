@@ -69,6 +69,13 @@ describe('POST /api/messages/internal', () => {
     );
   });
 
+  it('returns 400 for malformed JSON without dispatching', async () => {
+    const res = await POST(messageRequest('{', 'current-secret'));
+
+    expect(res.status).toBe(400);
+    expect(mockDispatchMessage).not.toHaveBeenCalled();
+  });
+
   it('returns 400 and does not dispatch when body validation fails', async () => {
     const thread = await createEmailThread();
 
@@ -151,7 +158,7 @@ function messageRequest(body: unknown, secret?: string) {
       'Content-Type': 'application/json',
       ...(secret ? { 'x-internal-secret': secret } : {}),
     },
-    body: JSON.stringify(body),
+    body: typeof body === 'string' ? body : JSON.stringify(body),
   });
 }
 

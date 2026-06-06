@@ -12,7 +12,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 import { auth } from '@clerk/nextjs/server';
-import { GET } from './route';
+import { GET, PATCH } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 
@@ -50,6 +50,19 @@ describe('GET /api/shopify/customer', () => {
     expect(mockFetch.mock.calls[0][1]).toMatchObject({
       headers: { 'X-Shopify-Access-Token': 'customer-token' },
     });
+  });
+});
+
+describe('PATCH /api/shopify/customer', () => {
+  it('rejects malformed JSON without calling Shopify', async () => {
+    const res = await PATCH(new Request('http://localhost/api/shopify/customer', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{',
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 

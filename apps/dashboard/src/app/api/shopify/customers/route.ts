@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { db } from '@clerk/db';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
+import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
 import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
@@ -60,12 +62,10 @@ export const GET = withOrgRoute(
 export const POST = withOrgRoute(
   { context: 'Shopify Customer POST', errorMessage: 'server_error' },
   async ({ org, request }) => {
-    const [{ first_name, last_name, email }, integration] = await Promise.all([
-      request.json(),
-      db.integration.findFirst({
-        where: { organizationId: org.id, platform: 'shopify' },
-      }),
-    ]);
+    const { first_name, last_name, email } = parseCreateShopifyCustomerBody(await readRequiredJsonObject(request));
+    const integration = await db.integration.findFirst({
+      where: { organizationId: org.id, platform: 'shopify' },
+    });
 
     if (!integration?.accessToken) {
       throw new NotFoundError('no_integration');

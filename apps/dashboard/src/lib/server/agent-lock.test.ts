@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { acquireThreadLock as AcquireThreadLockFn } from './agent-lock';
-import type { getRedis as GetRedisFn } from './redis';
+import type { getRedis } from './redis';
 
 vi.mock('@/lib/server/redis', () => ({
   getRedis: vi.fn(),
@@ -11,7 +11,7 @@ vi.mock('@/lib/server/logger', () => ({
 }));
 
 let acquireThreadLock: typeof AcquireThreadLockFn;
-let mockedGetRedis: ReturnType<typeof vi.mocked<GetRedisFn>>;
+let mockedGetRedis: ReturnType<typeof vi.mocked<typeof getRedis>>;
 
 function makeFakeRedis() {
   const store = new Map<string, string>();
@@ -48,7 +48,7 @@ describe('acquireThreadLock', () => {
 
   it('acquires a free lock and returns a release handle', async () => {
     const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
 
     const lock = await acquireThreadLock('thread-a');
@@ -64,7 +64,7 @@ describe('acquireThreadLock', () => {
 
   it('returns null when the lock is already held', async () => {
     const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
 
     const first = await acquireThreadLock('thread-b');
@@ -76,7 +76,7 @@ describe('acquireThreadLock', () => {
 
   it('release deletes only its own token and allows re-acquisition', async () => {
     const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
 
     const lock = await acquireThreadLock('thread-c');
@@ -91,7 +91,7 @@ describe('acquireThreadLock', () => {
 
   it('release is a no-op when another run owns the lock', async () => {
     const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
 
     const first = await acquireThreadLock('thread-d');
@@ -108,7 +108,7 @@ describe('acquireThreadLock', () => {
   it('fails open with a no-op lock when redis.set throws', async () => {
     const fake = makeFakeRedis();
     fake.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
     const lock = await acquireThreadLock('thread-redis-down');
 
@@ -130,7 +130,7 @@ describe('acquireThreadLock', () => {
 
   it('honors a custom TTL', async () => {
     const fake = makeFakeRedis();
-    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof GetRedisFn>);
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
 
     await acquireThreadLock('thread-e', 30);

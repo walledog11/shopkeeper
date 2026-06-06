@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { describe, expect, it, vi } from "vitest"
 import ClearedOvernight from "./ClearedOvernight"
 import NeedsYou from "./NeedsYou"
-import RepeatCustomers from "./RepeatCustomers"
 
 describe("home summary sections", () => {
   it("does not render empty bounded-list sections", () => {
@@ -18,9 +17,6 @@ describe("home summary sections", () => {
       topics: [],
       timeSavedHours: 0,
       repliesSent: 0,
-    }))).toBe("")
-    expect(renderToStaticMarkup(createElement(RepeatCustomers, {
-      customers: [],
     }))).toBe("")
   })
 })

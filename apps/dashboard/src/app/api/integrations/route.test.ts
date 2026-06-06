@@ -95,6 +95,13 @@ describe('/api/integrations', () => {
     expect(rows[0].metadata).toMatchObject({ provider: 'postmark' });
   });
 
+  it('rejects malformed JSON before creating an integration', async () => {
+    const res = await POST(rawRequest('http://localhost/api/integrations', '{'));
+
+    expect(res.status).toBe(400);
+    await expect(db.integration.count({ where: { organizationId: org.id } })).resolves.toBe(0);
+  });
+
   it('handles concurrent saves for the same integration key', async () => {
     const requests = Array.from({ length: 8 }, (_, index) => POST(new Request('http://localhost/api/integrations', {
       method: 'POST',
@@ -120,3 +127,11 @@ describe('/api/integrations', () => {
     expect(rows[0].fromEmail).toMatch(/^Fixture Shop [0-7]$/);
   });
 });
+
+function rawRequest(url: string, body: string, method = 'POST') {
+  return new Request(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body,
+  });
+}

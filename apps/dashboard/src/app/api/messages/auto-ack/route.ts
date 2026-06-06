@@ -13,7 +13,9 @@ import { db } from '@clerk/db';
 import { resolveAgentSettings } from '@clerk/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { readRequiredJsonObject } from '@/lib/api/body';
 import { withInternalRoute } from '@/lib/api/internal-route';
+import { parseAutoAckBody } from '@/app/api/messages/_lib/validation';
 
 export const POST = withInternalRoute(
   {
@@ -21,10 +23,7 @@ export const POST = withInternalRoute(
     errorMessage: 'Failed to send auto-acknowledgment',
   },
   async ({ request }) => {
-    const { threadId } = await request.json() as { threadId?: string };
-    if (!threadId) {
-      return NextResponse.json({ error: 'Missing threadId' }, { status: 400 });
-    }
+    const { threadId } = parseAutoAckBody(await readRequiredJsonObject(request));
 
     // Single query , include org so we avoid a second round-trip to Postgres
     const thread = await db.thread.findUnique({

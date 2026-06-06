@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clearOutboundRecords,
   isOutboundRecordingEnabled,
@@ -10,12 +10,10 @@ import {
 } from './outbound-recorder';
 
 let tempDir: string | null = null;
-const originalEnv = {
-  NODE_ENV: process.env.NODE_ENV,
-  E2E_TEST_RUN: process.env.E2E_TEST_RUN,
-  E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
-  E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
-};
+
+function testEnv(vars: Record<string, string | undefined>): NodeJS.ProcessEnv {
+  return vars as NodeJS.ProcessEnv;
+}
 
 async function useTempRecordPath() {
   tempDir = await mkdtemp(path.join(os.tmpdir(), 'clerk-outbound-records-'));
@@ -23,10 +21,7 @@ async function useTempRecordPath() {
 }
 
 afterEach(async () => {
-  process.env.NODE_ENV = originalEnv.NODE_ENV;
-  process.env.E2E_TEST_RUN = originalEnv.E2E_TEST_RUN;
-  process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
-  process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
+  vi.unstubAllEnvs();
 
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });
@@ -36,16 +31,16 @@ afterEach(async () => {
 
 describe('outbound recorder', () => {
   it('is enabled only for explicit E2E recording in a test runtime', () => {
-    expect(isOutboundRecordingEnabled({ NODE_ENV: 'production', E2E_OUTBOUND_MODE: 'record' })).toBe(false);
-    expect(isOutboundRecordingEnabled({ NODE_ENV: 'development', E2E_TEST_RUN: 'true', E2E_OUTBOUND_MODE: 'record' })).toBe(true);
-    expect(isOutboundRecordingEnabled({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'live' })).toBe(false);
-    expect(isOutboundRecordingEnabled({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'record' })).toBe(true);
+    expect(isOutboundRecordingEnabled(testEnv({ NODE_ENV: 'production', E2E_OUTBOUND_MODE: 'record' }))).toBe(false);
+    expect(isOutboundRecordingEnabled(testEnv({ NODE_ENV: 'development', E2E_TEST_RUN: 'true', E2E_OUTBOUND_MODE: 'record' }))).toBe(true);
+    expect(isOutboundRecordingEnabled(testEnv({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'live' }))).toBe(false);
+    expect(isOutboundRecordingEnabled(testEnv({ NODE_ENV: 'test', E2E_OUTBOUND_MODE: 'record' }))).toBe(true);
   });
 
   it('appends and reads outbound records when recording is enabled', async () => {
     await useTempRecordPath();
-    process.env.NODE_ENV = 'test';
-    process.env.E2E_OUTBOUND_MODE = 'record';
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('E2E_OUTBOUND_MODE', 'record');
 
     const record = await recordOutboundCall({
       source: 'dispatch_message',
@@ -79,8 +74,8 @@ describe('outbound recorder', () => {
 
   it('does nothing when recording is disabled', async () => {
     await useTempRecordPath();
-    process.env.NODE_ENV = 'test';
-    process.env.E2E_OUTBOUND_MODE = 'live';
+    vi.stubEnv('NODE_ENV', 'test');
+    vi.stubEnv('E2E_OUTBOUND_MODE', 'live');
 
     await expect(recordOutboundCall({
       source: 'dispatch_message',
