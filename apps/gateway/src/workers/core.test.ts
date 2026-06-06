@@ -150,6 +150,7 @@ describe('createCoreWorkerResources', () => {
     expect(workerInstances.map((worker) => worker.name)).toEqual([
       QUEUE.INBOUND,
       QUEUE.AI_SUMMARY,
+      QUEUE.ORDER_REVIEW,
     ]);
     expect(workerInstances.every((worker) => {
       const options = readOptions(worker);

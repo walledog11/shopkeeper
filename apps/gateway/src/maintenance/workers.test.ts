@@ -94,7 +94,7 @@ describe('createMaintenanceWorkers', () => {
 
     expect(maintenanceJobRegistrations).toHaveLength(7);
     expect(resources.workers).toHaveLength(9);
-    expect(resources.queues).toHaveLength(11);
+    expect(resources.queues).toHaveLength(12);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.CUSTOMER_MEMORY,
@@ -104,6 +104,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.DIGEST,
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
+      QUEUE.ORDER_REVIEW,
       QUEUE.QUEUE_HEALTH,
       QUEUE.INBOUND,
       QUEUE.AI_SUMMARY,
