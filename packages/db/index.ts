@@ -168,6 +168,8 @@ export {
   ThreadFilterFeedbackRuntime as ThreadFilterFeedback,
 };
 export type { PrismaClientType as PrismaClient, DbChannelType, DbSenderType, DbThreadFilterStatus, DbThreadFilterFeedback };
+export type ThreadFilterStatus = DbThreadFilterStatus;
+export type ThreadFilterFeedback = DbThreadFilterFeedback;
 export { encryptToken, decryptToken, isEncrypted } from './crypto.js';
 export {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,

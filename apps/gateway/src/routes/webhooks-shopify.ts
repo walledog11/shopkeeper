@@ -53,6 +53,8 @@ export function registerShopifyWebhookRoutes(router: Router): void {
 
     const topic = req.headers['x-shopify-topic'] as string | undefined;
     const shopDomain = req.headers['x-shopify-shop-domain'] as string | undefined;
+    const webhookIdHeader = req.headers['x-shopify-webhook-id'];
+    const webhookId = (Array.isArray(webhookIdHeader) ? webhookIdHeader[0] : webhookIdHeader)?.trim();
 
     if (topic === 'app/uninstalled') {
       if (!shopDomain) {
@@ -105,6 +107,7 @@ export function registerShopifyWebhookRoutes(router: Router): void {
         organizationId,
         topic,
         rawPayload: req.body,
+        inboundMessageId: webhookId ? `shopify:${shopDomain}:${webhookId}` : null,
         traceId,
       });
 

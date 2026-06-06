@@ -206,6 +206,11 @@ export interface ProcessMessageOptions {
   lockAsGenuine?: boolean;
 }
 
+function normalizeExternalMessageId(externalMessageId: string | null | undefined): string | null {
+  const trimmed = externalMessageId?.trim();
+  return trimmed ? trimmed : null;
+}
+
 export async function processInboundMessage(
   organizationId: string,
   platformId: string,
@@ -226,13 +231,14 @@ export async function processInboundMessage(
 ): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
 
-  const idempotencyKey = externalMessageId
-    ?? `${organizationId}:${platformId}:${messageText?.slice(0, 100) ?? ''}:${Math.floor(Date.now() / 60_000)}`;
+  const providerMessageId = normalizeExternalMessageId(externalMessageId);
 
-  const existing = await db.message.findFirst({ where: { externalMessageId: idempotencyKey } });
-  if (existing) {
-    logger.info({ idempotencyKey }, '[Worker] Duplicate message detected — skipping');
-    return null;
+  if (providerMessageId) {
+    const existing = await db.message.findFirst({ where: { externalMessageId: providerMessageId } });
+    if (existing) {
+      logger.info({ externalMessageId: providerMessageId }, '[Worker] Duplicate message detected — skipping');
+      return null;
+    }
   }
 
   const customer = await db.customer.upsert({
@@ -289,16 +295,24 @@ export async function processInboundMessage(
     }
   }
 
-  await createMessage(
-    {
-      threadId: thread!.id,
-      senderType: SenderType.customer,
-      contentText: messageText,
-      externalMessageId: idempotencyKey,
-      ...(attachments.length > 0 && { attachments }),
-    },
-    { cachedPlanMessageId: null, cachedPlan: Prisma.DbNull },
-  );
+  try {
+    await createMessage(
+      {
+        threadId: thread!.id,
+        senderType: SenderType.customer,
+        contentText: messageText,
+        ...(providerMessageId && { externalMessageId: providerMessageId }),
+        ...(attachments.length > 0 && { attachments }),
+      },
+      { cachedPlanMessageId: null, cachedPlan: Prisma.DbNull },
+    );
+  } catch (error) {
+    if (providerMessageId && (error as { code?: string }).code === 'P2002') {
+      logger.info({ externalMessageId: providerMessageId }, '[Worker] Duplicate message detected — skipping');
+      return null;
+    }
+    throw error;
+  }
 
   await aiSummaryQueue.add(JOB.SUMMARIZE_THREAD, {
     threadId: thread!.id,

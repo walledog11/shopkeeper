@@ -105,8 +105,15 @@ function makeEmailJob(organizationId: string, overrides: Record<string, unknown>
 function makeIgDmJob(
   organizationId: string,
   senderId = 'ig_sender_001',
-  options: { messageMid?: string; text?: string } = {},
+  options: { messageMid?: string | null; text?: string } = {},
 ) {
+  const message: { text: string; mid?: string } = {
+    text: options.text ?? 'Hi, can you help me?',
+  };
+  if (options.messageMid !== null) {
+    message.mid = options.messageMid ?? `mid_ig_${Date.now()}`;
+  }
+
   return {
     id: 'job-ig-test',
     data: {
@@ -122,10 +129,7 @@ function makeIgDmJob(
               {
                 sender: { id: senderId },
                 recipient: { id: 'page_123' },
-                message: {
-                  text: options.text ?? 'Hi, can you help me?',
-                  mid: options.messageMid ?? `mid_ig_${Date.now()}`,
-                },
+                message,
               },
             ],
           },
@@ -139,6 +143,7 @@ function makeShopifyJob(
   topic: string,
   customer: { email?: string; id?: number; first_name?: string; last_name?: string } | null,
   orderOverrides: Record<string, unknown> = {},
+  jobOverrides: Record<string, unknown> = {},
 ) {
   return {
     id: 'job-shopify-test',
@@ -153,6 +158,7 @@ function makeShopifyJob(
         customer,
         ...orderOverrides,
       },
+      ...jobOverrides,
     },
   };
 }
@@ -396,6 +402,37 @@ describe('Message worker — email branch', () => {
     });
     expect(messageCount).toBe(1);
   });
+
+  it('keeps repeated identical emails distinct when Postmark omits Message-ID', async () => {
+    mockAnthropicCreate.mockResolvedValue(classifierResponse('genuine'));
+
+    const handler = capturedHandlers.get('inbound-messages');
+    const job = makeEmailJob(org.id, {
+      senderEmail: 'missing-message-id@example.com',
+      inboundMessageId: null,
+      body: 'Same text sent twice.',
+    });
+
+    await handler!(job);
+    await handler!(job);
+
+    const customer = await db.customer.findFirst({
+      where: { organizationId: org.id, platformId: 'missing-message-id@example.com' },
+    });
+    const thread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.email },
+    });
+    const messages = await db.message.findMany({
+      where: { threadId: thread!.id },
+      orderBy: { sentAt: 'asc' },
+      select: { contentText: true, externalMessageId: true },
+    });
+
+    expect(messages).toEqual([
+      { contentText: 'Same text sent twice.', externalMessageId: null },
+      { contentText: 'Same text sent twice.', externalMessageId: null },
+    ]);
+  });
 });
 
 describe('AI Summary worker — filter gating', () => {
@@ -563,6 +600,35 @@ describe('Message worker — ig_dm branch', () => {
     expect(messagesForSender).toBe(1);
   });
 
+  it('keeps repeated identical IG DMs distinct when Meta omits message id', async () => {
+    const handler = capturedHandlers.get('inbound-messages');
+    const senderId = 'ig_missing_mid_sender_001';
+    const job = makeIgDmJob(org.id, senderId, {
+      messageMid: null,
+      text: 'Same IG message sent twice.',
+    });
+
+    await handler!(job);
+    await handler!(job);
+
+    const customer = await db.customer.findFirst({
+      where: { organizationId: org.id, platformId: senderId },
+    });
+    const thread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.ig_dm },
+    });
+    const messages = await db.message.findMany({
+      where: { threadId: thread!.id },
+      orderBy: { sentAt: 'asc' },
+      select: { contentText: true, externalMessageId: true },
+    });
+
+    expect(messages).toEqual([
+      { contentText: 'Same IG message sent twice.', externalMessageId: null },
+      { contentText: 'Same IG message sent twice.', externalMessageId: null },
+    ]);
+  });
+
   it('fetches IG profile when integration has an access token', async () => {
     await createTestIntegration(org.id, {
       platform: ChannelType.ig_dm,
@@ -698,5 +764,57 @@ describe('Message worker — shopify branch', () => {
 
     const messageCount = await db.message.count({ where: { threadId: existingThread.id } });
     expect(messageCount).toBe(1);
+  });
+
+  it('keeps repeated identical Shopify events distinct when no webhook id is available', async () => {
+    const handler = capturedHandlers.get('inbound-messages');
+    const job = makeShopifyJob(org.id, 'orders/updated', { email: 'shopify-no-id@example.com' });
+
+    await handler!(job);
+    await handler!(job);
+
+    const customer = await db.customer.findFirst({
+      where: { organizationId: org.id, platformId: 'shopify-no-id@example.com' },
+    });
+    const thread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.shopify },
+    });
+    const messages = await db.message.findMany({
+      where: { threadId: thread!.id },
+      orderBy: { sentAt: 'asc' },
+      select: { contentText: true, externalMessageId: true },
+    });
+
+    expect(messages).toEqual([
+      { contentText: 'Order #1001 has been updated.', externalMessageId: null },
+      { contentText: 'Order #1001 has been updated.', externalMessageId: null },
+    ]);
+  });
+
+  it('deduplicates Shopify provider retries with the same webhook id', async () => {
+    const handler = capturedHandlers.get('inbound-messages');
+    const externalMessageId = 'shopify:retry-shop.myshopify.com:duplicate-webhook-001';
+    const job = makeShopifyJob(
+      org.id,
+      'orders/created',
+      { email: 'shopify-duplicate@example.com' },
+      {},
+      { inboundMessageId: externalMessageId },
+    );
+
+    await handler!(job);
+    await handler!(job);
+
+    const messageCount = await db.message.count({ where: { externalMessageId } });
+    expect(messageCount).toBe(1);
+
+    const customer = await db.customer.findFirst({
+      where: { organizationId: org.id, platformId: 'shopify-duplicate@example.com' },
+    });
+    const thread = await db.thread.findFirst({
+      where: { organizationId: org.id, customerId: customer!.id, channelType: ChannelType.shopify },
+    });
+    const messagesForThread = await db.message.count({ where: { threadId: thread!.id } });
+    expect(messagesForThread).toBe(1);
   });
 });

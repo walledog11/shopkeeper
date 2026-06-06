@@ -425,6 +425,7 @@ describe('POST /webhooks/shopify', () => {
       .set('x-shopify-hmac-sha256', sig)
       .set('x-shopify-topic', 'orders/created')
       .set('x-shopify-shop-domain', shopDomain)
+      .set('x-shopify-webhook-id', 'webhook-1001')
       .send(body);
 
     expect(res.status).toBe(200);
@@ -432,7 +433,12 @@ describe('POST /webhooks/shopify', () => {
     expect(queueAddSpy).toHaveBeenCalledOnce();
     const [jobName, jobData] = queueAddSpy.mock.calls[0];
     expect(jobName).toBe('process-shopify-order');
-    expect(jobData).toMatchObject({ platform: 'shopify', organizationId: org.id, topic: 'orders/created' });
+    expect(jobData).toMatchObject({
+      platform: 'shopify',
+      organizationId: org.id,
+      topic: 'orders/created',
+      inboundMessageId: `shopify:${shopDomain}:webhook-1001`,
+    });
   });
 
   it('returns 401 when signature header is missing', async () => {

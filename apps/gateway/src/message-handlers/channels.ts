@@ -214,6 +214,7 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
     const result = await processInboundMessage(organizationId, platformId, CHANNEL.SHOPIFY, messageText, aiSummaryQueue, {
       customerName,
       initialTag: 'Order Status',
+      externalMessageId: job.data.inboundMessageId,
       traceId,
     });
     if (result?.isNew) {

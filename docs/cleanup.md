@@ -296,8 +296,21 @@ Relevant files:
 
 Tasks:
 
-- [ ] Audit every caller that can omit `externalMessageId`.
-- [ ] Decide the correct fallback behavior for Shopify and other provider events.
-- [ ] Replace minute-bucket text fallback with a safer provider-specific key where available.
-- [ ] Add tests for repeated identical inbound events that should remain distinct.
-- [ ] Add tests for duplicate provider events that should still be deduplicated.
+- [x] Audit every caller that can omit `externalMessageId`.
+- [x] Decide the correct fallback behavior for Shopify and other provider events.
+- [x] Replace minute-bucket text fallback with a safer provider-specific key where available.
+- [x] Add tests for repeated identical inbound events that should remain distinct.
+- [x] Add tests for duplicate provider events that should still be deduplicated.
+
+Phase 9 implementation notes:
+
+- `processInboundMessage` now deduplicates only when a real provider message or webhook ID is present. Missing IDs are persisted as `NULL` so repeated identical customer messages are not collapsed by a synthetic minute bucket.
+- Email uses Postmark `Message-ID` when present; IG uses Meta `mid` when present; Shopify order webhook jobs now carry `x-shopify-webhook-id` as `shopify:{shopDomain}:{webhookId}`.
+- Duplicate provider retries are still skipped by the existing partial unique index on non-null `messages.external_message_id`, with an extra create-time `P2002` guard for concurrent retries.
+
+Phase 9 verification completed on 2026-06-06:
+
+- `npm run test:integration -w apps/gateway -- src/worker.test.ts src/routes/webhooks.test.ts`
+- `npm run lint -w apps/gateway`
+- `npm run build -w apps/gateway`
+- `npm run lint`
