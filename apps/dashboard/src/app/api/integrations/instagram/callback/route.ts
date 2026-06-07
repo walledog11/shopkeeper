@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
+import { scrubValue } from '@shopkeeper/agent/observability';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      logger.error({ tokenData }, '[IG OAuth] Token exchange failed');
+      logger.error({ tokenData: scrubValue(tokenData) }, '[IG OAuth] Token exchange failed');
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
     }
     const shortLivedToken: string = tokenData.access_token;
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       { cache: 'no-store' }
     );
     const pagesData = await pagesRes.json();
-    logger.info({ pagesData }, '[IG OAuth] /me/accounts response');
+    logger.info({ pagesData: scrubValue(pagesData) }, '[IG OAuth] /me/accounts response');
 
     const pages: Array<{
       id: string;
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
       }),
     });
     const subscribeData = await subscribeRes.json();
-    logger.info({ subscribeData }, '[IG OAuth] Webhook subscription');
+    logger.info({ subscribeData: scrubValue(subscribeData) }, '[IG OAuth] Webhook subscription');
 
     // ---------------------------------------------------------------
     // Step 5: Save integration to database

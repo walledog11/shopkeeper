@@ -8,7 +8,7 @@ import type {
   PlanStep,
   AgentPlan,
   AgentTurn,
-} from "@shopkeeper/agent";
+} from "@shopkeeper/agent/types";
 import type {
   ChannelType as DbChannelType,
   SenderType as DbSenderType,
@@ -26,8 +26,8 @@ export type SenderType = DbSenderType;
 export type ThreadFilterStatus = DbThreadFilterStatus;
 export type ThreadFilterFeedback = DbThreadFilterFeedback;
 
-// Agent-domain types now live in @shopkeeper/agent (Track 2 extraction); re-exported
-// here so existing `@/types` imports are unchanged.
+// Agent-domain types live in @shopkeeper/agent/types; re-exported here so existing
+// `@/types` imports are unchanged.
 export type {
   AgentToolPermissions,
   SampleReply,

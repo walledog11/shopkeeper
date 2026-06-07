@@ -1,4 +1,5 @@
 import { Sparkles } from "lucide-react";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 import { Kicker } from "./primitives";
 
@@ -13,7 +14,7 @@ export function StepIntro() {
           <span className="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-[3px] border-background bg-green-400" />
         </span>
         <div>
-          <h1 className="m-0 text-[38px] font-semibold leading-[1.1] tracking-tight text-white">Hi, I&apos;m Concierge.</h1>
+          <h1 className="m-0 text-[38px] font-semibold leading-[1.1] tracking-tight text-white">Hi, I&apos;m {PRODUCT_NAME}.</h1>
           <div className="mt-1.5 font-mono text-[13px] text-white/45">Your new hire on the support team.</div>
         </div>
       </div>
@@ -49,7 +50,7 @@ export function StepIntro() {
         <div className="flex-1">
           <div className="text-[13px] font-semibold text-white">You stay in charge. Always.</div>
           <div className="mt-0.5 text-[12px] leading-snug text-white/70">
-            Every Concierge reply is auditable. Every limit is yours to change. You can pause me with one click.
+            Every {PRODUCT_NAME} reply is auditable. Every limit is yours to change. You can pause me with one click.
           </div>
         </div>
       </div>

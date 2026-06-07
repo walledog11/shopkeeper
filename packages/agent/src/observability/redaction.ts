@@ -1,5 +1,3 @@
-import type { ErrorEvent, EventHint } from '@sentry/nextjs';
-
 export const REDACTED = '[REDACTED]';
 export const REDACTED_EMAIL = '[email]';
 
@@ -42,7 +40,7 @@ function scrubString(value: string): string {
   return value.replace(EMAIL_PATTERN, REDACTED_EMAIL);
 }
 
-function scrubValue(value: unknown, key?: string, depth = 0): unknown {
+export function scrubValue(value: unknown, key?: string, depth = 0): unknown {
   if (depth > 6) return REDACTED;
   if (value == null) return value;
   if (key && SENSITIVE_KEY_PATTERN.test(key)) {
@@ -60,12 +58,33 @@ function scrubValue(value: unknown, key?: string, depth = 0): unknown {
   return value;
 }
 
-export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEvent | null {
+export interface SentryScrubEvent {
+  request?: {
+    data?: unknown;
+    cookies?: unknown;
+    headers?: Record<string, string>;
+    query_string?: string;
+  };
+  user?: { email?: string };
+  extra?: Record<string, unknown>;
+  contexts?: Record<string, unknown>;
+  tags?: Record<string, unknown>;
+  breadcrumbs?: Array<{
+    message?: string;
+    data?: Record<string, unknown>;
+  }>;
+  message?: string;
+  exception?: {
+    values?: Array<{ value?: string }>;
+  };
+}
+
+export function scrubSentryEvent<T extends SentryScrubEvent>(event: T): T {
   if (event.request) {
     delete event.request.data;
     delete event.request.cookies;
     if (event.request.headers) {
-      const headers = event.request.headers as Record<string, string>;
+      const headers = event.request.headers;
       for (const k of Object.keys(headers)) {
         if (SENSITIVE_KEY_PATTERN.test(k)) headers[k] = REDACTED;
       }
@@ -76,8 +95,8 @@ export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEve
   }
   if (event.user?.email) event.user.email = REDACTED_EMAIL;
   if (event.extra) event.extra = scrubValue(event.extra) as Record<string, unknown>;
-  if (event.contexts) event.contexts = scrubValue(event.contexts) as ErrorEvent['contexts'];
-  if (event.tags) event.tags = scrubValue(event.tags) as ErrorEvent['tags'];
+  if (event.contexts) event.contexts = scrubValue(event.contexts) as T['contexts'];
+  if (event.tags) event.tags = scrubValue(event.tags) as T['tags'];
   if (event.breadcrumbs) {
     event.breadcrumbs = event.breadcrumbs.map((b) => ({
       ...b,
@@ -93,4 +112,8 @@ export function sentryBeforeSend(event: ErrorEvent, _hint?: EventHint): ErrorEve
     }));
   }
   return event;
+}
+
+export function sentryBeforeSend<T extends SentryScrubEvent>(event: T): T | null {
+  return scrubSentryEvent(event);
 }

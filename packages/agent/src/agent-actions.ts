@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { db } from "@shopkeeper/db";
-import { TOOL_CATEGORIES } from "./tools/registry.js";
+import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type {
   ActionEntry,
   AgentActionMode,

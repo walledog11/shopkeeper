@@ -3,7 +3,7 @@ import { createMessage } from "@shopkeeper/db";
 import { resolveAgentSettings } from "./settings.js";
 import { serializeAgentTurn } from "./turns.js";
 import { ConflictError } from "./errors.js";
-import type { LockProvider } from "./lock.js";
+import type { LockProvider } from "./lock/index.js";
 import type { AgentContext, AgentActionMode, AgentResult } from "./agent-context.js";
 import type { AgentActionApproval } from "./agent-actions.js";
 import type { OrgSettings, RawToolCall } from "./types.js";

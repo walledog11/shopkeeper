@@ -24,8 +24,8 @@ import type {
   CreateRefundInput,
   KnowledgeBaseToolArticle,
   ToolExecutionDeps,
-} from "./registry.js";
-import { formatToolInputValidationError, getToolDefinition } from "./registry.js";
+} from "./registry/index.js";
+import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
 export type { StaticPolicyResult } from "./static-policy.js";
 
 type PreparedToolCall =

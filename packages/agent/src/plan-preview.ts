@@ -1,6 +1,6 @@
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
-import { TOOL_CATEGORIES } from "./tools/registry.js"
+import { TOOL_CATEGORIES } from "./tools/registry/index.js"
 import { checkStaticToolPolicy } from "./tools/static-policy.js"
 
 export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute"

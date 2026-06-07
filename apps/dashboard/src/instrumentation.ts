@@ -1,6 +1,6 @@
 import * as Sentry from '@sentry/nextjs';
 import { validateDashboardEnv } from '@/lib/env';
-import { sentryBeforeSend } from '@/lib/observability/redaction';
+import { sentryBeforeSend } from '@/lib/observability/sentry';
 
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {

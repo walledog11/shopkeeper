@@ -12,6 +12,7 @@
     "clean": "node ./scripts/clean.mjs artifacts",
     "clean:deps": "node ./scripts/clean.mjs deps",
     "lint": "npm run lint:structure && npm run lint:repo && npx turbo run lint",
+    "typecheck": "npx turbo run typecheck",
     "lint:structure": "node ./scripts/check-module-structure.mjs && node ./scripts/check-test-config-overlap.mjs",
     "lint:repo": "eslint e2e scripts playwright.config.ts playwright.browser.config.ts eslint.config.mjs --max-warnings 0",
     "db:push": "npx turbo run db:push",

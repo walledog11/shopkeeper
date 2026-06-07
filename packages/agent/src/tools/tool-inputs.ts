@@ -20,4 +20,4 @@ export type {
   UpdateShopifyOrderAddressInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
-} from "./registry.js";
+} from "./registry/index.js";

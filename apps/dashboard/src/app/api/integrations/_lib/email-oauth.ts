@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
+import { scrubValue } from '@shopkeeper/agent/observability';
 import logger from '@/lib/server/logger';
 import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
@@ -108,7 +109,7 @@ export async function completeEmailOAuth(
     const tokenData = await tokenResponse.json() as OAuthTokenResponse;
 
     if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_in) {
-      logger.error({ tokenData }, `[${prefix}] Token exchange failed`);
+      logger.error({ tokenData: scrubValue(tokenData) }, `[${prefix}] Token exchange failed`);
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
     }
 
@@ -119,7 +120,7 @@ export async function completeEmailOAuth(
     const userinfo = await userinfoResponse.json() as unknown;
     const userEmail = config.extractEmail(userinfo);
     if (!userEmail) {
-      logger.error({ userinfo }, `[${prefix}] userinfo missing email`);
+      logger.error({ userinfo: scrubValue(userinfo) }, `[${prefix}] userinfo missing email`);
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=no_email`);
     }
 

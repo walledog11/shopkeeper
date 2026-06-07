@@ -1,6 +1,6 @@
 import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "./types.js";
-import { TOOL_CATEGORIES } from "./tools/registry.js";
+import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { executeToolStructured } from "./tools/executor.js";
 import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent.js";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./agent-context.js";

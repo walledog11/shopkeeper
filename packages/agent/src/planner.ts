@@ -3,7 +3,7 @@ import { anthropic, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import logger from "./logger.js";
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js";
-import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry.js";
+import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
 import { executeToolStructured } from "./tools/executor.js";

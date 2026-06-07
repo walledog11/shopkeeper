@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { ErrorEvent } from '@sentry/nextjs';
-import { sentryBeforeSend, REDACTED, REDACTED_EMAIL } from './redaction';
+import { sentryBeforeSend, REDACTED, REDACTED_EMAIL } from './redaction.js';
 
-function baseEvent(): ErrorEvent {
-  return { type: undefined } as ErrorEvent;
+function baseEvent() {
+  return { type: undefined };
 }
 
 describe('sentryBeforeSend', () => {

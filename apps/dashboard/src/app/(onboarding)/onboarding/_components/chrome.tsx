@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Loader2, LogOut, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 import { STEPS } from "./model";
 
@@ -16,7 +17,7 @@ export function Header({ idx, onGoto, exitLabel, onExit }: {
           <Sparkles className="size-3.5" />
         </span>
         <div className="leading-tight">
-          <div className="text-[13px] font-semibold text-white">Concierge</div>
+          <div className="text-[13px] font-semibold text-white">{PRODUCT_NAME}</div>
           <div className="font-mono text-xs font-semibold uppercase tracking-wider text-white/45">Briefing in progress</div>
         </div>
       </div>

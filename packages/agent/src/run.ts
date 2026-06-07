@@ -4,7 +4,7 @@ import { pickModel } from "./ai/index.js";
 import logger from "./logger.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 import { resolveAgentSettings } from "./settings.js";
-import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry.js";
+import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
 import { executeToolWithStatus } from "./tools/executor.js";

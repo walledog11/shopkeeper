@@ -1,7 +1,12 @@
 import type { Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
+import {
+  listRecentUnfulfilledOrderIds,
+  ShopifyRequestError,
+  type ShopifyContext,
+} from '@shopkeeper/agent/shopify';
 import logger from '../logger.js';
-import { JOB, QUEUE, SHOPIFY_API_VERSION } from '../constants.js';
+import { JOB, QUEUE } from '../constants.js';
 import type { OrderReviewJobData } from '../types.js';
 import {
   createMaintenanceQueue,
@@ -14,27 +19,26 @@ import {
 // Order-ops (module #2) backstop. Scheduled, thread-less, flag-gated by
 // ORDER_RISK_MONITOR_ENABLED so it never runs for merchants. This is the
 // BACKSTOP trigger only — the orders/created webhook is primary. The sweep does
-// order DISCOVERY here (a raw Shopify list, bypassing the seam — acceptable at
-// solo-merchant volume) and enqueues each order into the in-process
-// order-review queue, the same path the webhook feeds. No more dashboard hop.
+// order DISCOVERY here and enqueues each order into the in-process order-review
+// queue, the same path the webhook feeds. No more dashboard hop.
 
 const ORDERS_PER_ORG = 10;
 
-interface RawOrderListEntry {
-  id: number;
-}
-
-async function listRecentUnfulfilledOrderIds(shop: string, accessToken: string): Promise<string[]> {
-  const url =
-    `https://${shop}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
-    `?status=open&fulfillment_status=unfulfilled&financial_status=paid&limit=${ORDERS_PER_ORG}&fields=id`;
-  const res = await fetch(url, { headers: { 'X-Shopify-Access-Token': accessToken } });
-  if (!res.ok) {
-    logger.warn({ shop, status: res.status }, '[OrderRiskMonitor] order list fetch failed');
+async function fetchRecentUnfulfilledOrderIds(shop: string, accessToken: string): Promise<string[]> {
+  const ctx: ShopifyContext = { shop, accessToken };
+  try {
+    return await listRecentUnfulfilledOrderIds(ctx, ORDERS_PER_ORG);
+  } catch (err) {
+    logger.warn(
+      {
+        shop,
+        status: err instanceof ShopifyRequestError ? err.status : undefined,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      '[OrderRiskMonitor] order list fetch failed',
+    );
     return [];
   }
-  const data = (await res.json()) as { orders?: RawOrderListEntry[] };
-  return (data.orders ?? []).map((o) => String(o.id));
 }
 
 export async function runOrderRiskMonitor(
@@ -53,7 +57,7 @@ export async function runOrderRiskMonitor(
   for (const integration of integrations) {
     if (!integration.accessToken || !integration.externalAccountId) continue;
     const shop = integration.externalAccountId;
-    const orderIds = await listRecentUnfulfilledOrderIds(shop, integration.accessToken);
+    const orderIds = await fetchRecentUnfulfilledOrderIds(shop, integration.accessToken);
     for (const orderId of orderIds) {
       // Same stable jobId as the webhook path — dedupes a webhook-reviewed order
       // against this backstop within the queue's retention window.

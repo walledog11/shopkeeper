@@ -6,7 +6,7 @@ import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { createGatewayBullMqConnection } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
-import { sentryBeforeSend } from './observability/redaction.js';
+import { sentryBeforeSend } from './observability/sentry.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
 import {

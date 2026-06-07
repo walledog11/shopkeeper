@@ -16,6 +16,7 @@ export {
 export {
   getOrderByName,
   getShopifyOrders,
+  listRecentUnfulfilledOrderIds,
 } from "./orders.js";
 export { updateShopifyOrderAddress } from "./order-address.js";
 export { cancelOrder } from "./order-cancellation.js";

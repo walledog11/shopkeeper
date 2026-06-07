@@ -57,3 +57,20 @@ export async function getOrderByName(
     return toolError(formatShopifyToolError("could not search orders", err));
   }
 }
+
+export async function listRecentUnfulfilledOrderIds(
+  ctx: ShopifyContext,
+  limit = 10,
+): Promise<string[]> {
+  const data = await shopifyRestJson<{ orders?: { id: number }[] }>(ctx, "orders.json", {
+    query: {
+      status: "open",
+      fulfillment_status: "unfulfilled",
+      financial_status: "paid",
+      limit,
+      fields: "id",
+    },
+  });
+
+  return (data.orders ?? []).map((order) => String(order.id));
+}

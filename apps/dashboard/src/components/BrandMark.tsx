@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
 
 interface BrandMarkProps {
@@ -41,7 +42,7 @@ export function BrandMark({
         className,
       )}
     >
-      <span className={cn("font-black tracking-tight", styles.word)}>clerk</span>
+      <span className={cn("font-black tracking-tight", styles.word)}>{PRODUCT_NAME}</span>
       <span className={cn("shrink-0 rounded-full bg-green-400", styles.dot)} />
     </Link>
   );

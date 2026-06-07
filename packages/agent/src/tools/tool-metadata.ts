@@ -4,5 +4,5 @@ export {
   TOOL_GROUPS,
   TOOL_LABELS,
   toolNamesForGroups,
-} from "./registry.js";
-export type { ToolGroup } from "./registry.js";
+} from "./registry/index.js";
+export type { ToolGroup } from "./registry/index.js";

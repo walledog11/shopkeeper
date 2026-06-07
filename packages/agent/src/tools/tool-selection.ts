@@ -1,1 +1,1 @@
-export { selectAgentTools } from "./registry.js";
+export { selectAgentTools } from "./registry/index.js";

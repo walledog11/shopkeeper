@@ -13,7 +13,7 @@ import {
   toolNamesForGroups,
   type ToolExecutionDeps,
   type ToolName,
-} from "./registry.js";
+} from "./registry/index.js";
 
 const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   search_kb: { query: "returns policy" },

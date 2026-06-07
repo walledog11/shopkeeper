@@ -6,7 +6,7 @@ import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
 import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "./plan-preview.js";
 import { resolveAutoExecuteMode } from "./settings.js";
-import { TOOL_CATEGORIES } from "./tools/registry.js";
+import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
 

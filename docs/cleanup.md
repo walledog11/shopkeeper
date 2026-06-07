@@ -351,15 +351,27 @@ Phase 9 verification completed on 2026-06-06:
 - `npm run build -w apps/gateway`
 - `npm run lint`
 
-## Other Cleanup Items [PENDING]
+## Other Cleanup Items [COMPLETED]
 
 
-  apps/dashboard typecheck currently fails on mechanical test typings:
-  apps/dashboard/src/app/api/billing/checkout/route.test.ts:76 pass plain Request where the route expects NextRequest; apps/dashboard/src/app/api/messages/
-  route.test.ts:384 has a bad ServerClient mock this type; apps/dashboard/src/lib/server/agent-lock.test.ts:14 and apps/dashboard/src/lib/server/rate-
-  limit.test.ts:16 use GetRedisFn as a value/type incorrectly.
+  1. Dashboard typecheck cleanup [DONE 2026-06-06]
 
-  This is high payoff because it turns tsc --noEmit back into a useful cleanup/build gate.
+  The previously failing mechanical test typings are already fixed on the current branch:
+  `apps/dashboard/src/app/api/billing/checkout/route.test.ts` uses `NextRequest` in its helper;
+  `apps/dashboard/src/app/api/messages/route.test.ts` uses a typed Postmark `ServerClient` mock;
+  `apps/dashboard/src/lib/server/agent-lock.test.ts` and `apps/dashboard/src/lib/server/rate-limit.test.ts`
+  use `vi.mocked(getRedis)` instead of mixing value/type aliases.
+
+  Item 1 follow-up implementation notes:
+
+  - Added `npm run typecheck -w apps/dashboard` and root `npm run typecheck` so `tsc --noEmit` is an explicit cleanup gate again.
+  - No additional code changes were required; the earlier failures were already resolved outside this pass.
+
+  Item 1 follow-up verification completed on 2026-06-06:
+
+  - `npm run typecheck -w apps/dashboard`
+  - `npm run build -w apps/dashboard`
+  - `npm run lint -w apps/dashboard`
 
   2. Finish the API body-validation pass [DONE 2026-06-06]
 
@@ -403,46 +415,123 @@ Phase 9 verification completed on 2026-06-06:
   - `npm run test:unit -w apps/dashboard -- src/lib/api/fetcher.unit.test.ts src/app/dashboard/tickets/_hooks/conversation-agent-requests.unit.test.ts src/app/dashboard/tickets/_hooks/useConversationAgentFlow.unit.test.ts`
   - `npm run lint -w apps/dashboard`
 
-  4. Split the agent tool registry without losing the registry contract
+  4. Split the agent tool registry without losing the registry contract [DONE 2026-06-06]
 
-  packages/agent/src/tools/registry.ts:1 is now 886 lines and mixes input interfaces, schema DSL, validation parser, tool definitions, policy metadata, labels,
-  and derived maps. Keep the single registry contract, but split the definitions by domain: knowledge, product, customer, order, thread, messaging. The derived
-  maps at packages/agent/src/tools/registry.ts:820 can remain centralized.
+  Tool definitions now live in domain modules under `packages/agent/src/tools/registry/`:
+  `knowledge.ts`, `product.ts`, `customer.ts`, `order.ts`, `thread.ts`, and `messaging.ts`.
+  Shared input types, schema DSL, validation, and context helpers live beside them in
+  `types.ts`, `schema.ts`, and `helpers.ts`. `packages/agent/src/tools/registry/index.ts`
+  keeps the single registry contract: it assembles `TOOL_DEFINITIONS` and the derived maps
+  (`TOOL_CATEGORIES`, `TOOL_GROUPS`, labels, Anthropic schemas, and selection helpers).
+  The assembler lives inside the directory so it does not shadow the domain modules under
+  the repo module-structure lint rule.
 
-  5. Centralize observability redaction and fix OAuth logging
+  Item 4 follow-up verification completed on 2026-06-06:
 
-  Dashboard and gateway have duplicated redaction modules:
-  apps/dashboard/src/lib/observability/redaction.ts:6, apps/gateway/src/observability/redaction.ts:6.
+  - `npm run test:unit -w packages/agent -- src/tools/registry.test.ts src/tools/executor.test.ts`
+  - `npm run test:unit -w packages/agent`
+  - `npm run lint -w packages/agent`
+  - `npm run build -w packages/agent`
 
-  OAuth callbacks also still log raw provider payloads:
-  apps/dashboard/src/app/api/integrations/_lib/email-oauth.ts:111, apps/dashboard/src/app/api/integrations/instagram/callback/route.ts:58, apps/dashboard/src/app/
-  api/integrations/shopify/callback/route.ts:97.
+  5. Centralize observability redaction and fix OAuth logging [DONE 2026-06-06]
 
-  This overlaps docs/to-do-list.md, but it is also clean duplication to remove.
+  Dashboard and gateway had duplicated redaction modules. OAuth callbacks also logged raw provider payloads.
 
-  6. Consolidate lock-provider implementation
+  Item 5 follow-up implementation notes:
 
-  Current WIP introduces a shared @shopkeeper/agent/lock interface, but dashboard and gateway duplicate timeout/release/no-op lock logic:
-  apps/dashboard/src/lib/server/agent-lock.ts:6, apps/gateway/src/clients/agent-lock.ts:6.
+  - Shared redaction now lives in `@shopkeeper/agent/observability`: `PINO_REDACT_PATHS`, `scrubValue`, and `sentryBeforeSend`.
+  - Dashboard and gateway loggers/Sentry hooks import the shared module; the duplicate app-local redaction files were removed.
+  - Email, Instagram, and Shopify OAuth failure/info logs now pass provider payloads through `scrubValue` before logging.
 
-  Extract common token-lock behavior behind tiny adapter functions for Upstash vs ioredis.
+  Item 5 follow-up verification completed on 2026-06-06:
 
-  7. Clean stale package-surface comments and barrels
+  - `npm run test:unit -w packages/agent -- src/observability/redaction.test.ts`
+  - `npm run lint -w packages/agent`
+  - `npm run lint -w apps/dashboard`
+  - `npm run lint -w apps/gateway`
+  - `npm run build -w packages/agent`
+
+  6. Consolidate lock-provider implementation [DONE 2026-06-06]
+
+  Dashboard and gateway duplicated timeout/release/no-op lock logic behind the shared `@shopkeeper/agent/lock` interface.
+
+  Item 6 follow-up implementation notes:
+
+  - Shared token-lock behavior now lives in `@shopkeeper/agent/lock/redis` via `createRedisLockProvider`.
+  - Upstash and ioredis adapters are tiny `setNxEx` / `evalRelease` wrappers; dashboard and gateway keep only host-specific Redis client wiring.
+  - Dashboard `upstashLockProvider` and gateway `createGatewayLockProvider` both delegate to the shared provider.
+
+  Item 6 follow-up verification completed on 2026-06-06:
+
+  - `npm run test:unit -w packages/agent -- src/lock/redis-lock.test.ts`
+  - `npm run test:integration -w apps/dashboard -- src/lib/server/agent-lock.test.ts`
+  - `npm run test:unit -w packages/agent`
+  - `npm run lint -w packages/agent`
+  - `npm run lint -w apps/dashboard`
+  - `npm run lint -w apps/gateway`
+  - `npm run build -w packages/agent`
+  - `npm run build -w apps/gateway`
+
+  7. Clean stale package-surface comments and barrels [DONE 2026-06-06]
 
   packages/agent/src/index.ts:1 still says “Track 2 extraction, in progress” and exports a broad root barrel at packages/agent/src/index.ts:13. After the
   extraction work, tighten the public surface or at least update the comment to reflect current ownership.
 
-  8. Move remaining provider fetches behind small clients
+  Item 7 follow-up implementation notes:
+
+  - The root `@shopkeeper/agent` export now re-exports shared domain types only; runtime modules stay on explicit subpaths.
+  - `packages/agent/README.md` documents the root type surface, supported subpaths, and private-module convention.
+  - Dashboard `@/types` now imports agent domain types from `@shopkeeper/agent/types`.
+
+  Item 7 follow-up verification completed on 2026-06-06:
+
+  - `npm run build -w packages/agent`
+  - `npm run lint -w packages/agent`
+  - `npm run lint -w apps/dashboard`
+  - `npm run test:unit -w apps/dashboard -- src/types/db-types.unit.test.ts`
+  - `npm run typecheck -w apps/dashboard`
+
+  8. Move remaining provider fetches behind small clients [DONE 2026-06-06]
 
   The Shopify order-risk backstop explicitly bypasses the Shopify seam at apps/gateway/src/maintenance/order-risk-monitor.ts:17 and builds a raw Admin API URL at
   apps/gateway/src/maintenance/order-risk-monitor.ts:28. Meta token health also builds token-bearing URLs directly at apps/gateway/src/maintenance/token-
   health.ts:31. This is lower priority than API validation/typecheck, but worth cleaning once the bigger gates are green.
 
+  Item 8 follow-up implementation notes:
+
+  - `listRecentUnfulfilledOrderIds` now lives in `@shopkeeper/agent/shopify`; the order-risk backstop uses the shared Shopify REST client.
+  - Gateway Meta Graph calls for token health now go through `apps/gateway/src/clients/meta-graph.ts` with encoded query params.
+  - Focused unit tests cover the Shopify list helper and Meta token-health client paths.
+
+  Item 8 follow-up verification completed on 2026-06-06:
+
+  - `npm run test:unit -w packages/agent -- src/shopify/orders.test.ts`
+  - `npm run test:integration -w apps/gateway -- src/clients/meta-graph.test.ts`
+  - `npm run lint -w packages/agent`
+  - `npm run lint -w apps/gateway`
+  - `npm run build -w packages/agent`
+  - `npm run build -w apps/gateway`
+
   Suggested Order
 
-  1. Typecheck cleanup.
-  2. Remaining API body validation.
-  3. Client request/pagination hook cleanup.
-  4. Agent registry split.
-  5. Redaction/OAuth logging and lock-provider consolidation.
-  6. Provider-client cleanup.
+  1. Typecheck cleanup. [DONE 2026-06-06]
+  2. Remaining API body validation. [DONE 2026-06-06]
+  3. Client request/pagination hook cleanup. [DONE 2026-06-06]
+  4. Agent registry split. [DONE 2026-06-06]
+  5. Redaction/OAuth logging and lock-provider consolidation. [DONE 2026-06-06]
+  6. Agent package surface cleanup. [DONE 2026-06-06]
+  7. Provider-client cleanup. [DONE 2026-06-06]
+
+## Post-audit fix (2026-06-06)
+
+- Moved the tool registry assembler from `packages/agent/src/tools/registry.ts` into
+  `packages/agent/src/tools/registry/index.ts` so the domain modules and assembler share one
+  directory without triggering the module-structure lint rule.
+- Updated agent imports to use explicit `./registry/index.js` paths, matching the package's
+  NodeNext convention.
+
+Verification:
+
+- `npm run lint`
+- `npm run build -w packages/agent`
+- `npm run test:unit -w packages/agent -- src/tools/registry.test.ts src/tools/executor.test.ts`

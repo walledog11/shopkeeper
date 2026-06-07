@@ -3,8 +3,8 @@ import type {
   AgentToolDefinition,
   CreateRefundInput,
   CreateShopifyOrderInput,
-} from "./registry.js";
-import { formatToolInputValidationError, getToolDefinition } from "./registry.js";
+} from "./registry/index.js";
+import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
 
 export type StaticPolicyResult =
   | { blocked: false }

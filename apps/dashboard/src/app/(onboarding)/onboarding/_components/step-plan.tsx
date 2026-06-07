@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { PRODUCT_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "./primitives";
 import { AUTONOMY_TIERS, CHANNEL_META, type ChannelKey, type OnboardingData } from "./model";
@@ -95,7 +96,7 @@ export function StepPlan({ data, connected, onStart, onBack }: {
         <div className="grid grid-cols-3 gap-3">
           <Waiting k="Inbox"     v="0 tickets" hint="filling up as I watch" />
           <Waiting k="Memory"    v="0 articles" hint="builds from your replies" />
-          <Waiting k="Concierge" v="ready" hint="your AI teammate" />
+          <Waiting k={PRODUCT_NAME} v="ready" hint="your AI teammate" />
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ import type {
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
   EscalateToHumanInput,
-} from "./tools/registry.js";
+} from "./tools/registry/index.js";
 import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./agent-context.js";
 
 // Where a thread-coupled tool delivers. Support injects the dashboard messaging

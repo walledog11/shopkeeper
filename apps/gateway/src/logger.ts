@@ -1,6 +1,6 @@
 import pino from 'pino';
 import { installAgentLogger } from '@shopkeeper/agent/logger';
-import { PINO_REDACT_PATHS, REDACTED } from './observability/redaction.js';
+import { PINO_REDACT_PATHS, REDACTED } from '@shopkeeper/agent/observability';
 
 const logger = pino({
   level: process.env.LOG_LEVEL ?? 'info',

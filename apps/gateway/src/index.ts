@@ -9,7 +9,7 @@ import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { createGatewayRedisClient } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
-import { sentryBeforeSend } from './observability/redaction.js';
+import { sentryBeforeSend } from './observability/sentry.js';
 
 export function createGatewayApp() {
   const app = express();

@@ -1,4 +1,8 @@
 import { db } from '@shopkeeper/db';
+import {
+  checkInstagramAccountAccess,
+  exchangeFacebookLongLivedToken,
+} from '../clients/meta-graph.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import {
@@ -10,7 +14,6 @@ import {
 } from './registration.js';
 
 const CONCURRENCY = 5;
-const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function runTokenHealthCheck(): Promise<void> {
   logger.info('[TokenHealth] Running daily Instagram token check');
@@ -28,13 +31,15 @@ export async function runTokenHealthCheck(): Promise<void> {
   for (let i = 0; i < igIntegrations.length; i += CONCURRENCY) {
     await Promise.all(igIntegrations.slice(i, i + CONCURRENCY).map(async (integration) => {
       try {
-        const res = await fetch(
-          `${FB_GRAPH}/${integration.externalAccountId}?fields=id&access_token=${integration.accessToken}`,
-        );
-        const data = await res.json() as { error?: { message: string } };
+        if (!integration.accessToken) return;
 
-        if (data.error) {
-          logger.error({ organizationId: integration.organizationId, accountId: integration.externalAccountId, err: data.error.message }, '[TokenHealth] Token invalid - marking as expired');
+        const check = await checkInstagramAccountAccess(
+          integration.externalAccountId,
+          integration.accessToken,
+        );
+
+        if (check.error) {
+          logger.error({ organizationId: integration.organizationId, accountId: integration.externalAccountId, err: check.error.message }, '[TokenHealth] Token invalid - marking as expired');
           if (integration.tokenExpiresAt?.getTime() !== 0) {
             await db.integration.update({
               where: { id: integration.id },
@@ -51,16 +56,17 @@ export async function runTokenHealthCheck(): Promise<void> {
 
         if (integration.refreshToken && appId && appSecret) {
           try {
-            const refreshRes = await fetch(
-              `${FB_GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${integration.refreshToken}`,
+            const refresh = await exchangeFacebookLongLivedToken(
+              appId,
+              appSecret,
+              integration.refreshToken,
             );
-            const refreshData = await refreshRes.json() as { access_token?: string; error?: { message: string } };
 
-            if (refreshData.access_token) {
-              updateData.refreshToken = refreshData.access_token;
+            if (refresh.data?.access_token) {
+              updateData.refreshToken = refresh.data.access_token;
               logger.info({ organizationId: integration.organizationId }, '[TokenHealth] User token refreshed');
             } else {
-              logger.warn({ organizationId: integration.organizationId, err: refreshData.error?.message }, '[TokenHealth] User token refresh failed - page token still valid');
+              logger.warn({ organizationId: integration.organizationId, err: refresh.error?.message }, '[TokenHealth] User token refresh failed - page token still valid');
             }
           } catch (refreshErr) {
             logger.warn({ organizationId: integration.organizationId, err: (refreshErr as Error).message }, '[TokenHealth] User token refresh error - page token still valid');

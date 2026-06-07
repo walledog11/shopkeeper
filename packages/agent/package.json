@@ -95,8 +95,16 @@
       "default": "./dist/order-ops/index.js"
     },
     "./lock": {
-      "types": "./dist/lock.d.ts",
-      "default": "./dist/lock.js"
+      "types": "./dist/lock/index.d.ts",
+      "default": "./dist/lock/index.js"
+    },
+    "./lock/redis": {
+      "types": "./dist/lock/redis-lock.d.ts",
+      "default": "./dist/lock/redis-lock.js"
+    },
+    "./observability": {
+      "types": "./dist/observability/index.d.ts",
+      "default": "./dist/observability/index.js"
     },
     "./errors": {
       "types": "./dist/errors.d.ts",
