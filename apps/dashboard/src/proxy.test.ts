@@ -82,11 +82,10 @@ describe('proxy middleware auth handling', () => {
     expect(res).toBeUndefined();
   });
 
-  it('redirects signed-in users away from /login to /dashboard', async () => {
+  it('lets signed-in users access /login for account switching', async () => {
     const { fn } = makeAuth('usr_1', null);
     const res = await capturedHandler(fn as never, makeReq('/login'));
-    expect(res?.status).toBe(307);
-    expect(res?.headers.get('location')).toContain('/dashboard');
+    expect(res).toBeUndefined();
   });
 
   it('redirects signed-in users away from /signup to /dashboard', async () => {

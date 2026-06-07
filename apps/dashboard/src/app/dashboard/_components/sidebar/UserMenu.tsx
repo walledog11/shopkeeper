@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import Link from "next/link";
+import { Building2, LogOut, UserRound } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import {
   DropdownMenu,
@@ -43,7 +44,19 @@ export function UserMenu({ navAuth, variant }: { navAuth: NavAuth; variant: "des
           </div>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48 bg-popover border-white/[0.09] text-white">
+      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-52 bg-popover border-white/[0.09] text-white">
+        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-white/[0.07]">
+          <Link href="/select-org">
+            <Building2 className="size-4 shrink-0" />
+            Switch workspace
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-white/[0.07]">
+          <Link href="/login">
+            <UserRound className="size-4 shrink-0" />
+            Switch account
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => signOut({ redirectUrl: "/login" })}
           className="text-red-400 focus:text-red-400 focus:bg-white/[0.07] cursor-pointer gap-2"

@@ -3,28 +3,27 @@ type ClerkElementOverrides = Record<string, string>;
 const baseElements: ClerkElementOverrides = {
   rootBox: "w-full",
   cardBox: "w-full",
-  card:
-    "w-full rounded-[1.75rem] border border-white/10 bg-[#0f0f0f]/95 text-white shadow-[0_24px_100px_-48px_rgba(0,0,0,0.95)] backdrop-blur-xl",
-  headerTitle: "text-white font-semibold tracking-tight",
-  headerSubtitle: "text-white/55",
+  card: "w-full rounded-md border border-border bg-card text-card-foreground shadow-sm",
+  headerTitle: "text-foreground font-semibold tracking-tight",
+  headerSubtitle: "text-muted-foreground",
   socialButtonsBlockButton:
-    "h-11 rounded-xl border border-white/10 bg-white/[0.03] text-white shadow-none hover:bg-white/[0.06]",
+    "h-10 rounded-md border border-border bg-muted/40 text-foreground shadow-none hover:bg-accent",
   socialButtonsBlockButtonText: "font-medium",
-  dividerLine: "bg-white/10",
-  dividerText: "text-xs font-medium text-white/40",
-  formFieldLabel: "text-sm font-medium text-white/75",
+  dividerLine: "bg-border",
+  dividerText: "text-xs font-medium text-muted-foreground",
+  formFieldLabel: "text-sm font-medium text-foreground/80",
   formFieldInput:
-    "h-11 rounded-xl border border-white/10 bg-white/[0.03] text-white shadow-none placeholder:text-white/35 focus:border-green-400 focus:ring-2 focus:ring-green-400/20",
-  formFieldHintText: "text-xs text-white/40",
+    "h-10 rounded-md border border-border bg-muted/40 text-foreground shadow-none placeholder:text-muted-foreground focus:border-green-400 focus:ring-2 focus:ring-green-400/20",
+  formFieldHintText: "text-xs text-muted-foreground",
   formButtonPrimary:
-    "h-11 rounded-xl bg-green-400 text-black shadow-none font-semibold hover:bg-green-300",
+    "h-10 rounded-md bg-green-400 text-green-950 shadow-none font-semibold hover:bg-green-300",
   footerActionLink: "font-medium text-green-400 hover:text-green-300",
-  identityPreviewText: "text-white",
+  identityPreviewText: "text-foreground",
   identityPreviewEditButtonIcon: "text-green-400",
   alertText: "text-sm",
   formResendCodeLink: "font-medium text-green-400 hover:text-green-300",
   otpCodeFieldInput:
-    "rounded-xl border border-white/10 bg-white/[0.03] text-white shadow-none focus:border-green-400 focus:ring-2 focus:ring-green-400/20",
+    "rounded-md border border-border bg-muted/40 text-foreground shadow-none focus:border-green-400 focus:ring-2 focus:ring-green-400/20",
 };
 
 export function getAuthClerkAppearance(overrides: ClerkElementOverrides = {}) {

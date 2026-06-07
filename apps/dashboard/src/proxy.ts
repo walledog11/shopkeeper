@@ -13,7 +13,7 @@ export default clerkMiddleware(async (auth, req) => {
 
   const { userId, orgId } = await auth()
 
-  if (userId && (pathname === '/login' || pathname === '/signup')) {
+  if (userId && pathname === '/signup') {
     return NextResponse.redirect(new URL('/dashboard', req.url))
   }
 

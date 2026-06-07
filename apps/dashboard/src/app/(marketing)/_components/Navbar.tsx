@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { AuthNavLinks } from "./AuthNavLinks";
 
 export function Navbar() {
   return (
@@ -16,12 +17,7 @@ export function Navbar() {
       </div>
 
       <div className="ml-auto flex gap-3 items-center">
-        <Link href="/login" className="hidden sm:inline-flex items-center py-2 px-4 rounded-full text-sm font-semibold border border-solid border-stone-500 text-stone-900 hover:text-stone-300 hover:border-stone-400 transition-colors" >
-          Sign in
-        </Link>
-        <Link href="/signup" className="inline-flex items-center py-2 px-4 rounded-full text-sm font-semibold bg-stone-900 text-stone-100 border border-solid border-stone-500">
-          Start free →
-        </Link>
+        <AuthNavLinks />
       </div>
     </nav>
     </div>
