@@ -23,10 +23,32 @@ async function main() {
 
 async function up() {
   const { command, baseArgs } = detectDockerCompose();
-  await runCommand(command, [...baseArgs, '-f', COMPOSE_FILE, 'up', '-d', 'postgres', 'redis'], {
-    env: process.env,
-  });
-  await waitForAllTestServices(process.env);
+  const composeArgs = [...baseArgs, '-f', COMPOSE_FILE];
+  const maxAttempts = 5;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await runCommand(command, [...composeArgs, 'pull', 'postgres', 'redis'], {
+        env: process.env,
+      });
+      await runCommand(command, [...composeArgs, 'up', '-d', 'postgres', 'redis'], {
+        env: process.env,
+      });
+      await waitForAllTestServices(process.env);
+      break;
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        throw error;
+      }
+
+      const delayMs = attempt * 5_000;
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[test-services] Start failed (attempt ${attempt}/${maxAttempts}): ${message}. Retrying in ${delayMs}ms...`,
+      );
+      await sleep(delayMs);
+    }
+  }
 
   const targets = getTestServiceTargets(process.env);
   console.log(`[test-services] Postgres ready at ${targets.postgres.host}:${targets.postgres.port}`);
@@ -45,6 +67,10 @@ async function status() {
   await runCommand(command, [...baseArgs, '-f', COMPOSE_FILE, 'ps'], {
     env: process.env,
   });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

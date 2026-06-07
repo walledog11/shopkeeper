@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16
+    image: public.ecr.aws/docker/library/postgres:16
     container_name: clerk-test-postgres
     environment:
       POSTGRES_DB: clerk_test
@@ -17,7 +17,7 @@ services:
       - clerk-test-postgres-data:/var/lib/postgresql/data
 
   redis:
-    image: redis:7
+    image: public.ecr.aws/docker/library/redis:7
     container_name: clerk-test-redis
     ports:
       - "56379:6379"

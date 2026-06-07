@@ -56,32 +56,6 @@ jobs:
     name: Integration Tests and Coverage
     needs: [secret-scan, lint, unit]
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: clerk_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres -d clerk_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-    env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/clerk_test?schema=public
-      TEST_REDIS_URL: redis://127.0.0.1:6379/0
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -90,6 +64,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
       - name: Run integration tests with coverage
         run: npm run test:coverage
       - name: Upload coverage reports
@@ -101,6 +77,9 @@ jobs:
             apps/dashboard/coverage/
             apps/gateway/coverage/
           retention-days: 7
+      - name: Stop test services
+        if: ${{ always() }}
+        run: npm run test:services:down
 
   build:
     name: Build
@@ -121,32 +100,7 @@ jobs:
     name: E2E Tests
     needs: [secret-scan, lint, unit, integration, build]
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_DB: clerk_test
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U postgres -d clerk_test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
     env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/clerk_test?schema=public
-      TEST_REDIS_URL: redis://127.0.0.1:6379/0
       CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY || vars.CLERK_SECRET_KEY }}
       CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY }}
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.CLERK_PUBLISHABLE_KEY || vars.CLERK_PUBLISHABLE_KEY }}
@@ -177,6 +131,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
       - name: Run smoke E2E tests
@@ -190,3 +146,6 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+      - name: Stop test services
+        if: ${{ always() }}
+        run: npm run test:services:down
