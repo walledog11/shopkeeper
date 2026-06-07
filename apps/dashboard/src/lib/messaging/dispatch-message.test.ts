@@ -173,7 +173,7 @@ describe('dispatchMessage', () => {
   });
 
   it('short-circuits provider calls when outbound recording succeeds', async () => {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'clerk-dispatch-records-'));
+    tempDir = await mkdtemp(path.join(os.tmpdir(), 'shopkeeper-dispatch-records-'));
     process.env.E2E_OUTBOUND_MODE = 'record';
     process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
 

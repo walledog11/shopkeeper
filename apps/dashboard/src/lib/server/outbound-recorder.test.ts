@@ -16,7 +16,7 @@ function testEnv(vars: Record<string, string | undefined>): NodeJS.ProcessEnv {
 }
 
 async function useTempRecordPath() {
-  tempDir = await mkdtemp(path.join(os.tmpdir(), 'clerk-outbound-records-'));
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'shopkeeper-outbound-records-'));
   process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
 }
 

@@ -121,7 +121,7 @@ function useProductsPageState() {
 
 export default function ProductsPageClient() {
   const {
-    allProducts,
+    allItems: allProducts,
     closeDrawer,
     data,
     debouncedQuery,

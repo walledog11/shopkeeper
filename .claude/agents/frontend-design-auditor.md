@@ -40,7 +40,7 @@ Your job is to scan the dashboard codebase, identify design issues, and return a
 
 ## Project Context
 
-This is **Clerk** — a Zendesk-like helpdesk for e-commerce brands. The dashboard is built with:
+This is **Shopkeeper** — a Zendesk-like helpdesk for e-commerce brands. The dashboard is built with:
 - Next.js 15 (App Router) in `apps/dashboard/src/`
 - Tailwind CSS for styling
 - The main dashboard UI lives in `apps/dashboard/src/app/dashboard/`
@@ -79,7 +79,7 @@ Return a report structured exactly like this:
 
 ---
 
-## Frontend Design Audit — Clerk Dashboard
+## Frontend Design Audit — Shopkeeper Dashboard
 
 ### Summary
 [2-3 sentences: overall state of the UI, biggest theme of issues]

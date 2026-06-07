@@ -51,7 +51,7 @@ const originalEnv = {
 
 beforeEach(async () => {
   org = await createTestOrg();
-  tempDir = await mkdtemp(path.join(os.tmpdir(), 'clerk-agent-records-'));
+  tempDir = await mkdtemp(path.join(os.tmpdir(), 'shopkeeper-agent-records-'));
   process.env.E2E_OUTBOUND_MODE = 'record';
   process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
   delete process.env.POSTMARK_API_KEY;

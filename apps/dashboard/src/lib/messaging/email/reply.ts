@@ -1,6 +1,6 @@
 import type { EmailHeader } from './types';
 
-const DEFAULT_INBOUND_EMAIL_DOMAIN = 'mail.clerkapp.com';
+const DEFAULT_INBOUND_EMAIL_DOMAIN = 'inbound.shopkeeper.app';
 const DEFAULT_REPLY_SUBJECT = 'Your inquiry';
 
 export function formatReplySubject(

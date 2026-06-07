@@ -1,4 +1,4 @@
-# Clerk — Core Extraction & Module Expansion Plan
+# Shopkeeper — Core Extraction & Module Expansion Plan
 
 > Follow-on to `autonomy-and-generality-plan.md`. That plan hardened support, generalized
 > the chassis, and proved (its Track 4 fraud spike) that the **substrate is module-agnostic
@@ -22,7 +22,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 |---|---|---|---|
 | **0** | Decide how the worker runs an agent (A vs B) | ✅ decided → **B** (extract core, run in-process) | — |
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
-| **2** | Extract core → `@clerk/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
+| **2** | Extract core → `@shopkeeper/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
 | **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 code-complete + eval-confirmed (2026-06-05) | manual live e2e; Telegram notify; eval fixtures |
 | **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-06) — 4.0 LockProvider ✅; 4.1 orchestration moved ✅; 4.2 worker auto-plan in-process ✅ | 4.3 operator runs in-process |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
@@ -32,8 +32,8 @@ wired, eval gate green at **94.6%**, baseline regenerated to **156/168**. Histor
 **2026-06-05 update** directly below.
 
 **Track 3 is code-complete + eval-confirmed (2026-06-05).** The order-ops module was rebuilt on the real Track 1/2
-seams and now runs **in-process in the gateway worker**: the module moved into `@clerk/agent` (new
-`@clerk/agent/order-ops` subpath — `buildOrderOpsContext(orderId, orgId, escalate)` takes the injected Seam-2 sink;
+seams and now runs **in-process in the gateway worker**: the module moved into `@shopkeeper/agent` (new
+`@shopkeeper/agent/order-ops` subpath — `buildOrderOpsContext(orderId, orgId, escalate)` takes the injected Seam-2 sink;
 `runOrderOps` gained a deterministic **pre-filter** that skips the model when there are no risk signals, and routes
 `flag_order` through `ctx.escalate`); the gateway gained `QUEUE.ORDER_REVIEW`/`JOB.ORDER_REVIEW`, an
 `orders/created`-webhook enqueue with a stable per-order jobId, and a new in-process `workers/order-review.ts`
@@ -68,7 +68,7 @@ does **not** set `EVAL_REPEATS` — pass `EVAL_REPEATS=3` explicitly or it write
 surfaced an **81.5% vs 93.5%** regression: every refund / tier-auto / escalate-ambiguous fixture that relies on
 `simulateToolResults` failed, because the eval runner spied the dashboard `executor` shim while the extracted
 `run.ts` calls the executor through its own **package-internal** import — the same mock-targeting class as the Phase 5
-`@anthropic-ai/sdk` fix. **Fixed** by mocking `@clerk/agent/executor` directly (verified mechanically with a
+`@anthropic-ai/sdk` fix. **Fixed** by mocking `@shopkeeper/agent/executor` directly (verified mechanically with a
 zero-cost probe that vitest inlines the package, so the mock reaches `run.ts`). Two cost changes landed alongside:
 **(a)** per-phase token + cache reporting in the suite (`[eval:usage]`, planner/run/judge split with `cacheHit%` +
 `costVsUncached`), and **(b)** the support system prompt split into a **stable cached prefix + volatile suffix**
@@ -92,7 +92,7 @@ per-fixture rather than trusting the aggregate gate alone.) Still: do not run th
 
 ```
 Track 0 (decide A vs B) ─> Track 1 (thread-optional core) ─┐
-                                                           ├─> Track 2 (extract → @clerk/agent)
+                                                           ├─> Track 2 (extract → @shopkeeper/agent)
                                                            │      └─> Track 3 (order-ops #2, in worker)
                                                            │              └─> Track 4 (repoint support)
 Track 5 (WhatsApp surface) ──────────────────────────────── parallel / later
@@ -202,10 +202,10 @@ module does not exist; its needs are unknowable.
 
 ---
 
-## Track 2 — Extract the core into `@clerk/agent` *(M–L · 🔶 Phases 1–5 done · depends on Track 1)*
+## Track 2 — Extract the core into `@shopkeeper/agent` *(M–L · 🔶 Phases 1–5 done · depends on Track 1)*
 
 **Goal:** move `runAgent` / `planAgent` / tools / prompt / context into a workspace package
-(`@clerk/agent`, alongside `@clerk/db`) so both apps import it and the host becomes a deployment decision.
+(`@shopkeeper/agent`, alongside `@shopkeeper/db`) so both apps import it and the host becomes a deployment decision.
 
 **Invariant (same as Track 1):** the dashboard support path does **byte-for-byte** what it does today.
 Extraction is a code-location move plus *one* forced new seam (the I/O sink); it is "safe" iff the eval
@@ -229,10 +229,10 @@ pattern), or **leave** in the dashboard (route glue).
 | `@/lib/messaging/thread-constants` (`isOperatorChannel`, `AGENT_NOTE_PREFIX`, `THREAD_STATUS`, `CHANNEL_TYPE`) | `context`, `intent`, `prompt`, `tools/thread` | **Move** into the package; dashboard messaging imports them back. ✅ |
 | `@/lib/server/logger` | `run`, `planner`, `spend`, `tools/thread` (9×) | **Resolved with the package's console `logger.ts`**, not a host-pino inject seam (that's deferred; `tools/thread` keeps its own pino in the dashboard). ✅ |
 | `@/lib/messaging/*` (`dispatch-message`, `email`, `email/reply`, `provider-send-failures`) + `@/lib/server/{outbound-recorder,gateway-url,customer-memory}` | **`tools/thread.ts` only** | **Inject — the one new seam** (`ctx.io`). These drag Postmark/IG/email; they must not enter the package. ✅ |
-| `api/agent-actions.ts` (`recordAgentActionsBatch`) | `run.ts` | **Move** into the package as core (`@clerk/agent/agent-actions`); null-`threadId`/`customerId`-safe. Dashboard path is now a re-export shim. ✅ |
-| `@/lib/server/refund-spend` (daily refund-cap counter) | `tools/executor.ts` | **Move** to `@clerk/db`. ⚠️ It was actually **Upstash Redis**, not a Postgres counter as first assumed — re-implemented as a Postgres counter (`refund-spend.ts` + new `RefundDailySpend` model), mirroring `spend-store.ts`. ✅ The schema change shipped as a committed migration (`20260604120000_add_refund_daily_spend`). **Correction:** an earlier pass landed the table via `prisma db push` to local dev *only* and left no migration — so CI and prod (both `prisma migrate deploy`) were missing the table and the executor's counter write threw in prod. Fixed by adding the migration; verified `migrate deploy` + the real-DB test pass. |
+| `api/agent-actions.ts` (`recordAgentActionsBatch`) | `run.ts` | **Move** into the package as core (`@shopkeeper/agent/agent-actions`); null-`threadId`/`customerId`-safe. Dashboard path is now a re-export shim. ✅ |
+| `@/lib/server/refund-spend` (daily refund-cap counter) | `tools/executor.ts` | **Move** to `@shopkeeper/db`. ⚠️ It was actually **Upstash Redis**, not a Postgres counter as first assumed — re-implemented as a Postgres counter (`refund-spend.ts` + new `RefundDailySpend` model), mirroring `spend-store.ts`. ✅ The schema change shipped as a committed migration (`20260604120000_add_refund_daily_spend`). **Correction:** an earlier pass landed the table via `prisma db push` to local dev *only* and left no migration — so CI and prod (both `prisma migrate deploy`) were missing the table and the executor's counter write threw in prod. Fixed by adding the migration; verified `migrate deploy` + the real-DB test pass. |
 | `@/lib/server/{ops-alerts,agent-failure-alerts}` | `run.ts` | ⚠️ the "already injected" assumption was wrong: `run.ts` imported `recordAgentFailure` as a **value** (drags `@/lib/env` + Sentry). Collapsed `failureRoute`/`failureCounterClient` into one injected `recordToolFailure(kind, tool, detail)` callback on `RunAgentOptions`; the dashboard shim builds the closure. Alerting infra stays in the dashboard. ✅ |
-| `@clerk/db`, `shopify/*` | core | **No change.** `@clerk/db` stays a dependency; `shopify/*` is self-contained (zero `@/` imports) and moves wholesale. ✅ |
+| `@shopkeeper/db`, `shopify/*` | core | **No change.** `@shopkeeper/db` stays a dependency; `shopify/*` is self-contained (zero `@/` imports) and moves wholesale. ✅ |
 
 ### The I/O sink — the one forced seam
 
@@ -247,15 +247,15 @@ exactly like `threadContextOf`:
   no-op when absent (never hit on the support path — filtered out of any thread-less tool set).
 - `tools/thread.ts` **stays in the dashboard** and becomes the support `io` sink, wired in `buildContext`
   next to the `escalate` sink. Postmark / IG / email / outbound-recorder never move.
-- **Net boundary:** `@clerk/agent` owns orchestration + Shopify + KB + prompt + policy; the dashboard owns
+- **Net boundary:** `@shopkeeper/agent` owns orchestration + Shopify + KB + prompt + policy; the dashboard owns
   outbound delivery and route glue. The rule: *touches a message provider or an HTTP request* → dashboard;
   *decides what to do* → package.
 
 ### Build / packaging (✅ done)
 
-Mirror `@clerk/db`'s ESM dual-package setup: runtime `dist/*.js` + `.d.ts`, `type: module`, `exports` map,
+Mirror `@shopkeeper/db`'s ESM dual-package setup: runtime `dist/*.js` + `.d.ts`, `type: module`, `exports` map,
 `tsc` build, turbo `predev` / `build` wiring. **ESM decision (settled):** plain `tsc` under `NodeNext`,
-all relative imports authored with `.js` extensions (mirrors `@clerk/db`'s `from './crypto.js'`). No
+all relative imports authored with `.js` extensions (mirrors `@shopkeeper/db`'s `from './crypto.js'`). No
 bundler, no `rewriteRelativeImportExtensions`. `scripts/check-module-structure.mjs` `SCAN_ROOTS` extended
 to cover the package. Verified: builds clean, emits `dist/{index.js,index.d.ts}`, resolves under NodeNext,
 `check-module-structure` passes.
@@ -269,7 +269,7 @@ keeps importing through these shims.
 ### Phase changelog (what actually moved + the gotchas)
 
 - **Phase 1 — scaffold ✅.** `packages/agent/` created (`package.json` / `tsconfig.json` / `src/index.ts`),
-  wired into root `workspaces`, `predev` (after `@clerk/db`), and turbo `build`. ESM decision settled (above).
+  wired into root `workspaces`, `predev` (after `@shopkeeper/db`), and turbo `build`. ESM decision settled (above).
 - **Phase 2 — types & AI client ✅.** Moved: agent type subset → `src/types.ts`; Anthropic client + tiering
   → `src/ai/{anthropic,index}.ts`; the three deps the AI client drags → `src/{settings,spend,usage}.ts`.
   `spend.ts`'s logger import resolved with a console-backed `src/logger.ts`. Dashboard `@/types` re-exports;
@@ -278,10 +278,10 @@ keeps importing through these shims.
 - **Phase 3 — I/O sink seam ✅.** Injected `ctx.io` for `tools/thread.ts` (see above).
 - **Phase 4 — shopify + tools + executor ✅.** Moved: `shopify/*`, `tools/*` registry surface,
   `tools/executor.ts`. `tools/thread.ts` stays in the dashboard as the I/O sink. Executor exposed via a
-  **server-only `@clerk/agent/executor` subpath** (kept out of the `@clerk/agent/tools` barrel so client
+  **server-only `@shopkeeper/agent/executor` subpath** (kept out of the `@shopkeeper/agent/tools` barrel so client
   components importing tool metadata don't pull `db`/Prisma). Context types
-  (`BaseAgentContext`/`SupportContext`/`AgentIO`/…) → `@clerk/agent/context`; thread-constants →
-  `@clerk/agent/thread-constants`. `refund-spend` → `@clerk/db` Postgres counter (the Redis surprise, above).
+  (`BaseAgentContext`/`SupportContext`/`AgentIO`/…) → `@shopkeeper/agent/context`; thread-constants →
+  `@shopkeeper/agent/thread-constants`. `refund-spend` → `@shopkeeper/db` Postgres counter (the Redis surprise, above).
 - **Phase 5 — remaining core ✅.** Moved: `run`, `planner`, `prompt`, `context` (as `buildContext` + a new
   injected `ThreadSink`), `intent`, `plan-preview`, `message-history`, `order-status-fast-path`, and
   `agent-actions` (re-homed as core; its `Prisma` JSON type now imports from `@prisma/client`, added as a
@@ -295,14 +295,14 @@ keeps importing through these shims.
   - **Test-mock migration gotcha:** `run-policy.unit.test.ts` and `runner.test.ts` drove the model loop by
     mocking the dashboard `@/lib/ai/anthropic` shim — which no longer intercepts the package's internal
     client import. Both now mock the shared `@anthropic-ai/sdk` specifier instead (+ the unit test stubs the
-    spend-store reads in its `@clerk/db` mock).
+    spend-store reads in its `@shopkeeper/db` mock).
   - **Verified:** package + gateway build clean; dashboard typecheck has zero production errors (only
     pre-existing `*.test.ts` quirks); package units 9/9, dashboard agent units 64/64, `runner.test.ts`
     integration 11/11.
   - **Phase 4 orphan (resolved):** the old `apps/dashboard/src/lib/server/refund-spend.test.ts` (Redis
     version, importing the deleted dashboard `refund-spend.ts`) was deleted and re-ported as a real-DB test
     at `apps/gateway/src/refund-spend.test.ts`, mirroring `spend.test.ts` (`createTestOrg`/`cleanupTestData`,
-    counter imported from `@clerk/db`). 5/5 green.
+    counter imported from `@shopkeeper/db`). 5/5 green.
 
 ### Remaining work (the "what's next")
 
@@ -310,24 +310,24 @@ keeps importing through these shims.
    The package now owns the dashboard-side halves of the spend wrapper and Anthropic client. **Three of four
    gateway-side consolidations done; the Shopify one remains:**
    - gateway `llm-spend.ts` ↔ dashboard `spend.ts` — ✅ **done.** Deleted `apps/gateway/src/llm-spend.ts`;
-     the gateway now imports `enforceSpendCap` / `recordSpend` from `@clerk/agent/spend` and `readModelUsage`
-     from `@clerk/agent/usage`. The package's `enforceSpendCap` was relaxed to a `SpendCapSettings` param
+     the gateway now imports `enforceSpendCap` / `recordSpend` from `@shopkeeper/agent/spend` and `readModelUsage`
+     from `@shopkeeper/agent/usage`. The package's `enforceSpendCap` was relaxed to a `SpendCapSettings` param
      (`{ dailyLLMSpendCapUsd? }` | null) so it accepts both full `OrgSettings` and the gateway's bare cap.
      The real-DB spend test moved with it (`llm-spend.test.ts` → `spend.test.ts`, retargeted at the package).
    - gateway `getAnthropic()` (`message-handlers/shared.ts:49`) ↔ dashboard `lib/ai/anthropic.ts` — ✅ **done.**
      Removed the gateway's lazy client; all call sites use the package's `anthropic` client via a new
-     `@clerk/agent/ai` subpath (which also exposes `buildCachedSystemPrompt` + `pickModel`). The gateway's
+     `@shopkeeper/agent/ai` subpath (which also exposes `buildCachedSystemPrompt` + `pickModel`). The gateway's
      non-agent calls keep their explicit `MODEL` constants rather than adopting `pickModel` tiering — those
      constants already equal the package's Haiku/Sonnet IDs, so behaviour is unchanged.
-   - gateway `customer-memory-summarizer.ts` ↔ dashboard memory reads — ✅ **done.** `@clerk/db/customer-memory`
+   - gateway `customer-memory-summarizer.ts` ↔ dashboard memory reads — ✅ **done.** `@shopkeeper/db/customer-memory`
      owns the shared types/constants; the summarizer's model call now routes through the package `anthropic`
      client.
    - gateway raw Shopify `fetch` (`message-handlers/shared.ts` → `lookupShopifyCustomerName`) ↔ the throttled
      `shopify/client.ts` — ✅ **done.** `lookupShopifyCustomerName` now calls `shopifyRestJson` from
-     `@clerk/agent/shopify` (per-shop token bucket + retry), closing the "gateway bypasses the Shopify seam"
+     `@shopkeeper/agent/shopify` (per-shop token bucket + retry), closing the "gateway bypasses the Shopify seam"
      crack from the prior plan. The dead `SHOPIFY_API_VERSION` import in `shared.ts` was dropped (the constant
      stays in `constants.ts` for `order-risk-monitor.ts`, the Track 3 spike).
-2. **Gateway depends on `@clerk/agent`** — ✅ established (imports `spend` / `usage` / `ai` / `settings`).
+2. **Gateway depends on `@shopkeeper/agent`** — ✅ established (imports `spend` / `usage` / `ai` / `settings`).
    Running the core in-process (`runAgent`) is first exercised by Track 3. Dashboard already does (✅, via shims).
 3. **Build/CI wiring** — ✅ **done.** The `evals.yml` PR-trigger path filter was stale (still watched the
    old `apps/dashboard/src/lib/agent/**` location); now also fires on `packages/agent/**` and
@@ -335,7 +335,7 @@ keeps importing through these shims.
    table correction).
 4. **Eval-harness fix + cost work (2026-06-05)** — ✅ **confirmed by the credited gate (94.6%) + baseline regen (156/168).**
    - **Executor-mock fix (required for the gate to pass at all):** the runner's `simulateToolResults` now drives a
-     hoisted `vi.mock("@clerk/agent/executor")` instead of a `vi.spyOn` on the dashboard shim namespace — the spy
+     hoisted `vi.mock("@shopkeeper/agent/executor")` instead of a `vi.spyOn` on the dashboard shim namespace — the spy
      couldn't reach `run.ts`'s package-internal `executeTool*` call. Without this the gate reads a false 81.5%.
    - **(a) Per-phase usage reporting:** `EvalUsage` gains `plannerUsage`/`runUsage`/`judgeUsage`; the runner tags each
      model call by phase; `formatUsageBreakdown` prints `[eval:usage]` (prompt/input/cacheWrite/cacheRead +
@@ -352,7 +352,7 @@ work~~ ✅ → ~~re-run gate (`EVAL_REPEATS=1`) + regenerate baseline~~ ✅ **(d
 
 **Exit (met 2026-06-05):** dashboard-hosted support paths behave identically — `EVAL_REPEATS=1` confirming gate
 **94.6% ≥ 93.5%**, committed baseline regenerated at `repeats=3` to **156/168** (flat, absorbing the prompt-split
-reorder); gateway builds and can `import { runAgent } from "@clerk/agent"`. Remaining housekeeping: commit the WIP.
+reorder); gateway builds and can `import { runAgent } from "@shopkeeper/agent"`. Remaining housekeeping: commit the WIP.
 
 **Anti-overbuild guard:** extract for the **two real consumers** (gateway worker, dashboard). Do not design
 an "agent SDK" with versioned plugin contracts. Narrow entry points, no speculative API. The injected I/O
@@ -360,7 +360,7 @@ sink is the *one* new seam — forced by the extraction (the executor cannot imp
 package), not speculative.
 
 **Open (decide when the work reaches it):** (1) logger — inject host pino (recommended) vs. the package
-owning a thin pino; (2) the eval suite (`__evals__`) — stay in `apps/dashboard` importing `@clerk/agent`
+owning a thin pino; (2) the eval suite (`__evals__`) — stay in `apps/dashboard` importing `@shopkeeper/agent`
 (recommended, no harness change) vs. move into the package.
 
 ---
@@ -376,7 +376,7 @@ seams; delete the forked dispatch.
   flag-gated by `ORDER_RISK_MONITOR_ENABLED`. The hourly sweep (`order-risk-monitor.ts`) is demoted to a
   backstop that enqueues into the same queue (no more dashboard HTTP hop).
 - [x] **Run `runOrderOps`** on the extracted core via the injected sink (Seam 2). ✅ Module moved into
-  `@clerk/agent` (`@clerk/agent/order-ops`); the new in-process `workers/order-review.ts` builds the context
+  `@shopkeeper/agent` (`@shopkeeper/agent/order-ops`); the new in-process `workers/order-review.ts` builds the context
   with an injected `escalate` and runs the loop. `runOrderOps` has a deterministic pre-filter (skips the
   model when `riskSignals` is empty); `flag_order` routes through `ctx.escalate`.
 - [x] **Output: flag/notify only.** ✅ A finding → an `AgentAction` row (`threadId`/`customerId` null). v1 is
@@ -410,12 +410,12 @@ Once the core is a package and the worker runs order-ops in-process, migrate sup
 `lib/agent/api/*` **orchestration** (`executeAgentTurn`, plan-cache read/write, auto-execute, audit-note
 serialization, thread resolution) that Track 2 deliberately left in the dashboard. That orchestration is
 genuinely shared, not Next-specific, but it drags three host-coupled things into the package boundary:
-**Upstash Redis** (thread lock `agent-lock.ts` + failure counter), **Clerk** (approver resolution), and the
+**Upstash Redis** (thread lock `agent-lock.ts` + failure counter), **Clerk.com** (approver resolution), and the
 **billing gate**. Auto-execute is live on the auto-plan path (`ai-summary.ts:44` passes
 `allowAutoExecute: withinBusinessHours`), so repointing auto-plan needs the full plan→run path, not just
 `planAgent`.
 
-**Decision (2026-06-05): promote the shared orchestration into `@clerk/agent` with injected infra seams**
+**Decision (2026-06-05): promote the shared orchestration into `@shopkeeper/agent` with injected infra seams**
 (not re-implement it gateway-side). Both the dashboard route and the worker call the *same*
 `executeAgentTurn`; the host-coupled bits become injected seams (the Tracks 1–2 pattern). This keeps the
 byte-for-byte support invariant (one source of truth, no drift) and honors the "repoint the trigger, don't
@@ -425,18 +425,18 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
 
 | `lib/agent/api` dep | Nature | Resolution |
 |---|---|---|
-| `buildContext` / `runAgent` / `planAgent` | ✅ already `@clerk/agent` | call directly (order-review already does) |
+| `buildContext` / `runAgent` / `planAgent` | ✅ already `@shopkeeper/agent` | call directly (order-review already does) |
 | `acquireThreadLock` (`agent-lock.ts`) | Upstash `.set({nx,ex})` / `.eval` | **inject `LockProvider`** — gateway is ioredis (`REDIS_URL`), different API; logic moves, client injected |
 | `serializeAgentTurn` (`turns.ts`), plan-cache (`plan-cache.ts`) | pure | **move** to package |
 | auto-execute (`plan-execution.ts`) | drags shadow recorder + approver | **move** core; **inject `ShadowRecorder`** (frozen/dashboard-rollout-only per trim list → no-op in worker) |
-| `resolveInternalAgentThread` (`internal.ts`), `requireOrgThread` (`auth.ts`) | DB (+ `@clerk/agent/shopify`) | **move** to package |
+| `resolveInternalAgentThread` (`internal.ts`), `requireOrgThread` (`auth.ts`) | DB (+ `@shopkeeper/agent/shopify`) | **move** to package |
 | route failure counter (Upstash) | host I/O | collapse into the existing injected `recordToolFailure` seam (Track 2); host builds the closure |
-| billing gate, Clerk approver | host I/O | **leave** host-side; pass resolved values in (operator path only) |
+| billing gate, Clerk.com approver | host I/O | **leave** host-side; pass resolved values in (operator path only) |
 | `rateLimit` (Upstash), `parse*Body` | Next route I/O | **leave** — the HTTP route keeps them; the in-process path skips them (BullMQ jobId-dedup + concurrency already serialize) |
 
 ### Phasing
 
-- [x] **4.0 — `LockProvider` seam ✅ (2026-06-05).** New `@clerk/agent/lock` subpath exports the
+- [x] **4.0 — `LockProvider` seam ✅ (2026-06-05).** New `@shopkeeper/agent/lock` subpath exports the
   `LockProvider`/`ThreadLock` interface (`acquire(threadId, ttlSeconds?) → {release} | null`).
   `executeAgentTurn` gained an optional `lock?: LockProvider` param defaulting to the dashboard's Upstash
   provider — **zero churn at the 5 callers** now; the optional→required flip lands in 4.1 when the function
@@ -445,7 +445,7 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   `createGatewayLockProvider(redis)` — ioredis (`set k v EX ttl NX` + numkeys-form `eval` release), same
   fail-open posture, **wired in 4.2**. Verified: package + gateway build clean, dashboard 0 production type
   errors, `agent-lock` test 7/7, lint clean.
-- [x] **4.1 — Move orchestration into `@clerk/agent` ✅ (2026-06-06).** Moved into `packages/agent/src`:
+- [x] **4.1 — Move orchestration into `@shopkeeper/agent` ✅ (2026-06-06).** Moved into `packages/agent/src`:
   `errors.ts` (the pure `ApiError` + subclasses — Next-free, dashboard `@/lib/api/errors` re-exports them and
   keeps `handleApiError`), `plan-cache-shape.ts`, `plan-cache.ts`, `turns.ts` (+ `AgentTurn` into `types.ts`),
   `thread-auth.ts` (was `auth.ts`), `internal-thread.ts` (was `internal.ts`), `turn.ts` (`executeAgentTurn`),
@@ -457,7 +457,7 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   shims, so partial-mock tests don't trip an eager runner access). Dashboard shims at the old paths keep the
   ~15 route/component call sites unchanged. **Test note (the Track 2 mock-targeting class):** quick-approve +
   plan-internal route tests reach the turn *through* plan-execution → retargeted their `executeAgentTurn` mock
-  from `@/lib/agent/api/execution` to `@clerk/agent/turn`, and the 2-arg `(params, deps)` signature needed
+  from `@/lib/agent/api/execution` to `@shopkeeper/agent/turn`, and the 2-arg `(params, deps)` signature needed
   `expect.anything()` for the deps arg. **Gate met:** dashboard 0 production type errors; package units 170/170,
   dashboard units 119/119, agent-surface integration 92/92, gateway 231/1-skip, lint clean; eval suite
   `EVAL_REPEATS=1` **54/56 (96.4%) ≥ 93.5%** (above the 92.9% baseline) — the 2 repeats=1 failures
@@ -490,8 +490,8 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
     touched. **Remaining:** manual live e2e (in-process auto-plan + auto-execute through the hop-back sink,
     needs the live env, like Track 3's); optionally wire the gateway `recordToolFailure` closure.
 - [ ] **4.3 — Operator runs in-process.** Point `executeFreeFormInstruction` + `handlePendingPlanCommand`
-  (Telegram) at an in-process `executeAgentTurn` + `resolveInternalAgentThread`. Billing gate + Clerk approver
-  resolve gateway-side (move billing check to `@clerk/db` or a gateway copy; approver passed pre-resolved).
+  (Telegram) at an in-process `executeAgentTurn` + `resolveInternalAgentThread`. Billing gate + Clerk.com approver
+  resolve gateway-side (move billing check to `@shopkeeper/db` or a gateway copy; approver passed pre-resolved).
 - [ ] **4.4 — Leave dashboard UI-initiated paths** (composer-ask, concierge, UI approve/quick-approve) calling
   the core in Next — minor, later choice. No urgency; minority of traffic, already work.
 - [ ] **4.5 — Retire the internal HTTP routes** only after their callers are migrated. (Note: `plan-internal`
@@ -556,7 +556,7 @@ the move is to stop pouring in, not rip out (except where noted).
 |---|---|---|---|
 | 0 | Decide A vs B (→ B) | — | — |
 | 1 | Thread-optional core (3 seams) | M | 0 |
-| 2 | Extract core → `@clerk/agent` + de-dupe | M–L | 1 |
+| 2 | Extract core → `@shopkeeper/agent` + de-dupe | M–L | 1 |
 | 3 | Order-ops #2 (event-driven, flag-only, in-worker) | M | 2 |
 | 4 | Repoint support to in-process worker | M | 2, 3 |
 | 5 | WhatsApp surface + `ChannelType` split | M | parallel / later |

@@ -1,4 +1,4 @@
-# Clerk — Autonomy Raise & Core Generality Plan
+# Shopkeeper — Autonomy Raise & Core Generality Plan
 
 Follow-on to `remediation-plan.md`. That plan hardened support and generalized the
 chassis (Phases 0–3). This one covers the next committed moves: **raising autonomy

@@ -2,7 +2,7 @@ import pino from 'pino';
 import { installAgentLogger } from '@shopkeeper/agent/logger';
 import { PINO_REDACT_PATHS, REDACTED } from '../observability/redaction';
 
-const globalForLogger = globalThis as typeof globalThis & { clerkLogger: pino.Logger | undefined };
+const globalForLogger = globalThis as typeof globalThis & { shopkeeperLogger: pino.Logger | undefined };
 
 function createLogger(): pino.Logger {
   return pino({
@@ -11,8 +11,8 @@ function createLogger(): pino.Logger {
   });
 }
 
-const logger = globalForLogger.clerkLogger ?? createLogger();
-globalForLogger.clerkLogger = logger;
+const logger = globalForLogger.shopkeeperLogger ?? createLogger();
+globalForLogger.shopkeeperLogger = logger;
 installAgentLogger(logger);
 
 export default logger;

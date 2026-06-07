@@ -9,7 +9,7 @@ const AGENT_PLAN_CACHE_VERSION = 2;
 const AGENT_SETTINGS_DEFAULTS = {
   aiContext: '',
   brandVoice: '',
-  agentName: 'Clerk',
+  agentName: 'Shopkeeper',
   autoPlanOnOpen: true,
   defaultInstruction: '',
   requireApprovalForActions: true,

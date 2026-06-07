@@ -82,7 +82,7 @@ Relevant files:
 Tasks:
 
 - [x] Classify each dashboard agent shim as a host adapter or compatibility re-export.
-- [x] Migrate imports to `@clerk/agent` wherever no dashboard host dependency is required.
+- [x] Migrate imports to `@shopkeeper/agent` wherever no dashboard host dependency is required.
 - [x] Keep dashboard wrappers only where they inject dashboard-specific runtime dependencies.
 - [x] Move core agent behavior tests from `apps/dashboard` into `packages/agent`.
 - [x] Leave only route, IO, and host-integration tests in dashboard.
@@ -92,7 +92,7 @@ Phase 2 classification:
 
 - Host adapters kept in dashboard: `apps/dashboard/src/lib/agent/context.ts`, `apps/dashboard/src/lib/agent/run.ts`, `apps/dashboard/src/lib/agent/runner.ts`, and `apps/dashboard/src/lib/agent/tools/thread.ts`.
 - Route, IO, eval, and host-integration ownership stayed in `apps/dashboard/src/lib/agent/api/*`, `apps/dashboard/src/lib/agent/tools/thread.test.ts`, `apps/dashboard/src/lib/agent/context.test.ts`, and `apps/dashboard/src/lib/agent/__evals__/*`.
-- Pure re-export shims for agent core, tools, Shopify, AI, and thread constants were removed after imports moved to `@clerk/agent` subpaths.
+- Pure re-export shims for agent core, tools, Shopify, AI, and thread constants were removed after imports moved to `@shopkeeper/agent` subpaths.
 
 Phase 2 verification completed on 2026-06-05:
 
@@ -299,17 +299,17 @@ Tasks:
 
 Phase 8 implementation notes:
 
-- `@clerk/db` now exports the `ThreadStatus` Prisma enum runtime and value type alongside the existing channel, sender, and filter enum exports.
-- Dashboard enum-like types and `VoiceProposal` now alias `@clerk/db` contracts while keeping dashboard API DTO object shapes explicit with string dates.
+- `@shopkeeper/db` now exports the `ThreadStatus` Prisma enum runtime and value type alongside the existing channel, sender, and filter enum exports.
+- Dashboard enum-like types and `VoiceProposal` now alias `@shopkeeper/db` contracts while keeping dashboard API DTO object shapes explicit with string dates.
 - `packages/db/README.md` documents the public root surface, the only direct public subpaths (`customer-memory` and `test-helpers`), and the private implementation modules that should stay behind the root export.
 - `packages/db/tsconfig.json` now includes every intentional root package module used by the public root surface. No new subpath exports were added because no callers import those narrower modules directly.
 - `apps/dashboard/src/types/db-types.unit.test.ts` adds compile-time assertions for the DB enum aliases and important dashboard DTO boundaries.
 
 Phase 8 verification completed on 2026-06-06:
 
-- `npm run build -w @clerk/db`
+- `npm run build -w @shopkeeper/db`
 - `npm run test:unit -w apps/dashboard -- src/types/db-types.unit.test.ts`
-- `npm run lint -w @clerk/db`
+- `npm run lint -w @shopkeeper/db`
 - `npm run lint -w apps/dashboard`
 - `npm run test:unit -w apps/dashboard`
 - `npm run test:unit` (rerun with network access after the sandbox blocked the configured test database)
@@ -422,7 +422,7 @@ Phase 9 verification completed on 2026-06-06:
 
   6. Consolidate lock-provider implementation
 
-  Current WIP introduces a shared @clerk/agent/lock interface, but dashboard and gateway duplicate timeout/release/no-op lock logic:
+  Current WIP introduces a shared @shopkeeper/agent/lock interface, but dashboard and gateway duplicate timeout/release/no-op lock logic:
   apps/dashboard/src/lib/server/agent-lock.ts:6, apps/gateway/src/clients/agent-lock.ts:6.
 
   Extract common token-lock behavior behind tiny adapter functions for Upstash vs ioredis.

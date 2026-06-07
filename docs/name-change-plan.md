@@ -309,7 +309,7 @@ Rename product branding in developer docs, production runbooks, and ops scripts.
 - [x] `scripts/clean.mjs`, `scripts/check-production-env.test.mjs` — cosmetic ops strings
 - [x] Sentry release prefix `shopkeeper@` (done in Phase 6: `scripts/sentry-upload-sourcemaps.mjs`)
 - [ ] `.github/workflows/*` — `clerk_test` DB name left unchanged (Phase 5; isolated CI infra)
-- [ ] Historical planning docs (`docs/cleanup.md`, `docs/remediation-plan.md`, `docs/core-extraction-and-module-expansion-plan.md`) — optional follow-up
+- [x] Historical planning docs (`docs/cleanup.md`, `docs/remediation-plan.md`, `docs/core-extraction-and-module-expansion-plan.md`, `docs/autonomy-and-generality-plan.md`)
 
 ---
 

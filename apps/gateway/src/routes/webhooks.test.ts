@@ -231,7 +231,7 @@ describe('POST /webhooks/email/inbound', () => {
   it('enqueues an email job when routing by org UUID in recipient address', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.clerk.delivery`,
+      To: `${org.id}@inbound.shopkeeper.delivery`,
       Subject: 'Help please',
       TextBody: 'I need assistance.',
     };
@@ -296,7 +296,7 @@ describe('POST /webhooks/email/inbound', () => {
   it('returns 400 when From or TextBody is missing', async () => {
     const res = await request(app)
       .post('/webhooks/email/inbound')
-      .send({ To: `${org.id}@inbound.clerk.delivery` });
+      .send({ To: `${org.id}@inbound.shopkeeper.delivery` });
 
     expect(res.status).toBe(400);
   });
@@ -304,7 +304,7 @@ describe('POST /webhooks/email/inbound', () => {
   it('forwards Postmark Attachments through to the queued job', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.clerk.delivery`,
+      To: `${org.id}@inbound.shopkeeper.delivery`,
       Subject: 'See attached',
       TextBody: 'Here is the photo.',
       Attachments: [
@@ -344,7 +344,7 @@ describe('POST /webhooks/email/inbound', () => {
 
       const res = await request(app)
         .post('/webhooks/email/inbound')
-        .send({ From: 'a@x.com', To: `${org.id}@inbound.clerk.delivery`, TextBody: 'hi' });
+        .send({ From: 'a@x.com', To: `${org.id}@inbound.shopkeeper.delivery`, TextBody: 'hi' });
 
       expect(res.status).toBe(401);
       expect(res.headers['www-authenticate']).toMatch(/^Basic/);
@@ -361,7 +361,7 @@ describe('POST /webhooks/email/inbound', () => {
       const res = await request(app)
         .post('/webhooks/email/inbound')
         .set('Authorization', `Basic ${Buffer.from('postmark:wrong').toString('base64')}`)
-        .send({ From: 'a@x.com', To: `${org.id}@inbound.clerk.delivery`, TextBody: 'hi' });
+        .send({ From: 'a@x.com', To: `${org.id}@inbound.shopkeeper.delivery`, TextBody: 'hi' });
 
       expect(res.status).toBe(401);
       expect(queueAddSpy).not.toHaveBeenCalled();
@@ -376,7 +376,7 @@ describe('POST /webhooks/email/inbound', () => {
         .set('Authorization', `Basic ${Buffer.from('postmark:secret').toString('base64')}`)
         .send({
           From: 'Alice <a@x.com>',
-          To: `${org.id}@inbound.clerk.delivery`,
+          To: `${org.id}@inbound.shopkeeper.delivery`,
           Subject: 'Hi',
           TextBody: 'hi',
         });
@@ -389,7 +389,7 @@ describe('POST /webhooks/email/inbound', () => {
   it('omits attachments from the queued job when Postmark sends none', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.clerk.delivery`,
+      To: `${org.id}@inbound.shopkeeper.delivery`,
       Subject: 'No attachments',
       TextBody: 'Just text.',
     };
