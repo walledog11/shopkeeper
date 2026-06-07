@@ -91,6 +91,7 @@ test('browser smoke blocks billing-gated message writes without persistence', as
   await db.message.create({
     data: {
       threadId: thread.id,
+      organizationId: org.id,
       senderType: SenderType.customer,
       contentText: `billing gate inbound ${runId}`,
     },

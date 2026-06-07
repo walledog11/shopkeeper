@@ -15,6 +15,7 @@ import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OrgSettings } from "@/types";
 
 export {
+  consumeThreadCachedPlan,
   formatApproverId,
   isAutoExecuteEnabled,
   getExecutablePlanToolCalls,

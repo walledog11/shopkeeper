@@ -63,8 +63,12 @@ export async function createTestMessage(
   content: string,
   senderType: DbSenderType = SenderType.customer,
 ) {
+  const thread = await db.thread.findUniqueOrThrow({
+    where: { id: threadId },
+    select: { organizationId: true },
+  });
   return db.message.create({
-    data: { threadId, contentText: content, senderType },
+    data: { threadId, organizationId: thread.organizationId, contentText: content, senderType },
   });
 }
 

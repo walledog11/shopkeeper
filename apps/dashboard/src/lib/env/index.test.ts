@@ -3,6 +3,7 @@ import { getDashboardAppUrl, getDashboardOpsAlertConfig, validateDashboardEnv } 
 
 function stubBaseDashboardEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
+  vi.stubEnv('DIRECT_DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper');
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');
@@ -28,15 +29,17 @@ describe('validateDashboardEnv', () => {
     expect(() => validateDashboardEnv()).toThrow(/UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN/);
   });
 
-  it('requires APP_URL and the Clerk publishable key in production', () => {
+  it('requires APP_URL, direct database URL, blob token, and the Clerk publishable key in production', () => {
     stubBaseDashboardEnv();
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', '');
     vi.stubEnv('APP_URL', '');
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
+    vi.stubEnv('DIRECT_DATABASE_URL', '');
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', '');
 
     expect(() => validateDashboardEnv()).toThrow(
-      /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, APP_URL/
+      /NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, APP_URL, DIRECT_DATABASE_URL, BLOB_READ_WRITE_TOKEN/
     );
   });
 
@@ -72,6 +75,7 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
 
     expect(() => validateDashboardEnv()).not.toThrow();
   });
@@ -84,6 +88,7 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
+    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
 
     expect(() => validateDashboardEnv()).not.toThrow();
   });

@@ -152,6 +152,7 @@ describe("getHomeSummary", () => {
     await db.message.create({
       data: {
         threadId: repliedThread.id,
+        organizationId: org.id,
         senderType: SenderType.ai,
         contentText: "deleted reply",
         sentAt: new Date("2026-06-04T13:00:00.000Z"),

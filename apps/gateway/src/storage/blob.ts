@@ -2,6 +2,8 @@ import { put } from '@vercel/blob';
 import { randomUUID } from 'crypto';
 import logger from '../logger.js';
 
+export const BLOB_ATTACHMENT_PREFIX = 'blob:';
+
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
 const BLOCKED_EXTENSIONS = new Set([
@@ -55,14 +57,14 @@ export async function uploadInboundAttachment(
     return null;
   }
 
-  const key = `attachments/${organizationId}/${randomUUID()}/${safeName}`;
+  const pathname = `attachments/${organizationId}/${randomUUID()}/${safeName}`;
   try {
-    const result = await put(key, buffer, {
-      access: 'public',
+    await put(pathname, buffer, {
+      access: 'private',
       contentType: contentType || 'application/octet-stream',
       addRandomSuffix: false,
     });
-    return result.url;
+    return `${BLOB_ATTACHMENT_PREFIX}${pathname}`;
   } catch (err) {
     logger.error({ err, organizationId, filename: safeName }, '[Blob] Upload failed');
     return null;

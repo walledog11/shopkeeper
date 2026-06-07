@@ -1,3 +1,4 @@
+import { toAttachmentDisplayUrl } from "@/lib/attachments/blob-ref";
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
@@ -48,7 +49,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
                 : "You"
               : undefined,
           isAgentNote,
-          attachments: message.attachments ?? [],
+          attachments: (message.attachments ?? []).map(toAttachmentDisplayUrl),
         }];
       }),
   };

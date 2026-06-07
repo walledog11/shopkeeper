@@ -261,6 +261,7 @@ test('blocks cross-org thread API and UI access in an authenticated session', as
   await db.message.create({
     data: {
       threadId: otherThread.id,
+      organizationId: otherOrg.id,
       senderType: SenderType.customer,
       contentText: otherMessageText,
       externalMessageId: `<cross-org-${runId}@example.com>`,
@@ -322,6 +323,7 @@ test('rejects unsupported channel dispatch without outbound or agent persistence
   await db.message.create({
     data: {
       threadId: thread.id,
+      organizationId: org.id,
       senderType: SenderType.customer,
       contentText: customerMessage,
       externalMessageId: `tiktok-${runId}`,

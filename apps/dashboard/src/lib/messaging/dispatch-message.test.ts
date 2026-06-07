@@ -80,6 +80,7 @@ describe('dispatchMessage', () => {
     await db.message.create({
       data: {
         threadId: thread.id,
+        organizationId: org.id,
         senderType: SenderType.customer,
         contentText: 'Where is it?',
         externalMessageId: incomingMessageId,

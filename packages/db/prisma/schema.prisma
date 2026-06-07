@@ -83,6 +83,7 @@ model Organization {
   llmDailySpend    LlmDailySpend[]
   refundDailySpend RefundDailySpend[]
   shadowDecisions  AutonomyShadowDecision[]
+  messages         Message[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -230,6 +231,7 @@ model Thread {
 model Message {
   id                String     @id @default(uuid()) @db.Uuid
   threadId          String     @map("thread_id") @db.Uuid
+  organizationId    String     @map("organization_id") @db.Uuid
   senderType        SenderType @map("sender_type")
   contentText       String?    @map("content_text") @db.Text
   mediaUrl          String?    @map("media_url") @db.Text
@@ -238,9 +240,11 @@ model Message {
   sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
   deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz
 
-  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  thread       Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([threadId])
+  @@index([organizationId])
   @@index([sentAt])
   @@index([deletedAt])
   @@map("messages")

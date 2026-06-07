@@ -8,20 +8,23 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - Production Upstash Redis created for the dashboard (rate limiting, locks, presence) in the same region as Vercel.
 - Dedicated Redis created for the gateway's BullMQ queues (e.g. Railway Redis), **separate** from Upstash, with `maxmemory-policy=noeviction` and persistence enabled.
 - `DATABASE_URL` uses the production database and includes `pgbouncer=true&connection_limit=1`.
+- `DIRECT_DATABASE_URL` uses the same Neon database over the direct (non-pooler) host. Prisma uses it for migrations; both apps need it set because the schema declares `directUrl`.
 - Gateway `REDIS_URL` points at its dedicated Redis: Railway private networking uses `redis://...redis.railway.internal`; managed Redis over the public internet uses the TLS form `rediss://...`. Do not point it at Upstash.
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
-- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `BLOB_READ_WRITE_TOKEN` is set for inbound email attachments, and Sentry source-map upload vars are available in the build environment.
+- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `POSTMARK_INBOUND_USERNAME` / `POSTMARK_INBOUND_PASSWORD` are set for inbound email, `BLOB_READ_WRITE_TOKEN` is set on both gateway (upload) and dashboard (authenticated download proxy), and Sentry source-map upload vars are available in the build environment.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
 
 ## Deploy Order
 
 1. Set or update production env vars in Vercel and Railway.
-2. Run the production DB migration:
+2. Run the production DB migration (uses `DIRECT_DATABASE_URL` via Prisma `directUrl`; keep the pooled `DATABASE_URL` set as well):
 
 ```bash
-DATABASE_URL='postgresql://...' npm run db:migrate:deploy
+DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
+DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require' \
+npm run db:migrate:deploy
 ```
 
 3. Deploy the dashboard to Vercel.

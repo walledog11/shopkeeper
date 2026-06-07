@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import crypto from 'crypto';
-import { scrubValue } from '@shopkeeper/agent/observability';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
@@ -95,7 +94,10 @@ export async function POST(request: Request) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      logger.error({ tokenData: scrubValue(tokenData) }, '[Shopify OAuth] Token exchange failed');
+      logger.error(
+        { status: tokenRes.status, error: tokenData.error },
+        '[Shopify OAuth] Token exchange failed',
+      );
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_token_failed`);
     }
     const accessToken: string = tokenData.access_token;

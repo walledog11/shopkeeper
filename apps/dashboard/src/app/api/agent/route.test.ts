@@ -128,5 +128,60 @@ describe('POST /api/agent', () => {
       instruction: 'Handle this',
       approvedToolCalls,
     }));
+
+    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updatedThread?.cachedPlan).toBeNull();
+    expect(updatedThread?.cachedPlanMessageId).toBeNull();
+  });
+
+  it('clears the cached plan after failed execution', async () => {
+    const approvedToolCalls = [{ id: 'send_1', name: 'send_reply', input: { text: 'Hi' } }];
+    const plan: AgentPlan = {
+      instruction: 'Handle this',
+      steps: [{ id: 'send_1', tool: 'send_reply', label: 'Notify customer', description: '"Hi"', category: 'communication', enabled: true }],
+      rawToolCalls: approvedToolCalls,
+    };
+    const thread = await createThreadWithCachedPlan(plan);
+    mockExecuteAgentTurn.mockRejectedValueOnce(new Error('execution failed'));
+
+    const res = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls }),
+    }));
+
+    expect(res.status).toBe(500);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledTimes(1);
+
+    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updatedThread?.cachedPlan).toBeNull();
+    expect(updatedThread?.cachedPlanMessageId).toBeNull();
+  });
+
+  it('rejects a second identical approval request after the plan is consumed', async () => {
+    const approvedToolCalls = [{ id: 'send_1', name: 'send_reply', input: { text: 'Hi' } }];
+    const plan: AgentPlan = {
+      instruction: 'Handle this',
+      steps: [{ id: 'send_1', tool: 'send_reply', label: 'Notify customer', description: '"Hi"', category: 'communication', enabled: true }],
+      rawToolCalls: approvedToolCalls,
+    };
+    const thread = await createThreadWithCachedPlan(plan);
+    const body = JSON.stringify({ threadId: thread.id, instruction: 'Handle this', approvedToolCalls });
+
+    const first = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    }));
+    expect(first.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledTimes(1);
+
+    const second = await POST(new Request('http://localhost:3000/api/agent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    }));
+    expect(second.status).toBe(400);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledTimes(1);
   });
 });

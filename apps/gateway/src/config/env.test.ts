@@ -3,10 +3,19 @@ import { getGatewayDashboardUrl, validateGatewayEnv } from './env.js';
 
 function stubBaseGatewayEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
+  vi.stubEnv('DIRECT_DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper');
   vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379/0');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');
   vi.stubEnv('TOKEN_ENCRYPTION_KEY', '0'.repeat(64));
+}
+
+function stubProductionGatewayEnv() {
+  stubBaseGatewayEnv();
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('DASHBOARD_URL', 'https://app.example.com');
+  vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark-inbound-user');
+  vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'postmark-inbound-pass');
 }
 
 afterEach(() => {
@@ -41,18 +50,23 @@ describe('validateGatewayEnv', () => {
     expect(() => validateGatewayEnv()).toThrow(/Missing required environment variable: DASHBOARD_URL/);
   });
 
-  it('passes in production when DASHBOARD_URL is configured', () => {
+  it('requires DIRECT_DATABASE_URL in production', () => {
     stubBaseGatewayEnv();
     vi.stubEnv('NODE_ENV', 'production');
     vi.stubEnv('DASHBOARD_URL', 'https://app.example.com');
+    vi.stubEnv('DIRECT_DATABASE_URL', '');
+
+    expect(() => validateGatewayEnv()).toThrow(/Missing required environment variable: DIRECT_DATABASE_URL/);
+  });
+
+  it('passes in production when DASHBOARD_URL is configured', () => {
+    stubProductionGatewayEnv();
 
     expect(() => validateGatewayEnv()).not.toThrow();
   });
 
   it('does not require Meta secrets for the v1 email and Shopify launch path', () => {
-    stubBaseGatewayEnv();
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('DASHBOARD_URL', 'https://app.example.com');
+    stubProductionGatewayEnv();
     vi.stubEnv('META_APP_SECRET', '');
 
     expect(() => validateGatewayEnv()).not.toThrow();
@@ -72,5 +86,13 @@ describe('validateGatewayEnv', () => {
     vi.stubEnv('DASHBOARD_INTERNAL_URL', 'not-a-url');
 
     expect(() => validateGatewayEnv()).toThrow(/DASHBOARD_INTERNAL_URL must be a valid absolute URL/);
+  });
+
+  it('requires Postmark inbound basic auth credentials in production', () => {
+    stubProductionGatewayEnv();
+    vi.stubEnv('POSTMARK_INBOUND_USERNAME', '');
+    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', '');
+
+    expect(() => validateGatewayEnv()).toThrow(/Missing required environment variable: POSTMARK_INBOUND_USERNAME/);
   });
 });

@@ -18,19 +18,19 @@ beforeEach(() => {
 });
 
 describe('uploadInboundAttachment', () => {
-  it('uploads a normal attachment and returns the public URL', async () => {
-    const url = await uploadInboundAttachment(
+  it('uploads a normal attachment and returns a private blob ref', async () => {
+    const ref = await uploadInboundAttachment(
       ORG_ID,
       'photo.png',
       'image/png',
       Buffer.from('hello').toString('base64'),
     );
-    expect(url).toBe('https://blob.vercel-storage.com/test');
+    expect(ref).toMatch(new RegExp(`^blob:attachments/${ORG_ID}/[0-9a-f-]+/photo.png$`));
     expect(putSpy).toHaveBeenCalledOnce();
-    const [key, body, opts] = putSpy.mock.calls[0];
-    expect(key).toMatch(new RegExp(`^attachments/${ORG_ID}/[0-9a-f-]+/photo.png$`));
+    const [pathname, body, opts] = putSpy.mock.calls[0];
+    expect(pathname).toMatch(new RegExp(`^attachments/${ORG_ID}/[0-9a-f-]+/photo.png$`));
     expect(Buffer.isBuffer(body)).toBe(true);
-    expect(opts).toMatchObject({ access: 'public', contentType: 'image/png' });
+    expect(opts).toMatchObject({ access: 'private', contentType: 'image/png' });
   });
 
   it('skips attachments larger than 10 MB', async () => {

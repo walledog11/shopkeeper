@@ -247,7 +247,8 @@ Configurable per org via Settings → Agent tab:
 
 ### Dashboard (Vercel)
 Required at production boot:
-- `DATABASE_URL` — Neon connection string with `?pgbouncer=true&connection_limit=1`
+- `DATABASE_URL` — Neon pooled connection string with `?pgbouncer=true&connection_limit=1`
+- `DIRECT_DATABASE_URL` — same Neon database on the direct (non-pooler) host; required by Prisma `directUrl` for migrations and schema validation
 - `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` — Clerk.com app keys
 - `ANTHROPIC_API_KEY` — Claude, used for the agent tool-use loop and AI plan generation
 - `INTERNAL_API_SECRET` — shared secret with gateway for internal API calls
@@ -262,6 +263,7 @@ Required for launch-scope features:
 - `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET` — Shopify OAuth and webhook verification
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
 - `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for authenticated attachment download proxy
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
 
 Optional dashboard variables:
@@ -278,7 +280,8 @@ Optional dashboard variables:
 
 ### Gateway (Railway)
 Required at production boot:
-- `DATABASE_URL` — Neon connection string with `?pgbouncer=true&connection_limit=1`
+- `DATABASE_URL` — Neon pooled connection string with `?pgbouncer=true&connection_limit=1`
+- `DIRECT_DATABASE_URL` — same Neon database on the direct (non-pooler) host; required by Prisma `directUrl` for migrations and schema validation
 - `REDIS_URL` — dedicated Redis for the BullMQ worker (e.g. Railway Redis), separate from the dashboard's Upstash. Railway private networking: `redis://...redis.railway.internal`; managed Redis over TLS: `rediss://...`
 - `ANTHROPIC_API_KEY` — Claude, used for AI summary and spam filtering in the worker
 - `INTERNAL_API_SECRET` — must match the dashboard value
@@ -288,7 +291,7 @@ Required at production boot:
 
 Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
-- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachments
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachment upload
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
 
 Optional gateway variables:
@@ -297,7 +300,7 @@ Optional gateway variables:
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` — Instagram webhook setup
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
-- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — optional basic auth for Postmark inbound webhooks
+- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
 - `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls
 - `SENTRY_RELEASE` — explicit Sentry release; otherwise deploy commit env vars are used when available
 

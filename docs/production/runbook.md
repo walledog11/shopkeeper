@@ -69,6 +69,7 @@ npm run build -w apps/gateway
 ### Dashboard Required At Production Boot
 
 - `DATABASE_URL`
+- `DIRECT_DATABASE_URL`
 - `CLERK_SECRET_KEY`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `ANTHROPIC_API_KEY`
@@ -86,6 +87,7 @@ Rules:
 - `APP_URL` must be a valid absolute `http` or `https` URL.
 - If `NEXT_PUBLIC_APP_URL` is set, it must be a valid absolute `http` or `https` URL and match `APP_URL`.
 - `DATABASE_URL` should include `pgbouncer=true` and `connection_limit=1`.
+- `DIRECT_DATABASE_URL` must use the direct Neon host (no `-pooler` suffix, no `pgbouncer=true`). Set it on Vercel and Railway even though runtime queries use the pooled URL.
 
 ### Dashboard Required For Launch Scope Features
 
@@ -100,6 +102,8 @@ Rules:
 - `STRIPE_WEBHOOK_SECRET`
 - `CLERK_WEBHOOK_SECRET`
   Used by `POST /api/webhooks/clerk` to verify Clerk lifecycle webhooks.
+- `BLOB_READ_WRITE_TOKEN`
+  Used by `GET /api/attachments` to stream private inbound email attachments to authenticated workspace members.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
@@ -114,6 +118,7 @@ Optional:
 ### Gateway Required At Production Boot
 
 - `DATABASE_URL`
+- `DIRECT_DATABASE_URL`
 - `REDIS_URL`
 - `ANTHROPIC_API_KEY`
 - `INTERNAL_API_SECRET`
@@ -127,12 +132,15 @@ Rules:
 - In production, `DASHBOARD_URL` is mandatory.
 - `DASHBOARD_INTERNAL_URL` is dev-only and should not be relied on in production.
 - `DATABASE_URL` should include `pgbouncer=true` and `connection_limit=1`.
+- `DIRECT_DATABASE_URL` must use the direct Neon host (no `-pooler` suffix, no `pgbouncer=true`).
 
 ### Gateway Required For Launch Scope Features
 
 - `SHOPIFY_APP_SECRET`
+- `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD`
+  Required for inbound email webhook basic auth in production.
 - `BLOB_READ_WRITE_TOKEN`
-  Required for inbound email attachments.
+  Required for inbound email attachment upload in the gateway worker.
 - `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
   Used by `scripts/sentry-upload-sourcemaps.mjs` for source-map upload.
 
@@ -167,8 +175,12 @@ node scripts/check-production-env.mjs gateway --scope=launch --env-file=apps/gat
 3. Run the production migration before first deploy.
 
 ```bash
-DATABASE_URL='postgresql://…' npm run db:migrate:deploy
+DATABASE_URL='postgresql://...@ep-....-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true&connection_limit=1' \
+DIRECT_DATABASE_URL='postgresql://...@ep-....us-east-2.aws.neon.tech/neondb?sslmode=require' \
+npm run db:migrate:deploy
 ```
+
+Prisma routes migrations through `DIRECT_DATABASE_URL` (`directUrl` in the schema). CI and local migration runs need both URLs set.
 
 4. Deploy the dashboard to Vercel.
    - Confirm `GET /api/health` returns `status: ok`.

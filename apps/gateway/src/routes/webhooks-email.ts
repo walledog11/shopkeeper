@@ -13,10 +13,16 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
+function isProductionEnv(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
 function hasValidPostmarkAuth(req: Request): boolean {
-  const expectedUser = process.env.POSTMARK_INBOUND_USERNAME;
-  const expectedPass = process.env.POSTMARK_INBOUND_PASSWORD;
-  if (!expectedUser || !expectedPass) return true;
+  const expectedUser = process.env.POSTMARK_INBOUND_USERNAME?.trim();
+  const expectedPass = process.env.POSTMARK_INBOUND_PASSWORD?.trim();
+  if (!expectedUser || !expectedPass) {
+    return !isProductionEnv();
+  }
 
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Basic ')) return false;

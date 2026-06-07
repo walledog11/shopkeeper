@@ -384,6 +384,22 @@ describe('POST /webhooks/email/inbound', () => {
       expect(res.status).toBe(200);
       expect(queueAddSpy).toHaveBeenCalledOnce();
     });
+
+    it('returns 401 in production when inbound basic auth credentials are not configured', async () => {
+      const previousNodeEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      try {
+        const res = await request(app)
+          .post('/webhooks/email/inbound')
+          .send({ From: 'a@x.com', To: `${org.id}@inbound.shopkeeper.delivery`, TextBody: 'hi' });
+
+        expect(res.status).toBe(401);
+        expect(queueAddSpy).not.toHaveBeenCalled();
+      } finally {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    });
   });
 
   it('omits attachments from the queued job when Postmark sends none', async () => {

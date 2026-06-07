@@ -15,6 +15,7 @@ const CONTRACTS = {
     label: 'Dashboard',
     bootRequired: [
       'DATABASE_URL',
+      'DIRECT_DATABASE_URL',
       'CLERK_SECRET_KEY',
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       'ANTHROPIC_API_KEY',
@@ -29,6 +30,7 @@ const CONTRACTS = {
       'GATEWAY_INTERNAL_URL',
       'POSTMARK_API_KEY',
       'INBOUND_EMAIL_DOMAIN',
+      'BLOB_READ_WRITE_TOKEN',
       'SHOPIFY_CLIENT_ID',
       'SHOPIFY_CLIENT_SECRET',
       'SHOPIFY_APP_SECRET',
@@ -46,6 +48,7 @@ const CONTRACTS = {
     label: 'Gateway',
     bootRequired: [
       'DATABASE_URL',
+      'DIRECT_DATABASE_URL',
       'REDIS_URL',
       'ANTHROPIC_API_KEY',
       'INTERNAL_API_SECRET',
@@ -56,6 +59,8 @@ const CONTRACTS = {
     launchRequired: [
       'SHOPIFY_APP_SECRET',
       'BLOB_READ_WRITE_TOKEN',
+      'POSTMARK_INBOUND_USERNAME',
+      'POSTMARK_INBOUND_PASSWORD',
       ...SENTRY_SOURCE_MAP_REQUIRED,
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL'],
@@ -206,11 +211,23 @@ export function validateProductionEnv(target, options = {}) {
   }
 
   const databaseUrl = readEnv(env, 'DATABASE_URL');
+  const directDatabaseUrl = readEnv(env, 'DIRECT_DATABASE_URL');
   if (databaseUrl && !databaseUrl.includes('pgbouncer=true')) {
     warnings.push('DATABASE_URL is missing pgbouncer=true');
   }
   if (databaseUrl && !databaseUrl.includes('connection_limit=')) {
     warnings.push('DATABASE_URL is missing connection_limit (for example connection_limit=1)');
+  }
+  if (directDatabaseUrl && directDatabaseUrl.includes('pgbouncer=true')) {
+    warnings.push('DIRECT_DATABASE_URL must not use pgbouncer=true; use the direct Neon host for migrations');
+  }
+  if (directDatabaseUrl && directDatabaseUrl.includes('-pooler')) {
+    warnings.push('DIRECT_DATABASE_URL appears to use a pooler host; use the direct Neon host instead');
+  }
+  if (databaseUrl && directDatabaseUrl && databaseUrl === directDatabaseUrl) {
+    warnings.push(
+      'DIRECT_DATABASE_URL should differ from DATABASE_URL in production; use the pooled URL for runtime and the direct URL for migrations'
+    );
   }
 
   if (target === 'gateway') {

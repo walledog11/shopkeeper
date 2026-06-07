@@ -250,6 +250,7 @@ async function seedEmailThreadWithCachedPlan(
   const customerMessage = await db.message.create({
     data: {
       threadId: thread.id,
+      organizationId: org.id,
       senderType: SenderType.customer,
       contentText: inboundText,
       externalMessageId: `<plan-e2e-${randomUUID()}@example.com>`,

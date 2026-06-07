@@ -322,6 +322,11 @@ describe('tenant data surfaces', () => {
   });
 
   it('passes only the active Clerk organization to team membership APIs', async () => {
+    vi.mocked(auth).mockResolvedValue({
+      userId: 'usr_caller',
+      orgId: callerOrg.clerkOrgId,
+      orgRole: 'org:admin',
+    } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
     mockGetMemberships.mockResolvedValue({
       data: [{
         id: 'mem_1',

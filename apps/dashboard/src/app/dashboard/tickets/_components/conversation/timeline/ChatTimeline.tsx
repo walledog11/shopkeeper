@@ -1,5 +1,6 @@
 "use client"
 
+import { isImageAttachmentUrl } from "@/lib/attachments/blob-ref"
 import { AlertTriangle, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import type { FailedMessage, Ticket } from "@/types"
@@ -20,7 +21,7 @@ function AttachmentList({ attachments }: { attachments: string[] }) {
   return (
     <div className="flex flex-wrap gap-2 mt-2">
       {attachments.map((url) => (
-        /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)
+        isImageAttachmentUrl(url)
           ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-white/[0.10]" />
           : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
       ))}

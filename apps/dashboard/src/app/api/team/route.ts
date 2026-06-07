@@ -3,6 +3,7 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { handleApiError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { getDashboardAppUrl } from '@/lib/env';
+import { requireOrgAdmin } from '@/app/api/team/_lib/auth';
 import { parseTeamInviteBody } from '@/app/api/team/_lib/validation';
 
 export async function GET() {
@@ -41,8 +42,9 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { orgId, userId } = await auth();
+    const { orgId, userId, orgRole } = await auth();
     if (!orgId || !userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    requireOrgAdmin(orgRole);
 
     const { emailAddress, role } = parseTeamInviteBody(await readRequiredJsonObject(request));
 
@@ -68,8 +70,9 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const { orgId, userId: requestingUserId } = await auth();
+    const { orgId, userId: requestingUserId, orgRole } = await auth();
     if (!orgId || !requestingUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    requireOrgAdmin(orgRole);
 
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');

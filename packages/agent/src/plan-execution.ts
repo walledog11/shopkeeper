@@ -94,7 +94,7 @@ async function loadCurrentCachedHomePlan(params: {
   };
 }
 
-async function clearCurrentCachedPlan(params: {
+export async function consumeThreadCachedPlan(params: {
   orgId: string;
   threadId: string;
   lastCustomerMessageId: string | null;
@@ -151,7 +151,7 @@ export async function executeCurrentCachedHomePlan(params: {
     persistAuditNote: true,
     auditMode,
     ...(approval ? { approval } : {}),
-  }, deps).finally(() => clearCurrentCachedPlan({
+  }, deps).finally(() => consumeThreadCachedPlan({
     orgId: params.orgId,
     threadId: params.threadId,
     lastCustomerMessageId: current.lastCustomerMessageId,

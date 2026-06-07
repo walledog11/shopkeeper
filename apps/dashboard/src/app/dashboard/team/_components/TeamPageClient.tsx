@@ -19,6 +19,7 @@ interface Props {
   initialMembers: TeamMember[];
   initialInvitations: TeamInvitation[];
   currentUserId: string;
+  isAdmin: boolean;
 }
 
 function roleLabel(role: string) {
@@ -46,19 +47,20 @@ export default function TeamPageClient(props: Props) {
   );
 }
 
-function useTeamPageState({ initialMembers, initialInvitations }: Props) {
+function useTeamPageState({ initialMembers, initialInvitations, isAdmin }: Props) {
   const searchParams = useSearchParams();
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
   const [showInviteModal, setShowInviteModal] = useState(false);
 
   useEffect(() => {
+    if (!isAdmin) return;
     const params = new URLSearchParams(searchParams.toString());
     if (params.get("invite") === "1") {
       setShowInviteModal(true);
       window.history.replaceState(null, "", "/dashboard/team");
     }
-  }, [searchParams]);
+  }, [isAdmin, searchParams]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);
@@ -146,7 +148,7 @@ function TeamPageContent(props: Props) {
     setShowInviteModal,
     showInviteModal,
   } = useTeamPageState(props);
-  const { currentUserId } = props;
+  const { currentUserId, isAdmin } = props;
 
   return (
     <div className="h-full overflow-y-auto bg-background">
@@ -158,12 +160,14 @@ function TeamPageContent(props: Props) {
             <h1 className="text-xl font-bold tracking-tight text-white/80">Team</h1>
             <p className="text-sm text-white/30 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
           </div>
-          <button type="button"
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md px-3.5 py-2 transition-all"
-          >
-            <UserPlus className="size-4" /> Invite member
-          </button>
+          {isAdmin && (
+            <button type="button"
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md px-3.5 py-2 transition-all"
+            >
+              <UserPlus className="size-4" /> Invite member
+            </button>
+          )}
         </div>
 
         {removalError && (
@@ -193,7 +197,7 @@ function TeamPageContent(props: Props) {
                   <span className="hidden md:block text-xs text-white/25 shrink-0">
                     Joined {timeAgo(new Date(member.createdAt).toISOString())}
                   </span>
-                  {!isSelf && (
+                  {isAdmin && !isSelf && (
                     <button type="button"
                       onClick={() => handleRemoveMember(member.userId)}
                       disabled={removing === member.userId}
@@ -227,14 +231,16 @@ function TeamPageContent(props: Props) {
                     <p className="text-xs text-white/30">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
                   </div>
                   <RolePill role={invite.role} />
-                  <button type="button"
-                    onClick={() => handleRevokeInvite(invite.id)}
-                    disabled={removing === invite.id}
-                    className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
-                    title="Revoke invitation"
-                  >
-                    <X className="size-4" />
-                  </button>
+                  {isAdmin && (
+                    <button type="button"
+                      onClick={() => handleRevokeInvite(invite.id)}
+                      disabled={removing === invite.id}
+                      className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      title="Revoke invitation"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

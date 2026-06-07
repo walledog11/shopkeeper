@@ -41,6 +41,8 @@ export function validateDashboardEnv(): void {
       'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
       'APP_URL',
       'TOKEN_ENCRYPTION_KEY',
+      'DIRECT_DATABASE_URL',
+      'BLOB_READ_WRITE_TOKEN',
     ] as const;
     const missingProduction = productionRequired.filter((name) => !hasEnv(name));
     if (missingProduction.length > 0) {
@@ -74,6 +76,13 @@ export function validateDashboardEnv(): void {
   }
   if (!dbUrl.includes('connection_limit=')) {
     console.warn('[Dashboard] DATABASE_URL is missing connection_limit , add it (e.g. connection_limit=1) to avoid connection exhaustion in production');
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    const directDbUrl = requireEnv('DIRECT_DATABASE_URL');
+    if (directDbUrl.includes('pgbouncer=true') || directDbUrl.includes('-pooler')) {
+      console.warn('[Dashboard] DIRECT_DATABASE_URL must use the direct Neon host, not the pooler');
+    }
   }
 }
 

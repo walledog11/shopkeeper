@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
-import { scrubValue } from '@shopkeeper/agent/observability';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
@@ -56,7 +55,10 @@ export async function POST(request: Request) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      logger.error({ tokenData: scrubValue(tokenData) }, '[IG OAuth] Token exchange failed');
+      logger.error(
+        { status: tokenRes.status, errorType: tokenData.error?.type, errorCode: tokenData.error?.code },
+        '[IG OAuth] Token exchange failed',
+      );
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
     }
     const shortLivedToken: string = tokenData.access_token;
@@ -81,7 +83,6 @@ export async function POST(request: Request) {
       { cache: 'no-store' }
     );
     const pagesData = await pagesRes.json();
-    logger.info({ pagesData: scrubValue(pagesData) }, '[IG OAuth] /me/accounts response');
 
     const pages: Array<{
       id: string;
@@ -89,6 +90,10 @@ export async function POST(request: Request) {
       access_token: string;
       instagram_business_account?: { id: string; username?: string };
     }> = pagesData.data || [];
+    logger.info(
+      { pageCount: pages.length, pageNames: pages.map((page) => page.name) },
+      '[IG OAuth] /me/accounts response',
+    );
 
     const igPage = pages.find((p) => p.instagram_business_account?.id);
 
@@ -117,7 +122,14 @@ export async function POST(request: Request) {
       }),
     });
     const subscribeData = await subscribeRes.json();
-    logger.info({ subscribeData: scrubValue(subscribeData) }, '[IG OAuth] Webhook subscription');
+    if (!subscribeData.success) {
+      logger.warn(
+        { status: subscribeRes.status, success: subscribeData.success },
+        '[IG OAuth] Webhook subscription failed',
+      );
+    } else {
+      logger.info('[IG OAuth] Webhook subscription succeeded');
+    }
 
     // ---------------------------------------------------------------
     // Step 5: Save integration to database

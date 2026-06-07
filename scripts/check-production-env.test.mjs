@@ -8,6 +8,7 @@ import { validateProductionEnv } from './check-production-env.mjs';
 function createDashboardLaunchEnv(overrides = {}) {
   return {
     DATABASE_URL: 'postgresql://prod.example/db?pgbouncer=true&connection_limit=1',
+    DIRECT_DATABASE_URL: 'postgresql://prod.example/db',
     CLERK_SECRET_KEY: 'sk_test_clerk',
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: 'pk_test_clerk',
     ANTHROPIC_API_KEY: 'test-anthropic-key',
@@ -29,6 +30,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     CLERK_WEBHOOK_SECRET: 'whsec_live_clerk',
     PRICE_ID_STARTER: 'price_starter',
     PRICE_ID_PRO: 'price_pro',
+    BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     SENTRY_AUTH_TOKEN: 'sentry-auth-token',
     SENTRY_ORG: 'sentry-org',
     SENTRY_PROJECT: 'sentry-project',
@@ -39,6 +41,7 @@ function createDashboardLaunchEnv(overrides = {}) {
 function createGatewayLaunchEnv(overrides = {}) {
   return {
     DATABASE_URL: 'postgresql://prod.example/db?pgbouncer=true&connection_limit=1',
+    DIRECT_DATABASE_URL: 'postgresql://prod.example/db',
     REDIS_URL: 'rediss://redis.example.com:6379/0',
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     INTERNAL_API_SECRET: 'test-internal-secret',
@@ -47,6 +50,8 @@ function createGatewayLaunchEnv(overrides = {}) {
     SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
     SHOPIFY_APP_SECRET: 'shopify-app-secret',
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
+    POSTMARK_INBOUND_USERNAME: 'postmark-inbound-user',
+    POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
     SENTRY_AUTH_TOKEN: 'sentry-auth-token',
     SENTRY_ORG: 'sentry-org',
     SENTRY_PROJECT: 'sentry-project',
@@ -130,6 +135,56 @@ test('dashboard launch contract requires Clerk webhook signing secret', () => {
   );
 });
 
+test('dashboard launch contract requires blob token for attachment proxy', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      BLOB_READ_WRITE_TOKEN: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: BLOB_READ_WRITE_TOKEN'),
+    true
+  );
+});
+
+test('dashboard launch contract requires direct database URL for Prisma migrations', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      DIRECT_DATABASE_URL: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: DIRECT_DATABASE_URL'),
+    true
+  );
+});
+
+test('dashboard launch contract warns when direct database URL uses the pooler', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      DIRECT_DATABASE_URL: 'postgresql://ep-pooler.us-east-2.aws.neon.tech/neondb?pgbouncer=true',
+    }),
+  });
+
+  assert.equal(
+    result.warnings.includes(
+      'DIRECT_DATABASE_URL must not use pgbouncer=true; use the direct Neon host for migrations'
+    ),
+    true
+  );
+  assert.equal(
+    result.warnings.includes(
+      'DIRECT_DATABASE_URL appears to use a pooler host; use the direct Neon host instead'
+    ),
+    true
+  );
+});
+
 test('dashboard launch contract requires token encryption key', () => {
   const result = validateProductionEnv('dashboard', {
     scope: 'launch',
@@ -207,6 +262,25 @@ test('gateway launch contract requires token encryption key', () => {
   );
 });
 
+test('gateway launch contract requires Postmark inbound basic auth credentials', () => {
+  const result = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      POSTMARK_INBOUND_USERNAME: '',
+      POSTMARK_INBOUND_PASSWORD: '',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes('Missing required environment variable: POSTMARK_INBOUND_USERNAME'),
+    true
+  );
+  assert.equal(
+    result.errors.includes('Missing required environment variable: POSTMARK_INBOUND_PASSWORD'),
+    true
+  );
+});
+
 test('gateway launch contract requires Sentry source map upload vars', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -252,6 +326,7 @@ test('env file parser trims comments and quoted values the same way prod env fil
     envFile,
     [
       'DATABASE_URL="postgresql://prod.example/db?pgbouncer=true&connection_limit=1"',
+      'DIRECT_DATABASE_URL=postgresql://prod.example/db',
       'REDIS_URL=rediss://redis.example.com:6379/0',
       'ANTHROPIC_API_KEY=test-anthropic-key',
       'INTERNAL_API_SECRET=test-internal-secret',
@@ -260,6 +335,8 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'SENTRY_DSN=https://public@example.ingest.sentry.io/1',
       'SHOPIFY_APP_SECRET=shopify-app-secret',
       'BLOB_READ_WRITE_TOKEN=vercel-blob-token   # attachment storage',
+      'POSTMARK_INBOUND_USERNAME=postmark-inbound-user',
+      'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
       'SENTRY_AUTH_TOKEN=sentry-auth-token',
       'SENTRY_ORG=sentry-org',
       'SENTRY_PROJECT=sentry-project',

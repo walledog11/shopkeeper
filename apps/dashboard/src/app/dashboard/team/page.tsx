@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation';
 import TeamPageClient from './_components/TeamPageClient';
 
 export default async function TeamPage() {
-  const { orgId, userId } = await auth();
+  const { orgId, userId, orgRole } = await auth();
   if (!orgId || !userId) redirect('/login');
+  const isAdmin = orgRole === 'org:admin';
 
   const client = await clerkClient();
   const [memberships, invitations] = await Promise.all([
@@ -37,6 +38,7 @@ export default async function TeamPage() {
         initialMembers={members}
         initialInvitations={pendingInvitations}
         currentUserId={userId}
+        isAdmin={isAdmin}
       />
     </Suspense>
   );

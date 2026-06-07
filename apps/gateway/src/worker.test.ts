@@ -321,7 +321,7 @@ describe('Message worker — email branch', () => {
       data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.shopify, status: 'open' },
     });
     await db.message.create({
-      data: { threadId: thread.id, senderType: 'customer', contentText: 'New order #1001 was placed.' },
+      data: { threadId: thread.id, organizationId: org.id, senderType: 'customer', contentText: 'New order #1001 was placed.' },
     });
 
     const aiHandler = capturedHandlers.get('ai-summary');
@@ -384,9 +384,34 @@ describe('Message worker — email branch', () => {
     await handler!(job); // second call = duplicate
 
     const messageCount = await db.message.count({
-      where: { externalMessageId: 'duplicate-mid-001' },
+      where: { organizationId: org.id, externalMessageId: 'duplicate-mid-001' },
     });
     expect(messageCount).toBe(1);
+  });
+
+  it('allows the same externalMessageId across different organizations', async () => {
+    mockAnthropicCreate.mockResolvedValue(classifierResponse('genuine'));
+
+    const handler = capturedHandlers.get('inbound-messages');
+    const otherOrg = await createTestOrg();
+    const sharedExternalId = 'shared-message-id-across-orgs';
+
+    try {
+      await handler!(makeEmailJob(org.id, { inboundMessageId: sharedExternalId }));
+      await handler!(makeEmailJob(otherOrg.id, {
+        inboundMessageId: sharedExternalId,
+        senderEmail: 'other-org-customer@example.com',
+      }));
+
+      expect(await db.message.count({
+        where: { organizationId: org.id, externalMessageId: sharedExternalId },
+      })).toBe(1);
+      expect(await db.message.count({
+        where: { organizationId: otherOrg.id, externalMessageId: sharedExternalId },
+      })).toBe(1);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
   });
 
   it('keeps repeated identical emails distinct when Postmark omits Message-ID', async () => {
@@ -438,7 +463,7 @@ describe('AI Summary worker — filter gating', () => {
       data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.email, status: 'open' },
     });
     await db.message.create({
-      data: { threadId: thread.id, senderType: 'customer', contentText: 'hey there' },
+      data: { threadId: thread.id, organizationId: org.id, senderType: 'customer', contentText: 'hey there' },
     });
 
     const aiHandler = capturedHandlers.get('ai-summary');
@@ -477,7 +502,7 @@ describe('AI Summary worker — filter gating', () => {
       data: { organizationId: org.id, customerId: customer.id, channelType: ChannelType.email, status: 'open' },
     });
     await db.message.create({
-      data: { threadId: thread.id, senderType: 'customer', contentText: 'buy now' },
+      data: { threadId: thread.id, organizationId: org.id, senderType: 'customer', contentText: 'buy now' },
     });
 
     const aiHandler = capturedHandlers.get('ai-summary');

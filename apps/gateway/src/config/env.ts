@@ -59,6 +59,10 @@ export function validateGatewayEnv(): void {
     throw new Error('[Gateway] Missing required environment variable: TOKEN_ENCRYPTION_KEY');
   }
 
+  if (process.env.NODE_ENV === 'production' && !hasEnv('DIRECT_DATABASE_URL')) {
+    throw new Error('[Gateway] Missing required environment variable: DIRECT_DATABASE_URL');
+  }
+
   const redisUrl = requireEnv('REDIS_URL');
   try {
     if (new URL(redisUrl).hostname.endsWith('upstash.io')) {
@@ -76,7 +80,23 @@ export function validateGatewayEnv(): void {
     logger.warn('[Gateway] DATABASE_URL is missing connection_limit — add it (e.g. connection_limit=1) to avoid connection exhaustion in production');
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    const directDbUrl = requireEnv('DIRECT_DATABASE_URL');
+    if (directDbUrl.includes('pgbouncer=true') || directDbUrl.includes('-pooler')) {
+      logger.warn('[Gateway] DIRECT_DATABASE_URL must use the direct Neon host, not the pooler');
+    }
+  }
+
   if (process.env.NODE_ENV === 'production' && hasEnv('DASHBOARD_INTERNAL_URL')) {
     logger.warn('[Gateway] DASHBOARD_INTERNAL_URL is set in production. Prefer DASHBOARD_URL and reserve DASHBOARD_INTERNAL_URL for local callback forwarding.');
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    if (!hasEnv('POSTMARK_INBOUND_USERNAME')) {
+      throw new Error('[Gateway] Missing required environment variable: POSTMARK_INBOUND_USERNAME');
+    }
+    if (!hasEnv('POSTMARK_INBOUND_PASSWORD')) {
+      throw new Error('[Gateway] Missing required environment variable: POSTMARK_INBOUND_PASSWORD');
+    }
   }
 }

@@ -214,9 +214,14 @@ export async function processInboundMessage(
   const providerMessageId = normalizeExternalMessageId(externalMessageId);
 
   if (providerMessageId) {
-    const existing = await db.message.findFirst({ where: { externalMessageId: providerMessageId } });
+    const existing = await db.message.findFirst({
+      where: { organizationId, externalMessageId: providerMessageId },
+    });
     if (existing) {
-      logger.info({ externalMessageId: providerMessageId }, '[Worker] Duplicate message detected — skipping');
+      logger.info(
+        { organizationId, externalMessageId: providerMessageId },
+        '[Worker] Duplicate message detected — skipping',
+      );
       return null;
     }
   }
@@ -279,6 +284,7 @@ export async function processInboundMessage(
     await createMessage(
       {
         threadId: thread!.id,
+        organizationId,
         senderType: SenderType.customer,
         contentText: messageText,
         ...(providerMessageId && { externalMessageId: providerMessageId }),
@@ -288,7 +294,10 @@ export async function processInboundMessage(
     );
   } catch (error) {
     if (providerMessageId && (error as { code?: string }).code === 'P2002') {
-      logger.info({ externalMessageId: providerMessageId }, '[Worker] Duplicate message detected — skipping');
+      logger.info(
+        { organizationId, externalMessageId: providerMessageId },
+        '[Worker] Duplicate message detected — skipping',
+      );
       return null;
     }
     throw error;
