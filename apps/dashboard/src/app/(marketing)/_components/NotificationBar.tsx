@@ -16,8 +16,7 @@ export default function NotificationBar() {
         
         {/* Faux Logo */}
         <div className="flex items-center gap-1 text-xl tracking-tight">
-          <span className="font-bold">clerk</span>
-          <span className="font-light">relate</span>
+          <span className="font-bold">Shopkeeper</span>
         </div>
 
         {/* Message */}

@@ -97,7 +97,7 @@ export async function validateTelegramWebhook(
   if (message.chat.type !== 'private') {
     logger.info({ chatType: message.chat.type }, '[Telegram] Ignoring non-private chat');
     res.status(200).send('OK');
-    await reply('Clerk only works in 1:1 chats. Open a direct message with the bot.');
+    await reply('Shopkeeper only works in 1:1 chats. Open a direct message with the bot.');
     return null;
   }
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { db } from '@clerk/db'
+import { db } from '@shopkeeper/db'
 import stripe from '@/lib/billing/stripe'
 import { getRedis } from '@/lib/server/redis'
 import type Stripe from 'stripe'

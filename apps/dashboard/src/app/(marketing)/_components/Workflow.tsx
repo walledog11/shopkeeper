@@ -6,14 +6,14 @@ const steps = [
   {
     num: "STEP 01",
     title: 'Customer DMs you "where\'s my order?"',
-    body: "Clerk reads it the second it lands. No queue, no delay.",
+    body: "Shopkeeper reads it the second it lands. No queue, no delay.",
     vis: (
       <div>
         <div className="mb-3.5 text-xs text-white/60 [font-family:var(--m-mono)]">incoming · 14:42:09</div>
         <div className="rounded-t-xl rounded-br-xl rounded-bl bg-white/10 px-5 py-4 text-[15px] leading-[1.5]">where&apos;s my order? been waiting a week 😩</div>
         <div className="mt-[22px] flex items-center gap-2 text-xs text-orange-500 [font-family:var(--m-mono)]">
           <span className="inline-block size-1.5 shrink-0 rounded-full bg-orange-500" />
-          Clerk read it · 0.4s ago
+          Shopkeeper read it · 0.4s ago
         </div>
       </div>
     ),
@@ -84,7 +84,7 @@ export function Workflow() {
       </div>
       <h2 className="mb-12 max-w-[18ch] text-[clamp(40px,5vw,72px)] leading-[0.95] tracking-[-0.02em] [font-family:var(--m-serif)]">
         You set the rules.{" "}
-        <em className="italic text-green-600">Clerk does the typing.</em>
+        <em className="italic text-green-600">Shopkeeper does the typing.</em>
       </h2>
 
       {/* Desktop: 2-col */}

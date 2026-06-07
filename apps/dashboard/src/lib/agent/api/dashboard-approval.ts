@@ -1,13 +1,13 @@
-import { createMessage, db, Prisma } from "@clerk/db";
+import { createMessage, db, Prisma } from "@shopkeeper/db";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
-import { classifyHomePlan } from "@clerk/agent/plan-preview";
+import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
 import { isAutoExecuteEnabled } from "@/lib/agent/api/plan-execution";
-import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE } from "@clerk/agent/settings";
-import { TOOL_CATEGORIES } from "@clerk/agent/tools";
+import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE } from "@shopkeeper/agent/settings";
+import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
-import type { AgentResult } from "@clerk/agent/context";
+import type { AgentResult } from "@shopkeeper/agent/context";
 
 const APPROVAL_INTENT_RE =
   /\b(create|place|make|refund|issue\s+a?\s*refund|cancel|update|change|edit|swap|remove|add|note|email|send|close|tag)\b/i;

@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { db } from '@clerk/db';
-import { createTestOrg, cleanupTestData } from '@clerk/db/test-helpers';
+import { db } from '@shopkeeper/db';
+import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import {
   getContext,
   updateContext,

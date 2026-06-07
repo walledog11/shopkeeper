@@ -1,7 +1,7 @@
-import type { DbChannelType } from '@clerk/db';
+import type { DbChannelType } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { requireJsonObject } from '@/lib/api/body';
-import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 
 type ChannelTypeValue = (typeof CHANNEL_TYPE)[keyof typeof CHANNEL_TYPE];
 

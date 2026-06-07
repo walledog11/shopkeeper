@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestMessage,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import type { AgentPlan } from '@/types';
 
 const { mockBuildContext, mockExecuteAgentTurn, mockPlanAgent } = vi.hoisted(() => ({
@@ -20,10 +20,10 @@ vi.mock('@/lib/agent/runner', () => ({
   planAgent: mockPlanAgent,
 }));
 
-// plan-internal auto-execute runs through @clerk/agent/plan-execution, which
+// plan-internal auto-execute runs through @shopkeeper/agent/plan-execution, which
 // calls the package-internal executeAgentTurn — mock the package (Track 4.1),
 // not the dashboard execution shim.
-vi.mock('@clerk/agent/turn', () => ({
+vi.mock('@shopkeeper/agent/turn', () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 

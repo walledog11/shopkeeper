@@ -9,13 +9,13 @@ import type { AgentPlan, RawToolCall, Ticket } from "@/types"
 interface Props {
   agentName: string
   containerRef?: Ref<HTMLDivElement>
-  clerkInstruction: string
-  isClerkMode: boolean
+  agentInstruction: string
+  isAgentMode: boolean
   isPlanExecuting: boolean
   isRegenerating: boolean
   noteCount: number
   onChange: (text: string) => void
-  onClearClerk: () => void
+  onClearAgentMode: () => void
   onPlanApprove: (approvedToolCalls: RawToolCall[]) => void
   onPlanDismiss: () => void
   onPlanRegenerate: () => void
@@ -38,13 +38,13 @@ interface Props {
 export default function ConversationComposerArea({
   agentName,
   containerRef,
-  clerkInstruction,
-  isClerkMode,
+  agentInstruction,
+  isAgentMode,
   isPlanExecuting,
   isRegenerating,
   noteCount,
   onChange,
-  onClearClerk,
+  onClearAgentMode,
   onPlanApprove,
   onPlanDismiss,
   onPlanRegenerate,
@@ -87,15 +87,15 @@ export default function ConversationComposerArea({
         shopifyCustomerId={composer.shopifyCustomerId}
         customerPlatformId={composer.customerPlatformId}
         lastCustomerMessageAt={composer.lastCustomerMessageAt}
-        value={isClerkMode ? clerkInstruction : composer.replyText}
-        isClerkMode={isClerkMode}
+        value={isAgentMode ? agentInstruction : composer.replyText}
+        isAgentMode={isAgentMode}
         viewTab={viewTab}
         noteCount={noteCount}
         onViewTabChange={onViewTabChange}
         isSending={composer.isSending}
         error={composer.sendError}
         onChange={onChange}
-        onClearClerk={onClearClerk}
+        onClearAgentMode={onClearAgentMode}
         onSend={onSend}
       />
     </div>

@@ -6,7 +6,7 @@ const channels = [
     logo: "/logos/instagram-logo.png",
     toneDown: true,
     title: "Instagram DMs",
-    body: "Story replies, comments, and direct messages. Clerk knows the difference and routes accordingly.",
+    body: "Story replies, comments, and direct messages. Shopkeeper knows the difference and routes accordingly.",
     statLabel: "avg setup",
     statVal: "90s",
   },
@@ -15,7 +15,7 @@ const channels = [
     logo: "/logos/shopify.svg",
     toneDown: true,
     title: "Shopify orders",
-    body: "Refunds, address changes, tracking , Clerk pulls order data and can take action with your approval.",
+    body: "Refunds, address changes, tracking , Shopkeeper pulls order data and can take action with your approval.",
     statLabel: "avg setup",
     statVal: "2m",
   },
@@ -42,7 +42,7 @@ export function Channels() {
         <em className="italic text-green-600">in one inbox.</em>
       </h2>
       <p className="mb-12 max-w-[52ch] text-[19px] leading-[1.45] text-stone-700">
-        Connect once. Clerk pulls every conversation into a single thread per customer , so you stop scrolling between four apps.
+        Connect once. Shopkeeper pulls every conversation into a single thread per customer , so you stop scrolling between four apps.
       </p>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-6">

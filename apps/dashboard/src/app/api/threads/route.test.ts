@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, db, createMessage } from '@clerk/db';
+import { ChannelType, SenderType, db, createMessage } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 // Mock Clerk auth before any imports that depend on it
 vi.mock('@clerk/nextjs/server', () => ({

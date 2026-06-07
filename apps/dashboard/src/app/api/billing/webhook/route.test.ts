@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@clerk/db';
-import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
+import { db } from '@shopkeeper/db';
+import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 import type Stripe from 'stripe';
 
 const { mockConstructEvent, mockRedisSet } = vi.hoisted(() => ({

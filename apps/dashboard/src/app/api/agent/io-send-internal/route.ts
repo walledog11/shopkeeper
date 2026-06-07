@@ -11,7 +11,7 @@
  */
 import { NextResponse } from "next/server";
 import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
-import type { SendReplyInput, SendEmailInput } from "@clerk/agent/tools";
+import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { BadRequestError } from "@/lib/api/errors";
 import { withInternalRoute } from "@/lib/api/internal-route";

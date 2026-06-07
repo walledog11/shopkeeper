@@ -5,13 +5,13 @@ import {
   ThreadFilterFeedback,
   ThreadFilterStatus,
   db,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 const { mockDispatchMessage } = vi.hoisted(() => ({
   mockDispatchMessage: vi.fn(),

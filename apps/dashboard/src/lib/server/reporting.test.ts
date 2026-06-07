@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { ChannelType, SenderType, createMessage, db, type DbChannelType } from "@clerk/db"
+import { ChannelType, SenderType, createMessage, db, type DbChannelType } from "@shopkeeper/db"
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
-} from "@clerk/db/test-helpers"
+} from "@shopkeeper/db/test-helpers"
 import {
   ANALYTICS_TAG_LIMIT,
   REPORTS_TAG_LIMIT,

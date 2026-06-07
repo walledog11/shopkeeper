@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { parseNextPageInfo, shopifyRest, ShopifyRequestError } from '@clerk/agent/shopify';
+import { parseNextPageInfo, shopifyRest, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 
 export const dynamic = 'force-dynamic';
 

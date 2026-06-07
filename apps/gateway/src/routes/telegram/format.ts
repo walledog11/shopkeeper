@@ -7,7 +7,7 @@ const FILLER_PHRASES = [
 ];
 
 export const HELP_TEXT = [
-  'Clerk commands:',
+  'Shopkeeper commands:',
   'SUMMARY — your current support inbox',
   '#1234 — look up a ticket by its order number',
   'After a summary, act on a flagged ticket:',

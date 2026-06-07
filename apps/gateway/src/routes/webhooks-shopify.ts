@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';

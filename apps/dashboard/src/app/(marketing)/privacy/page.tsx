@@ -1,14 +1,15 @@
 import type { Metadata } from 'next'
+import { CONTACT_EMAIL } from '@/lib/brand'
 import { LegalPage } from '../_components/LegalPage'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | Clerk',
-  description: 'How Clerk collects, uses, and protects personal information.',
+  title: 'Privacy Policy | Shopkeeper',
+  description: 'How Shopkeeper collects, uses, and protects personal information.',
 }
 
 const privacyIntro = (
   <p>
-    Clerk helps merchants manage support conversations and customer context. This policy explains what
+    Shopkeeper helps merchants manage support conversations and customer context. This policy explains what
     information we collect, how we use it, and the choices available to customers and merchants.
   </p>
 )
@@ -62,7 +63,7 @@ export default function PrivacyPage() {
           body: (
             <>
               <p>
-                We share information with service providers that help operate Clerk, including hosting, database,
+                We share information with service providers that help operate Shopkeeper, including hosting, database,
                 email, observability, billing, authentication, and AI infrastructure providers. These providers may only
                 use information to deliver services to us.
               </p>
@@ -79,7 +80,7 @@ export default function PrivacyPage() {
             <p>
               We retain account, workspace, support, and integration data while the merchant account is active or as
               needed for legitimate business, legal, security, and compliance purposes. Merchants can request export or
-              deletion by contacting hello@useclerk.co. We process verified deletion requests according to our
+              deletion by contacting {CONTACT_EMAIL}. We process verified deletion requests according to our
               documented data deletion procedure.
             </p>
           ),
@@ -101,13 +102,13 @@ export default function PrivacyPage() {
             <p>
               Depending on where you live, you may have rights to access, correct, export, delete, or object to certain
               processing of personal information. Merchants are responsible for responding to customer privacy requests,
-              and Clerk helps merchants complete those requests for data stored in the service.
+              and Shopkeeper helps merchants complete those requests for data stored in the service.
             </p>
           ),
         },
         {
           title: 'Contact',
-          body: <p>Questions or requests can be sent to hello@useclerk.co.</p>,
+          body: <p>Questions or requests can be sent to {CONTACT_EMAIL}.</p>,
         },
       ]}
     />

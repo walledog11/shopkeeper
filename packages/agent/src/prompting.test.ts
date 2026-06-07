@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CustomerMemory } from '@clerk/db';
+import type { CustomerMemory } from '@shopkeeper/db';
 import type { AgentContext } from './agent-context.js';
 import { selectToolNamesForInstruction } from './intent.js';
 import { buildComposerAskPrompt, buildSystemPrompt } from './prompt.js';

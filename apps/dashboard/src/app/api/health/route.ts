@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { validateDashboardEnv } from '@/lib/env';
 import logger from '@/lib/server/logger';
 import { getRedis } from '@/lib/server/redis';

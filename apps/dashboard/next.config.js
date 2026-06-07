@@ -63,7 +63,7 @@ const nextConfig = {
     root: path.resolve(__dirname, '../..'),
   },
   serverExternalPackages: ['stripe'],
-  transpilePackages: ['@clerk/db'],
+  transpilePackages: ['@shopkeeper/db'],
   images: {
     dangerouslyAllowSVG: true,
     contentDispositionType: 'attachment',

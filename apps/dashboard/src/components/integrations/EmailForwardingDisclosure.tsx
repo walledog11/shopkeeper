@@ -16,7 +16,7 @@ const FORWARDING_GUIDES = [
     steps: [
       "Gmail → Settings (gear) → See all settings → Forwarding and POP/IMAP.",
       "Click \"Add a forwarding address\" and paste the address above.",
-      "Gmail sends a verification code to that address , it will appear as a new ticket in Clerk. Paste the code back into Gmail.",
+      "Gmail sends a verification code to that address , it will appear as a new ticket in Shopkeeper. Paste the code back into Gmail.",
       "Select \"Forward a copy of incoming mail to…\" and choose to keep Gmail's copy in the inbox.",
     ],
   },
@@ -45,7 +45,7 @@ const FORWARDING_GUIDES = [
     label: "Cloudflare",
     steps: [
       "Cloudflare Dashboard → your domain → Email → Email Routing → Destination addresses.",
-      "Add the address above as a destination. Cloudflare sends a verification email , it will appear as a new ticket in Clerk. Click the link inside.",
+      "Add the address above as a destination. Cloudflare sends a verification email , it will appear as a new ticket in Shopkeeper. Click the link inside.",
       "Routes → create a custom address (e.g. support@yourdomain.com) routed to that destination.",
       "Save.",
     ],

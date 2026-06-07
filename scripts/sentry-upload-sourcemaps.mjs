@@ -15,11 +15,17 @@ if (!existsSync(distDir)) {
   exit(0);
 }
 
-const release =
+const rawRelease =
   env.SENTRY_RELEASE ||
   env.RAILWAY_GIT_COMMIT_SHA ||
   env.VERCEL_GIT_COMMIT_SHA ||
   '';
+
+const release = rawRelease
+  ? rawRelease.includes('@')
+    ? rawRelease
+    : `shopkeeper@${rawRelease}`
+  : '';
 
 const cliEnv = { ...env, SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL || 'warn' };
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -7,7 +7,7 @@ import {
   createTestMessage,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 const {
   mockCreateInvitation,

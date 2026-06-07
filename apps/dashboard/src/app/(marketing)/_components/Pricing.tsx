@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CONTACT_EMAIL } from "@/lib/brand";
 
 const tiers = [
   {
@@ -28,7 +29,7 @@ const tiers = [
     desc: "For teams running 100+ tickets a day.",
     features: ["Everything in Pro", "Unlimited conversations", "Custom AI instructions per channel", "SLA + audit log", "Dedicated onboarding"],
     cta: "Talk to us",
-    href: "mailto:hello@useclerk.co",
+    href: `mailto:${CONTACT_EMAIL}`,
     featured: false,
   },
 ];

@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { validateGatewayEnv } from './config/env.js';

@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ChannelType, db } from "@clerk/db";
+import { ChannelType, db } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import {
   decodeAgentActionCursor,
   getAgentActionReportStatsForOrgInRange,
@@ -13,8 +13,8 @@ import {
   listAgentActionLogEntries,
   streamAgentActionLogCsv,
 } from "@/lib/agent/api/action-log";
-import { recordAgentActionsBatch } from "@clerk/agent/agent-actions";
-import type { ActionEntry } from "@clerk/agent/context";
+import { recordAgentActionsBatch } from "@shopkeeper/agent/agent-actions";
+import type { ActionEntry } from "@shopkeeper/agent/context";
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
 

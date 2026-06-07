@@ -36,7 +36,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   aiContext: "",
   brandVoice: "",
   sampleReplies: [],
-  agentName: "Clerk",
+  agentName: "Shopkeeper",
   autoPlanOnOpen: true,
   autoExecuteEnabled: false,
   defaultInstruction: "",

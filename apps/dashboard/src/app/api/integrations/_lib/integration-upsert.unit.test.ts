@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Prisma } from '@clerk/db';
+import { Prisma } from '@shopkeeper/db';
 import { isIntegrationUniqueConstraintError } from './integration-upsert';
 
 function knownRequestError(code: string, meta: Record<string, unknown>) {

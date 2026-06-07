@@ -1,9 +1,9 @@
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
-import { isAgentTurnContent } from "@clerk/agent/tools";
+import { isAgentTurnContent } from "@shopkeeper/agent/tools";
 import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape";
-import { AGENT_NOTE_PREFIX, SENDER_TYPE } from "@clerk/agent/thread-constants";
+import { isAgentNoteContent, stripAgentNotePrefix, SENDER_TYPE } from "@shopkeeper/agent/thread-constants";
 import type { Thread, Ticket } from "@/types";
 
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {
@@ -23,7 +23,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
-    aiSummary: thread.aiSummary || "Clerk is analyzing this conversation…",
+    aiSummary: thread.aiSummary || "Shopkeeper is analyzing this conversation…",
     status: thread.status,
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
@@ -34,12 +34,12 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
         if (message.senderType === SENDER_TYPE.NOTE && isAgentTurnContent(message.contentText)) return [];
         const isAgentNote =
           message.senderType === SENDER_TYPE.NOTE &&
-          message.contentText?.startsWith(AGENT_NOTE_PREFIX);
+          isAgentNoteContent(message.contentText);
 
         return [{
           id: message.id,
           sender: message.senderType,
-          text: isAgentNote ? message.contentText!.slice(AGENT_NOTE_PREFIX.length) : message.contentText,
+          text: isAgentNote ? stripAgentNotePrefix(message.contentText!) : message.contentText,
           time: formatTime(message.sentAt),
           author:
             message.senderType === SENDER_TYPE.NOTE

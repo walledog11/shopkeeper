@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EMPTY_MEMORY } from '@clerk/db';
+import { EMPTY_MEMORY } from '@shopkeeper/db';
 import { allowTestNetworkHosts } from '../../../../scripts/test-network-guard.mjs';
 import { summarizeCustomerMemory } from './customer-memory-summarizer.js';
 

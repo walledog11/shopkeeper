@@ -1,4 +1,4 @@
-import { db, isMeaningfulVoiceEdit } from "@clerk/db";
+import { db, isMeaningfulVoiceEdit } from "@shopkeeper/db";
 import { extractCachedDraftReply } from "./plan-cache-shape";
 
 // Records one brand-voice learning sample when an operator sends a customer

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
-import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
+import { db } from '@shopkeeper/db';
+import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
 import { handleApiError } from '@/lib/api/errors';

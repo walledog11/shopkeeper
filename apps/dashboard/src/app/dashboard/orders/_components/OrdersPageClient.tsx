@@ -1,11 +1,11 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Search, X, ShoppingBag, RefreshCw, Download } from "lucide-react"
-import useSWR from "swr"
-import { errorMessageFromUnknown, fetcher, isApiRequestError } from "@/lib/api/fetcher"
+import { isApiRequestError } from "@/lib/api/fetcher"
 import { formatSyncRelativeTime } from "@/lib/format/date"
+import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import OrdersTable, { OrdersTableSkeleton } from "./OrdersTable"
 import type { OrderRow } from "./OrdersTable"
 import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
@@ -51,86 +51,44 @@ function ordersToCsv(orders: OrderRow[]): string {
 
 function useOrdersPageState() {
   const [filter, setFilter] = useState<FilterId>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const [pages, setPages] = useState<OrderRow[][]>([])
-  const [nextPageInfo, setNextPageInfo] = useState<string | null>(null)
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null)
   const [, setTick] = useState(0)
 
-  // Tick every 30s so the "synced X ago" subtitle updates
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 30_000)
     return () => clearInterval(id)
   }, [])
 
-  const handleSearchChange = (q: string) => {
-    setSearchQuery(q)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(q)
-      setPages([])
-      setNextPageInfo(null)
-      setLoadMoreError(null)
-    }, 250)
-  }
-
-  const buildKey = () => {
-    if (debouncedQuery) {
-      return `/api/orders?q=${encodeURIComponent(debouncedQuery)}`
-    }
-    const qs = filterToQuery(filter)
-    return qs ? `/api/orders?${qs}` : `/api/orders`
-  }
-
-  const { isLoading, error, mutate, isValidating } = useSWR<OrdersResponse>(
-    buildKey(),
-    fetcher,
-    {
-      onSuccess: (d) => {
-        setPages([d.orders])
-        setNextPageInfo(d.nextPageInfo)
-        setLastSyncedAt(Date.now())
-      },
-      keepPreviousData: true,
-      revalidateOnFocus: false,
-    }
-  )
+  const list = useCursorListState<OrderRow, OrdersResponse>({
+    buildUrl: (debouncedQuery) => {
+      if (debouncedQuery) {
+        return `/api/orders?q=${encodeURIComponent(debouncedQuery)}`
+      }
+      const qs = filterToQuery(filter)
+      return qs ? `/api/orders?${qs}` : `/api/orders`
+    },
+    fetchPage: async (pageInfo) => {
+      const page = await fetchOrdersPage(pageInfo)
+      return { items: page.orders, nextPageInfo: page.nextPageInfo }
+    },
+    loadMoreErrorMessage: "Unable to load more orders.",
+    onInitialLoad: () => {
+      setLastSyncedAt(Date.now())
+    },
+    selectInitialPage: (response) => ({
+      items: response.orders,
+      nextPageInfo: response.nextPageInfo,
+    }),
+  })
 
   const handleFilterChange = (id: FilterId) => {
     setFilter(id)
-    setSearchQuery('')
-    setDebouncedQuery('')
-    setPages([])
-    setNextPageInfo(null)
-    setLoadMoreError(null)
+    list.resetSearch()
   }
 
-  const loadMore = useCallback(async () => {
-    if (!nextPageInfo || isLoadingMore) return
-    setIsLoadingMore(true)
-    setLoadMoreError(null)
-    try {
-      const d = await fetchOrdersPage(nextPageInfo)
-      setPages(prev => [...prev, d.orders])
-      setNextPageInfo(d.nextPageInfo)
-    } catch (error) {
-      setLoadMoreError(errorMessageFromUnknown(error, "Unable to load more orders."))
-    } finally {
-      setIsLoadingMore(false)
-    }
-  }, [nextPageInfo, isLoadingMore])
-
-  const allOrders = pages.flat()
-  const isSearchMode = debouncedQuery.length > 0
-
   const handleExport = () => {
-    if (allOrders.length === 0) return
-    const csv = ordersToCsv(allOrders)
+    if (list.allItems.length === 0) return
+    const csv = ordersToCsv(list.allItems)
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -143,29 +101,17 @@ function useOrdersPageState() {
   }
 
   return {
-    allOrders,
-    error,
+    ...list,
     filter,
     handleExport,
     handleFilterChange,
-    handleSearchChange,
-    isLoading,
-    isLoadingMore,
-    isSearchMode,
-    isValidating,
     lastSyncedAt,
-    loadMore,
-    loadMoreError,
-    mutate,
-    nextPageInfo,
-    pages,
-    searchQuery,
   }
 }
 
 export default function OrdersPageClient() {
   const {
-    allOrders,
+    allItems: allOrders,
     error,
     filter,
     handleExport,

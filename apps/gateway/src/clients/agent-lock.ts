@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { Redis as IORedis } from 'ioredis';
-import type { LockProvider, ThreadLock } from '@clerk/agent/lock';
+import type { LockProvider, ThreadLock } from '@shopkeeper/agent/lock';
 import logger from '../logger.js';
 
 const RELEASE_SCRIPT = `if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end`;

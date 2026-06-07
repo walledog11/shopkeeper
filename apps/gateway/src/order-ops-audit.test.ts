@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { db } from '@clerk/db';
-import { createTestOrg, cleanupTestData } from '@clerk/db/test-helpers';
-import { recordAgentActionsBatch } from '@clerk/agent/agent-actions';
+import { db } from '@shopkeeper/db';
+import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
+import { recordAgentActionsBatch } from '@shopkeeper/agent/agent-actions';
 
 // Order-ops finding, substantiated: the audit log is NOT thread-locked. The
 // order-ops run records its flag action with threadId/customerId null and the
@@ -9,7 +9,7 @@ import { recordAgentActionsBatch } from '@clerk/agent/agent-actions';
 // run.ts's call site (it passed ctx.thread.id / ctx.customer.id), not the schema
 // or recordAgentActionsBatch (threadId/customerId are String? with onDelete: SetNull).
 //
-// Lives in the gateway (not the @clerk/agent package) because it needs the real
+// Lives in the gateway (not the @shopkeeper/agent package) because it needs the real
 // DB: the package's test:unit runs in CI's no-DB unit job, while the gateway's
 // suite runs in the DB-backed integration job — same precedent as refund-spend.
 

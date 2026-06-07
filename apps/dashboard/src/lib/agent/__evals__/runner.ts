@@ -1,22 +1,22 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { db, isEmptyMemory, SenderType, type DbChannelType, type DbSenderType } from "@clerk/db";
+import { db, isEmptyMemory, SenderType, type DbChannelType, type DbSenderType } from "@shopkeeper/db";
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import { vi } from "vitest";
-import { anthropic, buildCachedSystemPrompt } from "@clerk/agent/ai";
-import { HAIKU_MODEL } from "@clerk/agent/ai";
-import { planAgent } from "@clerk/agent/planner";
+import { anthropic, buildCachedSystemPrompt } from "@shopkeeper/agent/ai";
+import { HAIKU_MODEL } from "@shopkeeper/agent/ai";
+import { planAgent } from "@shopkeeper/agent/planner";
 import { runAgent, type RunAgentOptions } from "../run";
-import { classifyHomePlan } from "@clerk/agent/plan-preview";
-import { resolveAgentSettings } from "@clerk/agent/settings";
-import { readModelUsage } from "@clerk/agent/usage";
-import { hashInstruction, hashPlan, type AgentActionApproval } from "@clerk/agent/agent-actions";
+import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
+import { readModelUsage } from "@shopkeeper/agent/usage";
+import { hashInstruction, hashPlan, type AgentActionApproval } from "@shopkeeper/agent/agent-actions";
 import {
   escalateToHuman,
   addInternalNote,
@@ -25,7 +25,7 @@ import {
   updateThreadStatus,
   updateThreadTag,
 } from "../tools/thread";
-import type { AgentActionMode, AgentContext } from "@clerk/agent/context";
+import type { AgentActionMode, AgentContext } from "@shopkeeper/agent/context";
 import type { AgentPlan, OrgSettings } from "@/types";
 import { judgeReply } from "./judge";
 import type {
@@ -41,15 +41,15 @@ import type {
   FixtureRunSummary,
 } from "./types";
 
-// The executor now lives in @clerk/agent; run.ts calls it through the
+// The executor now lives in @shopkeeper/agent; run.ts calls it through the
 // package-internal import, so a namespace spy on the dashboard shim never
 // intercepts it. Mock the shared module instead (run.ts's relative
-// "./tools/executor.js" and "@clerk/agent/executor" resolve to the same file),
+// "./tools/executor.js" and "@shopkeeper/agent/executor" resolve to the same file),
 // delegating to a mutable per-fixture handler for simulated tool results.
 const simState = vi.hoisted(() => ({ current: null as Map<string, string> | null }));
 
-vi.mock("@clerk/agent/executor", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@clerk/agent/executor")>();
+vi.mock("@shopkeeper/agent/executor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@shopkeeper/agent/executor")>();
   return {
     ...actual,
     executeTool: (async (...a: Parameters<typeof actual.executeTool>) => {

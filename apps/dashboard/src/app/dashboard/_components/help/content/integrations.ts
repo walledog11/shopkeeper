@@ -11,7 +11,7 @@ export const integrations: Category = {
       title: "Connecting Gmail / Email",
       body: [
         {
-          text: "Email is the most common support channel. Connecting it routes messages sent to your support address directly into Clerk as tickets.",
+          text: "Email is the most common support channel. Connecting it routes messages sent to your support address directly into Shopkeeper as tickets.",
         },
         {
           heading: "How to connect",
@@ -20,16 +20,16 @@ export const integrations: Category = {
             "Click Connect on the Gmail / Email card.",
             "Enter your support email address (e.g. support@yourstore.com).",
             "Click Save.",
-            "Set up email forwarding from that address to the inbound address shown in Clerk.",
+            "Set up email forwarding from that address to the inbound address shown in Shopkeeper.",
           ],
         },
         {
           heading: "Setting up forwarding in Gmail",
           steps: [
             "In Gmail, go to Settings → See all settings → Forwarding and POP/IMAP.",
-            "Click Add a forwarding address and paste your Clerk inbound address.",
+            "Click Add a forwarding address and paste your Shopkeeper inbound address.",
             "Confirm the verification email that Gmail sends.",
-            "Set 'Forward a copy of incoming mail' to your Clerk address.",
+            "Set 'Forward a copy of incoming mail' to your Shopkeeper address.",
           ],
         },
         {
@@ -45,7 +45,7 @@ export const integrations: Category = {
       title: "Connecting Instagram DMs",
       body: [
         {
-          text: "Connect your Instagram Business account to receive Direct Messages as tickets in Clerk.",
+          text: "Connect your Instagram Business account to receive Direct Messages as tickets in Shopkeeper.",
         },
         {
           heading: "Requirements",
@@ -60,10 +60,10 @@ export const integrations: Category = {
           steps: [
             "Go to the Integrations page.",
             "Click Connect on the Instagram card.",
-            "You'll be redirected to Facebook to authorise Clerk.",
+            "You'll be redirected to Facebook to authorise Shopkeeper.",
             "Select the Facebook Page linked to your Instagram account.",
             "Grant the requested permissions and confirm.",
-            "You'll be redirected back to Clerk , a green Connected badge will appear.",
+            "You'll be redirected back to Shopkeeper , a green Connected badge will appear.",
           ],
         },
         {

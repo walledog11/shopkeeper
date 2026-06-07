@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 const { mockDispatchMessage } = vi.hoisted(() => ({
   mockDispatchMessage: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('@/lib/messaging/dispatch-message', () => ({
   dispatchMessage: mockDispatchMessage,
 }));
 
-import { AGENT_SETTINGS_DEFAULTS } from '@clerk/agent/settings';
+import { AGENT_SETTINGS_DEFAULTS } from '@shopkeeper/agent/settings';
 import { POST } from './route';
 
 const originalEnv = {

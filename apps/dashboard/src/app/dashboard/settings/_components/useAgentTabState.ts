@@ -14,7 +14,7 @@ import {
   writeSettingsPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
-import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@clerk/agent/settings"
+import { isValidBusinessHoursWindow, resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 
 interface UseAgentTabStateProps {

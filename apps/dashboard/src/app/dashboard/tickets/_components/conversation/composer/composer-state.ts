@@ -20,13 +20,13 @@ import {
 
 export function useComposerState({
   customerName,
-  agentName = "Clerk",
+  agentName = "Shopkeeper",
   channelType,
   shopifyCustomerId,
   customerPlatformId,
   lastCustomerMessageAt,
   value,
-  isClerkMode = false,
+  isAgentMode = false,
   viewTab,
   onViewTabChange,
   isSending,
@@ -44,7 +44,7 @@ export function useComposerState({
   const isEmailLike = channelType === "email" || channelType === "shopify"
   const igWindowExpired = isInstagramReplyWindowExpired({
     channelType,
-    isClerkMode,
+    isAgentMode,
     isNoteTab,
     lastCustomerMessageAt,
   })

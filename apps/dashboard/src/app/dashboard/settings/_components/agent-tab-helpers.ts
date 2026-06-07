@@ -1,4 +1,4 @@
-import { resolveAgentSettings, type AutonomyTier } from "@clerk/agent/settings"
+import { resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
 
 export type AgentSettingsAction =
@@ -296,7 +296,7 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
 
   return {
     ...state,
-    agentName: state.agentName.trim() || "Clerk",
+    agentName: state.agentName.trim() || "Shopkeeper",
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,

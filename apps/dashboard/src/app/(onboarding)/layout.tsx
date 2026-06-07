@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 
 export default async function OnboardingLayout({ children }: { children: React.ReactNode }) {
   const { userId, orgId } = await auth();

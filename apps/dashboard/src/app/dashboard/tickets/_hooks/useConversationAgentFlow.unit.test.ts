@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest"
 import {
-  getClerkCommandState,
+  getAgentCommandState,
   planRequiresApproval,
   resolvePendingPlan,
   shouldUsePrivateComposerAsk,
 } from "./useConversationAgentFlow"
 import type { AgentPlan } from "@/types"
 
-describe("getClerkCommandState", () => {
-  it("detects clerk mode in chat and notes", () => {
-    expect(getClerkCommandState("@clerk refund this order", "Clerk", "notes")).toEqual({
-      clerkInstruction: "refund this order",
-      isClerkMode: true,
-      triggerPrefix: "@clerk",
+describe("getAgentCommandState", () => {
+  it("detects agent mode in chat and notes", () => {
+    expect(getAgentCommandState("@shopkeeper refund this order", "Shopkeeper", "notes")).toEqual({
+      agentInstruction: "refund this order",
+      isAgentMode: true,
+      triggerPrefix: "@shopkeeper",
     })
 
-    expect(getClerkCommandState("@clerk refund this order", "Clerk", "chat")).toEqual({
-      clerkInstruction: "refund this order",
-      isClerkMode: true,
-      triggerPrefix: "@clerk",
+    expect(getAgentCommandState("@shopkeeper refund this order", "Shopkeeper", "chat")).toEqual({
+      agentInstruction: "refund this order",
+      isAgentMode: true,
+      triggerPrefix: "@shopkeeper",
     })
   })
 })

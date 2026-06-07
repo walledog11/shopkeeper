@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { upsertRaceSafeIntegration } from './integration-upsert';
 
 export type EmailIntegrationProvider = 'gmail' | 'outlook' | 'postmark';

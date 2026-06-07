@@ -246,7 +246,7 @@ test('gateway launch contract warns when Redis is not configured with TLS', () =
 });
 
 test('env file parser trims comments and quoted values the same way prod env files are written', async () => {
-  const tempDir = mkdtempSync(join(tmpdir(), 'clerk-env-check-'));
+  const tempDir = mkdtempSync(join(tmpdir(), 'shopkeeper-env-check-'));
   const envFile = join(tempDir, 'gateway.env');
   writeFileSync(
     envFile,

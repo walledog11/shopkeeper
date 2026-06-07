@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
 import type { Redis as IORedis } from 'ioredis';
-import type { LockProvider } from '@clerk/agent/lock';
+import type { LockProvider } from '@shopkeeper/agent/lock';
 import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import type { CustomerMemoryJobData } from '../types.js';
 import { createGatewayBullMqConnection, createGatewayRedisClient } from './redis-client.js';

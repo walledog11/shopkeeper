@@ -5,7 +5,7 @@ import {
   recordDailyLlmSpend,
   usdToNanoDollars,
   type LlmUsageTokens,
-} from "@clerk/db";
+} from "@shopkeeper/db";
 import logger from "./logger.js";
 
 // Backstop on per-org daily LLM spend. Persisted in Postgres (one row per org

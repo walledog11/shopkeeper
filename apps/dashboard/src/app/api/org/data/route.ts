@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 

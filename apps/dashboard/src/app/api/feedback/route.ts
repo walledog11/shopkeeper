@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server"
 import { NextResponse } from "next/server"
-import { db } from "@clerk/db"
+import { db } from "@shopkeeper/db"
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit"
 
 const THIRTY_DAYS = 60 * 60 * 24 * 30

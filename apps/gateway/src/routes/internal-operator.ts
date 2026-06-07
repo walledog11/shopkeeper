@@ -1,5 +1,5 @@
 import express, { type Request, type Response, type Router } from 'express';
-import { db, type DbChannelType } from '@clerk/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { CHANNEL } from '../constants.js';
 import { notifyOperator } from '../operator-notify.js';

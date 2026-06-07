@@ -1,7 +1,7 @@
-import { db, Prisma, SenderType } from "@clerk/db"
+import { db, Prisma, SenderType } from "@shopkeeper/db"
 import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape"
-import { buildPlanPreview, classifyHomePlan } from "@clerk/agent/plan-preview"
+import { buildPlanPreview, classifyHomePlan } from "@shopkeeper/agent/plan-preview"
 import {
   HOME_NEEDS_ATTENTION_LIMIT,
   HOME_OVERNIGHT_TOPIC_LIMIT,

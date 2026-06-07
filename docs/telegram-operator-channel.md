@@ -4,13 +4,13 @@ Implements §2a of `docs/production/checklist.md`. Replaces Twilio (WhatsApp/SMS
 
 ## Goal
 
-Merchant clicks "Connect Telegram" in the dashboard → opens `t.me/ClerkBot?start=<token>` → bot binds that chat to their `OrgMember`. From then on, plan approvals (`yes` / `no` / `skip N`), digest review, free-form instructions, and order lookups all work over Telegram with the same semantics as today's Twilio path.
+Merchant clicks "Connect Telegram" in the dashboard → opens `t.me/ShopkeeperBot?start=<token>` → bot binds that chat to their `OrgMember`. From then on, plan approvals (`yes` / `no` / `skip N`), digest review, free-form instructions, and order lookups all work over Telegram with the same semantics as today's Twilio path.
 
 Out of scope for this doc: WhatsApp Cloud API (§2b), web-push PWA (§2d), customer-facing SMS, Twilio deletion (handled in §2c after this lands).
 
 ## Why Telegram first
 
-- Single Clerk-owned bot — no per-merchant Meta App Review, no Twilio sandbox approval.
+- Single Shopkeeper-owned bot — no per-merchant Meta App Review, no Twilio sandbox approval.
 - Free, no per-message billing.
 - Bot API is a plain HTTPS webhook + REST send — no SDK lock-in, no TwiML.
 - `start=<payload>` deep-link is the exact primitive we need for binding.
@@ -43,7 +43,7 @@ Out of scope for this doc: WhatsApp Cloud API (§2b), web-push PWA (§2d), custo
 Verify: existing Twilio path still works end-to-end against staging.
 
 ### Phase 2 — Telegram bot setup + webhook plumbing [COMPLETED]
-1. Create `@ClerkBot` (production) and `@ClerkBotDev` (dev) via @BotFather. Store `TELEGRAM_BOT_TOKEN` (and `_DEV` variant) in Railway/Vercel envs. Add to `.env.example` and the env list in `CLAUDE.md`.
+1. Create `@ShopkeeperBot` (production) and `@ShopkeeperBotDev` (dev) via @BotFather. Store `TELEGRAM_BOT_TOKEN` (and `_DEV` variant) in Railway/Vercel envs. Add to `.env.example` and the env list in `CLAUDE.md`. See [phase-6-external-services.md](./phase-6-external-services.md) for migration from `@ClerkBot`.
 2. `clients/telegram-client.ts`:
    - `sendMessage(chatId, text, opts?)` → `POST /bot<token>/sendMessage`.
    - `setWebhook(url, secretToken)` → one-time setup; document running it via `apps/gateway/src/scripts/`.
@@ -55,10 +55,10 @@ Verify: existing Twilio path still works end-to-end against staging.
 4. Mount the route in `apps/gateway/src/start.ts` (or wherever `registerTwilioWebhookRoutes` is mounted).
 
 ### Phase 3 — bind flow (deep-link) [COMPLETED]
-1. `POST /api/integrations/telegram` (dashboard, authed): issue a single-use bind token (24h TTL, store in Redis: `telegram:bind:<token>` → `{ orgId, clerkUserId }`). Return `{ url: "https://t.me/ClerkBot?start=<token>" }`.
+1. `POST /api/integrations/telegram` (dashboard, authed): issue a single-use bind token (24h TTL, store in Redis: `telegram:bind:<token>` → `{ orgId, clerkUserId }`). Return `{ url: "https://t.me/ShopkeeperBot?start=<token>" }` (username from `TELEGRAM_BOT_USERNAME` env).
 2. Settings UI: button + QR code (`qrcode.react` is already a dep, confirm). Show current binding (chat title + "Disconnect").
 3. In `webhooks-telegram.ts`, when the message text starts with `/start <token>`:
-   - Look up the token in Redis. If missing/expired → reply "This link has expired. Generate a new one in your Clerk dashboard."
+   - Look up the token in Redis. If missing/expired → reply "This link has expired. Generate a new one in your Shopkeeper dashboard."
    - Set `OrgMember.telegramChatId = chat.id` for the resolved `clerkUserId`. Delete the token.
    - Reply "Connected. Reply to ticket digests here, or send free-form instructions like 'refund #1234'."
 4. `DELETE /api/integrations/telegram` clears `telegramChatId`.
@@ -72,13 +72,13 @@ Verify: existing Twilio path still works end-to-end against staging.
 2. Twilio card stays — gets a "Legacy" badge until §2c removes it. (Doing the removal in this PR violates the doc's "ship operator channel before deleting Twilio" sequencing.)
 
 ### Phase 6 — tests [COMPLETED]
-1. `apps/gateway/src/routes/webhooks-telegram.test.ts` — signature reject, `/start` bind, `yes`/`skip N`/`no`, `review`/`spam N`/`reply N`, `#N` order lookup, free-form forwarding. Real DB via `@clerk/db/test-helpers`; ioredis + telegram-client + global `fetch` mocked.
+1. `apps/gateway/src/routes/webhooks-telegram.test.ts` — signature reject, `/start` bind, `yes`/`skip N`/`no`, `review`/`spam N`/`reply N`, `#N` order lookup, free-form forwarding. Real DB via `@shopkeeper/db/test-helpers`; ioredis + telegram-client + global `fetch` mocked.
 2. `apps/gateway/src/operator-context.test.ts` — get/update/clear round-trip per channel, history truncation, `extractOrderNumber` table-driven.
 3. Manual E2E checklist below (run once against staging after bot is created).
 
 #### Manual E2E checklist
 
-CI can't talk to a real Telegram bot. Run this once end-to-end against staging after `@ClerkBotDev` is created and `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` are set in Railway, and `TELEGRAM_BOT_USERNAME` is set in Vercel. Run `tsx apps/gateway/src/scripts/set-telegram-webhook.ts <gateway-url>/webhooks/telegram` first.
+CI can't talk to a real Telegram bot. Run this once end-to-end against staging after `@ShopkeeperBotDev` is created and `TELEGRAM_BOT_TOKEN` / `TELEGRAM_WEBHOOK_SECRET` are set in Railway, and `TELEGRAM_BOT_USERNAME` is set in Vercel. Run `tsx apps/gateway/src/scripts/set-telegram-webhook.ts <gateway-url>/webhooks/telegram` first.
 
 - [ ] **Connect.** Dashboard → Integrations → Telegram → "Connect Telegram". Tap the deep link, send `/start`. Bot replies "Connected.". Re-open the integrations page; card shows the bound chat.
 - [ ] **Plan-ready ping.** Send a customer inbound (email or IG) that triggers an auto-plan. Telegram receives a digest with the plan + `yes / no / skip N` options.
@@ -97,7 +97,7 @@ CI can't talk to a real Telegram bot. Run this once end-to-end against staging a
 ## Open questions to resolve before coding
 
 1. **Single channelType or one per provider?** Today there's `sms_agent`. Cleanest is a single `operator_agent` channelType plus a `provider` column on the thread, but renaming an enum mid-flight is ugly. Pragmatic call: add `telegram_agent` next to `sms_agent`, plan to consolidate later. Confirm with the user before generalizing.
-2. **Per-org bot vs single Clerk bot?** Doc says single Clerk bot. That's correct for now (no per-merchant infra). Revisit if a merchant ever wants their own brand on the bot.
+2. **Per-org bot vs single Shopkeeper bot?** Doc says single Shopkeeper bot. That's correct for now (no per-merchant infra). Revisit if a merchant ever wants their own brand on the bot.
 3. **Where does the binding live — `OrgMember.telegramChatId` or an `Integration` row?** Today the equivalent for WhatsApp is split: `OrgMember.phoneNumber` (per-user) and `Integration` rows (per-org for customer-facing SMS). Telegram is operator-only, so `OrgMember.telegramChatId` is the right home. Don't add an `Integration` row.
 4. **Group chats?** Telegram allows the bot in groups. Initial version: ignore non-`private` chats. Note in the welcome message.
 

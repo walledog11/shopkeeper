@@ -1,4 +1,4 @@
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { BadRequestError, NotFoundError } from "./errors.js";
 
 type DashboardCustomerClient = Pick<typeof db, "customer">;

@@ -11,7 +11,7 @@ export const gettingStarted: Category = {
       title: "Quick start guide",
       body: [
         {
-          text: "Get Clerk up and running in three steps. You'll be receiving and replying to customer messages in minutes.",
+          text: "Get Shopkeeper up and running in three steps. You'll be receiving and replying to customer messages in minutes.",
         },
         {
           heading: "Step 1 , Connect a channel",
@@ -34,7 +34,7 @@ export const gettingStarted: Category = {
           heading: "Step 3 , Reply and resolve",
           steps: [
             "Click a ticket to open the conversation.",
-            "Type a reply in the composer at the bottom, or use Draft with Clerk to generate an AI reply.",
+            "Type a reply in the composer at the bottom, or use Draft with Shopkeeper to generate an AI reply.",
             "Hit Send to deliver your message back to the customer.",
             "When the issue is resolved, click the Resolve button in the top-right of the conversation.",
           ],
@@ -46,7 +46,7 @@ export const gettingStarted: Category = {
       title: "Platform overview",
       body: [
         {
-          text: "Clerk is a unified helpdesk that pulls customer messages from multiple channels into one inbox. Here's a quick map of the interface.",
+          text: "Shopkeeper is a unified helpdesk that pulls customer messages from multiple channels into one inbox. Here's a quick map of the interface.",
         },
         {
           heading: "Sidebar",
@@ -66,7 +66,7 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Settings",
-          text: "Configure your business name, AI context, and brand voice here. These settings directly affect how Clerk drafts replies.",
+          text: "Configure your business name, AI context, and brand voice here. These settings directly affect how Shopkeeper drafts replies.",
         },
       ],
     },

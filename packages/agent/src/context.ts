@@ -1,4 +1,4 @@
-import { db, isEmptyMemory, parseStoredMemory, type CustomerMemory } from "@clerk/db";
+import { db, isEmptyMemory, parseStoredMemory, type CustomerMemory } from "@shopkeeper/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import type { ToolResult } from "./tools/result.js";

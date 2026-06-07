@@ -41,7 +41,7 @@ describe("logoValidationError", () => {
 describe("exportFilenameFromDisposition", () => {
   it("uses the response filename or a dated fallback", () => {
     expect(exportFilenameFromDisposition('attachment; filename="backup.json"')).toBe("backup.json")
-    expect(exportFilenameFromDisposition("", new Date("2026-06-05T12:00:00Z"))).toBe("clerk-export-2026-06-05.json")
+    expect(exportFilenameFromDisposition("", new Date("2026-06-05T12:00:00Z"))).toBe("shopkeeper-export-2026-06-05.json")
   })
 })
 

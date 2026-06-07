@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType } from '@clerk/db';
+import { ChannelType } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 const { mockGenerateText } = vi.hoisted(() => ({
   mockGenerateText: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
-vi.mock('@clerk/agent/ai', () => ({
+vi.mock('@shopkeeper/agent/ai', () => ({
   generateText: mockGenerateText,
 }));
 

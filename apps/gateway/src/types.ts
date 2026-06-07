@@ -1,4 +1,4 @@
-import type { DbChannelType } from '@clerk/db';
+import type { DbChannelType } from '@shopkeeper/db';
 
 declare module 'http' {
   interface IncomingMessage {

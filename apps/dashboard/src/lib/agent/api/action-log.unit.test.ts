@@ -11,7 +11,7 @@ import {
   extractAgentTurnsFromMessages,
   serializeAgentTurn,
 } from "@/lib/agent/api/turns";
-import { isAgentTurnContent } from "@clerk/agent/tools";
+import { isAgentTurnContent } from "@shopkeeper/agent/tools";
 import type { ActionLogEntry } from "@/types";
 
 describe("agent action-log note helpers", () => {
@@ -76,8 +76,23 @@ describe("agent action-log note helpers", () => {
   it("exports a canonical message filter shape for prisma queries", () => {
     expect(agentTurnMessageFilter).toEqual({
       senderType: "note",
-      contentText: { startsWith: "__clerk_agent__" },
+      OR: [
+        { contentText: { startsWith: "__shopkeeper_agent__" } },
+        { contentText: { startsWith: "__clerk_agent__" } },
+      ],
     });
+  });
+
+  it("detects legacy agent turn prefixes during the transition window", () => {
+    const legacy = `__clerk_agent__${JSON.stringify({
+      instruction: "Handle this",
+      actions: [],
+      summary: "Done",
+      error: null,
+    })}`;
+
+    expect(isAgentTurnContent(legacy)).toBe(true);
+    expect(extractAgentTurnsFromMessages([{ id: "msg_legacy", contentText: legacy }])).toHaveLength(1);
   });
 });
 

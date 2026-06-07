@@ -7,9 +7,9 @@ import AgentPanelRoot from "./_components/agent-panel/AgentPanelRoot";
 import { AgentPanelProvider } from "./_components/agent-panel/AgentPanelContext";
 import { CommandPaletteProvider } from "./_components/CommandPaletteContext";
 import { getOrCreateOrg } from "@/lib/server/org";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;

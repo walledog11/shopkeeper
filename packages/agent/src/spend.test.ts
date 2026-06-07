@@ -25,7 +25,7 @@ function usdToNanoDollars(usd: number): number {
   return Math.round(usd * 1_000_000_000);
 }
 
-vi.mock("@clerk/db", () => ({
+vi.mock("@shopkeeper/db", () => ({
   DEFAULT_DAILY_LLM_SPEND_CAP_USD: 5,
   SpendCapError: MockSpendCapError,
   getDailyLlmSpendNano: mockGetDailyLlmSpendNano,
@@ -33,7 +33,7 @@ vi.mock("@clerk/db", () => ({
   usdToNanoDollars,
 }));
 
-import { SpendCapError } from "@clerk/db";
+import { SpendCapError } from "@shopkeeper/db";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
 import { enforceSpendCap, getDailySpendNano, recordSpend } from "./spend.js";
 

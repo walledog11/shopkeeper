@@ -1,6 +1,6 @@
-import type { CustomerMemory } from "@clerk/db";
+import type { CustomerMemory } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
-import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@clerk/agent/context";
+import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@shopkeeper/agent/context";
 
 export interface FixtureMessage {
   senderType: "customer" | "agent" | "ai" | "note";

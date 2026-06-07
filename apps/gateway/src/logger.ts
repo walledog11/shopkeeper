@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { installAgentLogger } from '@clerk/agent/logger';
+import { installAgentLogger } from '@shopkeeper/agent/logger';
 import { PINO_REDACT_PATHS, REDACTED } from './observability/redaction.js';
 
 const logger = pino({

@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ChannelType, db } from "@clerk/db";
+import { ChannelType, db } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import {
   hashInstruction,
   hashPlan,
   recordAgentActionsBatch,
-} from "@clerk/agent/agent-actions";
-import type { ActionEntry } from "@clerk/agent/context";
+} from "@shopkeeper/agent/agent-actions";
+import type { ActionEntry } from "@shopkeeper/agent/context";
 import type { AgentPlan } from "@/types";
 
 const refundPlan: AgentPlan = {

@@ -1,4 +1,4 @@
-import { db } from "@clerk/db"
+import { db } from "@shopkeeper/db"
 import { BadRequestError } from "@/lib/api/errors"
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000

@@ -1,14 +1,15 @@
 import type { Metadata } from 'next'
+import { CONTACT_EMAIL } from '@/lib/brand'
 import { LegalPage } from '../_components/LegalPage'
 
 export const metadata: Metadata = {
-  title: 'Terms of Service | Clerk',
-  description: 'Terms that govern use of Clerk.',
+  title: 'Terms of Service | Shopkeeper',
+  description: 'Terms that govern use of Shopkeeper.',
 }
 
 const termsIntro = (
   <p>
-    These Terms govern access to and use of Clerk. By creating an account or using the service, you agree to these
+    These Terms govern access to and use of Shopkeeper. By creating an account or using the service, you agree to these
     Terms on behalf of yourself and the business or organization you represent.
   </p>
 )
@@ -24,7 +25,7 @@ export default function TermsPage() {
           title: 'The Service',
           body: (
             <p>
-              Clerk provides support workflow software for merchants, including shared inbox tools, customer context,
+              Shopkeeper provides support workflow software for merchants, including shared inbox tools, customer context,
               AI-assisted summaries and draft replies, and integrations with commerce and messaging providers.
             </p>
           ),
@@ -43,7 +44,7 @@ export default function TermsPage() {
           title: 'Customer Communications and AI Assistance',
           body: (
             <p>
-              You are responsible for the content and legality of messages sent through Clerk. AI-assisted outputs may
+              You are responsible for the content and legality of messages sent through Shopkeeper. AI-assisted outputs may
               be incomplete or inaccurate and should be reviewed before use. You remain responsible for merchant
               policies, refunds, order decisions, and customer-facing commitments.
             </p>
@@ -54,7 +55,7 @@ export default function TermsPage() {
           body: (
             <p>
               Your use of connected services such as Shopify, email providers, Stripe, and messaging platforms remains
-              subject to their terms. You authorize Clerk to access, process, and transmit data from connected services
+              subject to their terms. You authorize Shopkeeper to access, process, and transmit data from connected services
               as needed to provide the product.
             </p>
           ),
@@ -73,7 +74,7 @@ export default function TermsPage() {
           title: 'Acceptable Use',
           body: (
             <p>
-              You may not use Clerk to violate law, infringe rights, send spam or deceptive messages, interfere with
+              You may not use Shopkeeper to violate law, infringe rights, send spam or deceptive messages, interfere with
               service operation, bypass security controls, reverse engineer the service, or process data you are not
               authorized to use.
             </p>
@@ -83,8 +84,8 @@ export default function TermsPage() {
           title: 'Data and Intellectual Property',
           body: (
             <p>
-              You retain rights to your business data and customer content. You grant Clerk the rights needed to host,
-              process, transmit, and display that data to provide and secure the service. Clerk retains rights to the
+              You retain rights to your business data and customer content. You grant Shopkeeper the rights needed to host,
+              process, transmit, and display that data to provide and secure the service. Shopkeeper retains rights to the
               service, software, design, documentation, and related technology.
             </p>
           ),
@@ -94,7 +95,7 @@ export default function TermsPage() {
           body: (
             <p>
               The service is provided as available and without warranties to the maximum extent permitted by law. To the
-              maximum extent permitted by law, Clerk will not be liable for indirect, incidental, special, consequential,
+              maximum extent permitted by law, Shopkeeper will not be liable for indirect, incidental, special, consequential,
               or punitive damages, or for lost profits, revenues, goodwill, or data.
             </p>
           ),
@@ -103,7 +104,7 @@ export default function TermsPage() {
           title: 'Termination',
           body: (
             <p>
-              You may stop using Clerk at any time. We may suspend or terminate access if you violate these Terms,
+              You may stop using Shopkeeper at any time. We may suspend or terminate access if you violate these Terms,
               create security or legal risk, or fail to pay applicable fees. Some provisions survive termination where
               their nature requires it.
             </p>
@@ -114,7 +115,7 @@ export default function TermsPage() {
           body: (
             <p>
               We may update these Terms from time to time. Material changes will be posted in the product or on this
-              page. Questions can be sent to hello@useclerk.co.
+              page. Questions can be sent to {CONTACT_EMAIL}.
             </p>
           ),
         },

@@ -1,5 +1,5 @@
 {
-  "name": "clerk-monorepo",
+  "name": "shopkeeper-monorepo",
   "private": true,
   "workspaces": [
     "apps/*",

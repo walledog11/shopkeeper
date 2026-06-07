@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { AlertCircle, Check, ChevronDown, ExternalLink, Loader2 } from "lucide-react"
 import type { ActionLogEntry } from "@/types"
-import { TOOL_LABELS } from "@clerk/agent/tools"
+import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 import { useActionLogEntries } from "@/hooks/useActionLogEntries"
 import { formatRelativeTimestamp } from "@/lib/format/date"
 import { getChannelBadgeClassName, getChannelLabel } from "@/lib/messaging/channels"

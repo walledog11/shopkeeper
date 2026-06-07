@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestIntegration,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 // ─── Hoisted mock state ──────────────────────────────────────────────────────
 // These must be declared with vi.hoisted so they are available inside vi.mock

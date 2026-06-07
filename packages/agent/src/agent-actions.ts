@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { TOOL_CATEGORIES } from "./tools/registry.js";
 import type {
   ActionEntry,

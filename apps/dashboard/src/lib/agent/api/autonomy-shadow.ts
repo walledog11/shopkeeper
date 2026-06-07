@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { db } from "@clerk/db";
-import { TOOL_CATEGORIES } from "@clerk/agent/tools";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { db } from "@shopkeeper/db";
+import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 

@@ -9,7 +9,7 @@
  * Response: 200 on success, 4xx/5xx on error.
  */
 import { NextResponse } from 'next/server';
-import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
+import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import { readRequiredJsonObject } from '@/lib/api/body';

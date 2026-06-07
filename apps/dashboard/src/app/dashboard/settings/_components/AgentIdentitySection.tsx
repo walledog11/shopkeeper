@@ -17,7 +17,7 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
           aria-label="Agent name"
           value={settingsState.agentName}
           onChange={e => dispatch({ type: "set", patch: { agentName: e.target.value } })}
-          placeholder="Clerk"
+          placeholder="Shopkeeper"
         />
         <LabeledTextInput
           label="Brand name"

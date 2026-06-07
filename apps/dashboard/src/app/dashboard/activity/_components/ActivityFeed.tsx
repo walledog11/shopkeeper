@@ -8,8 +8,8 @@ import { useActionLogEntries } from "@/hooks/useActionLogEntries"
 import { formatRelativeTime } from "@/lib/format/date"
 import { redactPii } from "@/lib/format/redact"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { isOperatorChannel } from "@clerk/agent/thread-constants"
-import { TOOL_CATEGORIES, TOOL_LABELS } from "@clerk/agent/tools"
+import { isOperatorChannel } from "@shopkeeper/agent/thread-constants"
+import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
 import type { ActionLogEntry, ToolCategory } from "@/types"
 
 const PILL_STYLES: Record<ToolCategory, string> = {

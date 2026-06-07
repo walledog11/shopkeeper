@@ -8,7 +8,7 @@ import type {
   PlanStep,
   AgentPlan,
   AgentTurn,
-} from "@clerk/agent";
+} from "@shopkeeper/agent";
 import type {
   ChannelType as DbChannelType,
   SenderType as DbSenderType,
@@ -16,9 +16,9 @@ import type {
   ThreadFilterStatus as DbThreadFilterStatus,
   ThreadStatus as DbThreadStatus,
   VoiceProposal as DbVoiceProposal,
-} from "@clerk/db";
+} from "@shopkeeper/db";
 
-// DB enum value types come from @clerk/db so dashboard DTOs cannot drift from
+// DB enum value types come from @shopkeeper/db so dashboard DTOs cannot drift from
 // Prisma enum changes.
 export type ChannelType = DbChannelType;
 export type ThreadStatus = DbThreadStatus;
@@ -26,7 +26,7 @@ export type SenderType = DbSenderType;
 export type ThreadFilterStatus = DbThreadFilterStatus;
 export type ThreadFilterFeedback = DbThreadFilterFeedback;
 
-// Agent-domain types now live in @clerk/agent (Track 2 extraction); re-exported
+// Agent-domain types now live in @shopkeeper/agent (Track 2 extraction); re-exported
 // here so existing `@/types` imports are unchanged.
 export type {
   AgentToolPermissions,

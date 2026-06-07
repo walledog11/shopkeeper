@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getDashboardAppUrl, getDashboardOpsAlertConfig, validateDashboardEnv } from './index';
 
 function stubBaseDashboardEnv() {
-  vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/clerk?pgbouncer=true&connection_limit=1');
+  vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
   vi.stubEnv('CLERK_SECRET_KEY', 'sk_test_clerk');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType } from '@clerk/db';
-import { generateText } from '@clerk/agent/ai';
+import { db, SenderType } from '@shopkeeper/db';
+import { generateText } from '@shopkeeper/agent/ai';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';

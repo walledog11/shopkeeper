@@ -48,19 +48,19 @@ export default function FeedbackPage() {
     <div className="p-5 md:p-6 ">
       <div className="mb-6">
         <h1 className="text-lg font-semibold tracking-tight">Feedback</h1>
-        <p className="text-sm text-muted-foreground mt-1">Share your thoughts to help us improve Clerk.</p>
+        <p className="text-sm text-muted-foreground mt-1">Share your thoughts to help us improve Shopkeeper.</p>
       </div>
 
       <Card className="bg-card border-border rounded-md p-6">
         {submitted ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center">
             <p className="text-sm font-semibold text-white/70">Thanks for the feedback!</p>
-            <p className="text-xs text-white/35">It helps us make Clerk better.</p>
+            <p className="text-xs text-white/35">It helps us make Shopkeeper better.</p>
           </div>
         ) : (
           <div className="space-y-5">
             <div>
-              <p className="text-sm font-medium text-white/70 mb-3">How are you liking Clerk?</p>
+              <p className="text-sm font-medium text-white/70 mb-3">How are you liking Shopkeeper?</p>
               <div className="flex items-center gap-1">
                 {[1, 2, 3, 4, 5].map(star => (
                   <button type="button"

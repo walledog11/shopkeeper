@@ -142,7 +142,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
     <SectionCard title="Data export" description="Download a JSON snapshot of all customers, threads, messages, knowledge base, and canned responses.">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <p className="text-xs text-white/35 max-w-md">
-          Useful for backups or migrating off Clerk. Doesn&apos;t include integration tokens, billing data, or audit logs.
+          Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
         </p>
         <div className="flex items-center gap-2 shrink-0">
           {exportError && <p className="text-xs text-red-400">{exportError}</p>}
@@ -230,7 +230,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
-                  This is your only workspace. Create another workspace first, or delete your account in Settings → Account to leave Clerk.
+                  This is your only workspace. Create another workspace first, or delete your account in Settings → Account to leave Shopkeeper.
                 </p>
               )}
             </div>

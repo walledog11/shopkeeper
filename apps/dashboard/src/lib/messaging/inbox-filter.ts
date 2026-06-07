@@ -1,6 +1,6 @@
-import { Prisma, ThreadFilterStatus } from "@clerk/db"
+import { Prisma, ThreadFilterStatus } from "@shopkeeper/db"
 import type { Prisma as PrismaTypes } from "@prisma/client"
-import { CHANNEL_TYPE } from "@clerk/agent/thread-constants"
+import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 
 export function canonicalInboxThreadWhere(organizationId: string): PrismaTypes.ThreadWhereInput {
   return {

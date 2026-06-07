@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@/lib/agent/api/plan-cache';
 import type { AgentPlan } from '@/types';
 
@@ -31,7 +31,7 @@ vi.mock('@/lib/agent/runner', () => ({
   planAgent: mockPlanAgent,
 }));
 
-vi.mock('@clerk/agent/settings', () => ({
+vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn().mockReturnValue({}),
 }));
 

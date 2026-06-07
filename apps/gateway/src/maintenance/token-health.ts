@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import {

@@ -23,19 +23,19 @@ const canned = (overrides: Partial<CannedResponse>): CannedResponse => ({
 })
 
 describe("isInstagramReplyWindowExpired", () => {
-  it("expires Instagram replies after 24 hours outside notes and Clerk mode", () => {
+  it("expires Instagram replies after 24 hours outside notes and agent mode", () => {
     const nowMs = new Date("2026-06-05T12:00:00.000Z").getTime()
 
     expect(isInstagramReplyWindowExpired({
       channelType: "ig_dm",
-      isClerkMode: false,
+      isAgentMode: false,
       isNoteTab: false,
       lastCustomerMessageAt: "2026-06-04T11:59:00.000Z",
       nowMs,
     })).toBe(true)
     expect(isInstagramReplyWindowExpired({
       channelType: "ig_dm",
-      isClerkMode: false,
+      isAgentMode: false,
       isNoteTab: true,
       lastCustomerMessageAt: "2026-06-04T11:59:00.000Z",
       nowMs,
@@ -75,13 +75,13 @@ describe("canned response insertion", () => {
 describe("buildComposerPlaceholder", () => {
   it("keeps desktop shortcut hints out of mobile placeholders", () => {
     expect(buildComposerPlaceholder({
-      agentName: "Clerk",
+      agentName: "Shopkeeper",
       customerName: "Maya",
       isMobile: false,
       isNoteTab: false,
     })).toContain("⌘↵ to send")
     expect(buildComposerPlaceholder({
-      agentName: "Clerk",
+      agentName: "Shopkeeper",
       customerName: "Maya",
       isMobile: true,
       isNoteTab: false,

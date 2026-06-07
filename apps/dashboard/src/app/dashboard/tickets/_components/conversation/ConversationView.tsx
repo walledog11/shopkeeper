@@ -90,12 +90,12 @@ export default function ConversationView({
 
   const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
   const {
-    clerkInstruction,
+    agentInstruction,
     handlePlanApprove,
     handlePlanDismiss,
     handlePlanRegenerate,
     handleSend,
-    isClerkMode,
+    isAgentMode,
     isPlanExecuting,
     isPlanLoading,
     isRegenerating,
@@ -278,13 +278,13 @@ export default function ConversationView({
           <ConversationComposerArea
             containerRef={composerRef}
             agentName={agentName}
-            clerkInstruction={clerkInstruction}
-            isClerkMode={isClerkMode}
+            agentInstruction={agentInstruction}
+            isAgentMode={isAgentMode}
             isPlanExecuting={isPlanExecuting}
             isRegenerating={isRegenerating}
             noteCount={noteCount}
-            onChange={text => onReplyChange(isClerkMode ? `@${agentName.toLowerCase()} ` + text : text)}
-            onClearClerk={() => onReplyChange('')}
+            onChange={text => onReplyChange(isAgentMode ? `@${agentName.toLowerCase()} ` + text : text)}
+            onClearAgentMode={() => onReplyChange('')}
             onPlanApprove={handlePlanApprove}
             onPlanDismiss={handlePlanDismiss}
             onPlanRegenerate={handlePlanRegenerate}

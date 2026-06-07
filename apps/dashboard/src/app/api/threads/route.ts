@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType, ThreadFilterStatus } from '@clerk/db';
+import { db, SenderType, ThreadFilterStatus } from '@shopkeeper/db';
 import { withOrgRoute } from '@/lib/api/route';
 import { canonicalInboxThreadWhere } from '@/lib/messaging/inbox-filter';
 

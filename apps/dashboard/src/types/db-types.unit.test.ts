@@ -5,7 +5,7 @@ import {
   ThreadFilterFeedback as DbThreadFilterFeedbackRuntime,
   ThreadFilterStatus as DbThreadFilterStatusRuntime,
   ThreadStatus as DbThreadStatusRuntime,
-} from "@clerk/db";
+} from "@shopkeeper/db";
 import type {
   ChannelType as DbChannelType,
   SenderType as DbSenderType,
@@ -13,7 +13,7 @@ import type {
   ThreadFilterStatus as DbThreadFilterStatus,
   ThreadStatus as DbThreadStatus,
   VoiceProposal as DbVoiceProposal,
-} from "@clerk/db";
+} from "@shopkeeper/db";
 import type {
   ActionLogEntry,
   ChannelType,
@@ -30,7 +30,7 @@ import type {
 } from "./index";
 
 describe("dashboard DB type boundaries", () => {
-  it("aliases Prisma enum value types from @clerk/db", () => {
+  it("aliases Prisma enum value types from @shopkeeper/db", () => {
     expectTypeOf<ChannelType>().toEqualTypeOf<DbChannelType>();
     expectTypeOf<ThreadStatus>().toEqualTypeOf<DbThreadStatus>();
     expectTypeOf<SenderType>().toEqualTypeOf<DbSenderType>();

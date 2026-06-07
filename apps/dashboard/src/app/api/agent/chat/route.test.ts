@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, SpendCapError, db, usdToNanoDollars } from "@clerk/db";
+import { ChannelType, SpendCapError, db, usdToNanoDollars } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
   createTestThread,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn(),
@@ -47,8 +47,8 @@ vi.mock("@/lib/agent/api/execution", () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 
-vi.mock("@clerk/agent/settings", async () => {
-  const actual = await vi.importActual<typeof import("@clerk/agent/settings")>("@clerk/agent/settings");
+vi.mock("@shopkeeper/agent/settings", async () => {
+  const actual = await vi.importActual<typeof import("@shopkeeper/agent/settings")>("@shopkeeper/agent/settings");
   return {
     ...actual,
     resolveAgentSettings: mockResolveAgentSettings,

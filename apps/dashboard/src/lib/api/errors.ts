@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { isSpendCapError, nanoDollarsToUsd } from '@clerk/db';
-import { ApiError } from '@clerk/agent/errors';
+import { isSpendCapError, nanoDollarsToUsd } from '@shopkeeper/db';
+import { ApiError } from '@shopkeeper/agent/errors';
 import logger from '@/lib/server/logger';
 
-// The error classes moved to @clerk/agent/errors (Track 4.1) so the shared
+// The error classes moved to @shopkeeper/agent/errors (Track 4.1) so the shared
 // orchestration can throw/catch one class identity across hosts. Re-exported
 // here so the ~56 dashboard importers stay unchanged; the Next-coupled mapper
 // below stays dashboard-side.
@@ -15,8 +15,8 @@ export {
   NotFoundError,
   BadRequestError,
   ConflictError,
-} from '@clerk/agent/errors';
-export type { ApiErrorDetail } from '@clerk/agent/errors';
+} from '@shopkeeper/agent/errors';
+export type { ApiErrorDetail } from '@shopkeeper/agent/errors';
 
 export function handleApiError(error: unknown, context: string, message: string): NextResponse {
   if (isSpendCapError(error)) {

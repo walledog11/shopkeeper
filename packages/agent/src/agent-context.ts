@@ -1,4 +1,4 @@
-import type { CustomerMemory } from "@clerk/db";
+import type { CustomerMemory } from "@shopkeeper/db";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,

@@ -1,5 +1,5 @@
-import { ThreadFilterFeedback, ThreadFilterStatus } from '@clerk/db';
-import { THREAD_STATUS } from '@clerk/agent/thread-constants';
+import { ThreadFilterFeedback, ThreadFilterStatus } from '@shopkeeper/db';
+import { THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { BadRequestError } from '@/lib/api/errors';
 import { requireJsonObject } from '@/lib/api/body';
 import { assertKnownFields, requireNonEmptyString } from '@/lib/api/validation';

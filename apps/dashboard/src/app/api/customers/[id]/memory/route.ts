@@ -5,7 +5,7 @@ import {
   db,
   parseStoredMemory,
   toCustomerMemoryJson,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import {

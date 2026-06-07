@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { Prisma } from "@prisma/client";
-import { db, Prisma as PrismaRuntime } from "@clerk/db";
-import { TOOL_LABELS } from "@clerk/agent/tools";
+import { db, Prisma as PrismaRuntime } from "@shopkeeper/db";
+import { TOOL_LABELS } from "@shopkeeper/agent/tools";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry } from "@/types";
 

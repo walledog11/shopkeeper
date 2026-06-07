@@ -1,5 +1,5 @@
-import { db } from '@clerk/db';
-import type { OrgSettings } from '@clerk/agent/types';
+import { db } from '@shopkeeper/db';
+import type { OrgSettings } from '@shopkeeper/agent/types';
 import * as Sentry from '@sentry/node';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';

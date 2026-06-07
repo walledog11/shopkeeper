@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import { updateContext, getContext } from '../operator-context.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -528,7 +528,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
 
     await waitForReplies(1);
     const text = lastReplyText();
-    expect(text).toMatch(/Clerk commands/);
+    expect(text).toMatch(/Shopkeeper commands/);
     expect(text).toMatch(/SUMMARY/);
     expect(text).toMatch(/OPEN <n>/);
   });

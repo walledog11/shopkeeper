@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { auth } from "@clerk/nextjs/server";
 import { getRedis } from "@/lib/redis";
 import { ApiError, UnauthorizedError } from "@/lib/api/errors";

@@ -3,7 +3,7 @@ import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { parseAgentQuickApproveBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import {
   executeCurrentCachedHomePlan,
   findFailedToolResult,

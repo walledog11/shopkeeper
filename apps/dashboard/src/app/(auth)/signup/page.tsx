@@ -47,7 +47,7 @@ function SignupAside() {
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] shadow-[0_24px_100px_-56px_rgba(0,0,0,0.95)] overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
           <span className="text-xs font-bold uppercase tracking-[0.18em] text-white/45">
-            Clerk Inbox
+            Shopkeeper Inbox
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-400">
             <span className="size-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -136,7 +136,7 @@ export default function SignUpPage() {
           <span className="text-green-400">runs itself.</span>
         </>
       }
-      description="Every DM, SMS, and Shopify order in one inbox. Clerk reads, drafts, and resolves , you just approve."
+      description="Every DM, SMS, and Shopify order in one inbox. Shopkeeper reads, drafts, and resolves , you just approve."
       aside={<SignupAside />}
     >
       <SignUp

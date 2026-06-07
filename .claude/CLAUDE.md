@@ -1,4 +1,4 @@
-# Clerk — AI operating layer for solo & small e-commerce businesses
+# Shopkeeper — AI operating layer for solo & small e-commerce businesses
 
 **Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram now; WhatsApp next; the dashboard is one surface, not *the* surface). Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
 
@@ -15,7 +15,7 @@
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel
 - `apps/gateway/` — Express + BullMQ worker → Railway
-- `packages/db/` — Prisma + Neon Postgres, exported as `@clerk/db`
+- `packages/db/` — Prisma + Neon Postgres, exported as `@shopkeeper/db`
 - Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway — **separate instances** (gateway needs a dedicated per-instance Redis for BullMQ, not Upstash). Daily LLM spend cap is shared across both apps via Postgres (`llm_daily_spend`), not Redis.
 - AI: Anthropic SDK (agent, plan, summary); OpenAI (embeddings)
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
@@ -29,14 +29,14 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Integration` — per platform per org (access token, expiry)
 - `Customer` — unique `(organizationId, platformId)`; `platformId` = email / IG sender ID / phone
 - `Thread` — `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan`, soft-delete + archive
-- `Message` — `senderType`: customer/agent/ai/note. **Agent action logs are `note` rows prefixed `__clerk_agent__`.**
+- `Message` — `senderType`: customer/agent/ai/note. **Agent action logs are `note` rows prefixed `__shopkeeper_agent__`** (legacy: `__clerk_agent__`).
 - `OperatorContext` — Telegram operator state per (org, chatId): history, pendingPlan, pendingDigest, lastOrderNumber. **DB-backed, not Redis.**
 - `OrgMember` — extends Clerk org membership with a bound Telegram chat
 - `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering)
 - `CannedResponse`, `Feedback`
 
 ## Channels
-Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Clerk bot), Shopify (OAuth + webhooks). TikTok: stubs only.
+Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), Shopify (OAuth + webhooks). TikTok: stubs only.
 
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 

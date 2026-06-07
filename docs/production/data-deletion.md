@@ -4,14 +4,14 @@ This process covers v1 launch operations for merchant workspace deletion and mer
 
 ## Scope
 
-Clerk stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, and local team-member metadata. Clerk authentication records live in Clerk.com, billing records live in Stripe, inbound/outbound email records live in Postmark, and connected commerce records live in Shopify.
+Shopkeeper stores merchant workspace data, connected integration metadata, customer records, support threads, messages, attachments, AI summaries, and local team-member metadata. Authentication records live in Clerk.com, billing records live in Stripe, inbound/outbound email records live in Postmark, and connected commerce records live in Shopify.
 
 ## Intake
 
-1. Accept requests at `hello@useclerk.co`.
+1. Accept requests at the contact address configured in `NEXT_PUBLIC_CONTACT_EMAIL` (defaults to `hello@useclerk.co` until domain migration in Phase 6).
 2. Confirm the request type: workspace deletion, customer export, customer deletion/redaction, or access correction.
 3. Verify the requester:
-   - Workspace deletion must come from a Clerk organization admin.
+   - Workspace deletion must come from a Clerk.com organization admin.
    - Customer export/deletion must come from the merchant that owns the customer relationship, or from the customer with merchant approval.
 4. Record the request date, requester, organization, customer identifier if applicable, operator, and completion date.
 
@@ -21,13 +21,13 @@ Target completion window: 30 days unless a stricter legal obligation applies.
 
 Preferred path:
 
-1. Delete the organization in Clerk.
-2. Confirm Clerk sends `organization.deleted` to `POST /api/webhooks/clerk`.
+1. Delete the organization in Clerk.com.
+2. Confirm Clerk.com sends `organization.deleted` to `POST /api/webhooks/clerk`.
 3. Confirm the local `Organization` row is gone. Prisma cascades delete related workspace records.
 4. Revoke or delete connected provider credentials in the relevant provider consoles if they remain active.
 5. Confirm Stripe subscription cancellation separately when applicable.
 
-Manual fallback if the Clerk webhook did not arrive:
+Manual fallback if the Clerk.com webhook did not arrive:
 
 ```sql
 begin;
@@ -40,12 +40,12 @@ After either path, check for attachment objects in Vercel Blob that belong to th
 
 ## Team Member Removal
 
-Clerk lifecycle webhooks handle local team-member cleanup:
+Clerk.com lifecycle webhooks handle local team-member cleanup:
 
 - `user.deleted` removes all matching `org_members` rows by `clerk_user_id`.
-- `organizationMembership.deleted` removes the matching `org_members` row for that Clerk organization and user.
+- `organizationMembership.deleted` removes the matching `org_members` row for that Clerk.com organization and user.
 
-If a replay is needed, use the Clerk Dashboard webhook message replay feature for the signed event rather than editing rows manually.
+If a replay is needed, use the Clerk.com Dashboard webhook message replay feature for the signed event rather than editing rows manually.
 
 ## Customer Export
 
@@ -55,7 +55,7 @@ Merchants can export customer conversation data from the dashboard GDPR export e
 GET /api/reports/gdpr?email=<customer-email>
 ```
 
-The export includes customer identity, thread metadata, summaries, and non-deleted message content visible to that merchant organization. Verify that the active Clerk organization is the merchant that owns the customer relationship before sending an export externally.
+The export includes customer identity, thread metadata, summaries, and non-deleted message content visible to that merchant organization. Verify that the active Clerk.com organization is the merchant that owns the customer relationship before sending an export externally.
 
 ## Customer Deletion Or Redaction
 
@@ -100,7 +100,7 @@ Do not hard-delete customer rows manually unless a legal requirement requires it
 
 ## Provider-Side Data
 
-Deletion in Clerk does not delete the merchant's source records in Shopify, Postmark, Stripe, Meta, Twilio, or any other connected provider. Tell the merchant which provider-side actions remain their responsibility and record that handoff in the request log.
+Deletion in Shopkeeper does not delete the merchant's source records in Shopify, Postmark, Stripe, Meta, Twilio, or any other connected provider. Tell the merchant which provider-side actions remain their responsibility and record that handoff in the request log.
 
 ## Shopify App Store GDPR Webhooks
 

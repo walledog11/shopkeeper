@@ -1,6 +1,6 @@
 import { Queue } from 'bullmq';
 import type { Redis as IORedis } from 'ioredis';
-import { db, type DbChannelType } from '@clerk/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { QUEUE, PROCESSING_QUEUE_DEFAULTS } from '../constants.js';
 import { createGatewayBullMqConnection, createGatewayRedisClient } from '../clients/redis-client.js';

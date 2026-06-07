@@ -1,8 +1,8 @@
-import { buildContext } from '@clerk/agent/build-context';
-import { runAgent } from '@clerk/agent/run';
-import type { ExecuteTurnRunAgent } from '@clerk/agent/turn';
-import type { PlanExecutionDeps, ShadowRecorder } from '@clerk/agent/plan-execution';
-import type { AgentContext } from '@clerk/agent/context';
+import { buildContext } from '@shopkeeper/agent/build-context';
+import { runAgent } from '@shopkeeper/agent/run';
+import type { ExecuteTurnRunAgent } from '@shopkeeper/agent/turn';
+import type { PlanExecutionDeps, ShadowRecorder } from '@shopkeeper/agent/plan-execution';
+import type { AgentContext } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../clients/agent-runtime.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 

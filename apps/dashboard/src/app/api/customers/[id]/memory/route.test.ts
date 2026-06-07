@@ -6,8 +6,8 @@ import {
   SUMMARY_MAX_CHARS,
   db,
   type CustomerMemory,
-} from '@clerk/db';
-import { cleanupTestData, createTestCustomer, createTestOrg } from '@clerk/db/test-helpers';
+} from '@shopkeeper/db';
+import { cleanupTestData, createTestCustomer, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockAuth } = vi.hoisted(() => ({
   mockAuth: vi.fn(),

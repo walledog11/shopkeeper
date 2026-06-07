@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, SenderType, db } from "@clerk/db";
+import { ChannelType, SenderType, db } from "@shopkeeper/db";
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   cleanupTestData,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 const {

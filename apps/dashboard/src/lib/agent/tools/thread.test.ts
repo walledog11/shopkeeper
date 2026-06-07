@@ -2,17 +2,17 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestIntegration,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import { readOutboundRecords } from '@/lib/server/outbound-recorder';
 import { escalateToHuman, sendEmail, sendReply, updateThreadStatus } from './thread';
-import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@clerk/agent/thread-constants';
+import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 
 const {
   mockEnqueueCustomerMemory,

@@ -154,7 +154,7 @@ export default function TelegramCard() {
               <div className="flex-1" />
               {!isConnected && (
                 <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
-                  <li>Click Connect Telegram — opens a chat with the Clerk bot</li>
+                  <li>Click Connect Telegram — opens a chat with the Shopkeeper bot</li>
                   <li>Tap Start in Telegram to link this device</li>
                   <li>Reply to digests or send free-form instructions from there</li>
                 </ol>

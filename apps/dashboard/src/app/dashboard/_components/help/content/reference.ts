@@ -11,7 +11,7 @@ export const reference: Category = {
       title: "How ticket IDs work",
       body: [
         {
-          text: "Every ticket in Clerk has a #ID number displayed in the bottom-right corner of each ticket row. These are sequential within your organisation.",
+          text: "Every ticket in Shopkeeper has a #ID number displayed in the bottom-right corner of each ticket row. These are sequential within your organisation.",
         },
         {
           heading: "What IDs are used for",
@@ -33,10 +33,10 @@ export const reference: Category = {
       title: "Data and privacy",
       body: [
         {
-          text: "Clerk stores the minimum data needed to operate your helpdesk.",
+          text: "Shopkeeper stores the minimum data needed to operate your helpdesk.",
         },
         {
-          heading: "What Clerk stores",
+          heading: "What Shopkeeper stores",
           steps: [
             "Customer platform IDs and names (from the connected channel).",
             "Message content , the text of each message in a thread.",
@@ -45,7 +45,7 @@ export const reference: Category = {
           ],
         },
         {
-          heading: "What Clerk does not store",
+          heading: "What Shopkeeper does not store",
           steps: [
             "Customer payment information.",
             "Passwords or authentication credentials of your customers.",
@@ -54,7 +54,7 @@ export const reference: Category = {
         },
         {
           heading: "AI and your data",
-          text: "When you use Draft with Clerk or refresh a Clerk Context summary, the conversation content is sent to an AI model to generate a response. This is used solely to produce the summary or draft , it is not used to train models.",
+          text: "When you use Draft with Shopkeeper or refresh a Shopkeeper Context summary, the conversation content is sent to an AI model to generate a response. This is used solely to produce the summary or draft , it is not used to train models.",
         },
       ],
     },
@@ -63,11 +63,11 @@ export const reference: Category = {
       title: "Supported channel types",
       body: [
         {
-          text: "Clerk currently supports the following channels for receiving customer messages.",
+          text: "Shopkeeper currently supports the following channels for receiving customer messages.",
         },
         {
           heading: "Gmail / Email",
-          text: "Inbound emails forwarded to your Clerk address become tickets. Replies are sent back via your configured sender address.",
+          text: "Inbound emails forwarded to your Shopkeeper address become tickets. Replies are sent back via your configured sender address.",
         },
         {
           heading: "Instagram DMs",

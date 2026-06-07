@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@clerk/db';
-import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
+import { ChannelType, db } from '@shopkeeper/db';
+import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),

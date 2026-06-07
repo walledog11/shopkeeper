@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType } from '@clerk/db';
+import { db, SenderType } from '@shopkeeper/db';
 import { withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 
 export const dynamic = 'force-dynamic';
 

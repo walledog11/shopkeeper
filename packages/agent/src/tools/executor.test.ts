@@ -14,7 +14,7 @@ const {
   mockIncrementDailyRefundSpendCents: vi.fn(),
 }));
 
-vi.mock("@clerk/db", () => ({
+vi.mock("@shopkeeper/db", () => ({
   db: {
     kbArticle: { findMany: mockFindKbArticles },
     kbCitation: { createMany: mockCreateKbCitations },

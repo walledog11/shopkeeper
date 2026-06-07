@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@/lib/agent/api/plan-cache";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 

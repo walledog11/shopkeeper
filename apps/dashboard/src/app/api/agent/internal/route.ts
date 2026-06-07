@@ -21,9 +21,9 @@ import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { assertBillingWriteAllowedForOrgId } from "@/lib/billing/write-gate";
 import { resolveClerkUserApprover } from "@/lib/agent/api/approver";
-import { isOperatorChannel } from "@clerk/agent/thread-constants";
+import { isOperatorChannel } from "@shopkeeper/agent/thread-constants";
 import { formatApproverId } from "@/lib/agent/api/plan-execution";
-import { hashInstruction } from "@clerk/agent/agent-actions";
+import { hashInstruction } from "@shopkeeper/agent/agent-actions";
 import logger from "@/lib/server/logger";
 
 interface AgentInternalRouteState {

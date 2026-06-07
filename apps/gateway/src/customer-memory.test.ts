@@ -10,7 +10,7 @@ import {
   isEmptyMemory,
   type CustomerMemory,
   type CustomerMemoryInteraction,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 
 function interaction(i: number): CustomerMemoryInteraction {
   return {

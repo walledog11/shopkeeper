@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { shopifyRestJson, type ShopifyContext } from '@clerk/agent/shopify';
+import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();

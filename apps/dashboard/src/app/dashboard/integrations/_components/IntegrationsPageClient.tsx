@@ -80,7 +80,7 @@ function IntegrationsPageContent() {
         {/* Header */}
         <div>
           <h1 className="text-lg font-bold text-white/80">Integrations</h1>
-          <p className="text-sm text-white/35 mt-0.5">Connect your channels and tools to Clerk.</p>
+          <p className="text-sm text-white/35 mt-0.5">Connect your channels and tools to Shopkeeper.</p>
         </div>
 
         {/* Stat strip */}

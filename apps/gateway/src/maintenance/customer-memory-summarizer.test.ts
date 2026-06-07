@@ -4,7 +4,7 @@ import {
   SpendCapError,
   SUMMARY_MAX_CHARS,
   type CustomerMemory,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import { MODEL } from '../constants.js';
 import { summarizeCustomerMemory } from './customer-memory-summarizer.js';
 
@@ -17,7 +17,7 @@ const { mockAnthropicCreate, mockEnforceSpendCap, mockLogger, mockRecordSpend } 
   mockRecordSpend: vi.fn(),
 }));
 
-vi.mock('@clerk/agent/ai', () => ({
+vi.mock('@shopkeeper/agent/ai', () => ({
   anthropic: {
     messages: {
       create: mockAnthropicCreate,
@@ -25,7 +25,7 @@ vi.mock('@clerk/agent/ai', () => ({
   },
 }));
 
-vi.mock('@clerk/agent/spend', () => ({
+vi.mock('@shopkeeper/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
   recordSpend: mockRecordSpend,
 }));

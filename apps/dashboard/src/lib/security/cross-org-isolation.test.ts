@@ -10,14 +10,14 @@
  * /api/agent/plan.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestIntegration,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),

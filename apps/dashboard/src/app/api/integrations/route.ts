@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateIntegrationBody } from '@/app/api/integrations/_lib/validation';
-import { CHANNEL_TYPE } from '@clerk/agent/thread-constants';
+import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
 import { saveForwardingEmailIntegration } from './_lib/email-integration';
 import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
 

@@ -1,4 +1,4 @@
-import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
+import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const FILTERED_PURGE_AFTER_DAYS = 7;

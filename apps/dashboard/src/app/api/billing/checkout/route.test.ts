@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
+import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const {
   mockCheckoutCreate,

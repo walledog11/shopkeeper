@@ -1,5 +1,5 @@
 {
-  "name": "clerk-dashboard",
+  "name": "shopkeeper-dashboard",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -21,8 +21,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.80.0",
-    "@clerk/agent": "*",
-    "@clerk/db": "*",
+    "@shopkeeper/agent": "*",
+    "@shopkeeper/db": "*",
     "@clerk/nextjs": "7.3.3",
     "@sentry/nextjs": "10.47.0",
     "@upstash/redis": "^1.37.0",

@@ -1,4 +1,4 @@
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "./types.js";
 import { TOOL_CATEGORIES } from "./tools/registry.js";
 import { executeToolStructured } from "./tools/executor.js";

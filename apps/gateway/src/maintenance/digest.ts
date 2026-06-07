@@ -1,4 +1,4 @@
-import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@clerk/db';
+import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { notifyOperator } from '../operator-notify.js';

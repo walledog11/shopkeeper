@@ -66,7 +66,7 @@ vi.mock('@sentry/node', () => ({
   captureException: mockCaptureException,
 }));
 
-vi.mock('@clerk/db', () => ({
+vi.mock('@shopkeeper/db', () => ({
   db: {
     organization: {
       findUnique: vi.fn().mockResolvedValue({ settings: {} }),
@@ -74,7 +74,7 @@ vi.mock('@clerk/db', () => ({
   },
 }));
 
-vi.mock('@clerk/agent/settings', () => ({
+vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn().mockReturnValue({ autoPlanOnOpen: true }),
 }));
 

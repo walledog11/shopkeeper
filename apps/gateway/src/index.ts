@@ -1,6 +1,6 @@
 import express from 'express';
 import * as Sentry from '@sentry/node';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import webhookRoutes from './routes/webhooks.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
 import internalCustomerMemoryRoutes from './routes/internal-customer-memory.js';
@@ -27,7 +27,7 @@ export function createGatewayApp() {
 
   // A simple health-check route to prove the server is alive
   app.get('/', (_req, res) => {
-    res.status(200).json({ status: 'Clerk Gateway is running 🟢' });
+    res.status(200).json({ status: 'Shopkeeper Gateway is running 🟢' });
   });
 
   return app;
@@ -146,20 +146,20 @@ export async function startGatewayServer() {
   logger.info({ dashboardUrl }, '[Gateway] Dashboard base URL configured');
 
   const server = app.listen(PORT, () => {
-    logger.info({ port: PORT }, '[Clerk Gateway] Server listening');
+    logger.info({ port: PORT }, '[Shopkeeper Gateway] Server listening');
   });
 
   const shutdown = () => {
     const forceExit = setTimeout(() => {
-      logger.warn('[Clerk Gateway] Graceful shutdown timed out — forcing exit');
+      logger.warn('[Shopkeeper Gateway] Graceful shutdown timed out — forcing exit');
       process.exit(1);
     }, 25_000);
     forceExit.unref();
 
-    logger.info('[Clerk Gateway] Shutting down gracefully');
+    logger.info('[Shopkeeper Gateway] Shutting down gracefully');
     server.closeAllConnections?.();
     server.close(async () => {
-      logger.info('[Clerk Gateway] HTTP server closed');
+      logger.info('[Shopkeeper Gateway] HTTP server closed');
       await db.$disconnect().catch(() => {});
       healthRedis.quit().catch(() => healthRedis.disconnect()).finally(() => {
         clearTimeout(forceExit);

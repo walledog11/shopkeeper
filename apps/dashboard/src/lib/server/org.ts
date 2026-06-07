@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
 import type { OrgSettings } from '@/types';
@@ -30,7 +30,7 @@ function composeAiContext(useCases: unknown, teamSize: unknown): string {
   if (!teamPhrase && casePhrases.length === 0) return '';
 
   const subject = teamPhrase ?? 'Team';
-  if (casePhrases.length === 0) return `${subject} using Clerk for customer support.`;
+  if (casePhrases.length === 0) return `${subject} using Shopkeeper for customer support.`;
 
   const list =
     casePhrases.length === 1
@@ -39,7 +39,7 @@ function composeAiContext(useCases: unknown, teamSize: unknown): string {
         ? `${casePhrases[0]} and ${casePhrases[1]}`
         : `${casePhrases.slice(0, -1).join(', ')}, and ${casePhrases[casePhrases.length - 1]}`;
 
-  return `${subject} using Clerk to ${list}.`;
+  return `${subject} using Shopkeeper to ${list}.`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getDailyRefundSpendCents, incrementDailyRefundSpendCents, utcDayString } from '@clerk/db';
-import { createTestOrg, cleanupTestData } from '@clerk/db/test-helpers';
+import { getDailyRefundSpendCents, incrementDailyRefundSpendCents, utcDayString } from '@shopkeeper/db';
+import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 
 let orgId: string | null = null;
 

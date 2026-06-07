@@ -1,4 +1,4 @@
-import { db, getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@clerk/db";
+import { db, getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@shopkeeper/db";
 import type { OrgSettings } from "../types.js";
 import { resolveAgentSettings } from "../settings.js";
 import {

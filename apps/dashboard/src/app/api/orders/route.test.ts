@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType } from '@clerk/db';
-import { cleanupTestData, createTestIntegration, createTestOrg } from '@clerk/db/test-helpers';
+import { ChannelType } from '@shopkeeper/db';
+import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockFetch } = vi.hoisted(() => ({
   mockFetch: vi.fn(),

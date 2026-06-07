@@ -1,7 +1,7 @@
-# Clerk — AI Operating Layer for Shopify Merchants
+# Shopkeeper — AI Support for Shopify Brands
 
 ## What This Is
-Clerk is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram today; WhatsApp next; the dashboard is one surface, not *the* surface).
+Shopkeeper is an AI operating layer for solo and small e-commerce businesses on Shopify — a general-purpose agent that handles operational work and is reachable from wherever the merchant is (Telegram today; WhatsApp next; the dashboard is one surface, not *the* surface).
 
 **Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
 
@@ -14,10 +14,10 @@ Roadmap: [`docs/core-extraction-and-module-expansion-plan.md`](docs/core-extract
 
 ## Repo Layout
 ```
-clerk/
+shopkeeper/
 ├── apps/dashboard/     # Next.js 16 — UI + API routes (Clerk.com auth, SWR, Tailwind)
 ├── apps/gateway/       # Express — webhook receiver + BullMQ worker
-└── packages/db/        # Prisma schema + shared @clerk/db client (Neon PostgreSQL)
+└── packages/db/        # Prisma schema + shared @shopkeeper/db client (Neon PostgreSQL)
 ```
 
 ## Maintenance Commands
@@ -49,7 +49,7 @@ clerk/
 ## Channels
 - **Email** — complete (Postmark inbound + outbound, reply threading, email quote stripping, AI spam filter on new senders)
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
-- **Telegram** — complete (operator-only, single Clerk bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
+- **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
 - **TikTok** — not started (type stubs and UI placeholder only)
 
@@ -126,7 +126,7 @@ Tool registry and execution live under `apps/dashboard/src/lib/agent/tools/`.
 
 ### Agent Settings (stored as JSON on Organization.settings)
 Configurable per org via Settings → Agent tab:
-- `agentName` — display name and `@mention` trigger (default: "Clerk")
+- `agentName` — display name and `@mention` trigger (default: "Shopkeeper")
 - `aiContext` — brand/store context prepended to system prompt
 - `brandVoice` — tone brief appended to system prompt
 - `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true)
@@ -208,7 +208,7 @@ Configurable per org via Settings → Agent tab:
 - **Integration** — one per connected platform per org. Stores access token, external account ID, token expiry.
 - **Customer** — unique by `(organizationId, platformId)`. `platformId` is email for email channel, IG sender ID for DMs.
 - **Thread** — belongs to org + customer. Has `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan` (agent plan cache), soft-delete + archive fields.
-- **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__clerk_agent__`.
+- **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__shopkeeper_agent__` (legacy rows may use `__clerk_agent__`).
 - **OperatorContext** — persists Telegram operator conversation state per (org, chatId) (history, pendingPlan, pendingDigest, lastOrderNumber). DB-backed, not Redis.
 - **OrgMember** — extends Clerk org membership with a bound Telegram chat for operator notifications.
 - **CannedResponse** — org-scoped saved replies with tags.

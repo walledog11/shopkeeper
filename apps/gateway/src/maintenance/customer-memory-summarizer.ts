@@ -12,12 +12,12 @@ import {
   type CustomerMemory,
   type CustomerMemoryInteraction,
   type CustomerMemoryPolicyFlags,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import { MODEL } from '../constants.js';
 import logger from '../logger.js';
-import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@clerk/agent/spend';
-import { readModelUsage } from '@clerk/agent/usage';
-import { anthropic } from '@clerk/agent/ai';
+import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@shopkeeper/agent/spend';
+import { readModelUsage } from '@shopkeeper/agent/usage';
+import { anthropic } from '@shopkeeper/agent/ai';
 
 const MAX_THREAD_MESSAGES = 50;
 const MAX_MESSAGE_CHARS = 2_000;

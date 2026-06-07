@@ -7,14 +7,14 @@ import {
   createMessage,
   type DbChannelType,
   type DbThreadFilterStatus,
-} from '@clerk/db';
-import { anthropic } from '@clerk/agent/ai';
-import { shopifyRestJson } from '@clerk/agent/shopify';
-import { isSpendCapError } from '@clerk/db';
+} from '@shopkeeper/db';
+import { anthropic } from '@shopkeeper/agent/ai';
+import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { isSpendCapError } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { JOB, MODEL, STATUS } from '../constants.js';
-import { enforceSpendCap, recordSpend } from '@clerk/agent/spend';
-import { readModelUsage } from '@clerk/agent/usage';
+import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
+import { readModelUsage } from '@shopkeeper/agent/usage';
 
 const MAX_INPUT_LENGTH = 4000;
 

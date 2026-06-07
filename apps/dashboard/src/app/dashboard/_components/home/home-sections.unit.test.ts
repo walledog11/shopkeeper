@@ -8,11 +8,11 @@ describe("home summary sections", () => {
   it("does not render empty bounded-list sections", () => {
     expect(renderToStaticMarkup(createElement(NeedsYou, {
       items: [],
-      agentName: "Clerk",
+      agentName: "Shopkeeper",
       onApproved: vi.fn(),
     }))).toBe("")
     expect(renderToStaticMarkup(createElement(ClearedOvernight, {
-      agentName: "Clerk",
+      agentName: "Shopkeeper",
       totalCount: 0,
       topics: [],
       timeSavedHours: 0,

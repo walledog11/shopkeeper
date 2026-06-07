@@ -30,7 +30,7 @@ const MODE_DETAILS = {
     `  ${ARTIFACT_DIRECTORY_NAMES.map((name) => `${name}/`).join(', ')}`,
     'Repo-wide TypeScript incremental build files:',
     '  *.tsbuildinfo',
-    'This mode does not remove .env files, app-local Clerk config, lockfiles, or node_modules.',
+    'This mode does not remove .env files, app-local Clerk.com auth config, lockfiles, or node_modules.',
   ],
   deps: [
     'Dependency directories only:',

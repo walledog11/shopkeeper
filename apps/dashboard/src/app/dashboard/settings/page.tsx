@@ -1,8 +1,8 @@
 import { Suspense } from "react"
-import { parseVoiceProposal } from "@clerk/db"
-import { normalizeStoredOrgSettings } from "@clerk/agent/settings"
+import { parseVoiceProposal } from "@shopkeeper/db"
+import { normalizeStoredOrgSettings } from "@shopkeeper/agent/settings"
 import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@clerk/agent/settings"
+import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import SettingsPageClient from "./_components/SettingsPageClient"
 
 export default async function SettingsPage() {

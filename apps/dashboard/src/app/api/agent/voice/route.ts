@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db, Prisma, parseVoiceProposal } from '@clerk/db';
-import { normalizeStoredOrgSettings } from '@clerk/agent/settings';
+import { db, Prisma, parseVoiceProposal } from '@shopkeeper/db';
+import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { parseAgentVoiceBody } from '@/lib/agent/api/validation';
 import { withOrgRoute } from '@/lib/api/route';

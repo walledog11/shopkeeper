@@ -1,8 +1,8 @@
-// Host wrapper — core runAgent moved to @clerk/agent (Track 2 extraction).
+// Host wrapper — core runAgent moved to @shopkeeper/agent (Track 2 extraction).
 // The dashboard injects its ops-alert failure recorder (Sentry/counter window)
 // so the shared package stays free of alerting infra (env, Sentry, ops-alerts).
-import { runAgent as coreRunAgent, type RunAgentOptions as CoreRunAgentOptions } from "@clerk/agent/run";
-import type { BaseAgentContext, AgentResult } from "@clerk/agent/context";
+import { runAgent as coreRunAgent, type RunAgentOptions as CoreRunAgentOptions } from "@shopkeeper/agent/run";
+import type { BaseAgentContext, AgentResult } from "@shopkeeper/agent/context";
 import type { OrgSettings, RawToolCall } from "@/types";
 import { recordAgentFailure, type AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";

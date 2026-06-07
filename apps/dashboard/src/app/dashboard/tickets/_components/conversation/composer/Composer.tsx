@@ -7,12 +7,12 @@ import type { ComposerProps } from "./composer-types"
 
 export default function Composer(props: ComposerProps) {
   const {
-    agentName = "Clerk",
+    agentName = "Shopkeeper",
     error,
-    isClerkMode = false,
+    isAgentMode = false,
     isSending,
     noteCount,
-    onClearClerk,
+    onClearAgentMode,
     onSend,
     value,
   } = props
@@ -108,7 +108,7 @@ export default function Composer(props: ComposerProps) {
         )}
 
         <div className="flex items-start gap-2">
-          {isClerkMode && (
+          {isAgentMode && (
             <span className="inline-flex items-center gap-1 bg-violet-500/15 text-violet-400 text-xs font-semibold px-2.5 py-[5px] rounded-full shrink-0 mt-0.5">
               <Bot className="size-3" />
               @{agentName.toLowerCase()}
@@ -150,9 +150,9 @@ export default function Composer(props: ComposerProps) {
                 if (!sendDisabled) onSend(isNoteTab)
                 return
               }
-              if (e.key === 'Backspace' && value === '' && isClerkMode && onClearClerk) {
+              if (e.key === 'Backspace' && value === '' && isAgentMode && onClearAgentMode) {
                 e.preventDefault()
-                onClearClerk()
+                onClearAgentMode()
               }
             }}
             disabled={isSending}
@@ -165,7 +165,7 @@ export default function Composer(props: ComposerProps) {
         <div className="flex items-center justify-between pt-3 pb-3">
           <div />
           <div className="flex items-center gap-3">
-            {isEmailLike && senderEmail && !isNoteTab && !isClerkMode && (
+            {isEmailLike && senderEmail && !isNoteTab && !isAgentMode && (
               <span className="text-xs text-white/40 hidden sm:block">
                 Replies as <span className="font-semibold text-white/70">{senderEmail}</span>
               </span>
@@ -175,7 +175,7 @@ export default function Composer(props: ComposerProps) {
               disabled={sendDisabled}
               onClick={() => onSend(isNoteTab)}
               className={`flex items-center gap-2 text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed h-8 pl-3 pr-2 rounded-md transition-colors ${
-                isClerkMode
+                isAgentMode
                   ? 'bg-violet-500 text-white hover:bg-violet-400'
                   : isNoteTab
                     ? 'bg-amber-500 text-black hover:bg-amber-400'
@@ -183,12 +183,12 @@ export default function Composer(props: ComposerProps) {
               }`}
             >
               {isSending ? (
-                <><Loader2 className="size-3.5 animate-spin" /> {isClerkMode ? 'Running…' : 'Sending…'}</>
+                <><Loader2 className="size-3.5 animate-spin" /> {isAgentMode ? 'Running…' : 'Sending…'}</>
               ) : (
                 <>
                   <span className="flex items-center gap-1">
                     <span className="text-sm leading-none">↑</span>
-                    {isClerkMode ? `Ask ${agentName}` : isNoteTab ? 'Save note' : 'Send'}
+                    {isAgentMode ? `Ask ${agentName}` : isNoteTab ? 'Save note' : 'Send'}
                   </span>
                   <kbd className="hidden md:inline bg-black/25 text-white/80 text-xs font-semibold rounded px-1.5 py-0.5 leading-none">
                     ⌘↵

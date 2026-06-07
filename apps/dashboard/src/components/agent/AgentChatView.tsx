@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowUp, Check, Loader2, Plus, Sparkles, X } from "lucide-react"
-import { TOOL_LABELS } from "@clerk/agent/tools"
+import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatClockTime } from "@/lib/format/date"

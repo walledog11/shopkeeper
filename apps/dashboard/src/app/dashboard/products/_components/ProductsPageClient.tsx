@@ -1,18 +1,13 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useCallback, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Search, X, Package, ShoppingBag,
 } from "lucide-react"
-import useSWR from "swr"
-import {
-  errorMessageFromPayload,
-  errorMessageFromUnknown,
-  fetcher,
-  isApiRequestError,
-  readJsonResponse,
-} from "@/lib/api/fetcher"
+import { isApiRequestError } from "@/lib/api/fetcher"
+import { useCursorListState } from "@/lib/api/use-cursor-list-state"
+import { fetchProductsPage } from "./product-requests"
 import { ProductDrawer } from "./ProductDrawer"
 import { ProductListRow } from "./ProductListRow"
 import { ProductListSkeleton } from "./ProductListSkeleton"
@@ -64,79 +59,35 @@ function ProductStatStrip({ products, isLoading }: { products: ProductRow[]; isL
 
 function useProductsPageState() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('any')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [pages, setPages] = useState<ProductRow[][]>([])
-  const [nextPageInfo, setNextPageInfo] = useState<string | null>(null)
   const [shop, setShop] = useState('')
-  const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null)
   const [selectedProduct, setSelectedProduct] = useState<ProductRow | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drawerProductRef = useRef<ProductRow | null>(null)
 
-  const handleSearchChange = (q: string) => {
-    setSearchQuery(q)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
-      setDebouncedQuery(q)
-      setPages([])
-      setNextPageInfo(null)
-      setLoadMoreError(null)
-    }, 250)
-  }
-
-  const buildKey = () => {
-    if (debouncedQuery) return `/api/shopify/products?q=${encodeURIComponent(debouncedQuery)}`
-    if (statusFilter !== 'any') return `/api/shopify/products?status=${statusFilter}`
-    return `/api/shopify/products`
-  }
-
-  const { data, isLoading, error } = useSWR<ProductsResponse>(
-    buildKey(),
-    fetcher,
-    {
-      onSuccess: (d) => {
-        setPages([d.products])
-        setNextPageInfo(d.nextPageInfo)
-        setShop(d.shop ?? '')
-      },
-      keepPreviousData: true,
-      revalidateOnFocus: false,
-    }
-  )
+  const list = useCursorListState<ProductRow, ProductsResponse>({
+    buildUrl: (debouncedQuery) => {
+      if (debouncedQuery) return `/api/shopify/products?q=${encodeURIComponent(debouncedQuery)}`
+      if (statusFilter !== 'any') return `/api/shopify/products?status=${statusFilter}`
+      return `/api/shopify/products`
+    },
+    fetchPage: async (pageInfo) => {
+      const page = await fetchProductsPage(pageInfo)
+      return { items: page.products, nextPageInfo: page.nextPageInfo }
+    },
+    loadMoreErrorMessage: 'Unable to load more products.',
+    onInitialLoad: (response) => {
+      setShop(response.shop ?? '')
+    },
+    selectInitialPage: (response) => ({
+      items: response.products,
+      nextPageInfo: response.nextPageInfo,
+    }),
+  })
 
   const handleFilterChange = (id: StatusFilter) => {
     setStatusFilter(id)
-    setSearchQuery('')
-    setDebouncedQuery('')
-    setPages([])
-    setNextPageInfo(null)
-    setLoadMoreError(null)
+    list.resetSearch()
   }
-
-  const loadMore = useCallback(async () => {
-    if (!nextPageInfo || isLoadingMore) return
-    setIsLoadingMore(true)
-    setLoadMoreError(null)
-    try {
-      const res = await fetch(`/api/shopify/products?page_info=${encodeURIComponent(nextPageInfo)}`)
-      const d = await readJsonResponse<ProductsResponse & { error?: unknown }>(res)
-      if (!res.ok) {
-        throw new Error(errorMessageFromPayload(d, 'Unable to load more products.'))
-      }
-      if (!d || !Array.isArray(d.products)) {
-        throw new Error('Unable to load more products.')
-      }
-      setPages(prev => [...prev, d.products])
-      setNextPageInfo(d.nextPageInfo)
-    } catch (error) {
-      setLoadMoreError(errorMessageFromUnknown(error, 'Unable to load more products.'))
-    } finally {
-      setIsLoadingMore(false)
-    }
-  }, [nextPageInfo, isLoadingMore])
 
   const openDrawer = (product: ProductRow) => {
     drawerProductRef.current = product
@@ -155,28 +106,13 @@ function useProductsPageState() {
     }, 300)
   }, [])
 
-  const allProducts = pages.flat()
-  const isSearchMode = debouncedQuery.length > 0
-
   return {
-    allProducts,
+    ...list,
     closeDrawer,
-    data,
-    debouncedQuery,
     drawerProduct: selectedProduct ?? drawerProductRef.current,
-    error,
     handleFilterChange,
-    handleSearchChange,
     isDrawerOpen,
-    isLoading,
-    isLoadingMore,
-    isSearchMode,
-    loadMore,
-    loadMoreError,
-    nextPageInfo,
     openDrawer,
-    pages,
-    searchQuery,
     selectedProduct,
     shop,
     statusFilter,

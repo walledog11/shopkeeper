@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType } from '@clerk/db';
-import { cleanupTestData, createTestIntegration, createTestOrg } from '@clerk/db/test-helpers';
+import { ChannelType } from '@shopkeeper/db';
+import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockShopifyRestJson } = vi.hoisted(() => ({
   mockShopifyRestJson: vi.fn(),
@@ -11,8 +11,8 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
-vi.mock('@clerk/agent/shopify', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@clerk/agent/shopify')>();
+vi.mock('@shopkeeper/agent/shopify', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shopkeeper/agent/shopify')>();
   return {
     ...actual,
     shopifyRestJson: mockShopifyRestJson,

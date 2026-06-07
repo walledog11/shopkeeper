@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   cleanupTestData,
   createTestOrg,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import {
   getDailyRefundSpendCents,
   incrementDailyRefundSpendCents,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
 

@@ -8,7 +8,7 @@ export default function LoginPage() {
       backHref="/"
       backLabel="Back to home"
       eyebrow="Welcome back"
-      title="Sign in to Clerk."
+      title="Sign in to Shopkeeper."
       description="Pick up where you left off , your inbox, drafts, and approvals are waiting."
     >
       <SignIn

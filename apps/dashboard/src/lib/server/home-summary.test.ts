@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
-import { ChannelType, SenderType, createMessage, db, type DbChannelType } from "@clerk/db"
+import { ChannelType, SenderType, createMessage, db, type DbChannelType } from "@shopkeeper/db"
 import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
-} from "@clerk/db/test-helpers"
+} from "@shopkeeper/db/test-helpers"
 import { buildAgentPlanCacheRecord } from "@/lib/agent/api/plan-cache"
-import { resolveAgentSettings } from "@clerk/agent/settings"
+import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import {
   HOME_NEEDS_ATTENTION_LIMIT,
   HOME_OVERNIGHT_TOPIC_LIMIT,

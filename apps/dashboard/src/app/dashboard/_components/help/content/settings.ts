@@ -11,7 +11,7 @@ export const settings: Category = {
       title: "Updating your business name",
       body: [
         {
-          text: "Your business name appears in the top header bar and is used by Clerk's AI when drafting replies.",
+          text: "Your business name appears in the top header bar and is used by Shopkeeper's AI when drafting replies.",
         },
         {
           heading: "How to update it",
@@ -29,11 +29,11 @@ export const settings: Category = {
       title: "AI context and brand voice",
       body: [
         {
-          text: "These two settings are the most important for getting high-quality AI drafts. They tell Clerk who you are and how you communicate.",
+          text: "These two settings are the most important for getting high-quality AI drafts. They tell Shopkeeper who you are and how you communicate.",
         },
         {
           heading: "AI Context",
-          text: "This is a short description of your business that Clerk reads before every draft. Include: what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about.",
+          text: "This is a short description of your business that Shopkeeper reads before every draft. Include: what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about.",
         },
         {
           heading: "Example AI Context",

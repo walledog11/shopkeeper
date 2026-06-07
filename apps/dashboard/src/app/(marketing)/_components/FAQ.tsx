@@ -5,7 +5,7 @@ import { useState } from "react";
 const faqs = [
   {
     q: "Will it ever send something embarrassing on my behalf?",
-    a: "Not unless you tell it to. By default, Clerk drafts every reply but waits for you to approve. As you build trust you can turn on auto-send for narrow cases like \"send tracking link if order is shipped.\" Everything else still pings you.",
+    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply but waits for you to approve. As you build trust you can turn on auto-send for narrow cases like \"send tracking link if order is shipped.\" Everything else still pings you.",
   },
   {
     q: "How does it learn my voice?",
@@ -20,7 +20,7 @@ const faqs = [
     a: "Inbox + AI drafts work standalone. Shopify-specific actions (refund, address change) only fire if you connect a store.",
   },
   {
-    q: "Can multiple team members use Clerk?",
+    q: "Can multiple team members use Shopkeeper?",
     a: "Yes. Professional includes multi-member access, role-based permissions, and internal notes so teams can align privately before replying.",
   },
   {

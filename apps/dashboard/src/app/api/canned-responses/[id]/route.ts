@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { parseUpdateCannedResponseBody } from '@/app/api/canned-responses/_lib/validation';

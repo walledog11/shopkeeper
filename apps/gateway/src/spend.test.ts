@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { SpendCapError, usageToNanoDollars, usdToNanoDollars, utcDayString, db } from '@clerk/db';
-import { createTestOrg, cleanupTestData } from '@clerk/db/test-helpers';
-import { enforceSpendCap, getDailySpendNano, recordSpend } from '@clerk/agent/spend';
+import { SpendCapError, usageToNanoDollars, usdToNanoDollars, utcDayString, db } from '@shopkeeper/db';
+import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
+import { enforceSpendCap, getDailySpendNano, recordSpend } from '@shopkeeper/agent/spend';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const USAGE = {

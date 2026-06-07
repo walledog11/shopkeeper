@@ -1,7 +1,7 @@
 const STATS = [
   { dim: "[live]", val: "2,847 tickets resolved", accent: "today" },
   { dim: "avg first response", val: "", accent: "42s" },
-  { dim: "brands using clerk", val: "", accent: "1,204" },
+  { dim: "brands using Shopkeeper", val: "", accent: "1,204" },
   { dim: "messages drafted last hour", val: "", accent: "8,931" },
   { dim: "refunds processed", val: "", accent: "$184k this week" },
 ];

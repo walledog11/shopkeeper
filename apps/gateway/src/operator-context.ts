@@ -5,7 +5,7 @@
  * is the Telegram chat id (string-encoded int64).
  */
 
-import { db, Prisma } from '@clerk/db';
+import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 
 const MAX_HISTORY_TURNS = 20;

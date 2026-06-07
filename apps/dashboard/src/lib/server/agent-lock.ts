@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { LockProvider, ThreadLock } from '@clerk/agent/lock';
+import type { LockProvider, ThreadLock } from '@shopkeeper/agent/lock';
 import { getRedis } from './redis';
 import logger from './logger';
 

@@ -1,4 +1,9 @@
-import { AGENT_TURN_PREFIX, isAgentTurnContent } from "./tools/turn-content.js";
+import {
+  AGENT_TURN_PREFIX,
+  LEGACY_AGENT_TURN_PREFIX,
+  getAgentTurnPrefixLength,
+  isAgentTurnContent,
+} from "./tools/turn-content.js";
 import type { AgentTurn } from "./types.js";
 
 export type AgentTurnAction = AgentTurn["actions"][number];
@@ -34,12 +39,12 @@ export function serializeAgentTurn(turn: AgentTurn): string {
 }
 
 function parseAgentTurn(contentText: string | null | undefined): AgentTurn | null {
-  if (!contentText?.startsWith(AGENT_TURN_PREFIX)) {
-    return null;
-  }
+  if (!contentText) return null;
+  const prefixLength = getAgentTurnPrefixLength(contentText);
+  if (prefixLength === null) return null;
 
   try {
-    const parsed = JSON.parse(contentText.slice(AGENT_TURN_PREFIX.length)) as Partial<AgentTurn>;
+    const parsed = JSON.parse(contentText.slice(prefixLength)) as Partial<AgentTurn>;
     return {
       ...(parsed.id ? { id: parsed.id } : {}),
       instruction: parsed.instruction ?? "",
@@ -83,5 +88,8 @@ export function excludeAgentTurnMessages<T extends MessageWithAgentTurn>(message
 
 export const agentTurnMessageFilter = {
   senderType: "note" as const,
-  contentText: { startsWith: AGENT_TURN_PREFIX },
+  OR: [
+    { contentText: { startsWith: AGENT_TURN_PREFIX } },
+    { contentText: { startsWith: LEGACY_AGENT_TURN_PREFIX } },
+  ],
 };

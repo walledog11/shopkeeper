@@ -1,18 +1,18 @@
-import { db } from '@clerk/db';
-import { requireOrgThread } from '@clerk/agent/thread-auth';
-import { buildContext } from '@clerk/agent/build-context';
-import { planAgent } from '@clerk/agent/planner';
-import { resolveAgentSettings } from '@clerk/agent/settings';
+import { db } from '@shopkeeper/db';
+import { requireOrgThread } from '@shopkeeper/agent/thread-auth';
+import { buildContext } from '@shopkeeper/agent/build-context';
+import { planAgent } from '@shopkeeper/agent/planner';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   buildAgentPlanCacheRecord,
   isAgentPlanCacheHit,
   readAgentPlanCache,
-} from '@clerk/agent/plan-cache';
+} from '@shopkeeper/agent/plan-cache';
 import {
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
-} from '@clerk/agent/plan-execution';
-import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@clerk/agent/types';
+} from '@shopkeeper/agent/plan-execution';
+import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import type { AgentPlan } from '../types.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
@@ -20,7 +20,7 @@ import type { AgentActionResult } from './planning-types.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
 
-// The core returns @clerk/agent's AgentPlan; the gateway's local AgentPlan is the
+// The core returns @shopkeeper/agent's AgentPlan; the gateway's local AgentPlan is the
 // looser JSON-shaped view its operator-notification path consumes (index-signature
 // rawToolCalls). The data is identical — this is the same widening the old
 // plan-internal HTTP boundary did implicitly via JSON.parse.

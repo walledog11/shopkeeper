@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './env.js';
 
 function stubBaseGatewayEnv() {
-  vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/clerk?pgbouncer=true&connection_limit=1');
+  vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
   vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379/0');
   vi.stubEnv('ANTHROPIC_API_KEY', 'test-anthropic-key');
   vi.stubEnv('INTERNAL_API_SECRET', 'test-internal-secret');

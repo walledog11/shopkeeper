@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
@@ -53,7 +53,7 @@ export async function handleTelegramMessage(
   if (!member) {
     logger.warn({ chatId }, '[Telegram] Unbound sender');
     await reply(
-      "This chat isn't connected to a Clerk workspace. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+      "This chat isn't connected to a Shopkeeper workspace. Generate a link from your Shopkeeper dashboard under Integrations → Telegram.",
     );
     return;
   }

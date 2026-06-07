@@ -5,7 +5,7 @@
  *   tsx src/scripts/set-telegram-webhook.ts <webhook-url>
  *
  * Example:
- *   tsx src/scripts/set-telegram-webhook.ts https://gateway.clerk.app/webhooks/telegram
+ *   tsx src/scripts/set-telegram-webhook.ts https://gateway.example.com/webhooks/telegram
  *
  * Env vars required:
  *   TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET

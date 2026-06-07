@@ -25,7 +25,7 @@ export const troubleshooting: Category = {
           heading: "2. Check email forwarding (for Gmail)",
           steps: [
             "In Gmail, go to Settings → Forwarding and POP/IMAP.",
-            "Confirm forwarding is enabled and pointing to your Clerk inbound address.",
+            "Confirm forwarding is enabled and pointing to your Shopkeeper inbound address.",
             "Send a test email to your support address and wait 30 seconds.",
           ],
         },
@@ -72,17 +72,17 @@ export const troubleshooting: Category = {
       title: "Email not routing correctly",
       body: [
         {
-          heading: "Emails arriving in Gmail but not in Clerk",
+          heading: "Emails arriving in Gmail but not in Shopkeeper",
           steps: [
             "Confirm forwarding is set up correctly in Gmail Settings → Forwarding and POP/IMAP.",
-            "Check that the forwarding address matches your Clerk inbound address exactly.",
+            "Check that the forwarding address matches your Shopkeeper inbound address exactly.",
             "Make sure Gmail hasn't paused forwarding , this can happen after a password change.",
           ],
         },
         {
           heading: "Duplicate tickets appearing",
           steps: [
-            "If you have multiple forwarding rules pointing to Clerk, each will create a ticket.",
+            "If you have multiple forwarding rules pointing to Shopkeeper, each will create a ticket.",
             "Go to Integrations and remove any duplicate email connections.",
             "In Gmail, ensure only one forwarding rule is active for your support address.",
           ],

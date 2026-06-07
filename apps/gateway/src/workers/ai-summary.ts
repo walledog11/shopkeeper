@@ -1,5 +1,5 @@
-import { db } from '@clerk/db';
-import { resolveAgentSettings } from '@clerk/agent/settings';
+import { db } from '@shopkeeper/db';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { Worker } from 'bullmq';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';

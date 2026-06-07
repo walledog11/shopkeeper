@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db, SenderType, createMessage } from '@clerk/db';
+import { db, SenderType, createMessage } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { ApiError } from '@/lib/api/errors';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';

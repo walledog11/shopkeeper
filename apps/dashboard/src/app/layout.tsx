@@ -9,7 +9,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "clerk: Your Chief Customer Officer",
+  title: "Shopkeeper — AI support for Shopify brands",
   description:
     "Consolidate customer messages from Instagram, TikTok, Shopify, and email into one AI-powered dashboard. Respond faster and smarter.",
 };

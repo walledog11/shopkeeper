@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@clerk/db';
+import { db, Prisma, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE, THREAD_STATUS } from '@clerk/agent/thread-constants';
+import { CHANNEL_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
 import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 import type { AgentTurnAction } from '@/lib/agent/api/turns';

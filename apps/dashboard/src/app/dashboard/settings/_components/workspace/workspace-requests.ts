@@ -40,7 +40,7 @@ export function logoValidationError(file: File): string | null {
 
 export function exportFilenameFromDisposition(disposition: string, now = new Date()): string {
   const match = disposition.match(/filename="?([^"]+)"?/)
-  return match?.[1] ?? `clerk-export-${now.toISOString().slice(0, 10)}.json`
+  return match?.[1] ?? `shopkeeper-export-${now.toISOString().slice(0, 10)}.json`
 }
 
 export async function fetchWorkspaceExport(fetchImpl: FetchLike = fetch, now = new Date()) {

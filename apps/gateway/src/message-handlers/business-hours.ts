@@ -2,5 +2,5 @@
 export {
   isWithinBusinessHours,
   resolveAgentSettings,
-} from '@clerk/agent/settings';
-export type { BusinessHoursSettings } from '@clerk/agent/settings';
+} from '@shopkeeper/agent/settings';
+export type { BusinessHoursSettings } from '@shopkeeper/agent/settings';

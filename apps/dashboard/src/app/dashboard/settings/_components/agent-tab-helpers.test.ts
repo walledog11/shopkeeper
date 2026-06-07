@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_SETTINGS_DEFAULTS } from "@clerk/agent/settings";
+import { AGENT_SETTINGS_DEFAULTS } from "@shopkeeper/agent/settings";
 import type { OrgSettings } from "@/types";
 import {
   applyTierDefaultsToInheritedSettings,
@@ -62,7 +62,7 @@ describe("agent tab helpers", () => {
       }
     );
 
-    expect(payload.agentName).toBe("Clerk");
+    expect(payload.agentName).toBe("Shopkeeper");
     expect(payload.maxRefundAmount).toBe(12.5);
     expect(payload.dailyRefundCap).toBeNull();
     expect(payload.dailyLLMSpendCapUsd).toBeNull();
@@ -98,12 +98,12 @@ describe("agent tab helpers", () => {
   });
 
   it("applies set and reset reducer actions", () => {
-    const base = makeSettings({ agentName: "Clerk" });
+    const base = makeSettings({ agentName: "Shopkeeper" });
     const changed = agentSettingsReducer(base, { type: "set", patch: { agentName: "Ada" } });
     const reset = agentSettingsReducer(changed, { type: "reset", payload: base });
 
     expect(changed.agentName).toBe("Ada");
-    expect(base.agentName).toBe("Clerk");
+    expect(base.agentName).toBe("Shopkeeper");
     expect(reset).toBe(base);
   });
 

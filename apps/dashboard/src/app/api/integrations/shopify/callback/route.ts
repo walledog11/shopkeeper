@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import crypto from 'crypto';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
@@ -8,7 +8,7 @@ import { getRedis } from '@/lib/server/redis';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
-import { shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
+import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 

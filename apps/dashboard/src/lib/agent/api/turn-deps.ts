@@ -10,7 +10,7 @@
 import { buildContext, runAgent } from "@/lib/agent/runner";
 import { upstashLockProvider } from "@/lib/server/agent-lock";
 import { getRedis } from "@/lib/server/redis";
-import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from "@clerk/agent/turn";
+import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from "@shopkeeper/agent/turn";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
 

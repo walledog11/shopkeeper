@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'crypto'
-import { db } from '@clerk/db'
+import { db } from '@shopkeeper/db'
 
 const { mockAuth, mockGetOrganization, mockGetUser } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors'
-import { resolveAgentSettings } from '@clerk/agent/settings'
+import { resolveAgentSettings } from '@shopkeeper/agent/settings'
 import type { OrgSettings } from '@/types'
 import { getOrCreateOrg } from './org'
 
@@ -109,9 +109,9 @@ describe('getOrCreateOrg', () => {
     expect(persisted.name).toBe('Acme')
     const settings = resolveAgentSettings(persisted.settings as Partial<OrgSettings>)
     expect(settings.aiContext).toBe(
-      'Solo merchant using Clerk to organize support tickets and automate responses to common questions.'
+      'Solo merchant using Shopkeeper to organize support tickets and automate responses to common questions.'
     )
-    expect(settings.agentName).toBe('Clerk')
+    expect(settings.agentName).toBe('Shopkeeper')
   })
 
   it('falls back to default settings when welcome metadata is missing', async () => {

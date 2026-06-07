@@ -12,7 +12,7 @@ export function Hero() {
 
       {/* Subtitle */}
       <p className="text-md text-stone-800 leading-relaxed max-w-[52ch] mx-auto mb-6" >
-        Clerk is an AI support agent for Shopify brands. It reads every Instagram DM, email, and SMS , drafts replies that actually sound like you, and only sends after you tap approve.
+        Shopkeeper is an AI support agent for Shopify brands. It reads every Instagram DM, email, and SMS , drafts replies that actually sound like you, and only sends after you tap approve.
       </p>
 
       {/* CTAs */}

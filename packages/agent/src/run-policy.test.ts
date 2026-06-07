@@ -29,7 +29,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
   },
 }));
 
-vi.mock("@clerk/db", () => ({
+vi.mock("@shopkeeper/db", () => ({
   getDailyRefundSpendCents: mockGetDailyRefundSpendCents,
   incrementDailyRefundSpendCents: mockIncrementDailyRefundSpendCents,
   db: {

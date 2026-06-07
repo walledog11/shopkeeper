@@ -70,7 +70,7 @@ export function InstagramConnectBody({ isConnected }: { isConnected: boolean }) 
           </p>
           <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
             <li>Make sure your Instagram is linked to a Facebook Business Page</li>
-            <li>Click Connect below and authorize Clerk via Meta OAuth</li>
+            <li>Click Connect below and authorize Shopkeeper via Meta OAuth</li>
             <li>DMs will start appearing as tickets immediately</li>
           </ol>
         </div>
@@ -108,11 +108,11 @@ export function ShopifyConnectBody({
       {!isConnected && (
         <div className="space-y-2">
           <p className="text-xs text-white/40 leading-relaxed">
-            Sync customer orders, returns, and Shopify Inbox messages directly into Clerk.
+            Sync customer orders, returns, and Shopify Inbox messages directly into Shopkeeper.
           </p>
           <ol className="text-xs text-white/30 space-y-1 list-decimal list-inside leading-relaxed">
             <li>Enter your <span className="font-mono text-white/45">.myshopify.com</span> store domain below</li>
-            <li>You&apos;ll be redirected to Shopify to authorize Clerk</li>
+            <li>You&apos;ll be redirected to Shopify to authorize Shopkeeper</li>
             <li>Order data and messages will sync automatically</li>
           </ol>
         </div>

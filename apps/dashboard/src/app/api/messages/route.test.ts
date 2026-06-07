@@ -2,14 +2,14 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@clerk/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestIntegration,
   createTestThread,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),

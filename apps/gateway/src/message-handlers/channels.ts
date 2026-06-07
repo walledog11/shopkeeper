@@ -1,5 +1,5 @@
 import type { Job, Queue } from 'bullmq';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import type { InboundJobData, ShopifyOrderPayload } from '../types.js';

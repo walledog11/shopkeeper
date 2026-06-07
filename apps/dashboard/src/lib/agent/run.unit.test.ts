@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import type { BaseAgentContext } from "@clerk/agent/context";
+import type { BaseAgentContext } from "@shopkeeper/agent/context";
 
 const { mockCoreRunAgent, mockRecordAgentFailure } = vi.hoisted(() => ({
   mockCoreRunAgent: vi.fn().mockResolvedValue({ summary: "ok", actionsPerformed: [] }),
   mockRecordAgentFailure: vi.fn().mockResolvedValue({ emitted: false }),
 }));
 
-vi.mock("@clerk/agent/run", () => ({
+vi.mock("@shopkeeper/agent/run", () => ({
   runAgent: mockCoreRunAgent,
 }));
 

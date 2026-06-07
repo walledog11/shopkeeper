@@ -39,7 +39,7 @@ const SUBJECT_ONLY = args.has('--subject-only');
 const PLAN_ONLY = args.has('--plan-only');
 const SUBJECT_MAX_LEN = 200;
 
-const { db } = await import('@clerk/db');
+const { db } = await import('@shopkeeper/db');
 
 function deriveSubject(text) {
   if (!text) return null;

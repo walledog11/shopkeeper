@@ -1,8 +1,8 @@
 import { Worker } from 'bullmq';
-import { db } from '@clerk/db';
-import { buildOrderOpsContext, runOrderOps } from '@clerk/agent/order-ops';
-import { resolveAgentSettings } from '@clerk/agent/settings';
-import type { OrgSettings } from '@clerk/agent/types';
+import { db } from '@shopkeeper/db';
+import { buildOrderOpsContext, runOrderOps } from '@shopkeeper/agent/order-ops';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { OrgSettings } from '@shopkeeper/agent/types';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import type { OrderReviewJobData } from '../types.js';

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, SenderType } from "@clerk/db";
+import { ChannelType, SenderType } from "@shopkeeper/db";
 import {
   cleanupTestData,
   createTestCustomer,
   createTestMessage,
   createTestOrg,
   createTestThread,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn(),

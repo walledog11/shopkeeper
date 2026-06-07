@@ -1,4 +1,4 @@
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { BadRequestError } from "./errors.js";
 import { requireOrgThread } from "./thread-auth.js";
 import { shopifyRestJson } from "./shopify/index.js";

@@ -7,7 +7,7 @@ import {
   normalizeStoredOrgSettings,
   parseOrgSettingsPatch,
   type OrgSettingsPatch,
-} from '@clerk/agent/settings';
+} from '@shopkeeper/agent/settings';
 import { BadRequestError } from '@/lib/api/errors';
 
 const ALLOWED_SETTINGS_UNSET = new Set([

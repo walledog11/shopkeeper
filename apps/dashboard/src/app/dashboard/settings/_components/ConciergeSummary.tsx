@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function ConciergeSummary({ orgName, settings, onJump }: Props) {
-  const agentName = settings.agentName?.trim() || "Clerk"
+  const agentName = settings.agentName?.trim() || "Shopkeeper"
   const lang = settings.replyLanguage === 'auto' ? "the customer's language" : settings.replyLanguage
   const jumpAgent = () => onJump('agent')
 

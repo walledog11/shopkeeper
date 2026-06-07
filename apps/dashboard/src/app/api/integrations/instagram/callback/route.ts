@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';

@@ -1,4 +1,4 @@
-import { db, Prisma, type DbChannelType } from '@clerk/db';
+import { db, Prisma, type DbChannelType } from '@shopkeeper/db';
 import type { Integration, Prisma as PrismaTypes } from '@prisma/client';
 
 const INTEGRATION_UNIQUE_TARGET = ['organizationId', 'platform', 'externalAccountId'] as const;

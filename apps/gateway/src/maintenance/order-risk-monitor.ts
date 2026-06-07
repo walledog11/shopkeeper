@@ -1,5 +1,5 @@
 import type { Queue } from 'bullmq';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { JOB, QUEUE, SHOPIFY_API_VERSION } from '../constants.js';
 import type { OrderReviewJobData } from '../types.js';

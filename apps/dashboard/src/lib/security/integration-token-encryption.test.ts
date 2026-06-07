@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { ChannelType, db, decryptToken, encryptToken, isEncrypted } from '@clerk/db';
-import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
+import { ChannelType, db, decryptToken, encryptToken, isEncrypted } from '@shopkeeper/db';
+import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 

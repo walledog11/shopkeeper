@@ -1,5 +1,5 @@
 {
-  "name": "clerk-gateway",
+  "name": "shopkeeper-gateway",
   "version": "1.0.0",
   "type": "module",
   "private": true,
@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.80.0",
-    "@clerk/agent": "*",
-    "@clerk/db": "*",
+    "@shopkeeper/agent": "*",
+    "@shopkeeper/db": "*",
     "@sentry/node": "10.47.0",
     "@vercel/blob": "2.3.3",
     "bullmq": "5.76.6",

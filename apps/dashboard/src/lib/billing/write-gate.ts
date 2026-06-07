@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { ApiError, NotFoundError } from '@/lib/api/errors';
 
 const BLOCKED_WRITE_STATUSES = new Set(['past_due', 'canceled']);

@@ -9,8 +9,8 @@
  * Response: 200 on success or skipped, 4xx/5xx on error.
  */
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
-import { resolveAgentSettings } from '@clerk/agent/settings';
+import { db } from '@shopkeeper/db';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { dispatchMessage } from '@/lib/messaging/dispatch-message';
 import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
 import { readRequiredJsonObject } from '@/lib/api/body';

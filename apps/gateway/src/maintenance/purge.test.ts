@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { db, ThreadFilterStatus, ThreadFilterFeedback, ChannelType, SenderType } from '@clerk/db';
+import { db, ThreadFilterStatus, ThreadFilterFeedback, ChannelType, SenderType } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import { purgeFilteredThreads, FILTERED_PURGE_AFTER_DAYS } from './purge.js';
 
 describe('purgeFilteredThreads', () => {

@@ -40,7 +40,7 @@ It is intentionally narrower than [`checklist.md`](checklist.md). This document 
 - Build command:
 
 ```bash
-npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=clerk-dashboard
+npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=shopkeeper-dashboard
 ```
 
 - Output directory: `apps/dashboard/.next`
@@ -191,7 +191,7 @@ npm run verify:production
 DASHBOARD_URL='https://app.example.com' \
 GATEWAY_URL='https://gateway.up.railway.app' \
 VERIFY_INBOUND_EMAIL_TO='org-id@mail.example.com' \
-VERIFY_INBOUND_EMAIL_FROM='clerk-smoke@example.com' \
+VERIFY_INBOUND_EMAIL_FROM='shopkeeper-smoke@example.com' \
 npm run verify:production
 ```
 
@@ -277,13 +277,13 @@ GATEWAY_URL='https://<gateway-production-url>' \
 npm run verify:production
 ```
 
-Create a Better Stack monitor group named `Clerk Production`, then create these monitors:
+Create a Better Stack monitor group named `Shopkeeper Production`, then create these monitors:
 
 | Monitor | URL | Required keyword |
 | --- | --- | --- |
-| `Clerk Dashboard Health` | `https://<dashboard-production-url>/api/health` | `"status":"ok"` |
-| `Clerk Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `"status":"ok"` |
-| `Clerk Gateway Queue Health` | `https://<gateway-production-url>/health/queues` | `"healthy":true` |
+| `Shopkeeper Dashboard Health` | `https://<dashboard-production-url>/api/health` | `"status":"ok"` |
+| `Shopkeeper Gateway Deep Health` | `https://<gateway-production-url>/health/deep` | `"status":"ok"` |
+| `Shopkeeper Gateway Queue Health` | `https://<gateway-production-url>/health/queues` | `"healthy":true` |
 
 Use the same settings for all three monitors:
 

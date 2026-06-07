@@ -3,7 +3,7 @@
 import useSWR from "swr"
 import { ShieldCheck, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
-import { TOOL_LABELS } from "@clerk/agent/tools"
+import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 
 interface ReadinessSlice {
   resolved: number

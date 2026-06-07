@@ -1,4 +1,4 @@
-import type { AutonomyTier } from "@clerk/agent/settings";
+import type { AutonomyTier } from "@shopkeeper/agent/settings";
 
 export interface AutonomyTierOption {
   id: AutonomyTier;

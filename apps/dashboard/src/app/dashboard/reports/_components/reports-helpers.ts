@@ -1,4 +1,4 @@
-import { TOOL_LABELS } from "@clerk/agent/tools"
+import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 import type { useReports } from "@/hooks/useReports"
 import type { DateRangePreset as Preset } from "@/lib/analytics/date-range"
 import { getChannelLabel } from "@/lib/messaging/channels"

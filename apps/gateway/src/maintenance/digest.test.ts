@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ThreadFilterStatus } from '@clerk/db';
+import { ThreadFilterStatus } from '@shopkeeper/db';
 import { bucketDigestThreads, formatDigestMessage } from './digest.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');

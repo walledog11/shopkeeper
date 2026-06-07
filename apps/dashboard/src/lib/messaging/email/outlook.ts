@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
 import { EmailNotConfiguredError, type EmailSender, type OutboundEmail } from './types';
 import { buildMimeBase64 } from './mime';

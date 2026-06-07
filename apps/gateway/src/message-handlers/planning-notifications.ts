@@ -1,4 +1,4 @@
-import { db, type DbChannelType } from '@clerk/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { notifyOperator } from '../operator-notify.js';

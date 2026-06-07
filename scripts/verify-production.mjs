@@ -30,7 +30,7 @@ function buildUrl(base, path) {
 async function fetchJson(url, expectedStatuses = [200]) {
   const response = await fetch(url, {
     headers: {
-      'user-agent': 'clerk-production-verify/1.0',
+      'user-agent': 'shopkeeper-production-verify/1.0',
     },
   });
 
@@ -104,8 +104,8 @@ async function verifyInboundEmailWebhook(baseUrl) {
     return;
   }
 
-  const from = process.env.VERIFY_INBOUND_EMAIL_FROM ?? 'clerk-smoke@example.com';
-  const subject = process.env.VERIFY_INBOUND_EMAIL_SUBJECT ?? `Clerk production smoke ${new Date().toISOString()}`;
+  const from = process.env.VERIFY_INBOUND_EMAIL_FROM ?? 'shopkeeper-smoke@example.com';
+  const subject = process.env.VERIFY_INBOUND_EMAIL_SUBJECT ?? `Shopkeeper production smoke ${new Date().toISOString()}`;
   const textBody = process.env.VERIFY_INBOUND_EMAIL_BODY ?? 'Production smoke test message';
 
   const form = new URLSearchParams({
@@ -120,7 +120,7 @@ async function verifyInboundEmailWebhook(baseUrl) {
     method: 'POST',
     headers: {
       'content-type': 'application/x-www-form-urlencoded',
-      'user-agent': 'clerk-production-verify/1.0',
+      'user-agent': 'shopkeeper-production-verify/1.0',
     },
     body: form,
   });

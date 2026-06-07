@@ -1,4 +1,4 @@
-import { db } from "@clerk/db";
+import { db } from "@shopkeeper/db";
 import { NotFoundError } from "@/lib/api/errors";
 import { getDashboardPlatformId, getOrCreateDashboardCustomer } from "@/lib/agent/api/auth";
 

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ChannelType, db } from "@clerk/db";
+import { ChannelType, db } from "@shopkeeper/db";
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   cleanupTestData,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 import {
   getAutonomyReadiness,

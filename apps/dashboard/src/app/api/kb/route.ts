@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { withOrgRoute } from '@/lib/api/route';
 
 export const GET = withOrgRoute(

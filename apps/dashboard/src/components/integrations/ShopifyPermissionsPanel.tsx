@@ -3,7 +3,7 @@
 import Link from "next/link"
 import useSWR from "swr"
 import { fetcher } from "@/lib/api/fetcher"
-import { resolveAgentSettings } from "@clerk/agent/settings"
+import { resolveAgentSettings } from "@shopkeeper/agent/settings"
 import type { OrgSettings } from "@/types"
 import { PermissionToggleRow } from "./PermissionToggleRow"
 

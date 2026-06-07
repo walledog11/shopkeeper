@@ -9,14 +9,14 @@ import {
   SUMMARY_MAX_CHARS,
   db,
   type CustomerMemory,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestMessage,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 import { buildContext } from './context';
 
 function memory(overrides: Partial<CustomerMemory> = {}): CustomerMemory {

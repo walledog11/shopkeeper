@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Bot } from "lucide-react"
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
-import type { AutonomyTier } from "@clerk/agent/settings"
+import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import { cn } from "@/lib/ui/cn"
 
 const TIER_TINTS: Record<AutonomyTier, string> = {

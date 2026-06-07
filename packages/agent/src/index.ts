@@ -1,4 +1,4 @@
-// @clerk/agent — shared agent core (Track 2 extraction, in progress).
+// @shopkeeper/agent — shared agent core (Track 2 extraction, in progress).
 //
 // The orchestration, tools, Shopify client, prompt, context, settings, and
 // policy surface move here out of apps/dashboard so the host (dashboard route
@@ -6,7 +6,7 @@
 // this barrel as files move: runAgent, planAgent, buildContext, selectAgentTools,
 // classifyHomePlan, and the policy surface.
 //
-// Authoring convention (mirrors @clerk/db): this is an ESM package built with
+// Authoring convention (mirrors @shopkeeper/db): this is an ESM package built with
 // plain tsc under NodeNext, so every relative import MUST carry a .js extension
 // (e.g. `from "./settings.js"`).
 

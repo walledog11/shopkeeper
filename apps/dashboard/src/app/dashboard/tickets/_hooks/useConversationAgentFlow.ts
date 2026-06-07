@@ -2,6 +2,13 @@
 
 import { useReducer, useState } from "react"
 import type { AgentPlan, AgentTurn, RawToolCall, Ticket } from "@/types"
+import {
+  askAgentPrivately,
+  executeApprovedAgentPlan,
+  fetchAgentPlan,
+  planRequestErrorTurn,
+  regenerateAgentPlan,
+} from "./conversation-agent-requests"
 
 interface UseConversationAgentFlowProps {
   ticket: Ticket
@@ -22,7 +29,7 @@ function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
   return { id: crypto.randomUUID(), ...turn }
 }
 
-export function getClerkCommandState(
+export function getAgentCommandState(
   replyText: string,
   agentName: string,
   viewTab: "chat" | "notes",
@@ -30,12 +37,12 @@ export function getClerkCommandState(
   const triggerPrefix = `@${agentName.toLowerCase()}`
   const trimmedReply = replyText.trimStart()
   const isSupportedComposerTab = viewTab === "chat" || viewTab === "notes"
-  const isClerkMode = isSupportedComposerTab && trimmedReply.toLowerCase().startsWith(triggerPrefix)
-  const clerkInstruction = isClerkMode ? trimmedReply.slice(triggerPrefix.length).replace(/^ /, "") : ""
+  const isAgentMode = isSupportedComposerTab && trimmedReply.toLowerCase().startsWith(triggerPrefix)
+  const agentInstruction = isAgentMode ? trimmedReply.slice(triggerPrefix.length).replace(/^ /, "") : ""
 
   return {
-    clerkInstruction,
-    isClerkMode,
+    agentInstruction,
+    isAgentMode,
     triggerPrefix,
   }
 }
@@ -100,7 +107,7 @@ export function useConversationAgentFlow({
   const [isPlanExecuting, setIsPlanExecuting] = useState(false)
   const [isRegenerating, setIsRegenerating] = useState(false)
 
-  const { clerkInstruction, isClerkMode } = getClerkCommandState(replyText, agentName, viewTab)
+  const { agentInstruction, isAgentMode } = getAgentCommandState(replyText, agentName, viewTab)
   const pendingPlan = pendingPlanState.ticketId === ticket.id && pendingPlanState.hasOverride
     ? pendingPlanState.plan
     : initialPlan ?? null
@@ -115,31 +122,13 @@ export function useConversationAgentFlow({
     onAgentRunningChange(true)
 
     try {
-      const response = await fetch("/api/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: ticket.id, instruction, approvedToolCalls }),
-      })
-      const data = await response.json()
-      const turn = createAgentTurn({
-        instruction,
-        actions: data.actionsPerformed ?? [],
-        summary: data.summary ?? null,
-        error: response.ok ? null : (data.error ?? "Agent failed."),
-      })
-
-      if (response.ok) {
+      const result = await executeApprovedAgentPlan(ticket.id, instruction, approvedToolCalls)
+      const turn = createAgentTurn(result.turn)
+      if (result.ok) {
         onAgentComplete(turn)
       } else {
         onAgentTurnAdd(turn)
       }
-    } catch {
-      onAgentTurnAdd(createAgentTurn({
-        instruction,
-        actions: [],
-        summary: null,
-        error: "Network error , please try again.",
-      }))
     } finally {
       onAgentRunningChange(false)
       setIsPlanExecuting(false)
@@ -154,31 +143,13 @@ export function useConversationAgentFlow({
     onPrivateAnswerStart?.()
 
     try {
-      const response = await fetch("/api/agent/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: ticket.id, instruction }),
-      })
-      const data = await response.json()
-      const turn = createAgentTurn({
-        instruction,
-        actions: data.actionsPerformed ?? [],
-        summary: data.summary ?? null,
-        error: response.ok ? null : (data.error ?? "Agent failed."),
-      })
-
-      if (response.ok) {
+      const result = await askAgentPrivately(ticket.id, instruction)
+      const turn = createAgentTurn(result.turn)
+      if (result.ok) {
         onAgentComplete(turn)
       } else {
         onAgentTurnAdd(turn)
       }
-    } catch {
-      onAgentTurnAdd(createAgentTurn({
-        instruction,
-        actions: [],
-        summary: null,
-        error: "Network error , please try again.",
-      }))
     } finally {
       setIsPlanLoading(false)
       setPendingInstruction(null)
@@ -186,8 +157,8 @@ export function useConversationAgentFlow({
   }
 
   const handleSend = async (noteArg: boolean) => {
-    if (isClerkMode && clerkInstruction) {
-      const instruction = clerkInstruction
+    if (isAgentMode && agentInstruction) {
+      const instruction = agentInstruction
 
       if (shouldUsePrivateComposerAsk(instruction)) {
         await answerPrivateQuestion(instruction)
@@ -199,17 +170,7 @@ export function useConversationAgentFlow({
       setIsPlanLoading(true)
 
       try {
-        const response = await fetch("/api/agent/plan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ threadId: ticket.id, instruction }),
-        })
-        if (!response.ok) {
-          const errData = await response.json().catch(() => null) as { error?: string } | null
-          throw new Error(errData?.error ?? "Plan request failed")
-        }
-
-        const plan: AgentPlan = await response.json()
+        const plan = await fetchAgentPlan(ticket.id, instruction)
         const requiresApproval = planRequiresApproval(plan)
 
         if (!requiresApproval) {
@@ -224,12 +185,7 @@ export function useConversationAgentFlow({
       } catch (err) {
         setIsPlanLoading(false)
         setPendingInstruction(null)
-        onAgentTurnAdd(createAgentTurn({
-          instruction,
-          actions: [],
-          summary: null,
-          error: err instanceof Error ? err.message : "Failed to generate plan , please try again.",
-        }))
+        onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
       }
 
       return
@@ -257,32 +213,21 @@ export function useConversationAgentFlow({
     const instruction = pendingPlan.instruction
 
     try {
-      const response = await fetch("/api/agent/plan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: ticket.id, instruction, force: true }),
-      })
-      if (!response.ok) {
-        throw new Error()
-      }
-
-      const plan: AgentPlan = await response.json()
-      const resolved = resolvePendingPlan(plan, instruction)
+      const plan = await regenerateAgentPlan(ticket.id, instruction)
+      const resolved = plan ? resolvePendingPlan(plan, instruction) : null
       if (resolved) setPendingPlan(resolved)
-    } catch {
-      // Keep the current plan in place on failure.
     } finally {
       setIsRegenerating(false)
     }
   }
 
   return {
-    clerkInstruction,
+    agentInstruction,
     handlePlanApprove,
     handlePlanDismiss,
     handlePlanRegenerate,
     handleSend,
-    isClerkMode,
+    isAgentMode,
     isPlanExecuting,
     isPlanLoading,
     isRegenerating,

@@ -7,6 +7,7 @@ import {
   isApiRequestError,
   readJsonResponse,
   requestJson,
+  requestOk,
 } from './fetcher';
 
 afterEach(() => {
@@ -64,5 +65,27 @@ describe('client API response helpers', () => {
 
     await expect(requestJson('/api/example', {}, 'Invalid response'))
       .rejects.toThrow('Invalid response');
+  });
+
+  it('resolves for successful mutation requests without a JSON body', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+
+    await expect(requestOk('/api/example', { method: 'PATCH' }, 'Failed')).resolves.toBeUndefined();
+  });
+
+  it('throws API errors for failed mutation requests', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Nope' }), { status: 400 }),
+    ));
+
+    await expect(requestOk('/api/example', { method: 'PATCH' }, 'Fallback'))
+      .rejects.toThrow('Nope');
+  });
+
+  it('uses the fallback message when mutation error bodies are not JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not json', { status: 502 })));
+
+    await expect(requestOk('/api/example', { method: 'PATCH' }, 'Fallback'))
+      .rejects.toThrow('Fallback');
   });
 });

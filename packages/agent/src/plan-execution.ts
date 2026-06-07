@@ -1,4 +1,4 @@
-import { Prisma, db } from "@clerk/db";
+import { Prisma, db } from "@shopkeeper/db";
 import { BadRequestError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { requireOrgThread } from "./thread-auth.js";

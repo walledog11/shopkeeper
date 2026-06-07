@@ -24,7 +24,7 @@ export function LegalPage({
         <div className="mx-auto flex max-w-4xl items-center justify-between p-5">
           <Link href="/" className="flex items-center gap-2 text-base font-semibold text-stone-900">
             <span className="inline-block size-3 rounded-full bg-green-400" />
-            clerk
+            Shopkeeper
           </Link>
           <Link href="/signup" className="text-sm font-semibold text-stone-700 hover:text-stone-950">
             Start free

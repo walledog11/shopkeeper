@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { createHmac } from 'crypto';
-import { ChannelType, db } from '@clerk/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestIntegration,
   cleanupTestData,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.

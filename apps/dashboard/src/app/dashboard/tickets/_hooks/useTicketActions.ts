@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import type { FailedMessage, Message, Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
-import { SENDER_TYPE } from '@clerk/agent/thread-constants'
+import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants'
+import { errorMessageFromUnknown, requestOk } from '@/lib/api/fetcher'
 
 export interface TicketToast {
   message: string
@@ -22,23 +23,17 @@ interface UseTicketActionsProps {
   setSelectedIds: Dispatch<SetStateAction<string[]>>
 }
 
-async function apiErrorMessage(res: Response, fallback: string) {
-  const body = await res.json().catch(() => null) as { error?: unknown } | null
-  if (typeof body?.error === 'string' && body.error.trim()) return body.error
-  return `${fallback} (${res.status})`
-}
+const jsonPost = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+})
 
-export async function requireOkResponse(res: Response, fallback: string) {
-  if (!res.ok) throw new Error(await apiErrorMessage(res, fallback))
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error && error.message ? error.message : fallback
-}
-
-function requestOk(input: RequestInfo | URL, init: RequestInit, fallback: string) {
-  return fetch(input, init).then(res => requireOkResponse(res, fallback))
-}
+const jsonPatch = (body: unknown): RequestInit => ({
+  method: 'PATCH',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+})
 
 export function useTicketActions({
   activeTicketId,
@@ -86,15 +81,11 @@ export function useTicketActions({
     }))
 
     try {
-      await requestOk('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId, text: textToSend, isNote: noteMode }),
-      }, 'Failed to send message')
+      await requestOk('/api/messages', jsonPost({ threadId, text: textToSend, isNote: noteMode }), 'Failed to send message')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to send message', err)
-      setSendError(errorMessage(err, 'Failed to send message.'))
+      setSendError(errorMessageFromUnknown(err, 'Failed to send message.'))
       setFailedMessages(prev => [...prev, { id: optimisticMessage.id, threadId, text: textToSend, isNote: noteMode }])
       await revalidateThreadCaches()
     } finally {
@@ -111,16 +102,12 @@ export function useTicketActions({
     showToast('Ticket resolved')
 
     try {
-      await requestOk(`/api/threads/${resolvedId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'closed' }),
-      }, 'Failed to close ticket')
+      await requestOk(`/api/threads/${resolvedId}`, jsonPatch({ status: 'closed' }), 'Failed to close ticket')
       revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to resolve ticket', err)
       await revalidateThreadCaches()
-      showToast(errorMessage(err, 'Failed to close ticket.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to close ticket.'), 'error')
     }
   }, [activeTicketId, moveThreadStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
@@ -133,16 +120,12 @@ export function useTicketActions({
     showToast('Ticket reopened')
 
     try {
-      await requestOk(`/api/threads/${reopenId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'open' }),
-      }, 'Failed to reopen ticket')
+      await requestOk(`/api/threads/${reopenId}`, jsonPatch({ status: 'open' }), 'Failed to reopen ticket')
       revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to reopen ticket', err)
       await revalidateThreadCaches()
-      showToast(errorMessage(err, 'Failed to reopen ticket.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to reopen ticket.'), 'error')
     }
   }, [activeTicketId, moveThreadStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
@@ -151,11 +134,7 @@ export function useTicketActions({
     const threadId = activeTicketId
     await patchThreadCaches(threadId, thread => ({ ...thread, shopifyCustomerId: customerId }))
     try {
-      await requestOk(`/api/threads/${threadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopifyCustomerId: customerId }),
-      }, 'Failed to link Shopify customer')
+      await requestOk(`/api/threads/${threadId}`, jsonPatch({ shopifyCustomerId: customerId }), 'Failed to link Shopify customer')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to link Shopify customer', err)
@@ -186,15 +165,11 @@ export function useTicketActions({
     }))
 
     try {
-      await requestOk('/api/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threadId: failed.threadId, text: failed.text, isNote: failed.isNote }),
-      }, 'Failed to retry message')
+      await requestOk('/api/messages', jsonPost({ threadId: failed.threadId, text: failed.text, isNote: failed.isNote }), 'Failed to retry message')
       await revalidateThreadCaches()
     } catch (err) {
       console.error('Failed to retry message', err)
-      setSendError(errorMessage(err, 'Failed to retry message.'))
+      setSendError(errorMessageFromUnknown(err, 'Failed to retry message.'))
       setFailedMessages(prev => [...prev, failed])
       await revalidateThreadCaches()
     }
@@ -204,18 +179,14 @@ export function useTicketActions({
     if (selectedIds.length === 0) return
     const ids = [...selectedIds]
     try {
-      await requestOk('/api/threads/bulk', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'close' }),
-      }, 'Failed to close selected tickets')
+      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'close' }), 'Failed to close selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} closed`)
     } catch (err) {
       console.error('Bulk close failed', err)
-      showToast(errorMessage(err, 'Failed to close selected tickets.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to close selected tickets.'), 'error')
     }
   }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, setSelectedIds, showToast])
 
@@ -223,52 +194,40 @@ export function useTicketActions({
     if (selectedIds.length === 0) return
     const ids = [...selectedIds]
     try {
-      await requestOk('/api/threads/bulk', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'archive' }),
-      }, 'Failed to archive selected tickets')
+      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'archive' }), 'Failed to archive selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       if (activeTicketId && ids.includes(activeTicketId)) setActiveTicketId(null)
       showToast(`${ids.length} ticket${ids.length !== 1 ? 's' : ''} archived`)
     } catch (err) {
       console.error('Bulk archive failed', err)
-      showToast(errorMessage(err, 'Failed to archive selected tickets.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to archive selected tickets.'), 'error')
     }
   }, [activeTicketId, revalidateThreadCaches, setActiveTicketId, setSelectedIds, showToast])
 
   const handleMarkAsSpam = useCallback(async (threadId: string) => {
     try {
-      await requestOk(`/api/threads/${threadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }),
-      }, 'Failed to mark as spam')
+      await requestOk(`/api/threads/${threadId}`, jsonPatch({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }), 'Failed to mark as spam')
       await moveThreadFilterStatus(threadId, 'filtered', 'confirmed_spam')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Marked as spam')
     } catch (err) {
       console.error('Failed to mark as spam', err)
-      showToast(errorMessage(err, 'Failed to mark as spam.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to mark as spam.'), 'error')
     }
   }, [activeTicketId, moveThreadFilterStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
   const handleRecover = useCallback(async (threadId: string) => {
     try {
-      await requestOk(`/api/threads/${threadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }),
-      }, 'Failed to recover thread')
+      await requestOk(`/api/threads/${threadId}`, jsonPatch({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }), 'Failed to recover thread')
       await moveThreadFilterStatus(threadId, 'genuine', 'confirmed_genuine')
       await revalidateThreadCaches()
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Recovered to inbox')
     } catch (err) {
       console.error('Failed to recover thread', err)
-      showToast(errorMessage(err, 'Failed to recover thread.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to recover thread.'), 'error')
     }
   }, [activeTicketId, moveThreadFilterStatus, revalidateThreadCaches, setActiveTicketId, showToast])
 
@@ -277,17 +236,13 @@ export function useTicketActions({
     if (selectedIds.length === 0 || !trimmedTag) return
     const ids = [...selectedIds]
     try {
-      await requestOk('/api/threads/bulk', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, action: 'tag', tag: trimmedTag }),
-      }, 'Failed to tag selected tickets')
+      await requestOk('/api/threads/bulk', jsonPatch({ ids, action: 'tag', tag: trimmedTag }), 'Failed to tag selected tickets')
       await revalidateThreadCaches()
       setSelectedIds([])
       showToast(`Tagged ${ids.length} ticket${ids.length !== 1 ? 's' : ''}`)
     } catch (err) {
       console.error('Bulk tag failed', err)
-      showToast(errorMessage(err, 'Failed to tag selected tickets.'), 'error')
+      showToast(errorMessageFromUnknown(err, 'Failed to tag selected tickets.'), 'error')
     }
   }, [revalidateThreadCaches, setSelectedIds, showToast])
 

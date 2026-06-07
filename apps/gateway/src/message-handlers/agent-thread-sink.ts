@@ -1,7 +1,7 @@
-import { db, SenderType, createMessage } from '@clerk/db';
-import { AGENT_NOTE_PREFIX, THREAD_STATUS, isOperatorChannel } from '@clerk/agent/thread-constants';
-import type { ThreadSink } from '@clerk/agent/build-context';
-import { toolError, toolOk, toolEscalated, type ToolResult } from '@clerk/agent/tools';
+import { db, SenderType, createMessage } from '@shopkeeper/db';
+import { AGENT_NOTE_PREFIX, THREAD_STATUS, isOperatorChannel } from '@shopkeeper/agent/thread-constants';
+import type { ThreadSink } from '@shopkeeper/agent/build-context';
+import { toolError, toolOk, toolEscalated, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
   AddInternalNoteInput,
   EscalateToHumanInput,
@@ -9,7 +9,7 @@ import type {
   SendReplyInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
-} from '@clerk/agent/tools';
+} from '@shopkeeper/agent/tools';
 import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { getInternalApiSecret } from './shared.js';

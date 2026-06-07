@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, SenderType, SpendCapError, db, type CustomerMemory } from '@clerk/db';
+import { ChannelType, SenderType, SpendCapError, db, type CustomerMemory } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
   createTestMessage,
   createTestOrg,
   createTestThread,
-} from '@clerk/db/test-helpers';
+} from '@shopkeeper/db/test-helpers';
 
 const { mockSummarizeCustomerMemory, mockCaptureException, mockLogger } = vi.hoisted(() => ({
   mockSummarizeCustomerMemory: vi.fn(),
@@ -35,7 +35,7 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
-vi.mock('@clerk/agent/spend', () => ({
+vi.mock('@shopkeeper/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
 }));
 

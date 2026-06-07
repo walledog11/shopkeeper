@@ -310,7 +310,7 @@ function DemoCard() {
         <div style={{ display: "flex", gap: 5 }}>
           {["dot-1", "dot-2", "dot-3"].map(key => <span key={key} style={{ width: 9, height: 9, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-block" }} />)}
         </div>
-        <span style={{ fontFamily: "var(--m-mono)", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>clerk.app/inbox</span>
+        <span style={{ fontFamily: "var(--m-mono)", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>shopkeeper.app/inbox</span>
         <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, color: "rgba(255,255,255,0.56)", fontSize: 12 }}>
           <span className="inline-block size-1.5 animate-[m-pulse_1.8s_ease_infinite] rounded-full bg-green-600" />
           live demo · interact with anything
@@ -383,7 +383,7 @@ function DemoCard() {
             <div className="border border-solid border-green-600 bg-white/[0.06]" style={{ borderRadius: 10, padding: "11px 13px" }}>
               <div className="mb-[5px] flex items-center gap-[5px] text-xs font-semibold uppercase tracking-[0.12em] text-green-600">
                 <span className="inline-block size-[5px] animate-[m-pulse_1.8s_ease_infinite] rounded-full bg-green-600" />
-                Clerk drafted a reply
+                Shopkeeper drafted a reply
               </div>
               <div style={{ minHeight: 32, maxHeight: 72, overflowY: "auto" }} className="no-scrollbar text-[13px] leading-[1.5] text-stone-100">
                 {draftText}
@@ -438,7 +438,7 @@ function MobileDemoCard() {
     <div className="bg-stone-900 text-stone-100" style={{ margin: "10px", borderRadius: 14, overflow: "hidden", boxShadow: "0 20px 50px -10px rgba(0,0,0,0.3)" }}>
       <div style={{ padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,0.08)", fontSize: 12 }}>
         <div style={{ display: "flex", gap: 5 }}>{["dot-1", "dot-2", "dot-3"].map(key => <span key={key} style={{ width: 8, height: 8, borderRadius: "50%", background: "rgba(255,255,255,0.2)", display: "inline-block" }} />)}</div>
-        <span style={{ fontFamily: "var(--m-mono)", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>clerk.app/inbox</span>
+        <span style={{ fontFamily: "var(--m-mono)", color: "rgba(255,255,255,0.5)", fontSize: 12 }}>shopkeeper.app/inbox</span>
         <span style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.5)", fontSize: 12 }}>
           <span className="inline-block size-[5px] animate-[m-pulse_1.8s_ease_infinite] rounded-full bg-green-600" />
           live
@@ -464,7 +464,7 @@ function MobileDemoCard() {
       </div>
       <div style={{ padding: "8px 14px 14px" }}>
         <div className="border border-solid border-green-600 bg-white/[0.06]" style={{ borderRadius: 9, padding: "10px 12px" }}>
-          <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-green-600">✦ Clerk drafted a reply</div>
+          <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-green-600">✦ Shopkeeper drafted a reply</div>
           <div className="text-xs leading-[1.5] text-stone-100">
             {draftText}<span className="ml-0.5 inline-block h-3 w-0.5 animate-[m-blink_1s_step-end_infinite] bg-green-600 align-middle" />
           </div>

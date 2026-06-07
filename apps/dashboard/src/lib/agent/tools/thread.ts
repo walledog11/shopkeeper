@@ -1,5 +1,5 @@
-import { db, SenderType, createMessage } from "@clerk/db";
-import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS, isOperatorChannel } from "@clerk/agent/thread-constants";
+import { db, SenderType, createMessage } from "@shopkeeper/db";
+import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS, isOperatorChannel } from "@shopkeeper/agent/thread-constants";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
@@ -8,7 +8,7 @@ import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib
 import { buildThreadReplyHeaders, formatReplySubject } from "@/lib/messaging/email/reply";
 import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
-import { toolError, toolEscalated, toolOk, type ToolResult } from "@clerk/agent/tools";
+import { toolError, toolEscalated, toolOk, type ToolResult } from "@shopkeeper/agent/tools";
 import type {
   AddInternalNoteInput,
   SendReplyInput,
@@ -16,7 +16,7 @@ import type {
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
   EscalateToHumanInput,
-} from "@clerk/agent/tools";
+} from "@shopkeeper/agent/tools";
 
 interface ThreadContext {
   threadId: string;

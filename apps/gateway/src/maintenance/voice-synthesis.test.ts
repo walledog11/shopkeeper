@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { db, parseVoiceProposal } from '@clerk/db';
-import { cleanupTestData, createTestOrg } from '@clerk/db/test-helpers';
+import { db, parseVoiceProposal } from '@shopkeeper/db';
+import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockAnthropicCreate, mockEnforceSpendCap, mockRecordSpend, mockLogger, mockCaptureException } = vi.hoisted(() => ({
   mockAnthropicCreate: vi.fn(),
@@ -10,11 +10,11 @@ const { mockAnthropicCreate, mockEnforceSpendCap, mockRecordSpend, mockLogger, m
   mockCaptureException: vi.fn(),
 }));
 
-vi.mock('@clerk/agent/ai', () => ({
+vi.mock('@shopkeeper/agent/ai', () => ({
   anthropic: { messages: { create: mockAnthropicCreate } },
 }));
 
-vi.mock('@clerk/agent/spend', () => ({
+vi.mock('@shopkeeper/agent/spend', () => ({
   enforceSpendCap: mockEnforceSpendCap,
   recordSpend: mockRecordSpend,
 }));

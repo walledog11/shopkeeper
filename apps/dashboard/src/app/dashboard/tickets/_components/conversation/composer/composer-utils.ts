@@ -4,20 +4,20 @@ export const EMPTY_CANNED_RESPONSES: CannedResponse[] = []
 
 export function isInstagramReplyWindowExpired({
   channelType,
-  isClerkMode,
+  isAgentMode,
   isNoteTab,
   lastCustomerMessageAt,
   nowMs = Date.now(),
 }: {
   channelType?: string
-  isClerkMode: boolean
+  isAgentMode: boolean
   isNoteTab: boolean
   lastCustomerMessageAt?: string | null
   nowMs?: number
 }) {
   return channelType === "ig_dm" &&
     !isNoteTab &&
-    !isClerkMode &&
+    !isAgentMode &&
     (!lastCustomerMessageAt || nowMs - new Date(lastCustomerMessageAt).getTime() > 24 * 60 * 60 * 1000)
 }
 

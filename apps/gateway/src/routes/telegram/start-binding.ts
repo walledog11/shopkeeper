@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { sendMessage } from '../../clients/telegram-client.js';
 import { getRateLimitRedis } from '../webhooks-shared.js';
@@ -13,7 +13,7 @@ export async function handleStartBinding(
 ): Promise<void> {
   if (!token) {
     await reply(
-      "This Telegram chat isn't linked to a Clerk workspace. Generate a link from your Clerk dashboard under Integrations → Telegram.",
+      "This Telegram chat isn't linked to a Shopkeeper workspace. Generate a link from your Shopkeeper dashboard under Integrations → Telegram.",
     );
     return;
   }
@@ -22,7 +22,7 @@ export async function handleStartBinding(
   const key = `telegram:bind:${token}`;
   const raw = await redis.get(key);
   if (!raw) {
-    await reply('This link has expired. Generate a new one from your Clerk dashboard under Integrations → Telegram.');
+    await reply('This link has expired. Generate a new one from your Shopkeeper dashboard under Integrations → Telegram.');
     return;
   }
 
@@ -31,7 +31,7 @@ export async function handleStartBinding(
     payload = JSON.parse(raw) as { orgId: string; clerkUserId: string };
   } catch {
     await redis.del(key);
-    await reply('This link is invalid. Generate a new one from your Clerk dashboard under Integrations → Telegram.');
+    await reply('This link is invalid. Generate a new one from your Shopkeeper dashboard under Integrations → Telegram.');
     return;
   }
 
@@ -43,7 +43,7 @@ export async function handleStartBinding(
 
   if (!member) {
     logger.warn({ orgId: payload.orgId, clerkUserId: payload.clerkUserId }, '[Telegram] Bind target OrgMember not found');
-    await reply('Could not link this chat — your workspace membership is missing. Open the Clerk dashboard and try again.');
+    await reply('Could not link this chat — your workspace membership is missing. Open the Shopkeeper dashboard and try again.');
     return;
   }
 
@@ -52,7 +52,7 @@ export async function handleStartBinding(
   const alreadyBound = existingChatIds.includes(chatId);
   if (!alreadyBound && existingChatIds.length >= MAX_TELEGRAM_DEVICES) {
     await reply(
-      `You already have ${MAX_TELEGRAM_DEVICES} devices connected. Disconnect one from your Clerk dashboard under Integrations → Telegram before adding another.`,
+      `You already have ${MAX_TELEGRAM_DEVICES} devices connected. Disconnect one from your Shopkeeper dashboard under Integrations → Telegram before adding another.`,
     );
     return;
   }
@@ -76,7 +76,7 @@ export async function handleStartBinding(
   for (const otherChatId of otherChatIds) {
     sendMessage(
       otherChatId,
-      'A new device was linked to your Clerk account. If this wasn\'t you, disconnect it from your dashboard under Integrations → Telegram.',
+      'A new device was linked to your Shopkeeper account. If this wasn\'t you, disconnect it from your dashboard under Integrations → Telegram.',
     ).catch((err: unknown) =>
       logger.warn({ err, chatId: otherChatId }, '[Telegram] Failed to send new-device alert'),
     );

@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { ChannelType, db } from "@clerk/db";
+import { ChannelType, db } from "@shopkeeper/db";
 import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
   createTestMessage,
   cleanupTestData,
-} from "@clerk/db/test-helpers";
+} from "@shopkeeper/db/test-helpers";
 import { buildAgentPlanCacheRecord } from "@/lib/agent/api/plan-cache";
 import { AGENT_PLAN_CACHE_VERSION } from "@/lib/agent/plan-cache-shape";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import type { AgentPlan, OrgSettings } from "@/types";
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -21,10 +21,10 @@ const { mockExecuteAgentTurn } = vi.hoisted(() => ({
   mockExecuteAgentTurn: vi.fn(),
 }));
 
-// quick-approve runs the turn through @clerk/agent/plan-execution, which calls
+// quick-approve runs the turn through @shopkeeper/agent/plan-execution, which calls
 // the package-internal executeAgentTurn — so the mock must target the package
 // (Track 4.1), not the dashboard execution shim.
-vi.mock("@clerk/agent/turn", () => ({
+vi.mock("@shopkeeper/agent/turn", () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 

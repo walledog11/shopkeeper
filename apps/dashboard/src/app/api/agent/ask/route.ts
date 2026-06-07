@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { createMessage } from "@clerk/db";
+import { createMessage } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { requireOrgThread } from "@/lib/agent/api/auth";
 import { parseAgentAskBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, runAgent } from "@/lib/agent/runner";
-import { resolveAgentSettings } from "@clerk/agent/settings";
+import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { serializeAgentTurn } from "@/lib/agent/api/turns";
 import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";

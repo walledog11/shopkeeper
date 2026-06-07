@@ -11,7 +11,7 @@ export const tickets: Category = {
       title: "Opening, replying, and resolving tickets",
       body: [
         {
-          text: "Every inbound customer message becomes a ticket in Clerk. Here's the full lifecycle.",
+          text: "Every inbound customer message becomes a ticket in Shopkeeper. Here's the full lifecycle.",
         },
         {
           heading: "Opening a ticket",
@@ -25,7 +25,7 @@ export const tickets: Category = {
           heading: "Replying to a customer",
           steps: [
             "Type your message in the composer at the bottom of the conversation.",
-            "Alternatively, click Draft with Clerk to generate an AI-assisted reply.",
+            "Alternatively, click Draft with Shopkeeper to generate an AI-assisted reply.",
             "Review the message, edit if needed, then click Send.",
             "Your reply is delivered back to the customer on their original channel (email, Instagram, etc.).",
           ],

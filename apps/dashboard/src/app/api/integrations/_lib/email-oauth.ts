@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
 import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';

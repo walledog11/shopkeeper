@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
-import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@clerk/agent/shopify';
+import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 

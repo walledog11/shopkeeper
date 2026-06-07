@@ -4,11 +4,11 @@ import {
   isSpendCapError,
   parseStoredMemory,
   toCustomerMemoryJson,
-} from '@clerk/db';
+} from '@shopkeeper/db';
 import * as Sentry from '@sentry/node';
 import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { enforceSpendCap, type SpendCapSettings } from '@clerk/agent/spend';
+import { enforceSpendCap, type SpendCapSettings } from '@shopkeeper/agent/spend';
 import type { CustomerMemoryJobData } from '../types.js';
 import { summarizeCustomerMemory } from './customer-memory-summarizer.js';
 import {

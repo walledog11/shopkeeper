@@ -1,9 +1,9 @@
-import { db, isSpendCapError, SenderType } from '@clerk/db';
+import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { CHANNEL, MODEL } from '../constants.js';
-import { enforceSpendCap, recordSpend } from '@clerk/agent/spend';
-import { readModelUsage } from '@clerk/agent/usage';
-import { anthropic } from '@clerk/agent/ai';
+import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
+import { readModelUsage } from '@shopkeeper/agent/usage';
+import { anthropic } from '@shopkeeper/agent/ai';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
   parseClassifierJson,

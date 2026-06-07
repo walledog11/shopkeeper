@@ -71,4 +71,17 @@ export async function requestJson<T>(
   return payload;
 }
 
+export async function requestOk(
+  url: string,
+  init: RequestInit = {},
+  fallbackError?: string,
+): Promise<void> {
+  const response = await fetch(url, init);
+  if (response.ok) return;
+
+  const payload = await readJsonResponse<ApiErrorPayload>(response);
+  const fallback = fallbackError ?? `API error: ${response.status} ${response.statusText}`.trim();
+  throw new ApiRequestError(errorMessageFromPayload(payload, fallback), response.status, payload);
+}
+
 export const fetcher = <T>(url: string) => requestJson<T>(url);

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createMessage } from "@clerk/db";
+import { createMessage } from "@shopkeeper/db";
 import { resolveAgentSettings } from "./settings.js";
 import { serializeAgentTurn } from "./turns.js";
 import { ConflictError } from "./errors.js";

@@ -1,4 +1,4 @@
-import { db } from '@clerk/db';
+import { db } from '@shopkeeper/db';
 import { getGatewayDashboardUrl } from '../../config/env.js';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';

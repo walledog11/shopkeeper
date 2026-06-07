@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { db } from '@clerk/db';
-import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@clerk/db/test-helpers';
+import { db } from '@shopkeeper/db';
+import { cleanupTestData, createTestCustomer, createTestOrg, createTestThread } from '@shopkeeper/db/test-helpers';
 import { captureVoiceEdit } from './voice-capture';
 
 function cachedPlanWithDraft(draft: string) {

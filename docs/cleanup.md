@@ -381,7 +381,7 @@ Phase 9 verification completed on 2026-06-06:
   - `npm run test:integration -w apps/dashboard -- src/app/api/messages/route.test.ts src/app/api/messages/internal/route.test.ts src/app/api/messages/auto-ack/route.test.ts src/app/api/ai/summary/route.test.ts src/app/api/integrations/route.test.ts src/app/api/shopify/customer/route.test.ts src/app/api/shopify/customers/route.test.ts src/app/api/customers/[id]/memory/route.test.ts`
   - `npm run lint -w apps/dashboard`
 
-  3. Collapse duplicated client request/workflow code
+  3. Collapse duplicated client request/workflow code [DONE 2026-06-06]
 
   There is already a shared client API helper in apps/dashboard/src/lib/api/fetcher.ts:55, but apps/dashboard/src/app/dashboard/tickets/_hooks/
   useTicketActions.ts:25 defines its own requestOk path and repeats optimistic mutation/error handling across many handlers. apps/dashboard/src/app/dashboard/
@@ -390,6 +390,18 @@ Phase 9 verification completed on 2026-06-06:
   Also, Products/Orders/Customers repeat the same debounced search + cursor pagination shape:
   apps/dashboard/src/app/dashboard/products/_components/ProductsPageClient.tsx:65, apps/dashboard/src/app/dashboard/orders/_components/OrdersPageClient.tsx:52,
   apps/dashboard/src/app/dashboard/customers/_components/CustomersPageClient.tsx:16.
+
+  Item 3 follow-up implementation notes:
+
+  - Shared mutation helper `requestOk` now lives in `apps/dashboard/src/lib/api/fetcher.ts`; ticket actions use it with `errorMessageFromUnknown`.
+  - Ticket composer agent calls moved to `apps/dashboard/src/app/dashboard/tickets/_hooks/conversation-agent-requests.ts`.
+  - Debounced search + cursor pagination now use `apps/dashboard/src/lib/api/use-cursor-list-state.ts` in Products, Orders, and Customers.
+  - Products load-more pagination now uses `product-requests.ts`, matching the existing orders/customers request helpers.
+
+  Item 3 follow-up verification completed on 2026-06-06:
+
+  - `npm run test:unit -w apps/dashboard -- src/lib/api/fetcher.unit.test.ts src/app/dashboard/tickets/_hooks/conversation-agent-requests.unit.test.ts src/app/dashboard/tickets/_hooks/useConversationAgentFlow.unit.test.ts`
+  - `npm run lint -w apps/dashboard`
 
   4. Split the agent tool registry without losing the registry contract
 
