@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3000",
+    "dev": "NEXT_DIST_DIR=.next-dev next dev -p 3000",
     "dev:e2e": "NEXT_DIST_DIR=.next-e2e next dev -p 3100",
     "build:e2e": "node ../../scripts/dashboard-e2e-build.mjs",
     "start:e2e": "NEXT_DIST_DIR=.next-e2e next start -p 3100",

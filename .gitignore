@@ -10,6 +10,7 @@ node_modules/
 
 # Next.js build output
 .next/
+apps/dashboard/.next-dev/
 apps/dashboard/.next-e2e/
 next-env.d.ts
 

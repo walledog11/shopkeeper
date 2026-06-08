@@ -10,6 +10,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ARTIFACT_DIRECTORY_NAMES = [
   '.turbo',
   '.next',
+  '.next-dev',
   '.next-e2e',
   'coverage',
   'dist',

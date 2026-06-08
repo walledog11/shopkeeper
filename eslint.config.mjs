@@ -47,6 +47,8 @@ export default [
   {
     ignores: [
       "**/.next/**",
+      "**/.next-dev/**",
+      "**/.next-e2e/**",
       "**/.turbo/**",
       "**/coverage/**",
       "**/dist/**",
