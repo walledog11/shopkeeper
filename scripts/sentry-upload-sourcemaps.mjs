@@ -1,15 +1,27 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { env, argv, exit } from 'node:process';
+import { fileURLToPath } from 'node:url';
 import { hasSentryUploadCredentials, resolveSentryRelease } from './sentry-release.mjs';
 
 const distDir = argv[2] || 'dist';
 const stripPublicMaps = argv.includes('--strip-public-maps');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
+const sentryCli = join(repoRoot, 'node_modules', '.bin', 'sentry-cli');
+
+function missingUploadVars(currentEnv) {
+  return ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT'].filter(
+    (name) => !currentEnv[name]?.trim(),
+  );
+}
 
 if (!hasSentryUploadCredentials(env)) {
-  console.log('[sentry] SENTRY_AUTH_TOKEN/SENTRY_ORG/SENTRY_PROJECT not all set — skipping source map upload');
+  const missing = missingUploadVars(env);
+  console.log(
+    `[sentry] Skipping source map upload — missing build env: ${missing.join(', ')}`,
+  );
   exit(0);
 }
 
@@ -18,10 +30,33 @@ if (!existsSync(distDir)) {
   exit(1);
 }
 
+if (!existsSync(sentryCli)) {
+  console.error('[sentry] sentry-cli not found in node_modules/.bin — run npm install');
+  exit(1);
+}
+
+const org = env.SENTRY_ORG.trim();
+const project = env.SENTRY_PROJECT.trim();
 const release = resolveSentryRelease(env);
 const cliEnv = { ...env, SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL || 'warn' };
 
-const inject = spawnSync('npx', ['--no-install', 'sentry-cli', 'sourcemaps', 'inject', distDir], {
+console.log(
+  `[sentry] Uploading source maps from ${distDir} to ${org}/${project}${
+    release ? ` (release ${release})` : ''
+  }`,
+);
+
+const injectArgs = [
+  sentryCli,
+  'sourcemaps',
+  'inject',
+  '--org',
+  org,
+  '--project',
+  project,
+  distDir,
+];
+const inject = spawnSync(injectArgs[0], injectArgs.slice(1), {
   stdio: 'inherit',
   env: cliEnv,
 });
@@ -30,11 +65,19 @@ if (inject.status !== 0) {
   exit(1);
 }
 
-const uploadArgs = ['--no-install', 'sentry-cli', 'sourcemaps', 'upload'];
+const uploadArgs = [
+  sentryCli,
+  'sourcemaps',
+  'upload',
+  '--org',
+  org,
+  '--project',
+  project,
+];
 if (release) uploadArgs.push('--release', release);
 uploadArgs.push(distDir);
 
-const upload = spawnSync('npx', uploadArgs, { stdio: 'inherit', env: cliEnv });
+const upload = spawnSync(uploadArgs[0], uploadArgs.slice(1), { stdio: 'inherit', env: cliEnv });
 if (upload.status !== 0) {
   console.error('[sentry] sourcemaps upload failed');
   exit(1);
