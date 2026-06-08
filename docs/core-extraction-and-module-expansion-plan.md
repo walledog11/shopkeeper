@@ -23,8 +23,8 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **0** | Decide how the worker runs an agent (A vs B) | ✅ decided → **B** (extract core, run in-process) | — |
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@shopkeeper/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
-| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 prod e2e partial (2026-06-08) | deploy bypass + `ORDER_RISK_MONITOR_ENABLED=1` on Railway; risky-order finding; idempotency; backstop; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | deploy bypass header wiring; fresh inbound live e2e (auto-plan/execute, Telegram operator); confirm Railway `DASHBOARD_URL` + `VERCEL_PROTECTION_BYPASS` |
+| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 prod e2e partial (2026-06-08) | set `ORDER_RISK_MONITOR_ENABLED=1` on Railway; risky-order finding; idempotency; backstop; Telegram notify; eval fixtures |
+| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | set Railway `VERCEL_PROTECTION_BYPASS` + redeploy; fresh inbound live e2e (auto-plan/execute, Telegram operator); confirm `DASHBOARD_URL` |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -45,21 +45,23 @@ enqueues into the same queue instead of HTTP-hopping the dashboard; the dashboar
 net confirms no regression: `EVAL_REPEATS=1` ran **53/56 ≈ 94.6% ≥ 93.5%**; the 3 per-fixture failures
 (`escalate-out-of-scope`, `address-change-post-fulfillment-escalate`, `order-status-basic`) are the known flappy/under-
 escalation set and **all pass at `repeats=3`** (targeted rerun, exit 0) — Track 3 touched zero support-core files.
-**Remaining before Track 3 is fully closed:** risky-order → finding, webhook idempotency, hourly backstop, confirm
-`ORDER_RISK_MONITOR_ENABLED=1` on Railway (zero `order-risk-review:*` `AgentAction` rows in prod so far), the
-Telegram-notify sink swap, and the deferred order-ops eval fixtures (Step 5). **3A benign pre-filter ✅ on prod
-(2026-06-08):** Palette `#PG1002` — zero risk signals, model skipped (`[order-ops] no risk signals - skipped`).
+**Remaining before Track 3 is fully closed:** set `ORDER_RISK_MONITOR_ENABLED=1` on Railway, risky-order → finding,
+webhook idempotency, hourly backstop, the Telegram-notify sink swap, and the deferred order-ops eval fixtures
+(Step 5). **3A benign pre-filter ✅ on prod (2026-06-08):** Palette `#PG1002` — zero risk signals, model skipped
+(`[order-ops] no risk signals - skipped`). **3B flag parsing ✅ (2026-06-08, b0a57e7):** `isOrderRiskMonitorEnabled()`
+in `runtime-config.ts` — `"false"`/`"0"` no longer enable the monitor.
 **Track 4 is deployed (4.0–4.5, 2026-06-08).** Gateway orchestration runs in-process; the retired
 `/api/agent/plan-internal` and `/api/agent/internal` routes are deleted; backfill scripts call
 `generateThreadPlan()` in-process. **Prod verification (2026-06-08):** dashboard **d8ce210** deployed; gateway
 `clerk-production-e37f.up.railway.app` `/health/deep` ok; retired orchestration routes return **401** (removed from
 `publicRoutePatterns`); hop-back routes (`io-send-internal`, `messages/auto-ack`, `messages/internal`) accept
 `x-internal-secret` (400 validation, not 401); `generateThreadPlan()` smoke against prod DB ok. **Remaining before
-Track 4 is fully closed:** fresh inbound live e2e (auto-plan/execute, Telegram operator, hop-back
-`io-send-internal` delivery); confirm Railway `DASHBOARD_URL` and add `x-vercel-protection-bypass` on hop-back
-if pointing at a protected `*.vercel.app` hostname. **4.6 preflight ✅ (2026-06-08):** stale `ai-summary` failed
-job inspected + removed — June 3 `plan-internal` 500, not a Track 4 regression; queue now `failed: 0`. 4.4 is
-decided — dashboard UI paths stay in Next.
+Track 4 is fully closed:** set Railway `VERCEL_PROTECTION_BYPASS` (+ confirm `DASHBOARD_URL`), redeploy gateway;
+fresh inbound live e2e (auto-plan/execute, Telegram operator, hop-back `io-send-internal` delivery). **4.6 preflight ✅
+(2026-06-08):** stale `ai-summary` failed job inspected + removed — June 3 `plan-internal` 500, not a Track 4
+regression; queue now `failed: 0`. **4.7 hop-back bypass wiring ✅ (2026-06-08, b0a57e7):** gateway hop-back fetches
+share `buildDashboardInternalHeaders()`; `verify-production.mjs` automates hop-back auth, retired-route, and
+queue-failure checks. 4.4 is decided — dashboard UI paths stay in Next.
 
 **Update (2026-06-08) — production e2e partial.** Ran against live gateway
 (`https://clerk-production-e37f.up.railway.app`) and dashboard deployment
@@ -72,14 +74,14 @@ valid secret (auth ok). Track 3: benign order pre-filter confirmed on Palette li
 no post-deploy `agent_actions` from worker paths yet. Stale pre-4.5 deployment URLs still serve the old routes
 — use the latest Production deployment or canonical `APP_URL`.
 
-**Update (2026-06-08, later) — hop-back bypass + order-risk flag parsing.** Gateway hop-back fetches now share
+**Update (2026-06-08, later) — hop-back bypass + order-risk flag parsing ✅ (b0a57e7).** Gateway hop-back fetches now share
 `buildDashboardInternalHeaders()` (`clients/dashboard-internal.ts`) and send `x-vercel-protection-bypass` when
 `VERCEL_PROTECTION_BYPASS` is set (io-send-internal, auto-ack, messages/internal). `ORDER_RISK_MONITOR_ENABLED`
 now parses via `isOrderRiskMonitorEnabled()` (`runtime-config.ts`) so `"false"`/`"0"` no longer enable the monitor.
 `verify-production.mjs` gained dashboard hop-back auth checks (400 validation, not 401), retired-route 401 checks,
 queue failed-job guard, and a warning when `DASHBOARD_URL` is `*.vercel.app` without a bypass token. **Still manual
-after deploy:** set Railway `VERCEL_PROTECTION_BYPASS` + confirm `ORDER_RISK_MONITOR_ENABLED=1`, then run Track 4.6
-fresh inbound e2e and Track 3 risky-order / idempotency / backstop checks.
+after deploy:** set Railway `VERCEL_PROTECTION_BYPASS` + `ORDER_RISK_MONITOR_ENABLED=1`, redeploy gateway, then run
+Track 4.6 fresh inbound e2e and Track 3 risky-order / idempotency / backstop checks.
 
 **Update (2026-06-08, later) — `ai-summary` queue preflight closed.** `/health/queues` now samples failed jobs
 (`failedJobs[]` with `failedReason`, `threadId`, `traceId`; gateway **1ba8c58**). The lone prod failure was a
@@ -425,6 +427,8 @@ seams; delete the forked dispatch.
   **Telegram notify deferred** (later sink swap, no core change). No Shopify mutations, no customer contact.
 - [x] **Autonomy: live behind `ORDER_RISK_MONITOR_ENABLED` with monitoring, no shadow.** ✅ Both the webhook
   enqueue and the worker processor gate on the flag.
+- [x] **Flag env parsing.** ✅ `isOrderRiskMonitorEnabled()` in `runtime-config.ts` — explicit boolean parsing so
+  `"false"`/`"0"` do not enable the monitor (2026-06-08, **b0a57e7**).
 - [ ] **Evals: a handful of order-ops fixtures, written when the behavior is worth gating** — deferred (Step 5).
   Support suite re-confirmed green (53/56 ≈ 94.6%; the 3 repeats=1 failures are the known flappy set, all pass
   at repeats=3). No order-ops fixtures yet.
@@ -435,11 +439,11 @@ seams; delete the forked dispatch.
   - [ ] **Risky → finding** — not yet triggered in prod (no `order-risk-review:*` rows in DB).
   - [ ] **Idempotency** — webhook retry / duplicate `order-review:${shop}:${orderId}` job.
   - [ ] **Backstop** — hourly `order-risk-monitor` enqueue.
-  - [ ] **Flag on Railway** — confirm `ORDER_RISK_MONITOR_ENABLED=1` on the gateway worker.
+  - [ ] **Flag on Railway** — set `ORDER_RISK_MONITOR_ENABLED=1` on the gateway worker and redeploy.
 
 **Exit:** order-ops reviews real `orders/create` events in-process in the worker, persists findings,
 notifies the merchant; the support suite is untouched. *(Met in code + eval; prod e2e partial — benign pre-filter
-only; risky finding, idempotency, backstop, and Telegram notify remain.)*
++ flag parsing done; Railway flag, risky finding, idempotency, backstop, and Telegram notify remain.)*
 
 **When order-ops later gains its first *mutating* action** (auto-cancel suspected fraud, auto-correct an
 address): *that action* — not the whole module — inherits the redefined per-module shadow→live ramp
@@ -458,9 +462,11 @@ Once the core is a package and the worker runs order-ops in-process, migrate sup
 `backfill-thread-subject-and-plan.mjs` to in-process `generateThreadPlan()`. Remaining internal hops are
 delivery-only: `io-send-internal`, `messages/auto-ack`, `messages/internal` — **prod auth verified** (valid
 `x-internal-secret` → 400 validation, not 401). Retired orchestration routes → **401** (no longer internally
-public). **Still open:** fresh inbound live e2e (auto-plan/execute with outbound delivery, Telegram operator through
-gateway worker); Railway `DASHBOARD_URL` / Vercel bypass header on hop-back fetches. **4.6 preflight ✅
-(2026-06-08):** stale `ai-summary` failed job cleared — see **2026-06-08 (later)** update above.
+public). **Still open:** set Railway `VERCEL_PROTECTION_BYPASS` (+ confirm `DASHBOARD_URL`), redeploy gateway, then
+fresh inbound live e2e (auto-plan/execute with outbound delivery, Telegram operator through gateway worker).
+**4.6 preflight ✅ (2026-06-08):** stale `ai-summary` failed job cleared — see **2026-06-08 (later)** update above.
+**4.7 hop-back bypass wiring ✅ (2026-06-08, b0a57e7):** `buildDashboardInternalHeaders()` + `verify-production`
+hop-back/retired-route/queue-failure checks — code shipped; Railway env + redeploy still required.
 
 **The finding (2026-06-05).** The two gateway-triggered routes (`/api/agent/plan-internal` for auto-plan,
 `/api/agent/internal` for Telegram operator runs) don't sit on thin route glue — they sit on a stack of
@@ -578,13 +584,20 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
     (**1ba8c58**); root cause = stale **2026-06-03** `plan-internal` 500 on thread `dfe31b6c-…` (not Track 4);
     removed via `POST /internal/queue/remove-failed` (**a3727ed**); queue now `failed: 0` (2026-06-08). June 7
     Palette inbound (`4ea3ec65-…`) already proved in-process plan + cache on prod.
+  - [x] **Hop-back bypass header wiring (code)** — `buildDashboardInternalHeaders()` sends
+    `x-vercel-protection-bypass` when `VERCEL_PROTECTION_BYPASS` is set on io-send-internal, auto-ack, and
+    messages/internal (**b0a57e7**, 2026-06-08).
+  - [x] **`verify-production` hop-back + queue checks** — automated hop-back auth (400), retired-route (401),
+    and queue failed-job guard (**b0a57e7**, 2026-06-08).
+  - [ ] **Railway env + redeploy** — set `VERCEL_PROTECTION_BYPASS` (and confirm `DASHBOARD_URL`) on gateway worker.
   - [ ] **Fresh inbound** → `ai-summary` → in-process auto-plan (post-4.5 worker-path sign-off).
   - [ ] Auto-execute + `io-send-internal` outbound delivery.
   - [ ] Telegram free-form + plan approval through `executeOperatorAgentTurn` on gateway worker.
 
 **Exit (met in code; prod e2e partial):** the majority of agent runs (channel-triggered) execute in the durable
-worker with no orchestration network hop; the dashboard keeps working throughout. *(Fresh inbound live e2e,
-hop-back delivery, and Telegram operator paths remain; `ai-summary` queue preflight closed 2026-06-08.)*
+worker with no orchestration network hop; the dashboard keeps working throughout. *(Hop-back bypass wiring +
+verify-production checks shipped **b0a57e7**; Railway env, fresh inbound live e2e, hop-back delivery, and
+Telegram operator paths remain; `ai-summary` queue preflight closed 2026-06-08.)*
 
 **Anti-overbuild guard:** this is "repoint the trigger," not "rewrite the runtime." If a step looks like a
 rewrite, the Track 2 package boundary is wrong — fix that, don't power through. (This is exactly why 4.1
