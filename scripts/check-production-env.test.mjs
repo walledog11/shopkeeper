@@ -31,9 +31,6 @@ function createDashboardLaunchEnv(overrides = {}) {
     PRICE_ID_STARTER: 'price_starter',
     PRICE_ID_PRO: 'price_pro',
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
-    SENTRY_AUTH_TOKEN: 'sentry-auth-token',
-    SENTRY_ORG: 'sentry-org',
-    SENTRY_PROJECT: 'sentry-project',
     ...overrides,
   };
 }
@@ -195,30 +192,6 @@ test('dashboard launch contract requires token encryption key', () => {
 
   assert.equal(
     result.errors.includes('Missing required environment variable: TOKEN_ENCRYPTION_KEY'),
-    true
-  );
-});
-
-test('dashboard launch contract requires Sentry source map upload vars', () => {
-  const result = validateProductionEnv('dashboard', {
-    scope: 'launch',
-    env: createDashboardLaunchEnv({
-      SENTRY_AUTH_TOKEN: '',
-      SENTRY_ORG: '',
-      SENTRY_PROJECT: '',
-    }),
-  });
-
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_AUTH_TOKEN'),
-    true
-  );
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_ORG'),
-    true
-  );
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_PROJECT'),
     true
   );
 });

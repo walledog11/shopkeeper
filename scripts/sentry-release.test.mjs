@@ -29,11 +29,11 @@ test('hasSentryUploadCredentials requires all upload vars', () => {
   );
 });
 
-test('isDeployBuild detects CI and platform env', () => {
+test('isDeployBuild detects platform deploy env only', () => {
   assert.equal(isDeployBuild({}), false);
+  assert.equal(isDeployBuild({ CI: 'true' }), false);
   assert.equal(isDeployBuild({ VERCEL: '1' }), true);
   assert.equal(isDeployBuild({ RAILWAY_ENVIRONMENT: 'production' }), true);
-  assert.equal(isDeployBuild({ CI: 'true' }), true);
 });
 
 test('missingSentryUploadVars lists unset keys', () => {

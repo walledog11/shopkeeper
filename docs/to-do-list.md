@@ -71,11 +71,9 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
 ## Observability And Operations
 
 - [X] Wire Sentry source-map upload into deploy/build.
-  - `scripts/sentry-upload-sourcemaps.mjs` runs via `postbuild` in dashboard (`apps/dashboard/.next`) and gateway (`dist`).
-  - Production builds fail upload when Sentry credentials are set but inject/upload fails; local builds skip when vars are missing.
-  - Dashboard emits server + client source maps, strips public client `.map` files after upload.
-  - Runtime `Sentry.init` and upload share `resolveSentryRelease()` (`shopkeeper@<sha>` from deploy env).
-  - **Ops follow-up:** confirm uploaded releases appear in Sentry after the next Vercel/Railway deploy.
+  - **Dashboard (Vercel):** use the Sentry Vercel integration for source maps; runtime needs `SENTRY_DSN` only.
+  - **Gateway (Railway):** `scripts/sentry-upload-sourcemaps.mjs` via `npm run upload-sourcemaps` after `tsc`.
+  - Runtime `Sentry.init` uses `resolveSentryRelease()` (`shopkeeper@<sha>` from deploy env).
 
 - [ ] Triage dependency audit findings.
   - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; 11 moderate (e.g. `qs`, `turbo`, `uuid` via `@sentry/webpack-plugin`).

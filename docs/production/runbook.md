@@ -106,8 +106,7 @@ Rules:
   Used by `GET /api/attachments` to stream private inbound email attachments to authenticated workspace members.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
-  Used by `scripts/sentry-upload-sourcemaps.mjs` for source-map upload.
+- `SENTRY_DSN` — runtime error tracking. Source maps upload via the [Sentry Vercel integration](https://vercel.com/integrations/sentry); no upload token needed on the dashboard.
 
 Optional:
 

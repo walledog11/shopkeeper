@@ -13,7 +13,7 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
-- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `POSTMARK_INBOUND_USERNAME` / `POSTMARK_INBOUND_PASSWORD` are set for inbound email, `BLOB_READ_WRITE_TOKEN` is set on both gateway (upload) and dashboard (authenticated download proxy), and Sentry source-map upload vars are available in the build environment.
+- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `POSTMARK_INBOUND_USERNAME` / `POSTMARK_INBOUND_PASSWORD` are set for inbound email, `BLOB_READ_WRITE_TOKEN` is set on both gateway (upload) and dashboard (authenticated download proxy), the **Sentry Vercel integration** is connected for dashboard source maps, and gateway `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` are set for Railway source map upload.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
 
 ## Deploy Order
@@ -45,13 +45,25 @@ npm run db:migrate:deploy
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- Dashboard uses `@sentry/nextjs` `withSentryConfig` in `apps/dashboard/next.config.js` — source maps upload as part of `next build` (Turbopack hook), not a separate deploy script.
-- Gateway uploads in `apps/gateway` `build` (`tsc && node scripts/sentry-upload-sourcemaps.mjs dist --require`).
-- Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` in the **build** environment for Vercel and Railway. `SENTRY_DSN` alone is not enough.
-- Vercel builds fail at config load if those three vars are missing (`VERCEL=1`). Gateway/Railway deploy builds fail in the upload script when vars are missing.
-- If Vercel Root Directory is `apps/dashboard`, use `apps/dashboard/vercel.json`. If root is the repo root, use root `vercel.json`.
+- **Dashboard (Vercel):** install the [Sentry Vercel integration](https://vercel.com/integrations/sentry) and set `SENTRY_DSN` for runtime. The integration uploads source maps during Vercel builds — do not add custom upload scripts or `SENTRY_AUTH_TOKEN` to the dashboard project unless you intentionally bypass the integration.
+- **Gateway (Railway):** `npm run build` is compile-only (`tsc`). Railway runs `npm run upload-sourcemaps` after build (`railway.json` / `nixpacks.toml`) using `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`.
+- CI (`npm run build` / `verify:pr`) does not require Sentry upload env.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
+
+## Sentry
+
+### Dashboard (Vercel)
+
+1. Install the [Sentry Vercel integration](https://vercel.com/integrations/sentry) and link the dashboard project.
+2. Set `SENTRY_DSN` in Vercel for runtime error reporting.
+3. Redeploy and confirm the release in Sentry includes uploaded artifacts (not just deployment metadata).
+
+No custom upload scripts or `SENTRY_AUTH_TOKEN` on the dashboard when using the integration.
+
+### Gateway (Railway)
+
+Set `SENTRY_DSN` for runtime and `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` for build-time source map upload. Railway runs `npm run upload-sourcemaps` after `tsc` (`railway.json`).
 
 ## Post-Deploy Verification
 

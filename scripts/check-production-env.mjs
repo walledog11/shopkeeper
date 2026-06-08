@@ -39,7 +39,6 @@ const CONTRACTS = {
       'CLERK_WEBHOOK_SECRET',
       'PRICE_ID_STARTER',
       'PRICE_ID_PRO',
-      ...SENTRY_SOURCE_MAP_REQUIRED,
     ],
     absoluteUrlVars: ['APP_URL', 'NEXT_PUBLIC_APP_URL', 'GATEWAY_INTERNAL_URL', 'TWILIO_WEBHOOK_URL'],
     equalPairs: [['APP_URL', 'NEXT_PUBLIC_APP_URL']],

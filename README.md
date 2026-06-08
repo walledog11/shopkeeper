@@ -30,7 +30,7 @@ shopkeeper/
 - **Gateway** — Railway (Express + BullMQ worker, single service)
 - **Database** — Neon PostgreSQL (pooled via pgbouncer)
 - **Redis** — dashboard uses Upstash (`@upstash/redis` REST client) for rate limiting/locks/presence; gateway uses a dedicated per-instance Redis (e.g. Railway Redis) via `ioredis` with `REDIS_URL` for BullMQ. These are separate instances.
-- **Error tracking** — Sentry (required for production observability; apps init when `SENTRY_DSN` is set)
+- **Error tracking** — Sentry (`SENTRY_DSN` at runtime). Dashboard source maps via the [Sentry Vercel integration](https://vercel.com/integrations/sentry); gateway source maps via `upload-sourcemaps` on Railway.
 
 ## Request Flow (Inbound Message)
 1. External platform POSTs to gateway webhook (Railway URL)
@@ -264,7 +264,6 @@ Required for launch-scope features:
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
 - `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for authenticated attachment download proxy
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
 
 Optional dashboard variables:
 - `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
@@ -292,7 +291,7 @@ Required at production boot:
 Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachment upload
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — Sentry source map upload
+- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — gateway source map upload on Railway
 
 Optional gateway variables:
 - `PORT` — Railway sets this automatically

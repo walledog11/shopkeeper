@@ -8,14 +8,13 @@ import { env, argv, exit } from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
   hasSentryUploadCredentials,
-  isDeployBuild,
   missingSentryUploadVars,
   resolveSentryRelease,
 } from './sentry-release.mjs';
 
 const distDir = argv.find((arg) => !arg.startsWith('-')) || 'dist';
 const stripPublicMaps = argv.includes('--strip-public-maps');
-const requireUpload = argv.includes('--require') || isDeployBuild(env);
+const requireUpload = argv.includes('--require');
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sentryCli = join(repoRoot, 'node_modules', '.bin', 'sentry-cli');
 
@@ -25,7 +24,7 @@ if (!hasSentryUploadCredentials(env)) {
 
   if (requireUpload) {
     console.error(`${message} (required on deploy builds)`);
-    console.error('[sentry] Set SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT in the build environment.');
+    console.error('[sentry] Set SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT in the Railway build environment.');
     exit(1);
   }
 

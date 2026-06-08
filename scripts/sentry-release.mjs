@@ -25,12 +25,7 @@ export function hasSentryUploadCredentials(env = process.env) {
 
 /** @param {NodeJS.ProcessEnv} [env] */
 export function isDeployBuild(env = process.env) {
-  return (
-    env.VERCEL === '1' ||
-    typeof env.RAILWAY_ENVIRONMENT === 'string' ||
-    env.CI === 'true' ||
-    env.CI === '1'
-  );
+  return env.VERCEL === '1' || typeof env.RAILWAY_ENVIRONMENT === 'string';
 }
 
 /** @param {NodeJS.ProcessEnv} [env] */
