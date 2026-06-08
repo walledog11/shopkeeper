@@ -1,29 +1,18 @@
 import { Queue } from 'bullmq';
 import { createGatewayRedisClient, toGatewayBullMqConnection } from '../clients/redis-client.js';
 import { loadGatewayEnv } from '../config/load-env.js';
-import { QUEUE } from '../constants.js';
 import { readFailedQueueJobSnapshots } from '../health.js';
 
 loadGatewayEnv();
 
-const QUEUE_ALIASES: Record<string, string> = {
-  inbound: QUEUE.INBOUND,
-  'inbound-messages': QUEUE.INBOUND,
-  aiSummary: QUEUE.AI_SUMMARY,
-  'ai-summary': QUEUE.AI_SUMMARY,
-};
-
-function resolveQueueName(raw: string | undefined): string {
-  const value = raw?.trim();
-  if (!value) {
+async function main(): Promise<void> {
+  const queueArg = process.argv[2];
+  if (!queueArg?.trim()) {
     throw new Error('Usage: npx tsx src/scripts/inspect-failed-queue-jobs.ts <inbound|ai-summary>');
   }
 
-  return QUEUE_ALIASES[value] ?? value;
-}
-
-async function main(): Promise<void> {
-  const queueName = resolveQueueName(process.argv[2]);
+  const { resolveQueueName } = await import('../queue-maintenance.js');
+  const queueName = resolveQueueName(queueArg);
   const redis = createGatewayRedisClient();
   const queue = new Queue(queueName, { connection: toGatewayBullMqConnection(redis) });
 

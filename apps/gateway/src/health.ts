@@ -32,6 +32,11 @@ let cachedQueueDiagnostics:
   | null = null;
 let queueDiagnosticsPromise: Promise<Record<string, unknown>> | null = null;
 
+export function clearQueueDiagnosticsCache(): void {
+  cachedQueueDiagnostics = null;
+  queueDiagnosticsPromise = null;
+}
+
 export interface WorkerHeartbeatPayload {
   timestamp: string;
   pid: number;
