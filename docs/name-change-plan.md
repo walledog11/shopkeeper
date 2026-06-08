@@ -31,7 +31,6 @@ The main trap is that **"clerk" means three different things** in this repo. A b
 | **NPM workspaces** | `@shopkeeper/db`, `@shopkeeper/agent`, `shopkeeper-dashboard`, `shopkeeper-gateway` | Replaces internal `@clerk/db` / `@clerk/agent` collision with Clerk.com SDK. |
 | **Telegram bot display name** | Shopkeeper | BotFather display name. |
 | **Telegram bot username** | `ShopkeeperBot` | Env: `TELEGRAM_BOT_USERNAME`. Register via BotFather in Phase 6; keep `ClerkBot` until then. |
-| **Sentry release prefix** | `shopkeeper@` | Cosmetic; update in Phase 6/7. |
 
 ### Scope decisions
 
@@ -266,7 +265,6 @@ Rewrites `__clerk_agent__` → `__shopkeeper_agent__` and `__clerk_agent_note__`
 - [x] `NEXT_PUBLIC_CONTACT_EMAIL` env — marketing/legal pages read contact address from env (defaults to `hello@useclerk.co`)
 - [x] Gateway Telegram bot copy → Shopkeeper
 - [x] Gateway health/log strings → Shopkeeper
-- [x] Sentry release auto-prefix `shopkeeper@<sha>` in `scripts/sentry-upload-sourcemaps.mjs`
 - [x] `verify-production.mjs` smoke test strings → Shopkeeper
 
 ### External services (manual — see runbook)
@@ -275,9 +273,8 @@ Rewrites `__clerk_agent__` → `__shopkeeper_agent__` and `__clerk_agent_note__`
 |---|---|
 | **Clerk.com dashboard** | Application name/display name → "Shopkeeper"; keep API keys and webhook URL path (`/api/webhooks/clerk` is fine) |
 | **Vercel** | Project name, custom domain, env var values that mention branding (not `CLERK_*`) |
-| **Railway** | Gateway service name, `DASHBOARD_URL`, Sentry release tags |
+| **Railway** | Gateway service name, `DASHBOARD_URL` |
 | **Neon** | Project name (cosmetic) |
-| **Sentry** | Org/project name, `SENTRY_PROJECT`, release naming |
 | **Stripe** | Product names, checkout descriptions, customer-facing receipt text |
 | **Postmark** | Sender name, inbound domain if you use `inbound.useclerk.co` |
 | **Shopify app** | App name in Partner Dashboard, OAuth redirect URLs if domain changes |
@@ -307,7 +304,6 @@ Rename product branding in developer docs, production runbooks, and ops scripts.
 - [x] `docs/telegram-operator-channel.md` — Shopkeeper dashboard/bot, `@shopkeeper/db`
 - [x] `scripts/verify-production.mjs` — user-agent `shopkeeper-production-verify/1.0`
 - [x] `scripts/clean.mjs`, `scripts/check-production-env.test.mjs` — cosmetic ops strings
-- [x] Sentry release prefix `shopkeeper@` (done in Phase 6: `scripts/sentry-upload-sourcemaps.mjs`)
 - [ ] `.github/workflows/*` — `clerk_test` DB name left unchanged (Phase 5; isolated CI infra)
 - [x] Historical planning docs (`docs/cleanup.md`, `docs/remediation-plan.md`, `docs/core-extraction-and-module-expansion-plan.md`, `docs/autonomy-and-generality-plan.md`)
 

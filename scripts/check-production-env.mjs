@@ -4,11 +4,6 @@ import { pathToFileURL } from 'node:url';
 
 const VALID_TARGETS = ['dashboard', 'gateway', 'all'];
 const VALID_SCOPES = ['boot', 'launch'];
-const SENTRY_SOURCE_MAP_REQUIRED = [
-  'SENTRY_AUTH_TOKEN',
-  'SENTRY_ORG',
-  'SENTRY_PROJECT',
-];
 
 const CONTRACTS = {
   dashboard: {
@@ -24,7 +19,6 @@ const CONTRACTS = {
       'TOKEN_ENCRYPTION_KEY',
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
-      'SENTRY_DSN',
     ],
     launchRequired: [
       'GATEWAY_INTERNAL_URL',
@@ -53,14 +47,12 @@ const CONTRACTS = {
       'INTERNAL_API_SECRET',
       'DASHBOARD_URL',
       'TOKEN_ENCRYPTION_KEY',
-      'SENTRY_DSN',
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
       'BLOB_READ_WRITE_TOKEN',
       'POSTMARK_INBOUND_USERNAME',
       'POSTMARK_INBOUND_PASSWORD',
-      ...SENTRY_SOURCE_MAP_REQUIRED,
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL'],
     expectedPathSuffixes: {

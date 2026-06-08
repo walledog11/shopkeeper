@@ -82,7 +82,7 @@ export function createAiSummaryWorker(workerOptions: SharedGatewayWorkerOptions)
   registerJobFailureLogging(worker, {
     logMessage: '[AISummary] Job failed',
     logFields: (job) => ({ jobId: job?.id, threadId: job?.data?.threadId }),
-    sentryExtra: (job) => ({
+    failureExtra: (job) => ({
       jobId: job?.id,
       queue: 'aiSummary',
       threadId: job?.data?.threadId,

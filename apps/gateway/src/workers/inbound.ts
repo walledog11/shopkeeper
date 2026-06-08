@@ -33,7 +33,7 @@ export function createInboundWorker(options: InboundWorkerRegistrationOptions): 
   registerJobFailureLogging(worker, {
     logMessage: '[Worker] Job failed permanently',
     logFields: (job) => ({ jobId: job?.id }),
-    sentryExtra: (job) => ({
+    failureExtra: (job) => ({
       jobId: job?.id,
       queue: 'inbound',
       platform: job?.data?.platform,

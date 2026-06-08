@@ -439,8 +439,8 @@ Phase 9 verification completed on 2026-06-06:
 
   Item 5 follow-up implementation notes:
 
-  - Shared redaction now lives in `@shopkeeper/agent/observability`: `PINO_REDACT_PATHS`, `scrubValue`, and `sentryBeforeSend`.
-  - Dashboard and gateway loggers/Sentry hooks import the shared module; the duplicate app-local redaction files were removed.
+  - Shared redaction now lives in `@shopkeeper/agent/observability`: `PINO_REDACT_PATHS` and `scrubValue`.
+  - Dashboard and gateway loggers import the shared module; the duplicate app-local redaction files were removed.
   - Email, Instagram, and Shopify OAuth failure/info logs now pass provider payloads through `scrubValue` before logging.
 
   Item 5 follow-up verification completed on 2026-06-06:

@@ -30,8 +30,6 @@ shopkeeper/
 - **Gateway** — Railway (Express + BullMQ worker, single service)
 - **Database** — Neon PostgreSQL (pooled via pgbouncer)
 - **Redis** — dashboard uses Upstash (`@upstash/redis` REST client) for rate limiting/locks/presence; gateway uses a dedicated per-instance Redis (e.g. Railway Redis) via `ioredis` with `REDIS_URL` for BullMQ. These are separate instances.
-- **Error tracking** — Sentry (`SENTRY_DSN` at runtime). Dashboard source maps via the [Sentry Vercel integration](https://vercel.com/integrations/sentry); gateway source maps via `upload-sourcemaps` on Railway.
-
 ## Request Flow (Inbound Message)
 1. External platform POSTs to gateway webhook (Railway URL)
 2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
@@ -240,7 +238,7 @@ Configurable per org via Settings → Agent tab:
 - `apps/dashboard/src/app/api/billing/route.ts` — Stripe billing info
 - `apps/dashboard/src/app/api/billing/webhook/route.ts` — Stripe webhook sync
 - `apps/dashboard/src/lib/redis.ts` — Upstash Redis client (rate limiting)
-- `apps/dashboard/src/instrumentation.ts` — startup env validation + Sentry init
+- `apps/dashboard/src/instrumentation.ts` — startup env validation
 - `packages/db/prisma/schema.prisma` — DB schema
 
 ## Environment Variables
@@ -255,7 +253,6 @@ Required at production boot:
 - `APP_URL` — production dashboard URL, for example `https://app.yourdomain.com`
 - `TOKEN_ENCRYPTION_KEY` — 32-byte integration token encryption key, encoded as 64 hex chars, base64, or 32 raw chars
 - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — Upstash Redis REST credentials
-- `SENTRY_DSN` — Sentry production error tracking
 
 Required for launch-scope features:
 - `GATEWAY_INTERNAL_URL` — Railway gateway URL, for example `https://gateway.up.railway.app`
@@ -275,7 +272,6 @@ Optional dashboard variables:
 - `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` — Outlook OAuth
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
-- `SENTRY_RELEASE` — explicit Sentry release; otherwise deploy commit env vars are used when available
 
 ### Gateway (Railway)
 Required at production boot:
@@ -286,12 +282,10 @@ Required at production boot:
 - `INTERNAL_API_SECRET` — must match the dashboard value
 - `DASHBOARD_URL` — production dashboard URL used for internal API calls
 - `TOKEN_ENCRYPTION_KEY` — same 32-byte integration token encryption key used by the dashboard
-- `SENTRY_DSN` — Sentry production error tracking
 
 Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachment upload
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` — gateway source map upload on Railway
 
 Optional gateway variables:
 - `PORT` — Railway sets this automatically
@@ -301,7 +295,6 @@ Optional gateway variables:
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
 - `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls
-- `SENTRY_RELEASE` — explicit Sentry release; otherwise deploy commit env vars are used when available
 
 ## Coding Guidelines
 - Don't add features, comments, error handling, or abstractions beyond what's asked

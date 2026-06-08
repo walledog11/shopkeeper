@@ -1,13 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { GatewayOpsAlertConfig } from './config/runtime-config.js';
 import {
   buildOpsAlertScope,
   emitOpsAlert,
   incrementOpsAlertWindow,
-  type OpsAlertCaptureContext,
   type OpsAlertCounterClient,
   type OpsAlertLogger,
-  type OpsAlertSentryClient,
 } from './ops-alerts.js';
 
 const DEFAULT_CONFIG: GatewayOpsAlertConfig = {
@@ -22,7 +20,7 @@ const DEFAULT_CONFIG: GatewayOpsAlertConfig = {
 };
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  // no env stubs
 });
 
 describe('buildOpsAlertScope', () => {
@@ -52,9 +50,8 @@ describe('buildOpsAlertScope', () => {
 });
 
 describe('emitOpsAlert', () => {
-  it('logs without capturing when Sentry is not configured', () => {
+  it('logs alerts when enabled', () => {
     const { logger, calls } = createTestLogger();
-    const { sentry, messages } = createTestSentry();
 
     const result = emitOpsAlert({
       category: 'provider_send',
@@ -62,47 +59,16 @@ describe('emitOpsAlert', () => {
       tags: { provider: 'postmark', channel: 'email' },
     }, {
       config: DEFAULT_CONFIG,
-      env: {} as NodeJS.ProcessEnv,
       logger,
-      sentry,
     });
 
-    expect(result).toEqual({ logged: true, captured: false, eventId: null, reason: 'missing_dsn' });
+    expect(result).toEqual({ logged: true, reason: 'logged' });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.level).toBe('warn');
-    expect(messages).toHaveLength(0);
   });
 
-  it('captures messages when alerts and Sentry are enabled', () => {
-    const { logger } = createTestLogger();
-    const { sentry, messages } = createTestSentry();
-
-    const result = emitOpsAlert({
-      category: 'webhook_signature',
-      message: 'Repeated Meta signature failures',
-      level: 'warning',
-      tags: { provider: 'meta' },
-      extra: { count: 5 },
-    }, {
-      config: DEFAULT_CONFIG,
-      env: { SENTRY_DSN: 'https://example.invalid/1' } as NodeJS.ProcessEnv,
-      logger,
-      sentry,
-    });
-
-    expect(result).toEqual({ logged: true, captured: true, eventId: 'message-event-id', reason: 'captured' });
-    expect(messages).toHaveLength(1);
-    expect(messages[0]?.context.tags).toMatchObject({
-      category: 'webhook_signature',
-      service: 'gateway',
-      provider: 'meta',
-    });
-    expect(messages[0]?.context.extra).toEqual({ count: 5 });
-  });
-
-  it('captures exceptions with alert context', () => {
-    const { logger } = createTestLogger();
-    const { sentry, exceptions } = createTestSentry();
+  it('logs exceptions with alert context', () => {
+    const { logger, calls } = createTestLogger();
     const error = new Error('tool failed');
 
     const result = emitOpsAlert({
@@ -113,32 +79,28 @@ describe('emitOpsAlert', () => {
       error,
     }, {
       config: DEFAULT_CONFIG,
-      env: { SENTRY_DSN: 'https://example.invalid/1' } as NodeJS.ProcessEnv,
       logger,
-      sentry,
     });
 
-    expect(result).toEqual({ logged: true, captured: true, eventId: 'exception-event-id', reason: 'captured' });
-    expect(exceptions).toEqual([{ error, context: expect.objectContaining({ level: 'error' }) }]);
+    expect(result).toEqual({ logged: true, reason: 'logged' });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.level).toBe('error');
+    expect(calls[0]?.fields.err).toBe('tool failed');
   });
 
-  it('logs but skips Sentry when OPS_ALERTS_ENABLED is false', () => {
+  it('skips logging when OPS_ALERTS_ENABLED is false', () => {
     const { logger, calls } = createTestLogger();
-    const { sentry, messages } = createTestSentry();
 
     const result = emitOpsAlert({
       category: 'provider_send',
       message: 'Provider failure',
     }, {
       config: { ...DEFAULT_CONFIG, enabled: false },
-      env: { SENTRY_DSN: 'https://example.invalid/1' } as NodeJS.ProcessEnv,
       logger,
-      sentry,
     });
 
-    expect(result).toEqual({ logged: true, captured: false, eventId: null, reason: 'disabled' });
-    expect(calls).toHaveLength(1);
-    expect(messages).toHaveLength(0);
+    expect(result).toEqual({ logged: false, reason: 'disabled' });
+    expect(calls).toHaveLength(0);
   });
 });
 
@@ -207,31 +169,6 @@ function createTestLogger(): {
       error: (fields, message) => calls.push({ level: 'error', fields, message }),
     },
     calls,
-  };
-}
-
-function createTestSentry(enabled = true): {
-  sentry: OpsAlertSentryClient;
-  messages: Array<{ message: string; context: OpsAlertCaptureContext }>;
-  exceptions: Array<{ error: unknown; context: OpsAlertCaptureContext }>;
-} {
-  const messages: Array<{ message: string; context: OpsAlertCaptureContext }> = [];
-  const exceptions: Array<{ error: unknown; context: OpsAlertCaptureContext }> = [];
-
-  return {
-    sentry: {
-      captureMessage: (message, context) => {
-        messages.push({ message, context: context! });
-        return 'message-event-id';
-      },
-      captureException: (error, context) => {
-        exceptions.push({ error, context: context! });
-        return 'exception-event-id';
-      },
-      isEnabled: () => enabled,
-    },
-    messages,
-    exceptions,
   };
 }
 

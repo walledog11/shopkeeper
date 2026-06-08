@@ -19,15 +19,15 @@ Status legend: `[x]` done, `[ ]` pending, `[~]` in progress or partially done.
 ### Production Env and Docs Alignment
 
 - [x] Update `scripts/check-production-env.mjs` for v1 scope: email + Shopify required; Meta/Twilio/USPS optional.
-- [x] Require `SENTRY_DSN` and gateway `BLOB_READ_WRITE_TOKEN` in production preflight.
+- [x] Require gateway `BLOB_READ_WRITE_TOKEN` in production preflight.
 - [x] Align `docs/production/runbook.md` and `docs/production/deployment.md` with the same env contract.
 - [x] Correct stale route/test counts in `docs/production/checklist.md`.
 
 ### Operational Guardrails
 
-- [x] Decide whether the checklist marks alerting as "instrumentation complete" or waits for production Sentry rules.
+- [x] Decide whether the checklist marks alerting as "instrumentation complete" or waits for production log-routing validation.
 - [x] Document BullMQ retry-exhausted job inspection and replay in the runbook.
-- [x] Document Sentry alert rule setup and controlled-alert validation steps.
+- [x] Document ops-alert log routing and controlled-alert validation steps.
 
 ### Clerk Lifecycle Cleanup
 

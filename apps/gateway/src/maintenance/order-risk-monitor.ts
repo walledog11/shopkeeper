@@ -86,7 +86,7 @@ export const registerOrderRiskMaintenanceJob: MaintenanceJobRegistration = async
     }
   }, {
     label: 'OrderRiskMonitor',
-    sentryQueue: 'order-risk-monitor',
+    failureQueue: 'order-risk-monitor',
   });
 
   return { workers: [worker], queues: [queue, reviewQueue] };

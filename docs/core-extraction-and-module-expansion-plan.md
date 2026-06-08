@@ -231,7 +231,7 @@ pattern), or **leave** in the dashboard (route glue).
 | `@/lib/messaging/*` (`dispatch-message`, `email`, `email/reply`, `provider-send-failures`) + `@/lib/server/{outbound-recorder,gateway-url,customer-memory}` | **`tools/thread.ts` only** | **Inject — the one new seam** (`ctx.io`). These drag Postmark/IG/email; they must not enter the package. ✅ |
 | `api/agent-actions.ts` (`recordAgentActionsBatch`) | `run.ts` | **Move** into the package as core (`@shopkeeper/agent/agent-actions`); null-`threadId`/`customerId`-safe. Dashboard path is now a re-export shim. ✅ |
 | `@/lib/server/refund-spend` (daily refund-cap counter) | `tools/executor.ts` | **Move** to `@shopkeeper/db`. ⚠️ It was actually **Upstash Redis**, not a Postgres counter as first assumed — re-implemented as a Postgres counter (`refund-spend.ts` + new `RefundDailySpend` model), mirroring `spend-store.ts`. ✅ The schema change shipped as a committed migration (`20260604120000_add_refund_daily_spend`). **Correction:** an earlier pass landed the table via `prisma db push` to local dev *only* and left no migration — so CI and prod (both `prisma migrate deploy`) were missing the table and the executor's counter write threw in prod. Fixed by adding the migration; verified `migrate deploy` + the real-DB test pass. |
-| `@/lib/server/{ops-alerts,agent-failure-alerts}` | `run.ts` | ⚠️ the "already injected" assumption was wrong: `run.ts` imported `recordAgentFailure` as a **value** (drags `@/lib/env` + Sentry). Collapsed `failureRoute`/`failureCounterClient` into one injected `recordToolFailure(kind, tool, detail)` callback on `RunAgentOptions`; the dashboard shim builds the closure. Alerting infra stays in the dashboard. ✅ |
+| `@/lib/server/{ops-alerts,agent-failure-alerts}` | `run.ts` | ⚠️ the "already injected" assumption was wrong: `run.ts` imported `recordAgentFailure` as a **value** (drags `@/lib/env` + ops-alerts). Collapsed `failureRoute`/`failureCounterClient` into one injected `recordToolFailure(kind, tool, detail)` callback on `RunAgentOptions`; the dashboard shim builds the closure. Alerting infra stays in the dashboard. ✅ |
 | `@shopkeeper/db`, `shopify/*` | core | **No change.** `@shopkeeper/db` stays a dependency; `shopify/*` is self-contained (zero `@/` imports) and moves wholesale. ✅ |
 
 ### The I/O sink — the one forced seam
@@ -473,7 +473,7 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   did before). (`requestAutoAck → /api/messages/auto-ack` still **stays a hop**.)
   - **Injected gateway deps (`agent-turn-deps.ts`):** ioredis `LockProvider` (4.0), `buildContext` +
     in-process `ThreadSink`, core `runAgent` (no ops-alert counter yet — `recordToolFailure` omitted; failures
-    still land as `AgentAction` rows + BullMQ/Sentry job-failure logging), **no-op `ShadowRecorder`** (rig is
+    still land as `AgentAction` rows + BullMQ job-failure logging), **no-op `ShadowRecorder`** (rig is
     dashboard-rollout-only).
   - **Gateway `ThreadSink` (`agent-thread-sink.ts`) — hop-back sink (decided 2026-06-06):** DB-only ops run
     in-process — `add_internal_note` / `update_thread_tag` (pure DB), `update_thread_status` (+ in-process

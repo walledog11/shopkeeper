@@ -78,7 +78,6 @@ npm run build -w apps/gateway
 - `TOKEN_ENCRYPTION_KEY`
 - `UPSTASH_REDIS_REST_URL`
 - `UPSTASH_REDIS_REST_TOKEN`
-- `SENTRY_DSN`
 
 > Dashboard `UPSTASH_REDIS_REST_URL` (Upstash REST — rate limiting, locks, presence) and gateway `REDIS_URL` (a dedicated per-instance Redis for BullMQ) are **separate** instances and must not point at the same database. BullMQ holds a blocking connection per worker and polls continuously, so running it against Upstash's per-command billing is very expensive. The daily LLM spend cap is shared across both apps via Postgres (the `llm_daily_spend` table), so it stays per-org regardless of the Redis split.
 
@@ -106,7 +105,6 @@ Rules:
   Used by `GET /api/attachments` to stream private inbound email attachments to authenticated workspace members.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
-- `SENTRY_DSN` — runtime error tracking. Source maps upload via the [Sentry Vercel integration](https://vercel.com/integrations/sentry); no upload token needed on the dashboard.
 
 Optional:
 
@@ -123,7 +121,6 @@ Optional:
 - `INTERNAL_API_SECRET`
 - `DASHBOARD_URL`
 - `TOKEN_ENCRYPTION_KEY`
-- `SENTRY_DSN`
 
 Rules:
 
@@ -140,8 +137,6 @@ Rules:
   Required for inbound email webhook basic auth in production.
 - `BLOB_READ_WRITE_TOKEN`
   Required for inbound email attachment upload in the gateway worker.
-- `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`
-  Used by `scripts/sentry-upload-sourcemaps.mjs` for source-map upload.
 
 Optional:
 
@@ -274,11 +269,11 @@ Relevant signed dashboard webhook route:
 
 ## Operational Guardrails
 
-The guardrail code is implemented, but the production checklist item is not complete until Sentry alert rules are configured and validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
+The guardrail code is implemented, but the production checklist item is not complete until ops-alert log routing is validated against live or staging traffic. Treat [`operational-guardrails.md`](operational-guardrails.md) as the implementation record and this section as the production operating procedure.
 
 ### External Monitors
 
-Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for the Sentry guardrail rules.
+Configure Better Stack HTTP keyword checks before sign-off. Do this manually in the Better Stack console; do not add Better Stack API tokens or credentials to the repo. Route these monitors to the same launch owner or escalation policy used for ops-alert notifications.
 
 Before creating monitors, verify the live production health endpoints from a trusted shell:
 
@@ -306,7 +301,7 @@ Use the same settings for all three monitors:
 - Verify SSL: enabled
 - Follow redirects: enabled
 - Region: `us`
-- Escalation policy: same launch owner or policy used by Sentry
+- Escalation policy: same launch owner or policy used for ops alerts
 
 After creation, wait for all three monitors to show `up`, confirm each has a first passing check timestamp, and use Better Stack's built-in test notification for the selected escalation policy. Do not validate alert routing by intentionally taking production down.
 
@@ -340,9 +335,11 @@ Evidence to record:
 
 Do not check off the PITR item until the retention window is recorded here or in the launch evidence tracker.
 
-### Sentry Alert Rules
+### Ops Alert Log Routing
 
-Create issue or metric alert rules for events with the following tags:
+Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Route Vercel and Railway log drains to your launch owner (for example Better Stack log keyword alerts on `opsAlert` and `category`).
+
+Alert categories:
 
 - `category=queue_health`
 - `category=webhook_signature`
@@ -353,16 +350,15 @@ Route both dashboard and gateway alerts to the same launch owner until ownership
 
 Before sign-off:
 
-1. Set `SENTRY_DSN` for both dashboard and gateway.
-2. Confirm `OPS_ALERTS_ENABLED` is unset or set to `true`.
-3. In staging or a safe production window, record the current alert env values.
-4. Temporarily set `OPS_ALERT_WINDOW_SECS=60` and set only the threshold under test to `1`.
-5. Trigger one controlled event per category.
-6. Confirm the event lands in Sentry with the expected `category` and `service` tags.
-7. Confirm the alert routes to the launch owner.
-8. Confirm the issue grouping, notification tags, extras, and absence of customer-facing side effects.
-9. Restore the default thresholds after validation.
-10. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing structured logs.
+1. Confirm `OPS_ALERTS_ENABLED` is unset or set to `true`.
+2. In staging or a safe production window, record the current alert env values.
+3. Temporarily set `OPS_ALERT_WINDOW_SECS=60` and set only the threshold under test to `1`.
+4. Trigger one controlled event per category.
+5. Confirm the structured log lands in your log drain with the expected `category` and `service` tags.
+6. Confirm the log-based alert routes to the launch owner.
+7. Confirm the log fields, grouping keys, and absence of customer-facing side effects.
+8. Restore the default thresholds after validation.
+9. Set `OPS_ALERTS_ENABLED=false` briefly and confirm threshold alerts are silenced without suppressing ordinary structured logs.
 
 Default thresholds to restore:
 
@@ -383,29 +379,29 @@ Run these in a safe production window with test org/user data only.
 1. Set `WEBHOOK_SIGNATURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the gateway.
 2. Send one intentionally unsigned or bad-signature request to `POST https://<gateway>/webhooks/shopify` or `POST https://<gateway>/webhooks/meta`.
 3. Confirm the app returns the existing rejection response, normally `401`.
-4. Confirm Sentry receives an event tagged `category=webhook_signature` and `service=gateway`.
+4. Confirm the log drain receives an entry tagged `category=webhook_signature` and `service=gateway`.
 
 `agent_failure`:
 
 1. Set `AGENT_FAILURE_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
 2. As an authenticated launch-test user in a test organization, call `POST https://<dashboard>/api/agent` with a valid test `threadId` but no approved plan.
 3. Confirm the route returns the controlled `400`.
-4. Confirm Sentry receives an event tagged `category=agent_failure`, `service=dashboard`, and `route=/api/agent`.
+4. Confirm the log drain receives an entry tagged `category=agent_failure`, `service=dashboard`, and `route=/api/agent`.
 
 `provider_send`:
 
 1. Set `PROVIDER_SEND_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
-2. Do not break live provider credentials. Trigger one controlled dashboard-side provider alert using the existing alert helper against production Sentry and Redis with test metadata: `provider=postmark`, `channel=email`, and `orgId=<test-org-id>`.
-3. Confirm Sentry receives an event tagged `category=provider_send`, `service=dashboard`, `provider=postmark`, and `channel=email`.
+2. Do not break live provider credentials. Trigger one controlled dashboard-side provider alert using the existing alert helper against production Redis with test metadata: `provider=postmark`, `channel=email`, and `orgId=<test-org-id>`.
+3. Confirm the log drain receives an entry tagged `category=provider_send`, `service=dashboard`, `provider=postmark`, and `channel=email`.
 
 `queue_health`:
 
 1. Check `GET https://<gateway>/health/queues` first.
 2. If there is already a failed, waiting, or active-stuck condition, lower only the matching queue threshold and let the maintenance worker emit naturally.
 3. If queues are clean, trigger one controlled gateway-side queue alert through the existing alert helper with `category=queue_health`, `queue=inbound`, and test metadata.
-4. Confirm Sentry receives an event tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
+4. Confirm the log drain receives an entry tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
 
-After each category, record the Sentry issue URL, event id, alert recipient, tags/extras checked, and any side-effect notes in the sign-off evidence section.
+After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in the sign-off evidence section.
 
 ### BullMQ Failed Jobs
 
@@ -445,7 +441,7 @@ Do not mark the deploy track done until you have all of the following:
 - dashboard `/api/health` returned `200`
 - gateway `/health/deep` returned `200`
 - gateway `/health/queues` showed a healthy worker heartbeat
-- Sentry alert rules are configured and one controlled alert per guardrail category has routed correctly
+- ops-alert log routing is configured and one controlled alert per guardrail category has routed correctly
 - `npm run verify:production` passed against the live URLs
 - Better Stack checks are passing for dashboard health, gateway deep health, and gateway queue health
 - Neon production PITR is enabled and the retention window is recorded
@@ -454,10 +450,10 @@ Do not mark the deploy track done until you have all of the following:
 
 Reliability evidence to record before updating [`checklist.md`](checklist.md):
 
-- Sentry `queue_health`: issue URL, event id, routed owner, validation time
-- Sentry `webhook_signature`: issue URL, event id, routed owner, validation time
-- Sentry `provider_send`: issue URL, event id, routed owner, validation time
-- Sentry `agent_failure`: issue URL, event id, routed owner, validation time
+- Ops alert `queue_health`: log timestamp, routed owner, validation time
+- Ops alert `webhook_signature`: log timestamp, routed owner, validation time
+- Ops alert `provider_send`: log timestamp, routed owner, validation time
+- Ops alert `agent_failure`: log timestamp, routed owner, validation time
 - Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway queue monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time

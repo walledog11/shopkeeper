@@ -54,7 +54,7 @@ export const registerRetentionMaintenanceJobs: MaintenanceJobRegistration = asyn
 
   const archivalWorker = createMaintenanceWorker(context, QUEUE.ARCHIVAL, archiveOldClosedThreads, {
     label: 'Archival',
-    sentryQueue: 'thread-archival',
+    failureQueue: 'thread-archival',
   });
 
   const purgeQueue = createMaintenanceQueue(context, QUEUE.PURGE);
@@ -62,7 +62,7 @@ export const registerRetentionMaintenanceJobs: MaintenanceJobRegistration = asyn
 
   const purgeWorker = createMaintenanceWorker(context, QUEUE.PURGE, purgeDeletedRecords, {
     label: 'Purge',
-    sentryQueue: 'purge',
+    failureQueue: 'purge',
   });
 
   return {

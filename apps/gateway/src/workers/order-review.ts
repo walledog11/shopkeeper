@@ -53,7 +53,7 @@ export function createOrderReviewWorker(
   registerJobFailureLogging(worker, {
     logMessage: '[OrderReview] Job failed permanently',
     logFields: (job) => ({ jobId: job?.id }),
-    sentryExtra: (job) => ({
+    failureExtra: (job) => ({
       jobId: job?.id,
       queue: 'order-review',
       organizationId: job?.data?.organizationId,

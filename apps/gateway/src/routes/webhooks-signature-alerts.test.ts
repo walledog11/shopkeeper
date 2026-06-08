@@ -5,7 +5,6 @@ import {
   type EmitOpsAlertResult,
   type OpsAlertCounterClient,
   type OpsAlertLogger,
-  type OpsAlertSentryClient,
 } from '../ops-alerts.js';
 import {
   recordWebhookSignatureFailure,
@@ -30,9 +29,7 @@ const DISABLED_CONFIG: GatewayOpsAlertConfig = {
 
 const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   logged: true,
-  captured: false,
-  eventId: null,
-  reason: 'missing_dsn',
+  reason: 'logged',
 };
 
 type SignatureCase = {
@@ -115,21 +112,14 @@ describe('recordWebhookSignatureFailure', () => {
     expect(emitAlert).toHaveBeenCalledTimes(1);
   });
 
-  it('does not capture to Sentry when alerts are disabled', async () => {
+  it('does not log alerts when alerts are disabled', async () => {
     const { client } = createCounterClient();
-    const sentryCalls: string[] = [];
-    const mockSentry: OpsAlertSentryClient = {
-      captureMessage: vi.fn((msg: string) => { sentryCalls.push(msg); return 'event-id'; }),
-      captureException: vi.fn(),
-    };
     const mockLogger: OpsAlertLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     const realEmitDisabled: typeof emitOpsAlert = (input) =>
       emitOpsAlert(input, {
         config: DISABLED_CONFIG,
-        env: { SENTRY_DSN: 'https://example.invalid/1' } as NodeJS.ProcessEnv,
         logger: mockLogger,
-        sentry: mockSentry,
       });
 
     for (let i = 1; i <= CONFIG.webhookSignatureThreshold; i++) {
@@ -140,8 +130,8 @@ describe('recordWebhookSignatureFailure', () => {
       );
     }
 
-    expect(sentryCalls).toHaveLength(0);
-    expect(mockSentry.captureMessage).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
+    expect(mockLogger.error).not.toHaveBeenCalled();
   });
 
   it('uses separate counters per provider and reason', async () => {

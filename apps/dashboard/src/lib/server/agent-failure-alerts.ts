@@ -1,9 +1,7 @@
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 import {
   emitOpsAlert,
-  flushOpsAlertDelivery,
   incrementOpsAlertWindow,
-  type EmitOpsAlertDependencies,
   type IncrementOpsAlertWindowResult,
   type OpsAlertCounterClient,
 } from '@/lib/server/ops-alerts';
@@ -33,7 +31,6 @@ export interface AgentFailureAlertDependencies {
   counterClient: OpsAlertCounterClient;
   config?: DashboardOpsAlertConfig;
   emitAlert?: typeof emitOpsAlert;
-  flushAlertDelivery?: (dependencies?: EmitOpsAlertDependencies) => Promise<boolean>;
   incrementWindow?: typeof incrementOpsAlertWindow;
   nowMs?: number;
 }
@@ -81,7 +78,7 @@ export async function recordAgentFailure(
   });
 
   if (window.thresholdCrossed) {
-    const alert = emit({
+    emit({
       category: 'agent_failure',
       message: formatFailureMessage(input.kind, route, tool, window.count),
       level: 'error',
@@ -110,10 +107,6 @@ export async function recordAgentFailure(
         resetAt: window.resetAt,
       },
     }, { config });
-
-    if (alert.captured) {
-      await (deps.flushAlertDelivery ?? flushOpsAlertDelivery)({ config });
-    }
   }
 
   return { window, emitted: window.thresholdCrossed };

@@ -20,12 +20,10 @@ interface MockWorkerInstance {
 }
 
 const {
-  mockCaptureException,
   mockLogger,
   queueInstances,
   workerInstances,
 } = vi.hoisted(() => ({
-  mockCaptureException: vi.fn(),
   mockLogger: {
     error: vi.fn(),
     info: vi.fn(),
@@ -60,10 +58,6 @@ vi.mock('bullmq', () => ({
     this.close = vi.fn().mockResolvedValue(undefined);
     workerInstances.push(this);
   }),
-}));
-
-vi.mock('@sentry/node', () => ({
-  captureException: mockCaptureException,
 }));
 
 vi.mock('@shopkeeper/db', () => ({
@@ -115,7 +109,6 @@ import {
 beforeEach(() => {
   queueInstances.length = 0;
   workerInstances.length = 0;
-  mockCaptureException.mockClear();
   mockLogger.error.mockClear();
   mockLogger.info.mockClear();
   mockLogger.warn.mockClear();
@@ -180,11 +173,8 @@ describe('createCoreWorkerResources', () => {
     }, inboundError);
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { err: 'inbound boom', jobId: 'inbound-job' },
-      '[Worker] Job failed permanently',
-    );
-    expect(mockCaptureException).toHaveBeenCalledWith(inboundError, {
-      extra: {
+      {
+        err: 'inbound boom',
         jobId: 'inbound-job',
         queue: 'inbound',
         platform: 'email',
@@ -192,7 +182,8 @@ describe('createCoreWorkerResources', () => {
         traceId: 'trace_1',
         attemptsMade: 2,
       },
-    });
+      '[Worker] Job failed permanently',
+    );
 
     const summaryError = new Error('summary boom');
     readFailedHandler<AiSummaryJobData>(workerInstances[1])({
@@ -208,19 +199,17 @@ describe('createCoreWorkerResources', () => {
     }, summaryError);
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { err: 'summary boom', jobId: 'summary-job', threadId: 'thread_1' },
-      '[AISummary] Job failed',
-    );
-    expect(mockCaptureException).toHaveBeenCalledWith(summaryError, {
-      extra: {
+      {
+        err: 'summary boom',
         jobId: 'summary-job',
-        queue: 'aiSummary',
         threadId: 'thread_1',
+        queue: 'aiSummary',
         organizationId: 'org_1',
         traceId: 'trace_2',
         attemptsMade: 3,
       },
-    });
+      '[AISummary] Job failed',
+    );
   });
 });
 

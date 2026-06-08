@@ -9,7 +9,6 @@ import {
   isSpendCapError,
   type VoiceProposal,
 } from '@shopkeeper/db';
-import * as Sentry from '@sentry/node';
 import { JOB, MODEL, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@shopkeeper/agent/spend';
@@ -242,7 +241,6 @@ export async function runVoiceSynthesis(options: { now?: Date } = {}): Promise<R
         { err: err instanceof Error ? err.message : String(err), organizationId },
         '[VoiceSynthesis] Failed for organization',
       );
-      Sentry.captureException(err, { extra: { organizationId, component: 'voice_synthesis' } });
     }
   }
 
@@ -258,7 +256,7 @@ export const registerVoiceSynthesisMaintenanceJob: MaintenanceJobRegistration = 
     logger.info(result, '[VoiceSynthesis] Daily brand-voice synthesis complete');
   }, {
     label: 'VoiceSynthesis',
-    sentryQueue: 'voice-synthesis',
+    failureQueue: 'voice-synthesis',
   });
 
   return { workers: [worker], queues: [queue] };

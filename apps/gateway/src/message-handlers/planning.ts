@@ -1,6 +1,5 @@
 import { db } from '@shopkeeper/db';
 import type { OrgSettings } from '@shopkeeper/agent/types';
-import * as Sentry from '@sentry/node';
 import { STATUS } from '../constants.js';
 import logger from '../logger.js';
 import { requestAutoAck } from './planning-dashboard-client.js';
@@ -56,10 +55,6 @@ export async function precomputeThreadPlan(
     };
   } catch (err) {
     logger.error({ err: (err as Error).message, threadId, organizationId }, '[Worker] precomputeThreadPlan error');
-    Sentry.captureException(err, {
-      tags: { path: 'plan-precompute' },
-      extra: { threadId, organizationId },
-    });
     throw err;
   }
 }

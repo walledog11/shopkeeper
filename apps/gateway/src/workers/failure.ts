@@ -1,4 +1,3 @@
-import * as Sentry from '@sentry/node';
 import logger from '../logger.js';
 
 export interface FailedJobSnapshot<DataType> {
@@ -17,7 +16,7 @@ export interface WorkerFailureEmitter<DataType> {
 export interface JobFailureLoggingOptions<DataType> {
   logMessage: string;
   logFields: (job: FailedJobSnapshot<DataType> | undefined, err: Error) => Record<string, unknown>;
-  sentryExtra: (job: FailedJobSnapshot<DataType> | undefined, err: Error) => Record<string, unknown>;
+  failureExtra: (job: FailedJobSnapshot<DataType> | undefined, err: Error) => Record<string, unknown>;
 }
 
 export function registerJobFailureLogging<DataType>(
@@ -26,11 +25,8 @@ export function registerJobFailureLogging<DataType>(
 ): void {
   worker.on('failed', (job, err) => {
     logger.error(
-      { err: err.message, ...options.logFields(job, err) },
+      { err: err.message, ...options.logFields(job, err), ...options.failureExtra(job, err) },
       options.logMessage,
     );
-    Sentry.captureException(err, {
-      extra: options.sentryExtra(job, err),
-    });
   });
 }

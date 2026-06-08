@@ -19,7 +19,7 @@
 - Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway — **separate instances** (gateway needs a dedicated per-instance Redis for BullMQ, not Upstash). Daily LLM spend cap is shared across both apps via Postgres (`llm_daily_spend`), not Redis.
 - AI: Anthropic SDK (agent, plan, summary); OpenAI (embeddings)
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
-- Sentry inits in both apps if `SENTRY_DSN` is set.
+- Ops alerts emit structured Pino logs (`opsAlert: true`) when thresholds are crossed; no external error-tracking vendor.
 
 ## Inbound flow
 External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
@@ -85,15 +85,15 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
 - `apps/gateway/src/health.ts` — `/health` and `/health/queues` diagnostic endpoints
 - `apps/dashboard/src/lib/redis.ts` — Upstash REST client + rate limiting
-- `apps/dashboard/src/instrumentation.ts` — env validation + Sentry init
+- `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
 ## Dashboard routes
 `/dashboard/{tickets, canned-responses, agent, kb, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
 
 ## Env (names only — values in Vercel/Railway)
-**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `SENTRY_DSN`, `TOKEN_ENCRYPTION_KEY`
+**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`
 
-**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `SENTRY_DSN`, `TOKEN_ENCRYPTION_KEY`
+**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 

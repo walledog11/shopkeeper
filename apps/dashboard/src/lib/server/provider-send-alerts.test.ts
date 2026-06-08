@@ -5,7 +5,6 @@ import {
   type EmitOpsAlertResult,
   type OpsAlertCounterClient,
   type OpsAlertLogger,
-  type OpsAlertSentryClient,
 } from './ops-alerts';
 import {
   recordProviderSendFailure,
@@ -27,9 +26,7 @@ const DISABLED_CONFIG: DashboardOpsAlertConfig = { ...CONFIG, enabled: false };
 
 const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   logged: true,
-  captured: false,
-  eventId: null,
-  reason: 'missing_dsn',
+  reason: 'logged',
 };
 
 type ProviderCase = {
@@ -129,21 +126,14 @@ describe('recordProviderSendFailure', () => {
     expect(emitAlert).toHaveBeenCalledTimes(1);
   });
 
-  it('does not capture to Sentry when alerts are disabled', async () => {
+  it('does not log alerts when alerts are disabled', async () => {
     const { client } = createCounterClient();
-    const sentryCalls: string[] = [];
     const mockLogger = createTestLogger();
-    const mockSentry: OpsAlertSentryClient = {
-      captureMessage: vi.fn((msg: string) => { sentryCalls.push(msg); return 'event-id'; }),
-      captureException: vi.fn(),
-    };
 
     const realEmitDisabled: typeof emitOpsAlert = (input) =>
       emitOpsAlert(input, {
         config: DISABLED_CONFIG,
-        env: { ...process.env, SENTRY_DSN: 'https://example.invalid/1' },
         logger: mockLogger,
-        sentry: mockSentry,
       });
 
     for (let i = 1; i <= CONFIG.providerSendThreshold; i++) {
@@ -155,12 +145,8 @@ describe('recordProviderSendFailure', () => {
       );
     }
 
-    expect(sentryCalls).toHaveLength(0);
-    expect(mockSentry.captureMessage).not.toHaveBeenCalled();
-    expect(mockLogger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ category: 'provider_send' }),
-      expect.stringContaining('Repeated provider send failure'),
-    );
+    expect(mockLogger.error).not.toHaveBeenCalled();
+    expect(mockLogger.warn).not.toHaveBeenCalled();
   });
 
   it('re-alerts in a new window after the previous window expires', async () => {

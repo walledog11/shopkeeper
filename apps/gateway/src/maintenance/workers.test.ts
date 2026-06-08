@@ -17,12 +17,10 @@ interface MockWorkerInstance {
 }
 
 const {
-  mockCaptureException,
   mockLogger,
   queueInstances,
   workerInstances,
 } = vi.hoisted(() => ({
-  mockCaptureException: vi.fn(),
   mockLogger: {
     error: vi.fn(),
   },
@@ -57,10 +55,6 @@ vi.mock('bullmq', () => ({
   }),
 }));
 
-vi.mock('@sentry/node', () => ({
-  captureException: mockCaptureException,
-}));
-
 vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
@@ -80,7 +74,6 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 beforeEach(() => {
   queueInstances.length = 0;
   workerInstances.length = 0;
-  mockCaptureException.mockClear();
   mockLogger.error.mockClear();
 });
 
@@ -184,14 +177,12 @@ describe('createMaintenanceWorkers', () => {
     const err = new Error('boom');
     handler({ id: 'job-1', attemptsMade: 2 }, err);
 
-    expect(mockLogger.error).toHaveBeenCalledWith({ err: 'boom', jobId: 'job-1' }, '[TokenHealth] Job failed');
-    expect(mockCaptureException).toHaveBeenCalledWith(err, {
-      extra: {
-        jobId: 'job-1',
-        queue: 'token-health',
-        attemptsMade: 2,
-      },
-    });
+    expect(mockLogger.error).toHaveBeenCalledWith({
+      err: 'boom',
+      jobId: 'job-1',
+      queue: 'token-health',
+      attemptsMade: 2,
+    }, '[TokenHealth] Job failed');
   });
 });
 

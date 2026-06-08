@@ -43,13 +43,13 @@ export function createMaintenanceWorker<DataType = unknown>(
   context: MaintenanceRegistrationContext,
   queueName: string,
   processor: Processor<DataType>,
-  failure: { label: string; sentryQueue: string },
+  failure: { label: string; failureQueue: string },
 ): Worker<DataType> {
   const worker = new Worker<DataType>(queueName, processor, {
     connection: context.workerConn,
     ...context.workerOptions,
   });
-  registerWorkerFailure(worker, failure.label, failure.sentryQueue);
+  registerWorkerFailure(worker, failure.label, failure.failureQueue);
   return worker;
 }
 
@@ -85,13 +85,13 @@ export async function closeMaintenanceQueues(resources: MaintenanceResources): P
   await Promise.all(resources.queues.map((queue) => queue.close()));
 }
 
-function registerWorkerFailure(worker: Worker, label: string, sentryQueue: string): void {
+function registerWorkerFailure(worker: Worker, label: string, failureQueue: string): void {
   registerJobFailureLogging(worker, {
     logMessage: `[${label}] Job failed`,
     logFields: (job) => ({ jobId: job?.id }),
-    sentryExtra: (job) => ({
+    failureExtra: (job) => ({
       jobId: job?.id,
-      queue: sentryQueue,
+      queue: failureQueue,
       attemptsMade: job?.attemptsMade,
     }),
   });

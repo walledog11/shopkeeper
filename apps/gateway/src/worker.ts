@@ -1,13 +1,10 @@
 import { db } from '@shopkeeper/db';
-import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { validateGatewayEnv } from './config/env.js';
 import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { createGatewayBullMqConnection } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
-import { resolveSentryRelease } from '@shopkeeper/agent/observability';
-import { sentryBeforeSend } from './observability/sentry.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
 import {
@@ -18,16 +15,6 @@ import {
 
 export async function startWorkerRuntime() {
   validateGatewayEnv();
-
-  if (process.env.SENTRY_DSN) {
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'production',
-      release: resolveSentryRelease(),
-      sendDefaultPii: false,
-      beforeSend: sentryBeforeSend,
-    });
-  }
 
   const workerRedisConfig = getGatewayWorkerRedisConfig();
 

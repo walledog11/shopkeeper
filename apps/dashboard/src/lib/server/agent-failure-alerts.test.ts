@@ -20,9 +20,7 @@ const CONFIG: DashboardOpsAlertConfig = {
 
 const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   logged: true,
-  captured: false,
-  eventId: null,
-  reason: 'missing_dsn',
+  reason: 'logged',
 };
 
 function createCounterClient(): { client: OpsAlertCounterClient } {

@@ -1,20 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { DashboardOpsAlertConfig } from '@/lib/env';
 import {
   buildOpsAlertScope,
   emitOpsAlert,
   incrementOpsAlertWindow,
-  type OpsAlertCaptureContext,
   type OpsAlertCounterClient,
   type OpsAlertLogger,
-  type OpsAlertSentryClient,
 } from './ops-alerts';
-
-vi.mock('@sentry/nextjs', () => ({
-  captureMessage: vi.fn(),
-  captureException: vi.fn(),
-  isEnabled: vi.fn(() => true),
-}));
 
 const DEFAULT_CONFIG: DashboardOpsAlertConfig = {
   enabled: true,
@@ -28,11 +20,11 @@ const DEFAULT_CONFIG: DashboardOpsAlertConfig = {
 };
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  // no env stubs
 });
 
 describe('dashboard ops alerts', () => {
-  it('builds dashboard-scoped Sentry context', () => {
+  it('builds dashboard-scoped alert context', () => {
     const scope = buildOpsAlertScope({
       category: 'provider_send',
       message: 'Meta sends are failing',
@@ -59,9 +51,8 @@ describe('dashboard ops alerts', () => {
     ]);
   });
 
-  it('captures messages when alerts and Sentry are enabled', () => {
+  it('logs alerts when enabled', () => {
     const { logger, calls } = createTestLogger();
-    const { sentry, messages } = createTestSentry();
 
     const result = emitOpsAlert({
       category: 'agent_failure',
@@ -69,37 +60,26 @@ describe('dashboard ops alerts', () => {
       tags: { tool: 'send_reply' },
     }, {
       config: DEFAULT_CONFIG,
-      env: createTestEnv({ SENTRY_DSN: 'https://example.invalid/1' }),
       logger,
-      sentry,
     });
 
-    expect(result).toEqual({ logged: true, captured: true, eventId: 'message-event-id', reason: 'captured' });
+    expect(result).toEqual({ logged: true, reason: 'logged' });
     expect(calls).toHaveLength(1);
-    expect(messages[0]?.context.tags).toMatchObject({
-      category: 'agent_failure',
-      service: 'dashboard',
-      tool: 'send_reply',
-    });
   });
 
-  it('logs but skips Sentry when alerts are disabled', () => {
+  it('skips logging when alerts are disabled', () => {
     const { logger, calls } = createTestLogger();
-    const { sentry, messages } = createTestSentry();
 
     const result = emitOpsAlert({
       category: 'provider_send',
       message: 'Provider failure',
     }, {
       config: { ...DEFAULT_CONFIG, enabled: false },
-      env: createTestEnv({ SENTRY_DSN: 'https://example.invalid/1' }),
       logger,
-      sentry,
     });
 
-    expect(result).toEqual({ logged: true, captured: false, eventId: null, reason: 'disabled' });
-    expect(calls).toHaveLength(1);
-    expect(messages).toHaveLength(0);
+    expect(result).toEqual({ logged: false, reason: 'disabled' });
+    expect(calls).toHaveLength(0);
   });
 
   it('increments Upstash-compatible fixed-window counters', async () => {
@@ -143,29 +123,6 @@ function createTestLogger(): {
       error: (fields, message) => calls.push({ level: 'error', fields, message }),
     },
     calls,
-  };
-}
-
-function createTestEnv(overrides: Record<string, string | undefined>): NodeJS.ProcessEnv {
-  return { ...process.env, ...overrides };
-}
-
-function createTestSentry(enabled = true): {
-  sentry: OpsAlertSentryClient;
-  messages: Array<{ message: string; context: OpsAlertCaptureContext }>;
-} {
-  const messages: Array<{ message: string; context: OpsAlertCaptureContext }> = [];
-
-  return {
-    sentry: {
-      captureMessage: (message, context) => {
-        messages.push({ message, context: context! });
-        return 'message-event-id';
-      },
-      captureException: () => 'exception-event-id',
-      isEnabled: () => enabled,
-    },
-    messages,
   };
 }
 

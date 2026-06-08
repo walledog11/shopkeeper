@@ -60,11 +60,6 @@ vi.mock('@anthropic-ai/sdk', () => ({
   }),
 }));
 
-vi.mock('@sentry/node', () => ({
-  init: vi.fn(),
-  captureException: vi.fn(),
-}));
-
 vi.mock('./logger.js', () => ({
   default: mockLogger,
 }));

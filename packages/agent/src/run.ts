@@ -26,8 +26,8 @@ const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES).flatMap(([name, category
 export interface RunAgentOptions {
   readOnly?: boolean;
   // Injected tool-failure recorder. The dashboard wires this to its ops-alert
-  // counter + Sentry; a thread-less / gateway host may omit it. Keeping it
-  // injected is what keeps alerting infra (env, Sentry) out of the shared core.
+  // counter; a thread-less / gateway host may omit it. Keeping it injected is
+  // what keeps alerting infra (env, ops-alerts) out of the shared core.
   recordToolFailure?: (
     kind: "tool_result" | "tool_exception",
     tool: string,

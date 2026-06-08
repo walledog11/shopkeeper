@@ -2,12 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db, parseVoiceProposal } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockAnthropicCreate, mockEnforceSpendCap, mockRecordSpend, mockLogger, mockCaptureException } = vi.hoisted(() => ({
+const { mockAnthropicCreate, mockEnforceSpendCap, mockRecordSpend, mockLogger } = vi.hoisted(() => ({
   mockAnthropicCreate: vi.fn(),
   mockEnforceSpendCap: vi.fn(),
   mockRecordSpend: vi.fn(),
   mockLogger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
-  mockCaptureException: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/agent/ai', () => ({
@@ -20,7 +19,6 @@ vi.mock('@shopkeeper/agent/spend', () => ({
 }));
 
 vi.mock('../logger.js', () => ({ default: mockLogger }));
-vi.mock('@sentry/node', () => ({ captureException: mockCaptureException }));
 
 import { runVoiceSynthesis } from './voice-synthesis.js';
 
@@ -49,7 +47,6 @@ beforeEach(async () => {
   mockAnthropicCreate.mockReset();
   mockEnforceSpendCap.mockReset().mockResolvedValue(undefined);
   mockRecordSpend.mockReset().mockResolvedValue(undefined);
-  mockCaptureException.mockReset();
   mockLogger.error.mockClear();
 });
 

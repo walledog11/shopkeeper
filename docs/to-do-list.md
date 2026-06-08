@@ -9,10 +9,10 @@ Last reviewed: 2026-06-07.
 
 Do these before treating production as ready:
 
-1. **Confirm production alerting is live** — verify Sentry/queue/webhook/agent alert paths and record evidence.
+1. **Confirm production alerting is live** — verify ops-alert log routing for queue/webhook/agent/provider paths and record evidence.
 2. **Review Redis lock fail-open for mutating agent runs** — decide fail-closed vs fail-open for high-risk mutations.
 
-Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup, Sentry source-map release verification in staging/production.
+Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup.
 
 ## Release Blockers
 
@@ -61,7 +61,7 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
   - Dashboard still sends `Content-Security-Policy-Report-Only` with `unsafe-inline` and `unsafe-eval` in `apps/dashboard/next.config.js`.
   - Move toward enforcement after reviewing report-only violations.
   - Reduce or justify `unsafe-inline` and `unsafe-eval`.
-  - Keep Clerk, Sentry, and Cloudflare challenge requirements documented.
+  - Keep Clerk and Cloudflare challenge requirements documented.
 
 - [ ] Review Redis lock fail-open behavior for mutating agent runs. **(pre-release priority)**
   - `acquireThreadLock` in `apps/dashboard/src/lib/server/agent-lock.ts` proceeds with a no-op lock if Redis is unavailable.
@@ -70,17 +70,16 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
 
 ## Observability And Operations
 
-- [X] Wire Sentry source-map upload into deploy/build.
-  - **Dashboard (Vercel):** use the Sentry Vercel integration for source maps; runtime needs `SENTRY_DSN` only.
-  - **Gateway (Railway):** `scripts/sentry-upload-sourcemaps.mjs` via `npm run upload-sourcemaps` after `tsc`.
-  - Runtime `Sentry.init` uses `resolveSentryRelease()` (`shopkeeper@<sha>` from deploy env).
+- [X] Remove Sentry SDK, source-map upload, and related env vars from both apps.
+  - Ops alerts now emit structured Pino logs only (`opsAlert: true`).
+  - Deploy builds are compile-only; no external error-tracking vendor dependency.
 
 - [ ] Triage dependency audit findings.
-  - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; 11 moderate (e.g. `qs`, `turbo`, `uuid` via `@sentry/webpack-plugin`).
+  - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; moderate findings remain in dev tooling deps.
   - Prioritize framework/runtime dependencies and document accepted risk for dev-only/tooling findings.
 
 - [ ] Confirm production alerting is live, not just implemented. **(pre-release priority)**
-  - Verify Sentry projects, DSNs, alert rules, source maps, and queue/webhook/provider/agent failure alert paths in staging or production.
+  - Verify log-drain routing and queue/webhook/provider/agent failure alert paths in staging or production.
   - Record evidence in the production runbook.
 
 ## Documentation Cleanup

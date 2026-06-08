@@ -18,7 +18,6 @@ function createDashboardLaunchEnv(overrides = {}) {
     TOKEN_ENCRYPTION_KEY: '0'.repeat(64),
     UPSTASH_REDIS_REST_URL: 'https://redis.example.com',
     UPSTASH_REDIS_REST_TOKEN: 'redis-token',
-    SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
     GATEWAY_INTERNAL_URL: 'https://gateway.example.com',
     POSTMARK_API_KEY: 'postmark-key',
     INBOUND_EMAIL_DOMAIN: 'mail.example.com',
@@ -44,14 +43,10 @@ function createGatewayLaunchEnv(overrides = {}) {
     INTERNAL_API_SECRET: 'test-internal-secret',
     DASHBOARD_URL: 'https://app.example.com',
     TOKEN_ENCRYPTION_KEY: '0'.repeat(64),
-    SENTRY_DSN: 'https://public@example.ingest.sentry.io/1',
     SHOPIFY_APP_SECRET: 'shopify-app-secret',
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     POSTMARK_INBOUND_USERNAME: 'postmark-inbound-user',
     POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
-    SENTRY_AUTH_TOKEN: 'sentry-auth-token',
-    SENTRY_ORG: 'sentry-org',
-    SENTRY_PROJECT: 'sentry-project',
     ...overrides,
   };
 }
@@ -100,20 +95,6 @@ test('dashboard launch contract warns on deprecated GATEWAY_PUBLIC_URL usage', (
     result.warnings.includes(
       'GATEWAY_PUBLIC_URL is deprecated; use GATEWAY_INTERNAL_URL as the canonical dashboard gateway base URL'
     ),
-    true
-  );
-});
-
-test('dashboard launch contract requires Sentry for production observability', () => {
-  const result = validateProductionEnv('dashboard', {
-    scope: 'launch',
-    env: createDashboardLaunchEnv({
-      SENTRY_DSN: '',
-    }),
-  });
-
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_DSN'),
     true
   );
 });
@@ -254,30 +235,6 @@ test('gateway launch contract requires Postmark inbound basic auth credentials',
   );
 });
 
-test('gateway launch contract requires Sentry source map upload vars', () => {
-  const result = validateProductionEnv('gateway', {
-    scope: 'launch',
-    env: createGatewayLaunchEnv({
-      SENTRY_AUTH_TOKEN: '',
-      SENTRY_ORG: '',
-      SENTRY_PROJECT: '',
-    }),
-  });
-
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_AUTH_TOKEN'),
-    true
-  );
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_ORG'),
-    true
-  );
-  assert.equal(
-    result.errors.includes('Missing required environment variable: SENTRY_PROJECT'),
-    true
-  );
-});
-
 test('gateway launch contract warns when Redis is not configured with TLS', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -305,14 +262,10 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'INTERNAL_API_SECRET=test-internal-secret',
       'DASHBOARD_URL=https://app.example.com',
       'TOKEN_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000',
-      'SENTRY_DSN=https://public@example.ingest.sentry.io/1',
       'SHOPIFY_APP_SECRET=shopify-app-secret',
       'BLOB_READ_WRITE_TOKEN=vercel-blob-token   # attachment storage',
       'POSTMARK_INBOUND_USERNAME=postmark-inbound-user',
       'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
-      'SENTRY_AUTH_TOKEN=sentry-auth-token',
-      'SENTRY_ORG=sentry-org',
-      'SENTRY_PROJECT=sentry-project',
       '',
     ].join('\n')
   );

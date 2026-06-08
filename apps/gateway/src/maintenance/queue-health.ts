@@ -179,7 +179,7 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
     });
   }, {
     label: 'QueueHealth',
-    sentryQueue: 'queue-health',
+    failureQueue: 'queue-health',
   });
 
   return {

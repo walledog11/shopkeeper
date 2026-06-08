@@ -21,9 +21,7 @@ const CONFIG: GatewayOpsAlertConfig = {
 
 const LOG_ONLY_RESULT: EmitOpsAlertResult = {
   logged: true,
-  captured: false,
-  eventId: null,
-  reason: 'missing_dsn',
+  reason: 'logged',
 };
 
 describe('checkGatewayQueueHealth', () => {

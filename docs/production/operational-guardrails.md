@@ -1,6 +1,6 @@
 # Operational Guardrails V1 Plan
 
-This plan covers the first production operational guardrail pass for launch. It uses the existing Sentry and structured logging setup. It does not add Slack, a generic webhook notifier, a new database table, or a new vendor dependency.
+This plan covers the first production operational guardrail pass for launch. It uses structured Pino logging only. It does not add Slack, a generic webhook notifier, a new database table, or a new vendor dependency.
 
 ## Summary
 
@@ -15,30 +15,30 @@ The goal is to make production failures visible quickly without changing custome
 
 ## Plan Evaluation
 
-Overall assessment: this is a good V1 launch plan. It is focused on production failure modes that can block customer support, reuses the repo's existing Sentry, Redis, structured logging, BullMQ, and provider code, and avoids new tables, vendors, and customer-facing behavior changes.
+Overall assessment: this is a good V1 launch plan. It is focused on production failure modes that can block customer support, reuses the repo's existing Redis, structured logging, BullMQ, and provider code, and avoids new tables, vendors, and customer-facing behavior changes.
 
 Strengths:
 
 - It targets failure classes that are hard to spot manually during launch: stuck jobs, bad webhook configuration, provider outages or credential failures, and broken agent/tool execution.
 - It keeps alerting out of the customer path by preserving existing HTTP responses, message persistence semantics, and agent summaries.
 - It gives concrete thresholds and env vars, which makes implementation testable and rollout reversible.
-- It matches the current repo shape: the gateway already has a queue-health maintenance worker, webhook verification paths, and Sentry setup; the dashboard already has Redis rate limiting, provider dispatch code, agent routes, and Sentry initialization.
+- It matches the current repo shape: the gateway already has a queue-health maintenance worker and webhook verification paths; the dashboard already has Redis rate limiting, provider dispatch code, and agent routes.
 
 Risks to handle during implementation:
 
-- Alert grouping must be deliberate. `orgId` is useful as a tag or extra field, but including it in every Sentry fingerprint can fragment issues and hide platform-wide incidents. Fingerprints should group by stable failure class first, then provider, channel, queue, or tool.
+- Alert grouping must be deliberate. `orgId` is useful as a tag or extra field, but including it in every fingerprint can fragment issues and hide platform-wide incidents. Fingerprints should group by stable failure class first, then provider, channel, queue, or tool.
 - Redis fixed-window counters need a small shared contract because the gateway uses `ioredis` and the dashboard uses the Upstash REST client. The helper should expose the same behavior on both sides without forcing either app into the other Redis client.
 - Queue active-job inspection can become expensive if implemented by scanning too many jobs. Limit the active-job sample, cache diagnostics consistently, and report the oldest observed active job rather than attempting a full queue scan.
 - Queue alerts only work if the queue-health repeatable worker is running. Deployments that split `GATEWAY_RUNTIME_ROLE=server` and `worker` must keep maintenance workers enabled in the worker process.
-- `OPS_ALERTS_ENABLED` should disable Sentry captures and threshold alerts but should not suppress ordinary structured logs that are needed for debugging.
-- The plan assumes Sentry is initialized when `SENTRY_DSN` is present. The alert helper should degrade to logs only when Sentry is missing so local, test, and staging environments remain predictable.
+- `OPS_ALERTS_ENABLED` should disable threshold alerts but should not suppress ordinary structured logs that are needed for debugging.
+- The alert helper always emits structured logs; local, test, and staging environments remain predictable without any external error-tracking vendor.
 
 ## Key Changes
 
 ### Shared alert helper
 
-- Add a small shared operational alert helper for Sentry-backed alerts.
-- Emit structured logs plus `Sentry.captureMessage` or `Sentry.captureException`.
+- Add a small shared operational alert helper for structured log alerts.
+- Emit structured Pino logs with `opsAlert: true`.
 - Use stable tags and fingerprints for `category`, `service`, `queue`, `provider`, and `channel`; include `orgId` as a tag or extra field where available rather than a default fingerprint key.
 - Add `OPS_ALERTS_ENABLED`, defaulting to enabled in production and disabled only when explicitly set to `false`.
 
@@ -81,22 +81,22 @@ Risks to handle during implementation:
 
 ## Implementation Phases
 
-Each phase should preserve existing customer-facing behavior, add or update targeted tests before moving on, and keep `OPS_ALERTS_ENABLED=false` as a kill switch for Sentry-backed threshold alerts.
+Each phase should preserve existing customer-facing behavior, add or update targeted tests before moving on, and keep `OPS_ALERTS_ENABLED=false` as a kill switch for threshold alerts.
 
 ### Phase 0: Alerting contract and helpers
 
 Create the shared operational alerting contract before instrumenting call sites.
 
 - [x] Add alert categories: `queue_health`, `webhook_signature`, `provider_send`, and `agent_failure`.
-- [x] Add a helper for structured log fields, Sentry tags, Sentry extras, severity, and stable fingerprints.
+- [x] Add a helper for structured log fields, tags, extras, severity, and stable fingerprints.
 - [x] Add fixed-window threshold helpers with the same behavior for gateway `ioredis` and dashboard Upstash Redis.
 - [x] Parse and validate alert env vars close to existing runtime/env config code.
-- [x] Ensure missing `SENTRY_DSN` falls back to structured logs only.
+- [x] Ensure alerts always emit structured logs regardless of environment.
 - [x] Add unit tests for enabled/disabled behavior, threshold crossing, TTL handling, and fingerprint/tag output.
 
 Completion gate:
 
-- [x] The helper can emit a single log-only alert locally, emit Sentry captures when configured, and stay quiet when `OPS_ALERTS_ENABLED=false`.
+- [x] The helper can emit a structured log alert and stay quiet when `OPS_ALERTS_ENABLED=false`.
 
 ### Phase 1: Gateway queue health
 
@@ -155,19 +155,19 @@ Completion gate:
 
 - [x] Repeated agent route failures and repeated tool `Error:` results alert after `AGENT_FAILURE_ALERT_THRESHOLD`; successful agent flows remain unchanged.
 
-### Phase 5: Production rollout and Sentry rules
+### Phase 5: Production rollout and log routing
 
 Roll out after targeted tests pass.
 
 - [x] Run `npm run lint`, `npm run test:unit`, `npm run test:integration`, `npm run test:e2e:smoke`, and `npm run build`.
 - [ ] Deploy with default thresholds first, then tune only after observing real traffic.
-- [ ] Configure Sentry alert rules for the four categories before marking the checklist item complete.
+- [ ] Configure log-drain alerts for the four categories before marking the checklist item complete.
 - [ ] Trigger one controlled alert per category in staging or a safe production smoke window and confirm grouping, owner routing, and payload quality.
 - [ ] Confirm `OPS_ALERTS_ENABLED=false` can silence threshold alerts without redeploying code.
 
 Completion gate:
 
-- [ ] Sentry receives correctly grouped alerts for all four categories, runbook steps are enough to triage them, and the production checklist guardrails item can move from `partial` to `done`.
+- [ ] Log drains receive correctly grouped alerts for all four categories, runbook steps are enough to triage them, and the production checklist guardrails item can move from `partial` to `done`.
 
 ## Test Plan
 
@@ -193,7 +193,7 @@ Add targeted tests for:
 
 ## Production Setup
 
-Set `SENTRY_DSN` for both dashboard and gateway. The production checklist tracks live alerting readiness, not only code instrumentation, so do not mark the checklist item done until Sentry rules and controlled-alert validation are complete.
+Route Vercel and Railway log drains to your launch owner. The production checklist tracks live alerting readiness, not only code instrumentation, so do not mark the checklist item done until log routing and controlled-alert validation are complete.
 
 Optional env vars:
 
@@ -206,12 +206,12 @@ Optional env vars:
 - `PROVIDER_SEND_ALERT_THRESHOLD`
 - `AGENT_FAILURE_ALERT_THRESHOLD`
 
-Recommended Sentry alert rules:
+Recommended log-drain alert rules:
 
-- alert on new issue where `category=queue_health`
-- alert on issue count spike where `category=webhook_signature`
-- alert on issue count spike where `category=provider_send`
-- alert on issue count spike where `category=agent_failure`
+- alert on log keyword `opsAlert` + `category=queue_health`
+- alert on log keyword `opsAlert` + `category=webhook_signature`
+- alert on log keyword `opsAlert` + `category=provider_send`
+- alert on log keyword `opsAlert` + `category=agent_failure`
 - route gateway alerts and dashboard alerts to the same launch ops owner until ownership is split
 
 ## Runbook Expectations
@@ -242,7 +242,7 @@ When agent/tool alerts fire:
 
 ## Assumptions
 
-- Sentry is the only v1 alert channel.
+- Structured logs routed through Vercel/Railway log drains are the only v1 alert channel.
 - Scope is launch blockers only, not a full ops dashboard.
 - Redis is acceptable for short-window alert aggregation because both dashboard and gateway already depend on Redis for production guardrails.
 - No database migration is needed.

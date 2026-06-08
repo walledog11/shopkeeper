@@ -98,7 +98,7 @@ export const registerTokenHealthMaintenanceJob: MaintenanceJobRegistration = asy
 
   const worker = createMaintenanceWorker(context, QUEUE.TOKEN_HEALTH, runTokenHealthCheck, {
     label: 'TokenHealth',
-    sentryQueue: 'token-health',
+    failureQueue: 'token-health',
   });
 
   return { workers: [worker], queues: [queue] };

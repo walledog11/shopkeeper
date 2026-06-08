@@ -13,7 +13,6 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - A new production-only `INTERNAL_API_SECRET` has been generated.
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
-- `TOKEN_ENCRYPTION_KEY` and `SENTRY_DSN` are set for both apps, gateway `POSTMARK_INBOUND_USERNAME` / `POSTMARK_INBOUND_PASSWORD` are set for inbound email, `BLOB_READ_WRITE_TOKEN` is set on both gateway (upload) and dashboard (authenticated download proxy), the **Sentry Vercel integration** is connected for dashboard source maps, and gateway `SENTRY_AUTH_TOKEN` / `SENTRY_ORG` / `SENTRY_PROJECT` are set for Railway source map upload.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
 
 ## Deploy Order
@@ -45,25 +44,11 @@ npm run db:migrate:deploy
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- **Dashboard (Vercel):** install the [Sentry Vercel integration](https://vercel.com/integrations/sentry) and set `SENTRY_DSN` for runtime. The integration uploads source maps during Vercel builds — do not add custom upload scripts or `SENTRY_AUTH_TOKEN` to the dashboard project unless you intentionally bypass the integration.
-- **Gateway (Railway):** `npm run build` is compile-only (`tsc`). Railway runs `npm run upload-sourcemaps` after build (`railway.json` / `nixpacks.toml`) using `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`.
-- CI (`npm run build` / `verify:pr`) does not require Sentry upload env.
+- **Dashboard (Vercel):** `next build` only; no external error-tracking SDK or source-map upload step.
+- **Gateway (Railway):** `npm run build` is compile-only (`tsc`).
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
-
-## Sentry
-
-### Dashboard (Vercel)
-
-1. Install the [Sentry Vercel integration](https://vercel.com/integrations/sentry) and link the dashboard project.
-2. Set `SENTRY_DSN` in Vercel for runtime error reporting.
-3. Redeploy and confirm the release in Sentry includes uploaded artifacts (not just deployment metadata).
-
-No custom upload scripts or `SENTRY_AUTH_TOKEN` on the dashboard when using the integration.
-
-### Gateway (Railway)
-
-Set `SENTRY_DSN` for runtime and `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT` for build-time source map upload. Railway runs `npm run upload-sourcemaps` after `tsc` (`railway.json`).
+- Ops alerts emit structured Pino logs with `opsAlert: true` when thresholds are crossed. See [`runbook.md`](runbook.md) for validation steps.
 
 ## Post-Deploy Verification
 
@@ -80,33 +65,10 @@ node scripts/check-production-env.mjs dashboard --scope=launch --env-file=apps/d
 node scripts/check-production-env.mjs gateway --scope=launch --env-file=apps/gateway/.env
 ```
 
-Run the automated verification first:
+After deploy, run the production smoke check:
 
 ```bash
-DASHBOARD_URL='https://your-dashboard.vercel.app' \
-GATEWAY_URL='https://your-gateway.up.railway.app' \
 npm run verify:production
 ```
 
-Optional inbound email smoke test:
-
-```bash
-DASHBOARD_URL='https://your-dashboard.vercel.app' \
-GATEWAY_URL='https://your-gateway.up.railway.app' \
-VERIFY_INBOUND_EMAIL_TO='support@inbound.example.com' \
-VERIFY_INBOUND_EMAIL_FROM='smoke@example.com' \
-npm run verify:production
-```
-
-## Manual Completion Checks
-
-After the automated checks pass, confirm the v1 support flow in production:
-
-1. Send a smoke-test inbound email to the production inbound address.
-2. Confirm the gateway accepts the webhook.
-3. Confirm `/health/deep` reports `checks.worker.status = ok`.
-4. Confirm the thread appears in the dashboard inbox.
-5. Open the thread and verify the message body and metadata are present.
-6. Send a reply from the dashboard and confirm provider delivery succeeds.
-
-Do not mark the deployment complete until both the health checks and the inbox smoke test pass.
+See [`runbook.md`](runbook.md) for operational procedures.

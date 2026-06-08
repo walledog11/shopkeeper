@@ -1,4 +1,3 @@
-import * as Sentry from '@sentry/node';
 import logger from './logger.js';
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from './config/runtime-config.js';
 import { getFixedWindowPeriod, incrementFixedWindowCounter } from './fixed-window-counter.js';
@@ -33,12 +32,6 @@ export interface OpsAlertCaptureContext {
   fingerprint: string[];
 }
 
-export interface OpsAlertSentryClient {
-  captureMessage: (message: string, context?: OpsAlertCaptureContext) => string;
-  captureException: (error: unknown, context?: OpsAlertCaptureContext) => string;
-  isEnabled?: () => boolean;
-}
-
 export interface OpsAlertLogger {
   info: (fields: Record<string, unknown>, message: string) => void;
   warn: (fields: Record<string, unknown>, message: string) => void;
@@ -47,16 +40,12 @@ export interface OpsAlertLogger {
 
 export interface EmitOpsAlertDependencies {
   config?: GatewayOpsAlertConfig;
-  env?: NodeJS.ProcessEnv;
   logger?: OpsAlertLogger;
-  sentry?: OpsAlertSentryClient;
 }
 
 export interface EmitOpsAlertResult {
   logged: boolean;
-  captured: boolean;
-  eventId: string | null;
-  reason: 'captured' | 'disabled' | 'missing_dsn' | 'sentry_disabled';
+  reason: 'logged' | 'disabled';
 }
 
 export interface OpsAlertCounterClient {
@@ -102,12 +91,14 @@ export function buildOpsAlertScope(input: OpsAlertInput, defaultService: OpsAler
 
 export function emitOpsAlert(input: OpsAlertInput, dependencies: EmitOpsAlertDependencies = {}): EmitOpsAlertResult {
   const config = dependencies.config ?? getGatewayOpsAlertConfig();
-  const env = dependencies.env ?? process.env;
   const alertLogger = dependencies.logger ?? logger;
-  const sentry = dependencies.sentry ?? (Sentry as OpsAlertSentryClient);
   const scope = buildOpsAlertScope(input, 'gateway');
   const service = scope.tags.service ?? 'gateway';
   const level = scope.level;
+
+  if (!config.enabled) {
+    return { logged: false, reason: 'disabled' };
+  }
 
   const logFields = {
     opsAlert: true,
@@ -116,27 +107,12 @@ export function emitOpsAlert(input: OpsAlertInput, dependencies: EmitOpsAlertDep
     tags: scope.tags,
     extra: scope.extra,
     fingerprint: scope.fingerprint,
+    ...(input.error !== undefined ? { err: input.error instanceof Error ? input.error.message : String(input.error) } : {}),
   };
 
   writeAlertLog(alertLogger, level, logFields, input.message);
 
-  if (!config.enabled) {
-    return { logged: true, captured: false, eventId: null, reason: 'disabled' };
-  }
-
-  if (!hasSentryDsn(env)) {
-    return { logged: true, captured: false, eventId: null, reason: 'missing_dsn' };
-  }
-
-  if (sentry.isEnabled && !sentry.isEnabled()) {
-    return { logged: true, captured: false, eventId: null, reason: 'sentry_disabled' };
-  }
-
-  const eventId = input.error === undefined
-    ? sentry.captureMessage(input.message, scope)
-    : sentry.captureException(input.error, scope);
-
-  return { logged: true, captured: true, eventId, reason: 'captured' };
+  return { logged: true, reason: 'logged' };
 }
 
 export async function incrementOpsAlertWindow(
@@ -221,11 +197,6 @@ function writeAlertLog(
     return;
   }
   alertLogger.warn(fields, message);
-}
-
-function hasSentryDsn(env: NodeJS.ProcessEnv): boolean {
-  const dsn = env.SENTRY_DSN;
-  return typeof dsn === 'string' && dsn.trim().length > 0;
 }
 
 function normalizeCounterKeyPart(part: OpsAlertTagValue): string {

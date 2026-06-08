@@ -26,7 +26,6 @@ const DEFAULT_PROVIDER_HOSTS = [
     exact: ['accounts.google.com', 'oauth2.googleapis.com', 'openidconnect.googleapis.com', 'www.googleapis.com'],
   },
   { provider: 'twilio', suffixes: ['twilio.com'], exact: ['api.twilio.com'] },
-  { provider: 'sentry', suffixes: ['sentry.io'], exact: ['sentry.io'] },
 ];
 
 const LOCAL_URL_ENV_KEYS = [

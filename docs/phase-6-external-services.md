@@ -41,8 +41,6 @@ Do these in sequence to avoid broken OAuth callbacks or webhooks mid-cutover.
 | `INBOUND_EMAIL_DOMAIN` | e.g. `inbound.shopkeeper.app` |
 | `GATEWAY_INTERNAL_URL` | Gateway public URL if it changes |
 | `TELEGRAM_BOT_USERNAME` | `ShopkeeperBot` (after BotFather registration) |
-| `SENTRY_PROJECT` | Rename project in Sentry console first |
-| `SENTRY_RELEASE` | Optional; see Sentry section |
 
 **Do not change:** `CLERK_*`, `CLERK_WEBHOOK_SECRET`, or the `/api/webhooks/clerk` route.
 
@@ -54,7 +52,6 @@ Do these in sequence to avoid broken OAuth callbacks or webhooks mid-cutover.
 | `DASHBOARD_INTERNAL_URL` | Vercel deployment URL if used for internal redirects |
 | `TELEGRAM_BOT_TOKEN` | New bot token if switching from `@ClerkBot` |
 | `TELEGRAM_WEBHOOK_SECRET` | Rotate if compromised during bot migration |
-| `SENTRY_PROJECT` | Match dashboard Sentry project rename |
 
 After deploy, re-register the Telegram webhook:
 
@@ -92,12 +89,6 @@ tsx src/scripts/set-telegram-webhook.ts https://<gateway-host>/webhooks/telegram
 ### Neon
 
 - [ ] Rename project (cosmetic only — `DATABASE_URL` host stays the same)
-
-### Sentry
-
-- [ ] Rename org/project to Shopkeeper (cosmetic)
-- [ ] Update `SENTRY_ORG`, `SENTRY_PROJECT` in Vercel and Railway
-- [ ] Release naming: set `SENTRY_RELEASE=shopkeeper@<git-sha>` in build env, or rely on auto-prefix in `scripts/sentry-upload-sourcemaps.mjs`
 
 ### Stripe
 
@@ -224,7 +215,7 @@ Manual checks:
 - [ ] Clerk.com application display name updated
 - [ ] Vercel env + domain updated
 - [ ] Railway env updated + Telegram webhook registered
-- [ ] Sentry / Neon / Stripe renamed
+- [ ] Neon / Stripe renamed
 - [ ] Postmark sender + inbound domain updated
 - [ ] Shopify / Meta / Google / Microsoft OAuth consoles updated
 - [ ] Telegram bot migrated

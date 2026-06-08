@@ -1,5 +1,4 @@
 import express from 'express';
-import * as Sentry from '@sentry/node';
 import { db } from '@shopkeeper/db';
 import webhookRoutes from './routes/webhooks.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
@@ -8,8 +7,6 @@ import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { createGatewayRedisClient } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
-import { resolveSentryRelease } from '@shopkeeper/agent/observability';
-import { sentryBeforeSend } from './observability/sentry.js';
 
 export function createGatewayApp() {
   const app = express();
@@ -34,16 +31,6 @@ export function createGatewayApp() {
 }
 
 export async function startGatewayServer() {
-  if (process.env.SENTRY_DSN) {
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      environment: process.env.NODE_ENV || 'production',
-      release: resolveSentryRelease(),
-      sendDefaultPii: false,
-      beforeSend: sentryBeforeSend,
-    });
-  }
-
   validateGatewayEnv();
 
   const app = createGatewayApp();

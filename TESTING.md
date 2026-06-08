@@ -40,7 +40,7 @@ Coverage bootstraps the DB package, waits for test services, and runs migrations
 
 ## Network Calls
 
-Vitest setup installs a strict fetch guard in dashboard and gateway tests. Localhost and configured local dashboard/gateway URLs are allowed. Real provider hosts and unknown public hosts are blocked by default, including Upstash, Anthropic, Stripe, Clerk, Shopify, Postmark, Meta, Microsoft, Google, Twilio, and Sentry.
+Vitest setup installs a strict fetch guard in dashboard and gateway tests. Localhost and configured local dashboard/gateway URLs are allowed. Real provider hosts and unknown public hosts are blocked by default, including Upstash, Anthropic, Stripe, Clerk, Shopify, Postmark, Meta, Microsoft, Google, and Twilio.
 
 Mock provider calls in-process with `vi.stubGlobal('fetch', mockFetch)`, `vi.spyOn(globalThis, 'fetch')`, SDK mocks, or route-level dependency injection. If a test genuinely needs a fixture host, use the named helper:
 

@@ -17,8 +17,6 @@ const CSP_DIRECTIVES = {
     "'self'",
     'https://*.clerk.com',
     'https://*.clerk.accounts.dev',
-    'https://*.sentry.io',
-    'https://*.ingest.sentry.io',
   ],
   'frame-src': ['https://*.clerk.com', 'https://challenges.cloudflare.com'],
   'worker-src': ["'self'", 'blob:'],
