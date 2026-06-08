@@ -11,8 +11,8 @@ import type {
   UpdateThreadTagInput,
 } from '@shopkeeper/agent/tools';
 import logger from '../logger.js';
+import { buildDashboardInternalHeaders } from '../clients/dashboard-internal.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
-import { getInternalApiSecret } from './shared.js';
 import { pushOperatorEscalation } from '../routes/internal-operator.js';
 
 interface ThreadSinkContext {
@@ -36,10 +36,7 @@ async function dispatchAgentSend(
   try {
     const response = await fetch(`${getGatewayDashboardUrl()}/api/agent/io-send-internal`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-internal-secret': getInternalApiSecret(),
-      },
+      headers: buildDashboardInternalHeaders(),
       body: JSON.stringify({ orgId: ctx.orgId, threadId: ctx.threadId, orgName: ctx.orgName, op, input }),
     });
     if (!response.ok) {

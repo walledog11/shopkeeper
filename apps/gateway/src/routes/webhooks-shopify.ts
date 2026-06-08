@@ -1,6 +1,7 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
 import { db } from '@shopkeeper/db';
+import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
@@ -115,7 +116,7 @@ export function registerShopifyWebhookRoutes(router: Router): void {
       // Flag-gated; the stable jobId dedupes webhook retries so each order is
       // reviewed once. The per-order agent run happens in-process in the worker.
       const orderId = (req.body as { id?: number | string } | undefined)?.id;
-      if (topic === 'orders/created' && process.env.ORDER_RISK_MONITOR_ENABLED && orderId != null) {
+      if (topic === 'orders/created' && isOrderRiskMonitorEnabled() && orderId != null) {
         await getOrderReviewQueue().add(
           JOB.ORDER_REVIEW,
           { organizationId, orderId: String(orderId), traceId },

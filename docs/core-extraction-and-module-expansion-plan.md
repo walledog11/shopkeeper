@@ -23,8 +23,8 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **0** | Decide how the worker runs an agent (A vs B) | ✅ decided → **B** (extract core, run in-process) | — |
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@shopkeeper/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
-| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 prod e2e partial (2026-06-08) | risky-order finding; idempotency; confirm `ORDER_RISK_MONITOR_ENABLED` on Railway; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | fresh inbound live e2e (auto-plan/execute, Telegram operator); confirm Railway `DASHBOARD_URL` + bypass on hop-back |
+| **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 prod e2e partial (2026-06-08) | deploy bypass + `ORDER_RISK_MONITOR_ENABLED=1` on Railway; risky-order finding; idempotency; backstop; Telegram notify; eval fixtures |
+| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | deploy bypass header wiring; fresh inbound live e2e (auto-plan/execute, Telegram operator); confirm Railway `DASHBOARD_URL` + `VERCEL_PROTECTION_BYPASS` |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -71,6 +71,15 @@ valid secret (auth ok). Track 3: benign order pre-filter confirmed on Palette li
 `order-risk-review:*` findings in prod DB. Track 4: in-process `generateThreadPlan()` confirmed against prod DB;
 no post-deploy `agent_actions` from worker paths yet. Stale pre-4.5 deployment URLs still serve the old routes
 — use the latest Production deployment or canonical `APP_URL`.
+
+**Update (2026-06-08, later) — hop-back bypass + order-risk flag parsing.** Gateway hop-back fetches now share
+`buildDashboardInternalHeaders()` (`clients/dashboard-internal.ts`) and send `x-vercel-protection-bypass` when
+`VERCEL_PROTECTION_BYPASS` is set (io-send-internal, auto-ack, messages/internal). `ORDER_RISK_MONITOR_ENABLED`
+now parses via `isOrderRiskMonitorEnabled()` (`runtime-config.ts`) so `"false"`/`"0"` no longer enable the monitor.
+`verify-production.mjs` gained dashboard hop-back auth checks (400 validation, not 401), retired-route 401 checks,
+queue failed-job guard, and a warning when `DASHBOARD_URL` is `*.vercel.app` without a bypass token. **Still manual
+after deploy:** set Railway `VERCEL_PROTECTION_BYPASS` + confirm `ORDER_RISK_MONITOR_ENABLED=1`, then run Track 4.6
+fresh inbound e2e and Track 3 risky-order / idempotency / backstop checks.
 
 **Update (2026-06-08, later) — `ai-summary` queue preflight closed.** `/health/queues` now samples failed jobs
 (`failedJobs[]` with `failedReason`, `threadId`, `traceId`; gateway **1ba8c58**). The lone prod failure was a

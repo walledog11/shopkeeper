@@ -5,6 +5,7 @@ import {
   ShopifyRequestError,
   type ShopifyContext,
 } from '@shopkeeper/agent/shopify';
+import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { JOB, QUEUE } from '../constants.js';
 import type { OrderReviewJobData } from '../types.js';
@@ -44,7 +45,7 @@ async function fetchRecentUnfulfilledOrderIds(shop: string, accessToken: string)
 export async function runOrderRiskMonitor(
   reviewQueue: Queue<OrderReviewJobData>,
 ): Promise<{ orgsScanned: number; ordersReviewed: number }> {
-  if (!process.env.ORDER_RISK_MONITOR_ENABLED) {
+  if (!isOrderRiskMonitorEnabled()) {
     return { orgsScanned: 0, ordersReviewed: 0 };
   }
 

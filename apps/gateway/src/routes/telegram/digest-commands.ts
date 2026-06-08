@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { buildDashboardInternalHeaders } from '../../clients/dashboard-internal.js';
 import { getGatewayDashboardUrl } from '../../config/env.js';
 import logger from '../../logger.js';
 import type { OperatorContext } from '../../operator-context.js';
@@ -95,10 +96,7 @@ export async function handleDigestCommand(
   await reply(filler());
   const response = await fetch(`${getGatewayDashboardUrl()}/api/messages/internal`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '',
-    },
+    headers: buildDashboardInternalHeaders(),
     body: JSON.stringify({ threadId: targetId, text: command.text }),
   });
   if (!response.ok) {

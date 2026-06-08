@@ -4,6 +4,7 @@ import { buildOrderOpsContext, runOrderOps } from '@shopkeeper/agent/order-ops';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { OrgSettings } from '@shopkeeper/agent/types';
 import { QUEUE } from '../constants.js';
+import { isOrderRiskMonitorEnabled } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import type { OrderReviewJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
@@ -23,7 +24,7 @@ export function createOrderReviewWorker(
   const worker = new Worker<OrderReviewJobData>(QUEUE.ORDER_REVIEW, async (job) => {
     const { organizationId, orderId, traceId } = job.data;
 
-    if (!process.env.ORDER_RISK_MONITOR_ENABLED) return;
+    if (!isOrderRiskMonitorEnabled()) return;
     if (!organizationId || !orderId) {
       logger.error({ jobId: job.id, traceId }, '[OrderReview] Job missing organizationId/orderId — dropping');
       return;

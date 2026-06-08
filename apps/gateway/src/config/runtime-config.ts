@@ -123,3 +123,7 @@ export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
     agentFailureThreshold: parsePositiveIntEnv('AGENT_FAILURE_ALERT_THRESHOLD', 3),
   };
 }
+
+export function isOrderRiskMonitorEnabled(): boolean {
+  return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
+}

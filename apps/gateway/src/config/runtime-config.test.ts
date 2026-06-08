@@ -3,6 +3,7 @@ import {
   getGatewayRuntimeRole,
   getGatewayOpsAlertConfig,
   getGatewayWorkerRedisConfig,
+  isOrderRiskMonitorEnabled,
   shouldRunGatewayServer,
   shouldRunGatewayWorker,
 } from './runtime-config.js';
@@ -119,5 +120,32 @@ describe('getGatewayOpsAlertConfig', () => {
     vi.stubEnv('OPS_ALERTS_ENABLED', 'true');
     vi.stubEnv('OPS_ALERT_WINDOW_SECS', '0');
     expect(() => getGatewayOpsAlertConfig()).toThrow(/OPS_ALERT_WINDOW_SECS/);
+  });
+});
+
+describe('isOrderRiskMonitorEnabled', () => {
+  it('defaults to disabled when unset', () => {
+    expect(isOrderRiskMonitorEnabled()).toBe(false);
+  });
+
+  it('enables only for explicit truthy values', () => {
+    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '1');
+    expect(isOrderRiskMonitorEnabled()).toBe(true);
+
+    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'true');
+    expect(isOrderRiskMonitorEnabled()).toBe(true);
+  });
+
+  it('treats falsey string values as disabled', () => {
+    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'false');
+    expect(isOrderRiskMonitorEnabled()).toBe(false);
+
+    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', '0');
+    expect(isOrderRiskMonitorEnabled()).toBe(false);
+  });
+
+  it('rejects invalid boolean strings', () => {
+    vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
+    expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
   });
 });
