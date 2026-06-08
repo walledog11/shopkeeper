@@ -12,10 +12,6 @@ import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
 import AutonomyReadinessCard from "./AutonomyReadinessCard"
 import type { ActionLogEntry } from "@/types"
 
-// ── Focus lenses ─────────────────────────────────────────────────────────────
-// Each lens maps to the action-log API's `tool` filter so the sample is built
-// server-side. "All" passes no filter.
-
 type Focus = "replies" | "escalations" | "all"
 
 const FOCUS_OPTIONS: { id: Focus; label: string; tools: string[] }[] = [
@@ -23,10 +19,6 @@ const FOCUS_OPTIONS: { id: Focus; label: string; tools: string[] }[] = [
   { id: "escalations", label: "Escalations", tools: ["escalate_to_human"] },
   { id: "all", label: "All outputs", tools: [] },
 ]
-
-// ── Output extraction ────────────────────────────────────────────────────────
-// The prose the agent actually produced lives in the tool input, not the result
-// string ("Reply sent to customer..."). Pull it out so it can be read directly.
 
 type Tone = "reply" | "note" | "escalate"
 
@@ -39,9 +31,9 @@ interface OutputBlock {
 }
 
 const TONE_STYLES: Record<Tone, { container: string; label: string }> = {
-  reply:    { container: "border-emerald-800/40 bg-emerald-900/[0.12]", label: "text-emerald-300" },
-  escalate: { container: "border-amber-800/40 bg-amber-900/[0.12]",     label: "text-amber-300" },
-  note:     { container: "border-white/[0.08] bg-white/[0.03]",          label: "text-white/45" },
+  reply: { container: "border-emerald-800/40 bg-emerald-900/[0.12]", label: "text-emerald-300" },
+  escalate: { container: "border-amber-800/40 bg-amber-900/[0.12]", label: "text-amber-300" },
+  note: { container: "border-white/[0.08] bg-white/[0.03]", label: "text-white/45" },
 }
 
 function field(input: unknown, key: string): string | null {
@@ -73,7 +65,9 @@ function toOutputBlock(action: ActionLogEntry["actions"][number], idx: number): 
     }
     case "escalate_to_human": {
       const reason = field(action.input, "reason")
-      return reason ? { key, tool: action.tool, label: "Escalated to merchant", text: reason, tone: "escalate" } : null
+      return reason
+        ? { key, tool: action.tool, label: "Escalated to merchant", text: reason, tone: "escalate" }
+        : null
     }
     case "add_internal_note": {
       const text = field(action.input, "text")
@@ -84,19 +78,17 @@ function toOutputBlock(action: ActionLogEntry["actions"][number], idx: number): 
   }
 }
 
-// Side-effecting actions (refunds, cancellations, edits) have no prose — their
-// outcome is the result string. Surface them compactly under the prose.
 function outcomeActions(entry: ActionLogEntry): ActionLogEntry["actions"] {
   return entry.actions.filter((action) => {
     if ((TOOL_CATEGORIES[action.tool] ?? "internal") === "read") return false
-    return action.tool !== "send_reply"
+    return (
+      action.tool !== "send_reply"
       && action.tool !== "send_email"
       && action.tool !== "escalate_to_human"
       && action.tool !== "add_internal_note"
+    )
   })
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 const MODE_LABELS: Record<NonNullable<ActionLogEntry["mode"]>, string> = {
   auto_executed: "Auto-sent",
@@ -109,8 +101,6 @@ function entryHref(entry: ActionLogEntry): string | null {
   if (isOperatorChannel(entry.channelType)) return "/dashboard/agent"
   return `/dashboard/tickets?thread=${entry.threadId}`
 }
-
-// ── Sub-components ───────────────────────────────────────────────────────────
 
 function ReviewCard({ entry }: { entry: ActionLogEntry }) {
   const channel = getChannelInfo(entry.channelType)
@@ -125,7 +115,6 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
 
   return (
     <div className="border-b border-white/[0.05] px-5 py-4 hover:bg-white/[0.02] transition-colors group">
-      {/* Header */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="size-6 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0">
           <Image src={channel.logo} alt={channel.name} width={13} height={13} className="object-contain" />
@@ -157,15 +146,18 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
         )}
       </div>
 
-      {/* Prose outputs , what the agent actually said */}
       {outputs.length > 0 ? (
         <div className="mt-3 space-y-2 pl-8">
           {outputs.map((block) => {
             const tone = TONE_STYLES[block.tone]
             return (
               <div key={block.key} className={`rounded-lg border p-3 ${tone.container}`}>
-                <p className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${tone.label}`}>{block.label}</p>
-                <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">{block.text}</p>
+                <p className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${tone.label}`}>
+                  {block.label}
+                </p>
+                <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
+                  {block.text}
+                </p>
               </div>
             )
           })}
@@ -174,7 +166,6 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
         <p className="mt-2 pl-8 text-xs text-white/30 italic">No customer-facing text in this turn.</p>
       )}
 
-      {/* Outcomes , side-effecting actions with no prose */}
       {outcomes.length > 0 && (
         <div className="mt-2 pl-8 space-y-1">
           {outcomes.map((action, idx) => {
@@ -184,9 +175,7 @@ function ReviewCard({ entry }: { entry: ActionLogEntry }) {
                 <span className={`font-semibold shrink-0 ${isError ? "text-red-300" : "text-white/55"}`}>
                   {TOOL_LABELS[action.tool] ?? action.tool}
                 </span>
-                {action.result && (
-                  <span className="text-white/40 truncate">{action.result}</span>
-                )}
+                {action.result && <span className="text-white/40 truncate">{action.result}</span>}
               </div>
             )
           })}
@@ -211,9 +200,7 @@ function SkeletonCard() {
   )
 }
 
-// ── Page ─────────────────────────────────────────────────────────────────────
-
-export default function ReviewFeed() {
+export default function QualityPanel() {
   const [focus, setFocus] = useState<Focus>("replies")
   const tools = useMemo(() => FOCUS_OPTIONS.find((o) => o.id === focus)?.tools ?? [], [focus])
   const filters = useMemo(() => ({ tools }), [tools])
@@ -226,17 +213,9 @@ export default function ReviewFeed() {
     loadMore,
   } = useActionLogEntries(filters)
 
-  const changeFocus = (id: Focus) => {
-    setFocus(id)
-  }
-
   return (
-    <div className="h-full overflow-y-auto">
-      {/* Header */}
-      <div className="p-5 border-b border-white/[0.06]">
-        <h1 className="text-lg font-semibold text-white">Review</h1>
-        <p className="text-sm text-white/40 mt-0.5">Read what the AI actually drafted and sent. Spot-check quality.</p>
-
+    <>
+      <div className="px-5 py-4 border-b border-white/[0.06]">
         <AutonomyReadinessCard />
 
         <div className="flex flex-wrap items-center gap-1.5 mt-3">
@@ -246,7 +225,7 @@ export default function ReviewFeed() {
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => changeFocus(opt.id)}
+                onClick={() => setFocus(opt.id)}
                 className={`text-xs font-semibold px-2.5 h-6 rounded border transition-colors ${
                   active
                     ? "bg-white/[0.12] text-white border-white/[0.18]"
@@ -260,10 +239,11 @@ export default function ReviewFeed() {
         </div>
       </div>
 
-      {/* Content */}
       {isLoading && allEntries.length === 0 ? (
         <div>
-          {Array.from({ length: 6 }, (_, i) => `review-skeleton-${i}`).map((key) => <SkeletonCard key={key} />)}
+          {Array.from({ length: 6 }, (_, i) => `review-skeleton-${i}`).map((key) => (
+            <SkeletonCard key={key} />
+          ))}
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-24 text-center px-6">
@@ -279,7 +259,11 @@ export default function ReviewFeed() {
       ) : allEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center px-6">
           <div className="size-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-4">
-            {focus === "escalations" ? <Eye className="size-5 text-white/30" /> : <MessageSquare className="size-5 text-white/30" />}
+            {focus === "escalations" ? (
+              <Eye className="size-5 text-white/30" />
+            ) : (
+              <MessageSquare className="size-5 text-white/30" />
+            )}
           </div>
           <p className="text-sm font-medium text-white/60 mb-1">Nothing to review yet</p>
           <p className="text-xs text-white/30 max-w-xs">
@@ -290,7 +274,9 @@ export default function ReviewFeed() {
         </div>
       ) : (
         <>
-          {allEntries.map((entry) => <ReviewCard key={entry.id} entry={entry} />)}
+          {allEntries.map((entry) => (
+            <ReviewCard key={entry.id} entry={entry} />
+          ))}
 
           <div className="flex justify-center py-6">
             {hasMore ? (
@@ -309,6 +295,6 @@ export default function ReviewFeed() {
           </div>
         </>
       )}
-    </div>
+    </>
   )
 }

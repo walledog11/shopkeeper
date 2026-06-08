@@ -24,7 +24,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@shopkeeper/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
 | **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 prod e2e partial (2026-06-08) | risky-order finding; idempotency; confirm `ORDER_RISK_MONITOR_ENABLED` on Railway; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | worker-path live e2e (inbound auto-plan/execute, Telegram operator); confirm Railway `DASHBOARD_URL` + bypass on hop-back |
+| **4** | Repoint support to in-process worker | 🔶 prod e2e partial — 4.0–4.5 deployed (2026-06-08) | fresh inbound live e2e (auto-plan/execute, Telegram operator); confirm Railway `DASHBOARD_URL` + bypass on hop-back |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -55,22 +55,31 @@ Telegram-notify sink swap, and the deferred order-ops eval fixtures (Step 5). **
 `clerk-production-e37f.up.railway.app` `/health/deep` ok; retired orchestration routes return **401** (removed from
 `publicRoutePatterns`); hop-back routes (`io-send-internal`, `messages/auto-ack`, `messages/internal`) accept
 `x-internal-secret` (400 validation, not 401); `generateThreadPlan()` smoke against prod DB ok. **Remaining before
-Track 4 is fully closed:** worker-path live e2e (inbound → `ai-summary` auto-plan/execute, Telegram operator runs,
-hop-back `io-send-internal` delivery end-to-end); confirm Railway `DASHBOARD_URL` and add
-`x-vercel-protection-bypass` on hop-back if pointing at a protected `*.vercel.app` hostname. 4.4 is decided —
-dashboard UI paths stay in Next.
+Track 4 is fully closed:** fresh inbound live e2e (auto-plan/execute, Telegram operator, hop-back
+`io-send-internal` delivery); confirm Railway `DASHBOARD_URL` and add `x-vercel-protection-bypass` on hop-back
+if pointing at a protected `*.vercel.app` hostname. **4.6 preflight ✅ (2026-06-08):** stale `ai-summary` failed
+job inspected + removed — June 3 `plan-internal` 500, not a Track 4 regression; queue now `failed: 0`. 4.4 is
+decided — dashboard UI paths stay in Next.
 
 **Update (2026-06-08) — production e2e partial.** Ran against live gateway
 (`https://clerk-production-e37f.up.railway.app`) and dashboard deployment
 (`shopkeeper-dashboard-jt841cnsk-…vercel.app`, commit **d8ce210**). Vercel Deployment Protection requires
-`x-vercel-protection-bypass` on `*.vercel.app` URLs. Gateway: `/health/deep` ok (db, redis, worker heartbeat);
-`ai-summary` queue shows **1 failed** job — inspect before trusting auto-plan e2e. Dashboard: `/api/health` ok.
-Retired routes (`plan-internal`, `internal`, `order-risk-internal`) → **401** with valid `x-internal-secret` (expected
-post-4.5: no longer in `publicRoutePatterns`). Delivery hops → **400** with valid secret (auth ok). Track 3: benign
-order pre-filter confirmed on Palette live Shopify order; no historical `order-risk-review:*` findings in prod DB.
-Track 4: in-process `generateThreadPlan()` confirmed against prod DB; no post-deploy `agent_actions` from worker paths
-yet. Stale pre-4.5 deployment URLs still serve the old routes — use the latest Production deployment or canonical
-`APP_URL`.
+`x-vercel-protection-bypass` on `*.vercel.app` URLs. Gateway: `/health/deep` ok (db, redis, worker heartbeat).
+Dashboard: `/api/health` ok. Retired routes (`plan-internal`, `internal`, `order-risk-internal`) → **401** with
+valid `x-internal-secret` (expected post-4.5: no longer in `publicRoutePatterns`). Delivery hops → **400** with
+valid secret (auth ok). Track 3: benign order pre-filter confirmed on Palette live Shopify order; no historical
+`order-risk-review:*` findings in prod DB. Track 4: in-process `generateThreadPlan()` confirmed against prod DB;
+no post-deploy `agent_actions` from worker paths yet. Stale pre-4.5 deployment URLs still serve the old routes
+— use the latest Production deployment or canonical `APP_URL`.
+
+**Update (2026-06-08, later) — `ai-summary` queue preflight closed.** `/health/queues` now samples failed jobs
+(`failedJobs[]` with `failedReason`, `threadId`, `traceId`; gateway **1ba8c58**). The lone prod failure was a
+**stale pre-migration job** (id `1`, finished **2026-06-03**): `plan-internal returned 500` on thread
+`dfe31b6c-…` ("No Subject" email) — not a Track 4 regression. The June 7 Palette inbound (`4ea3ec65-…`,
+"shopping globally") **succeeded** in-process (cached plan v2 on prod). Removed the stale job via
+`POST /internal/queue/remove-failed` (gateway **a3727ed**); `/health/queues` now shows `aiSummary.failed: 0`.
+**Still open for 4.6:** send a **fresh** inbound during business hours to sign off the post-4.5 worker path end-
+to-end (auto-plan/execute, hop-back delivery, Telegram operator).
 
 **Update (2026-06-05, later) — gate PASSED, Track 2 complete.** With credits added, the confirming `EVAL_REPEATS=1`
 run came back **53/56 (94.6%) ≥ 93.5%** — the aggregate gate did not throw. The executor-mock fix is confirmed
@@ -440,8 +449,9 @@ Once the core is a package and the worker runs order-ops in-process, migrate sup
 `backfill-thread-subject-and-plan.mjs` to in-process `generateThreadPlan()`. Remaining internal hops are
 delivery-only: `io-send-internal`, `messages/auto-ack`, `messages/internal` — **prod auth verified** (valid
 `x-internal-secret` → 400 validation, not 401). Retired orchestration routes → **401** (no longer internally
-public). **Still open:** worker-path live e2e (inbound → `ai-summary`, auto-execute with outbound delivery,
-Telegram operator through gateway worker); Railway `DASHBOARD_URL` / Vercel bypass header on hop-back fetches.
+public). **Still open:** fresh inbound live e2e (auto-plan/execute with outbound delivery, Telegram operator through
+gateway worker); Railway `DASHBOARD_URL` / Vercel bypass header on hop-back fetches. **4.6 preflight ✅
+(2026-06-08):** stale `ai-summary` failed job cleared — see **2026-06-08 (later)** update above.
 
 **The finding (2026-06-05).** The two gateway-triggered routes (`/api/agent/plan-internal` for auto-plan,
 `/api/agent/internal` for Telegram operator runs) don't sit on thin route glue — they sit on a stack of
@@ -555,13 +565,17 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   - [x] Dashboard `/api/health` ok (Vercel bypass on `*.vercel.app`).
   - [x] `generateThreadPlan()` in-process smoke against prod DB ok.
   - [x] Hop-back route auth (`io-send-internal`, `auto-ack`, `messages/internal`) ok.
-  - [ ] Inbound message → `ai-summary` → in-process auto-plan (watch: 1 failed `ai-summary` job on prod).
+  - [x] **`ai-summary` queue preflight** — failed job inspected via `/health/queues` `failedJobs[]`
+    (**1ba8c58**); root cause = stale **2026-06-03** `plan-internal` 500 on thread `dfe31b6c-…` (not Track 4);
+    removed via `POST /internal/queue/remove-failed` (**a3727ed**); queue now `failed: 0` (2026-06-08). June 7
+    Palette inbound (`4ea3ec65-…`) already proved in-process plan + cache on prod.
+  - [ ] **Fresh inbound** → `ai-summary` → in-process auto-plan (post-4.5 worker-path sign-off).
   - [ ] Auto-execute + `io-send-internal` outbound delivery.
   - [ ] Telegram free-form + plan approval through `executeOperatorAgentTurn` on gateway worker.
 
 **Exit (met in code; prod e2e partial):** the majority of agent runs (channel-triggered) execute in the durable
-worker with no orchestration network hop; the dashboard keeps working throughout. *(Worker-path live e2e and
-hop-back delivery remain.)*
+worker with no orchestration network hop; the dashboard keeps working throughout. *(Fresh inbound live e2e,
+hop-back delivery, and Telegram operator paths remain; `ai-summary` queue preflight closed 2026-06-08.)*
 
 **Anti-overbuild guard:** this is "repoint the trigger," not "rewrite the runtime." If a step looks like a
 rewrite, the Track 2 package boundary is wrong — fix that, don't power through. (This is exactly why 4.1

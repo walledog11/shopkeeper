@@ -128,7 +128,7 @@ export default function ThreadList({
           />
         )}
 
-        {!isSearchMode && hasMore && (
+        {!isSearchMode && hasMore && tickets.length > 0 && (
           <div className="px-4 py-3 border-t border-white/[0.05]">
             <button type="button"
               onClick={onLoadMore}

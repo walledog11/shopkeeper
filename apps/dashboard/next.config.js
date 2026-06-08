@@ -57,6 +57,20 @@ const nextConfig = {
       { source: `/:path${NOINDEX_PATH_GROUP}/:rest*`, headers: NOINDEX_HEADERS },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: '/dashboard/reports',
+        destination: '/dashboard/analytics?tab=export',
+        permanent: false,
+      },
+      {
+        source: '/dashboard/activity',
+        destination: '/dashboard/review?tab=audit',
+        permanent: false,
+      },
+    ];
+  },
   turbopack: {
     root: path.resolve(__dirname, '../..'),
   },
