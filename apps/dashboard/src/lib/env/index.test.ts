@@ -10,6 +10,17 @@ function stubBaseDashboardEnv() {
   vi.stubEnv('TOKEN_ENCRYPTION_KEY', '0'.repeat(64));
 }
 
+function stubProductionDashboardEnv() {
+  stubBaseDashboardEnv();
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
+  vi.stubEnv('APP_URL', 'https://app.example.com');
+  vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
+  vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
+  vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
+  vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
+}
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -44,63 +55,36 @@ describe('validateDashboardEnv', () => {
   });
 
   it('rejects mismatched app URLs in production', () => {
-    stubBaseDashboardEnv();
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
-    vi.stubEnv('APP_URL', 'https://app.example.com');
+    stubProductionDashboardEnv();
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://www.example.com');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
 
     expect(() => validateDashboardEnv()).toThrow(/APP_URL and NEXT_PUBLIC_APP_URL must match/);
   });
 
   it('rejects invalid app URLs in production', () => {
-    stubBaseDashboardEnv();
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
+    stubProductionDashboardEnv();
     vi.stubEnv('APP_URL', 'not-a-url');
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
 
     expect(() => validateDashboardEnv()).toThrow(/APP_URL must be a valid absolute URL/);
   });
 
   it('passes in production when the public app URLs match', () => {
-    stubBaseDashboardEnv();
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
+    stubProductionDashboardEnv();
     vi.stubEnv('APP_URL', 'https://app.example.com/');
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
-    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
 
     expect(() => validateDashboardEnv()).not.toThrow();
   });
 
   it('passes in production without NEXT_PUBLIC_APP_URL when APP_URL is set', () => {
-    stubBaseDashboardEnv();
-    vi.stubEnv('NODE_ENV', 'production');
-    vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'pk_test_clerk');
-    vi.stubEnv('APP_URL', 'https://app.example.com');
+    stubProductionDashboardEnv();
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
-    vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
 
     expect(() => validateDashboardEnv()).not.toThrow();
   });
 
   it('rejects whitespace-only production env values', () => {
-    stubBaseDashboardEnv();
-    vi.stubEnv('NODE_ENV', 'production');
+    stubProductionDashboardEnv();
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', '   ');
-    vi.stubEnv('APP_URL', 'https://app.example.com');
-    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.example.com');
-    vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
-    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
 
     expect(() => validateDashboardEnv()).toThrow(/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
   });
