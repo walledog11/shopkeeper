@@ -22,3 +22,20 @@ export function hasSentryUploadCredentials(env = process.env) {
       env.SENTRY_PROJECT?.trim(),
   );
 }
+
+/** @param {NodeJS.ProcessEnv} [env] */
+export function isDeployBuild(env = process.env) {
+  return (
+    env.VERCEL === '1' ||
+    typeof env.RAILWAY_ENVIRONMENT === 'string' ||
+    env.CI === 'true' ||
+    env.CI === '1'
+  );
+}
+
+/** @param {NodeJS.ProcessEnv} [env] */
+export function missingSentryUploadVars(env = process.env) {
+  return ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT'].filter(
+    (name) => !env[name]?.trim(),
+  );
+}

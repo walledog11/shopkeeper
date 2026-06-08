@@ -45,9 +45,9 @@ npm run db:migrate:deploy
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- Each app `build` script uploads source maps via `scripts/sentry-upload-sourcemaps.mjs` when `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` are set in the **build** environment (not runtime-only).
-- On Vercel, set those three vars for Production (and Preview if desired). Turbo only passes them through when listed in `turbo.json` `passThroughEnv`.
-- After deploy, check build logs for `[sentry] Uploading source maps...` or `[sentry] Skipping source map upload — missing build env: ...`.
+- Each app runs `npm run upload-sourcemaps` **after** the compile step, outside Turbo cache (`vercel.json` and `nixpacks.toml`).
+- Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` in the **build** environment for Vercel and Railway.
+- Deploy builds fail if those vars are missing (`--require` / `CI` detection). Check build logs for `[sentry] Uploading source maps...`.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
 

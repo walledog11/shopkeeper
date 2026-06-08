@@ -4,24 +4,30 @@ import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { env, argv, exit } from 'node:process';
 import { fileURLToPath } from 'node:url';
-import { hasSentryUploadCredentials, resolveSentryRelease } from './sentry-release.mjs';
+import {
+  hasSentryUploadCredentials,
+  isDeployBuild,
+  missingSentryUploadVars,
+  resolveSentryRelease,
+} from './sentry-release.mjs';
 
-const distDir = argv[2] || 'dist';
+const distDir = argv.find((arg) => !arg.startsWith('-')) || 'dist';
 const stripPublicMaps = argv.includes('--strip-public-maps');
+const requireUpload = argv.includes('--require') || isDeployBuild(env);
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sentryCli = join(repoRoot, 'node_modules', '.bin', 'sentry-cli');
 
-function missingUploadVars(currentEnv) {
-  return ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT'].filter(
-    (name) => !currentEnv[name]?.trim(),
-  );
-}
-
 if (!hasSentryUploadCredentials(env)) {
-  const missing = missingUploadVars(env);
-  console.log(
-    `[sentry] Skipping source map upload — missing build env: ${missing.join(', ')}`,
-  );
+  const missing = missingSentryUploadVars(env);
+  const message = `[sentry] Missing source map upload env: ${missing.join(', ')}`;
+
+  if (requireUpload) {
+    console.error(`${message} (required on deploy builds)`);
+    console.error('[sentry] Set SENTRY_AUTH_TOKEN, SENTRY_ORG, and SENTRY_PROJECT in the build environment.');
+    exit(1);
+  }
+
+  console.log(`[sentry] Skipping source map upload — ${message}`);
   exit(0);
 }
 
@@ -38,48 +44,30 @@ if (!existsSync(sentryCli)) {
 const org = env.SENTRY_ORG.trim();
 const project = env.SENTRY_PROJECT.trim();
 const release = resolveSentryRelease(env);
-const cliEnv = { ...env, SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL || 'warn' };
+const cliEnv = { ...env, SENTRY_LOG_LEVEL: env.SENTRY_LOG_LEVEL || 'info' };
 
 console.log(
   `[sentry] Uploading source maps from ${distDir} to ${org}/${project}${
-    release ? ` (release ${release})` : ''
+    release ? ` (release ${release})` : ' (no release env — set SENTRY_RELEASE or deploy commit sha)'
   }`,
 );
 
-const injectArgs = [
-  sentryCli,
-  'sourcemaps',
-  'inject',
-  '--org',
-  org,
-  '--project',
-  project,
-  distDir,
-];
-const inject = spawnSync(injectArgs[0], injectArgs.slice(1), {
-  stdio: 'inherit',
-  env: cliEnv,
-});
-if (inject.status !== 0) {
-  console.error('[sentry] sourcemaps inject failed');
+runSentryCli(['info'], cliEnv);
+
+const injected = runSentryCli(
+  ['sourcemaps', 'inject', '--org', org, '--project', project, distDir],
+  cliEnv,
+);
+if (!injected) {
   exit(1);
 }
 
-const uploadArgs = [
-  sentryCli,
-  'sourcemaps',
-  'upload',
-  '--org',
-  org,
-  '--project',
-  project,
-];
+const uploadArgs = ['sourcemaps', 'upload', '--org', org, '--project', project];
 if (release) uploadArgs.push('--release', release);
 uploadArgs.push(distDir);
 
-const upload = spawnSync(uploadArgs[0], uploadArgs.slice(1), { stdio: 'inherit', env: cliEnv });
-if (upload.status !== 0) {
-  console.error('[sentry] sourcemaps upload failed');
+const uploaded = runSentryCli(uploadArgs, cliEnv);
+if (!uploaded) {
   exit(1);
 }
 
@@ -91,6 +79,15 @@ if (stripPublicMaps) {
 }
 
 console.log(`[sentry] source maps uploaded${release ? ` for release ${release}` : ''}`);
+
+function runSentryCli(args, cliEnv) {
+  const result = spawnSync(sentryCli, args, { stdio: 'inherit', env: cliEnv });
+  if (result.status !== 0) {
+    console.error(`[sentry] sentry-cli ${args.join(' ')} failed`);
+    return false;
+  }
+  return true;
+}
 
 function removePublicSourceMaps(rootDir) {
   if (!existsSync(rootDir)) {

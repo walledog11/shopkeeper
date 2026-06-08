@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { hasSentryUploadCredentials, resolveSentryRelease } from './sentry-release.mjs';
+import {
+  hasSentryUploadCredentials,
+  isDeployBuild,
+  missingSentryUploadVars,
+  resolveSentryRelease,
+} from './sentry-release.mjs';
 
 test('resolveSentryRelease prefixes bare commit shas', () => {
   assert.equal(resolveSentryRelease({ VERCEL_GIT_COMMIT_SHA: 'abc123' }), 'shopkeeper@abc123');
@@ -22,4 +27,18 @@ test('hasSentryUploadCredentials requires all upload vars', () => {
     }),
     true,
   );
+});
+
+test('isDeployBuild detects CI and platform env', () => {
+  assert.equal(isDeployBuild({}), false);
+  assert.equal(isDeployBuild({ VERCEL: '1' }), true);
+  assert.equal(isDeployBuild({ RAILWAY_ENVIRONMENT: 'production' }), true);
+  assert.equal(isDeployBuild({ CI: 'true' }), true);
+});
+
+test('missingSentryUploadVars lists unset keys', () => {
+  assert.deepEqual(missingSentryUploadVars({ SENTRY_ORG: 'org' }), [
+    'SENTRY_AUTH_TOKEN',
+    'SENTRY_PROJECT',
+  ]);
 });
