@@ -70,10 +70,6 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
 
 ## Observability And Operations
 
-- [X] Remove Sentry SDK, source-map upload, and related env vars from both apps.
-  - Ops alerts now emit structured Pino logs only (`opsAlert: true`).
-  - Deploy builds are compile-only; no external error-tracking vendor dependency.
-
 - [ ] Triage dependency audit findings.
   - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; moderate findings remain in dev tooling deps.
   - Prioritize framework/runtime dependencies and document accepted risk for dev-only/tooling findings.
