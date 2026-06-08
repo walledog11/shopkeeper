@@ -1,76 +1,84 @@
 /**
- * Backfill Action Plans for open tickets that have no cached plan.
+ * Backfill action plans for open tickets that have no cached plan.
  *
- * Finds every OPEN, non-filtered thread where cachedPlanMessageId doesn't
- * match the last customer message, then calls plan-internal for each one.
+ * Finds every OPEN thread whose cachedPlanMessageId doesn't match the last
+ * customer message, then runs generateThreadPlan() in-process (Track 4.5).
  *
  * Usage (from apps/gateway/):
  *   tsx src/scripts/backfill-plans.ts
+ *   tsx src/scripts/backfill-plans.ts --dry-run
+ *   tsx src/scripts/backfill-plans.ts --genuine-only
  *
- * Env vars required (same as gateway):
- *   DATABASE_URL, INTERNAL_API_SECRET, DASHBOARD_URL or DASHBOARD_INTERNAL_URL
+ * Env vars required (same as gateway worker):
+ *   DATABASE_URL, ANTHROPIC_API_KEY, and other gateway agent runtime vars
  */
 
+import { db } from '@shopkeeper/db';
 import { loadGatewayEnv } from '../config/load-env.js';
+import { generateThreadPlan } from '../message-handlers/generate-thread-plan.js';
+
 loadGatewayEnv();
-
-import { PrismaClient } from '@prisma/client';
-import { getGatewayDashboardUrl } from '../config/env.js';
-
-const db = new PrismaClient();
-
-function getInternalSecret(): string {
-  const s = process.env.INTERNAL_API_SECRET;
-  if (!s) throw new Error('Missing INTERNAL_API_SECRET');
-  return s;
-}
 
 const CONCURRENCY = 3;
 const DELAY_MS = 500;
+
+interface Args {
+  dryRun: boolean;
+  genuineOnly: boolean;
+}
+
+function parseArgs(): Args {
+  const args = process.argv.slice(2);
+  return {
+    dryRun: args.includes('--dry-run'),
+    genuineOnly: args.includes('--genuine-only'),
+  };
+}
 
 async function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function generatePlan(orgId: string, threadId: string): Promise<boolean> {
-  const res = await fetch(`${getGatewayDashboardUrl()}/api/agent/plan-internal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': getInternalSecret(),
-    },
-    body: JSON.stringify({ orgId, threadId }),
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    console.error(`  ✗ [${threadId}] plan-internal returned ${res.status}: ${body.slice(0, 120)}`);
-    return false;
+async function generatePlan(orgId: string, threadId: string, dryRun: boolean): Promise<boolean> {
+  if (dryRun) {
+    console.log(`  – [${threadId}] would generate plan`);
+    return true;
   }
 
-  const data = await res.json() as { plan?: { steps?: unknown[] } };
-  const stepCount = data.plan?.steps?.length ?? 0;
-  if (stepCount === 0) {
-    console.log(`  – [${threadId}] plan generated but has 0 steps (skipped)`);
+  try {
+    const { plan } = await generateThreadPlan(orgId, threadId, false);
+    const stepCount = plan?.steps?.length ?? 0;
+    if (stepCount === 0) {
+      console.log(`  – [${threadId}] plan generated but has 0 steps (skipped)`);
+      return false;
+    }
+    console.log(`  ✓ [${threadId}] plan generated (${stepCount} steps)`);
+    return true;
+  } catch (err) {
+    console.error(`  ✗ [${threadId}] error: ${(err as Error).message}`);
     return false;
   }
-  console.log(`  ✓ [${threadId}] plan generated (${stepCount} steps)`);
-  return true;
 }
 
 async function main() {
-  const dashboardUrl = getGatewayDashboardUrl();
-  console.log(`Dashboard: ${dashboardUrl}`);
+  const { dryRun, genuineOnly } = parseArgs();
+  console.log(`Backfill plans${dryRun ? ' [DRY RUN]' : ''}${genuineOnly ? ' [genuine-only]' : ''}`);
 
-  // Fetch all open, non-filtered, non-archived threads with their last customer message
   const threads = await db.thread.findMany({
-    where: {
-      status: 'open',
-      filterStatus: { not: 'filtered' },
-      archivedAt: null,
-      deletedAt: null,
-      channelType: { notIn: ['sms_agent', 'dashboard_agent'] },
-    },
+    where: genuineOnly
+      ? {
+          status: 'open',
+          filterStatus: 'genuine',
+          archivedAt: null,
+          deletedAt: null,
+        }
+      : {
+          status: 'open',
+          filterStatus: { not: 'filtered' },
+          archivedAt: null,
+          deletedAt: null,
+          channelType: { notIn: ['sms_agent', 'dashboard_agent'] },
+        },
     select: {
       id: true,
       organizationId: true,
@@ -84,10 +92,9 @@ async function main() {
     },
   });
 
-  // Filter to those missing a current plan
   const needsPlan = threads.filter(t => {
     const lastMsgId = t.messages[0]?.id ?? null;
-    if (!lastMsgId) return false; // no customer message at all
+    if (!lastMsgId) return false;
     return t.cachedPlanMessageId !== lastMsgId;
   });
 
@@ -95,21 +102,16 @@ async function main() {
 
   if (needsPlan.length === 0) {
     console.log('Nothing to do.');
-    await db.$disconnect();
     return;
   }
 
   let done = 0;
   let success = 0;
 
-  // Process in batches of CONCURRENCY
   for (let i = 0; i < needsPlan.length; i += CONCURRENCY) {
     const batch = needsPlan.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
-      batch.map(t => generatePlan(t.organizationId, t.id).catch(err => {
-        console.error(`  ✗ [${t.id}] error: ${(err as Error).message}`);
-        return false;
-      }))
+      batch.map(t => generatePlan(t.organizationId, t.id, dryRun)),
     );
     success += results.filter(Boolean).length;
     done += batch.length;
@@ -118,10 +120,13 @@ async function main() {
   }
 
   console.log(`\nDone. ${success}/${needsPlan.length} plans generated successfully.`);
-  await db.$disconnect();
 }
 
-main().catch(err => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+main()
+  .catch(err => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await db.$disconnect();
+  });

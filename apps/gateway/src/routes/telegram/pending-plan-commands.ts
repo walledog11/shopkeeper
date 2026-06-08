@@ -1,10 +1,22 @@
-import { getGatewayDashboardUrl } from '../../config/env.js';
+import type { RawToolCall } from '@shopkeeper/agent/types';
 import { READ_TOOLS } from '../../constants.js';
 import logger from '../../logger.js';
 import { updateContext, type OperatorContext, type ToolCall } from '../../operator-context.js';
+import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import type { PendingPlanCommand } from './command-parser.js';
 import { filler } from './format.js';
 import type { TelegramReply } from './types.js';
+
+function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
+  return toolCalls.map((toolCall) => {
+    const { id, name, input, ...rest } = toolCall;
+    return {
+      id,
+      name,
+      input: input !== undefined ? input : (Object.keys(rest).length > 0 ? rest : undefined),
+    };
+  });
+}
 
 export async function handlePendingPlanCommand(
   organizationId: string,
@@ -36,29 +48,20 @@ export async function handlePendingPlanCommand(
   logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Telegram] Approving plan');
   await reply(filler());
 
-  const response = await fetch(`${getGatewayDashboardUrl()}/api/agent/internal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '',
-    },
-    body: JSON.stringify({
+  let summary: string;
+  try {
+    ({ summary } = await executeOperatorAgentTurn({
       orgId: organizationId,
       threadId,
       instruction,
-      approvedToolCalls,
+      approvedToolCalls: normalizeApprovedToolCalls(approvedToolCalls),
       clerkUserId,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    logger.error({ status: response.status, err: error }, '[Telegram] Internal agent API error');
+    }));
+  } catch (err) {
+    logger.error({ err }, '[Telegram] Operator agent turn failed (plan approval)');
     await reply('Something went wrong running the plan. Please try again.');
     return true;
   }
-
-  const { summary } = (await response.json()) as { summary: string };
   await updateContext(organizationId, chatId, {
     pendingPlan: null,
     lastThreadId: threadId,

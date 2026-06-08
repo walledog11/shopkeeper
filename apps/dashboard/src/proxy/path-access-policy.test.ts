@@ -19,8 +19,9 @@ describe("proxy path access policy", () => {
     expect(isPublicPath("/api/webhooks/clerk")).toBe(true);
     expect(isPublicPath("/api/webhooks/email")).toBe(true);
     expect(isPublicPath("/api/integrations/shopify/callback")).toBe(true);
-    expect(isPublicPath("/api/agent/internal")).toBe(true);
-    expect(isPublicPath("/api/agent/plan-internal")).toBe(true);
+    expect(isPublicPath("/api/agent/io-send-internal")).toBe(true);
+    expect(isPublicPath("/api/messages/auto-ack")).toBe(true);
+    expect(isPublicPath("/api/messages/internal")).toBe(true);
   });
 
   it("requires auth but not an org for signed-in onboarding and workspace selection pages", () => {

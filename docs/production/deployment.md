@@ -44,8 +44,8 @@ npm run db:migrate:deploy
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- **Dashboard (Vercel):** `next build` only; no external error-tracking SDK or source-map upload step.
-- **Gateway (Railway):** `npm run build` is compile-only (`tsc`).
+- **Dashboard (Vercel):** `next build` only; no Level 2 error-tracking SDK or source-map upload step at launch (see [error-tracking-plan.md](error-tracking-plan.md)).
+- **Gateway (Railway):** `npm run build` is compile-only (`tsc`); no source-map upload at launch.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
 - Ops alerts emit structured Pino logs with `opsAlert: true` when thresholds are crossed. See [`runbook.md`](runbook.md) for validation steps.

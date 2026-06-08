@@ -16,7 +16,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 
 ---
 
-## Status at a glance (2026-06-05)
+## Status at a glance (2026-06-07)
 
 | Track | What | State | Next action |
 |---|---|---|---|
@@ -24,7 +24,7 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 | **1** | Thread-optional core (3 seams) | ✅ complete | — |
 | **2** | Extract core → `@shopkeeper/agent` | ✅ gate passed (2026-06-05); baseline regenerated **156/168** | — |
 | **3** | Order-ops module #2 (event-driven, flag-only, in-worker) | 🔶 code-complete + eval-confirmed (2026-06-05) | manual live e2e; Telegram notify; eval fixtures |
-| **4** | Repoint support to in-process worker | 🔶 in progress (2026-06-06) — 4.0 LockProvider ✅; 4.1 orchestration moved ✅; 4.2 worker auto-plan in-process ✅ | 4.3 operator runs in-process |
+| **4** | Repoint support to in-process worker | 🔶 code-complete — 4.0–4.5 ✅ (2026-06-07) | manual live e2e |
 | **5** | WhatsApp channel surface | ⬜ not started | parallel / later |
 
 **Track 2 is complete (gate passed 2026-06-05).** All code moved (Phases 1–5), gateway dedup done (4/4), build/CI
@@ -47,7 +47,11 @@ net confirms no regression: `EVAL_REPEATS=1` ran **53/56 ≈ 94.6% ≥ 93.5%**; 
 escalation set and **all pass at `repeats=3`** (targeted rerun, exit 0) — Track 3 touched zero support-core files.
 **Remaining before Track 3 is fully closed:** the manual `ORDER_RISK_MONITOR_ENABLED=1` live-gateway/Shopify e2e
 (unrun locally — needs the live env), the Telegram-notify sink swap, and the deferred order-ops eval fixtures (Step 5).
-**Resuming work = start Track 4 (repoint support to the in-process worker), now unblocked.**
+**Track 4 is code-complete (4.0–4.5, 2026-06-07).** Gateway orchestration runs in-process; the retired
+`/api/agent/plan-internal` and `/api/agent/internal` routes are deleted; backfill scripts call
+`generateThreadPlan()` in-process. **Remaining before Track 4 is fully closed:** manual live e2e (in-process
+auto-plan + auto-execute, Telegram operator runs, hop-back `io-send-internal` sends). 4.4 is decided — dashboard
+UI paths stay in Next.
 
 **Update (2026-06-05, later) — gate PASSED, Track 2 complete.** With credits added, the confirming `EVAL_REPEATS=1`
 run came back **53/56 (94.6%) ≥ 93.5%** — the aggregate gate did not throw. The executor-mock fix is confirmed
@@ -352,7 +356,7 @@ work~~ ✅ → ~~re-run gate (`EVAL_REPEATS=1`) + regenerate baseline~~ ✅ **(d
 
 **Exit (met 2026-06-05):** dashboard-hosted support paths behave identically — `EVAL_REPEATS=1` confirming gate
 **94.6% ≥ 93.5%**, committed baseline regenerated at `repeats=3` to **156/168** (flat, absorbing the prompt-split
-reorder); gateway builds and can `import { runAgent } from "@shopkeeper/agent"`. Remaining housekeeping: commit the WIP.
+reorder); gateway builds and can `import { runAgent } from "@shopkeeper/agent"`.
 
 **Anti-overbuild guard:** extract for the **two real consumers** (gateway worker, dashboard). Do not design
 an "agent SDK" with versioned plugin contracts. Narrow entry points, no speculative API. The injected I/O
@@ -400,10 +404,16 @@ address): *that action* — not the whole module — inherits the redefined per-
 
 ---
 
-## Track 4 — Repoint support to the in-process worker *(M · 🔶 in progress · last, incremental)*
+## Track 4 — Repoint support to the in-process worker *(M · 🔶 code-complete 2026-06-07 · last, incremental)*
 
 Once the core is a package and the worker runs order-ops in-process, migrate support's
 **gateway-triggered** paths off the HTTP hop — one trigger at a time, never big-bang.
+
+**Update (2026-06-07) — 4.5 done; gateway orchestration hops retired.** Auto-plan (4.2), Telegram operator
+runs (4.3), and route retirement (4.5) are complete. Deleted `/api/agent/plan-internal` and
+`/api/agent/internal`; repointed `backfill-plans.ts` and `backfill-thread-subject-and-plan.mjs` to in-process
+`generateThreadPlan()`. Remaining internal hops are delivery-only: `io-send-internal`, `messages/auto-ack`,
+`messages/internal`. **Still open:** manual live e2e across the in-process paths.
 
 **The finding (2026-06-05).** The two gateway-triggered routes (`/api/agent/plan-internal` for auto-plan,
 `/api/agent/internal` for Telegram operator runs) don't sit on thin route glue — they sit on a stack of
@@ -431,7 +441,7 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
 | auto-execute (`plan-execution.ts`) | drags shadow recorder + approver | **move** core; **inject `ShadowRecorder`** (frozen/dashboard-rollout-only per trim list → no-op in worker) |
 | `resolveInternalAgentThread` (`internal.ts`), `requireOrgThread` (`auth.ts`) | DB (+ `@shopkeeper/agent/shopify`) | **move** to package |
 | route failure counter (Upstash) | host I/O | collapse into the existing injected `recordToolFailure` seam (Track 2); host builds the closure |
-| billing gate, Clerk.com approver | host I/O | **leave** host-side; pass resolved values in (operator path only) |
+| billing gate, Clerk.com approver | host I/O | **leave** host-side; pass resolved values in (operator path only) ✅ gateway copies wired in 4.3 |
 | `rateLimit` (Upstash), `parse*Body` | Next route I/O | **leave** — the HTTP route keeps them; the in-process path skips them (BullMQ jobId-dedup + concurrency already serialize) |
 
 ### Phasing
@@ -486,19 +496,33 @@ rewrite the runtime" guardrail below. **Migrate auto-plan first**, then operator
   - **Verified:** package + gateway build clean; gateway typecheck 0 errors; dashboard 0 production type errors
     (only pre-existing `*.test.ts` quirks); lint + `check-module-structure` clean; gateway suite 231 pass / 1
     skip (incl. refactored `internal-operator` 404-path + unchanged `sendAutoAck`). The support eval net is not
-    implicated — the dashboard `plan-internal` path is byte-for-byte unchanged and the package core was not
-    touched. **Remaining:** manual live e2e (in-process auto-plan + auto-execute through the hop-back sink,
-    needs the live env, like Track 3's); optionally wire the gateway `recordToolFailure` closure.
-- [ ] **4.3 — Operator runs in-process.** Point `executeFreeFormInstruction` + `handlePendingPlanCommand`
-  (Telegram) at an in-process `executeAgentTurn` + `resolveInternalAgentThread`. Billing gate + Clerk.com approver
-  resolve gateway-side (move billing check to `@shopkeeper/db` or a gateway copy; approver passed pre-resolved).
-- [ ] **4.4 — Leave dashboard UI-initiated paths** (composer-ask, concierge, UI approve/quick-approve) calling
-  the core in Next — minor, later choice. No urgency; minority of traffic, already work.
-- [ ] **4.5 — Retire the internal HTTP routes** only after their callers are migrated. (Note: `plan-internal`
-  also has a non-worker caller — `scripts/backfill-plans.ts`; keep the route or repoint the script.)
+    implicated — orchestration moved in-process without touching the prompt/model path. The dashboard
+    `plan-internal` route was kept until 4.5 retired it (2026-06-07). **Remaining:** manual live e2e
+    (in-process auto-plan + auto-execute through the hop-back sink, needs the live env, like Track 3's);
+    optionally wire the gateway `recordToolFailure` closure.
+- [x] **4.3 — Operator runs in-process ✅ (2026-06-07).** `executeFreeFormInstruction` +
+  `handlePendingPlanCommand` (Telegram) no longer hop to `/api/agent/internal`; both call a new in-process
+  `executeOperatorAgentTurn` (`message-handlers/execute-operator-agent-turn.ts`) that mirrors the dashboard
+  internal route: `assertBillingWriteAllowedForOrgId` (gateway copy at `billing/write-gate.ts`) →
+  `resolveInternalAgentThread` → `executeAgentTurn` with `buildGatewayTurnDeps()` (extracted from the 4.2
+  plan-execution deps — shared ioredis lock + hop-back `ThreadSink`). Plan approvals resolve the Clerk approver
+  gateway-side via `clients/clerk-approver.ts` (Clerk REST API when `CLERK_SECRET_KEY` is set; falls back to
+  `clerkUserId`-only). `send_reply` / `send_email` still hop to `/api/agent/io-send-internal` (unchanged 4.2
+  boundary). The dashboard `/api/agent/internal` route was kept until 4.5 retired it (2026-06-07). **Verified:**
+  gateway build + lint clean; gateway suite **207/207** (incl. updated Telegram webhook tests +
+  `execute-operator-agent-turn` unit tests). **Remaining:** manual live e2e (Telegram free-form + plan approval
+  through the in-process path, needs the live env, like 4.2/Track 3).
+- [x] **4.4 — Leave dashboard UI-initiated paths in Next ✅ (decided, no work).** Composer-ask, concierge, UI
+  approve/quick-approve stay on dashboard routes — minority of traffic, already works.
+- [x] **4.5 — Retire the internal HTTP routes ✅ (2026-06-07).** Deleted `/api/agent/plan-internal` and
+  `/api/agent/internal` (+ route tests). Repointed `apps/gateway/src/scripts/backfill-plans.ts` and
+  `scripts/backfill-thread-subject-and-plan.mjs` to in-process `generateThreadPlan()` (no dashboard HTTP).
+  Removed retired routes from `AGENT_FAILURE_ROUTES`; added `io-send-internal`, `messages/auto-ack`, and
+  `messages/internal` to dashboard `publicRoutePatterns` (Clerk bypass for remaining internal hops). **Verified:**
+  dashboard + gateway build clean; targeted tests pass.
 
-**Exit:** the majority of agent runs (channel-triggered) execute in the durable worker with no network hop;
-the dashboard keeps working throughout.
+**Exit (met in code):** the majority of agent runs (channel-triggered) execute in the durable worker with no
+orchestration network hop; the dashboard keeps working throughout. *(Manual live e2e remains.)*
 
 **Anti-overbuild guard:** this is "repoint the trigger," not "rewrite the runtime." If a step looks like a
 rewrite, the Track 2 package boundary is wrong — fix that, don't power through. (This is exactly why 4.1
@@ -568,8 +592,8 @@ the move is to stop pouring in, not rip out (except where noted).
 1. **Per-module mutation ramp thresholds:** when a module gains its first mutating action, the
    redefined-shadow agreement bar / spot-check window before it goes live. Set when the first mutation is
    actually proposed.
-2. **Dashboard UI-initiated execution host:** in-process in Next vs. call the gateway. Decide during Track 4;
-   low stakes either way.
+2. **Dashboard UI-initiated execution host:** in-process in Next vs. call the gateway. **Decided (4.4,
+   2026-06-07):** stay in Next — composer-ask, concierge, approve/quick-approve unchanged.
 3. **Customer contact from proactive runs:** thread-spawn vs. thread-less `send_email`. Decide when a module
    first needs to contact a customer (not order-ops v1).
 

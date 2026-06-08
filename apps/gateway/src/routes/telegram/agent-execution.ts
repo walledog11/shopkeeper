@@ -1,8 +1,8 @@
 import { db } from '@shopkeeper/db';
-import { getGatewayDashboardUrl } from '../../config/env.js';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
 import { extractOrderNumber, updateContext, type OperatorContext } from '../../operator-context.js';
+import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import { filler, relativeAge } from './format.js';
 import type { TelegramReply } from './types.js';
 
@@ -68,30 +68,22 @@ export async function executeFreeFormInstruction(
   logger.info({ chatId, organizationId, orderNumber: orderNumber || null }, '[Telegram] Free-form agent instruction');
   await reply(filler());
 
-  const response = await fetch(`${getGatewayDashboardUrl()}/api/agent/internal`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-secret': process.env.INTERNAL_API_SECRET ?? '',
-    },
-    body: JSON.stringify({
+  let summary: string;
+  let threadId: string;
+  try {
+    ({ summary, threadId } = await executeOperatorAgentTurn({
       orgId: organizationId,
       instruction: body,
       ...(orderNumber ? { orderNumber } : {}),
       ...(context.lastThreadId ? { threadId: context.lastThreadId } : {}),
       senderPhone: `telegram:${chatId}`,
       clerkUserId,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    logger.error({ status: response.status, err: error }, '[Telegram] Internal agent API error (free-form)');
+    }));
+  } catch (err) {
+    logger.error({ err }, '[Telegram] Operator agent turn failed (free-form)');
     await reply('Something went wrong running the agent. Please try again.');
     return;
   }
-
-  const { summary, threadId } = (await response.json()) as { summary: string; threadId: string };
   await updateContext(organizationId, chatId, {
     ...(orderNumber ? { lastOrderNumber: orderNumber } : {}),
     lastThreadId: threadId,

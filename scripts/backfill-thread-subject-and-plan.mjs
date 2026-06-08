@@ -8,6 +8,7 @@
 //   node scripts/backfill-thread-subject-and-plan.mjs --subject-only
 //   node scripts/backfill-thread-subject-and-plan.mjs --plan-only
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,84 +92,18 @@ async function backfillSubjects() {
 }
 
 async function backfillPlans() {
-  const dashboardUrl =
-    process.env.DASHBOARD_INTERNAL_URL || process.env.DASHBOARD_URL || process.env.APP_URL;
-  const internalSecret = process.env.INTERNAL_API_SECRET;
-  if (!dashboardUrl) {
-    console.error('[plan] missing DASHBOARD_INTERNAL_URL / DASHBOARD_URL / APP_URL — skipping plan backfill');
-    return;
-  }
-  if (!internalSecret) {
-    console.error('[plan] missing INTERNAL_API_SECRET — skipping plan backfill');
-    return;
-  }
+  const tsxArgs = ['tsx', 'apps/gateway/src/scripts/backfill-plans.ts', '--genuine-only'];
+  if (DRY_RUN) tsxArgs.push('--dry-run');
 
-  const threads = await db.thread.findMany({
-    where: {
-      status: 'open',
-      filterStatus: 'genuine',
-      archivedAt: null,
-      deletedAt: null,
-    },
-    select: {
-      id: true,
-      organizationId: true,
-      cachedPlanMessageId: true,
-      messages: {
-        where: { senderType: 'customer', deletedAt: null },
-        orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
-        take: 1,
-        select: { id: true },
-      },
-    },
+  const result = spawnSync('npx', tsxArgs, {
+    cwd: REPO_ROOT,
+    stdio: 'inherit',
+    env: process.env,
   });
 
-  const stale = threads.filter(t => {
-    const last = t.messages[0];
-    if (!last) return false;
-    return t.cachedPlanMessageId !== last.id;
-  });
-
-  let regenerated = 0;
-  let failed = 0;
-  let emptyPlans = 0;
-  for (const thread of stale) {
-    if (DRY_RUN) {
-      console.log(`[plan:dry] ${thread.id} (org=${thread.organizationId}) — would regenerate`);
-      regenerated += 1;
-      continue;
-    }
-
-    try {
-      const res = await fetch(`${dashboardUrl}/api/agent/plan-internal`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-internal-secret': internalSecret,
-        },
-        body: JSON.stringify({ orgId: thread.organizationId, threadId: thread.id }),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => '');
-        console.error(`[plan] ${thread.id} status=${res.status} body=${body.slice(0, 200)}`);
-        failed += 1;
-        continue;
-      }
-      const data = await res.json();
-      if (!data?.plan?.steps?.length) {
-        emptyPlans += 1;
-      } else {
-        regenerated += 1;
-      }
-    } catch (err) {
-      console.error(`[plan] ${thread.id} error=${err?.message ?? err}`);
-      failed += 1;
-    }
+  if (result.status !== 0) {
+    throw new Error(`plan backfill exited with code ${result.status ?? 'unknown'}`);
   }
-
-  console.log(
-    `[plan] open_genuine=${threads.length} stale=${stale.length} ${DRY_RUN ? 'would_regenerate' : 'regenerated'}=${regenerated} empty_plans=${emptyPlans} failed=${failed}`,
-  );
 }
 
 async function main() {

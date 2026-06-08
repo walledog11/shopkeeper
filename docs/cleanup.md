@@ -1,537 +1,556 @@
-# Project Cleanup Plan
+# Gateway Cleanup Plan
 
-## Current Cleanup Plan (2026-06-05)
+## Overview (2026-06-07)
 
-This plan replaces the completed cleanup tracker. It covers issues found in the follow-up code audit and intentionally excludes the work already completed in the previous `docs/cleanup.md`.
+This plan replaces the completed cleanup tracker. It covers issues found in the gateway code audit (`apps/gateway/src`, ~6,200 LOC). The core inbound → classify → summarize → plan → notify pipeline is sound; the slop is mostly migration debt, copy-pasted helpers, partially built infrastructure, and Redis connection sprawl.
 
 Audit baseline:
 
-- `npm run lint` passes.
-- `npm run test:unit` passes from Turbo cache.
-- `npm run test:node` passes.
-- The worktree contains user-owned uncommitted changes. Do not revert or rewrite unrelated work.
+- Core worker bootstrap, env validation, webhook auth, and idempotency are in good shape.
+- No critical production bugs identified.
+- Main pain points: stale WhatsApp naming, layer violations, duplicate helpers, half-wired ops alerts, and connection proliferation.
+
+Do not revert or rewrite unrelated user-owned work in the worktree.
 
 ## Phase 0: Keep The Cleanup Verifiable
 
-Use this phase as the verification contract for the rest of the plan.
+Use this phase as the verification contract for every later phase.
 
-- [x] Keep cleanup changes scoped by phase.
-- [x] Run `npm run lint` after each cleanup batch.
-- [x] Run targeted tests for every changed module and failure path.
-  - Phase 0 is doc-only, so no module-specific failure-path tests were required.
-- [x] Run `npm run test:unit` and `npm run test:node` after shared package or API contract changes.
-- [x] Run gateway and agent builds after shared package, logging, or worker orchestration changes.
-- [x] Do not modify unrelated user-owned work.
+- [ ] Keep cleanup changes scoped by phase — one PR per phase where practical.
+- [ ] Run `npm run lint -w apps/gateway` after each cleanup batch.
+- [ ] Run targeted gateway integration tests for every changed module and failure path.
+- [ ] Run `npm run build -w apps/gateway` after shared config, Redis, or worker orchestration changes.
+- [ ] Run `npm run lint` and `npm run test:node` after cross-package contract changes.
+- [ ] Do not modify unrelated user-owned work.
 
-Phase 0 verification completed on 2026-06-05:
+Suggested per-phase verification:
 
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
-- `npm run build -w packages/agent`
-- `npm run build -w apps/gateway`
+```bash
+npm run lint -w apps/gateway
+npm run build -w apps/gateway
+npm run test:integration -w apps/gateway -- <changed-test-files>
+```
 
-Keep this verification contract active for every later cleanup phase.
+For Redis, worker bootstrap, or inbound path changes, also run:
 
-## Phase 1: Consolidate Agent Tool Definitions
+```bash
+npm run test:integration -w apps/gateway -- src/worker.test.ts src/workers/core.test.ts
+```
 
-Agent tool definitions are currently spread across Anthropic schemas, TypeScript input interfaces, metadata, policy checks, and executor switch branches. This creates drift risk and leaves runtime argument validation weak.
+---
 
-Relevant files:
+## Phase 1: Quick Wins — Dedupe, Dead Code, and Config Consistency
 
-- `packages/agent/src/tools/tool-schemas.ts`
-- `packages/agent/src/tools/tool-inputs.ts`
-- `packages/agent/src/tools/tool-metadata.ts`
-- `packages/agent/src/tools/executor.ts`
-- `packages/agent/src/tools/static-policy.ts`
+Low-risk changes that reduce confusion without touching architecture.
 
-Tasks:
+### 1.1 Centralize internal API secret access
 
-- [x] Define a single tool-definition registry for every agent tool.
-- [x] Store each tool's name, schema, runtime parser, category, group, labels, policy metadata, and executor binding in that registry.
-- [x] Derive the Anthropic tool schema list from the registry.
-- [x] Derive tool labels, tool categories, plan-step labels, and UI selectors from the registry.
-- [x] Replace unsafe `cast<T>` argument handling with runtime validation before execution.
-- [x] Fix known schema drift, including `create_refund` documentation versus required arguments.
-- [x] Add parser and execution-routing tests for every tool.
+**Problem:** `getInternalApiSecret()` lives in `message-handlers/shared.ts`. Telegram routes read `process.env.INTERNAL_API_SECRET ?? ''`, bypassing rotation support via `INTERNAL_API_SECRET_PREV`.
 
-Phase 1 verification completed on 2026-06-05:
+**Files:**
 
-- `npm run test:unit -w packages/agent`
-- `npm run lint -w packages/agent`
-- `npm run build -w packages/agent`
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
-- `npm run build -w apps/gateway`
+- `apps/gateway/src/message-handlers/shared.ts`
+- `apps/gateway/src/config/env.ts`
+- `apps/gateway/src/routes/internal-auth.ts`
+- `apps/gateway/src/routes/telegram/agent-execution.ts`
+- `apps/gateway/src/routes/telegram/digest-commands.ts`
+- `apps/gateway/src/routes/telegram/pending-plan-commands.ts`
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+- `apps/gateway/src/message-handlers/planning-dashboard-client.ts`
 
-## Phase 2: Finish Agent Package Boundary Cleanup
+**Tasks:**
 
-The agent extraction left dashboard compatibility shims and split test ownership. Some files are real host adapters, while others are pure re-export shims.
+- [ ] Move `getInternalApiSecret()` to `config/env.ts` (alongside `validateGatewayEnv`).
+- [ ] Update all callers to import from `config/env.ts`.
+- [ ] Replace `process.env.INTERNAL_API_SECRET ?? ''` in Telegram routes with `getInternalApiSecret()`.
+- [ ] Add a test that secret rotation (`INTERNAL_API_SECRET_PREV`) is honored by `authorizeInternalRequest`.
 
-Relevant files:
+### 1.2 Extract duplicated crypto and typing helpers
 
-- `apps/dashboard/src/lib/agent/context.ts`
-- `apps/dashboard/src/lib/agent/run.ts`
-- `apps/dashboard/src/lib/agent/api/agent-actions.ts`
-- `apps/dashboard/src/lib/agent/tools/executor.ts`
-- `apps/dashboard/src/lib/ai/index.ts`
-- `apps/dashboard/src/lib/agent/runner.test.ts`
-- `packages/agent/package.json`
+**Problem:** `safeEqual` is copy-pasted in two route files. `isRecord` / JSON guards are duplicated across three modules.
 
-Tasks:
+**Files:**
 
-- [x] Classify each dashboard agent shim as a host adapter or compatibility re-export.
-- [x] Migrate imports to `@shopkeeper/agent` wherever no dashboard host dependency is required.
-- [x] Keep dashboard wrappers only where they inject dashboard-specific runtime dependencies.
-- [x] Move core agent behavior tests from `apps/dashboard` into `packages/agent`.
-- [x] Leave only route, IO, and host-integration tests in dashboard.
-- [x] Remove obsolete re-export files once imports and tests no longer need them.
+- `apps/gateway/src/routes/webhooks-email.ts`
+- `apps/gateway/src/routes/internal-auth.ts`
+- `apps/gateway/src/operator-context.ts`
+- `apps/gateway/src/maintenance/queue-health.ts`
+- `apps/gateway/src/maintenance/voice-synthesis.ts`
 
-Phase 2 classification:
+**Tasks:**
 
-- Host adapters kept in dashboard: `apps/dashboard/src/lib/agent/context.ts`, `apps/dashboard/src/lib/agent/run.ts`, `apps/dashboard/src/lib/agent/runner.ts`, and `apps/dashboard/src/lib/agent/tools/thread.ts`.
-- Route, IO, eval, and host-integration ownership stayed in `apps/dashboard/src/lib/agent/api/*`, `apps/dashboard/src/lib/agent/tools/thread.test.ts`, `apps/dashboard/src/lib/agent/context.test.ts`, and `apps/dashboard/src/lib/agent/__evals__/*`.
-- Pure re-export shims for agent core, tools, Shopify, AI, and thread constants were removed after imports moved to `@shopkeeper/agent` subpaths.
+- [ ] Add `apps/gateway/src/lib/crypto.ts` with `safeEqual(a, b)`.
+- [ ] Add `apps/gateway/src/lib/typing.ts` with `isRecord`, `readString`, and other shared guards.
+- [ ] Replace local copies in the files above.
+- [ ] Add focused unit tests for the extracted helpers.
 
-Phase 2 verification completed on 2026-06-05:
+### 1.3 Canonical channel label formatting
 
-- `npm run test:unit -w packages/agent`
-- `npm run build -w packages/agent`
-- `npm run test:unit -w apps/dashboard`
-- `npm run test:integration -w apps/dashboard -- src/lib/agent/context.test.ts src/lib/agent/tools/thread.test.ts src/lib/agent/api/action-log.test.ts`
-- `npm run lint:structure`
-- `npm run lint -w packages/agent`
-- `npm run lint -w apps/dashboard`
-- `npm run build -w apps/gateway`
-- `npm run build -w apps/dashboard` (rerun outside the sandbox after Turbopack hit a sandbox port-binding restriction)
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
+**Problem:** Identical `channelType === CHANNEL.IG_DM ? 'Instagram DM' : capitalize` logic appears in three places.
 
-## Phase 3: Centralize API Body Parsing And Validation
+**Files:**
 
-API routes still duplicate hand-written JSON parsing and request validation. Several direct `request.json()` calls can turn malformed JSON into generic server errors.
+- `apps/gateway/src/message-handlers/planning-notifications.ts`
+- `apps/gateway/src/routes/internal-operator.ts`
+- `apps/gateway/src/routes/telegram/format.ts` (preferred home)
 
-Relevant files:
+**Tasks:**
 
-- `apps/dashboard/src/lib/api/route.ts`
-- `apps/dashboard/src/app/api/canned-responses/route.ts`
-- `apps/dashboard/src/app/api/kb/[id]/route.ts`
-- `apps/dashboard/src/app/api/agent/plan-internal/route.ts`
-- `apps/dashboard/src/app/api/agent/order-risk-internal/route.ts`
+- [ ] Add `formatChannelLabel(channelType: DbChannelType): string` to `routes/telegram/format.ts` or a shared format module.
+- [ ] Replace duplicated label logic in planning notifications and operator escalation.
+- [ ] Add a small unit test for each channel type.
 
-Tasks:
+### 1.4 Remove dead constants and shims
 
-- [x] Add a shared JSON body reader that maps malformed JSON to `BadRequestError`.
-- [x] Add route-friendly helpers for required objects, optional objects, and empty-body handling.
-- [x] Centralize validators for canned responses, KB articles, agent internals, threads, billing, and team routes.
-- [x] Remove local duplicate helpers such as repeated `readJsonBody`, `requireNonEmptyString`, and tag normalizers.
-- [x] Add failure-path tests for malformed JSON, invalid field types, empty bodies, and unknown fields where relevant.
+**Problem:** Unused exports and a 6-line re-export shim add noise.
 
-Phase 3 verification completed on 2026-06-05:
+**Files:**
 
-- `npm run test:unit -w apps/dashboard -- src/lib/api/body.unit.test.ts src/lib/agent/api/validation.unit.test.ts src/app/api/threads/_lib/validation.unit.test.ts src/app/api/team/_lib/validation.unit.test.ts src/app/api/billing/_lib/validation.unit.test.ts`
-- `npm run test:integration -w apps/dashboard -- src/app/api/canned-responses/route.test.ts src/app/api/kb/bases/route.test.ts 'src/app/api/threads/[id]/route.test.ts' src/app/api/billing/checkout/route.test.ts src/app/api/billing/portal/route.test.ts src/app/api/agent/plan-internal/route.test.ts`
-- `npm run test:integration -w apps/dashboard -- src/app/api/agent/route.test.ts src/app/api/agent/chat/route.test.ts src/app/api/agent/internal/route.test.ts src/app/api/agent/plan/route.test.ts src/app/api/agent/quick-approve/route.test.ts src/app/api/org/route.test.ts src/lib/security/tenant-data-surfaces.test.ts`
-- `npm run lint -w apps/dashboard`
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
-
-## Phase 4: Split Gateway Core Worker Registration
-
-The maintenance worker cleanup is complete, but `apps/gateway/src/worker.ts` still assembles inbound workers, AI summary workers, Redis resources, failure handlers, heartbeat, and shutdown wiring in one file.
-
-Relevant files:
-
-- `apps/gateway/src/worker.ts`
+- `apps/gateway/src/constants.ts`
+- `apps/gateway/src/message-handlers/business-hours.ts`
+- `apps/gateway/src/workers/ai-summary.ts`
+- `apps/gateway/src/routes/webhooks-signature-alerts.ts`
 - `apps/gateway/src/maintenance/workers.ts`
 
-Tasks:
+**Tasks:**
 
-- [x] Extract inbound worker registration into a focused module.
-- [x] Extract AI summary worker registration into a focused module.
-- [x] Create a shared gateway worker resource contract for queues, workers, heartbeat, and shutdown resources.
-- [x] Centralize job failure logging and shutdown registration.
-- [x] Keep queue names, concurrency, retry behavior, and telemetry unchanged.
-- [x] Add registration and shutdown tests for the core workers.
+- [ ] Remove `CHANNEL.SMS` if still unused (only referenced in a comment).
+- [ ] Remove `SHOPIFY_API_VERSION` if still unused.
+- [ ] Remove unused `validation_failed` variant from webhook signature alerts if confirmed dead.
+- [ ] Delete `business-hours.ts` shim; import directly from `@shopkeeper/agent/settings` in `ai-summary.ts`.
+- [ ] Remove or document unused exports `closeMaintenanceWorkers` / `closeMaintenanceQueues` if production shutdown uses `workers/resources.ts` exclusively.
 
-Phase 4 verification completed on 2026-06-05:
+### 1.5 Fix boolean env parsing for order risk monitor
 
-- `npm run test:integration -w apps/gateway -- src/worker.test.ts src/workers/core.test.ts src/maintenance/workers.test.ts`
-- `npm run lint -w apps/gateway`
-- `npm run build -w apps/gateway`
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
-- `npm run build -w packages/agent`
+**Problem:** `ORDER_RISK_MONITOR_ENABLED` uses raw truthiness — any non-empty string (including `"false"`) enables the feature.
 
-## Phase 5: Inject Host Logging Into `packages/agent`
+**Files:**
 
-`packages/agent` currently logs directly through `console`, bypassing dashboard and gateway logging behavior.
+- `apps/gateway/src/config/runtime-config.ts`
+- `apps/gateway/src/workers/order-review.ts`
+- `apps/gateway/src/maintenance/order-risk-monitor.ts`
+- `apps/gateway/src/routes/webhooks-shopify.ts`
 
-Relevant files:
+**Tasks:**
 
-- `packages/agent/src/logger.ts`
-- `packages/agent/src/run.ts`
-- `packages/agent/src/planner.ts`
-- `packages/agent/src/spend.ts`
+- [ ] Add `isOrderRiskMonitorEnabled()` in `runtime-config.ts` using existing `parseBooleanEnv`.
+- [ ] Replace all `process.env.ORDER_RISK_MONITOR_ENABLED` checks with the getter.
+- [ ] Add a unit test for `"false"`, `"0"`, and unset values.
 
-Tasks:
+### 1.6 Fail loudly on unknown inbound platforms
 
-- [x] Define a small logger interface for the agent package.
-- [x] Let dashboard and gateway install or pass their host logger.
-- [x] Preserve log levels, redaction behavior, and request or job correlation metadata.
-- [x] Keep a minimal console fallback for tests and standalone package usage.
-- [x] Add tests that verify injected logging is used for planner, runner, and spend paths.
+**Problem:** `workers/inbound.ts` completes successfully when `job.data.platform` is unrecognized — misconfigured jobs vanish silently.
 
-Phase 5 verification completed on 2026-06-05:
+**Files:**
 
-- `npm run test:unit -w packages/agent -- src/run.test.ts src/planner.test.ts src/spend.test.ts`
-- `npm run test:unit -w packages/agent`
-- `npm run build -w packages/agent`
-- `npm run lint -w packages/agent`
-- `npm run lint -w apps/gateway`
-- `npm run build -w apps/gateway`
-- `npm run lint -w apps/dashboard`
-- `npm run lint`
-- `npm run test:unit`
-- `npm run test:node`
+- `apps/gateway/src/workers/inbound.ts`
 
-Additional verification note:
+**Tasks:**
 
-- `npm run build -w apps/dashboard` was attempted in the sandbox and rerun outside the sandbox after Turbopack hit the known port-binding restriction. The elevated build reached type checking and failed on an unrelated pre-existing issue in `apps/dashboard/src/app/api/threads/_lib/validation.ts` where `ThreadFilterStatus` is used as a type.
+- [ ] Add an `else` branch that logs an error and throws (so BullMQ retry/failure semantics apply).
+- [ ] Add a test case for an unknown platform value.
 
-## Phase 6: Decompose Large Client Components
+### 1.7 Consolidate duplicate time constants
 
-Several client files combine workflow state, mutation orchestration, local effects, and rendering. These are hard to test and risky to change.
+**Problem:** `ONE_DAY_MS` / `ONE_HOUR_MS` are exported from `maintenance/registration.ts` but redefined locally in `digest.ts` and `purge.ts`.
 
-Relevant files:
+**Files:**
 
-- `apps/dashboard/src/app/dashboard/kb/_components/KbPageClient.tsx`
-- `apps/dashboard/src/app/dashboard/settings/_components/workspace/WorkspaceTab.tsx`
-- `apps/dashboard/src/components/agent/AgentChatClient.tsx`
-- `apps/dashboard/src/app/dashboard/tickets/_components/conversation/composer/Composer.tsx`
-- `apps/dashboard/src/app/dashboard/customers/_components/CustomerDrawerContent.tsx`
+- `apps/gateway/src/maintenance/registration.ts`
+- `apps/gateway/src/maintenance/digest.ts`
+- `apps/gateway/src/maintenance/purge.ts`
 
-Tasks:
+**Tasks:**
 
-- [x] Split KB page workflow state, mutation helpers, and view components.
-- [x] Split Workspace tab logo upload, export, clear tickets, delete workspace, and save flows.
-- [x] Split Agent chat session restoration, send/retry logic, and rendering.
-- [x] Extract focused hooks or reducers only where they reduce real state complexity.
-- [x] Add targeted tests around destructive actions and failed mutations.
-- [x] Preserve current visual behavior while reducing component size and prop churn.
+- [ ] Import shared time constants from `registration.ts` in digest and purge.
+- [ ] Remove local redefinitions.
 
-Phase 6 implementation notes:
+### 1.8 Remove dead digest parameter
 
-- KB page state moved to `useKbPageState`, rendering moved to `KbPageView`, and request helpers remain in `kb-page-requests`.
-- Workspace API helpers moved to `workspace-requests`; logo, export, clear tickets, delete workspace, and save flows are composed by `useWorkspaceTabState`; section rendering moved to `WorkspaceSections`.
-- Agent chat session restoration and stale-session retry behavior moved to `agent-chat-session` and `useAgentChatState`; rendering moved to `AgentChatView`.
-- Composer slash-command state moved to `composer-state`, with canned-response filtering, template replacement, Instagram window checks, and placeholder formatting in `composer-utils`.
-- The customer drawer target is the existing `dashboard/customers` drawer path; edit/save and start-thread requests moved to `customer-drawer-requests`, state moved to `useCustomerDrawerState`, and rendering moved to `CustomerDrawerSections`.
+**Problem:** `shouldSendDigest` accepts `_currentHourUtc` but never uses it.
 
-Phase 6 verification completed on 2026-06-06:
+**Files:**
 
-- `npm run test:unit -w apps/dashboard -- src/app/dashboard/settings/_components/workspace/workspace-requests.unit.test.ts src/components/agent/agent-chat-session.unit.test.ts src/app/dashboard/tickets/_components/conversation/composer/composer-utils.unit.test.ts src/app/dashboard/customers/_components/customer-drawer-requests.unit.test.ts src/app/dashboard/kb/_components/kb-page-requests.unit.test.ts`
-- `npm run lint -w apps/dashboard`
-- `npm run test:unit -w apps/dashboard`
-- `npm run lint`
+- `apps/gateway/src/maintenance/digest.ts`
+- `apps/gateway/src/maintenance/digest.test.ts`
 
-Additional verification note:
+**Tasks:**
 
-- `./node_modules/.bin/tsc -p apps/dashboard/tsconfig.json --noEmit --pretty false` was attempted after the refactor. It failed on unrelated pre-existing dashboard typecheck issues in billing and Clerk webhook route tests using `Request` where `NextRequest` is expected, `apps/dashboard/src/app/api/threads/_lib/validation.ts` enum value/type usage, server test `NODE_ENV` assignment types, and related existing test helper typings. The rerun no longer reported Phase 6 files after fixing the extracted composer and customer drawer test type issues.
+- [ ] Remove the unused parameter and update callers/tests.
 
-## Phase 7: Make Date And Channel Formatting Canonical
+**Phase 1 verification:**
 
-Date, relative-time, and channel labels still duplicate across dashboard surfaces, even after the Activity and Review cleanup.
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/workers/core.test.ts src/maintenance/digest.test.ts src/config/runtime-config.test.ts src/routes/telegram/command-parser.test.ts`
 
-Relevant files:
+---
 
-- `apps/dashboard/src/lib/format/date.ts`
-- `apps/dashboard/src/lib/messaging/channels.ts`
-- `apps/dashboard/src/app/dashboard/agent/_components/ActionLog.tsx`
-- `apps/dashboard/src/app/dashboard/orders/_components/OrdersPageClient.tsx`
-- `apps/dashboard/src/components/integrations/integration-card-helpers.ts`
+## Phase 2: Rename WhatsApp Legacy Naming to Telegram
 
-Tasks:
+**Problem:** Operator notifications go through Telegram, but queue names, job IDs, failure labels, comments, and tests still say "WhatsApp." This misleads onboarding and runbooks.
 
-- [x] Expand the shared date-formatting utilities to cover current local helpers.
-- [x] Expand channel metadata helpers to cover dashboard labels consistently.
-- [x] Remove local channel label maps where shared metadata is sufficient.
-- [x] Remove local relative-time helpers from orders, integrations, and action log views.
-- [x] Add focused tests for channel label and date formatting edge cases.
+**Files:**
 
-Phase 7 implementation notes:
+- `apps/gateway/src/constants.ts`
+- `apps/gateway/src/maintenance/digest.ts`
+- `apps/gateway/src/maintenance/registration.ts`
+- `apps/gateway/src/types.ts`
+- `apps/gateway/src/workers/ai-summary.ts`
+- `apps/gateway/src/message-handlers/shared.ts`
+- `apps/gateway/src/worker.test.ts`
+- `docs/telegram-operator-channel.md`
+- `docs/production/runbook.md` (if queue names are referenced)
 
-- Shared date formatting now covers full dates, short dates, month-year labels, Unix timestamps, clock times, relative timestamps, sync labels, and activity labels with fallback and timezone options.
-- Orders, KB, customers, billing, Telegram, agent chat, home briefing, reports, analytics, and context-panel date call sites now use the shared date helpers instead of local date wrappers.
-- Reports channel labels now use shared channel metadata, including the report-specific internal operator grouping. Reports tool labels now use the agent tool registry instead of a local map.
-- Integration token alert counting now uses the existing integration-card token helpers instead of duplicating expiry thresholds in the integrations page.
+**Tasks:**
 
-Phase 7 verification completed on 2026-06-06:
+- [ ] Document legacy BullMQ queue names in `constants.ts` if a full rename is deferred.
+- [ ] Rename `QUEUE.DIGEST`, `JOB.DIGEST`, and `JOB.DIGEST_ID` to telegram-oriented names (e.g. `operator-digest`, `send-operator-digest`, `operator-digest-hourly`).
+- [ ] Update `failureQueue` label in `maintenance/digest.ts`.
+- [ ] Migrate repeatable job registration: remove old repeatable jobs and register new IDs (one-time deploy step — document in runbook).
+- [ ] Update comments in `types.ts`, `ai-summary.ts`, and `shared.ts`.
+- [ ] Update stale "WhatsApp notification" language in `worker.test.ts`.
+- [ ] Cross-check production runbook and operational guardrails for stale queue names.
 
-- `npm run test:unit -w apps/dashboard -- src/lib/format/date.unit.test.ts src/lib/messaging/channels.unit.test.ts`
-- `npm run lint -w apps/dashboard`
-- `npm run test:unit -w apps/dashboard`
-- `npm run lint`
+**Phase 2 verification:**
 
-## Phase 8: Clarify Dashboard Types And DB Package Surface
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/maintenance/digest.test.ts src/worker.test.ts`
+- [ ] Manual check: repeatable digest job re-registers cleanly on worker startup.
 
-Dashboard types manually mirror Prisma and DB package types. The DB package also exposes newer modules through the root export while its package surface and build contract are not very explicit.
+---
 
-Relevant files:
+## Phase 3: Fix Layer Violations and Stale Scripts
 
-- `apps/dashboard/src/types/index.ts`
-- `packages/db/index.ts`
-- `packages/db/package.json`
-- `packages/db/tsconfig.json`
+**Problem:** Worker-layer code imports from HTTP routes. A maintenance script still calls a removed HTTP endpoint.
 
-Tasks:
+### 3.1 Move operator escalation out of routes
 
-- [x] Replace manually mirrored enum-like dashboard types with generated DB types or shared constants where practical.
-- [x] Keep API DTO types explicit and separate from persistence model types.
-- [x] Document which DB modules are public root exports and which are private implementation details.
-- [x] Add subpath exports only for DB modules that should be imported directly.
-- [x] Align `packages/db` TypeScript include patterns with the intended package surface.
-- [x] Add type-level or compile-time tests for important shared DTO boundaries where useful.
+**Files:**
 
-Phase 8 implementation notes:
+- `apps/gateway/src/routes/internal-operator.ts`
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+- `apps/gateway/src/operator-notify.ts` (or new `services/operator-escalation.ts`)
 
-- `@shopkeeper/db` now exports the `ThreadStatus` Prisma enum runtime and value type alongside the existing channel, sender, and filter enum exports.
-- Dashboard enum-like types and `VoiceProposal` now alias `@shopkeeper/db` contracts while keeping dashboard API DTO object shapes explicit with string dates.
-- `packages/db/README.md` documents the public root surface, the only direct public subpaths (`customer-memory` and `test-helpers`), and the private implementation modules that should stay behind the root export.
-- `packages/db/tsconfig.json` now includes every intentional root package module used by the public root surface. No new subpath exports were added because no callers import those narrower modules directly.
-- `apps/dashboard/src/types/db-types.unit.test.ts` adds compile-time assertions for the DB enum aliases and important dashboard DTO boundaries.
+**Tasks:**
 
-Phase 8 verification completed on 2026-06-06:
+- [ ] Extract `pushOperatorEscalation` and `formatEscalationMessage` into `operator-notify.ts` or a dedicated service module.
+- [ ] Keep `routes/internal-operator.ts` as a thin HTTP wrapper that delegates to the service.
+- [ ] Update `agent-thread-sink.ts` to import from the service layer, not routes.
+- [ ] Add or extend tests for escalation formatting and notification dispatch.
 
-- `npm run build -w @shopkeeper/db`
-- `npm run test:unit -w apps/dashboard -- src/types/db-types.unit.test.ts`
-- `npm run lint -w @shopkeeper/db`
-- `npm run lint -w apps/dashboard`
-- `npm run test:unit -w apps/dashboard`
-- `npm run test:unit` (rerun with network access after the sandbox blocked the configured test database)
-- `npm run test:node`
-- `npm run build -w packages/agent`
-- `npm run build -w apps/gateway`
-- `npm run lint`
+### 3.2 Rewrite or delete stale backfill script
 
-Additional verification note:
+**Files:**
 
-- `./node_modules/.bin/tsc -p apps/dashboard/tsconfig.json --noEmit --pretty false` was attempted after the type cleanup. It still fails on unrelated existing dashboard typecheck issues: missing `@/lib/agent/order-ops/*` modules referenced by `order-risk-internal`, route tests passing `Request` where `NextRequest` is expected, a Clerk ServerClient mock constructor type, `GetRedisFn` value/type usage in server tests, and readonly or widened `NODE_ENV` test assignments. The rerun did not report Phase 7 or Phase 8 files after fixing the initial `Ticket["filterFeedback"]` assertion in the new type-boundary test.
+- `apps/gateway/src/scripts/backfill-plans.ts`
+- `apps/gateway/src/message-handlers/generate-thread-plan.ts`
+- `apps/gateway/src/scripts/rebuild-bad-summaries.ts` (reference implementation)
 
-## Phase 9: Review Inbound Idempotency Fallbacks
+**Tasks:**
 
-Some inbound message paths synthesize an idempotency key from organization, platform, message text, and a minute bucket when no provider external message ID is available. This can collapse distinct repeated messages.
+- [ ] Rewrite `backfill-plans.ts` to call `generateThreadPlan()` in-process (mirror `rebuild-bad-summaries.ts`), **or** delete the script if no longer needed.
+- [ ] Remove references to `/api/agent/plan-internal` from script header comments.
+- [ ] If kept, document required env vars and usage in the script header.
 
-Relevant files:
+**Phase 3 verification:**
+
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/routes/internal-operator.test.ts src/worker.test.ts`
+- [ ] Confirm no production import from `routes/` in `message-handlers/` or `workers/`.
+
+---
+
+## Phase 4: Consolidate Redis and BullMQ Connections
+
+**Problem:** Lazy singletons across webhooks, health, worker, agent locks, and queue diagnostics can open 7+ Redis connections per process on combined server+worker deploys.
+
+**Files:**
+
+- `apps/gateway/src/clients/redis-client.ts`
+- `apps/gateway/src/routes/webhooks-shared.ts`
+- `apps/gateway/src/index.ts`
+- `apps/gateway/src/worker.ts`
+- `apps/gateway/src/clients/agent-runtime.ts`
+- `apps/gateway/src/health.ts`
+- `apps/gateway/src/maintenance/queue-health.ts`
+- `apps/gateway/src/rate-limit.ts`
+
+**Tasks:**
+
+- [ ] Introduce shared module-level singletons: `getGatewayRedis()`, `getGatewayBullMqProducerConnection()`, `getGatewayBullMqWorkerConnection()`.
+- [ ] Refactor `webhooks-shared.ts` to reuse one BullMQ connection for `_messageQueue` and `_orderReviewQueue`; reuse the shared Redis client for rate limiting.
+- [ ] Refactor `index.ts` health checks to reuse the shared Redis client.
+- [ ] Refactor `agent-runtime.ts` lock Redis to reuse the shared client (or document why a separate connection is required).
+- [ ] Refactor `health.ts` queue diagnostics to reuse cached Queue instances instead of creating/closing per request.
+- [ ] Align worker bootstrap (`worker.ts`) with the same connection module.
+- [ ] Document expected connection count per runtime role (`server`, `worker`, `all`) in a code comment or README.
+- [ ] Add tests that verify singleton behavior (same instance returned on repeated calls).
+
+**Phase 4 verification:**
+
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/worker.test.ts src/maintenance/queue-health.test.ts src/routes/webhooks.test.ts`
+- [ ] Smoke test: `/health/deep` and webhook enqueue both work after refactor.
+
+---
+
+## Phase 5: Consolidate External API Clients
+
+**Problem:** Meta Graph, dashboard internal APIs, and provider sends are accessed through parallel ad-hoc patterns.
+
+### 5.1 Unify Meta Graph client
+
+**Files:**
+
+- `apps/gateway/src/clients/meta-graph.ts`
+- `apps/gateway/src/message-handlers/channels.ts`
+
+**Tasks:**
+
+- [ ] Add `fetchInstagramUserProfile(senderId, accessToken)` to `meta-graph.ts`.
+- [ ] Remove hardcoded `FB_GRAPH = 'https://graph.facebook.com/v22.0'` from `channels.ts`.
+- [ ] Call the shared client from `handleIgDmJob`.
+- [ ] Extend `clients/meta-graph.test.ts` for the new helper.
+
+### 5.2 Unify dashboard internal HTTP client
+
+**Files:**
+
+- `apps/gateway/src/message-handlers/planning-dashboard-client.ts`
+- `apps/gateway/src/routes/telegram/agent-execution.ts`
+- `apps/gateway/src/routes/telegram/digest-commands.ts`
+- `apps/gateway/src/routes/telegram/pending-plan-commands.ts`
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+
+**Tasks:**
+
+- [ ] Extend `planning-dashboard-client.ts` into a small `dashboard-internal-client.ts` with typed helpers for:
+  - `/api/agent/internal`
+  - `/api/messages/internal`
+  - `/api/agent/io-send-internal`
+  - Any other raw `fetch` calls to dashboard internal routes
+- [ ] Replace raw `fetch` + header boilerplate in Telegram routes and `agent-thread-sink.ts`.
+- [ ] Centralize auth headers (`x-internal-secret`) in the client.
+- [ ] Add unit tests for request construction and error handling.
+
+**Phase 5 verification:**
+
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/clients/meta-graph.test.ts src/routes/webhooks-telegram.test.ts src/worker.test.ts`
+
+---
+
+## Phase 6: Wire or Remove Half-Built Ops Alerts
+
+**Problem:** `ops-alerts.ts` defines `provider_send` and `agent_failure` categories with config thresholds, but only `queue_health` and `webhook_signature` are emitted in production. This overlaps with the error-tracking plan in `docs/production/error-tracking-plan.md`.
+
+**Files:**
+
+- `apps/gateway/src/ops-alerts.ts`
+- `apps/gateway/src/config/runtime-config.ts`
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+- `apps/gateway/src/clients/telegram-client.ts`
+- `apps/gateway/src/message-handlers/planning-notifications.ts`
+- `docs/production/error-tracking-plan.md`
+
+**Tasks:**
+
+- [ ] Decide policy: wire alerts now, or remove unused categories until error tracking lands.
+- [ ] If wiring:
+  - [ ] Emit `provider_send` on Telegram send failures (`telegram-client.ts`, `operator-notify.ts`).
+  - [ ] Emit `agent_failure` on tool dispatch failures in `agent-thread-sink.ts`.
+  - [ ] Document alert thresholds in operational guardrails.
+- [ ] If deferring:
+  - [ ] Remove `provider_send` and `agent_failure` from `OPS_ALERT_CATEGORIES` and runtime config.
+  - [ ] Remove associated tests or mark them as skipped with a link to the error-tracking plan.
+- [ ] Align with `docs/production/error-tracking-plan.md` so ops alerts and future Sentry integration do not duplicate.
+
+**Phase 6 verification:**
+
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/ops-alerts.test.ts src/routes/webhooks-signature-alerts.test.ts src/maintenance/queue-health.test.ts`
+
+---
+
+## Phase 7: Notification Failure Policy
+
+**Problem:** Operator notification failures are swallowed — jobs complete even when operators were not notified. Failures are invisible to BullMQ retry semantics.
+
+**Files:**
+
+- `apps/gateway/src/message-handlers/planning-notifications.ts`
+- `apps/gateway/src/message-handlers/planning.ts`
+- `apps/gateway/src/operator-notify.ts`
+- `apps/gateway/src/clients/telegram-client.ts`
+
+**Tasks:**
+
+- [ ] Document intentional vs. critical notification paths (plan alerts vs. auto-ack vs. escalation).
+- [ ] For critical paths (escalation, plan approval prompts): either fail the job (retry) or emit an ops alert on failure.
+- [ ] Change `telegram-client.sendMessage` to return a boolean or throw; let callers decide policy.
+- [ ] Update `planning-notifications.ts` and `planning.ts` `sendAutoAck` to match the documented policy.
+- [ ] Add tests for notification failure behavior.
+
+**Phase 7 verification:**
+
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/worker.test.ts src/routes/webhooks-telegram.test.ts`
+
+---
+
+## Phase 8: Slim Down God Files and Config Sprawl
+
+**Problem:** `queue-health.ts` (383 LOC) and `shared.ts` (316 LOC) carry type scaffolding and mixed concerns. Config reads are scattered across routes.
+
+### 8.1 Slim `queue-health.ts`
+
+**Files:**
+
+- `apps/gateway/src/maintenance/queue-health.ts`
+- `apps/gateway/src/lib/typing.ts` (from Phase 1)
+
+**Tasks:**
+
+- [ ] Move shared guards (`isRecord`, `readString`, normalizers) to `lib/typing.ts`.
+- [ ] Collapse internal-only interfaces that are not part of the public contract.
+- [ ] Keep exported surface: `checkGatewayQueueHealth`, registration helpers, and DI types needed for tests.
+- [ ] Target ~250 LOC or less without losing test coverage.
+
+### 8.2 Slim `message-handlers/shared.ts`
+
+**Files:**
 
 - `apps/gateway/src/message-handlers/shared.ts`
 
-Tasks:
+**Tasks:**
 
-- [x] Audit every caller that can omit `externalMessageId`.
-- [x] Decide the correct fallback behavior for Shopify and other provider events.
-- [x] Replace minute-bucket text fallback with a safer provider-specific key where available.
-- [x] Add tests for repeated identical inbound events that should remain distinct.
-- [x] Add tests for duplicate provider events that should still be deduplicated.
+- [ ] After Phase 1 moves `getInternalApiSecret` out, evaluate remaining responsibilities:
+  - Email classification / summarization
+  - Shopify customer lookup
+  - Inbound message persistence
+- [ ] Split into focused modules if a natural boundary exists (e.g. `inbound-persistence.ts`, `email-classifier.ts`) without over-abstracting.
+- [ ] Avoid creating one-line helper files.
 
-Phase 9 implementation notes:
+### 8.3 Group scattered env reads
 
-- `processInboundMessage` now deduplicates only when a real provider message or webhook ID is present. Missing IDs are persisted as `NULL` so repeated identical customer messages are not collapsed by a synthetic minute bucket.
-- Email uses Postmark `Message-ID` when present; IG uses Meta `mid` when present; Shopify order webhook jobs now carry `x-shopify-webhook-id` as `shopify:{shopDomain}:{webhookId}`.
-- Duplicate provider retries are still skipped by the existing partial unique index on non-null `messages.external_message_id`, with an extra create-time `P2002` guard for concurrent retries.
+**Files:**
 
-Phase 9 verification completed on 2026-06-06:
+- `apps/gateway/src/config/runtime-config.ts`
+- Route files reading Meta, Telegram, Postmark secrets inline
 
-- `npm run test:integration -w apps/gateway -- src/worker.test.ts src/routes/webhooks.test.ts`
-- `npm run lint -w apps/gateway`
-- `npm run build -w apps/gateway`
-- `npm run lint`
+**Tasks:**
 
-## Other Cleanup Items [COMPLETED]
+- [ ] Add grouped getters where env is read in more than one place: `getMetaWebhookConfig()`, `getTelegramConfig()`, `getPostmarkWebhookConfig()`.
+- [ ] Replace ad-hoc `process.env` reads in route handlers with config getters.
+- [ ] Extend `runtime-config.test.ts` for new getters.
 
+**Phase 8 verification:**
 
-  1. Dashboard typecheck cleanup [DONE 2026-06-06]
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run build -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway -- src/maintenance/queue-health.test.ts src/worker.test.ts src/config/runtime-config.test.ts`
 
-  The previously failing mechanical test typings are already fixed on the current branch:
-  `apps/dashboard/src/app/api/billing/checkout/route.test.ts` uses `NextRequest` in its helper;
-  `apps/dashboard/src/app/api/messages/route.test.ts` uses a typed Postmark `ServerClient` mock;
-  `apps/dashboard/src/lib/server/agent-lock.test.ts` and `apps/dashboard/src/lib/server/rate-limit.test.ts`
-  use `vi.mocked(getRedis)` instead of mixing value/type aliases.
+---
 
-  Item 1 follow-up implementation notes:
+## Phase 9: Trim Migration Narration and Test Debt
 
-  - Added `npm run typecheck -w apps/dashboard` and root `npm run typecheck` so `tsc --noEmit` is an explicit cleanup gate again.
-  - No additional code changes were required; the earlier failures were already resolved outside this pass.
+**Problem:** "Track 4.2" migration comments, stale test language, and a monolithic `worker.test.ts` (826 LOC) add maintenance cost.
 
-  Item 1 follow-up verification completed on 2026-06-06:
+### 9.1 Trim stale comments
 
-  - `npm run typecheck -w apps/dashboard`
-  - `npm run build -w apps/dashboard`
-  - `npm run lint -w apps/dashboard`
+**Files:**
 
-  2. Finish the API body-validation pass [DONE 2026-06-06]
+- `apps/gateway/src/message-handlers/generate-thread-plan.ts`
+- `apps/gateway/src/message-handlers/agent-turn-deps.ts`
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+- `apps/gateway/src/routes/internal-operator.ts`
+- `apps/gateway/src/clients/agent-runtime.ts`
+- `apps/gateway/src/workers/order-review.ts`
+- `apps/gateway/src/maintenance/order-risk-monitor.ts`
+- `apps/gateway/src/routes/webhooks-shopify.ts`
 
-  Phase 3 missed several write routes that still call request.json() directly:
-  apps/dashboard/src/app/api/messages/route.ts:18, apps/dashboard/src/app/api/messages/internal/route.ts:23, apps/dashboard/src/app/api/messages/auto-ack/
-  route.ts:24, apps/dashboard/src/app/api/ai/summary/route.ts:14, apps/dashboard/src/app/api/integrations/route.ts:62, apps/dashboard/src/app/api/shopify/
-  customer/route.ts:51, apps/dashboard/src/app/api/shopify/customers/route.ts:63, and apps/dashboard/src/app/api/customers/[id]/memory/route.ts:65.
+**Tasks:**
 
-  Use readRequiredJsonObject/route validators consistently and add malformed JSON tests for these routes.
+- [ ] Replace long "Track 4.2" migration narration with brief "why" comments.
+- [ ] Link to `docs/core-extraction-and-module-expansion-plan.md` where historical context is still useful.
+- [ ] Remove references to replaced HTTP hops (`plan-internal`, dashboard sink) from inline comments.
 
-  Phase 3 follow-up implementation notes:
+### 9.2 Simplify Telegram command parser dead path
 
-  - Shared route validators now live beside each route group: `messages/_lib/validation.ts`, `ai/summary/_lib/validation.ts`, `integrations/_lib/validation.ts`, `shopify/customer/_lib/validation.ts`, and `customers/_lib/validation.ts`.
-  - All eight write routes now parse bodies through `readRequiredJsonObject` plus route validators instead of direct `request.json()` calls.
-  - Malformed JSON failure-path tests were added for every updated route.
+**Files:**
 
-  Phase 3 follow-up verification completed on 2026-06-06:
+- `apps/gateway/src/routes/telegram/command-parser.ts`
+- `apps/gateway/src/routes/telegram/message-handler.ts`
 
-  - `npm run test:integration -w apps/dashboard -- src/app/api/messages/route.test.ts src/app/api/messages/internal/route.test.ts src/app/api/messages/auto-ack/route.test.ts src/app/api/ai/summary/route.test.ts src/app/api/integrations/route.test.ts src/app/api/shopify/customer/route.test.ts src/app/api/shopify/customers/route.test.ts src/app/api/customers/[id]/memory/route.test.ts`
-  - `npm run lint -w apps/dashboard`
+**Tasks:**
 
-  3. Collapse duplicated client request/workflow code [DONE 2026-06-06]
+- [ ] Remove unused `free-form` discriminant from `parseTelegramCommand` return type, or use it explicitly in the handler.
+- [ ] Add/update tests in `command-parser.test.ts`.
 
-  There is already a shared client API helper in apps/dashboard/src/lib/api/fetcher.ts:55, but apps/dashboard/src/app/dashboard/tickets/_hooks/
-  useTicketActions.ts:25 defines its own requestOk path and repeats optimistic mutation/error handling across many handlers. apps/dashboard/src/app/dashboard/
-  tickets/_hooks/useConversationAgentFlow.ts:111 also repeats direct fetch/JSON/error-to-turn conversion for /api/agent, /ask, and /plan.
+### 9.3 Split `worker.test.ts`
 
-  Also, Products/Orders/Customers repeat the same debounced search + cursor pagination shape:
-  apps/dashboard/src/app/dashboard/products/_components/ProductsPageClient.tsx:65, apps/dashboard/src/app/dashboard/orders/_components/OrdersPageClient.tsx:52,
-  apps/dashboard/src/app/dashboard/customers/_components/CustomersPageClient.tsx:16.
+**Files:**
 
-  Item 3 follow-up implementation notes:
+- `apps/gateway/src/worker.test.ts`
 
-  - Shared mutation helper `requestOk` now lives in `apps/dashboard/src/lib/api/fetcher.ts`; ticket actions use it with `errorMessageFromUnknown`.
-  - Ticket composer agent calls moved to `apps/dashboard/src/app/dashboard/tickets/_hooks/conversation-agent-requests.ts`.
-  - Debounced search + cursor pagination now use `apps/dashboard/src/lib/api/use-cursor-list-state.ts` in Products, Orders, and Customers.
-  - Products load-more pagination now uses `product-requests.ts`, matching the existing orders/customers request helpers.
+**Tasks:**
 
-  Item 3 follow-up verification completed on 2026-06-06:
+- [ ] Extract shared fixtures into `src/test-fixtures/` or a `worker-test-helpers.ts`.
+- [ ] Split by worker concern: inbound, ai-summary, order-review.
+- [ ] Add focused tests for `generateThreadPlan` auto-execute path if not covered after split.
+- [ ] Add shared `makeTestOpsAlertConfig()` helper for ops-alert test files.
 
-  - `npm run test:unit -w apps/dashboard -- src/lib/api/fetcher.unit.test.ts src/app/dashboard/tickets/_hooks/conversation-agent-requests.unit.test.ts src/app/dashboard/tickets/_hooks/useConversationAgentFlow.unit.test.ts`
-  - `npm run lint -w apps/dashboard`
+**Phase 9 verification:**
 
-  4. Split the agent tool registry without losing the registry contract [DONE 2026-06-06]
+- [ ] `npm run lint -w apps/gateway`
+- [ ] `npm run test:integration -w apps/gateway`
+- [ ] Confirm total test count and coverage are unchanged or improved.
 
-  Tool definitions now live in domain modules under `packages/agent/src/tools/registry/`:
-  `knowledge.ts`, `product.ts`, `customer.ts`, `order.ts`, `thread.ts`, and `messaging.ts`.
-  Shared input types, schema DSL, validation, and context helpers live beside them in
-  `types.ts`, `schema.ts`, and `helpers.ts`. `packages/agent/src/tools/registry/index.ts`
-  keeps the single registry contract: it assembles `TOOL_DEFINITIONS` and the derived maps
-  (`TOOL_CATEGORIES`, `TOOL_GROUPS`, labels, Anthropic schemas, and selection helpers).
-  The assembler lives inside the directory so it does not shadow the domain modules under
-  the repo module-structure lint rule.
+---
 
-  Item 4 follow-up verification completed on 2026-06-06:
+## Suggested PR Order
 
-  - `npm run test:unit -w packages/agent -- src/tools/registry.test.ts src/tools/executor.test.ts`
-  - `npm run test:unit -w packages/agent`
-  - `npm run lint -w packages/agent`
-  - `npm run build -w packages/agent`
+| Order | Phase | Effort | Risk |
+|-------|-------|--------|------|
+| 1 | Phase 1 — Quick wins | 1–2 days | Low |
+| 2 | Phase 2 — WhatsApp → Telegram naming | 0.5–1 day | Medium (BullMQ job migration) |
+| 3 | Phase 3 — Layer fixes and stale script | 0.5–1 day | Low |
+| 4 | Phase 5 — API client consolidation | 1–2 days | Low |
+| 5 | Phase 4 — Redis singleton | 2–3 days | Medium |
+| 6 | Phase 6 — Ops alerts decision | 0.5–1 day | Low |
+| 7 | Phase 7 — Notification failure policy | 1 day | Medium |
+| 8 | Phase 8 — Slim god files and config | 1–2 days | Low |
+| 9 | Phase 9 — Comments and test split | 1–2 days | Low |
 
-  5. Centralize observability redaction and fix OAuth logging [DONE 2026-06-06]
+Phases 4 and 5 can run in parallel if different owners; Phase 6 should align with the error-tracking plan before Sentry work begins.
 
-  Dashboard and gateway had duplicated redaction modules. OAuth callbacks also logged raw provider payloads.
+---
 
-  Item 5 follow-up implementation notes:
+## Out of Scope
 
-  - Shared redaction now lives in `@shopkeeper/agent/observability`: `PINO_REDACT_PATHS` and `scrubValue`.
-  - Dashboard and gateway loggers import the shared module; the duplicate app-local redaction files were removed.
-  - Email, Instagram, and Shopify OAuth failure/info logs now pass provider payloads through `scrubValue` before logging.
+These items were reviewed and are **not** part of this plan:
 
-  Item 5 follow-up verification completed on 2026-06-06:
+- Dashboard or agent package cleanup (covered by the previous cleanup tracker, now complete).
+- New features or error-tracking implementation (see `docs/production/error-tracking-plan.md`).
+- Renaming BullMQ queue names beyond the digest queue (inbound, ai-summary, etc. are correctly named).
+- SMS channel support (no implementation exists; remove dead constant only).
 
-  - `npm run test:unit -w packages/agent -- src/observability/redaction.test.ts`
-  - `npm run lint -w packages/agent`
-  - `npm run lint -w apps/dashboard`
-  - `npm run lint -w apps/gateway`
-  - `npm run build -w packages/agent`
+---
 
-  6. Consolidate lock-provider implementation [DONE 2026-06-06]
+## Completion Criteria
 
-  Dashboard and gateway duplicated timeout/release/no-op lock logic behind the shared `@shopkeeper/agent/lock` interface.
+The gateway cleanup is done when:
 
-  Item 6 follow-up implementation notes:
-
-  - Shared token-lock behavior now lives in `@shopkeeper/agent/lock/redis` via `createRedisLockProvider`.
-  - Upstash and ioredis adapters are tiny `setNxEx` / `evalRelease` wrappers; dashboard and gateway keep only host-specific Redis client wiring.
-  - Dashboard `upstashLockProvider` and gateway `createGatewayLockProvider` both delegate to the shared provider.
-
-  Item 6 follow-up verification completed on 2026-06-06:
-
-  - `npm run test:unit -w packages/agent -- src/lock/redis-lock.test.ts`
-  - `npm run test:integration -w apps/dashboard -- src/lib/server/agent-lock.test.ts`
-  - `npm run test:unit -w packages/agent`
-  - `npm run lint -w packages/agent`
-  - `npm run lint -w apps/dashboard`
-  - `npm run lint -w apps/gateway`
-  - `npm run build -w packages/agent`
-  - `npm run build -w apps/gateway`
-
-  7. Clean stale package-surface comments and barrels [DONE 2026-06-06]
-
-  packages/agent/src/index.ts:1 still says “Track 2 extraction, in progress” and exports a broad root barrel at packages/agent/src/index.ts:13. After the
-  extraction work, tighten the public surface or at least update the comment to reflect current ownership.
-
-  Item 7 follow-up implementation notes:
-
-  - The root `@shopkeeper/agent` export now re-exports shared domain types only; runtime modules stay on explicit subpaths.
-  - `packages/agent/README.md` documents the root type surface, supported subpaths, and private-module convention.
-  - Dashboard `@/types` now imports agent domain types from `@shopkeeper/agent/types`.
-
-  Item 7 follow-up verification completed on 2026-06-06:
-
-  - `npm run build -w packages/agent`
-  - `npm run lint -w packages/agent`
-  - `npm run lint -w apps/dashboard`
-  - `npm run test:unit -w apps/dashboard -- src/types/db-types.unit.test.ts`
-  - `npm run typecheck -w apps/dashboard`
-
-  8. Move remaining provider fetches behind small clients [DONE 2026-06-06]
-
-  The Shopify order-risk backstop explicitly bypasses the Shopify seam at apps/gateway/src/maintenance/order-risk-monitor.ts:17 and builds a raw Admin API URL at
-  apps/gateway/src/maintenance/order-risk-monitor.ts:28. Meta token health also builds token-bearing URLs directly at apps/gateway/src/maintenance/token-
-  health.ts:31. This is lower priority than API validation/typecheck, but worth cleaning once the bigger gates are green.
-
-  Item 8 follow-up implementation notes:
-
-  - `listRecentUnfulfilledOrderIds` now lives in `@shopkeeper/agent/shopify`; the order-risk backstop uses the shared Shopify REST client.
-  - Gateway Meta Graph calls for token health now go through `apps/gateway/src/clients/meta-graph.ts` with encoded query params.
-  - Focused unit tests cover the Shopify list helper and Meta token-health client paths.
-
-  Item 8 follow-up verification completed on 2026-06-06:
-
-  - `npm run test:unit -w packages/agent -- src/shopify/orders.test.ts`
-  - `npm run test:integration -w apps/gateway -- src/clients/meta-graph.test.ts`
-  - `npm run lint -w packages/agent`
-  - `npm run lint -w apps/gateway`
-  - `npm run build -w packages/agent`
-  - `npm run build -w apps/gateway`
-
-  Suggested Order
-
-  1. Typecheck cleanup. [DONE 2026-06-06]
-  2. Remaining API body validation. [DONE 2026-06-06]
-  3. Client request/pagination hook cleanup. [DONE 2026-06-06]
-  4. Agent registry split. [DONE 2026-06-06]
-  5. Redaction/OAuth logging and lock-provider consolidation. [DONE 2026-06-06]
-  6. Agent package surface cleanup. [DONE 2026-06-06]
-  7. Provider-client cleanup. [DONE 2026-06-06]
-
-## Post-audit fix (2026-06-06)
-
-- Moved the tool registry assembler from `packages/agent/src/tools/registry.ts` into
-  `packages/agent/src/tools/registry/index.ts` so the domain modules and assembler share one
-  directory without triggering the module-structure lint rule.
-- Updated agent imports to use explicit `./registry/index.js` paths, matching the package's
-  NodeNext convention.
-
-Verification:
-
-- `npm run lint`
-- `npm run build -w packages/agent`
-- `npm run test:unit -w packages/agent -- src/tools/registry.test.ts src/tools/executor.test.ts`
+- [ ] No worker or message-handler module imports from `routes/`.
+- [ ] All dashboard internal API calls go through a shared client with centralized auth.
+- [ ] Redis connection count is documented and bounded per runtime role.
+- [ ] No stale WhatsApp naming in code, tests, or runbooks.
+- [ ] Ops alert categories are either wired or removed — no half-built config.
+- [ ] Unknown inbound platforms fail loudly.
+- [ ] `backfill-plans.ts` is rewritten or deleted.
+- [ ] `npm run lint`, `npm run build -w apps/gateway`, and `npm run test:integration -w apps/gateway` all pass.

@@ -14,7 +14,7 @@ import { updateContext, getContext } from '../operator-context.js';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 // In-memory backing store for the ioredis mock so the /start bind flow can
 // round-trip telegram:bind:<token> values.
-const { mockLogger, redisStore, incrStore, sendMessageSpy } = vi.hoisted(() => ({
+const { mockLogger, redisStore, incrStore, sendMessageSpy, executeOperatorAgentTurnSpy } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -24,6 +24,11 @@ const { mockLogger, redisStore, incrStore, sendMessageSpy } = vi.hoisted(() => (
   redisStore: new Map<string, string>(),
   incrStore: new Map<string, number>(),
   sendMessageSpy: vi.fn().mockResolvedValue(undefined),
+  executeOperatorAgentTurnSpy: vi.fn().mockResolvedValue({
+    summary: 'Done.',
+    threadId: '00000000-0000-4000-8000-000000000001',
+    actionsPerformed: [],
+  }),
 }));
 
 vi.mock('ioredis', () => ({
@@ -75,6 +80,10 @@ vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
 
+vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
+  executeOperatorAgentTurn: executeOperatorAgentTurnSpy,
+}));
+
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 
 function createApp() {
@@ -119,6 +128,12 @@ beforeEach(async () => {
   redisStore.clear();
   incrStore.clear();
   sendMessageSpy.mockClear();
+  executeOperatorAgentTurnSpy.mockClear();
+  executeOperatorAgentTurnSpy.mockResolvedValue({
+    summary: 'Done.',
+    threadId: '00000000-0000-4000-8000-000000000001',
+    actionsPerformed: [],
+  });
   mockLogger.debug.mockClear();
   mockLogger.error.mockClear();
   mockLogger.info.mockClear();
@@ -321,33 +336,32 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       },
     });
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ summary: 'Refunded.' }), { status: 200 }),
-    );
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      summary: 'Refunded.',
+      threadId,
+      actionsPerformed: [],
+    });
 
-    try {
-      await request(app)
-        .post('/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
 
-      // Filler reply first, then the agent summary reply.
-      await waitForReplies(2);
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(url).toMatch(/\/api\/agent\/internal$/);
-      const body = JSON.parse(init.body as string);
-      expect(body.threadId).toBe(threadId);
-      expect(body.approvedToolCalls).toEqual([{ id: 'tc1', name: 'refundOrder', amount: 5 }]);
-      expect(body.clerkUserId).toBe(`usr_${chatId}`);
-      expect(lastReplyText()).toBe('Refunded.');
+    // Filler reply first, then the agent summary reply.
+    await waitForReplies(2);
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
+      orgId: org.id,
+      threadId,
+      instruction: 'refund #1',
+      approvedToolCalls: [{ id: 'tc1', name: 'refundOrder', input: { amount: 5 } }],
+      clerkUserId: `usr_${chatId}`,
+    });
+    expect(lastReplyText()).toBe('Refunded.');
 
-      const ctx = await getContext(org.id, chatId);
-      expect(ctx.pendingPlan).toBeNull();
-      expect(ctx.lastThreadId).toBe(threadId);
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    const ctx = await getContext(org.id, chatId);
+    expect(ctx.pendingPlan).toBeNull();
+    expect(ctx.lastThreadId).toBe(threadId);
   });
 
   it('"skip 1" drops the first actionable tool call', async () => {
@@ -366,23 +380,17 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       },
     });
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ summary: 'Done.' }), { status: 200 }),
-    );
-    try {
-      await request(app)
-        .post('/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
 
-      await waitForReplies(2);
-      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(init.body as string);
-      const ids = (body.approvedToolCalls as Array<{ id: string }>).map((tc) => tc.id);
-      expect(ids).toEqual(['r1', 'a2']);
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    await waitForReplies(2);
+    const call = executeOperatorAgentTurnSpy.mock.calls[0]?.[0] as {
+      approvedToolCalls: Array<{ id: string }>;
+    };
+    const ids = call.approvedToolCalls.map((tc) => tc.id);
+    expect(ids).toEqual(['r1', 'a2']);
   });
 
   it('"no" clears pendingPlan without calling the agent', async () => {
@@ -391,22 +399,16 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await updateContext(org.id, chatId, {
       pendingPlan: { threadId: 't', instruction: 'i', rawToolCalls: [] },
     });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
 
-    try {
-      await request(app)
-        .post('/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
-
-      await waitForReplies(1);
-      expect(lastReplyText()).toMatch(/dismissed/i);
-      expect(fetchSpy).not.toHaveBeenCalled();
-      const ctx = await getContext(org.id, chatId);
-      expect(ctx.pendingPlan).toBeNull();
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    await waitForReplies(1);
+    expect(lastReplyText()).toMatch(/dismissed/i);
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
+    const ctx = await getContext(org.id, chatId);
+    expect(ctx.pendingPlan).toBeNull();
   });
 });
 
@@ -604,7 +606,7 @@ describe('POST /webhooks/telegram — order lookup', () => {
 
 // ── Free-form instruction ────────────────────────────────────────────────────
 describe('POST /webhooks/telegram — free-form instruction', () => {
-  it('forwards arbitrary text to /api/agent/internal and updates history', async () => {
+  it('runs arbitrary text in-process and updates history', async () => {
     const chatId = '8000001';
     const member = await db.orgMember.create({
       data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
@@ -613,32 +615,31 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
       data: { orgMemberId: member.id, chatId },
     });
     const newThreadId = '00000000-0000-4000-8000-000000000099';
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ summary: 'Looked it up.', threadId: newThreadId }), { status: 200 }),
-    );
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      summary: 'Looked it up.',
+      threadId: newThreadId,
+      actionsPerformed: [],
+    });
 
-    try {
-      await request(app)
-        .post('/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'how many orders today?' } });
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'how many orders today?' } });
 
-      await waitForReplies(2);
-      expect(fetchSpy).toHaveBeenCalledOnce();
-      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(url).toMatch(/\/api\/agent\/internal$/);
-      const body = JSON.parse(init.body as string);
-      expect(body.instruction).toBe('how many orders today?');
-      expect(body.senderPhone).toBe(`telegram:${chatId}`);
-      expect(lastReplyText()).toBe('Looked it up.');
+    await waitForReplies(2);
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
+      orgId: org.id,
+      instruction: 'how many orders today?',
+      senderPhone: `telegram:${chatId}`,
+      clerkUserId: `usr_${chatId}`,
+    });
+    expect(lastReplyText()).toBe('Looked it up.');
 
-      const ctx = await getContext(org.id, chatId);
-      expect(ctx.lastThreadId).toBe(newThreadId);
-      expect(ctx.history.map((m) => m.content)).toContain('how many orders today?');
-      expect(ctx.history.map((m) => m.content)).toContain('Looked it up.');
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    const ctx = await getContext(org.id, chatId);
+    expect(ctx.lastThreadId).toBe(newThreadId);
+    expect(ctx.history.map((m) => m.content)).toContain('how many orders today?');
+    expect(ctx.history.map((m) => m.content)).toContain('Looked it up.');
   });
 });
 
@@ -660,20 +661,15 @@ describe('POST /webhooks/telegram — per-chatId rate limit', () => {
     });
     primeCounter(chatId, 30);
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    try {
-      const res = await request(app)
-        .post('/webhooks/telegram')
-        .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hi' } });
+    const res = await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hi' } });
 
-      expect(res.status).toBe(200);
-      await new Promise((r) => setTimeout(r, 30));
-      expect(sendMessageSpy).not.toHaveBeenCalled();
-      expect(fetchSpy).not.toHaveBeenCalled();
-    } finally {
-      fetchSpy.mockRestore();
-    }
+    expect(res.status).toBe(200);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(sendMessageSpy).not.toHaveBeenCalled();
+    expect(executeOperatorAgentTurnSpy).not.toHaveBeenCalled();
   });
 
   it('allows requests under the limit', async () => {

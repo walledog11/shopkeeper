@@ -1,6 +1,6 @@
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { runAgent } from '@shopkeeper/agent/run';
-import type { ExecuteTurnRunAgent } from '@shopkeeper/agent/turn';
+import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from '@shopkeeper/agent/turn';
 import type { PlanExecutionDeps, ShadowRecorder } from '@shopkeeper/agent/plan-execution';
 import type { AgentContext } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../clients/agent-runtime.js';
@@ -27,12 +27,18 @@ const noopShadow: ShadowRecorder = {
   resolveShadowDecisionOnApproval: async () => {},
 };
 
-export function buildGatewayPlanExecutionDeps(): PlanExecutionDeps {
+export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
   return {
     lock: getGatewayLockProvider(),
     buildContext: (threadId: string, orgId: string): Promise<AgentContext> =>
       buildContext(threadId, orgId, gatewayThreadSink),
     runAgent: gatewayRunAgent,
+  };
+}
+
+export function buildGatewayPlanExecutionDeps(): PlanExecutionDeps {
+  return {
+    ...buildGatewayTurnDeps(),
     shadow: noopShadow,
   };
 }

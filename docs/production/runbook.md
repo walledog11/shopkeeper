@@ -337,7 +337,7 @@ Do not check off the PITR item until the retention window is recorded here or in
 
 ### Ops Alert Log Routing
 
-Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Route Vercel and Railway log drains to your launch owner (for example Better Stack log keyword alerts on `opsAlert` and `category`).
+Ops alerts emit structured Pino logs with `opsAlert: true` and stable `category`, `service`, `tags`, `extra`, and `fingerprint` fields. Route Vercel and Railway log drains to Better Stack and create keyword alert rules on `opsAlert` and `category` (see [error-tracking-plan.md](error-tracking-plan.md)).
 
 Alert categories:
 

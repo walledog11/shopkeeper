@@ -169,7 +169,7 @@ describe("POST /api/agent/quick-approve", () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
-  it("rejects auto-execute plans (server-side auto-execute runs via plan-internal, not this route)", async () => {
+  it("rejects auto-execute plans (server-side auto-execute runs in the gateway worker, not this route)", async () => {
     const plan: AgentPlan = {
       instruction: "Handle this",
       steps: [{

@@ -22,8 +22,7 @@ const FAILURE_ROUTE = 'gateway:auto-plan';
 
 // The core returns @shopkeeper/agent's AgentPlan; the gateway's local AgentPlan is the
 // looser JSON-shaped view its operator-notification path consumes (index-signature
-// rawToolCalls). The data is identical — this is the same widening the old
-// plan-internal HTTP boundary did implicitly via JSON.parse.
+// rawToolCalls). The data is identical at runtime — only the TypeScript view differs.
 function toGatewayPlan(plan: PackageAgentPlan | null): AgentPlan | null {
   return plan as unknown as AgentPlan | null;
 }
@@ -38,11 +37,9 @@ export interface GeneratedThreadPlan {
   autoExecutionError?: string;
 }
 
-// In-process replacement for the plan-internal HTTP hop (Track 4.2). Mirrors
-// apps/dashboard/src/app/api/agent/plan-internal/route.ts: resolve the thread +
-// settings, serve the plan cache when warm, otherwise plan and cache it, then
-// (when within business hours) auto-execute via the moved orchestration with the
-// gateway's ioredis lock + no-op shadow.
+// In-process auto-plan (Track 4.2): resolve the thread + settings, serve the plan
+// cache when warm, otherwise plan and cache it, then (when within business hours)
+// auto-execute via the moved orchestration with the gateway's ioredis lock + no-op shadow.
 export async function generateThreadPlan(
   organizationId: string,
   threadId: string,

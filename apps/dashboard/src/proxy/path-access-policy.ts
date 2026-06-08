@@ -15,8 +15,9 @@ export const publicRoutePatterns = [
   "/api/webhooks(.*)",
   "/api/integrations/shopify/callback(.*)",
   "/api/integrations/instagram/callback(.*)",
-  "/api/agent/plan-internal(.*)",
-  "/api/agent/internal(.*)",
+  "/api/agent/io-send-internal(.*)",
+  "/api/messages/auto-ack(.*)",
+  "/api/messages/internal(.*)",
 ] as const;
 
 const signedInNoOrgRoutePatterns = [
