@@ -3,7 +3,6 @@ import * as Sentry from '@sentry/node';
 import { db } from '@shopkeeper/db';
 import webhookRoutes from './routes/webhooks.js';
 import internalOperatorRoutes from './routes/internal-operator.js';
-import internalCustomerMemoryRoutes from './routes/internal-customer-memory.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
 import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
@@ -126,7 +125,6 @@ export async function startGatewayServer() {
 
   app.use('/webhooks', webhookRoutes);
   app.use('/internal', internalOperatorRoutes);
-  app.use('/internal', internalCustomerMemoryRoutes);
 
   // During local dev, ngrok points to this gateway (port 8080) but dashboard OAuth
   // callbacks arrive here. Forward them to the dashboard so the OAuth flow completes.

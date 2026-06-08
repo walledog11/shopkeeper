@@ -27,7 +27,6 @@ function threadlessCtx(escalate: (reason: string) => Promise<void>): BaseAgentCo
   return {
     orgId: "org_1",
     orgName: "Test Store",
-    customerMemory: null,
     recentMessages: [],
     shopify: null,
     escalate,

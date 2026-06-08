@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { db, isEmptyMemory, SenderType, type DbChannelType, type DbSenderType } from "@shopkeeper/db";
+import { db, SenderType, type DbChannelType, type DbSenderType } from "@shopkeeper/db";
 import {
   createTestOrg,
   createTestCustomer,
@@ -297,7 +297,6 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
       name: setup.customerName ?? null,
       platformId: setup.customerPlatformId ?? "customer@test.com",
     },
-    customerMemory: setup.customerMemory && !isEmptyMemory(setup.customerMemory) ? setup.customerMemory : null,
     recentMessages: setup.messages.map((m) => ({
       senderType: m.senderType,
       contentText: m.contentText,
@@ -516,15 +515,6 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
       fixture.setup.customerPlatformId ?? "customer@test.com",
       fixture.setup.customerName ? { name: fixture.setup.customerName } : {},
     );
-    if (fixture.setup.customerMemory) {
-      await db.customer.update({
-        where: { id: customer.id },
-        data: {
-          memory: JSON.parse(JSON.stringify(fixture.setup.customerMemory)),
-          memoryUpdatedAt: new Date(),
-        },
-      });
-    }
     const thread = await createTestThread(org.id, customer.id, channel, { tag: fixture.setup.tag });
 
     const createFixtureMessages = async (index: number): Promise<void> => {
@@ -643,7 +633,6 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
         replyText,
         context: {
           orgSettings: resolved,
-          customerMemory: ctx.customerMemory,
           recentMessages: ctx.recentMessages,
         },
       });

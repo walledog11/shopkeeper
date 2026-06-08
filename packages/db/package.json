@@ -13,10 +13,6 @@
     "./test-helpers": {
       "types": "./dist/test-helpers.d.ts",
       "default": "./dist/test-helpers.js"
-    },
-    "./customer-memory": {
-      "types": "./dist/customer-memory.d.ts",
-      "default": "./dist/customer-memory.js"
     }
   },
   "scripts": {

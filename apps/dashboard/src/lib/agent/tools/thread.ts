@@ -1,9 +1,8 @@
 import { db, SenderType, createMessage } from "@shopkeeper/db";
-import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS, isOperatorChannel } from "@shopkeeper/agent/thread-constants";
+import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agent/thread-constants";
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
-import { enqueueCustomerMemoryForClosedThreads } from "@/lib/server/customer-memory";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
 import { buildThreadReplyHeaders, formatReplySubject } from "@/lib/messaging/email/reply";
 import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
@@ -215,17 +214,10 @@ export async function updateThreadStatus(
   input: UpdateThreadStatusInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  const updated = await db.thread.update({
+  await db.thread.update({
     where: { id: ctx.threadId },
     data: { status: input.status },
-    select: { updatedAt: true, channelType: true },
   });
-  if (input.status === THREAD_STATUS.CLOSED && !isOperatorChannel(updated.channelType)) {
-    await enqueueCustomerMemoryForClosedThreads({
-      organizationId: ctx.orgId,
-      threads: [{ threadId: ctx.threadId, closedAt: updated.updatedAt }],
-    });
-  }
   return toolOk(`Thread status updated to "${input.status}".`);
 }
 

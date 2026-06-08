@@ -222,24 +222,6 @@ export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
 export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
 export { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from './refund-spend.js';
 export {
-  CUSTOMER_MEMORY_VERSION,
-  EMPTY_MEMORY,
-  KEY_FACTS_MAX,
-  KEY_FACT_MAX_CHARS,
-  OUTCOME_MAX_CHARS,
-  RECENT_INTERACTIONS_MAX,
-  SUMMARY_MAX_CHARS,
-  boundMemory,
-  isEmptyMemory,
-  parseStoredMemory,
-  toCustomerMemoryJson,
-} from './customer-memory.js';
-export type {
-  CustomerMemory,
-  CustomerMemoryInteraction,
-  CustomerMemoryPolicyFlags,
-} from './customer-memory.js';
-export {
   BRAND_VOICE_MAX_CHARS,
   VOICE_RATIONALE_MAX_CHARS,
   VOICE_SYNTHESIS_MIN_EDITS,

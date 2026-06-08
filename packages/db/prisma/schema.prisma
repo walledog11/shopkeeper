@@ -173,8 +173,6 @@ model Customer {
   profilePicUrl   String?   @map("profile_pic_url") @db.Text
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
-  memory          Json?     @default("{}") @db.JsonB
-  memoryUpdatedAt DateTime? @map("memory_updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   threads      Thread[]
@@ -183,7 +181,6 @@ model Customer {
   @@unique([organizationId, platformId])
   @@index([organizationId])
   @@index([deletedAt])
-  @@index([organizationId, memoryUpdatedAt])
   @@map("customers")
 }
 

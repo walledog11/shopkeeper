@@ -7,10 +7,7 @@ contracts that must stay aligned across dashboard, gateway, and agent code.
 
 - `@shopkeeper/db` is the primary public surface. Import the DB client, Prisma
   runtime, Prisma enum runtimes and value types, message helper, token helpers,
-  spend helpers, refund helpers, customer-memory contract, and voice-proposal
-  contract from the root.
-- `@shopkeeper/db/customer-memory` is a public subpath for UI code that needs the
-  customer-memory contract without importing the DB client wrapper.
+  spend helpers, refund helpers, and voice-proposal contract from the root.
 - `@shopkeeper/db/test-helpers` is a public test-only subpath for integration tests.
 
 ## Private modules

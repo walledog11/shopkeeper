@@ -101,3 +101,67 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
   - Root `npm run verify:pr` already runs lint, unit tests, integration tests, e2e smoke, coverage, and build.
   - Document the official pre-release command sequence, including `npx prisma validate`, `npm run verify:production:env`, and `npm run test:integration`.
   - Record known sandbox-only caveats, such as Next/Turbopack needing permission to bind an internal worker port during build.
+
+## Customer Memory Removal
+
+Remove the customer memory feature end-to-end. Ticket view should have **one summary** — the per-ticket `aiSummary` in the main conversation column. The context sidebar keeps customer identity, Shopify data, and recent tickets only.
+
+Two concepts exist today:
+
+| | Thread summary | Customer memory |
+|---|---|---|
+| Field | `threads.aiSummary` | `customers.memory` |
+| Scope | This ticket | Cross-ticket |
+| User-visible | Yes (main column) | Yes (sidebar, editable) |
+| Auto-generated | Yes | Yes (on close + daily refresh) |
+| Manual edit | No | Yes (PATCH API) |
+
+### PR 1 — Remove UI and dashboard API (user-facing)
+
+- [X] Delete `CustomerMemoryPanel.tsx`
+- [X] Delete `GET` + `PATCH` at `apps/dashboard/src/app/api/customers/[id]/memory/route.ts` (+ its test)
+- [X] Delete memory validation in `apps/dashboard/src/app/api/customers/_lib/validation.ts`
+- [X] Remove `<CustomerMemoryPanel />` from `ContextPanel.tsx`
+
+**Result:** Sidebar no longer shows "WHAT WE KNOW." Only thread summary remains in the main column.
+
+### PR 2 — Stop triggering memory updates
+
+- [X] Delete `apps/dashboard/src/lib/server/customer-memory.ts` (+ test)
+- [X] Remove enqueue calls from `threads/[id]/route.ts`, `threads/bulk/route.ts`, `lib/agent/tools/thread.ts`, and `gateway/message-handlers/agent-thread-sink.ts`
+- [X] Delete `apps/gateway/src/routes/internal-customer-memory.ts` (+ test) and unregister from `apps/gateway/src/index.ts`
+
+**Result:** Closing tickets no longer fires memory jobs.
+
+### PR 3 — Remove gateway workers and agent integration
+
+- [X] Delete gateway maintenance module: `customer-memory.ts`, `customer-memory-summarizer.ts` (+ tests)
+- [X] Remove `registerCustomerMemoryMaintenanceJob` from `maintenance/workers.ts`
+- [X] Remove `QUEUE.CUSTOMER_MEMORY*`, `JOB.UPDATE_CUSTOMER_MEMORY*`, `MODEL.CUSTOMER_MEMORY` from gateway constants
+- [X] Remove `customerMemory` from agent runtime: `agent-context.ts`, `context.ts`, `prompt.ts`, `order-ops/context.ts`
+- [X] Update agent and dashboard agent tests/evals that stub `customerMemory`
+
+**Result:** No LLM spend on background customer summarization. Agent relies on `thread.aiSummary`, messages, Shopify orders, KB, and open thread count.
+
+### PR 4 — Database cleanup
+
+- [X] Delete `packages/db/customer-memory.ts` and exports from `packages/db/index.ts`
+- [X] Prisma migration: drop `customers.memory`, `customers.memoryUpdatedAt`, and the `(organizationId, memoryUpdatedAt)` index
+- [ ] Drain/clear BullMQ queues `customer-memory` and `customer-memory-refresh` in Redis (one-time ops step after deploy)
+  - Remove repeatable job `customer-memory-stale-refresh-daily` from queue `customer-memory-refresh`
+  - Obliterate both queues so no stale jobs remain
+
+**Deploy order:** PR 3 before PR 4 (code must not reference columns before migration).
+
+### Optional follow-up (not blocking)
+
+If agent quality regresses after removal, add a read-only substitute at context build time: fetch last 3 closed threads for the customer and inject their `aiSummary` + `tag` into the prompt. No new queues, no editable UI, no LLM maintenance jobs.
+
+### Verification checklist
+
+- [ ] Open a ticket — sidebar has no "WHAT WE KNOW"; main column still shows thread summary
+- [ ] Resolve a ticket — no calls to `/internal/customer-memory/*`; no jobs in `customer-memory` queue
+- [ ] Run agent on a returning customer — prompt has no `## What you know about this customer` section
+- [ ] Test suite: `packages/agent`, `apps/gateway`, `apps/dashboard` (especially thread close/resolution paths)
+- [ ] E2E: `core-agent-flow.spec.ts` still passes
+- [ ] Redis: stale repeatable job `customer-memory-stale-refresh-daily` removed

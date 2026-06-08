@@ -159,7 +159,6 @@ export async function buildOrderOpsContext(
   const base: BaseAgentContext = {
     orgId,
     orgName: org.name ?? "Support",
-    customerMemory: null,
     recentMessages: [],
     shopify: shopifyCtx,
     // Seam 2: the injected flag sink. runOrderOps routes flag_order through

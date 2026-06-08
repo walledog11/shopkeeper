@@ -1,4 +1,3 @@
-import type { CustomerMemory } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
 import type { AgentActionMode, AgentActionStatus, ShopifyOrderSummary } from "@shopkeeper/agent/context";
 
@@ -32,7 +31,6 @@ export interface ThreadSetup {
   openThreadCount?: number;
   orgSettings?: Partial<OrgSettings>;
   simulateToolResults?: SimulatedToolResult[];
-  customerMemory?: CustomerMemory;
 }
 
 export interface ToolInputExpectation {

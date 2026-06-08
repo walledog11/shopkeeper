@@ -8,17 +8,9 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 
-const { mockEnqueueCustomerMemory } = vi.hoisted(() => ({
-  mockEnqueueCustomerMemory: vi.fn(),
-}));
-
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),
   clerkClient: vi.fn(),
-}));
-
-vi.mock('@/lib/server/customer-memory', () => ({
-  enqueueCustomerMemoryForClosedThreads: mockEnqueueCustomerMemory,
 }));
 
 import { GET, PATCH } from './route';
@@ -152,10 +144,6 @@ describe('PATCH /api/threads/[id]', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe('closed');
     expect(updated?.filterFeedback).toBe('confirmed_genuine');
-    expect(mockEnqueueCustomerMemory).toHaveBeenCalledWith({
-      organizationId: org.id,
-      threads: [{ threadId: thread.id, closedAt: expect.any(Date) }],
-    });
   });
 
   it('does not write implicit feedback when closing a genuine thread', async () => {
@@ -168,10 +156,6 @@ describe('PATCH /api/threads/[id]', () => {
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe('closed');
     expect(updated?.filterFeedback).toBe('none');
-    expect(mockEnqueueCustomerMemory).toHaveBeenCalledWith({
-      organizationId: org.id,
-      threads: [{ threadId: thread.id, closedAt: expect.any(Date) }],
-    });
   });
 
   it('rejects an invalid filterStatus value', async () => {

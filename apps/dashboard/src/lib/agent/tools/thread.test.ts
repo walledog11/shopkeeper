@@ -15,19 +15,13 @@ import { escalateToHuman, sendEmail, sendReply, updateThreadStatus } from './thr
 import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 
 const {
-  mockEnqueueCustomerMemory,
   mockPostmarkSend,
   mockRecordEmailSendFailure,
   mockRecordInstagramSendFailure,
 } = vi.hoisted(() => ({
-  mockEnqueueCustomerMemory: vi.fn(),
   mockPostmarkSend: vi.fn(),
   mockRecordEmailSendFailure: vi.fn(),
   mockRecordInstagramSendFailure: vi.fn(),
-}));
-
-vi.mock('@/lib/server/customer-memory', () => ({
-  enqueueCustomerMemoryForClosedThreads: mockEnqueueCustomerMemory,
 }));
 
 vi.mock('postmark', () => ({
@@ -55,7 +49,6 @@ beforeEach(async () => {
   process.env.E2E_OUTBOUND_MODE = 'record';
   process.env.E2E_OUTBOUND_RECORD_PATH = path.join(tempDir, 'records.jsonl');
   delete process.env.POSTMARK_API_KEY;
-  mockEnqueueCustomerMemory.mockClear();
   mockPostmarkSend.mockReset().mockResolvedValue({ MessageID: 'mock-message-id' });
   mockRecordEmailSendFailure.mockReset().mockResolvedValue(undefined);
   mockRecordInstagramSendFailure.mockReset().mockResolvedValue(undefined);
@@ -261,7 +254,7 @@ describe('sendEmail outbound recording', () => {
 });
 
 describe('updateThreadStatus', () => {
-  it('enqueues a customer memory update when the agent closes a thread', async () => {
+  it('updates thread status when the agent closes a thread', async () => {
     const customer = await createTestCustomer(org.id, 'agent-close@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
@@ -273,22 +266,6 @@ describe('updateThreadStatus', () => {
     expect(result.message).toBe('Thread status updated to "closed".');
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.status).toBe(THREAD_STATUS.CLOSED);
-    expect(mockEnqueueCustomerMemory).toHaveBeenCalledWith({
-      organizationId: org.id,
-      threads: [{ threadId: thread.id, closedAt: expect.any(Date) }],
-    });
-  });
-
-  it('skips the customer memory enqueue when closing an operator-channel thread', async () => {
-    const customer = await createTestCustomer(org.id, 'agent-close-operator@example.com');
-    const thread = await createTestThread(org.id, customer.id, ChannelType.dashboard_agent);
-
-    await updateThreadStatus(
-      { status: THREAD_STATUS.CLOSED },
-      { threadId: thread.id, orgId: org.id, orgName: org.name },
-    );
-
-    expect(mockEnqueueCustomerMemory).not.toHaveBeenCalled();
   });
 });
 

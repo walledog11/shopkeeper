@@ -5,7 +5,6 @@ import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
-import { enqueueCustomerMemoryForClosedThreads } from '@/lib/server/customer-memory';
 import type { AgentTurnAction } from '@/lib/agent/api/turns';
 
 export const GET = withOrgRoute<{ id: string }>(
@@ -84,13 +83,6 @@ export const PATCH = withOrgRoute<{ id: string }>(
         ...(resolvedFeedback !== undefined && { filterFeedback: resolvedFeedback }),
       },
     });
-
-    if (status === THREAD_STATUS.CLOSED) {
-      await enqueueCustomerMemoryForClosedThreads({
-        organizationId: org.id,
-        threads: [{ threadId: id, closedAt: updated.updatedAt }],
-      });
-    }
 
     return NextResponse.json(updated);
   },

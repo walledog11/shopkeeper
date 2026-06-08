@@ -1,4 +1,4 @@
-import { db, isEmptyMemory, parseStoredMemory, type CustomerMemory } from "@shopkeeper/db";
+import { db } from "@shopkeeper/db";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import type { ToolResult } from "./tools/result.js";
@@ -29,11 +29,6 @@ export interface ThreadSink {
   sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   updateThreadTag(input: UpdateThreadTagInput, ctx: ThreadSinkContext): Promise<ToolResult>;
-}
-
-function readCustomerMemory(memory: unknown): CustomerMemory | null {
-  const parsed = parseStoredMemory(memory);
-  return isEmptyMemory(parsed) ? null : parsed;
 }
 
 type RawShopifyOrder = {
@@ -74,8 +69,6 @@ export async function buildContext(threadId: string, orgId: string, sink: Thread
             id: true,
             name: true,
             platformId: true,
-            memory: true,
-            memoryUpdatedAt: true,
           },
         },
         messages: { orderBy: { sentAt: "desc" }, take: 50 },
@@ -205,7 +198,6 @@ export async function buildContext(threadId: string, orgId: string, sink: Thread
   const base: BaseAgentContext = {
     orgId,
     orgName: org?.name ?? "Support",
-    customerMemory: readCustomerMemory(thread.customer.memory),
     recentMessages: [...thread.messages].reverse().map((m) => ({
       senderType: m.senderType,
       contentText: m.contentText,

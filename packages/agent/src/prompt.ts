@@ -30,56 +30,6 @@ function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { in
   return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
 }
 
-function buildCustomerMemorySection(ctx: AgentContext): string {
-  const memory = ctx.customerMemory;
-  if (!memory) return "";
-
-  const parts: string[] = [];
-  const summary = typeof memory.summary === "string" ? memory.summary.trim() : "";
-  if (summary) parts.push(summary);
-
-  const keyFacts = (Array.isArray(memory.keyFacts) ? memory.keyFacts : [])
-    .flatMap((fact) => {
-      if (typeof fact !== "string") return [];
-      const trimmed = fact.trim();
-      return trimmed ? [trimmed] : [];
-    })
-    .slice(0, 3);
-  if (keyFacts.length > 0) {
-    parts.push(`Key facts:\n${keyFacts.map((fact) => `- ${fact}`).join("\n")}`);
-  }
-
-  const recentInteractions = (Array.isArray(memory.recentInteractions) ? memory.recentInteractions : [])
-    .map((interaction) => {
-      const outcome = typeof interaction.outcome === "string" ? interaction.outcome.trim() : "";
-      if (!outcome) return null;
-      const tag = typeof interaction.tag === "string" && interaction.tag.trim() ? interaction.tag.trim() : "untagged";
-      const closedAt = typeof interaction.closedAt === "string" ? interaction.closedAt : "unknown";
-      return `${tag} , ${outcome} (${closedAt})`;
-    })
-    .filter((line): line is string => line !== null)
-    .slice(0, 3);
-  if (recentInteractions.length > 0) {
-    parts.push(`Recent interactions:\n${recentInteractions.map((line) => `- ${line}`).join("\n")}`);
-  }
-
-  const directives: string[] = [];
-  const policyFlags = memory.policyFlags ?? {};
-  if (policyFlags.complaintPattern) {
-    directives.push("This customer has filed multiple complaints recently , bias toward escalation.");
-  }
-  if (policyFlags.vip) {
-    directives.push("This is a high-value customer , extra care on tone.");
-  }
-  if (directives.length > 0) {
-    parts.push(directives.join(" "));
-  }
-
-  return parts.length > 0
-    ? `\n\n## What you know about this customer\n${parts.join("\n\n")}`
-    : "";
-}
-
 function buildGuardrailClauses(s: ReturnType<typeof resolveAgentSettings>): string[] {
   const clauses: string[] = [];
   if (s.blockCancellations) {
@@ -124,7 +74,7 @@ function buildAutonomySection(s: ReturnType<typeof resolveAgentSettings>): strin
 
 // ──────────────────────────────────────────────────────────────────────────
 // Skeleton: shared, module-agnostic frame. Identity + the trailing scaffold
-// (guardrails, language, autonomy, voice, memory) wrap every agent persona; each
+// (guardrails, language, autonomy, voice) wrap every agent persona; each
 // module injects its own context block and instruction block. Section builders
 // below produce those shared pieces so modules only declare order and content.
 // ──────────────────────────────────────────────────────────────────────────
@@ -235,7 +185,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
       stable: "",
       volatile: composeSystemPrompt({
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.`,
-        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildBrandContextSections(s, ctx, { includeVoice: false })}${buildCustomerMemorySection(ctx)}`,
+        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildBrandContextSections(s, ctx, { includeVoice: false })}`,
         instructions: OPERATOR_INSTRUCTIONS,
         trailer: `${UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s)}${buildLanguageSection(s, "operator")}`,
       }),
@@ -268,7 +218,7 @@ ${ordersJson}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}${kbSection}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
 
   return { stable: SUPPORT_STABLE_PREFIX, volatile };
 }
@@ -300,7 +250,7 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<Org
 - Customer email/handle: ${ctx.customer.platformId}
 
 ## Customer's recent orders
-${ordersJson}${buildBrandContextSections(s, ctx, { includeVoice: true })}${buildCustomerMemorySection(ctx)}
+${ordersJson}${buildBrandContextSections(s, ctx, { includeVoice: true })}
 
 ## Knowledge base
 ${kbSection}

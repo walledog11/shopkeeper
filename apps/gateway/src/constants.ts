@@ -2,7 +2,6 @@ export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SMS: 'sms', SHOPIFY: 's
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',
-  CUSTOMER_MEMORY: 'claude-sonnet-4-6',
   // Brand-voice synthesis rewrites a setting that shapes every future reply and
   // is human-approved before taking effect — judgment-grade, low-frequency.
   VOICE_SYNTHESIS: 'claude-sonnet-4-6',
@@ -11,8 +10,6 @@ export const QUEUE = {
   INBOUND: 'inbound-messages',
   TOKEN_HEALTH: 'token-health',
   AI_SUMMARY: 'ai-summary',
-  CUSTOMER_MEMORY: 'customer-memory',
-  CUSTOMER_MEMORY_REFRESH: 'customer-memory-refresh',
   ARCHIVAL: 'thread-archival',
   PURGE: 'purge',
   DIGEST: 'whatsapp-digest',
@@ -27,9 +24,6 @@ export const JOB = {
   TOKEN_HEALTH_CHECK: 'check-ig-tokens',
   TOKEN_HEALTH_ID: 'ig-token-health-daily',
   SUMMARIZE_THREAD: 'summarize-thread',
-  UPDATE_CUSTOMER_MEMORY: 'update-customer-memory',
-  REFRESH_STALE_CUSTOMER_MEMORY: 'refresh-stale-customer-memory',
-  REFRESH_STALE_CUSTOMER_MEMORY_ID: 'customer-memory-stale-refresh-daily',
   ARCHIVE_THREADS: 'archive-old-threads',
   ARCHIVE_THREADS_ID: 'thread-archival-daily',
   SHOPIFY: 'process-shopify-order',

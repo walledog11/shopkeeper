@@ -57,12 +57,6 @@ export interface AiSummaryJobData {
   skipSummary?: boolean;
 }
 
-export interface CustomerMemoryJobData {
-  threadId: string;
-  organizationId?: string;
-  closedAt?: string;
-}
-
 export interface OrderReviewJobData {
   organizationId: string;
   orderId: string;

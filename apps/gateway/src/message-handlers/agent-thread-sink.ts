@@ -1,5 +1,5 @@
 import { db, SenderType, createMessage } from '@shopkeeper/db';
-import { AGENT_NOTE_PREFIX, THREAD_STATUS, isOperatorChannel } from '@shopkeeper/agent/thread-constants';
+import { AGENT_NOTE_PREFIX, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import type { ThreadSink } from '@shopkeeper/agent/build-context';
 import { toolError, toolOk, toolEscalated, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
@@ -14,8 +14,6 @@ import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { getInternalApiSecret } from './shared.js';
 import { pushOperatorEscalation } from '../routes/internal-operator.js';
-import { enqueueCustomerMemoryThreadClose } from '../maintenance/customer-memory.js';
-import { getCustomerMemoryQueue } from '../clients/agent-runtime.js';
 
 interface ThreadSinkContext {
   threadId: string;
@@ -25,7 +23,7 @@ interface ThreadSinkContext {
 
 // The gateway worker's in-process ThreadSink (Track 4.2). DB-only operations
 // (note / tag / status / escalate) run in-process — the gateway already owns the
-// customer-memory queue and the operator-notify path the dashboard sink hops to.
+// operator-notify path the dashboard sink hops to.
 // The two provider-coupled tools (send_reply / send_email) hop back to the
 // dashboard, where Postmark / Instagram delivery lives (package boundary: touches
 // a message provider , dashboard).
@@ -81,23 +79,10 @@ export const gatewayThreadSink: ThreadSink = {
   },
 
   async updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    const updated = await db.thread.update({
+    await db.thread.update({
       where: { id: ctx.threadId },
       data: { status: input.status },
-      select: { updatedAt: true, channelType: true },
     });
-    if (input.status === THREAD_STATUS.CLOSED && !isOperatorChannel(updated.channelType)) {
-      await enqueueCustomerMemoryThreadClose(getCustomerMemoryQueue(), {
-        organizationId: ctx.orgId,
-        threadId: ctx.threadId,
-        closedAt: updated.updatedAt.toISOString(),
-      }).catch((err) => {
-        logger.warn(
-          { err: (err as Error).message, threadId: ctx.threadId },
-          '[agent-sink] customer-memory enqueue on close failed',
-        );
-      });
-    }
     return toolOk(`Thread status updated to "${input.status}".`);
   },
 

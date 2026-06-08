@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
+import { JOB, QUEUE } from '../constants.js';
 
 interface MockQueueInstance {
   name: string;
@@ -92,13 +92,11 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(7);
-    expect(resources.workers).toHaveLength(9);
-    expect(resources.queues).toHaveLength(12);
+    expect(maintenanceJobRegistrations).toHaveLength(6);
+    expect(resources.workers).toHaveLength(7);
+    expect(resources.queues).toHaveLength(10);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
-      QUEUE.CUSTOMER_MEMORY,
-      QUEUE.CUSTOMER_MEMORY_REFRESH,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -111,8 +109,6 @@ describe('createMaintenanceWorkers', () => {
     ]);
     expect(workerInstances.map((worker) => worker.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
-      QUEUE.CUSTOMER_MEMORY,
-      QUEUE.CUSTOMER_MEMORY_REFRESH,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -121,14 +117,6 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.QUEUE_HEALTH,
     ]);
 
-    expect(readOptions(findQueue(QUEUE.CUSTOMER_MEMORY))).toMatchObject({
-      connection: producerConn,
-      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
-    });
-    expect(readOptions(findQueue(QUEUE.CUSTOMER_MEMORY_REFRESH))).toMatchObject({
-      connection: producerConn,
-      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
-    });
     expect(workerInstances.every((worker) => {
       const options = readOptions(worker);
       return options.connection === workerConn
@@ -147,11 +135,6 @@ describe('createMaintenanceWorkers', () => {
     expect(readRepeatJob(QUEUE.TOKEN_HEALTH)).toEqual({
       name: JOB.TOKEN_HEALTH_CHECK,
       jobId: JOB.TOKEN_HEALTH_ID,
-      every: ONE_DAY_MS,
-    });
-    expect(readRepeatJob(QUEUE.CUSTOMER_MEMORY_REFRESH)).toEqual({
-      name: JOB.REFRESH_STALE_CUSTOMER_MEMORY,
-      jobId: JOB.REFRESH_STALE_CUSTOMER_MEMORY_ID,
       every: ONE_DAY_MS,
     });
     expect(readRepeatJob(QUEUE.ARCHIVAL)).toEqual({
@@ -184,7 +167,6 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.QUEUE_HEALTH_ID,
       every: FIVE_MINUTES_MS,
     });
-    expect(findQueue(QUEUE.CUSTOMER_MEMORY).add).not.toHaveBeenCalled();
     expect(findQueue(QUEUE.INBOUND).add).not.toHaveBeenCalled();
     expect(findQueue(QUEUE.AI_SUMMARY).add).not.toHaveBeenCalled();
   });

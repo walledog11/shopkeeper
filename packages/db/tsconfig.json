@@ -13,7 +13,6 @@
     "index.ts",
     "test-helpers.ts",
     "crypto.ts",
-    "customer-memory.ts",
     "llm-spend.ts",
     "spend-store.ts",
     "refund-spend.ts",

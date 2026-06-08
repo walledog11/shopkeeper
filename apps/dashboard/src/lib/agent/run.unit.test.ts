@@ -20,7 +20,6 @@ function makeCtx(): BaseAgentContext {
   return {
     orgId: "org_1",
     orgName: "Test Store",
-    customerMemory: null,
     recentMessages: [],
     shopify: null,
     escalate: vi.fn().mockResolvedValue(undefined),

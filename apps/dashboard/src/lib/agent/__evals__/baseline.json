@@ -1,9 +1,9 @@
 {
   "generatedAt": "2026-06-06T00:13:15.899Z",
   "repeats": 3,
-  "total": 168,
-  "passed": 156,
-  "passRate": 0.9285714285714286,
+  "total": 159,
+  "passed": 148,
+  "passRate": 0.9308176100628931,
   "categories": {
     "address-change": {
       "total": 9,
@@ -29,11 +29,6 @@
       "total": 6,
       "passed": 6,
       "passRate": 1
-    },
-    "memory": {
-      "total": 9,
-      "passed": 8,
-      "passRate": 0.8888888888888888
     },
     "multi-step": {
       "total": 6,
@@ -163,21 +158,6 @@
       "passRate": 1
     },
     "kb-policy-no-article": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "memory-complaint-pattern-escalates": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
-    "memory-empty-no-regression": {
-      "repeats": 3,
-      "passes": 2,
-      "passRate": 0.6666666666666666
-    },
-    "memory-vip-tone": {
       "repeats": 3,
       "passes": 3,
       "passRate": 1

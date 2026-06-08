@@ -1,4 +1,3 @@
-import type { CustomerMemory } from "@shopkeeper/db";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -48,13 +47,12 @@ export interface ShopifyOrderSummary {
   } | null;
 }
 
-// Module-agnostic agent context: the org identity, customer memory, and the
-// conversation any module's agent loop operates on. Future modules compose
-// their own context on top of this base.
+// Module-agnostic agent context: the org identity and the conversation any
+// module's agent loop operates on. Future modules compose their own context on
+// top of this base.
 export interface BaseAgentContext {
   orgId: string;
   orgName: string;
-  customerMemory: CustomerMemory | null;
   recentMessages: { senderType: string; contentText: string | null }[];
   shopify: { shop: string; accessToken: string } | null;
   // Module-supplied escalation/flag sink. Support routes a thread to a human;

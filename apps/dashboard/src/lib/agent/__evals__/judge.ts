@@ -1,5 +1,4 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { CustomerMemory } from "@shopkeeper/db";
 import { anthropic, buildCachedSystemPrompt } from "@shopkeeper/agent/ai";
 import type { OrgSettings } from "@/types";
 import { readModelUsage } from "@shopkeeper/agent/usage";
@@ -9,7 +8,7 @@ const JUDGE_MODEL = "claude-sonnet-4-6";
 
 const JUDGE_SYSTEM_PROMPT = `You evaluate an AI support agent's drafted reply against a list of rubric checks.
 
-For each check, decide whether the reply satisfies the check's description, given the supplied context (brand voice, customer memory, conversation excerpt).
+For each check, decide whether the reply satisfies the check's description, given the supplied context (brand voice, conversation excerpt).
 
 Return your results by calling the report_judgments tool exactly once. Include one entry per check, using the same checkId values that were provided. Keep each reasoning to 1–2 sentences explaining the basis for the pass/fail decision. Do not invent checkIds, and do not skip any checks.
 
@@ -17,7 +16,6 @@ Judge strictly on the rubric description. Do not penalize stylistic choices that
 
 export interface JudgeContext {
   orgSettings?: Partial<OrgSettings> | null;
-  customerMemory?: CustomerMemory | null;
   recentMessages?: { senderType: string; contentText: string | null }[];
 }
 
@@ -50,10 +48,6 @@ function renderContext(context: JudgeContext): string {
   const brandVoice = context.orgSettings?.brandVoice ?? null;
   if (brandVoice) {
     lines.push(`Brand voice: ${brandVoice}`);
-  }
-
-  if (context.customerMemory) {
-    lines.push(`Customer memory: ${JSON.stringify(context.customerMemory)}`);
   }
 
   if (context.recentMessages && context.recentMessages.length > 0) {
