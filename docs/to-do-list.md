@@ -9,11 +9,10 @@ Last reviewed: 2026-06-07.
 
 Do these before treating production as ready:
 
-1. **Wire Sentry source-map upload into deploy/build** — script exists but is not invoked by build/deploy.
-2. **Confirm production alerting is live** — verify Sentry/queue/webhook/agent alert paths and record evidence.
-3. **Review Redis lock fail-open for mutating agent runs** — decide fail-closed vs fail-open for high-risk mutations.
+1. **Confirm production alerting is live** — verify Sentry/queue/webhook/agent alert paths and record evidence.
+2. **Review Redis lock fail-open for mutating agent runs** — decide fail-closed vs fail-open for high-risk mutations.
 
-Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup.
+Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup, Sentry source-map release verification in staging/production.
 
 ## Release Blockers
 
@@ -71,10 +70,12 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
 
 ## Observability And Operations
 
-- [ ] Wire Sentry source-map upload into deploy/build. **(pre-release priority)**
-  - `scripts/sentry-upload-sourcemaps.mjs` exists and env validation requires `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT`.
-  - Not yet invoked from dashboard/gateway build scripts or Vercel/Railway deploy hooks.
-  - Add the upload step after each app's build output is available.
+- [X] Wire Sentry source-map upload into deploy/build.
+  - `scripts/sentry-upload-sourcemaps.mjs` runs via `postbuild` in dashboard (`apps/dashboard/.next`) and gateway (`dist`).
+  - Production builds fail upload when Sentry credentials are set but inject/upload fails; local builds skip when vars are missing.
+  - Dashboard emits server + client source maps, strips public client `.map` files after upload.
+  - Runtime `Sentry.init` and upload share `resolveSentryRelease()` (`shopkeeper@<sha>` from deploy env).
+  - **Ops follow-up:** confirm uploaded releases appear in Sentry after the next Vercel/Railway deploy.
 
 - [ ] Triage dependency audit findings.
   - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; 11 moderate (e.g. `qs`, `turbo`, `uuid` via `@sentry/webpack-plugin`).

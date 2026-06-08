@@ -6,6 +6,7 @@ import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { createGatewayBullMqConnection } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
+import { resolveSentryRelease } from '@shopkeeper/agent/observability';
 import { sentryBeforeSend } from './observability/sentry.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
@@ -22,6 +23,7 @@ export async function startWorkerRuntime() {
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || 'production',
+      release: resolveSentryRelease(),
       sendDefaultPii: false,
       beforeSend: sentryBeforeSend,
     });

@@ -7,3 +7,4 @@ export {
   sentryBeforeSend,
 } from './redaction.js';
 export type { SentryScrubEvent } from './redaction.js';
+export { resolveSentryRelease } from './sentry-release.js';

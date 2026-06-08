@@ -8,6 +8,7 @@ import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { createGatewayRedisClient } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
+import { resolveSentryRelease } from '@shopkeeper/agent/observability';
 import { sentryBeforeSend } from './observability/sentry.js';
 
 export function createGatewayApp() {
@@ -37,6 +38,7 @@ export async function startGatewayServer() {
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
       environment: process.env.NODE_ENV || 'production',
+      release: resolveSentryRelease(),
       sendDefaultPii: false,
       beforeSend: sentryBeforeSend,
     });
