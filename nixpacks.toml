@@ -9,7 +9,6 @@ cmds = [
   "npm run build -w packages/db",
   "npm run build -w packages/agent",
   "npm run build -w apps/gateway",
-  "npm run upload-sourcemaps -w apps/gateway",
 ]
 
 [start]

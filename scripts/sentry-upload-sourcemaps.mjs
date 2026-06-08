@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+console.log('[shopkeeper/sentry-upload] script invoked');
+
 import { spawnSync } from 'node:child_process';
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';

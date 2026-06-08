@@ -45,9 +45,11 @@ npm run db:migrate:deploy
   `GATEWAY_QUEUE_DIAGNOSTICS_CACHE_MS`,
   `GATEWAY_ENABLE_MAINTENANCE_WORKERS`.
 - Vercel and Railway build the shared DB and agent packages before their apps so package output is current during deploy.
-- Each app runs `npm run upload-sourcemaps` **after** the compile step, outside Turbo cache (`vercel.json` and `nixpacks.toml`).
-- Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` in the **build** environment for Vercel and Railway.
-- Deploy builds fail if those vars are missing (`--require` / `CI` detection). Check build logs for `[sentry] Uploading source maps...`.
+- Dashboard uses `@sentry/nextjs` `withSentryConfig` in `apps/dashboard/next.config.js` — source maps upload as part of `next build` (Turbopack hook), not a separate deploy script.
+- Gateway uploads in `apps/gateway` `build` (`tsc && node scripts/sentry-upload-sourcemaps.mjs dist --require`).
+- Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, and `SENTRY_PROJECT` in the **build** environment for Vercel and Railway. `SENTRY_DSN` alone is not enough.
+- Vercel builds fail at config load if those three vars are missing (`VERCEL=1`). Gateway/Railway deploy builds fail in the upload script when vars are missing.
+- If Vercel Root Directory is `apps/dashboard`, use `apps/dashboard/vercel.json`. If root is the repo root, use root `vercel.json`.
 - The dashboard health endpoint is `/api/health`.
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
 

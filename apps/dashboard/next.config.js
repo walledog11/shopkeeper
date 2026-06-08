@@ -1,4 +1,5 @@
 const path = require('path');
+const { withSentryConfig } = require('@sentry/nextjs');
 
 const CSP_DIRECTIVES = {
   'default-src': ["'self'"],
@@ -45,14 +46,49 @@ const NOINDEX_HEADERS = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
 const NOINDEX_PATH_GROUP =
   '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|api)';
 
+function resolveSentryRelease() {
+  const raw = (
+    process.env.SENTRY_RELEASE ||
+    process.env.VERCEL_GIT_COMMIT_SHA ||
+    process.env.RAILWAY_GIT_COMMIT_SHA ||
+    ''
+  ).trim();
+
+  if (!raw) {
+    return undefined;
+  }
+
+  return raw.includes('@') ? raw : `shopkeeper@${raw}`;
+}
+
+function missingSentryUploadEnv() {
+  return ['SENTRY_AUTH_TOKEN', 'SENTRY_ORG', 'SENTRY_PROJECT'].filter(
+    (name) => !process.env[name]?.trim(),
+  );
+}
+
+if (process.env.VERCEL === '1') {
+  const missing = missingSentryUploadEnv();
+  if (missing.length > 0) {
+    throw new Error(
+      `[sentry] Vercel build missing source map env: ${missing.join(', ')}. ` +
+        'Add them under Project Settings → Environment Variables for Production builds.',
+    );
+  }
+}
+
+console.log('[shopkeeper/dashboard] next.config loaded', {
+  vercel: process.env.VERCEL === '1',
+  release: resolveSentryRelease() ?? '(none)',
+  sentryProject: process.env.SENTRY_PROJECT ?? '(unset)',
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
-  productionBrowserSourceMaps: true,
   experimental: {
     // Next 16.2's Turbopack persistence can race compaction and delete its live cache.
     turbopackFileSystemCacheForDev: false,
-    serverSourceMaps: true,
   },
   async headers() {
     return [
@@ -63,6 +99,7 @@ const nextConfig = {
   },
   turbopack: {
     root: path.resolve(__dirname, '../..'),
+    debugIds: true,
   },
   serverExternalPackages: ['stripe'],
   transpilePackages: ['@shopkeeper/db'],
@@ -82,4 +119,16 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: false,
+  widenClientFileUpload: true,
+  release: {
+    name: resolveSentryRelease(),
+  },
+  sourcemaps: {
+    deleteSourcemapsAfterUpload: true,
+  },
+});

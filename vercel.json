@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npx turbo run build --filter=shopkeeper-dashboard && npm run upload-sourcemaps -w shopkeeper-dashboard",
+  "buildCommand": "npx prisma generate --schema=packages/db/prisma/schema.prisma && npm run build -w packages/db && npm run build -w packages/agent && npx turbo run build --filter=shopkeeper-dashboard",
   "outputDirectory": "apps/dashboard/.next",
   "installCommand": "npm install",
   "framework": "nextjs"
