@@ -22,7 +22,7 @@ import {
   isTokenExpired,
   isTokenExpiringSoon,
 } from "./integration-card-helpers"
-import type { PillState } from "./integration-card-types"
+import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
 
 export type { ConnectType, PlatformConfig }
 
@@ -31,10 +31,11 @@ interface Props {
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
   onDisconnect: (integrationId: string) => void
+  onLaunchOAuth?: (url: string, onClosed?: () => void) => void
   lastActivity?: string | null
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect, lastActivity }: Props) {
+export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity }: Props) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [shop, setShop] = useState("")
@@ -85,18 +86,30 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
     }
   }
 
+  function launchOAuth(path: string, params: Record<string, string | undefined>, onClosed?: () => void) {
+    const url = buildOAuthAuthUrl(path, {
+      returnTo: "/dashboard/integrations",
+      ...params,
+    })
+    if (onLaunchOAuth) {
+      onLaunchOAuth(url, onClosed)
+      return
+    }
+    window.location.href = url
+  }
+
   function handleShopifyConnect() {
     const domain = shop.trim()
     if (!domain) return
     setLoading(true)
-    window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(domain)}`
+    launchOAuth("/api/integrations/shopify/auth", { shop: domain }, () => setLoading(false))
   }
 
   function handleReauthorize() {
     if (config.connectType === "ig") {
-      window.location.href = "/api/integrations/instagram/auth"
+      launchOAuth("/api/integrations/instagram/auth", {})
     } else if (config.connectType === "shopify" && connected[0]) {
-      window.location.href = `/api/integrations/shopify/auth?shop=${encodeURIComponent(connected[0].externalAccountId)}`
+      launchOAuth("/api/integrations/shopify/auth", { shop: connected[0].externalAccountId })
     } else if (config.connectType === "email" && connected[0]) {
       const path = getEmailReauthorizePath(connected[0])
       if (path) window.location.href = path

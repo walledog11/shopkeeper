@@ -1,12 +1,17 @@
 "use client"
 
-import { Suspense, useState, useEffect } from "react"
+import { Suspense, useCallback, useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { CheckCircle2, AlertCircle, AlertTriangle, X, Zap } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
+import {
+  isOAuthDoneMessage,
+  openOAuthPopup,
+  watchOAuthPopup,
+} from "@/lib/integrations/oauth-flow"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
@@ -37,6 +42,42 @@ function IntegrationsPageContent() {
     else if (connected === 'outlook') setBanner({ type: 'success', message: 'Outlook connected successfully.' })
     else if (error) setBanner({ type: 'error', message: OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.' })
   }, [searchParams])
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin || !isOAuthDoneMessage(event.data)) return
+      void mutate()
+      if (event.data.connected === 'instagram') {
+        setBanner({ type: 'success', message: 'Instagram connected successfully.' })
+      } else if (event.data.connected === 'shopify') {
+        setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
+      } else if (event.data.connected === 'gmail') {
+        setBanner({ type: 'success', message: 'Gmail connected successfully.' })
+      } else if (event.data.connected === 'outlook') {
+        setBanner({ type: 'success', message: 'Outlook connected successfully.' })
+      } else if (event.data.error) {
+        setBanner({
+          type: 'error',
+          message: OAUTH_ERROR_MESSAGES[event.data.error] ?? 'An unexpected error occurred.',
+        })
+      }
+    }
+
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [mutate])
+
+  const launchOAuth = useCallback((url: string, onClosed?: () => void) => {
+    const popup = openOAuthPopup(url)
+    if (!popup) {
+      onClosed?.()
+      return
+    }
+    watchOAuthPopup(popup, () => {
+      void mutate()
+      onClosed?.()
+    })
+  }, [mutate])
 
   async function handleConnect(platform: string, value: string): Promise<boolean> {
     try {
@@ -156,6 +197,7 @@ function IntegrationsPageContent() {
               lastActivity={def.platform ? getLastActivity(def.platform) : null}
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
+              onLaunchOAuth={launchOAuth}
             />
           )] : [])}
         </div>
@@ -174,6 +216,7 @@ function IntegrationsPageContent() {
               lastActivity={def.platform ? getLastActivity(def.platform) : null}
               onConnect={handleConnect}
               onDisconnect={handleDisconnect}
+              onLaunchOAuth={launchOAuth}
             />
           )] : [])}
           <TelegramCard />

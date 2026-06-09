@@ -10,9 +10,17 @@ import { createPostRedirectResponse } from '@/lib/server/post-redirect-response'
 import { normalizeShopifyShopDomain, parseShopifyShopIdentity, isSameShopifyStore } from '@/lib/shopify/oauth';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
+import { buildOAuthCompleteUrl } from '@/app/api/integrations/_lib/oauth-complete-url';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 
 const SHOPIFY_WEBHOOK_TOPICS = ['orders/created', 'orders/fulfilled', 'orders/updated', 'orders/cancelled', 'app/uninstalled'];
+
+function oauthComplete(
+  appUrl: string,
+  params: { connected?: string; error?: string; returnTo?: string | null },
+) {
+  return NextResponse.redirect(buildOAuthCompleteUrl(appUrl, params));
+}
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Shopify connection');
@@ -53,12 +61,12 @@ export async function POST(request: Request) {
   } = callbackSession.session;
 
   if (!code || !shop || !hmac) {
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_invalid_callback`);
+    return oauthComplete(appUrl, { error: 'shopify_invalid_callback', returnTo });
   }
 
   const shopDomain = normalizeShopifyShopDomain(shop);
   if (!shopDomain || !savedShop) {
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_invalid_callback`);
+    return oauthComplete(appUrl, { error: 'shopify_invalid_callback', returnTo });
   }
 
   // ---------------------------------------------------------------
@@ -77,7 +85,7 @@ export async function POST(request: Request) {
 
   if (!timingSafeIncludes([digest], hmac)) {
     logger.error('[Shopify OAuth] HMAC verification failed');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_hmac_invalid`);
+    return oauthComplete(appUrl, { error: 'shopify_hmac_invalid', returnTo });
   }
 
   // ---------------------------------------------------------------
@@ -97,13 +105,13 @@ export async function POST(request: Request) {
         { status: tokenRes.status, error: tokenData.error },
         '[Shopify OAuth] Token exchange failed',
       );
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_token_failed`);
+      return oauthComplete(appUrl, { error: 'shopify_token_failed', returnTo });
     }
     const accessToken: string = tokenData.access_token;
 
     if (!clerkOrgId) {
       logger.error('[Shopify OAuth] Missing org cookie , session likely interrupted');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
+      return oauthComplete(appUrl, { error: 'shopify_server_error', returnTo });
     }
 
     // ---------------------------------------------------------------
@@ -116,7 +124,7 @@ export async function POST(request: Request) {
       authorizedShop = await fetchShopifyShopIdentity(shopDomain, accessToken);
     } catch (err) {
       logger.error({ err, shop: shopDomain }, '[Shopify OAuth] Failed to fetch authorized shop identity');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
+      return oauthComplete(appUrl, { error: 'shopify_server_error', returnTo });
     }
 
     if (savedShop !== shopDomain) {
@@ -127,7 +135,7 @@ export async function POST(request: Request) {
             { shop: shopDomain, savedShop, authorizedShopId: authorizedShop.id, requestedShopId: requestedShop.id },
             '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
           );
-          return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
+          return oauthComplete(appUrl, { error: 'shopify_shop_mismatch', returnTo });
         }
         logger.info(
           { shop: shopDomain, savedShop, canonicalShop: authorizedShop.myshopifyDomain },
@@ -138,7 +146,7 @@ export async function POST(request: Request) {
           { err, shop: shopDomain, savedShop },
           '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
         );
-        return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
+        return oauthComplete(appUrl, { error: 'shopify_shop_mismatch', returnTo });
       }
     }
 
@@ -154,7 +162,7 @@ export async function POST(request: Request) {
     const org = await db.organization.findUnique({ where: { clerkOrgId } });
     if (!org) {
       logger.error({ clerkOrgId }, '[Shopify OAuth] Org not found');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
+      return oauthComplete(appUrl, { error: 'shopify_server_error', returnTo });
     }
     const shopifyIntegration = await upsertRaceSafeIntegration({
       organizationId: org.id,
@@ -204,14 +212,11 @@ export async function POST(request: Request) {
       logger.warn({ shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');
     }
 
-    const successUrl = returnTo
-      ? `${appUrl}${returnTo}`
-      : `${appUrl}/dashboard/integrations?connected=shopify`;
-    return NextResponse.redirect(successUrl);
+    return oauthComplete(appUrl, { connected: 'shopify', returnTo });
 
   } catch (err) {
     logger.error({ err }, '[Shopify OAuth] Unexpected error');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
+    return oauthComplete(appUrl, { error: 'shopify_server_error', returnTo });
   }
 }
 

@@ -6,11 +6,10 @@ import { useClerk, useUser, useOrganization, useOrganizationList } from "@clerk/
 import useSWR from "swr";
 import { fetcher } from "@/lib/api/fetcher";
 import { Footer, Header } from "./_components/chrome";
-import { openOAuth } from "./_components/open-oauth";
+import { openOAuthPopup, watchOAuthPopup, isOAuthDoneMessage } from "@/lib/integrations/oauth-flow";
 import {
   CHANNEL_META,
   DEFAULT_DATA,
-  POPUP_NAME,
   STEPS,
   STORAGE_KEY,
   type ChannelKey,
@@ -54,14 +53,6 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const orgCreationInFlight = useRef(false);
 
-  // OAuth popup landed back on /onboarding , notify opener and close.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (window.opener && window.opener !== window && window.name === POPUP_NAME) {
-      try { window.opener.postMessage({ type: "clerk-oauth-done" }, window.location.origin); } catch {}
-      window.close();
-    }
-  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, idx })); } catch {}
@@ -122,22 +113,17 @@ export default function OnboardingPage() {
     const ready = await ensureOrganization();
     setSaving(false);
     if (!ready) return;
-    const win = openOAuth(url);
-    if (!win) return;
-    const timer = window.setInterval(() => {
-      if (win.closed) {
-        window.clearInterval(timer);
-        void refreshIntegrations();
-      }
-    }, 500);
+    const popup = openOAuthPopup(url);
+    if (!popup) return;
+    watchOAuthPopup(popup, () => {
+      void refreshIntegrations();
+    });
   }, [ensureOrganization, refreshIntegrations]);
 
   useEffect(() => {
     function onMessage(e: MessageEvent) {
-      if (e.origin !== window.location.origin) return;
-      if ((e.data as { type?: string } | null)?.type === "clerk-oauth-done") {
-        void refreshIntegrations();
-      }
+      if (e.origin !== window.location.origin || !isOAuthDoneMessage(e.data)) return;
+      void refreshIntegrations();
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

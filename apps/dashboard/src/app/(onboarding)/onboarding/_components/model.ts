@@ -7,7 +7,6 @@ export { AUTONOMY_TIERS };
 
 export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v1";
-export const POPUP_NAME = "clerk_oauth_popup";
 export type StepId = "intro" | "store" | "shopify" | "channels" | "autonomy" | "plan";
 export type ChannelKey = "email" | "ig_dm" | "shopify";
 

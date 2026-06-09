@@ -96,7 +96,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     })));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=shopify_shop_mismatch');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_shop_mismatch');
     expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockLogger.error).toHaveBeenCalledWith(
       {
@@ -133,7 +133,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     })));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?connected=shopify');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify');
     expect(mockLogger.info).toHaveBeenCalledWith(
       {
         shop: 'rxcemn-vt.myshopify.com',
@@ -173,7 +173,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     })));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/settings');
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify&returnTo=%2Fdashboard%2Fsettings');
 
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.shopify },
