@@ -14,6 +14,7 @@ import logger from '../logger.js';
 import { enforceSpendCap, recordSpend, type SpendCapSettings } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
 import { anthropic } from '@shopkeeper/agent/ai';
+import { isRecord } from '../lib/typing.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -73,10 +74,6 @@ export interface SynthesizeVoiceBriefParams {
   organizationId: string;
   currentBrief: string;
   edits: VoiceEditInput[];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
 function readSpendSettings(settings: unknown): SpendCapSettings | null {

@@ -3,7 +3,7 @@ import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { Worker } from 'bullmq';
 import { QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { isWithinBusinessHours } from '../message-handlers/business-hours.js';
+import { isWithinBusinessHours } from '@shopkeeper/agent/settings';
 import { generateThreadIntelligence } from '../message-handlers/intelligence.js';
 import {
   precomputeThreadPlan,

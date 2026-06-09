@@ -7,6 +7,7 @@
 
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
+import { isRecord } from './lib/typing.js';
 
 const MAX_HISTORY_TURNS = 20;
 
@@ -42,10 +43,6 @@ const EMPTY: OperatorContext = {
   pendingPlan: null,
   pendingDigest: null,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readHistory(value: unknown): OperatorContext['history'] {
   if (!Array.isArray(value)) return [];

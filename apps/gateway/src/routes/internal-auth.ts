@@ -1,14 +1,7 @@
-import { timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
+import { getInternalApiSecret } from '../config/env.js';
+import { safeEqual } from '../lib/crypto.js';
 import logger from '../logger.js';
-import { getInternalApiSecret } from '../message-handlers/shared.js';
-
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
 
 export function authorizeInternalRequest(req: Request, res: Response, logContext: string): boolean {
   const incomingSecret = req.headers['x-internal-secret'];

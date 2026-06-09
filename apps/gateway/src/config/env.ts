@@ -35,6 +35,10 @@ function normalizeAbsoluteUrl(name: string, value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+export function getInternalApiSecret(): string {
+  return requireEnv('INTERNAL_API_SECRET');
+}
+
 export function getGatewayDashboardUrl(): string {
   const url = process.env.DASHBOARD_URL?.trim() || process.env.DASHBOARD_INTERNAL_URL?.trim();
   if (!url) {

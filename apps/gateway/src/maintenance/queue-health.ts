@@ -1,5 +1,6 @@
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from '../config/runtime-config.js';
 import { JOB, QUEUE } from '../constants.js';
+import { isRecord, readString } from '../lib/typing.js';
 import {
   emitOpsAlert,
   incrementOpsAlertWindow,
@@ -374,10 +375,3 @@ function formatTimestamp(value: unknown): string | null {
   return timestampMs === null ? null : new Date(timestampMs).toISOString();
 }
 
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}

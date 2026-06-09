@@ -21,9 +21,13 @@ vi.mock('../clients/redis-client.js', () => ({
   }),
 }));
 
-vi.mock('../message-handlers/shared.js', () => ({
-  getInternalApiSecret: () => 'test-internal-secret',
-}));
+vi.mock('../config/env.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../config/env.js')>();
+  return {
+    ...actual,
+    getInternalApiSecret: () => 'test-internal-secret',
+  };
+});
 
 function createApp() {
   const app = express();

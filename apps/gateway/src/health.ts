@@ -3,6 +3,7 @@ import { Queue } from 'bullmq';
 import { QUEUE } from './constants.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
 import { toGatewayBullMqConnection } from './clients/redis-client.js';
+import { isRecord } from './lib/typing.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
 export const FAILED_QUEUE_JOB_SAMPLE_LIMIT = 5;
@@ -175,6 +176,3 @@ function formatTimestamp(value: unknown): string | null {
   return new Date(value).toISOString();
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}

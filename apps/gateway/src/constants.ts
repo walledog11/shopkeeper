@@ -1,4 +1,4 @@
-export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SMS: 'sms', SHOPIFY: 'shopify' } as const;
+export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',
@@ -40,8 +40,6 @@ export const JOB = {
   ORDER_REVIEW: 'process-order-review',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
-
-export const SHOPIFY_API_VERSION = '2026-04';
 
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {

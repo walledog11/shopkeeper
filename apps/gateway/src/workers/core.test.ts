@@ -70,6 +70,7 @@ vi.mock('@shopkeeper/db', () => ({
 
 vi.mock('@shopkeeper/agent/settings', () => ({
   resolveAgentSettings: vi.fn().mockReturnValue({ autoPlanOnOpen: true }),
+  isWithinBusinessHours: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock('../logger.js', () => ({
@@ -80,10 +81,6 @@ vi.mock('../message-handlers/channels.js', () => ({
   handleEmailJob: vi.fn(),
   handleIgDmJob: vi.fn(),
   handleShopifyJob: vi.fn(),
-}));
-
-vi.mock('../message-handlers/business-hours.js', () => ({
-  isWithinBusinessHours: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock('../message-handlers/intelligence.js', () => ({

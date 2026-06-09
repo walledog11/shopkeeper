@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isWithinBusinessHours,
   resolveAgentSettings,
-} from './business-hours.js';
+} from '@shopkeeper/agent/settings';
 
 describe('business hours', () => {
   it('applies shared defaults and treats disabled hours as open', () => {

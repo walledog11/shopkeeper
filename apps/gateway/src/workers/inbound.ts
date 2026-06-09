@@ -27,6 +27,12 @@ export function createInboundWorker(options: InboundWorkerRegistrationOptions): 
       await handleEmailJob(job, options.aiSummaryQueue);
     } else if (job.data.platform === CHANNEL.SHOPIFY) {
       await handleShopifyJob(job, options.aiSummaryQueue);
+    } else {
+      logger.error(
+        { jobId: job.id, platform: job.data.platform, traceId },
+        '[Worker] Unknown inbound platform',
+      );
+      throw new Error(`Unknown inbound platform: ${String(job.data.platform)}`);
     }
   }, options.workerOptions);
 

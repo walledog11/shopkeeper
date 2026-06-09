@@ -1,6 +1,6 @@
 import { db, type DbChannelType } from '@shopkeeper/db';
-import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
+import { formatChannelLabel } from '../routes/telegram/format.js';
 import { notifyOperator } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
@@ -11,9 +11,7 @@ function formatPlanMessage(
   summary: string,
   steps: PlanStep[],
 ): string {
-  const channel = channelType === CHANNEL.IG_DM
-    ? 'Instagram DM'
-    : channelType.charAt(0).toUpperCase() + channelType.slice(1);
+  const channel = formatChannelLabel(channelType);
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   const stepLines = actionableSteps.map((step, index) => {
@@ -48,9 +46,7 @@ function formatAutoExecutionMessage(
   plan: AgentPlan,
   result: PrecomputedPlanResult,
 ): string {
-  const channel = channelType === CHANNEL.IG_DM
-    ? 'Instagram DM'
-    : channelType.charAt(0).toUpperCase() + channelType.slice(1);
+  const channel = formatChannelLabel(channelType);
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepLines = actionableSteps.map((step, index) => `${index + 1}. ${step.description || step.label}`);
   const statusLine = result.autoExecutionStatus === 'error'

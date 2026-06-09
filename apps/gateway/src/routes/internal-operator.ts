@@ -1,8 +1,8 @@
 import express, { type Request, type Response, type Router } from 'express';
 import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
-import { CHANNEL } from '../constants.js';
 import { notifyOperator } from '../operator-notify.js';
+import { formatChannelLabel } from './telegram/format.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 
@@ -14,9 +14,7 @@ function formatEscalationMessage(
   dashboardUrl: string,
   threadId: string,
 ): string {
-  const channel = channelType === CHANNEL.IG_DM
-    ? 'Instagram DM'
-    : channelType.charAt(0).toUpperCase() + channelType.slice(1);
+  const channel = formatChannelLabel(channelType);
 
   const lines: (string | null)[] = [
     `Escalated — ${channel}`,

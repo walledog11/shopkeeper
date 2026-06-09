@@ -11,8 +11,7 @@ export type WebhookSignatureProvider = 'meta' | 'shopify' | 'telegram';
 export type WebhookSignatureFailureReason =
   | 'missing_signature'
   | 'missing_raw_body'
-  | 'signature_mismatch'
-  | 'validation_failed';
+  | 'signature_mismatch';
 
 export interface WebhookSignatureAlertDependencies {
   counterClient: OpsAlertCounterClient;

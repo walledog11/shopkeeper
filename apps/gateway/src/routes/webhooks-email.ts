@@ -1,17 +1,11 @@
 import type { Request, Response, Router } from 'express';
-import { randomUUID, timingSafeEqual } from 'crypto';
+import { randomUUID } from 'crypto';
 import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
+import { safeEqual } from '../lib/crypto.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
-
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, 'utf8');
-  const bb = Buffer.from(b, 'utf8');
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
 
 function isProductionEnv(): boolean {
   return process.env.NODE_ENV === 'production';

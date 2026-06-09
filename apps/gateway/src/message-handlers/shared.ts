@@ -18,14 +18,6 @@ import { readModelUsage } from '@shopkeeper/agent/usage';
 
 const MAX_INPUT_LENGTH = 4000;
 
-export function getInternalApiSecret(): string {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) {
-    throw new Error('[Gateway] Missing required environment variable: INTERNAL_API_SECRET');
-  }
-  return secret;
-}
-
 export async function lookupShopifyCustomerName(organizationId: string, email: string): Promise<string | null> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },

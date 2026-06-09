@@ -1,5 +1,4 @@
-import { getGatewayDashboardUrl } from '../config/env.js';
-import { getInternalApiSecret } from '../message-handlers/shared.js';
+import { getGatewayDashboardUrl, getInternalApiSecret } from '../config/env.js';
 
 interface DashboardApiSuccess<T> {
   ok: true;

@@ -5,11 +5,10 @@ import { notifyOperator } from '../operator-notify.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
+  ONE_HOUR_MS,
   scheduleRepeatableJob,
   type MaintenanceJobRegistration,
 } from './registration.js';
-
-const ONE_HOUR_MS = 60 * 60 * 1000;
 const FOUR_HOURS_MS = 4 * ONE_HOUR_MS;
 const TWENTY_FOUR_HOURS_MS = 24 * ONE_HOUR_MS;
 
@@ -158,8 +157,6 @@ export async function buildOrgDigest(organizationId: string, now: Date): Promise
 export async function sendScheduledDigests(): Promise<void> {
   const now = new Date();
   const nowMs = now.getTime();
-  const currentHourUtc = now.getUTCHours();
-
   const orgs = await db.organization.findMany({
     where: { members: { some: { telegramChats: { some: {} } } } },
     select: {
@@ -174,7 +171,7 @@ export async function sendScheduledDigests(): Promise<void> {
 
   const eligibleOrgs = orgs.filter(org => {
     const settings = (org.settings as Record<string, unknown> | null) ?? {};
-    return settings.digestEnabled === true && shouldSendDigest(settings, currentHourUtc, nowMs);
+    return settings.digestEnabled === true && shouldSendDigest(settings, nowMs);
   });
 
   if (eligibleOrgs.length === 0) return;
@@ -256,7 +253,6 @@ function localHourAndDay(timeZone: string, now: Date): { hour: number; day: numb
 
 export function shouldSendDigest(
   settings: Record<string, unknown>,
-  _currentHourUtc: number,
   nowMs: number,
 ): boolean {
   const frequency = typeof settings.digestFrequency === 'string' ? settings.digestFrequency : 'daily';

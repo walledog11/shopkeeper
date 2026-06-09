@@ -1,3 +1,6 @@
+import { CHANNEL } from '../../constants.js';
+import type { DbChannelType } from '@shopkeeper/db';
+
 const FILLER_PHRASES = [
   'On it…',
   'Give me a sec…',
@@ -14,6 +17,12 @@ export const HELP_TEXT = [
   '  OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to re-list',
   "Or just send an instruction like 'refund #1234'.",
 ].join('\n');
+
+export function formatChannelLabel(channelType: DbChannelType): string {
+  return channelType === CHANNEL.IG_DM
+    ? 'Instagram DM'
+    : channelType.charAt(0).toUpperCase() + channelType.slice(1);
+}
 
 export function filler(): string {
   return FILLER_PHRASES[Math.floor(Math.random() * FILLER_PHRASES.length)];

@@ -1,6 +1,5 @@
 import { db, ThreadFilterStatus, ThreadFilterFeedback } from '@shopkeeper/db';
-
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+import { ONE_DAY_MS } from './registration.js';
 export const FILTERED_PURGE_AFTER_DAYS = 7;
 
 export async function purgeFilteredThreads(now: Date): Promise<number> {

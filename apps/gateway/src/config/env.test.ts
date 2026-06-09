@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getGatewayDashboardUrl, validateGatewayEnv } from './env.js';
+import { getGatewayDashboardUrl, getInternalApiSecret, validateGatewayEnv } from './env.js';
 
 function stubBaseGatewayEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
@@ -20,6 +20,20 @@ function stubProductionGatewayEnv() {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe('getInternalApiSecret', () => {
+  it('returns the configured secret', () => {
+    stubBaseGatewayEnv();
+    expect(getInternalApiSecret()).toBe('test-internal-secret');
+  });
+
+  it('throws when INTERNAL_API_SECRET is missing', () => {
+    stubBaseGatewayEnv();
+    vi.stubEnv('INTERNAL_API_SECRET', '');
+
+    expect(() => getInternalApiSecret()).toThrow(/Missing required environment variable: INTERNAL_API_SECRET/);
+  });
 });
 
 describe('getGatewayDashboardUrl', () => {
