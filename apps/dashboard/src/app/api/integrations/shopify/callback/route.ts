@@ -7,7 +7,7 @@ import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
-import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
+import { normalizeShopifyShopDomain, parseShopifyShopIdentity, isSameShopifyStore } from '@/lib/shopify/oauth';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
@@ -57,9 +57,8 @@ export async function POST(request: Request) {
   }
 
   const shopDomain = normalizeShopifyShopDomain(shop);
-  if (!shopDomain || !savedShop || shopDomain !== savedShop) {
-    logger.error({ shop, savedShop }, '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
+  if (!shopDomain || !savedShop) {
+    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_invalid_callback`);
   }
 
   // ---------------------------------------------------------------
@@ -108,23 +107,47 @@ export async function POST(request: Request) {
     }
 
     // ---------------------------------------------------------------
-    // Step 4: Fetch shop info for display name (best-effort)
+    // Step 4: Resolve canonical shop identity and verify requested shop
+    // OAuth always returns the store's original myshopify.com domain, which can
+    // differ from an alias the merchant typed (e.g. after a domain rename).
     // ---------------------------------------------------------------
-    let shopName: string = shopDomain;
+    let authorizedShop: Awaited<ReturnType<typeof fetchShopifyShopIdentity>>;
     try {
-      const shopData = await shopifyRestJson<{ shop?: { name?: string } }>(
-        { shop: shopDomain, accessToken },
-        'shop.json',
-        { maxRetries: 0 }
-      );
-      shopName = shopData.shop?.name ?? shopDomain;
+      authorizedShop = await fetchShopifyShopIdentity(shopDomain, accessToken);
     } catch (err) {
-      logger.warn({ err, shop: shopDomain }, '[Shopify OAuth] Failed to fetch shop name , using domain');
+      logger.error({ err, shop: shopDomain }, '[Shopify OAuth] Failed to fetch authorized shop identity');
+      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
     }
+
+    if (savedShop !== shopDomain) {
+      try {
+        const requestedShop = await fetchShopifyShopIdentity(savedShop, accessToken);
+        if (!isSameShopifyStore(authorizedShop, requestedShop)) {
+          logger.error(
+            { shop: shopDomain, savedShop, authorizedShopId: authorizedShop.id, requestedShopId: requestedShop.id },
+            '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
+          );
+          return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
+        }
+        logger.info(
+          { shop: shopDomain, savedShop, canonicalShop: authorizedShop.myshopifyDomain },
+          '[Shopify OAuth] Accepted myshopify domain alias',
+        );
+      } catch (err) {
+        logger.error(
+          { err, shop: shopDomain, savedShop },
+          '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
+        );
+        return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_shop_mismatch`);
+      }
+    }
+
+    const canonicalShopDomain = authorizedShop.myshopifyDomain;
+    const shopName = authorizedShop.name;
 
     // ---------------------------------------------------------------
     // Step 5: Save integration to database
-    // externalAccountId = shop domain (used for webhook routing)
+    // externalAccountId = canonical shop domain (used for webhook routing)
     // fromEmail         = shop name (displayed in UI)
     // accessToken       = Shopify Admin API token (permanent)
     // ---------------------------------------------------------------
@@ -136,19 +159,19 @@ export async function POST(request: Request) {
     const shopifyIntegration = await upsertRaceSafeIntegration({
       organizationId: org.id,
       platform: 'shopify',
-      externalAccountId: shopDomain,
+      externalAccountId: canonicalShopDomain,
       data: { accessToken, fromEmail: shopName },
     });
     const shopifyIntegrationId = shopifyIntegration.id;
 
-    logger.info({ shopName, shop: shopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
+    logger.info({ shopName, shop: canonicalShopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
 
     // Soft-fail: a registration error should not break the OAuth flow.
     let gatewayUrl: string | null = null;
     try {
       gatewayUrl = getGatewayBaseUrl();
     } catch (error) {
-      logger.warn({ err: error, shop: shopDomain }, '[Shopify OAuth] Gateway URL invalid , skipping webhook registration');
+      logger.warn({ err: error, shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL invalid , skipping webhook registration');
     }
 
     if (gatewayUrl) {
@@ -156,7 +179,7 @@ export async function POST(request: Request) {
         SHOPIFY_WEBHOOK_TOPICS.map(async (topic) => {
           try {
             await shopifyRestJson(
-              { shop: shopDomain, accessToken },
+              { shop: canonicalShopDomain, accessToken },
               'webhooks.json',
               {
                 method: 'POST',
@@ -164,21 +187,21 @@ export async function POST(request: Request) {
                 body: { webhook: { topic, address: `${gatewayUrl}/webhooks/shopify`, format: 'json' } },
               }
             );
-            logger.info({ topic, shop: shopDomain }, '[Shopify OAuth] Webhook registered');
+            logger.info({ topic, shop: canonicalShopDomain }, '[Shopify OAuth] Webhook registered');
           } catch (err) {
             const detail = err instanceof ShopifyRequestError ? err.payload ?? {} : err;
-            logger.warn({ topic, shop: shopDomain, err: detail }, '[Shopify OAuth] Webhook registration failed');
+            logger.warn({ topic, shop: canonicalShopDomain, err: detail }, '[Shopify OAuth] Webhook registration failed');
             void recordProviderSendFailure('shopify', 'webhook_registration', org.id, {
               counterClient: getRedis(),
               integrationId: shopifyIntegrationId,
               detail: `Shopify webhook registration failed for ${topic}`,
-              extra: { topic, shop: shopDomain },
+              extra: { topic, shop: canonicalShopDomain },
             });
           }
         })
       );
     } else {
-      logger.warn({ shop: shopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');
+      logger.warn({ shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');
     }
 
     const successUrl = returnTo
@@ -190,4 +213,17 @@ export async function POST(request: Request) {
     logger.error({ err }, '[Shopify OAuth] Unexpected error');
     return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=shopify_server_error`);
   }
+}
+
+async function fetchShopifyShopIdentity(shop: string, accessToken: string) {
+  const shopData = await shopifyRestJson<{ shop?: { id?: number | string; name?: string; myshopify_domain?: string } }>(
+    { shop, accessToken },
+    'shop.json',
+    { maxRetries: 0 },
+  );
+  const identity = parseShopifyShopIdentity(shopData, shop);
+  if (!identity) {
+    throw new Error(`Shopify shop identity missing for ${shop}`);
+  }
+  return identity;
 }

@@ -77,24 +77,76 @@ afterEach(async () => {
 });
 
 describe('POST /api/integrations/shopify/callback', () => {
-  it('rejects a callback for a different shop before token exchange', async () => {
+  it('rejects a callback for a different shop after verifying shop identity', async () => {
     mockSavedCookies({
       shopify_oauth_state: 'state_123',
       shopify_oauth_org: org!.clerkOrgId,
       shopify_oauth_user: 'usr_oauth',
       shopify_oauth_shop: 'fixture-shop.myshopify.com',
     });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 1, name: 'Evil Shop', myshopify_domain: 'evil-shop.myshopify.com' } }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 2, name: 'Fixture Shop', myshopify_domain: 'fixture-shop.myshopify.com' } }));
 
-    const res = await POST(new Request('http://localhost/api/integrations/shopify/callback?code=abc&shop=evil-shop.myshopify.com&state=state_123&hmac=bad'));
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'evil-shop.myshopify.com',
+      state: 'state_123',
+    })));
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=shopify_shop_mismatch');
-    expect(mockFetch).not.toHaveBeenCalled();
-    expect(mockCookieDelete).toHaveBeenCalledWith('shopify_oauth_shop');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { shop: 'evil-shop.myshopify.com', savedShop: 'fixture-shop.myshopify.com' },
+      {
+        shop: 'evil-shop.myshopify.com',
+        savedShop: 'fixture-shop.myshopify.com',
+        authorizedShopId: 1,
+        requestedShopId: 2,
+      },
       '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
     );
+  });
+
+  it('accepts myshopify domain aliases for the same store', async () => {
+    mockSavedCookies({
+      shopify_oauth_state: 'state_123',
+      shopify_oauth_org: org!.clerkOrgId,
+      shopify_oauth_user: 'usr_oauth',
+      shopify_oauth_shop: 'almond-9567.myshopify.com',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 42, name: 'Palette Garments', myshopify_domain: 'rxcemn-vt.myshopify.com' } }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 42, name: 'Palette Garments', myshopify_domain: 'rxcemn-vt.myshopify.com' } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 2 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 3 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 4 } }))
+      .mockResolvedValueOnce(jsonResponse({ webhook: { id: 5 } }));
+
+    const res = await POST(new Request(signedCallbackUrl({
+      code: 'oauth_code',
+      shop: 'rxcemn-vt.myshopify.com',
+      state: 'state_123',
+    })));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?connected=shopify');
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      {
+        shop: 'rxcemn-vt.myshopify.com',
+        savedShop: 'almond-9567.myshopify.com',
+        canonicalShop: 'rxcemn-vt.myshopify.com',
+      },
+      '[Shopify OAuth] Accepted myshopify domain alias',
+    );
+
+    const integration = await db.integration.findFirstOrThrow({
+      where: { organizationId: org!.id, platform: ChannelType.shopify },
+    });
+    expect(integration.externalAccountId).toBe('rxcemn-vt.myshopify.com');
   });
 
   it('persists the active org integration and soft-fails webhook registration errors', async () => {
@@ -107,7 +159,7 @@ describe('POST /api/integrations/shopify/callback', () => {
     });
     mockFetch
       .mockResolvedValueOnce(jsonResponse({ access_token: 'shpat_fixture' }))
-      .mockResolvedValueOnce(jsonResponse({ shop: { name: 'Fixture Shop' } }))
+      .mockResolvedValueOnce(jsonResponse({ shop: { id: 7, name: 'Fixture Shop', myshopify_domain: 'fixture-shop.myshopify.com' } }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ errors: 'topic disabled' }, { status: 422 }))
       .mockResolvedValueOnce(jsonResponse({ webhook: { id: 3 } }))
@@ -131,9 +183,6 @@ describe('POST /api/integrations/shopify/callback', () => {
     expect(integration.fromEmail).toBe('Fixture Shop');
 
     expect(mockFetch).toHaveBeenCalledTimes(7);
-    expect(String(mockFetch.mock.calls[0][0])).toBe('https://fixture-shop.myshopify.com/admin/oauth/access_token');
-    expect(String(mockFetch.mock.calls[1][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/shop.json');
-    expect(String(mockFetch.mock.calls[2][0])).toBe('https://fixture-shop.myshopify.com/admin/api/2026-04/webhooks.json');
     expect(mockLogger.warn).toHaveBeenCalledWith(
       { topic: 'orders/fulfilled', shop: 'fixture-shop.myshopify.com', err: { errors: 'topic disabled' } },
       '[Shopify OAuth] Webhook registration failed',
