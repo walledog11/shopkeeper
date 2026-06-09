@@ -1,43 +1,19 @@
-import { Queue } from 'bullmq';
 import type { Redis as IORedis } from 'ioredis';
 import { db, type DbChannelType } from '@shopkeeper/db';
-import logger from '../logger.js';
-import { QUEUE, PROCESSING_QUEUE_DEFAULTS } from '../constants.js';
-import { createGatewayBullMqConnection, createGatewayRedisClient } from '../clients/redis-client.js';
+import { QUEUE } from '../constants.js';
+import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
+import { getGatewayRedis } from '../clients/redis-client.js';
 
-let _messageQueue: Queue | null = null;
-export function getMessageQueue(): Queue {
-  if (!_messageQueue) {
-    const redisConnection = createGatewayBullMqConnection();
-    _messageQueue = new Queue(QUEUE.INBOUND, {
-      connection: redisConnection,
-      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
-    });
-  }
-  return _messageQueue;
+export function getMessageQueue() {
+  return getGatewayBullMqQueue(QUEUE.INBOUND);
 }
 
-let _orderReviewQueue: Queue | null = null;
-export function getOrderReviewQueue(): Queue {
-  if (!_orderReviewQueue) {
-    const redisConnection = createGatewayBullMqConnection();
-    _orderReviewQueue = new Queue(QUEUE.ORDER_REVIEW, {
-      connection: redisConnection,
-      defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
-    });
-  }
-  return _orderReviewQueue;
+export function getOrderReviewQueue() {
+  return getGatewayBullMqQueue(QUEUE.ORDER_REVIEW);
 }
 
-let _rateLimitRedis: IORedis | null = null;
 export function getRateLimitRedis(): IORedis {
-  if (!_rateLimitRedis) {
-    _rateLimitRedis = createGatewayRedisClient();
-    _rateLimitRedis.on('error', (err: Error) => {
-      logger.error({ err: err.message }, '[Webhook] Rate-limit Redis error');
-    });
-  }
-  return _rateLimitRedis;
+  return getGatewayRedis();
 }
 
 export async function resolveOrganizationId(platform: DbChannelType, externalAccountId: string): Promise<string | null> {

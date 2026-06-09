@@ -16,7 +16,7 @@ export async function generateThreadIntelligence(
   try {
     // skipSummary path: email worker already classified pre-persistence; the
     // thread row is fully populated. Return it as-is so downstream plan
-    // precompute + WhatsApp notify can still run.
+    // precompute + operator notify can still run.
     if (opts?.skipSummary) {
       return db.thread.findUnique({ where: { id: threadId } });
     }

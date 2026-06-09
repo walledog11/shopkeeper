@@ -170,7 +170,7 @@ export interface ProcessMessageOptions {
   attachments?: string[];
   // Email path classifies pre-persistence so we can write filter columns inline
   // and skip the LLM round-trip in the SUMMARIZE_THREAD job. The job still runs
-  // (with skipSummary=true) so plan precompute + WhatsApp notify still fire.
+  // (with skipSummary=true) so plan precompute + operator notify still fire.
   precomputed?: ClassificationResult | null;
   // Kill-switch path: write filterDecidedAt at creation so SUMMARIZE_THREAD
   // still generates summary+tag but skips reclassifying (gated on

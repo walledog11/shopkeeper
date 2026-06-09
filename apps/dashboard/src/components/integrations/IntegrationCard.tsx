@@ -12,18 +12,12 @@ import { ConnectedAccounts } from "./ConnectedAccounts"
 import { ShopifyPermissionsPanel } from "./ShopifyPermissionsPanel"
 import { StatusPill } from "./StatusPill"
 import {
-  ComingSoonConnectBody,
   EmailConnectBody,
   InstagramConnectBody,
   ShopifyConnectBody,
 } from "./connect-bodies"
-import {
-  isPostmarkEmail,
-  isTokenExpired,
-  isTokenExpiringSoon,
-} from "./integration-card-helpers"
+import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
-import type { PillState } from "./integration-card-types"
 
 export type { ConnectType, PlatformConfig }
 
@@ -34,47 +28,40 @@ interface Props {
   onDisconnect: (integrationId: string) => void
   onLaunchOAuth?: (url: string, onClosed?: () => void) => void
   lastActivity?: string | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity }: Props) {
-  const [open, setOpen] = useState(false)
+export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange }: Props) {
   const [email, setEmail] = useState("")
   const [shop, setShop] = useState("")
   const [loading, setLoading] = useState(false)
-  const [notified, setNotified] = useState(false)
   const [kbSyncing, setKbSyncing] = useState(false)
   const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
 
   const isConnected = connected.length > 0
-  const isComingSoon = config.connectType === "coming-soon"
 
-  const hasExpired = isConnected && connected.some(isTokenExpired)
-  const hasExpiringSoon = isConnected && !hasExpired && connected.some(isTokenExpiringSoon)
-  const needsReauth = hasExpired || hasExpiringSoon
-
-  const isAwaitingFirstInbound =
-    isConnected &&
-    !lastActivity &&
-    config.connectType === "email" &&
-    connected.every(isPostmarkEmail)
-
-  const pillState: PillState = isComingSoon
-    ? "coming-soon"
-    : hasExpired
-    ? "action-needed"
-    : hasExpiringSoon
-    ? "auth-expiring"
-    : isAwaitingFirstInbound
-    ? "waiting-for-inbound"
-    : isConnected
-    ? "connected"
-    : "not-connected"
+  const health = deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null)
 
   const accountIdInline: string | null = isConnected
     ? (config.connectType === "ig"
         ? (connected[0].fromEmail || `@${connected[0].externalAccountId}`)
+        : config.connectType === "shopify"
+        ? (connected[0].fromEmail || connected[0].externalAccountId)
         : connected[0].externalAccountId)
     : null
+
+  const threadsThisWeek = isConnected ? connected[0].threadsThisWeek ?? 0 : 0
+  const activityLabel = config.connectType === "shopify" ? "Last activity" : "Last message"
+  const statusLine = !isConnected
+    ? config.description
+    : health.note ??
+      [
+        lastActivity ? `${activityLabel} ${formatLastActivityTime(lastActivity)}` : "No messages yet",
+        ...(threadsThisWeek > 0
+          ? [`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`]
+          : []),
+      ].join(" · ")
 
   async function handleEmailConnect() {
     if (!email) return
@@ -134,18 +121,21 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
     }
   }
 
+  function handleRowConnect() {
+    if (config.connectType === "ig") {
+      launchOAuth("/api/integrations/instagram/auth", {})
+      return
+    }
+    onOpenChange(true)
+  }
+
   return (
-    <div className={cn(
-      "rounded-xl border bg-card overflow-hidden transition-colors",
-      isComingSoon
-        ? "border-white/[0.04] opacity-50"
-        : "border-white/[0.08]",
-    )}>
+    <div id={config.id} className="rounded-xl border border-white/[0.08] bg-card overflow-hidden transition-colors scroll-mt-6">
       <div className="relative">
         <button
           type="button"
           aria-expanded={open}
-          onClick={() => setOpen(o => !o)}
+          onClick={() => onOpenChange(!open)}
           className="w-full flex items-start gap-4 px-5 py-4 transition-colors hover:bg-white/[0.02] cursor-pointer border-0 bg-transparent text-left [font-family:inherit]"
         >
           <div className={cn(
@@ -159,34 +149,39 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           <div className="flex-1 min-w-0 space-y-1">
             <div className="flex items-center gap-2.5 flex-wrap">
               <p className="text-[15px] font-bold text-white/95 leading-none">{config.name}</p>
-              <StatusPill state={pillState} />
+              <StatusPill state={health.state} />
               {accountIdInline && (
-                <span className="text-xs font-mono text-white/35 truncate max-w-[260px]">{accountIdInline}</span>
+                <span className="text-xs text-white/45 truncate max-w-[260px]">{accountIdInline}</span>
               )}
             </div>
-            <p className="text-xs text-white/40 leading-relaxed">{config.description}</p>
+            <p className={cn("text-xs leading-relaxed", health.note ? "text-amber-400/90" : "text-white/40")}>
+              {statusLine}
+            </p>
           </div>
 
           <div className="flex items-center gap-3 shrink-0 mt-1">
-            {isConnected && lastActivity && !needsReauth && (
-              <span className="text-xs text-white/30 hidden sm:block">
-                synced {formatLastActivityTime(lastActivity)}
-              </span>
-            )}
             <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
           </div>
         </button>
-        {needsReauth && (
+        {health.canFix && (
           <button type="button"
             onClick={handleReauthorize}
-            className="absolute right-12 top-4 text-xs font-semibold text-white/80 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] rounded-md px-3 py-1.5 transition-colors"
+            className="absolute right-12 top-4 text-xs font-semibold text-amber-300 bg-amber-400/[0.08] hover:bg-amber-400/[0.14] border border-amber-400/[0.25] rounded-md px-3 py-1.5 transition-colors"
           >
-            Reauthorize
+            Fix
+          </button>
+        )}
+        {!isConnected && !open && (
+          <button type="button"
+            onClick={handleRowConnect}
+            className="absolute right-12 top-4 text-xs font-semibold text-white/90 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.15] rounded-md px-3 py-1.5 transition-colors"
+          >
+            Connect
           </button>
         )}
       </div>
 
-      {open && !isComingSoon && (
+      {open && (
         <div className="border-t border-white/[0.06] px-5 py-4 space-y-4">
           <ShopifyPermissionsPanel enabled={config.connectType === "shopify" && isConnected} />
           <ConnectedAccounts
@@ -222,16 +217,6 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
             />
           )}
         </div>
-      )}
-
-      {open && isComingSoon && (
-        <ComingSoonConnectBody
-          notified={notified}
-          onNotify={() => {
-            setNotified(true)
-            setTimeout(() => setNotified(false), 3000)
-          }}
-        />
       )}
     </div>
   )

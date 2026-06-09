@@ -22,6 +22,21 @@ async function fetchMetaGraph<T>(url: URL): Promise<MetaGraphResponse<T>> {
   return { data: payload as T };
 }
 
+export interface InstagramUserProfile {
+  name?: string;
+  profile_pic?: string;
+}
+
+export async function fetchInstagramUserProfile(
+  senderId: string,
+  accessToken: string,
+): Promise<MetaGraphResponse<InstagramUserProfile>> {
+  const url = new URL(`${META_GRAPH_BASE}/${senderId}`);
+  url.searchParams.set('fields', 'name,profile_pic');
+  url.searchParams.set('access_token', accessToken);
+  return fetchMetaGraph<InstagramUserProfile>(url);
+}
+
 export async function checkInstagramAccountAccess(
   accountId: string,
   accessToken: string,

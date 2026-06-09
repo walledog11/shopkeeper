@@ -1,5 +1,5 @@
-import { Queue } from 'bullmq';
-import { createGatewayRedisClient, toGatewayBullMqConnection } from '../clients/redis-client.js';
+import { closeGatewayBullMqQueues, getGatewayBullMqQueue } from '../clients/gateway-queues.js';
+import { closeGatewayRedisConnections } from '../clients/redis-client.js';
 import { loadGatewayEnv } from '../config/load-env.js';
 import { readFailedQueueJobSnapshots } from '../health.js';
 
@@ -11,19 +11,16 @@ async function main(): Promise<void> {
     throw new Error('Usage: npx tsx src/scripts/inspect-failed-queue-jobs.ts <inbound|ai-summary>');
   }
 
-  const { resolveQueueName } = await import('../queue-maintenance.js');
-  const queueName = resolveQueueName(queueArg);
-  const redis = createGatewayRedisClient();
-  const queue = new Queue(queueName, { connection: toGatewayBullMqConnection(redis) });
+  const queue = getGatewayBullMqQueue(queueArg);
 
   try {
     const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
     const failedJobs = await readFailedQueueJobSnapshots(queue, counts.failed ?? 0, 20);
 
-    console.log(JSON.stringify({ queueName, counts, failedJobs }, null, 2));
+    console.log(JSON.stringify({ queueName: queue.name, counts, failedJobs }, null, 2));
   } finally {
-    await queue.close();
-    await redis.quit().catch(() => redis.disconnect());
+    await closeGatewayBullMqQueues();
+    await closeGatewayRedisConnections();
   }
 }
 

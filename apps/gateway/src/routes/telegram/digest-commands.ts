@@ -1,6 +1,5 @@
 import { db } from '@shopkeeper/db';
-import { buildDashboardInternalHeaders } from '../../clients/dashboard-internal.js';
-import { getGatewayDashboardUrl } from '../../config/env.js';
+import { postDashboardInternal } from '../../clients/dashboard-internal.js';
 import logger from '../../logger.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
@@ -94,14 +93,12 @@ export async function handleDigestCommand(
   }
 
   await reply(filler());
-  const response = await fetch(`${getGatewayDashboardUrl()}/api/messages/internal`, {
-    method: 'POST',
-    headers: buildDashboardInternalHeaders(),
-    body: JSON.stringify({ threadId: targetId, text: command.text }),
+  const response = await postDashboardInternal('/api/messages/internal', {
+    threadId: targetId,
+    text: command.text,
   });
   if (!response.ok) {
-    const error = await response.text();
-    logger.error({ status: response.status, err: error, threadId: targetId }, '[Telegram] Digest REPLY failed');
+    logger.error({ status: response.status, err: response.responseBody, threadId: targetId }, '[Telegram] Digest REPLY failed');
     await reply('Reply failed to send. Please try again from the dashboard.');
     return true;
   }

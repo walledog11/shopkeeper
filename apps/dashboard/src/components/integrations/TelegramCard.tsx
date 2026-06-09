@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { fetcher } from "@/lib/api/fetcher"
 import { formatDate } from "@/lib/format/date"
 import { cn } from "@/lib/ui/cn"
+import { StatusPill } from "./StatusPill"
 
 const MAX_TELEGRAM_DEVICES = 3
 
@@ -70,39 +71,42 @@ export default function TelegramCard() {
   }
 
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-card overflow-hidden">
-      <button type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
-      >
-        <div className="size-11 rounded-lg flex items-center justify-center shrink-0 bg-sky-500/[0.08] border border-sky-500/20">
-          <Send className="size-[22px] text-sky-300" />
-        </div>
-
-        <div className="flex-1 min-w-0 space-y-1">
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <p className="text-[15px] font-bold text-white/95 leading-none">Telegram</p>
-            {isConnected ? (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-400/[0.08] border border-emerald-400/[0.20] rounded-full px-2 py-0.5">
-                <span className="size-1.5 rounded-full bg-emerald-400" />
-                {chats.length === 1 ? '1 device' : `${chats.length} devices`}
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/30 border border-white/[0.10] rounded-full px-2 py-0.5">
-                <span className="size-1.5 rounded-full bg-white/20" />
-                Not connected
-              </span>
-            )}
+    <div id="telegram" className="rounded-xl border border-white/[0.08] bg-card overflow-hidden scroll-mt-6">
+      <div className="relative">
+        <button type="button"
+          onClick={() => setOpen(o => !o)}
+          className="w-full flex items-start gap-4 px-5 py-4 text-left hover:bg-white/[0.02] transition-colors"
+        >
+          <div className="size-11 rounded-lg flex items-center justify-center shrink-0 bg-sky-500/[0.08] border border-sky-500/20">
+            <Send className="size-[22px] text-sky-300" />
           </div>
-          <p className="text-xs text-white/40 leading-relaxed">
-            Talk to the AI agent over Telegram. Approve plans, review digests, look up orders.
-          </p>
-        </div>
 
-        <div className="flex items-center gap-3 shrink-0 mt-1">
-          <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
-        </div>
-      </button>
+          <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <p className="text-[15px] font-bold text-white/95 leading-none">Telegram</p>
+              <StatusPill state={isConnected ? 'working' : 'not-connected'} />
+            </div>
+            <p className="text-xs text-white/40 leading-relaxed">
+              {isConnected
+                ? `${chats.length} device${chats.length === 1 ? '' : 's'} linked`
+                : 'Talk to the AI agent over Telegram. Approve plans, review digests, look up orders.'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0 mt-1">
+            <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
+          </div>
+        </button>
+        {!isConnected && !open && isAvailable && (
+          <button type="button"
+            disabled={connecting}
+            onClick={connect}
+            className="absolute right-12 top-4 text-xs font-semibold text-white/90 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.15] rounded-md px-3 py-1.5 transition-colors"
+          >
+            {connecting ? 'Opening…' : 'Connect'}
+          </button>
+        )}
+      </div>
 
       {open && (
         <div className="border-t border-white/[0.06] px-5 py-4 space-y-3">

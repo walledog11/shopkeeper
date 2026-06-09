@@ -1,4 +1,5 @@
-import { createGatewayRedisClient } from '../clients/redis-client.js';
+import { closeGatewayBullMqQueues } from '../clients/gateway-queues.js';
+import { closeGatewayRedisConnections } from '../clients/redis-client.js';
 import { loadGatewayEnv } from '../config/load-env.js';
 import { clearQueueDiagnosticsCache } from '../health.js';
 import { removeFailedQueueJob } from '../queue-maintenance.js';
@@ -12,9 +13,8 @@ async function main(): Promise<void> {
     throw new Error('Usage: npx tsx src/scripts/remove-failed-queue-job.ts <inbound|ai-summary> <jobId>');
   }
 
-  const redis = createGatewayRedisClient();
   try {
-    const removed = await removeFailedQueueJob(redis, queue, jobId);
+    const removed = await removeFailedQueueJob(queue, jobId);
     if (!removed) {
       console.error(`Failed job not found: queue=${queue} jobId=${jobId}`);
       process.exitCode = 1;
@@ -24,7 +24,8 @@ async function main(): Promise<void> {
     clearQueueDiagnosticsCache();
     console.log(JSON.stringify({ removed: true, queue, jobId }));
   } finally {
-    await redis.quit().catch(() => redis.disconnect());
+    await closeGatewayBullMqQueues();
+    await closeGatewayRedisConnections();
   }
 }
 

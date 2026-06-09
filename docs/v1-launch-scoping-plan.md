@@ -19,7 +19,7 @@ observability gap on the live gateway support path, and add one smoke test. Ever
 |---|---|---|---|---|
 | **A1** | `ORDER_RISK_MONITOR_ENABLED=false` in Railway | A — launch-blocking | Small | ⬜ |
 | **A2** | Confirm `autoExecuteEnabled` off for all orgs at launch | A — launch-blocking | Small | ✅ 2026-06-09 |
-| **A3** | Failure-observability posture for gateway operator path (accept + document) | A — launch-blocking | Small / Medium | ⬜ |
+| **A3** | Failure-observability posture for gateway operator path (accept + document) | A — launch-blocking | Small / Medium | ✅ 2026-06-09 |
 | **A4** | Confirm evals cover the V1 host; add one gateway-operator smoke test | A — launch-blocking | Small + Medium | ✅ 2026-06-09 |
 | **B1–B8** | Order-ops + premature generalization + operator settings-source divergence | B — deferred | — | ⬜ defer |
 
@@ -123,16 +123,28 @@ the legacy boolean and the newer `autoExecuteMode` enum, not just the boolean th
 **Every org resolved to `off`** (none `shadow` or `live`, none with the legacy boolean `true`). A2
 holds; no remediation needed. Re-confirm before launch if any org edits settings in the interim.
 
-### A3 — Failure-observability posture for the live gateway operator path — *Small (accept) / Medium (build)*
+### A3 — Failure-observability posture for the live gateway operator path — *Small (accept)* — ✅ accepted + documented 2026-06-09
 `executeOperatorAgentTurn` omits `recordToolFailure`, so the per-tool failure-*rate*
 counter/threshold alert (the dashboard's `opsAlert` Pino path) does not fire for operator-turn tool
-failures. Individual failures **still** persist as `AgentAction` error rows and surface in BullMQ
-job-failure logs.
-- **Recommendation: accept the counter gap for V1.** Confirm operator-turn tool failures are
-  visible in gateway logs, and document the gap. Pre-launch volume is ~0 and individual failures are
-  already observable; the missing piece is only threshold aggregation.
-- Alternative (Medium): wire an ioredis-backed failure counter on the gateway mirroring the
-  dashboard's. Not recommended for V1.
+failures. **Decision: accept the counter gap for V1.** The missing piece is only threshold
+aggregation; individual failures are already observable on two tiers, both verified 2026-06-09:
+
+- **Per-tool failures** (caught inside the agent loop, never propagate — `run.ts:192`) surface as
+  (a) `AgentAction` error rows — `recordAgentActionsBatch` in `finish()` persists every action
+  including `status: "error"` + `errorDetail`, independent of `recordToolFailure`
+  (`run.ts:101-113`, `agent-actions.ts:54-59,82-83`); and (b) gateway logs —
+  `logger.error "[agent] tool error"` on a throw (`run.ts:198`) plus `logger.info "[agent] tool
+  result"` carrying `isError`/`status` for every call (`run.ts:225-233`).
+- **Whole-turn failures** (billing gate, thread resolution, lock, any unhandled throw out of
+  `executeOperatorAgentTurn`) are caught by the Telegram route handlers and logged
+  `logger.error "[Telegram] Operator agent turn failed ..."` (`agent-execution.ts:82-85`,
+  `pending-plan-commands.ts:60-63`). The handlers catch-and-reply rather than rethrow, so the
+  BullMQ **job succeeds** — these surface through the handlers' own logging, *not* job-failure
+  logging (corrects an earlier note in this doc that named BullMQ job-failure logs).
+
+Pre-launch volume is ~0 and individual failures are already observable; only threshold aggregation
+is absent. Alternative (Medium): wire an ioredis-backed failure counter on the gateway mirroring the
+dashboard's. Not recommended for V1.
 
 ### A4 — Confirm evals cover the V1 host; add one gateway-operator smoke test — *Small (confirm) + Medium (test)* — ✅ done 2026-06-09
 The agent-quality evals (`apps/dashboard/src/lib/agent/__evals__/runner.ts`) drive the **shared**

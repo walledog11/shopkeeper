@@ -64,7 +64,8 @@ Risks to handle during implementation:
 
 ### Provider send failures
 
-- Alert on repeated outbound failures from Postmark/email, Meta/Instagram, Twilio/WhatsApp/SMS, and Shopify webhook registration or send paths.
+- Alert on repeated outbound failures from Postmark/email, Meta/Instagram, Twilio/WhatsApp/SMS, and Shopify webhook registration or send paths (dashboard).
+- Alert on repeated Telegram operator-notification send failures from the gateway (`clients/telegram-client.ts` → `provider-send-alerts.ts`; provider `telegram`, channel `operator_notify`).
 - Use existing dispatch result failures and caught provider exceptions.
 - Do not change message persistence semantics. Failed dispatches should still avoid saving successful outbound messages unless existing code already does otherwise.
 - Default threshold:
@@ -74,10 +75,11 @@ Risks to handle during implementation:
 
 - Alert on repeated API-level agent failures from dashboard agent endpoints.
 - Alert on repeated tool results beginning with `Error:` and thrown tool exceptions.
+- Alert on repeated gateway worker thread-sink dashboard dispatch hop failures (`message-handlers/agent-thread-sink.ts` → `agent-failure-alerts.ts`; route `gateway-thread-sink`, tools `send_reply` / `send_email`).
 - Group by org and tool name where available.
 - Preserve current agent summaries and user-facing error behavior.
 - Default threshold:
-  - `AGENT_FAILURE_ALERT_THRESHOLD=3` per org/tool/window
+  - `AGENT_FAILURE_ALERT_THRESHOLD=3` per org/tool/window (gateway thread-sink uses the same env var)
 
 ## Implementation Phases
 
@@ -126,6 +128,30 @@ Instrument signature rejection paths in gateway webhook routes.
 Completion gate:
 
 - [x] Repeated invalid signatures alert after `WEBHOOK_SIGNATURE_ALERT_THRESHOLD`; single invalid requests only log at the existing level.
+
+### Phase 2b: Gateway Telegram provider send failures
+
+Instrument outbound Telegram operator-notification failures in the gateway worker/server process.
+
+- [x] Add provider-send alerts around `telegram-client.sendMessage` HTTP failures and network errors.
+- [x] Group by provider `telegram`, channel `operator_notify`, and org id where available (`unknown` when only chat id is known).
+- [x] Include chat id, HTTP status, and truncated error detail in alert extras only; do not change operator notify persistence semantics.
+
+Completion gate:
+
+- [x] Repeated Telegram send failures cross `PROVIDER_SEND_ALERT_THRESHOLD`; successful operator notifications remain unchanged.
+
+### Phase 2c: Gateway agent thread-sink failures
+
+Instrument dashboard dispatch hop failures from the gateway worker thread sink.
+
+- [x] Add agent-failure alerts when `/api/agent/io-send-internal` returns non-OK or throws for `send_reply` / `send_email`.
+- [x] Group by route `gateway-thread-sink`, org, and tool; preserve existing tool error strings returned to the agent.
+- [x] Do not alert on business-logic tool `Error:` results returned in OK responses — dashboard provider/agent alerting already covers those paths.
+
+Completion gate:
+
+- [x] Repeated thread-sink dispatch hop failures alert after `AGENT_FAILURE_ALERT_THRESHOLD`; successful agent turns remain unchanged.
 
 ### Phase 3: Dashboard provider send failures
 

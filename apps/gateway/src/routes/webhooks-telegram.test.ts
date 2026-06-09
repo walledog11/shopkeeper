@@ -23,7 +23,7 @@ const { mockLogger, redisStore, incrStore, sendMessageSpy, executeOperatorAgentT
   },
   redisStore: new Map<string, string>(),
   incrStore: new Map<string, number>(),
-  sendMessageSpy: vi.fn().mockResolvedValue(undefined),
+  sendMessageSpy: vi.fn().mockResolvedValue(true),
   executeOperatorAgentTurnSpy: vi.fn().mockResolvedValue({
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',

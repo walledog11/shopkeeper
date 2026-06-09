@@ -59,6 +59,8 @@ export async function precomputeThreadPlan(
   }
 }
 
+// Best-effort customer auto-ack: failures are logged only so the ai-summary job
+// still completes outside business hours.
 export async function sendAutoAck(organizationId: string, threadId: string): Promise<void> {
   try {
     const response = await requestAutoAck(threadId);

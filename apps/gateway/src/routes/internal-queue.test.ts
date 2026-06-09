@@ -14,13 +14,6 @@ vi.mock('../health.js', () => ({
   clearQueueDiagnosticsCache: () => clearQueueDiagnosticsCache(),
 }));
 
-vi.mock('../clients/redis-client.js', () => ({
-  createGatewayRedisClient: () => ({
-    quit: vi.fn().mockResolvedValue(undefined),
-    disconnect: vi.fn(),
-  }),
-}));
-
 vi.mock('../config/env.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../config/env.js')>();
   return {
@@ -62,7 +55,7 @@ describe('POST /internal/queue/remove-failed', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ removed: true, queue: 'ai-summary', jobId: '1' });
-    expect(removeFailedQueueJob).toHaveBeenCalledWith(expect.anything(), 'ai-summary', '1');
+    expect(removeFailedQueueJob).toHaveBeenCalledWith('ai-summary', '1');
     expect(clearQueueDiagnosticsCache).toHaveBeenCalled();
   });
 

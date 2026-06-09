@@ -13,7 +13,9 @@ import { gatewayThreadSink } from './agent-thread-sink.js';
 //
 // runAgent is the core directly — the gateway has no ops-alert counter, so it
 // omits recordToolFailure; tool failures still surface as AgentAction error rows
-// and via the worker's BullMQ job-failure logging.
+// and via the "[agent] tool error"/"[agent] tool result" logs. Whole-turn throws
+// are logged by the Telegram route handlers ("[Telegram] Operator agent turn
+// failed ..."), which catch and reply rather than failing the job.
 
 const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCalls, settings, options) =>
   runAgent(ctx, instruction, approvedToolCalls, settings, {

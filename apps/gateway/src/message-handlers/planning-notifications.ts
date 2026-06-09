@@ -1,6 +1,6 @@
 import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
-import { formatChannelLabel } from '../routes/telegram/format.js';
+import { formatChannelLabel } from '../lib/channel-format.js';
 import { notifyOperator } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
@@ -118,32 +118,31 @@ export async function sendOperatorPlanNotification(
   plan: AgentPlan,
   instruction: string,
 ): Promise<void> {
-  try {
-    const chats = await db.orgMemberTelegramChat.findMany({
-      where: { orgMember: { organizationId } },
-      select: { chatId: true },
+  const chats = await db.orgMemberTelegramChat.findMany({
+    where: { orgMember: { organizationId } },
+    select: { chatId: true },
+  });
+
+  if (chats.length === 0) {
+    logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
+    return;
+  }
+
+  const summary = aiSummary || instruction;
+  const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
+
+  for (const member of chats) {
+    const result = await notifyOperator(organizationId, member, message, {
+      pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
+    }, {
+      policy: 'critical',
+      threadId,
     });
-
-    if (chats.length === 0) {
-      logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
-      return;
+    if (result) {
+      logger.info(
+        { organizationId, threadId, chatId: result.chatId },
+        '[Worker] Plan notification sent',
+      );
     }
-
-    const summary = aiSummary || instruction;
-    const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
-
-    for (const member of chats) {
-      const result = await notifyOperator(organizationId, member, message, {
-        pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
-      });
-      if (result) {
-        logger.info(
-          { organizationId, threadId, chatId: result.chatId },
-          '[Worker] Plan notification sent',
-        );
-      }
-    }
-  } catch (err) {
-    logger.error({ err: (err as Error).message, threadId }, '[Worker] sendOperatorPlanNotification error');
   }
 }

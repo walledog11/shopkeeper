@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelType } from '@shopkeeper/db';
-import { formatChannelLabel } from './format.js';
+import { formatChannelLabel } from './channel-format.js';
 
 describe('formatChannelLabel', () => {
   it('formats Instagram DMs with the canonical label', () => {

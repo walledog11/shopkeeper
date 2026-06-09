@@ -6,6 +6,11 @@ export const MODEL = {
   // is human-approved before taking effect — judgment-grade, low-frequency.
   VOICE_SYNTHESIS: 'claude-sonnet-4-6',
 } as const;
+// Operator digests now route through Telegram, but BullMQ queue/job names below
+// still use the legacy `whatsapp-*` prefix. Renaming live repeatable jobs needs a
+// one-time deploy: remove the old repeatable entries from Redis, deploy with new
+// names, and let registration re-schedule. Deferred until a digest deploy already
+// touches the worker.
 export const QUEUE = {
   INBOUND: 'inbound-messages',
   TOKEN_HEALTH: 'token-health',

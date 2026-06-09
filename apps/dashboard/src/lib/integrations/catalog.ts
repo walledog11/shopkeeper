@@ -1,4 +1,4 @@
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'coming-soon'
+export type ConnectType = 'email' | 'ig' | 'shopify'
 
 export interface PlatformConfig {
   id: string
@@ -12,6 +12,16 @@ export interface PlatformConfig {
 }
 
 export const PLATFORM_CONFIG: PlatformConfig[] = [
+  {
+    id: "shopify",
+    platform: "shopify",
+    name: "Shopify",
+    logo: "/logos/shopify.svg",
+    description: "Sync customer orders, returns, and Shopify Inbox messages directly into Shopkeeper.",
+    connectType: 'shopify',
+    accentBg: "bg-emerald-500/[0.08]",
+    accentBorder: "border-emerald-500/20",
+  },
   {
     id: "email",
     platform: "email",
@@ -31,26 +41,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     connectType: 'ig',
     accentBg: "bg-pink-500/[0.08]",
     accentBorder: "border-pink-500/20",
-  },
-  {
-    id: "tiktok",
-    platform: "tiktok",
-    name: "TikTok",
-    logo: "/logos/tiktok-logo.png",
-    description: "Manage TikTok Shop messages and video comments in one unified inbox.",
-    connectType: 'coming-soon',
-    accentBg: "bg-white/[0.05]",
-    accentBorder: "border-white/[0.10]",
-  },
-  {
-    id: "shopify",
-    platform: "shopify",
-    name: "Shopify",
-    logo: "/logos/shopify.svg",
-    description: "Sync customer orders, returns, and Shopify Inbox messages directly into Shopkeeper.",
-    connectType: 'shopify',
-    accentBg: "bg-emerald-500/[0.08]",
-    accentBorder: "border-emerald-500/20",
   },
 ]
 

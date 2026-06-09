@@ -201,7 +201,7 @@ export const registerDigestMaintenanceJob: MaintenanceJobRegistration = async (c
 
   const worker = createMaintenanceWorker(context, QUEUE.DIGEST, sendScheduledDigests, {
     label: 'Digest',
-    failureQueue: 'whatsapp-digest',
+    failureQueue: QUEUE.DIGEST,
   });
 
   return { workers: [worker], queues: [queue] };

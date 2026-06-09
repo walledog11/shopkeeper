@@ -6,7 +6,8 @@ import internalQueueRoutes from './routes/internal-queue.js';
 import { getGatewayDashboardUrl, validateGatewayEnv } from './config/env.js';
 import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
-import { createGatewayRedisClient } from './clients/redis-client.js';
+import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
+import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
 
 export function createGatewayApp() {
@@ -36,11 +37,7 @@ export async function startGatewayServer() {
 
   const app = createGatewayApp();
   const PORT = process.env.PORT || 8080;
-  const healthRedis = createGatewayRedisClient();
-
-  healthRedis.on('error', (err: Error) => {
-    logger.error({ err: err.message }, '[Health] Redis connection error');
-  });
+  const healthRedis = getGatewayRedis();
 
   // Deep health check — verifies DB, Redis, worker heartbeat, and queue readiness
   app.get('/health/deep', async (_req, res) => {
@@ -82,7 +79,7 @@ export async function startGatewayServer() {
     }
 
     try {
-      const queueCounts = await getQueueDiagnostics(healthRedis);
+      const queueCounts = await getQueueDiagnostics();
       checks.queues = { status: 'ok', counts: queueCounts };
     } catch (err) {
       checks.queues = { status: 'error' };
@@ -96,7 +93,7 @@ export async function startGatewayServer() {
   app.get('/health/queues', async (_req, res) => {
     try {
       const heartbeat = await readWorkerHeartbeat(healthRedis);
-      const queueCounts = await getQueueDiagnostics(healthRedis);
+      const queueCounts = await getQueueDiagnostics();
 
       res.status(200).json({
         worker: {
@@ -150,7 +147,10 @@ export async function startGatewayServer() {
     server.close(async () => {
       logger.info('[Shopkeeper Gateway] HTTP server closed');
       await db.$disconnect().catch(() => {});
-      healthRedis.quit().catch(() => healthRedis.disconnect()).finally(() => {
+      Promise.all([
+        closeGatewayBullMqQueues(),
+        closeGatewayRedisConnections(),
+      ]).finally(() => {
         clearTimeout(forceExit);
         process.exit(0);
       });

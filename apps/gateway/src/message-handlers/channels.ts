@@ -1,5 +1,6 @@
 import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
+import { fetchInstagramUserProfile } from '../clients/meta-graph.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import type { InboundJobData, ShopifyOrderPayload } from '../types.js';
@@ -11,8 +12,6 @@ import {
   stripQuotedReply,
   type ClassificationResult,
 } from './shared.js';
-
-const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
 export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
   const { organizationId, traceId } = job.data;
@@ -66,13 +65,10 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
         select: { accessToken: true },
       });
       if (integration?.accessToken) {
-        const profileRes = await fetch(
-          `${FB_GRAPH}/${senderId}?fields=name,profile_pic&access_token=${integration.accessToken}`,
-        );
-        if (profileRes.ok) {
-          const profileData = await profileRes.json() as { name?: string; profile_pic?: string };
-          igName = profileData.name || null;
-          igProfilePic = profileData.profile_pic || null;
+        const profileResult = await fetchInstagramUserProfile(senderId, integration.accessToken);
+        if (profileResult.data) {
+          igName = profileResult.data.name || null;
+          igProfilePic = profileResult.data.profile_pic || null;
         }
       }
     } catch (profileErr) {

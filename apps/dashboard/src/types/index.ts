@@ -61,6 +61,7 @@ export interface Integration {
   metadata?: unknown;
   createdAt: string;
   lastActivity?: string | null;
+  threadsThisWeek?: number;
 }
 
 export interface Customer {

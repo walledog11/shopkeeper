@@ -1,9 +1,9 @@
 "use client"
 
-import { Suspense, useCallback, useState, useEffect } from "react"
+import { Suspense, useCallback, useState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
-import { CheckCircle2, AlertCircle, AlertTriangle, X, Zap } from "lucide-react"
+import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
@@ -15,6 +15,7 @@ import {
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { Integration } from "@/types"
 
 // ── Page ───────────────────────────────────────────────────────────────────────
@@ -29,43 +30,51 @@ export default function IntegrationsPageClient() {
 
 function IntegrationsPageContent() {
   const searchParams = useSearchParams()
-  const { data: integrations = [], mutate } = useSWR<Integration[]>('/api/integrations', fetcher)
-  const [banner, setBanner] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const { data, mutate } = useSWR<Integration[]>('/api/integrations', fetcher)
+  const { data: telegramStatus } = useSWR<{ connected: boolean }>('/api/integrations/telegram', fetcher)
+  const integrations = data ?? []
+  const loaded = data !== undefined
+  const [openId, setOpenId] = useState<string | null>(null)
+
+  const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const showToast = useCallback((tone: 'success' | 'error', message: string) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current)
+    setToast({ tone, message })
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 5000)
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString())
     const connected = params.get('connected')
     const error = params.get('error')
-    if (connected === 'instagram') setBanner({ type: 'success', message: 'Instagram connected successfully.' })
-    else if (connected === 'shopify') setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
-    else if (connected === 'gmail') setBanner({ type: 'success', message: 'Gmail connected successfully.' })
-    else if (connected === 'outlook') setBanner({ type: 'success', message: 'Outlook connected successfully.' })
-    else if (error) setBanner({ type: 'error', message: OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.' })
-  }, [searchParams])
+    if (connected === 'instagram') showToast('success', 'Instagram connected.')
+    else if (connected === 'shopify') showToast('success', 'Shopify store connected.')
+    else if (connected === 'gmail') showToast('success', 'Gmail connected.')
+    else if (connected === 'outlook') showToast('success', 'Outlook connected.')
+    else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
+  }, [searchParams, showToast])
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
       if (event.origin !== window.location.origin || !isOAuthDoneMessage(event.data)) return
       void mutate()
       if (event.data.connected === 'instagram') {
-        setBanner({ type: 'success', message: 'Instagram connected successfully.' })
+        showToast('success', 'Instagram connected.')
       } else if (event.data.connected === 'shopify') {
-        setBanner({ type: 'success', message: 'Shopify store connected successfully.' })
+        showToast('success', 'Shopify store connected.')
       } else if (event.data.connected === 'gmail') {
-        setBanner({ type: 'success', message: 'Gmail connected successfully.' })
+        showToast('success', 'Gmail connected.')
       } else if (event.data.connected === 'outlook') {
-        setBanner({ type: 'success', message: 'Outlook connected successfully.' })
+        showToast('success', 'Outlook connected.')
       } else if (event.data.error) {
-        setBanner({
-          type: 'error',
-          message: OAUTH_ERROR_MESSAGES[event.data.error] ?? 'An unexpected error occurred.',
-        })
+        showToast('error', OAUTH_ERROR_MESSAGES[event.data.error] ?? 'An unexpected error occurred.')
       }
     }
 
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [mutate])
+  }, [mutate, showToast])
 
   const launchOAuth = useCallback((url: string, onClosed?: () => void) => {
     const popup = openOAuthPopup(url)
@@ -90,7 +99,7 @@ function IntegrationsPageContent() {
       await mutate()
       return true
     } catch {
-      setBanner({ type: 'error', message: 'Failed to connect. Please try again.' })
+      showToast('error', 'Failed to connect. Please try again.')
       return false
     }
   }
@@ -100,8 +109,9 @@ function IntegrationsPageContent() {
       const res = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       await mutate()
+      showToast('success', 'Disconnected.')
     } catch {
-      setBanner({ type: 'error', message: 'Failed to disconnect. Please try again.' })
+      showToast('error', 'Failed to disconnect. Please try again.')
     }
   }
 
@@ -109,10 +119,22 @@ function IntegrationsPageContent() {
   const getLastActivity = (platform: string) =>
     integrations.find(i => i.platform === platform)?.lastActivity ?? null
 
-  // Stat strip
-  const activePlatforms = PLATFORM_CONFIG.filter(p => p.connectType !== 'coming-soon')
-  const connectedCount = activePlatforms.filter(p => p.platform && getConnected(p.platform).length > 0).length
   const alertCount = integrations.filter(hasIntegrationTokenAlert).length
+
+  const hasShopify = integrations.some(i => i.platform === 'shopify')
+  const hasEmail = integrations.some(i => i.platform === 'email')
+  const setupSteps = [
+    { id: 'shopify', label: 'Connect your Shopify store', detail: 'So Shopkeeper can look up orders and customers for you.', done: hasShopify },
+    { id: 'email', label: 'Connect your support email', detail: 'Customer emails become tickets you can answer in one place.', done: hasEmail },
+    { id: 'telegram', label: 'Link Telegram on your phone', detail: 'Approve replies and get updates wherever you are.', done: telegramStatus?.connected ?? false },
+  ]
+  const showSetup = loaded && (!hasShopify || !hasEmail)
+  const nextStepIndex = setupSteps.findIndex(s => !s.done)
+
+  function goToStep(stepId: string) {
+    if (stepId !== 'telegram') setOpenId(stepId)
+    document.getElementById(stepId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -124,115 +146,102 @@ function IntegrationsPageContent() {
           <p className="text-sm text-white/35 mt-0.5">Connect your channels and tools to Shopkeeper.</p>
         </div>
 
-        {/* Stat strip */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-3.5">
-            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest mb-1">Connected</p>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-white/80">{connectedCount}</span>
-              <span className="text-sm text-white/30">of {activePlatforms.length}</span>
-            </div>
-          </div>
-          <div className={cn(
-            "rounded-xl border px-4 py-3.5",
-            alertCount > 0
-              ? "border-amber-400/[0.20] bg-amber-400/[0.04]"
-              : "border-white/[0.07] bg-white/[0.02]"
-          )}>
-            <p className={cn(
-              "text-xs font-semibold uppercase tracking-widest mb-1",
-              alertCount > 0 ? "text-amber-400/70" : "text-white/30"
-            )}>
-              {alertCount > 0 ? 'Needs attention' : 'Health'}
-            </p>
-            <div className="flex items-center gap-2">
-              {alertCount > 0 ? (
-                <>
-                  <AlertTriangle className="size-4 text-amber-400" />
-                  <span className="text-sm font-semibold text-amber-400">{alertCount} alert{alertCount > 1 ? 's' : ''}</span>
-                </>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <Zap className="size-4 text-emerald-400" />
-                  <span className="text-sm font-semibold text-emerald-400">All good</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Banner */}
-        {banner && (
-          <div className={cn(
-            "flex items-start gap-3 rounded-lg px-4 py-3.5 text-sm border",
-            banner.type === 'success'
-              ? 'bg-emerald-400/[0.06] border-emerald-400/[0.15] text-emerald-400'
-              : 'bg-red-400/[0.06] border-red-400/[0.15] text-red-400'
-          )}>
-            {banner.type === 'success'
-              ? <CheckCircle2 className="size-4 mt-0.5 shrink-0" />
-              : <AlertCircle className="size-4 mt-0.5 shrink-0" />
-            }
-            <span>{banner.message}</span>
-            <button type="button"
-              onClick={() => setBanner(null)}
-              className="ml-auto text-current opacity-40 hover:opacity-80 transition-opacity shrink-0"
-            >
-              <X className="size-3.5" />
-            </button>
+        {/* Attention banner — only when something needs fixing */}
+        {alertCount > 0 && (
+          <div className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm border border-amber-400/[0.20] bg-amber-400/[0.04] text-amber-400">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span>
+              {alertCount} connection{alertCount > 1 ? 's' : ''} need{alertCount > 1 ? '' : 's'} attention — use the Fix button below.
+            </span>
           </div>
         )}
 
-        {/* Data sources */}
-        <div className="space-y-3">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Data sources</p>
-            <p className="text-xs italic text-white/25">What Concierge reads from to answer questions and take action.</p>
+        {/* Setup progress — until Shopify and email are connected */}
+        {showSetup && (
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-5 py-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="text-sm font-semibold text-white/80">Set up Shopkeeper</p>
+              <p className="text-xs text-white/35">Step {nextStepIndex + 1} of {setupSteps.length}</p>
+            </div>
+            <ol className="mt-3 space-y-2.5">
+              {setupSteps.map((step, i) => (
+                <li key={step.id} className="flex items-start gap-3">
+                  {step.done ? (
+                    <CheckCircle2 className="size-4 mt-0.5 text-emerald-400 shrink-0" />
+                  ) : (
+                    <span className={cn(
+                      "size-4 mt-0.5 rounded-full border text-[10px] font-semibold flex items-center justify-center shrink-0",
+                      i === nextStepIndex ? "border-white/40 text-white/70" : "border-white/[0.15] text-white/30",
+                    )}>
+                      {i + 1}
+                    </span>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-xs font-medium", step.done ? "text-white/35" : "text-white/70")}>
+                      {step.label}
+                    </p>
+                    {!step.done && i === nextStepIndex && (
+                      <p className="text-xs text-white/35 mt-0.5">{step.detail}</p>
+                    )}
+                  </div>
+                  {!step.done && i === nextStepIndex && (
+                    <button type="button"
+                      onClick={() => goToStep(step.id)}
+                      className="text-xs font-semibold text-white/90 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.15] rounded-md px-3 py-1.5 transition-colors shrink-0"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
           </div>
-          {PLATFORM_CONFIG.flatMap(def => def.id === 'shopify' ? [(
-            <IntegrationCard
-              key={def.id}
-              config={def}
-              connected={def.platform ? getConnected(def.platform) : []}
-              lastActivity={def.platform ? getLastActivity(def.platform) : null}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-              onLaunchOAuth={launchOAuth}
-            />
-          )] : [])}
-        </div>
+        )}
 
-        {/* Channels */}
-        <div className="space-y-3">
-          <div className="flex items-baseline gap-3 flex-wrap">
-            <p className="text-xs font-semibold text-white/30 uppercase tracking-widest">Channels</p>
-            <p className="text-xs italic text-white/25">Where Concierge talks to your customers and team.</p>
+        {/* Integrations */}
+        {loaded ? (
+          <div className="space-y-3">
+            {PLATFORM_CONFIG.map(def => (
+              <IntegrationCard
+                key={def.id}
+                config={def}
+                connected={def.platform ? getConnected(def.platform) : []}
+                lastActivity={def.platform ? getLastActivity(def.platform) : null}
+                onConnect={handleConnect}
+                onDisconnect={handleDisconnect}
+                onLaunchOAuth={launchOAuth}
+                open={openId === def.id}
+                onOpenChange={(o) => setOpenId(o ? def.id : null)}
+              />
+            ))}
+            <TelegramCard />
           </div>
-          {PLATFORM_CONFIG.flatMap(def => def.id === 'email' || def.id === 'instagram' ? [(
-            <IntegrationCard
-              key={def.id}
-              config={def}
-              connected={def.platform ? getConnected(def.platform) : []}
-              lastActivity={def.platform ? getLastActivity(def.platform) : null}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-              onLaunchOAuth={launchOAuth}
-            />
-          )] : [])}
-          <TelegramCard />
-          {PLATFORM_CONFIG.flatMap(def => def.id === 'tiktok' ? [(
-            <IntegrationCard
-              key={def.id}
-              config={def}
-              connected={def.platform ? getConnected(def.platform) : []}
-              lastActivity={def.platform ? getLastActivity(def.platform) : null}
-              onConnect={handleConnect}
-              onDisconnect={handleDisconnect}
-            />
-          )] : [])}
-        </div>
+        ) : (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-card px-5 py-4 flex items-start gap-4">
+                <Skeleton className="size-11 rounded-lg" />
+                <div className="flex-1 space-y-2 pt-0.5">
+                  <Skeleton className="h-4 w-44" />
+                  <Skeleton className="h-3 w-72" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
       </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1c1c1c] border border-white/[0.10] text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
+          {toast.tone === 'error'
+            ? <AlertCircle className="size-4 text-red-400 shrink-0" />
+            : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
+          }
+          {toast.message}
+        </div>
+      )}
     </div>
   )
 }

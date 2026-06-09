@@ -442,7 +442,7 @@ describe('Message worker — email branch', () => {
 });
 
 describe('AI Summary worker — filter gating', () => {
-  it('skips plan precompute and WhatsApp notification when filterStatus is questionable', async () => {
+  it('skips plan precompute and operator notification when filterStatus is questionable', async () => {
     mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('questionable'));
 
     const fetchUrls: string[] = [];
@@ -481,7 +481,7 @@ describe('AI Summary worker — filter gating', () => {
     expect(updated?.filterStatus).toBe('questionable');
   });
 
-  it('skips plan precompute and WhatsApp notification when filterStatus is filtered', async () => {
+  it('skips plan precompute and operator notification when filterStatus is filtered', async () => {
     mockAnthropicCreate.mockResolvedValueOnce(classifierResponse('filtered'));
 
     const fetchUrls: string[] = [];

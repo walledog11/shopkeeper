@@ -13,7 +13,7 @@ function serializeIntegration<T extends {
   refreshToken?: string | null;
   createdAt?: Date;
   tokenExpiresAt?: Date | null;
-}>(integration: T, lastActivity?: string | null) {
+}>(integration: T, lastActivity?: string | null, threadsThisWeek?: number) {
   const safe = { ...integration } as Omit<T, 'accessToken' | 'refreshToken'> & {
     accessToken?: string | null;
     refreshToken?: string | null;
@@ -23,13 +23,15 @@ function serializeIntegration<T extends {
   return {
     ...safe,
     ...(lastActivity !== undefined && { lastActivity }),
+    ...(threadsThisWeek !== undefined && { threadsThisWeek }),
   };
 }
 
 export const GET = withOrgRoute(
   { context: 'Integrations GET', errorMessage: 'Failed to fetch integrations' },
   async ({ org }) => {
-    const [integrations, activityRows] = await Promise.all([
+    const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+    const [integrations, activityRows, weeklyRows] = await Promise.all([
       db.integration.findMany({
         where: { organizationId: org.id },
         orderBy: { createdAt: 'asc' },
@@ -39,14 +41,27 @@ export const GET = withOrgRoute(
         where: { organizationId: org.id, deletedAt: null },
         _max: { updatedAt: true },
       }),
+      db.thread.groupBy({
+        by: ['channelType'],
+        where: { organizationId: org.id, deletedAt: null, createdAt: { gte: weekAgo } },
+        _count: { _all: true },
+      }),
     ]);
 
     const lastActivityByChannel: Record<string, string | null> = {};
     for (const row of activityRows) {
       lastActivityByChannel[row.channelType] = row._max.updatedAt?.toISOString() ?? null;
     }
+    const weeklyByChannel: Record<string, number> = {};
+    for (const row of weeklyRows) {
+      weeklyByChannel[row.channelType] = row._count._all;
+    }
 
-    const result = integrations.map(i => serializeIntegration(i, lastActivityByChannel[i.platform] ?? null));
+    const result = integrations.map(i => serializeIntegration(
+      i,
+      lastActivityByChannel[i.platform] ?? null,
+      weeklyByChannel[i.platform] ?? 0,
+    ));
 
     return NextResponse.json(result);
   },

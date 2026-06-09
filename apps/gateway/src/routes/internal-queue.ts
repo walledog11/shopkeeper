@@ -1,6 +1,5 @@
 import express, { type Request, type Response, type Router } from 'express';
 import logger from '../logger.js';
-import { createGatewayRedisClient } from '../clients/redis-client.js';
 import { clearQueueDiagnosticsCache } from '../health.js';
 import { removeFailedQueueJob } from '../queue-maintenance.js';
 import { authorizeInternalRequest } from './internal-auth.js';
@@ -16,9 +15,8 @@ export function registerInternalQueueRoutes(router: Router): void {
       return res.status(400).json({ error: 'queue and jobId are required' });
     }
 
-    const redis = createGatewayRedisClient();
     try {
-      const removed = await removeFailedQueueJob(redis, queue, jobId);
+      const removed = await removeFailedQueueJob(queue, jobId);
       if (!removed) {
         return res.status(404).json({ error: 'Failed job not found' });
       }
@@ -32,8 +30,6 @@ export function registerInternalQueueRoutes(router: Router): void {
         '[InternalQueue] remove-failed handler error',
       );
       return res.status(500).json({ error: 'Internal Server Error' });
-    } finally {
-      await redis.quit().catch(() => redis.disconnect());
     }
   });
 }

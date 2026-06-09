@@ -10,7 +10,7 @@ import {
 } from '@shopkeeper/db/test-helpers';
 
 const { sendMessageSpy } = vi.hoisted(() => ({
-  sendMessageSpy: vi.fn().mockResolvedValue(undefined),
+  sendMessageSpy: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../clients/telegram-client.js', () => ({
@@ -147,5 +147,31 @@ describe('POST /internal/operator/escalate', () => {
     expect(bodyArg).toContain('Escalated');
     expect(bodyArg).toContain('Wholesale pricing question.');
     expect(bodyArg).toContain(`/dashboard/tickets/${thread.id}`);
+  });
+
+  it('returns 500 when Telegram send fails for a bound operator', async () => {
+    const customer = await createTestCustomer(org.id, 'send-fail@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-fail` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId: `chat-${org.id}-fail` },
+    });
+
+    sendMessageSpy.mockResolvedValueOnce(false);
+
+    const res = await request(app)
+      .post('/internal/operator/escalate')
+      .set('x-internal-secret', SECRET)
+      .send({
+        organizationId: org.id,
+        threadId: thread.id,
+        reason: 'Needs human review',
+      });
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'Internal Server Error' });
   });
 });

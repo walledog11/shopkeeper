@@ -53,7 +53,7 @@ export interface AiSummaryJobData {
   traceId?: string;
   // Set when the email path classified inline pre-persistence: skip the LLM
   // round-trip in generateThreadIntelligence, but still run plan precompute +
-  // WhatsApp notification downstream.
+  // operator notification downstream.
   skipSummary?: boolean;
 }
 

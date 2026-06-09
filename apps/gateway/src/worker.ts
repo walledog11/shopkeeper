@@ -3,7 +3,11 @@ import logger from './logger.js';
 import { validateGatewayEnv } from './config/env.js';
 import { createMaintenanceWorkers } from './maintenance/workers.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
-import { createGatewayBullMqConnection } from './clients/redis-client.js';
+import {
+  closeGatewayRedisConnections,
+  getGatewayBullMqProducerConnection,
+  getGatewayBullMqWorkerConnection,
+} from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
@@ -18,15 +22,8 @@ export async function startWorkerRuntime() {
 
   const workerRedisConfig = getGatewayWorkerRedisConfig();
 
-  // Queues (producers) use non-blocking commands — maxRetriesPerRequest left at default (20) so
-  // enqueue calls fail fast rather than hanging indefinitely if Redis is unavailable.
-  const sharedProducerConn = createGatewayBullMqConnection();
-  // Workers use maxRetriesPerRequest: null so they wait for Redis to recover instead of erroring.
-  // setMaxListeners is raised to accommodate every worker plus our own error handler.
-  const sharedWorkerConn = createGatewayBullMqConnection({ maxRetriesPerRequest: null });
-  sharedProducerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis producer error'));
-  sharedWorkerConn.setMaxListeners(20);
-  sharedWorkerConn.on('error', (err: Error) => logger.error({ err: err.message }, '[Worker] Redis worker error'));
+  const sharedProducerConn = getGatewayBullMqProducerConnection();
+  const sharedWorkerConn = getGatewayBullMqWorkerConnection();
 
   const workerOptions = {
     connection: sharedWorkerConn,
@@ -50,15 +47,9 @@ export async function startWorkerRuntime() {
     heartbeats: [heartbeat],
     shutdownResources: [
       {
-        label: 'redis-producer',
+        label: 'redis-connections',
         close: async () => {
-          await sharedProducerConn.quit().catch(() => sharedProducerConn.disconnect());
-        },
-      },
-      {
-        label: 'redis-worker',
-        close: async () => {
-          await sharedWorkerConn.quit().catch(() => sharedWorkerConn.disconnect());
+          await closeGatewayRedisConnections();
         },
       },
       {

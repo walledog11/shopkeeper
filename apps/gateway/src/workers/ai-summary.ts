@@ -23,7 +23,7 @@ export function createAiSummaryWorker(workerOptions: SharedGatewayWorkerOptions)
     logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
     const updatedThread = await generateThreadIntelligence(threadId, { skipSummary });
 
-    // Only genuine threads get a plan + WhatsApp notify. Questionable show in
+    // Only genuine threads get a plan + operator notify. Questionable show in
     // the inbox but skip both; filtered skip everything downstream.
     if (updatedThread?.filterStatus && updatedThread.filterStatus !== 'genuine') {
       logger.info(

@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { BookOpen, Check, Loader2, Mail } from "lucide-react"
+import { BookOpen, Loader2, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/ui/cn"
@@ -161,32 +161,6 @@ export function ShopifyConnectBody({
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-export function ComingSoonConnectBody({
-  notified,
-  onNotify,
-}: {
-  notified: boolean
-  onNotify: () => void
-}) {
-  return (
-    <div className="border-t border-white/[0.06] px-5 py-4 flex items-center justify-between">
-      <p className="text-xs text-white/30">This integration isn&apos;t available yet.</p>
-      <Button
-        variant="ghost"
-        size="sm"
-        disabled={notified}
-        onClick={onNotify}
-        className={cn(
-          "h-8 px-3 text-xs font-medium",
-          notified ? "text-emerald-400 pointer-events-none" : "text-white/30 hover:text-white/55",
-        )}
-      >
-        {notified ? <><Check className="size-3 mr-1" />Notified</> : "Notify me"}
-      </Button>
     </div>
   )
 }

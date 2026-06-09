@@ -11,9 +11,9 @@ import type {
   UpdateThreadTagInput,
 } from '@shopkeeper/agent/tools';
 import logger from '../logger.js';
-import { buildDashboardInternalHeaders } from '../clients/dashboard-internal.js';
-import { getGatewayDashboardUrl } from '../config/env.js';
-import { pushOperatorEscalation } from '../routes/internal-operator.js';
+import { recordAgentFailureInBackground } from '../agent-failure-alerts.js';
+import { postDashboardInternal } from '../clients/dashboard-internal.js';
+import { pushOperatorEscalation } from '../operator-escalation.js';
 
 interface ThreadSinkContext {
   threadId: string;
@@ -28,31 +28,58 @@ interface ThreadSinkContext {
 // dashboard, where Postmark / Instagram delivery lives (package boundary: touches
 // a message provider , dashboard).
 
+function recordDispatchFailure(
+  op: 'send_reply' | 'send_email',
+  ctx: ThreadSinkContext,
+  kind: 'tool_result' | 'tool_exception',
+  detail: string,
+  statusCode?: number,
+): void {
+  recordAgentFailureInBackground({
+    kind,
+    route: 'gateway-thread-sink',
+    orgId: ctx.orgId,
+    tool: op,
+    statusCode: statusCode ?? null,
+    detail,
+  });
+}
+
 async function dispatchAgentSend(
   op: 'send_reply' | 'send_email',
   ctx: ThreadSinkContext,
   input: SendReplyInput | SendEmailInput,
 ): Promise<ToolResult> {
   try {
-    const response = await fetch(`${getGatewayDashboardUrl()}/api/agent/io-send-internal`, {
-      method: 'POST',
-      headers: buildDashboardInternalHeaders(),
-      body: JSON.stringify({ orgId: ctx.orgId, threadId: ctx.threadId, orgName: ctx.orgName, op, input }),
+    const response = await postDashboardInternal<ToolResult>('/api/agent/io-send-internal', {
+      orgId: ctx.orgId,
+      threadId: ctx.threadId,
+      orgName: ctx.orgName,
+      op,
+      input,
     });
     if (!response.ok) {
-      const body = await response.text().catch(() => '');
       logger.warn(
-        { op, status: response.status, threadId: ctx.threadId, body: body.slice(0, 300) },
+        { op, status: response.status, threadId: ctx.threadId, body: response.responseBody.slice(0, 300) },
         '[agent-sink] dashboard send hop failed',
+      );
+      recordDispatchFailure(
+        op,
+        ctx,
+        'tool_result',
+        response.responseBody.slice(0, 300) || `HTTP ${response.status}`,
+        response.status,
       );
       return toolError(`Error: message dispatch failed (${response.status}).`);
     }
-    return await response.json() as ToolResult;
+    return response.data;
   } catch (err) {
+    const message = (err as Error).message;
     logger.error(
-      { op, err: (err as Error).message, threadId: ctx.threadId },
+      { op, err: message, threadId: ctx.threadId },
       '[agent-sink] dashboard send hop errored',
     );
+    recordDispatchFailure(op, ctx, 'tool_exception', message);
     return toolError('Error: message dispatch failed.');
   }
 }

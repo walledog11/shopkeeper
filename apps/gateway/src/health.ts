@@ -1,8 +1,7 @@
 import type { Redis as IORedis } from 'ioredis';
-import { Queue } from 'bullmq';
 import { QUEUE } from './constants.js';
+import { getGatewayBullMqQueue } from './clients/gateway-queues.js';
 import { getGatewayWorkerRedisConfig } from './config/runtime-config.js';
-import { toGatewayBullMqConnection } from './clients/redis-client.js';
 import { isRecord } from './lib/typing.js';
 
 export const WORKER_HEARTBEAT_KEY = 'health:gateway-worker:heartbeat';
@@ -82,7 +81,7 @@ export async function readWorkerHeartbeat(redis: IORedis): Promise<{
   }
 }
 
-export async function getQueueDiagnostics(redis: IORedis): Promise<Record<string, unknown>> {
+export async function getQueueDiagnostics(): Promise<Record<string, unknown>> {
   const now = Date.now();
   if (cachedQueueDiagnostics && cachedQueueDiagnostics.expiresAt > now) {
     return cachedQueueDiagnostics.value;
@@ -94,41 +93,36 @@ export async function getQueueDiagnostics(redis: IORedis): Promise<Record<string
 
   queueDiagnosticsPromise = (async () => {
     const { queueDiagnosticsCacheMs } = getGatewayWorkerRedisConfig();
-    const connection = toGatewayBullMqConnection(redis);
-    const inboundQueue = new Queue(QUEUE.INBOUND, { connection });
-    const summaryQueue = new Queue(QUEUE.AI_SUMMARY, { connection });
+    const inboundQueue = getGatewayBullMqQueue(QUEUE.INBOUND);
+    const summaryQueue = getGatewayBullMqQueue(QUEUE.AI_SUMMARY);
 
-    try {
-      const [inboundCounts, summaryCounts] = await Promise.all([
-        inboundQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-        summaryQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
-      ]);
+    const [inboundCounts, summaryCounts] = await Promise.all([
+      inboundQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
+      summaryQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused'),
+    ]);
 
-      const [inboundFailedJobs, aiSummaryFailedJobs] = await Promise.all([
-        readFailedQueueJobSnapshots(inboundQueue, inboundCounts.failed ?? 0),
-        readFailedQueueJobSnapshots(summaryQueue, summaryCounts.failed ?? 0),
-      ]);
+    const [inboundFailedJobs, aiSummaryFailedJobs] = await Promise.all([
+      readFailedQueueJobSnapshots(inboundQueue, inboundCounts.failed ?? 0),
+      readFailedQueueJobSnapshots(summaryQueue, summaryCounts.failed ?? 0),
+    ]);
 
-      const diagnostics = {
-        inbound: {
-          ...inboundCounts,
-          ...(inboundFailedJobs.length > 0 ? { failedJobs: inboundFailedJobs } : {}),
-        },
-        aiSummary: {
-          ...summaryCounts,
-          ...(aiSummaryFailedJobs.length > 0 ? { failedJobs: aiSummaryFailedJobs } : {}),
-        },
-      };
+    const diagnostics = {
+      inbound: {
+        ...inboundCounts,
+        ...(inboundFailedJobs.length > 0 ? { failedJobs: inboundFailedJobs } : {}),
+      },
+      aiSummary: {
+        ...summaryCounts,
+        ...(aiSummaryFailedJobs.length > 0 ? { failedJobs: aiSummaryFailedJobs } : {}),
+      },
+    };
 
-      cachedQueueDiagnostics = {
-        value: diagnostics,
-        expiresAt: now + queueDiagnosticsCacheMs,
-      };
+    cachedQueueDiagnostics = {
+      value: diagnostics,
+      expiresAt: now + queueDiagnosticsCacheMs,
+    };
 
-      return diagnostics;
-    } finally {
-      await Promise.all([inboundQueue.close(), summaryQueue.close()]);
-    }
+    return diagnostics;
   })();
 
   try {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   checkInstagramAccountAccess,
   exchangeFacebookLongLivedToken,
+  fetchInstagramUserProfile,
   META_GRAPH_VERSION,
 } from './meta-graph.js';
 
@@ -41,6 +42,23 @@ describe('meta-graph client', () => {
     await expect(checkInstagramAccountAccess('page_123', 'bad-token')).resolves.toEqual({
       error: { message: 'Invalid OAuth access token.' },
     });
+  });
+
+  it('fetches an Instagram user profile with encoded query params', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      name: 'Jane Doe',
+      profile_pic: 'https://example.com/pic.jpg',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(fetchInstagramUserProfile('sender_456', 'token/with+special')).resolves.toEqual({
+      data: { name: 'Jane Doe', profile_pic: 'https://example.com/pic.jpg' },
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    expect(url.pathname).toBe(`/${META_GRAPH_VERSION}/sender_456`);
+    expect(url.searchParams.get('fields')).toBe('name,profile_pic');
+    expect(url.searchParams.get('access_token')).toBe('token/with+special');
   });
 
   it('exchanges a long-lived Facebook token', async () => {

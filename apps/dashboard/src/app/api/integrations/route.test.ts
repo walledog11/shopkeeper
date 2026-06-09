@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),
@@ -47,6 +52,26 @@ describe('/api/integrations', () => {
     expect(body[0].metadata).toMatchObject({ provider: 'gmail' });
     expect(body[0]).not.toHaveProperty('accessToken');
     expect(body[0]).not.toHaveProperty('refreshToken');
+  });
+
+  it('reports per-channel last activity and weekly thread counts', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: ChannelType.email,
+        externalAccountId: 'support@example.com',
+      },
+    });
+    const customer = await createTestCustomer(org.id, 'customer@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const res = await GET();
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as Array<Record<string, unknown>>;
+    expect(body).toHaveLength(1);
+    expect(body[0].lastActivity).toBe(thread.updatedAt.toISOString());
+    expect(body[0].threadsThisWeek).toBe(1);
   });
 
   it('replaces the org email integration when saving forwarding', async () => {

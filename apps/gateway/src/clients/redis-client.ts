@@ -1,7 +1,22 @@
 import type { ConnectionOptions } from 'bullmq';
 import { Redis as IORedis, type RedisOptions } from 'ioredis';
+import logger from '../logger.js';
 
 export type GatewayBullMqConnection = ConnectionOptions & IORedis;
+
+/**
+ * Expected live Redis connection count per gateway runtime role:
+ * - `server`: 2 (shared Redis + BullMQ producer)
+ * - `worker`: 3 (shared Redis + BullMQ producer + BullMQ worker)
+ * - `all`: server and worker are separate processes, so counts add per child (2 + 3).
+ *
+ * BullMQ workers must keep a dedicated blocking connection (`maxRetriesPerRequest: null`).
+ * Do not collapse producer and worker connections into one client.
+ */
+
+let sharedRedis: IORedis | null = null;
+let producerConnection: GatewayBullMqConnection | null = null;
+let workerConnection: GatewayBullMqConnection | null = null;
 
 export function getGatewayRedisUrl(db = 0): string {
   const rawUrl = process.env.REDIS_URL;
@@ -28,4 +43,72 @@ export function createGatewayBullMqConnection(options?: RedisOptions): GatewayBu
 
 export function toGatewayBullMqConnection(redis: IORedis): GatewayBullMqConnection {
   return redis as GatewayBullMqConnection;
+}
+
+export function getGatewayRedis(): IORedis {
+  if (!sharedRedis) {
+    sharedRedis = createGatewayRedisClient();
+    sharedRedis.on('error', (err: Error) => {
+      logger.error({ err: err.message }, '[GatewayRedis] Shared Redis error');
+    });
+  }
+
+  return sharedRedis;
+}
+
+export function getGatewayBullMqProducerConnection(): GatewayBullMqConnection {
+  if (producerConnection) {
+    return producerConnection;
+  }
+
+  const connection = createGatewayBullMqConnection();
+  connection.on('error', (err: Error) => {
+    logger.error({ err: err.message }, '[GatewayRedis] BullMQ producer error');
+  });
+  producerConnection = connection;
+  return connection;
+}
+
+export function getGatewayBullMqWorkerConnection(): GatewayBullMqConnection {
+  if (workerConnection) {
+    return workerConnection;
+  }
+
+  const connection = createGatewayBullMqConnection({ maxRetriesPerRequest: null });
+  connection.setMaxListeners(20);
+  connection.on('error', (err: Error) => {
+    logger.error({ err: err.message }, '[GatewayRedis] BullMQ worker error');
+  });
+  workerConnection = connection;
+  return connection;
+}
+
+export async function closeGatewayRedisConnections(): Promise<void> {
+  const closers: Promise<unknown>[] = [];
+
+  if (sharedRedis) {
+    const redis = sharedRedis;
+    sharedRedis = null;
+    closers.push(redis.quit().catch(() => redis.disconnect()));
+  }
+
+  if (producerConnection) {
+    const connection = producerConnection;
+    producerConnection = null;
+    closers.push(connection.quit().catch(() => connection.disconnect()));
+  }
+
+  if (workerConnection) {
+    const connection = workerConnection;
+    workerConnection = null;
+    closers.push(connection.quit().catch(() => connection.disconnect()));
+  }
+
+  await Promise.all(closers);
+}
+
+export function resetGatewayRedisConnectionsForTests(): void {
+  sharedRedis = null;
+  producerConnection = null;
+  workerConnection = null;
 }
