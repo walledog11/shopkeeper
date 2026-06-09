@@ -23,6 +23,7 @@ import {
   isTokenExpiringSoon,
 } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
+import type { PillState } from "./integration-card-types"
 
 export type { ConnectType, PlatformConfig }
 
