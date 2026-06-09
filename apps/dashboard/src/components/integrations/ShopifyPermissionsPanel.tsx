@@ -1,14 +1,13 @@
 "use client"
 
 import Link from "next/link"
-import useSWR from "swr"
-import { fetcher } from "@/lib/api/fetcher"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
+import { useOrg } from "@/hooks/useOrg"
 import type { OrgSettings } from "@/types"
 import { PermissionToggleRow } from "./PermissionToggleRow"
 
 export function ShopifyPermissionsPanel({ enabled }: { enabled: boolean }) {
-  const { data, mutate } = useSWR<{ settings: Partial<OrgSettings> }>(enabled ? "/api/org" : null, fetcher)
+  const { data, mutate } = useOrg({ enabled })
   const settings = resolveAgentSettings(data?.settings)
   const refundCap = settings.maxRefundAmount == null ? null : `auto-approve up to $${settings.maxRefundAmount}`
 

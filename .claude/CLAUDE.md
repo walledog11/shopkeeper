@@ -10,7 +10,7 @@
 3. Trust is binary — one bad refund undoes months of goodwill. Bias toward escalation over confident wrong action; failure modes matter more than success modes.
 4. Every workflow module shares one general-purpose agent core. The core must not couple to support specifically.
 
-**Direction & roadmap:** `docs/autonomy-and-generality-plan.md` (chassis generalization + autonomy raise) and `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read these before assuming the support-only framing when touching agent architecture. Note the current state vs. the direction: agent execution today lives in the dashboard (Vercel) and the orchestration (`run.ts`, executor) is thread-coupled; the roadmap moves execution into the gateway worker and makes the core thread-optional.
+**Direction & roadmap:** `docs/autonomy-and-generality-plan.md` (chassis generalization + autonomy raise) and `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read these before assuming the support-only framing when touching agent architecture. The agent core now lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps (extraction Track 2 complete); the remaining roadmap direction is moving more execution into the gateway worker.
 
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel
@@ -40,27 +40,35 @@ Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Sho
 
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 
-## Agent (`apps/dashboard/src/lib/agent/`)
+## Agent core (`packages/agent/`, imported as `@shopkeeper/agent/*`)
+Canonical location for all agent logic; both apps import it via subpath exports.
 - `context.ts` — `buildContext()` (loads thread, customer, recent messages, KB, recent orders)
 - `planner.ts` — `planAgent()` (generates plan with no side effects, caches in `Thread.cachedPlan`)
 - `run.ts` — `runAgent()` (executes approved plan or runs an instruction end-to-end)
-- `runner.ts` — barrel re-export for the above
 - `prompt.ts` — system prompt builder
 - `intent.ts` — operator-channel intent classification + tool subset selection
 - `order-status-fast-path.ts` — bypasses LLM for "where is X's order?" in operator channels
 - `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
-- `tools/registry.ts` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
+- `tools/registry/` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
 - `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
-- `tools/thread.ts`, `shopify/*.ts` — implementations
+- `shopify/*.ts` — Shopify API implementations
 - `settings.ts` — defaults + resolver. Settings live in `Organization.settings` JSON.
-- `api/*` — glue between Next.js routes and the agent core (auth, validation, plan-cache, action-log, sessions)
+- `thread-auth.ts`, `plan-cache.ts`, `plan-cache-shape.ts`, `turns.ts`, `turn.ts`, `plan-execution.ts` — route-facing helpers
+
+### Dashboard host adapters (`apps/dashboard/src/lib/agent/`)
+Not a copy of the core — these inject dashboard infrastructure into it:
+- `context.ts` / `run.ts` — wrap core `buildContext`/`runAgent` with the thread I/O sink and ops-alert recorder
+- `tools/thread.ts` — the actual thread I/O sink (send reply/email, escalate)
+- `runner.ts` — barrel composing core + wrapper exports
+- `api/*` — Next.js route glue (validation, sessions, action-log, dashboard approval, turn seams)
+- `__evals__/` — agent eval harness, wired to `test:evals` / `test:evals:baseline`
 
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in Internal tab.
 - **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram via `sms_agent`.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
-Read tool list and exact behavior from `tools/registry.ts` — do not infer.
+Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.
 
 `Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted/broad/full), `autoExecuteEnabled` (hidden rollout flag), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
 
@@ -90,10 +98,10 @@ Read tool list and exact behavior from `tools/registry.ts` — do not infer.
 ## Dashboard routes
 `/dashboard/{tickets, canned-responses, agent, kb, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
 
-## Env (names only — values in Vercel/Railway)
-**Dashboard:** `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`
+## Env (names only — values in Vercel/Railway; see each app's `.env.example` for the full list)
+**Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` + `MICROSOFT_CLIENT_ID`/`SECRET` (email OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)
 
-**Gateway:** `DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`
+**Gateway:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `POSTMARK_INBOUND_USERNAME`/`PASSWORD`, `GATEWAY_RUNTIME_ROLE`, plus tuning vars (`LOG_LEVEL`, `LOG_PRETTY`, `PORT`, `GATEWAY_*`, `ORDER_RISK_MONITOR_ENABLED`)
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 

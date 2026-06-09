@@ -8,6 +8,8 @@ function presenceKey(orgId: string, threadId: string): string {
   return `presence:${orgId}:${threadId}`;
 }
 
+// Heartbeat + read in one request: registers the caller as a viewer and
+// returns how many *other* org members are currently viewing the thread.
 export async function PUT(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -17,30 +19,13 @@ export async function PUT(
 
   const { id: threadId } = await params;
   const now = Date.now();
+  const cutoff = now - PRESENCE_TTL * 1000;
 
   try {
     const client = getRedis();
     const key = presenceKey(orgId, threadId);
     await client.zadd(key, { gt: true }, { score: now, member: userId });
     await client.expire(key, PRESENCE_TTL * 4);
-  } catch {}
-
-  return NextResponse.json({ ok: true });
-}
-
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  const { id: threadId } = await params;
-  const cutoff = Date.now() - PRESENCE_TTL * 1000;
-
-  try {
-    const client = getRedis();
-    const key = presenceKey(orgId, threadId);
     const active = await client.zrange(key, cutoff, '+inf', { byScore: true });
     const count = active.filter(uid => uid !== userId).length;
     return NextResponse.json({ count });

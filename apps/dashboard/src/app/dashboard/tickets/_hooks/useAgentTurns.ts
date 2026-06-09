@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { AgentTurn, Message, Thread } from '@/types'
-import { extractAgentTurnsFromMessages, serializeAgentTurn, type AgentTurnAction } from '@/lib/agent/api/turns'
+import { extractAgentTurnsFromMessages, serializeAgentTurn, type AgentTurnAction } from '@shopkeeper/agent/turns'
 import { SENDER_TYPE } from '@shopkeeper/agent/thread-constants'
 
 interface UseAgentTurnsProps {

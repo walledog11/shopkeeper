@@ -3,7 +3,7 @@ import { getChannelInfo } from "@/lib/messaging/channels";
 import { getCustomerName } from "@/lib/messaging/customer-name";
 import { formatTime, formatTicketAge } from "@/lib/format/date";
 import { isAgentTurnContent } from "@shopkeeper/agent/tools";
-import { getCurrentPlanForThread } from "@/lib/agent/plan-cache-shape";
+import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape";
 import { isAgentNoteContent, stripAgentNotePrefix, SENDER_TYPE } from "@shopkeeper/agent/thread-constants";
 import type { Thread, Ticket } from "@/types";
 

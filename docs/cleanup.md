@@ -1,33 +1,27 @@
 # Gateway Cleanup Plan
 
-## Overview (2026-06-07)
+## Overview (2026-06-09)
 
-This plan replaces the completed cleanup tracker. It covers issues found in the gateway code audit (`apps/gateway/src`, ~6,200 LOC). The core inbound → classify → summarize → plan → notify pipeline is sound; the slop is mostly migration debt, copy-pasted helpers, partially built infrastructure, and Redis connection sprawl.
+Covers issues from the gateway code audit (`apps/gateway/src`, ~6,200 LOC), re-verified against the current tree on 2026-06-09. The core inbound → classify → summarize → plan → notify pipeline is sound; the slop is mostly migration debt, copy-pasted helpers, partially built infrastructure, and Redis connection sprawl.
 
-Audit baseline:
+Removed from the original plan as already complete:
 
-- Core worker bootstrap, env validation, webhook auth, and idempotency are in good shape.
-- No critical production bugs identified.
-- Main pain points: stale WhatsApp naming, layer violations, duplicate helpers, half-wired ops alerts, and connection proliferation.
+- `ORDER_RISK_MONITOR_ENABLED` boolean parsing — `runtime-config.ts` already uses `parseBooleanEnv`.
+- `backfill-plans.ts` rewrite — already calls `generateThreadPlan()` in-process with env vars documented.
+- Dashboard internal HTTP client — `clients/dashboard-internal.ts` already exists with centralized auth headers; Telegram routes and `planning-dashboard-client.ts` use it. Only two raw `fetch` call sites remain (folded into Phase 4 below).
+- Telegram routes reading `process.env.INTERNAL_API_SECRET` directly — no longer true; all outbound calls go through `buildDashboardInternalHeaders()`.
 
 Do not revert or rewrite unrelated user-owned work in the worktree.
 
 ## Phase 0: Keep The Cleanup Verifiable
 
-Use this phase as the verification contract for every later phase.
+Use this as the verification contract for every later phase.
 
 - [ ] Keep cleanup changes scoped by phase — one PR per phase where practical.
-- [ ] Run `npm run lint -w apps/gateway` after each cleanup batch.
-- [ ] Run targeted gateway integration tests for every changed module and failure path.
-- [ ] Run `npm run build -w apps/gateway` after shared config, Redis, or worker orchestration changes.
-- [ ] Run `npm run lint` and `npm run test:node` after cross-package contract changes.
-- [ ] Do not modify unrelated user-owned work.
-
-Suggested per-phase verification:
+- [ ] Run `npm run lint -w apps/gateway` and `npm run build -w apps/gateway` after each batch.
+- [ ] Run targeted gateway integration tests for every changed module and failure path:
 
 ```bash
-npm run lint -w apps/gateway
-npm run build -w apps/gateway
 npm run test:integration -w apps/gateway -- <changed-test-files>
 ```
 
@@ -43,36 +37,44 @@ npm run test:integration -w apps/gateway -- src/worker.test.ts src/workers/core.
 
 Low-risk changes that reduce confusion without touching architecture.
 
-### 1.1 Centralize internal API secret access
+### 1.1 Fail loudly on unknown inbound platforms
 
-**Problem:** `getInternalApiSecret()` lives in `message-handlers/shared.ts`. Telegram routes read `process.env.INTERNAL_API_SECRET ?? ''`, bypassing rotation support via `INTERNAL_API_SECRET_PREV`.
+**Problem:** `workers/inbound.ts` completes successfully when `job.data.platform` is unrecognized — misconfigured jobs vanish silently. Highest-value item in this phase.
+
+**Files:**
+
+- `apps/gateway/src/workers/inbound.ts`
+
+**Tasks:**
+
+- [ ] Add an `else` branch that logs an error and throws (so BullMQ retry/failure semantics apply).
+- [ ] Add a test case for an unknown platform value.
+
+### 1.2 Move internal API secret access to config
+
+**Problem:** `getInternalApiSecret()` lives in `message-handlers/shared.ts` but is imported by `clients/dashboard-internal.ts` and `routes/internal-auth.ts` — a config concern living in the message-handler layer.
 
 **Files:**
 
 - `apps/gateway/src/message-handlers/shared.ts`
 - `apps/gateway/src/config/env.ts`
+- `apps/gateway/src/clients/dashboard-internal.ts`
 - `apps/gateway/src/routes/internal-auth.ts`
-- `apps/gateway/src/routes/telegram/agent-execution.ts`
-- `apps/gateway/src/routes/telegram/digest-commands.ts`
-- `apps/gateway/src/routes/telegram/pending-plan-commands.ts`
-- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
-- `apps/gateway/src/message-handlers/planning-dashboard-client.ts`
 
 **Tasks:**
 
 - [ ] Move `getInternalApiSecret()` to `config/env.ts` (alongside `validateGatewayEnv`).
 - [ ] Update all callers to import from `config/env.ts`.
-- [ ] Replace `process.env.INTERNAL_API_SECRET ?? ''` in Telegram routes with `getInternalApiSecret()`.
-- [ ] Add a test that secret rotation (`INTERNAL_API_SECRET_PREV`) is honored by `authorizeInternalRequest`.
 
-### 1.2 Extract duplicated crypto and typing helpers
+### 1.3 Extract duplicated crypto and typing helpers
 
-**Problem:** `safeEqual` is copy-pasted in two route files. `isRecord` / JSON guards are duplicated across three modules.
+**Problem:** `safeEqual` is copy-pasted in two route files. `isRecord` is duplicated across four modules (`health.ts`, `operator-context.ts`, `queue-health.ts`, `voice-synthesis.ts`).
 
 **Files:**
 
 - `apps/gateway/src/routes/webhooks-email.ts`
 - `apps/gateway/src/routes/internal-auth.ts`
+- `apps/gateway/src/health.ts`
 - `apps/gateway/src/operator-context.ts`
 - `apps/gateway/src/maintenance/queue-health.ts`
 - `apps/gateway/src/maintenance/voice-synthesis.ts`
@@ -84,23 +86,17 @@ Low-risk changes that reduce confusion without touching architecture.
 - [ ] Replace local copies in the files above.
 - [ ] Add focused unit tests for the extracted helpers.
 
-### 1.3 Canonical channel label formatting
+### 1.4 Canonical channel label formatting
 
-**Problem:** Identical `channelType === CHANNEL.IG_DM ? 'Instagram DM' : capitalize` logic appears in three places.
-
-**Files:**
-
-- `apps/gateway/src/message-handlers/planning-notifications.ts`
-- `apps/gateway/src/routes/internal-operator.ts`
-- `apps/gateway/src/routes/telegram/format.ts` (preferred home)
+**Problem:** Identical `channelType === CHANNEL.IG_DM ? 'Instagram DM' : capitalize` logic appears three times across `planning-notifications.ts` (twice) and `internal-operator.ts`.
 
 **Tasks:**
 
 - [ ] Add `formatChannelLabel(channelType: DbChannelType): string` to `routes/telegram/format.ts` or a shared format module.
-- [ ] Replace duplicated label logic in planning notifications and operator escalation.
+- [ ] Replace the duplicated label logic in both files.
 - [ ] Add a small unit test for each channel type.
 
-### 1.4 Remove dead constants and shims
+### 1.5 Remove dead constants and shims
 
 **Problem:** Unused exports and a 6-line re-export shim add noise.
 
@@ -110,122 +106,63 @@ Low-risk changes that reduce confusion without touching architecture.
 - `apps/gateway/src/message-handlers/business-hours.ts`
 - `apps/gateway/src/workers/ai-summary.ts`
 - `apps/gateway/src/routes/webhooks-signature-alerts.ts`
-- `apps/gateway/src/maintenance/workers.ts`
-
-**Tasks:**
-
-- [ ] Remove `CHANNEL.SMS` if still unused (only referenced in a comment).
-- [ ] Remove `SHOPIFY_API_VERSION` if still unused.
-- [ ] Remove unused `validation_failed` variant from webhook signature alerts if confirmed dead.
-- [ ] Delete `business-hours.ts` shim; import directly from `@shopkeeper/agent/settings` in `ai-summary.ts`.
-- [ ] Remove or document unused exports `closeMaintenanceWorkers` / `closeMaintenanceQueues` if production shutdown uses `workers/resources.ts` exclusively.
-
-### 1.5 Fix boolean env parsing for order risk monitor
-
-**Problem:** `ORDER_RISK_MONITOR_ENABLED` uses raw truthiness — any non-empty string (including `"false"`) enables the feature.
-
-**Files:**
-
-- `apps/gateway/src/config/runtime-config.ts`
-- `apps/gateway/src/workers/order-review.ts`
-- `apps/gateway/src/maintenance/order-risk-monitor.ts`
-- `apps/gateway/src/routes/webhooks-shopify.ts`
-
-**Tasks:**
-
-- [ ] Add `isOrderRiskMonitorEnabled()` in `runtime-config.ts` using existing `parseBooleanEnv`.
-- [ ] Replace all `process.env.ORDER_RISK_MONITOR_ENABLED` checks with the getter.
-- [ ] Add a unit test for `"false"`, `"0"`, and unset values.
-
-### 1.6 Fail loudly on unknown inbound platforms
-
-**Problem:** `workers/inbound.ts` completes successfully when `job.data.platform` is unrecognized — misconfigured jobs vanish silently.
-
-**Files:**
-
-- `apps/gateway/src/workers/inbound.ts`
-
-**Tasks:**
-
-- [ ] Add an `else` branch that logs an error and throws (so BullMQ retry/failure semantics apply).
-- [ ] Add a test case for an unknown platform value.
-
-### 1.7 Consolidate duplicate time constants
-
-**Problem:** `ONE_DAY_MS` / `ONE_HOUR_MS` are exported from `maintenance/registration.ts` but redefined locally in `digest.ts` and `purge.ts`.
-
-**Files:**
-
 - `apps/gateway/src/maintenance/registration.ts`
-- `apps/gateway/src/maintenance/digest.ts`
-- `apps/gateway/src/maintenance/purge.ts`
 
 **Tasks:**
 
-- [ ] Import shared time constants from `registration.ts` in digest and purge.
-- [ ] Remove local redefinitions.
+- [ ] Remove `CHANNEL.SMS` (unused).
+- [ ] Remove `SHOPIFY_API_VERSION` (unused).
+- [ ] Remove the `validation_failed` variant from `WebhookSignatureFailureReason` — never passed by any caller.
+- [ ] Delete the `business-hours.ts` shim; import directly from `@shopkeeper/agent/settings` in `ai-summary.ts`.
+- [ ] `closeMaintenanceWorkers` / `closeMaintenanceQueues`: these **are** used by `maintenance/workers.test.ts` — verify whether production shutdown uses them before touching; if only tests use them, keep and document, don't delete blindly.
 
-### 1.8 Remove dead digest parameter
+### 1.6 Minor trivia (do opportunistically, not as dedicated work)
 
-**Problem:** `shouldSendDigest` accepts `_currentHourUtc` but never uses it.
-
-**Files:**
-
-- `apps/gateway/src/maintenance/digest.ts`
-- `apps/gateway/src/maintenance/digest.test.ts`
-
-**Tasks:**
-
-- [ ] Remove the unused parameter and update callers/tests.
+- [ ] Import `ONE_DAY_MS` / `ONE_HOUR_MS` from `maintenance/registration.ts` in `digest.ts` and `purge.ts` instead of redefining locally.
+- [ ] Remove the unused `_currentHourUtc` parameter from `shouldSendDigest` (`digest.ts`) and update callers/tests.
 
 **Phase 1 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
 - [ ] `npm run build -w apps/gateway`
-- [ ] `npm run test:integration -w apps/gateway -- src/workers/core.test.ts src/maintenance/digest.test.ts src/config/runtime-config.test.ts src/routes/telegram/command-parser.test.ts`
+- [ ] `npm run test:integration -w apps/gateway -- src/workers/core.test.ts src/maintenance/digest.test.ts src/routes/webhooks-signature-alerts.test.ts`
 
 ---
 
-## Phase 2: Rename WhatsApp Legacy Naming to Telegram
+## Phase 2: WhatsApp Legacy Naming
 
-**Problem:** Operator notifications go through Telegram, but queue names, job IDs, failure labels, comments, and tests still say "WhatsApp." This misleads onboarding and runbooks.
+**Problem:** Operator notifications go through Telegram, but queue names (`whatsapp-digest`), job IDs, failure labels, comments, and tests still say "WhatsApp."
+
+**Recommended scope:** rename comments, test names, and the `failureQueue` label only. Renaming the live BullMQ repeatable queue requires a one-time job-migration deploy step — real risk for cosmetic payoff. Document the legacy queue names in `constants.ts` and defer the queue rename until a deploy already touches the digest worker.
 
 **Files:**
 
 - `apps/gateway/src/constants.ts`
 - `apps/gateway/src/maintenance/digest.ts`
-- `apps/gateway/src/maintenance/registration.ts`
 - `apps/gateway/src/types.ts`
 - `apps/gateway/src/workers/ai-summary.ts`
 - `apps/gateway/src/message-handlers/shared.ts`
+- `apps/gateway/src/message-handlers/intelligence.ts`
 - `apps/gateway/src/worker.test.ts`
-- `docs/telegram-operator-channel.md`
-- `docs/production/runbook.md` (if queue names are referenced)
 
 **Tasks:**
 
-- [ ] Document legacy BullMQ queue names in `constants.ts` if a full rename is deferred.
-- [ ] Rename `QUEUE.DIGEST`, `JOB.DIGEST`, and `JOB.DIGEST_ID` to telegram-oriented names (e.g. `operator-digest`, `send-operator-digest`, `operator-digest-hourly`).
-- [ ] Update `failureQueue` label in `maintenance/digest.ts`.
-- [ ] Migrate repeatable job registration: remove old repeatable jobs and register new IDs (one-time deploy step — document in runbook).
-- [ ] Update comments in `types.ts`, `ai-summary.ts`, and `shared.ts`.
-- [ ] Update stale "WhatsApp notification" language in `worker.test.ts`.
-- [ ] Cross-check production runbook and operational guardrails for stale queue names.
+- [ ] Document legacy BullMQ queue names (`whatsapp-digest`, `send-whatsapp-digest`, `whatsapp-digest-hourly`) in `constants.ts` with a comment explaining the deferred rename.
+- [ ] Update `failureQueue: 'whatsapp-digest'` label in `maintenance/digest.ts` only if it is a free-form label, not a queue key.
+- [ ] Update "WhatsApp" comments in `types.ts`, `ai-summary.ts`, `shared.ts`, `intelligence.ts`.
+- [ ] Update stale "WhatsApp notification" test names in `worker.test.ts`.
+- [ ] If/when the queue rename happens: remove old repeatable jobs and register new IDs (one-time deploy step — document in runbook).
 
 **Phase 2 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
-- [ ] `npm run build -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway -- src/maintenance/digest.test.ts src/worker.test.ts`
-- [ ] Manual check: repeatable digest job re-registers cleanly on worker startup.
 
 ---
 
-## Phase 3: Fix Layer Violations and Stale Scripts
+## Phase 3: Fix the Last Layer Violation
 
-**Problem:** Worker-layer code imports from HTTP routes. A maintenance script still calls a removed HTTP endpoint.
-
-### 3.1 Move operator escalation out of routes
+**Problem:** `message-handlers/agent-thread-sink.ts` imports `pushOperatorEscalation` from `routes/internal-operator.js` — the only remaining routes import from non-route code.
 
 **Files:**
 
@@ -237,117 +174,50 @@ Low-risk changes that reduce confusion without touching architecture.
 
 - [ ] Extract `pushOperatorEscalation` and `formatEscalationMessage` into `operator-notify.ts` or a dedicated service module.
 - [ ] Keep `routes/internal-operator.ts` as a thin HTTP wrapper that delegates to the service.
-- [ ] Update `agent-thread-sink.ts` to import from the service layer, not routes.
+- [ ] Update `agent-thread-sink.ts` to import from the service layer.
 - [ ] Add or extend tests for escalation formatting and notification dispatch.
-
-### 3.2 Rewrite or delete stale backfill script
-
-**Files:**
-
-- `apps/gateway/src/scripts/backfill-plans.ts`
-- `apps/gateway/src/message-handlers/generate-thread-plan.ts`
-- `apps/gateway/src/scripts/rebuild-bad-summaries.ts` (reference implementation)
-
-**Tasks:**
-
-- [ ] Rewrite `backfill-plans.ts` to call `generateThreadPlan()` in-process (mirror `rebuild-bad-summaries.ts`), **or** delete the script if no longer needed.
-- [ ] Remove references to `/api/agent/plan-internal` from script header comments.
-- [ ] If kept, document required env vars and usage in the script header.
 
 **Phase 3 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
-- [ ] `npm run build -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway -- src/routes/internal-operator.test.ts src/worker.test.ts`
 - [ ] Confirm no production import from `routes/` in `message-handlers/` or `workers/`.
 
 ---
 
-## Phase 4: Consolidate Redis and BullMQ Connections
+## Phase 4: Finish External API Client Consolidation
 
-**Problem:** Lazy singletons across webhooks, health, worker, agent locks, and queue diagnostics can open 7+ Redis connections per process on combined server+worker deploys.
+### 4.1 Unify Meta Graph client
 
-**Files:**
-
-- `apps/gateway/src/clients/redis-client.ts`
-- `apps/gateway/src/routes/webhooks-shared.ts`
-- `apps/gateway/src/index.ts`
-- `apps/gateway/src/worker.ts`
-- `apps/gateway/src/clients/agent-runtime.ts`
-- `apps/gateway/src/health.ts`
-- `apps/gateway/src/maintenance/queue-health.ts`
-- `apps/gateway/src/rate-limit.ts`
-
-**Tasks:**
-
-- [ ] Introduce shared module-level singletons: `getGatewayRedis()`, `getGatewayBullMqProducerConnection()`, `getGatewayBullMqWorkerConnection()`.
-- [ ] Refactor `webhooks-shared.ts` to reuse one BullMQ connection for `_messageQueue` and `_orderReviewQueue`; reuse the shared Redis client for rate limiting.
-- [ ] Refactor `index.ts` health checks to reuse the shared Redis client.
-- [ ] Refactor `agent-runtime.ts` lock Redis to reuse the shared client (or document why a separate connection is required).
-- [ ] Refactor `health.ts` queue diagnostics to reuse cached Queue instances instead of creating/closing per request.
-- [ ] Align worker bootstrap (`worker.ts`) with the same connection module.
-- [ ] Document expected connection count per runtime role (`server`, `worker`, `all`) in a code comment or README.
-- [ ] Add tests that verify singleton behavior (same instance returned on repeated calls).
-
-**Phase 4 verification:**
-
-- [ ] `npm run lint -w apps/gateway`
-- [ ] `npm run build -w apps/gateway`
-- [ ] `npm run test:integration -w apps/gateway -- src/worker.test.ts src/maintenance/queue-health.test.ts src/routes/webhooks.test.ts`
-- [ ] Smoke test: `/health/deep` and webhook enqueue both work after refactor.
-
----
-
-## Phase 5: Consolidate External API Clients
-
-**Problem:** Meta Graph, dashboard internal APIs, and provider sends are accessed through parallel ad-hoc patterns.
-
-### 5.1 Unify Meta Graph client
-
-**Files:**
-
-- `apps/gateway/src/clients/meta-graph.ts`
-- `apps/gateway/src/message-handlers/channels.ts`
+**Problem:** `channels.ts` hardcodes `FB_GRAPH = 'https://graph.facebook.com/v22.0'` while `clients/meta-graph.ts` already centralizes the base URL + version — version-drift risk.
 
 **Tasks:**
 
 - [ ] Add `fetchInstagramUserProfile(senderId, accessToken)` to `meta-graph.ts`.
-- [ ] Remove hardcoded `FB_GRAPH = 'https://graph.facebook.com/v22.0'` from `channels.ts`.
-- [ ] Call the shared client from `handleIgDmJob`.
+- [ ] Remove the hardcoded `FB_GRAPH` constant from `channels.ts`; call the shared client from `handleIgDmJob`.
 - [ ] Extend `clients/meta-graph.test.ts` for the new helper.
 
-### 5.2 Unify dashboard internal HTTP client
+### 4.2 Route the last two raw fetches through `dashboard-internal.ts`
 
-**Files:**
+**Problem:** Two call sites still use raw `fetch` (already with shared headers) instead of `postDashboardInternal`:
 
-- `apps/gateway/src/message-handlers/planning-dashboard-client.ts`
-- `apps/gateway/src/routes/telegram/agent-execution.ts`
-- `apps/gateway/src/routes/telegram/digest-commands.ts`
-- `apps/gateway/src/routes/telegram/pending-plan-commands.ts`
-- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
+- `apps/gateway/src/routes/telegram/digest-commands.ts:97` (`/api/messages/internal`)
+- `apps/gateway/src/message-handlers/agent-thread-sink.ts:37` (`/api/agent/io-send-internal`)
 
 **Tasks:**
 
-- [ ] Extend `planning-dashboard-client.ts` into a small `dashboard-internal-client.ts` with typed helpers for:
-  - `/api/agent/internal`
-  - `/api/messages/internal`
-  - `/api/agent/io-send-internal`
-  - Any other raw `fetch` calls to dashboard internal routes
-- [ ] Replace raw `fetch` + header boilerplate in Telegram routes and `agent-thread-sink.ts`.
-- [ ] Centralize auth headers (`x-internal-secret`) in the client.
-- [ ] Add unit tests for request construction and error handling.
+- [ ] Convert both to `postDashboardInternal` (or a typed wrapper alongside the existing ones).
 
-**Phase 5 verification:**
+**Phase 4 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
-- [ ] `npm run build -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway -- src/clients/meta-graph.test.ts src/routes/webhooks-telegram.test.ts src/worker.test.ts`
 
 ---
 
-## Phase 6: Wire or Remove Half-Built Ops Alerts
+## Phase 5: Wire or Remove Half-Built Ops Alerts
 
-**Problem:** `ops-alerts.ts` defines `provider_send` and `agent_failure` categories with config thresholds, but only `queue_health` and `webhook_signature` are emitted in production. This overlaps with the error-tracking plan in `docs/production/error-tracking-plan.md`.
+**Problem:** `ops-alerts.ts` defines `provider_send` and `agent_failure` categories with config thresholds, but only `queue_health` and `webhook_signature` are emitted in production. Overlaps with `docs/production/error-tracking-plan.md`.
 
 **Files:**
 
@@ -355,31 +225,24 @@ Low-risk changes that reduce confusion without touching architecture.
 - `apps/gateway/src/config/runtime-config.ts`
 - `apps/gateway/src/message-handlers/agent-thread-sink.ts`
 - `apps/gateway/src/clients/telegram-client.ts`
-- `apps/gateway/src/message-handlers/planning-notifications.ts`
-- `docs/production/error-tracking-plan.md`
 
 **Tasks:**
 
 - [ ] Decide policy: wire alerts now, or remove unused categories until error tracking lands.
-- [ ] If wiring:
-  - [ ] Emit `provider_send` on Telegram send failures (`telegram-client.ts`, `operator-notify.ts`).
-  - [ ] Emit `agent_failure` on tool dispatch failures in `agent-thread-sink.ts`.
-  - [ ] Document alert thresholds in operational guardrails.
-- [ ] If deferring:
-  - [ ] Remove `provider_send` and `agent_failure` from `OPS_ALERT_CATEGORIES` and runtime config.
-  - [ ] Remove associated tests or mark them as skipped with a link to the error-tracking plan.
+- [ ] If wiring: emit `provider_send` on Telegram send failures and `agent_failure` on tool dispatch failures in `agent-thread-sink.ts`; document thresholds in operational guardrails.
+- [ ] If deferring: remove `provider_send` and `agent_failure` from `OPS_ALERT_CATEGORIES` and runtime config; remove or skip associated tests with a link to the error-tracking plan.
 - [ ] Align with `docs/production/error-tracking-plan.md` so ops alerts and future Sentry integration do not duplicate.
 
-**Phase 6 verification:**
+**Phase 5 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway -- src/ops-alerts.test.ts src/routes/webhooks-signature-alerts.test.ts src/maintenance/queue-health.test.ts`
 
 ---
 
-## Phase 7: Notification Failure Policy
+## Phase 6: Notification Failure Policy
 
-**Problem:** Operator notification failures are swallowed — jobs complete even when operators were not notified. Failures are invisible to BullMQ retry semantics.
+**Problem:** `telegram-client.sendMessage` returns `void` and only logs on failure — jobs complete even when operators were not notified. Acceptable for digests; bad for escalations (a silently dropped escalation is the trust-breaking failure mode).
 
 **Files:**
 
@@ -391,121 +254,70 @@ Low-risk changes that reduce confusion without touching architecture.
 **Tasks:**
 
 - [ ] Document intentional vs. critical notification paths (plan alerts vs. auto-ack vs. escalation).
-- [ ] For critical paths (escalation, plan approval prompts): either fail the job (retry) or emit an ops alert on failure.
+- [ ] For critical paths (escalation, plan approval prompts): either fail the job (retry) or emit an ops alert on failure (ties into Phase 5 `provider_send` decision).
 - [ ] Change `telegram-client.sendMessage` to return a boolean or throw; let callers decide policy.
 - [ ] Update `planning-notifications.ts` and `planning.ts` `sendAutoAck` to match the documented policy.
 - [ ] Add tests for notification failure behavior.
 
-**Phase 7 verification:**
+**Phase 6 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway -- src/worker.test.ts src/routes/webhooks-telegram.test.ts`
 
 ---
 
-## Phase 8: Slim Down God Files and Config Sprawl
+## Phase 7: Consolidate Redis and BullMQ Connections
 
-**Problem:** `queue-health.ts` (383 LOC) and `shared.ts` (316 LOC) carry type scaffolding and mixed concerns. Config reads are scattered across routes.
+**Problem:** `clients/redis-client.ts` is a pure factory (`new IORedis` per call) with call sites in `index.ts`, `worker.ts`, `webhooks-shared.ts`, `agent-runtime.ts`, `internal-queue.ts`, `health.ts`, and `queue-maintenance.ts` — 7+ connections per process on combined server+worker deploys.
 
-### 8.1 Slim `queue-health.ts`
-
-**Files:**
-
-- `apps/gateway/src/maintenance/queue-health.ts`
-- `apps/gateway/src/lib/typing.ts` (from Phase 1)
+**Note:** do not collapse to a single connection. BullMQ Workers require their own blocking connections; the correct shape is three singletons: shared Redis client, BullMQ producer connection, BullMQ worker connection. Only worth doing if Railway Redis connection limits are actually a concern.
 
 **Tasks:**
 
-- [ ] Move shared guards (`isRecord`, `readString`, normalizers) to `lib/typing.ts`.
-- [ ] Collapse internal-only interfaces that are not part of the public contract.
-- [ ] Keep exported surface: `checkGatewayQueueHealth`, registration helpers, and DI types needed for tests.
-- [ ] Target ~250 LOC or less without losing test coverage.
+- [ ] Introduce `getGatewayRedis()`, `getGatewayBullMqProducerConnection()`, `getGatewayBullMqWorkerConnection()` module-level singletons.
+- [ ] Refactor `webhooks-shared.ts` to reuse one producer connection for `_messageQueue` and `_orderReviewQueue`; reuse the shared Redis client for rate limiting.
+- [ ] Refactor `index.ts` health checks and `agent-runtime.ts` lock Redis to reuse the shared client (or document why a separate connection is required).
+- [ ] Refactor `health.ts` queue diagnostics to reuse cached Queue instances instead of creating/closing per request.
+- [ ] Align worker bootstrap (`worker.ts`) with the same connection module.
+- [ ] Document expected connection count per runtime role (`server`, `worker`, `all`).
+- [ ] Add tests that verify singleton behavior.
 
-### 8.2 Slim `message-handlers/shared.ts`
-
-**Files:**
-
-- `apps/gateway/src/message-handlers/shared.ts`
-
-**Tasks:**
-
-- [ ] After Phase 1 moves `getInternalApiSecret` out, evaluate remaining responsibilities:
-  - Email classification / summarization
-  - Shopify customer lookup
-  - Inbound message persistence
-- [ ] Split into focused modules if a natural boundary exists (e.g. `inbound-persistence.ts`, `email-classifier.ts`) without over-abstracting.
-- [ ] Avoid creating one-line helper files.
-
-### 8.3 Group scattered env reads
-
-**Files:**
-
-- `apps/gateway/src/config/runtime-config.ts`
-- Route files reading Meta, Telegram, Postmark secrets inline
-
-**Tasks:**
-
-- [ ] Add grouped getters where env is read in more than one place: `getMetaWebhookConfig()`, `getTelegramConfig()`, `getPostmarkWebhookConfig()`.
-- [ ] Replace ad-hoc `process.env` reads in route handlers with config getters.
-- [ ] Extend `runtime-config.test.ts` for new getters.
-
-**Phase 8 verification:**
+**Phase 7 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
 - [ ] `npm run build -w apps/gateway`
-- [ ] `npm run test:integration -w apps/gateway -- src/maintenance/queue-health.test.ts src/worker.test.ts src/config/runtime-config.test.ts`
+- [ ] `npm run test:integration -w apps/gateway -- src/worker.test.ts src/maintenance/queue-health.test.ts src/routes/webhooks.test.ts`
+- [ ] Smoke test: `/health/deep` and webhook enqueue both work after refactor.
 
 ---
 
-## Phase 9: Trim Migration Narration and Test Debt
+## Phase 8: Slim God Files, Config Sprawl, and Test Debt
 
-**Problem:** "Track 4.2" migration comments, stale test language, and a monolithic `worker.test.ts` (826 LOC) add maintenance cost.
+Lowest priority. Do only where a natural boundary exists — LOC targets are not goals in themselves.
 
-### 9.1 Trim stale comments
+### 8.1 Slim `queue-health.ts` (383 LOC) and `message-handlers/shared.ts` (316 LOC)
 
-**Files:**
+- [ ] Move shared guards (`isRecord`, `readString`, normalizers) to `lib/typing.ts` (Phase 1).
+- [ ] Collapse internal-only interfaces in `queue-health.ts` that are not part of the public contract; keep exported surface (`checkGatewayQueueHealth`, registration helpers, DI types).
+- [ ] After Phase 1 moves `getInternalApiSecret` out of `shared.ts`, split remaining responsibilities (email classification, Shopify customer lookup, inbound persistence) only if a natural boundary exists. Avoid one-line helper files.
 
-- `apps/gateway/src/message-handlers/generate-thread-plan.ts`
-- `apps/gateway/src/message-handlers/agent-turn-deps.ts`
-- `apps/gateway/src/message-handlers/agent-thread-sink.ts`
-- `apps/gateway/src/routes/internal-operator.ts`
-- `apps/gateway/src/clients/agent-runtime.ts`
-- `apps/gateway/src/workers/order-review.ts`
-- `apps/gateway/src/maintenance/order-risk-monitor.ts`
-- `apps/gateway/src/routes/webhooks-shopify.ts`
+### 8.2 Group scattered env reads
 
-**Tasks:**
+- [ ] Add grouped getters in `runtime-config.ts` where env is read in more than one place: `getMetaWebhookConfig()`, `getTelegramConfig()`, `getPostmarkWebhookConfig()`.
+- [ ] Replace ad-hoc `process.env` reads in route handlers with the getters; extend `runtime-config.test.ts`.
 
-- [ ] Replace long "Track 4.2" migration narration with brief "why" comments.
-- [ ] Link to `docs/core-extraction-and-module-expansion-plan.md` where historical context is still useful.
-- [ ] Remove references to replaced HTTP hops (`plan-internal`, dashboard sink) from inline comments.
+### 8.3 Trim stale migration comments
 
-### 9.2 Simplify Telegram command parser dead path
+- [ ] Replace "Track 4.x" narration with brief "why" comments — **selectively**: several of these comments genuinely explain injection seams and should be kept or shortened, not deleted. Link to `docs/core-extraction-and-module-expansion-plan.md` where historical context is still useful.
+- Files: `generate-thread-plan.ts`, `agent-turn-deps.ts`, `agent-thread-sink.ts`, `internal-operator.ts`, `agent-runtime.ts`, `execute-operator-agent-turn.ts`, `agent-lock.ts`.
 
-**Files:**
-
-- `apps/gateway/src/routes/telegram/command-parser.ts`
-- `apps/gateway/src/routes/telegram/message-handler.ts`
-
-**Tasks:**
-
-- [ ] Remove unused `free-form` discriminant from `parseTelegramCommand` return type, or use it explicitly in the handler.
-- [ ] Add/update tests in `command-parser.test.ts`.
-
-### 9.3 Split `worker.test.ts`
-
-**Files:**
-
-- `apps/gateway/src/worker.test.ts`
-
-**Tasks:**
+### 8.4 Split `worker.test.ts` (826 LOC)
 
 - [ ] Extract shared fixtures into `src/test-fixtures/` or a `worker-test-helpers.ts`.
 - [ ] Split by worker concern: inbound, ai-summary, order-review.
-- [ ] Add focused tests for `generateThreadPlan` auto-execute path if not covered after split.
-- [ ] Add shared `makeTestOpsAlertConfig()` helper for ops-alert test files.
+- [ ] Add focused tests for the `generateThreadPlan` auto-execute path if not covered after split.
 
-**Phase 9 verification:**
+**Phase 8 verification:**
 
 - [ ] `npm run lint -w apps/gateway`
 - [ ] `npm run test:integration -w apps/gateway`
@@ -517,28 +329,26 @@ Low-risk changes that reduce confusion without touching architecture.
 
 | Order | Phase | Effort | Risk |
 |-------|-------|--------|------|
-| 1 | Phase 1 — Quick wins | 1–2 days | Low |
-| 2 | Phase 2 — WhatsApp → Telegram naming | 0.5–1 day | Medium (BullMQ job migration) |
-| 3 | Phase 3 — Layer fixes and stale script | 0.5–1 day | Low |
-| 4 | Phase 5 — API client consolidation | 1–2 days | Low |
-| 5 | Phase 4 — Redis singleton | 2–3 days | Medium |
-| 6 | Phase 6 — Ops alerts decision | 0.5–1 day | Low |
-| 7 | Phase 7 — Notification failure policy | 1 day | Medium |
-| 8 | Phase 8 — Slim god files and config | 1–2 days | Low |
-| 9 | Phase 9 — Comments and test split | 1–2 days | Low |
+| 1 | Phase 1 — Quick wins | 0.5–1 day | Low |
+| 2 | Phase 3 — Layer violation | 0.5 day | Low |
+| 3 | Phase 4 — API client consolidation | 0.5 day | Low |
+| 4 | Phase 5 — Ops alerts decision | 0.5–1 day | Low |
+| 5 | Phase 6 — Notification failure policy | 1 day | Medium |
+| 6 | Phase 2 — WhatsApp naming (comments/labels only) | 0.5 day | Low |
+| 7 | Phase 7 — Redis singletons | 2–3 days | Medium |
+| 8 | Phase 8 — God files, config, test split | 1–2 days | Low |
 
-Phases 4 and 5 can run in parallel if different owners; Phase 6 should align with the error-tracking plan before Sentry work begins.
+Phase 5 should align with the error-tracking plan before Sentry work begins; Phase 6 depends on the Phase 5 decision.
 
 ---
 
 ## Out of Scope
 
-These items were reviewed and are **not** part of this plan:
-
 - Dashboard or agent package cleanup (covered by the previous cleanup tracker, now complete).
 - New features or error-tracking implementation (see `docs/production/error-tracking-plan.md`).
-- Renaming BullMQ queue names beyond the digest queue (inbound, ai-summary, etc. are correctly named).
+- Renaming live BullMQ queue names (deferred — see Phase 2 note).
 - SMS channel support (no implementation exists; remove dead constant only).
+- The `free-form` discriminant in `routes/telegram/command-parser.ts` — technically unread at the call site, but it keeps the union total and self-documenting; leave it.
 
 ---
 
@@ -547,10 +357,9 @@ These items were reviewed and are **not** part of this plan:
 The gateway cleanup is done when:
 
 - [ ] No worker or message-handler module imports from `routes/`.
-- [ ] All dashboard internal API calls go through a shared client with centralized auth.
+- [ ] All dashboard internal API calls go through `clients/dashboard-internal.ts`.
 - [ ] Redis connection count is documented and bounded per runtime role.
-- [ ] No stale WhatsApp naming in code, tests, or runbooks.
+- [ ] No stale WhatsApp naming in comments, labels, or tests (queue-name rename explicitly deferred and documented).
 - [ ] Ops alert categories are either wired or removed — no half-built config.
 - [ ] Unknown inbound platforms fail loudly.
-- [ ] `backfill-plans.ts` is rewritten or deleted.
 - [ ] `npm run lint`, `npm run build -w apps/gateway`, and `npm run test:integration -w apps/gateway` all pass.

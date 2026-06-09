@@ -5,7 +5,7 @@ import { readRequiredJsonObject } from '@/lib/api/body';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { parseThreadPatchBody } from '@/app/api/threads/_lib/validation';
-import type { AgentTurnAction } from '@/lib/agent/api/turns';
+import type { AgentTurnAction } from '@shopkeeper/agent/turns';
 
 export const GET = withOrgRoute<{ id: string }>(
   { context: 'Threads GET by id', errorMessage: 'Failed to fetch thread' },

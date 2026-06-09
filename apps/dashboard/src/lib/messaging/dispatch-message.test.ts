@@ -89,7 +89,7 @@ describe('dispatchMessage', () => {
 
     const result = await dispatchMessage({ ...thread, customer }, org, 'It ships today.');
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toMatchObject({ ok: true });
     expect(mockPostmarkSend).toHaveBeenCalledWith(expect.objectContaining({
       Subject: 'Re: Order status',
       Headers: [
@@ -195,9 +195,9 @@ describe('dispatchMessage', () => {
     const igThread = await createTestThread(org.id, igCustomer.id, ChannelType.ig_dm);
 
     await expect(dispatchMessage({ ...emailThread, customer: emailCustomer }, org, 'Recorded email.'))
-      .resolves.toEqual({ ok: true });
+      .resolves.toMatchObject({ ok: true });
     await expect(dispatchMessage({ ...igThread, customer: igCustomer }, org, 'Recorded Instagram DM.'))
-      .resolves.toEqual({ ok: true });
+      .resolves.toMatchObject({ ok: true });
 
     expect(mockPostmarkSend).not.toHaveBeenCalled();
     expect(mockFetch).not.toHaveBeenCalled();

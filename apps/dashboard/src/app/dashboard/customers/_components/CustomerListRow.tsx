@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react"
 import { CustomerAvatar } from "./CustomerAvatar"
-import { formatLTV, fullName, locationString, type CustomerRow } from "./customers-page-utils"
+import { formatLTV, fullName, type CustomerRow } from "./customers-page-utils"
+import { locationString } from "@/lib/format/shopify"
 
 export function CustomerListRow({ customer, isSelected, onClick }: {
   customer: CustomerRow

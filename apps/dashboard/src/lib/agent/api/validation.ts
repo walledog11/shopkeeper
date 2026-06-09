@@ -1,5 +1,5 @@
 import { BadRequestError, type ApiErrorDetail } from "@/lib/api/errors";
-import { requireTrimmedInstruction } from "@/lib/agent/api/auth";
+import { requireTrimmedInstruction } from "@shopkeeper/agent/thread-auth";
 import { decodeAgentActionCursor, type AgentActionCursor } from "@/lib/agent/api/action-log";
 import type { RawToolCall } from "@/types";
 

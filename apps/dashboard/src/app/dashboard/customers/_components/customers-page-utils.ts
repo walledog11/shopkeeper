@@ -1,10 +1,6 @@
-export interface ShopifyAddress {
-  address1: string | null
-  city: string | null
-  province: string | null
-  country_name: string | null
-  zip: string | null
-}
+import type { ShopifyAddress, ShopifyOrder } from "@/types/shopify"
+
+export type { ShopifyAddress, ShopifyOrder }
 
 export interface CustomerRow {
   id: number
@@ -16,16 +12,6 @@ export interface CustomerRow {
   total_spent: string
   created_at: string
   default_address: ShopifyAddress | null
-}
-
-export interface ShopifyOrder {
-  id: number
-  name: string
-  created_at: string
-  financial_status: string
-  fulfillment_status: string | null
-  total_price: string
-  line_items: { title: string; quantity: number }[]
 }
 
 export interface CustomerDetailResponse {
@@ -66,11 +52,6 @@ export function formatLTV(val: string) {
   if (isNaN(n)) return "$0"
   if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`
   return `$${n.toFixed(2)}`
-}
-
-export function locationString(addr: ShopifyAddress | null) {
-  if (!addr) return null
-  return [addr.city, addr.country_name].filter(Boolean).join(", ") || null
 }
 
 export function fulfillmentStyle(status: string | null) {

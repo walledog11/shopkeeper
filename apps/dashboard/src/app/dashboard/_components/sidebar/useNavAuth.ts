@@ -2,11 +2,9 @@
 
 import { useSyncExternalStore } from "react";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
-import useSWR from "swr";
-import { fetcher } from "@/lib/api/fetcher";
 import { resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings";
 import { formatRole } from "@/lib/format/role";
-import type { OrgSettings } from "@/types";
+import { useOrg } from "@/hooks/useOrg";
 
 export function useNavAuth(initialAutonomyTier: AutonomyTier) {
   const { user } = useUser();
@@ -15,9 +13,7 @@ export function useNavAuth(initialAutonomyTier: AutonomyTier) {
     memberships: { infinite: false, pageSize: 20 },
   });
   const { userMemberships, setActive } = useOrganizationList({ userMemberships: { infinite: true } });
-  const { data: orgData } = useSWR<{ planName?: string; settings?: Partial<OrgSettings> }>("/api/org", fetcher, {
-    revalidateOnFocus: false,
-  });
+  const { data: orgData } = useOrg({ revalidateOnFocus: false });
   const mounted = useSyncExternalStore(
     () => () => {},
     () => true,

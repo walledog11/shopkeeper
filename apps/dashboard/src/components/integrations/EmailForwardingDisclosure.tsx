@@ -1,11 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import useSWR from "swr"
 import { ChevronDown, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { fetcher } from "@/lib/api/fetcher"
+import { useOrg } from "@/hooks/useOrg"
 import { cn } from "@/lib/ui/cn"
 import { CopyButton } from "./CopyButton"
 
@@ -69,7 +68,7 @@ export function EmailForwardingDisclosure({
 }) {
   const [open, setOpen] = useState(false)
   const [provider, setProvider] = useState<ForwardingProviderId>("google")
-  const { data: org } = useSWR<{ id: string; inboundEmailDomain: string }>(open ? "/api/org" : null, fetcher)
+  const { data: org } = useOrg({ enabled: open })
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
   const guide = FORWARDING_GUIDES.find(g => g.id === provider) ?? FORWARDING_GUIDES[0]
 

@@ -65,11 +65,6 @@ export const POST = withOrgRoute(
       logger.error({ err, threadId }, '[Messages POST] Failed to capture voice edit');
     }
 
-    const message = await db.message.findFirst({
-      where: { threadId, senderType: SenderType.agent },
-      orderBy: { sentAt: 'desc' },
-    });
-
-    return NextResponse.json(message);
+    return NextResponse.json(result.message);
   },
 );

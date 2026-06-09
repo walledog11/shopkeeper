@@ -27,14 +27,18 @@ interface DispatchMessageOptions {
   emailSubjectFallback?: string;
 }
 
+type Message = Awaited<ReturnType<typeof createMessage>>;
+
+type DispatchFailure = { ok: false; error: string; detail?: string; providerStatus?: number };
+
 export type DispatchMessageResult =
-  | { ok: true }
-  | { ok: false; error: string; detail?: string; providerStatus?: number };
+  | { ok: true; message: Message }
+  | DispatchFailure;
 
 /**
  * Dispatches text to the customer via the thread's channel, then saves
  * the message to DB and sets the thread status to open.
- * Returns { ok: true } on success, { ok: false, error } on failure.
+ * Returns { ok: true, message } on success, { ok: false, error } on failure.
  */
 export async function dispatchMessage(
   thread: DispatchThread,
@@ -125,12 +129,12 @@ export async function dispatchMessage(
     return { ok: false, error: 'Unsupported channel' };
   }
 
-  await createMessage(
+  const message = await createMessage(
     { threadId: thread.id, senderType: SenderType.agent, contentText: text },
     { status: THREAD_STATUS.OPEN },
   );
 
-  return { ok: true };
+  return { ok: true, message };
 }
 
 async function sendEmail(
@@ -142,7 +146,7 @@ async function sendEmail(
     subjectFallback?: string;
     originalChannel?: string;
   },
-): Promise<DispatchMessageResult> {
+): Promise<{ ok: true } | DispatchFailure> {
   const integration = await db.integration.findFirst({
     where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
   });

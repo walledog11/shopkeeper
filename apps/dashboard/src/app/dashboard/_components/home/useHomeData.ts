@@ -10,7 +10,8 @@ import {
 } from "@/lib/home/summary-contract"
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
-import type { Integration, OrgSettings, KnowledgeBase } from "@/types"
+import { useOrg } from "@/hooks/useOrg"
+import type { Integration, KnowledgeBase } from "@/types"
 
 interface OrdersResponse {
   orders: Array<{
@@ -38,7 +39,7 @@ export function useHomeData({ initialSummary }: Options) {
     },
   )
   const { data: integrations = [] } = useSWR<Integration[]>("/api/integrations", fetcher)
-  const { data: orgData } = useSWR<{ settings: Partial<OrgSettings> }>("/api/org", fetcher)
+  const { data: orgData } = useOrg()
   const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>("/api/kb", fetcher, { revalidateOnFocus: false })
   const { data: telegramData } = useSWR<{ connected: boolean }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })

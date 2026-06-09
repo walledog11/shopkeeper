@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { KeyedMutator } from 'swr'
-import type { AgentTurnAction } from '@/lib/agent/api/turns'
+import type { AgentTurnAction } from '@shopkeeper/agent/turns'
 import type { Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
 
 type ThreadListMutate = (updater?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>

@@ -3,11 +3,11 @@ import { NextResponse } from "next/server";
 import { createMessage } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { requireOrgThread } from "@/lib/agent/api/auth";
+import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
 import { parseAgentAskBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, runAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
-import { serializeAgentTurn } from "@/lib/agent/api/turns";
+import { serializeAgentTurn } from "@shopkeeper/agent/turns";
 import logger from "@/lib/server/logger";
 import type { OrgSettings } from "@/types";
 

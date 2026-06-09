@@ -19,7 +19,7 @@ import ThreadList from './thread-list/ThreadList'
 import ConversationView from './conversation/ConversationView'
 import ContextPanel from './context-panel/ContextPanel'
 import ContextPanelSkeleton from './context-panel/ContextPanelSkeleton'
-import { getCurrentPlanForThread } from '@/lib/agent/plan-cache-shape'
+import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
 interface Props {

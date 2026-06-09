@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import type { ShopifyCustomer, ShopifyOrder } from '@/types/shopify';
 import logger from '@/lib/server/logger';
 
 const CUSTOMER_FIELDS = 'id,first_name,last_name,email,phone,note,orders_count,total_spent,currency,created_at,default_address';
@@ -204,48 +205,6 @@ async function addProductImagesToOrders(orders: ShopifyOrder[], ctx: ShopifyCont
     logger.warn({ err }, '[Shopify Customer GET] Failed to fetch product images');
     return orders;
   }
-}
-
-export interface ShopifyCustomer {
-  id: number;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  note: string | null;
-  orders_count: number;
-  total_spent: string;
-  currency?: string | null;
-  created_at: string;
-  default_address: ShopifyAddress | null;
-}
-
-export interface ShopifyAddress {
-  id: number;
-  address1: string | null;
-  city: string | null;
-  province: string | null;
-  country_name: string | null;
-  zip: string | null;
-}
-
-export interface ShopifyOrder {
-  id: number;
-  name: string;
-  created_at: string;
-  fulfillment_status: string | null;
-  total_price: string;
-  currency?: string | null;
-  line_items: ShopifyLineItem[];
-}
-
-export interface ShopifyLineItem {
-  title: string;
-  quantity: number;
-  product_id: number | null;
-  variant_title: string | null;
-  sku: string | null;
-  image?: string | null;
 }
 
 interface ShopifyProductImage {

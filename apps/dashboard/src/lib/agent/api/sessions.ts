@@ -1,6 +1,6 @@
 import { db } from "@shopkeeper/db";
 import { NotFoundError } from "@/lib/api/errors";
-import { getDashboardPlatformId, getOrCreateDashboardCustomer } from "@/lib/agent/api/auth";
+import { getDashboardPlatformId, getOrCreateDashboardCustomer } from "@shopkeeper/agent/thread-auth";
 
 const SESSION_LIMIT = 50;
 const MESSAGE_LIMIT = 100;

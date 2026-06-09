@@ -1,5 +1,5 @@
 import { db, isMeaningfulVoiceEdit } from "@shopkeeper/db";
-import { extractCachedDraftReply } from "./plan-cache-shape";
+import { extractCachedDraftReply } from "@shopkeeper/agent/plan-cache-shape";
 
 // Records one brand-voice learning sample when an operator sends a customer
 // reply that meaningfully diverges from the agent's cached draft. The cached

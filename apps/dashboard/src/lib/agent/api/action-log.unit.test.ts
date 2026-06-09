@@ -10,7 +10,7 @@ import {
   excludeAgentTurnMessages,
   extractAgentTurnsFromMessages,
   serializeAgentTurn,
-} from "@/lib/agent/api/turns";
+} from "@shopkeeper/agent/turns";
 import { isAgentTurnContent } from "@shopkeeper/agent/tools";
 import type { ActionLogEntry } from "@/types";
 

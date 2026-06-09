@@ -7,7 +7,7 @@ import {
   createTestMessage,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
-import { buildAgentPlanCacheRecord } from '@/lib/agent/api/plan-cache';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { AgentPlan } from '@/types';
 
