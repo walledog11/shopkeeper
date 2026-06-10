@@ -51,9 +51,9 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, removeThreadById: removeFromOpen, prependThread: prependToOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply)
-  const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, removeThreadById: removeFromClosed, prependThread: prependToClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true)
-  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, removeThreadById: removeFromFiltered, prependThread: prependToFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered')
+  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, removeThreadById: removeFromOpen, prependThread: prependToOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply, activeTab === 'open')
+  const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, removeThreadById: removeFromClosed, prependThread: prependToClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true, undefined, false, activeTab === 'closed')
+  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, removeThreadById: removeFromFiltered, prependThread: prependToFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered', false, activeTab === 'filtered')
   const isSearchMode = searchQuery.length >= 2
 
   const { data: searchData, isLoading: isSearchLoading, mutate: mutateSearch } = useSWR<{ threads: Thread[] }>(

@@ -27,6 +27,7 @@ export function usePaginatedThreads(
   preview = false,
   filterStatus?: "filtered",
   needsReply = false,
+  active = true,
 ) {
   const isVisible = useIsDocumentVisible();
   const baseInterval = status === "open" ? 15000 : 60000;
@@ -48,7 +49,7 @@ export function usePaginatedThreads(
     getKey,
     fetcher,
     {
-      refreshInterval: isVisible ? baseInterval : 0,
+      refreshInterval: isVisible && active ? baseInterval : 0,
       fallbackData: fbData,
       revalidateFirstPage: true,
     }

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { db } from '@shopkeeper/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
@@ -46,7 +47,7 @@ function composeAiContext(useCases: unknown, teamSize: unknown): string {
  * Looks up the Organization for the currently active Clerk organization.
  * Creates one on first use if it doesn't exist yet.
  */
-export async function getOrCreateOrg() {
+export const getOrCreateOrg = cache(async () => {
   const e2eOrg = await getE2EBypassOrg();
   if (e2eOrg) return e2eOrg;
 
@@ -86,4 +87,4 @@ export async function getOrCreateOrg() {
     if ((err as { code?: string }).code !== 'P2002') throw err;
     return db.organization.findUniqueOrThrow({ where: { clerkOrgId: orgId } });
   }
-}
+});
