@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 
 const signInLinkClass =
-  "hidden sm:inline-flex items-center px-3 py-2 text-[15px] font-medium text-stone-700 hover:text-[#2b2118] transition-colors";
+  "hidden sm:inline-flex items-center px-1 py-2 text-[15px] font-medium text-[#2b2118] hover:text-stone-600 transition-colors";
 
-const primaryLinkClass =
-  "inline-flex items-center rounded-xl bg-[#2b2118] px-5 py-2.5 text-sm font-semibold text-[#faf6ef] hover:bg-[#43352a] transition-colors";
+const primaryLinkClass = "m-glass-btn m-glass-btn-primary px-5 py-2.5 text-sm";
 
 export function AuthNavLinks() {
   const { isLoaded, isSignedIn } = useAuth();

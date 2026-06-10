@@ -61,7 +61,7 @@ function StatusBarIcons() {
 function TypingBubble({ receivedClass }: { receivedClass: string }) {
   return (
     <div
-      className={`flex items-center gap-1 rounded-[18px] rounded-bl-[5px] px-3.5 py-2.5 animate-[m-msg_0.25s_ease] ${receivedClass}`}
+      className={`inline-flex w-fit shrink-0 items-center gap-1 rounded-[18px] rounded-bl-[5px] px-3.5 py-2.5 animate-[m-msg_0.25s_ease] ${receivedClass}`}
       style={{ fontFamily: IOS_FONT }}
     >
       {[0, 1, 2].map((i) => (
@@ -119,7 +119,7 @@ function InstagramHeader({
         <div className="truncate text-[15px] font-semibold leading-tight text-stone-900">{title}</div>
         <div className="truncate text-[12px] leading-tight text-stone-500">{subtitle}</div>
       </div>
-      <div className="flex shrink-0 items-center gap-4">
+      <div className="flex shrink-0 items-center gap-2.5">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -170,7 +170,7 @@ function IMessageHeader({
   avatarBg,
 }: Pick<ChatDemoProps, "title" | "avatar" | "avatarBg">) {
   return (
-    <div className="relative flex min-h-[52px] items-center justify-center px-3 pb-2 pt-1">
+    <div className="relative flex min-h-[52px] items-center justify-center px-11 pb-2 pt-1">
       <div className="absolute left-3 top-1/2 -translate-y-1/2">
         <svg
           viewBox="0 0 24 24"
@@ -192,8 +192,8 @@ function IMessageHeader({
         >
           {avatar}
         </span>
-        <div className="flex items-center gap-px text-[11px] font-medium leading-none text-stone-900">
-          <span className="truncate max-w-[140px]">{title}</span>
+        <div className="flex max-w-full items-center gap-px text-[11px] font-medium leading-tight text-stone-900">
+          <span className="whitespace-nowrap">{title}</span>
           <svg
             viewBox="0 0 24 24"
             fill="none"
@@ -366,7 +366,7 @@ function IMessageMessages({
   );
 
   return (
-    <div className="flex flex-col gap-2 px-2.5 pt-[100px] pb-[72px]">
+    <div className="flex flex-col gap-2 px-2.5 pt-[108px] pb-[72px]">
       {visible.map((m, i) => {
         const cluster = getClusterPosition(visible, i);
         const showSender = m.from === "agent" && (i === 0 || visible[i - 1].from !== "agent");
@@ -390,7 +390,9 @@ function IMessageMessages({
               )}
               <div className="min-w-0">
                 {showSender && (
-                  <div className="mb-0.5 pl-0.5 text-[11px] leading-none text-stone-500">{title}</div>
+                  <div className="mb-0.5 pl-0.5 text-[11px] leading-tight whitespace-nowrap text-stone-500">
+                    {title}
+                  </div>
                 )}
                 <div
                   className={`px-3.5 py-2 text-[13px] leading-[1.35] text-stone-900 bg-[#E9E9EB] ${receivedBubbleRadius(cluster)}`}
@@ -427,7 +429,9 @@ function IMessageMessages({
             {avatar}
           </span>
           <div className="min-w-0">
-            <div className="mb-0.5 pl-0.5 text-[11px] leading-none text-stone-500">{title}</div>
+            <div className="mb-0.5 pl-0.5 text-[11px] leading-tight whitespace-nowrap text-stone-500">
+              {title}
+            </div>
             <TypingBubble receivedClass="bg-[#E9E9EB]" />
           </div>
         </div>
@@ -476,7 +480,11 @@ function InstagramMessages({
           </div>
         </div>
       ))}
-      {typing && <TypingBubble receivedClass={receivedTyping} />}
+      {typing && (
+        <div className="max-w-[82%] self-start animate-[m-msg_0.25s_ease]">
+          <TypingBubble receivedClass={receivedTyping} />
+        </div>
+      )}
     </div>
   );
 }

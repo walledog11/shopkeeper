@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { GlassLink } from "./GlassLink";
 
 function rise(delayMs: number) {
   return {
@@ -30,42 +30,7 @@ export function Hero() {
         Meet Shopkeeper, <em className="italic text-[#9c9285]">your newest employee.</em>
       </h1>
 
-      <p
-        className="mx-auto mb-8 max-w-[52ch] text-[17px] leading-relaxed text-stone-700"
-        style={rise(160)}
-      >
-        It answers your customers on Instagram, email, and SMS — in your voice, with your store&apos;s
-        real order data — and texts you when something needs a human. You approve; it does the typing.
-      </p>
-
-      <div className="mb-5 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
-        <Link
-          href="/signup"
-          className="inline-flex items-center rounded-full bg-[#2b2118] px-6 py-3 text-sm font-semibold text-[#f6f2eb] no-underline transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-[#43352a]"
-        >
-          Hire Shopkeeper — free for 14 days
-        </Link>
-        <Link
-          href="#how"
-          className="inline-flex items-center rounded-full border border-stone-900/15 px-6 py-3 text-sm font-semibold text-stone-900 no-underline transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-stone-900/35"
-        >
-          Watch it work ↓
-        </Link>
-      </div>
-
-      <div
-        className="mb-14 flex flex-wrap justify-center gap-x-8 gap-y-2 text-[13px] text-stone-600"
-        style={rise(320)}
-      >
-        {["No credit card", "Shopify connects in 2 min", "Cancel anytime"].map((item) => (
-          <span key={item} className="inline-flex items-center gap-1.5">
-            <span className="grid size-4 place-items-center rounded-full bg-[#2b2118] text-[9px] text-[#f6f2eb]">✓</span>
-            {item}
-          </span>
-        ))}
-      </div>
-
-      <div style={rise(420)}>
+      <div style={rise(420)} className="mt-10">
         {/* Raw HTML so the `muted` attribute is present at parse time — React only sets
             the property, and the browser blocks autoplay on a not-yet-muted video. */}
         <div
@@ -73,9 +38,15 @@ export function Hero() {
             __html: `<video src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4" autoplay muted loop playsinline class="mx-auto w-full max-w-[880px] rounded-[28px] bg-[#f6f2eb] shadow-[0_40px_80px_-30px_rgba(22,20,19,0.4)]"></video>`,
           }}
         />
-        <p className="mt-6 text-[13px] text-stone-500 [font-family:var(--m-mono)]">
-          ↑ 38 seconds of your newest employee at work
-        </p>
+      </div>
+
+      <div className="mt-9 flex flex-wrap items-center justify-center gap-3" style={rise(240)}>
+        <GlassLink href="/signup" variant="primary" className="px-6 py-3">
+          Hire Shopkeeper — free for 14 days
+        </GlassLink>
+        <GlassLink href="#how" variant="secondary" className="px-6 py-3">
+          Watch it work ↓
+        </GlassLink>
       </div>
     </section>
   );

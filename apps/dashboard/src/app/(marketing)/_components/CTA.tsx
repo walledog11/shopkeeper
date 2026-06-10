@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { Reveal } from "./Reveal";
+import { GlassLink } from "./GlassLink";
 
 export function CTA() {
   return (
@@ -12,12 +12,9 @@ export function CTA() {
           <p className="mx-auto mb-9 max-w-[44ch] text-base leading-relaxed text-[#f6f2eb]/70">
             Set up in five minutes. Your customers will never know you slept.
           </p>
-          <Link
-            href="/signup"
-            className="inline-flex items-center rounded-full bg-[#f6f2eb] px-7 py-3.5 text-sm font-semibold text-stone-900 no-underline transition-[background-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-white"
-          >
+          <GlassLink href="/signup" variant="light" className="px-7 py-3.5">
             Hire Shopkeeper — start free
-          </Link>
+          </GlassLink>
           <p className="mt-5 text-[12px] text-[#f6f2eb]/50 [font-family:var(--m-mono)]">
             14 days free · no credit card
           </p>

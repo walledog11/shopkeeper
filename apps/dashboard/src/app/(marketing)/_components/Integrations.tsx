@@ -35,7 +35,7 @@ const tiles: { name: string; left: string; top: string; logo?: string; mark?: Re
 
 export function Integrations() {
   return (
-    <section className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
+    <section id="integrations" className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
       {/* Watercolor wash bands */}
       <div
         aria-hidden

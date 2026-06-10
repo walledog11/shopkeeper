@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CONTACT_EMAIL } from "@/lib/brand";
 import { Reveal } from "./Reveal";
+import { cn } from "@/lib/ui/cn";
 
 const tiers = [
   {
@@ -105,11 +106,10 @@ export function Pricing() {
             </ul>
             <Link
               href={tier.href}
-              className={`mt-auto block w-full rounded-full p-3 text-center text-sm font-semibold no-underline transition-colors ${
-                tier.featured
-                  ? "bg-[#f6f2eb] text-stone-900 hover:bg-white"
-                  : "border border-stone-900/20 text-stone-900 hover:border-stone-900/50"
-              }`}
+              className={cn(
+                "mt-auto w-full p-3 text-center",
+                tier.featured ? "m-glass-btn m-glass-btn-light" : "m-glass-btn m-glass-btn-outline",
+              )}
             >
               {tier.cta}
             </Link>
