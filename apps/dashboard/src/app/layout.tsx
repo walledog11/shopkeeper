@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: "Shopkeeper — AI support for Shopify brands",
   description:
     "Consolidate customer messages from Instagram, TikTok, Shopify, and email into one AI-powered dashboard. Respond faster and smarter.",
+  icons: {
+    icon: "/logos/shopkeeper-shop-logo.png",
+    apple: "/logos/shopkeeper-shop-logo.png",
+  },
 };
 
 export default function RootLayout({
