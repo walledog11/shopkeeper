@@ -94,6 +94,17 @@ describe('createRedisLockProvider', () => {
     await expect(lock!.release()).resolves.toBeUndefined();
   });
 
+  it('fails closed when the client source is unavailable', async () => {
+    const provider = createRedisLockProvider({
+      getClient: () => null,
+    });
+
+    await expect(provider.acquire('thread-down', { failClosed: true })).rejects.toMatchObject({
+      name: 'ServiceUnavailableError',
+      status: 503,
+    });
+  });
+
   it('fails open when redis.set throws', async () => {
     const fake = makeFakeUpstashRedis();
     fake.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
@@ -102,5 +113,16 @@ describe('createRedisLockProvider', () => {
     const lock = await provider.acquire('thread-error');
     expect(lock).not.toBeNull();
     await expect(lock!.release()).resolves.toBeUndefined();
+  });
+
+  it('fails closed when redis.set throws', async () => {
+    const fake = makeFakeUpstashRedis();
+    fake.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const provider = createRedisLockProvider(upstashRedisLockClient(fake));
+
+    await expect(provider.acquire('thread-error', { failClosed: true })).rejects.toMatchObject({
+      name: 'ServiceUnavailableError',
+      status: 503,
+    });
   });
 });

@@ -15,6 +15,7 @@ export {
   NotFoundError,
   BadRequestError,
   ConflictError,
+  ServiceUnavailableError,
 } from '@shopkeeper/agent/errors';
 export type { ApiErrorDetail } from '@shopkeeper/agent/errors';
 

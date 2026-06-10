@@ -110,11 +110,22 @@ describe('acquireThreadLock', () => {
     fake.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
     mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
 
-    const lock = await acquireThreadLock('thread-redis-down');
+    const lock = await acquireThreadLock('thread-redis-down', { failClosed: false });
 
     expect(lock).not.toBeNull();
     // Releasing the no-op lock should not blow up.
     await expect(lock!.release()).resolves.toBeUndefined();
+  });
+
+  it('fails closed when redis.set throws', async () => {
+    const fake = makeFakeRedis();
+    fake.set.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    mockedGetRedis.mockReturnValue(fake as unknown as ReturnType<typeof getRedis>);
+
+    await expect(acquireThreadLock('thread-redis-down', { failClosed: true })).rejects.toMatchObject({
+      name: 'ServiceUnavailableError',
+      status: 503,
+    });
   });
 
   it('fails open when getRedis itself throws (e.g., missing env)', async () => {
@@ -122,10 +133,21 @@ describe('acquireThreadLock', () => {
       throw new Error('UPSTASH env missing');
     });
 
-    const lock = await acquireThreadLock('thread-no-env');
+    const lock = await acquireThreadLock('thread-no-env', { failClosed: false });
 
     expect(lock).not.toBeNull();
     await expect(lock!.release()).resolves.toBeUndefined();
+  });
+
+  it('fails closed when getRedis itself throws (e.g., missing env)', async () => {
+    mockedGetRedis.mockImplementationOnce(() => {
+      throw new Error('UPSTASH env missing');
+    });
+
+    await expect(acquireThreadLock('thread-no-env', { failClosed: true })).rejects.toMatchObject({
+      name: 'ServiceUnavailableError',
+      status: 503,
+    });
   });
 
   it('honors a custom TTL', async () => {

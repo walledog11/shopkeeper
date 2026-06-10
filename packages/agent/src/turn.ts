@@ -54,11 +54,17 @@ export interface ExecuteAgentTurnParams {
   };
 }
 
+function requiresFailClosedLock(params: ExecuteAgentTurnParams): boolean {
+  return params.auditMode !== "read_only";
+}
+
 export async function executeAgentTurn(
   params: ExecuteAgentTurnParams,
   deps: ExecuteAgentTurnDeps,
 ): Promise<AgentResult> {
-  const lock = await deps.lock.acquire(params.threadId);
+  const lock = await deps.lock.acquire(params.threadId, {
+    failClosed: requiresFailClosedLock(params),
+  });
   if (!lock) {
     throw new ConflictError("Agent is already running on this thread. Try again in a few seconds.");
   }

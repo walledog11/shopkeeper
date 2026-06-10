@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
-import type { LockProvider, ThreadLock } from './index.js';
+import { ServiceUnavailableError } from '../errors.js';
+import type { LockAcquireOptions, LockProvider, ThreadLock } from './index.js';
 
 export const RELEASE_SCRIPT =
   'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
@@ -37,38 +38,67 @@ function resolveClient(source: RedisLockClient | RedisLockClientSource): RedisLo
   return 'getClient' in source ? source.getClient() : source;
 }
 
+function resolveLockUnavailable(
+  options: RedisLockProviderOptions | undefined,
+  meta: Record<string, unknown>,
+  message: string,
+  failClosed: boolean,
+): ThreadLock {
+  options?.log?.warn(meta, message);
+  if (failClosed) {
+    throw new ServiceUnavailableError(
+      'Agent lock unavailable. Mutating agent runs are blocked until locking is restored.',
+    );
+  }
+  return NOOP_LOCK;
+}
+
 export function createRedisLockProvider(
   source: RedisLockClient | RedisLockClientSource,
   options?: RedisLockProviderOptions,
 ): LockProvider {
   return {
-    async acquire(threadId: string, ttlSeconds = 90): Promise<ThreadLock | null> {
+    async acquire(threadId: string, acquireOptions: LockAcquireOptions = {}): Promise<ThreadLock | null> {
+      const ttlSeconds = acquireOptions.ttlSeconds ?? 90;
+      const failClosed = acquireOptions.failClosed ?? false;
       const key = `agent:lock:${threadId}`;
       const token = crypto.randomUUID();
       const client = resolveClient(source);
 
       if (!client) {
-        options?.log?.warn({ threadId }, '[agent-lock] redis unavailable; proceeding without lock');
-        return NOOP_LOCK;
+        return resolveLockUnavailable(
+          options,
+          { threadId },
+          failClosed
+            ? '[agent-lock] redis unavailable; refusing mutating agent turn without lock'
+            : '[agent-lock] redis unavailable; proceeding without lock',
+          failClosed,
+        );
       }
 
       let acquired: unknown;
       try {
         acquired = await withTimeout(client.setNxEx(key, token, ttlSeconds), ACQUIRE_TIMEOUT_MS);
       } catch (err) {
-        options?.log?.warn(
+        return resolveLockUnavailable(
+          options,
           { err: (err as Error).message, threadId },
-          '[agent-lock] redis set failed; proceeding without lock',
+          failClosed
+            ? '[agent-lock] redis set failed; refusing mutating agent turn without lock'
+            : '[agent-lock] redis set failed; proceeding without lock',
+          failClosed,
         );
-        return NOOP_LOCK;
       }
 
       if (acquired === TIMED_OUT) {
-        options?.log?.warn(
+        return resolveLockUnavailable(
+          options,
           { threadId, timeoutMs: ACQUIRE_TIMEOUT_MS },
-          '[agent-lock] redis set timed out; proceeding without lock',
+          failClosed
+            ? '[agent-lock] redis set timed out; refusing mutating agent turn without lock'
+            : '[agent-lock] redis set timed out; proceeding without lock',
+          failClosed,
         );
-        return NOOP_LOCK;
       }
 
       if (acquired !== 'OK') return null;

@@ -61,3 +61,10 @@ export class ConflictError extends ApiError {
     this.name = 'ConflictError';
   }
 }
+
+export class ServiceUnavailableError extends ApiError {
+  constructor(message = 'Service temporarily unavailable') {
+    super(message, 503);
+    this.name = 'ServiceUnavailableError';
+  }
+}
