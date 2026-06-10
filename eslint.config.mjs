@@ -21,6 +21,7 @@ const repoNodeTsFiles = [
   "apps/gateway/vitest.config.ts",
   "e2e/**/*.{ts,mts,cts}",
   "packages/agent/src/**/*.ts",
+  "packages/email/src/**/*.ts",
   "packages/db/*.ts",
   "packages/db/scripts/*.ts",
   "playwright.browser.config.ts",

@@ -1,0 +1,69 @@
+{
+  "name": "@shopkeeper/email",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./providers": {
+      "types": "./dist/providers.d.ts",
+      "default": "./dist/providers.js"
+    },
+    "./reply": {
+      "types": "./dist/reply.d.ts",
+      "default": "./dist/reply.js"
+    },
+    "./mime-build": {
+      "types": "./dist/mime-build.d.ts",
+      "default": "./dist/mime-build.js"
+    },
+    "./mime-parse": {
+      "types": "./dist/mime-parse.d.ts",
+      "default": "./dist/mime-parse.js"
+    },
+    "./inbound-normalize": {
+      "types": "./dist/inbound-normalize.d.ts",
+      "default": "./dist/inbound-normalize.js"
+    },
+    "./address-filter": {
+      "types": "./dist/address-filter.d.ts",
+      "default": "./dist/address-filter.js"
+    },
+    "./token": {
+      "types": "./dist/token.d.ts",
+      "default": "./dist/token.js"
+    },
+    "./senders": {
+      "types": "./dist/senders/index.d.ts",
+      "default": "./dist/senders/index.js"
+    },
+    "./logger": {
+      "types": "./dist/logger.d.ts",
+      "default": "./dist/logger.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch --preserveWatchOutput",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "lint": "cd ../.. && eslint packages/email/src --max-warnings 0"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.5",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "@shopkeeper/db": "*",
+    "mailparser": "^3.7.4",
+    "postmark": "4.0.7"
+  }
+}

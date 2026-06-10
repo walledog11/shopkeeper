@@ -2,8 +2,8 @@
 
 Plan for native Gmail inbox sync (no forwarding required for OAuth merchants), parallel Outlook improvements, and cleanup of the split Postmark / OAuth email model.
 
-**Status:** Phase 0 complete (2026-06-09); Phases 1+ not started  
-**Last updated:** 2026-06-09 (Phase 0 shipped: env split, email-token-health job, hybrid-model docs, Integrations rail status UX)
+**Status:** Phase 0 + Phase 1 complete (2026-06-09); Phase 1.5 / Phase 2 not started  
+**Last updated:** 2026-06-09 (Phase 1 shipped: `packages/email` shared package — token refresh, MIME build/parse, inbound normalize, address filter, providers, senders; dashboard email lib reduced to re-export shims)
 
 ## Goal
 
@@ -143,9 +143,21 @@ flowchart TB
 
 ---
 
-### Phase 1 — shared email infrastructure
+### Phase 1 — shared email infrastructure — ✅ DONE (2026-06-09)
 
 **Purpose:** extract code Gmail and Outlook inbound will share; avoid duplicating token refresh and MIME logic.
+
+**Shipped:**
+- ✅ `packages/email` (`@shopkeeper/email`) created with subpath exports, consumed by both `apps/dashboard` and `apps/gateway`. Build wired into root `predev` + turbo `^build`; `packages/email/src` added to ESLint globs.
+- ✅ Modules: `types.ts`, `providers.ts`, `token.ts` (shared OAuth refresh — `requestTokenRefresh` / `persistRefreshedToken` / `getEmailOAuthClient`), `mime-build.ts`, `mime-parse.ts` (mailparser), `inbound-normalize.ts`, `address-filter.ts`, `reply.ts`, `logger.ts` (install seam, mirrors agent), `senders/` (Postmark/Gmail/Outlook + `getEmailSender`).
+- ✅ `GmailSender` / `OutlookSender` now refresh via shared `token.ts`.
+- ✅ Dashboard `apps/dashboard/src/lib/messaging/email/*` reduced to thin re-export shims (importers + existing tests unchanged; shims removed in Phase 5).
+- ✅ Both apps install the email logger (`installEmailLogger`) alongside the agent logger.
+- ✅ **Verify:** `packages/email` unit tests (MIME parse fixtures: multipart, attachments, Message-ID, HTML-only→text fallback; address-filter; inbound-normalize) pass; dashboard DB-backed sender tests still green through shims; gateway + dashboard typecheck clean; package lint clean.
+
+**Deferred to later phases (as planned):**
+- `email-token-health.ts` still carries its own refresh copy — Phase 5 "Complete migration" folds it onto `token.ts`.
+- GCP Pub/Sub client + wiring `inbound-normalize` / `address-filter` into the gateway worker pipeline land in **Phase 2** (they are inbound-consumption glue, dark until Gmail native inbound).
 
 #### Package location — resolved
 
@@ -568,7 +580,7 @@ No new required vars for Phase 2; optional feature flags via org settings later.
 
 0. **Google restricted-scope verification** — file *before* Phase 2 coding, in parallel with Phase 0/1. Long pole, externally gated. Phases 2–3 can be built and tested against `Internal`/test users while it's pending, but cannot reach external merchants until it clears.
 1. **Phase 0** — ✅ shipped (2026-06-09); no flag.
-2. **Phase 1** — ship; no user-visible change. Unblocks Phase 1.5 and Phase 2.
+2. **Phase 1** — ✅ shipped (2026-06-09); no user-visible change. Unblocked Phase 1.5 and Phase 2.
 3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. Ship in parallel with Phase 2 once `packages/email` exists. Internal orgs → agent/auto-ack paths first → merchant composer.
 4. **Phase 2** — behind `GMAIL_NATIVE_INBOUND=true` (gateway + dashboard). Internal orgs first. Can run in parallel with Phase 1.5.
 5. **Phase 3** — enable Gmail flag for all new connects; existing integrations prompt re-auth.

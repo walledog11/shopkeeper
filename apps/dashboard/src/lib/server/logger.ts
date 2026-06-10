@@ -1,5 +1,6 @@
 import pino from 'pino';
 import { installAgentLogger } from '@shopkeeper/agent/logger';
+import { installEmailLogger } from '@shopkeeper/email/logger';
 import { PINO_REDACT_PATHS, REDACTED } from '@shopkeeper/agent/observability';
 
 const globalForLogger = globalThis as typeof globalThis & { shopkeeperLogger: pino.Logger | undefined };
@@ -14,5 +15,6 @@ function createLogger(): pino.Logger {
 const logger = globalForLogger.shopkeeperLogger ?? createLogger();
 globalForLogger.shopkeeperLogger = logger;
 installAgentLogger(logger);
+installEmailLogger(logger);
 
 export default logger;

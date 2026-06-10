@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/agent",
+    "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/email && npm run build -w packages/agent",
     "dev": "npx turbo run dev",
     "build": "npx turbo run build",
     "clean": "node ./scripts/clean.mjs artifacts",

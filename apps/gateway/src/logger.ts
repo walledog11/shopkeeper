@@ -1,5 +1,6 @@
 import pino from 'pino';
 import { installAgentLogger } from '@shopkeeper/agent/logger';
+import { installEmailLogger } from '@shopkeeper/email/logger';
 import { PINO_REDACT_PATHS, REDACTED } from '@shopkeeper/agent/observability';
 
 const logger = pino({
@@ -14,5 +15,6 @@ const logger = pino({
 });
 
 installAgentLogger(logger);
+installEmailLogger(logger);
 
 export default logger;
