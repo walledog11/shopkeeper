@@ -59,14 +59,18 @@ export function EmailForwardingDisclosure({
   setEmail,
   loading,
   onSave,
+  defaultOpen = false,
+  label = "Use email forwarding (advanced)",
 }: {
   isConnected: boolean
   email: string
   setEmail: (v: string) => void
   loading: boolean
   onSave: () => void
+  defaultOpen?: boolean
+  label?: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(defaultOpen)
   const [provider, setProvider] = useState<ForwardingProviderId>("google")
   const { data: org } = useOrg({ enabled: open })
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
@@ -79,7 +83,7 @@ export function EmailForwardingDisclosure({
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center justify-between px-3.5 py-2.5 text-left"
       >
-        <span className="text-xs font-medium text-white/55">Use email forwarding (advanced)</span>
+        <span className="text-xs font-medium text-white/55">{label}</span>
         <ChevronDown className={cn("size-3.5 text-white/30 transition-transform", open && "rotate-180")} />
       </button>
       {open && (

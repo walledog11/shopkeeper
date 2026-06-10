@@ -12,6 +12,14 @@ function hasEnv(name: string): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+export type EmailInboundMode = 'hybrid' | 'postmark' | 'gmail-only';
+
+export function getEmailInboundMode(): EmailInboundMode {
+  const value = process.env.EMAIL_INBOUND_MODE?.trim().toLowerCase();
+  if (value === 'postmark' || value === 'gmail-only') return value;
+  return 'hybrid';
+}
+
 function requireEnv(name: string): string {
   const value = process.env[name];
   if (typeof value !== 'string' || value.trim().length === 0) {
@@ -95,7 +103,9 @@ export function validateGatewayEnv(): void {
     logger.warn('[Gateway] DASHBOARD_INTERNAL_URL is set in production. Prefer DASHBOARD_URL and reserve DASHBOARD_INTERNAL_URL for local callback forwarding.');
   }
 
-  if (process.env.NODE_ENV === 'production') {
+  // Postmark inbound auth is required whenever the forwarding rail is active
+  // (hybrid/postmark). gmail-only boots without it for dev / future native-only.
+  if (process.env.NODE_ENV === 'production' && getEmailInboundMode() !== 'gmail-only') {
     if (!hasEnv('POSTMARK_INBOUND_USERNAME')) {
       throw new Error('[Gateway] Missing required environment variable: POSTMARK_INBOUND_USERNAME');
     }

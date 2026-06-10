@@ -14,6 +14,7 @@ export const MODEL = {
 export const QUEUE = {
   INBOUND: 'inbound-messages',
   TOKEN_HEALTH: 'token-health',
+  EMAIL_TOKEN_HEALTH: 'email-token-health',
   AI_SUMMARY: 'ai-summary',
   ARCHIVAL: 'thread-archival',
   PURGE: 'purge',
@@ -28,6 +29,8 @@ export const JOB = {
   EMAIL: 'process-email',
   TOKEN_HEALTH_CHECK: 'check-ig-tokens',
   TOKEN_HEALTH_ID: 'ig-token-health-daily',
+  EMAIL_TOKEN_HEALTH_CHECK: 'check-email-tokens',
+  EMAIL_TOKEN_HEALTH_ID: 'email-token-health-daily',
   SUMMARIZE_THREAD: 'summarize-thread',
   ARCHIVE_THREADS: 'archive-old-threads',
   ARCHIVE_THREADS_ID: 'thread-archival-daily',

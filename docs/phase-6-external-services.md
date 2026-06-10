@@ -1,6 +1,6 @@
 # Phase 6 — External Services Runbook
 
-Rename **Clerk → Shopkeeper** in every service outside the repo. Code changes for this phase are in the same deploy window; see [name-change-plan.md](./name-change-plan.md).
+Rename **Clerk → Shopkeeper** in every service outside the repo. Code changes for this phase are in the same deploy window.
 
 **Prerequisite:** Confirm the primary domain before starting DNS-dependent steps.
 

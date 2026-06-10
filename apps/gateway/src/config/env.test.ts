@@ -109,4 +109,13 @@ describe('validateGatewayEnv', () => {
 
     expect(() => validateGatewayEnv()).toThrow(/Missing required environment variable: POSTMARK_INBOUND_USERNAME/);
   });
+
+  it('does not require Postmark inbound credentials when EMAIL_INBOUND_MODE=gmail-only', () => {
+    stubProductionGatewayEnv();
+    vi.stubEnv('EMAIL_INBOUND_MODE', 'gmail-only');
+    vi.stubEnv('POSTMARK_INBOUND_USERNAME', '');
+    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', '');
+
+    expect(() => validateGatewayEnv()).not.toThrow();
+  });
 });

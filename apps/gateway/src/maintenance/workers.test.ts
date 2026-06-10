@@ -85,11 +85,12 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(6);
-    expect(resources.workers).toHaveLength(7);
-    expect(resources.queues).toHaveLength(10);
+    expect(maintenanceJobRegistrations).toHaveLength(7);
+    expect(resources.workers).toHaveLength(8);
+    expect(resources.queues).toHaveLength(11);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
+      QUEUE.EMAIL_TOKEN_HEALTH,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -102,6 +103,7 @@ describe('createMaintenanceWorkers', () => {
     ]);
     expect(workerInstances.map((worker) => worker.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
+      QUEUE.EMAIL_TOKEN_HEALTH,
       QUEUE.ARCHIVAL,
       QUEUE.PURGE,
       QUEUE.DIGEST,
@@ -128,6 +130,11 @@ describe('createMaintenanceWorkers', () => {
     expect(readRepeatJob(QUEUE.TOKEN_HEALTH)).toEqual({
       name: JOB.TOKEN_HEALTH_CHECK,
       jobId: JOB.TOKEN_HEALTH_ID,
+      every: ONE_DAY_MS,
+    });
+    expect(readRepeatJob(QUEUE.EMAIL_TOKEN_HEALTH)).toEqual({
+      name: JOB.EMAIL_TOKEN_HEALTH_CHECK,
+      jobId: JOB.EMAIL_TOKEN_HEALTH_ID,
       every: ONE_DAY_MS,
     });
     expect(readRepeatJob(QUEUE.ARCHIVAL)).toEqual({

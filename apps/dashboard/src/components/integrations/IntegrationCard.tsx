@@ -193,6 +193,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           {config.connectType === "email" && (
             <EmailConnectBody
               isConnected={isConnected}
+              connected={connected}
               email={email}
               setEmail={setEmail}
               loading={loading}

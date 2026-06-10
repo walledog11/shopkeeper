@@ -2,8 +2,8 @@
 
 Plan for native Gmail inbox sync (no forwarding required for OAuth merchants), parallel Outlook improvements, and cleanup of the split Postmark / OAuth email model.
 
-**Status:** draft  
-**Last updated:** 2026-06-07 (reliability + architecture additions)
+**Status:** Phase 0 complete (2026-06-09); Phases 1+ not started  
+**Last updated:** 2026-06-09 (Phase 0 shipped: env split, email-token-health job, hybrid-model docs, Integrations rail status UX)
 
 ## Goal
 
@@ -114,31 +114,32 @@ flowchart TB
 
 ## Phased plan
 
-### Phase 0 — cleanup & contracts (no behavior change)
+### Phase 0 — cleanup & contracts (no behavior change) — ✅ DONE (2026-06-09)
 
 **Purpose:** reduce confusion and harden the existing stack before adding Gmail sync.
 
-1. **Document the hybrid model** in README and `docs/production/runbook.md` (inbound rail vs outbound provider).
-2. **Integrations UX**
-   - After Gmail/Outlook connect, show explicit status: “Sending: connected” / “Receiving: forwarding required” until Phase 2 lands.
-   - Move forwarding instructions out of “advanced” for forwarding-only merchants; keep separate checklist for OAuth users during transition.
-3. **Env validation split**
-   - Keep Postmark inbound auth required when `EMAIL_INBOUND_MODE=postmark|hybrid` (default).
-   - Allow gateway boot without Postmark inbound creds only when `EMAIL_INBOUND_MODE=gmail-only` (dev / future); production default stays `hybrid`.
-4. **Outbound hygiene**
-   - Audit `fromEmail` vs `externalAccountId` usage in `dispatch-message.ts`; always prefer `fromEmail` for `From`, `externalAccountId` for OAuth identity lookup.
-   - Log provider + integration id on send failures (already partially done via `recordEmailSendFailure`).
-5. **Re-auth path + email OAuth token health**
+1. ✅ **Document the hybrid model** in README and `docs/production/runbook.md` (inbound rail vs outbound provider). — README Email channel line rewritten; runbook gained an "Email architecture: inbound rail vs outbound provider" section + new env vars.
+2. ✅ **Integrations UX**
+   - ✅ After Gmail/Outlook connect, show explicit status: “Sending: connected” / “Receiving: forwarding required” until Phase 2 lands. — `EmailRailStatus` panel in `connect-bodies.tsx`.
+   - ✅ Move forwarding instructions out of “advanced” for forwarding-only merchants; keep separate checklist for OAuth users during transition. — `EmailForwardingDisclosure` gained `defaultOpen` + `label`; auto-expands and relabels to "Set up inbound forwarding" for OAuth-connected merchants.
+3. ✅ **Env validation split** (`apps/gateway/src/config/env.ts`)
+   - ✅ Keep Postmark inbound auth required when `EMAIL_INBOUND_MODE=postmark|hybrid` (default). — via new `getEmailInboundMode()`.
+   - ✅ Allow gateway boot without Postmark inbound creds only when `EMAIL_INBOUND_MODE=gmail-only` (dev / future); production default stays `hybrid`. — covered by new `env.test.ts` case.
+4. ✅ **Outbound hygiene** — audit found the rules already satisfied; **no code change.**
+   - ✅ `fromEmail` preferred for `From`, `externalAccountId` for OAuth identity in both send paths (`dispatch-message.ts:168`, `agent/tools/thread.ts:119`).
+   - ✅ Provider + integration id already logged on send failures via `recordEmailSendFailure`.
+5. ✅ **Re-auth path + email OAuth token health**
    - Email OAuth uses an **epoch sentinel** (`tokenExpiresAt = 0`) for “refresh token dead — reconnect required,” not `Date.now()` comparison. Normal access-token expiry is handled by proactive refresh at send time (`GmailSender` / `OutlookSender`). This is intentional — see `providers.test.ts`.
-   - **Gap today:** Instagram has a daily `token-health` maintenance job that probes tokens and sets the sentinel on failure; Gmail/Outlook do not. Revoked refresh tokens can fail at send time without surfacing “Reconnect” in Integrations UI.
-   - **Add `email-token-health` maintenance job** (gateway, parallel with Phase 1):
-     - Daily: for each `platform: email` integration with `provider: gmail | outlook`, attempt a lightweight token probe (refresh if near expiry, or a minimal API call such as Gmail `users.getProfile` / Graph `me`).
-     - On refresh failure or 401 after refresh: set `tokenExpiresAt: new Date(0)` (same sentinel pattern as `apps/gateway/src/maintenance/token-health.ts` for Instagram).
-     - On success: update `tokenExpiresAt` from provider response.
-   - Surface “Reconnect Gmail/Outlook” in Integrations UI when sentinel is set (existing `isEmailAuthReauthorizationRequired` + `integration-card-helpers.ts`).
+   - **Gap (now closed):** Instagram had a daily `token-health` job; Gmail/Outlook did not.
+   - ✅ **Added `email-token-health` maintenance job** (`apps/gateway/src/maintenance/email-token-health.ts`, registered in `workers.ts`):
+     - Daily: for each `platform: email` integration with `provider: gmail | outlook` and a refresh token, attempt a refresh-token probe.
+     - On 4xx (dead grant): set `tokenExpiresAt: new Date(0)` (same sentinel pattern as `token-health.ts`). 5xx/network treated as transient — token left alone.
+     - On success: update `accessToken` + `tokenExpiresAt` (and `refreshToken` if rotated).
+   - ✅ Reconnect surfacing in Integrations UI **already wired** (`isEmailAuthReauthorizationRequired` → `integration-card-helpers.ts` → `IntegrationCard` Fix button); job only needed to set the sentinel.
+   - **Caveat (deferred):** probe needs `GOOGLE_CLIENT_ID/SECRET` + `MICROSOFT_CLIENT_ID/SECRET` in the gateway (not present today). Job skips gracefully (warn, no sentinel) when absent; documented in `apps/gateway/.env.example`. Add to production env / `verify:production:env` when provisioned.
    - Phase 2 adds a second re-auth trigger: missing `gmail.readonly` scope in metadata (extend `isEmailAuthReauthorizationRequired`).
 
-**Verify:** existing e2e email flow (`e2e/core-agent-flow.spec.ts`) and Postmark webhook tests unchanged. Add unit test: email token health sets epoch sentinel on simulated refresh failure.
+**Verify:** ✅ Postmark webhook tests unchanged; gateway + dashboard typecheck clean; new unit tests pass (`email-token-health.test.ts` sentinel/refresh/transient cases, `env.test.ts` gmail-only case, `workers.test.ts` registry counts).
 
 ---
 
@@ -239,7 +240,14 @@ POST /api/messages (or io-send-internal)
               └─ exhausted → sendStatus: 'failed', recordEmailSendFailure, UI shows retry affordance
 ```
 
-**Queue placement:** prefer **gateway** (`send-email` queue) to avoid Vercel serverless worker limitations and to colocate with inbound queues. Dashboard enqueues via internal API or direct Redis enqueue with shared job schema. Worker calls `@shopkeeper/email` senders directly (requires moving senders to `packages/email` in Phase 1 — Phase 1.5 ships after Phase 1 package exists).
+**Queue placement:** prefer **gateway** (`send-email` queue) to avoid Vercel serverless worker limitations and to colocate with inbound queues. Worker calls `@shopkeeper/email` senders directly (requires moving senders to `packages/email` in Phase 1 — Phase 1.5 ships after Phase 1 package exists).
+
+**Enqueue path — unresolved, must decide before coding.** The dashboard cannot do a "direct Redis enqueue" onto the gateway's BullMQ queue without violating the project's Redis split: the gateway runs a dedicated per-instance `ioredis`/`REDIS_URL` for BullMQ, while the dashboard uses Upstash REST — *separate instances by design* (see CLAUDE.md). Two real options, neither free:
+
+- **(A) Internal HTTP enqueue** (`POST` to a gateway internal route, like `plan-internal`). Keeps the Redis split intact, but the enqueue itself becomes a synchronous dashboard→gateway call that can fail — which partly re-introduces the very hop fragility this phase exists to reduce. Mitigated because the failure surface is now "couldn't enqueue" (fast, retryable, message stays `pending`) rather than "provider timed out mid-send."
+- **(B) Give the dashboard the gateway's `REDIS_URL`** so it can enqueue directly. Removes the HTTP hop but creates a new dashboard→gateway-Redis coupling that does not exist today and cuts against the separation rationale (serverless connection churn against the BullMQ Redis).
+
+Recommendation: **(A)** for v1 — it preserves the architecture and the orphan-`pending` row is already recoverable via the retry affordance. Revisit (B) only if enqueue-hop failures show up in metrics. Whichever is chosen, an orphan-`pending` sweeper (messages stuck `pending` > N min with no job) is needed since enqueue-after-row-create is not atomic.
 
 **Job payload (minimal):**
 
@@ -282,6 +290,8 @@ sendError      String?
 ### Phase 2 — Gmail native inbound
 
 **Purpose:** OAuth Gmail merchants receive tickets without Postmark forwarding.
+
+> **Blocking dependency — start before any Phase 2 coding.** `gmail.readonly` is a Google **restricted scope**. Native inbound cannot ship to external merchants until Google's restricted-scope verification (OAuth consent screen + security audit) clears — this is weeks-to-months, outside our control, and can be rejected. Until it clears, native inbound only works for `Internal`-type app / test users, and the forwarding rail remains the *actual* production path. **File the verification application as step 0** (parallel with Phase 1), because every Phase 2/3 line of code is dark until it lands. Treat Success Criterion #1 ("zero forwarding") as gated on this, not on our engineering.
 
 #### 2a — OAuth scope expansion
 
@@ -344,7 +354,7 @@ Pattern: copy `registerTokenHealthMaintenanceJob` structure in `maintenance/work
    - Skip outbound-only / SENT (check labels on `format=metadata` first for cheap filter)
    - Extract attachments → base64 or buffer → existing `uploadInboundAttachment`
 7. Update `gmailHistoryId` in metadata.
-8. Enqueue `process-email` job(s) with same shape Postmark uses today.
+8. Enqueue `process-email` job(s) with same shape Postmark uses today. **Carry the parsed `Message-ID` as `externalMessageId`** (dedup) **and persist it on the stored customer `Message`** (threading). Dedup already works off `externalMessageId`, but reply threading (`In-Reply-To` / `References` via `buildThreadReplyHeaders`) needs the inbound `Message-ID` stored on the row. **This must land with Phase 2, not Phase 5** — otherwise Gmail-native replies thread incorrectly the moment native inbound is enabled. The Phase 5 "threading regression" row is verification/tests for this, not the first time the field is written.
 
 #### 2e — Deduping and edge cases
 
@@ -432,7 +442,7 @@ Ship after Gmail path is stable — same patterns, different API surface.
 | Priority | Item | Action |
 |----------|------|--------|
 | High | **Provider message IDs** | Persist `providerMessageId` on outbound agent messages when Gmail/Graph/Postmark return one; enables future bounce correlation |
-| High | **Threading regression** | Ensure inbound `Message-ID` stored on customer messages; replies use `In-Reply-To` / `References`; add tests for Gmail-native inbound threading |
+| High | **Threading regression** | Inbound `Message-ID` storage already lands in Phase 2 (see 2d step 8). This row is **verification only**: confirm replies use `In-Reply-To` / `References`; add tests for Gmail-native inbound threading. Do not defer the field write here. |
 | Medium | **Attachment outbound** | Extend `OutboundEmail` + `mime-build.ts` for `multipart/mixed`; Gmail raw + Outlook MIME send |
 | Medium | **Shared token refresh** | Complete migration: all senders + gateway sync use `packages/email/token.ts` (started in Phase 1) |
 | Low | **HTML replies** | Optional `textHtml` on outbound; plain text fallback required |
@@ -556,7 +566,8 @@ No new required vars for Phase 2; optional feature flags via org settings later.
 
 ## Rollout
 
-1. **Phase 0** — ship immediately; no flag.
+0. **Google restricted-scope verification** — file *before* Phase 2 coding, in parallel with Phase 0/1. Long pole, externally gated. Phases 2–3 can be built and tested against `Internal`/test users while it's pending, but cannot reach external merchants until it clears.
+1. **Phase 0** — ✅ shipped (2026-06-09); no flag.
 2. **Phase 1** — ship; no user-visible change. Unblocks Phase 1.5 and Phase 2.
 3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. Ship in parallel with Phase 2 once `packages/email` exists. Internal orgs → agent/auto-ack paths first → merchant composer.
 4. **Phase 2** — behind `GMAIL_NATIVE_INBOUND=true` (gateway + dashboard). Internal orgs first. Can run in parallel with Phase 1.5.

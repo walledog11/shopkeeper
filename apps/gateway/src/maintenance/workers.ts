@@ -1,5 +1,6 @@
 import type { ConnectionOptions } from 'bullmq';
 import { registerDigestMaintenanceJob } from './digest.js';
+import { registerEmailTokenHealthMaintenanceJob } from './email-token-health.js';
 import { registerOrderRiskMaintenanceJob } from './order-risk-monitor.js';
 import { registerQueueHealthMaintenanceJob } from './queue-health.js';
 import { registerRetentionMaintenanceJobs } from './retention.js';
@@ -16,6 +17,7 @@ import { registerVoiceSynthesisMaintenanceJob } from './voice-synthesis.js';
 
 export const maintenanceJobRegistrations: MaintenanceJobRegistration[] = [
   registerTokenHealthMaintenanceJob,
+  registerEmailTokenHealthMaintenanceJob,
   registerRetentionMaintenanceJobs,
   registerDigestMaintenanceJob,
   registerVoiceSynthesisMaintenanceJob,

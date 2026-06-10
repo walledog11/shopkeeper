@@ -134,16 +134,45 @@ Rules:
 
 - `SHOPIFY_APP_SECRET`
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD`
-  Required for inbound email webhook basic auth in production.
+  Required for inbound email webhook basic auth in production whenever the forwarding rail is
+  active — i.e. `EMAIL_INBOUND_MODE` is `hybrid` (default) or `postmark`. See the email
+  architecture note below.
 - `BLOB_READ_WRITE_TOKEN`
   Required for inbound email attachment upload in the gateway worker.
 
 Optional:
 
+- `EMAIL_INBOUND_MODE`
+  `hybrid` (default) | `postmark` | `gmail-only`. Selects which inbound rail(s) the gateway
+  expects. `gmail-only` lets the gateway boot without Postmark inbound creds (dev / future
+  native-only); production stays `hybrid` until the last forwarding merchant migrates.
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
+  Same values as the dashboard. Used by the daily `email-token-health` maintenance job to probe
+  Gmail/Outlook refresh tokens and flag "Reconnect" in Integrations when a refresh token dies.
+  If absent, the probe is skipped (no reconnect flag is set) and outbound senders still refresh
+  tokens at send time.
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` for Instagram DM after v1.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` for the Telegram operator channel.
+
+### Email architecture: inbound rail vs outbound provider
+
+Email is a **hybrid model** — keep the two concerns separate when debugging:
+
+- **Inbound rail** (how customer mail becomes a ticket): today every provider uses Postmark
+  forwarding — the merchant forwards their mailbox to `{orgId}@inbound.<domain>`, Postmark hits
+  `POST /webhooks/email/inbound`, and the gateway enqueues a `process-email` BullMQ job. Native
+  Gmail/Outlook inbound (no forwarding) is planned but not yet shipped; `EMAIL_INBOUND_MODE`
+  gates whether Postmark inbound creds are required at boot.
+- **Outbound provider** (how replies are sent): chosen per integration from
+  `Integration.metadata.provider` — `gmail` (Gmail API), `outlook` (Graph), or `postmark`
+  (forwarding fallback). The reply `From` uses `Integration.fromEmail` (falling back to
+  `externalAccountId`); the OAuth account email is the identity used for `replyTo` and token
+  refresh.
+
+A merchant who connected Gmail/Outlook via OAuth today gets **outbound via that provider but
+inbound still via forwarding** until native inbound ships.
 
 ## Deploy Sequence
 
@@ -401,7 +430,7 @@ Run these in a safe production window with test org/user data only.
 3. If queues are clean, trigger one controlled gateway-side queue alert through the existing alert helper with `category=queue_health`, `queue=inbound`, and test metadata.
 4. Confirm the log drain receives an entry tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
 
-After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in the sign-off evidence section.
+After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
 
 ### BullMQ Failed Jobs
 

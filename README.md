@@ -45,7 +45,7 @@ shopkeeper/
 - All DB queries are scoped by `organizationId`
 
 ## Channels
-- **Email** — complete (Postmark inbound + outbound, reply threading, email quote stripping, AI spam filter on new senders)
+- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding for every provider today (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job); native Gmail/Outlook inbound is planned, gated by `EMAIL_INBOUND_MODE`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API, Graph, or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail/Outlook refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
 - **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)

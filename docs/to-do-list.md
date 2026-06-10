@@ -3,13 +3,20 @@
 This list comes from the production-readiness audit of the current dashboard,
 gateway, Prisma, auth, DB, and agent/gateway integration setup.
 
-Last reviewed: 2026-06-07.
+Last reviewed: 2026-06-09.
 
 ## Pre-Release Priority (open items)
 
 Do these before treating production as ready:
 
-1. **Confirm production alerting is live** — verify ops-alert log routing for queue/webhook/agent/provider paths and record evidence.
+1. **Confirm production alerting is live** — ops-alert code is done; finish Better Stack Level 1 sign-off (see [error-tracking-plan.md](production/error-tracking-plan.md), [runbook.md](production/runbook.md), [alerting-evidence.md](production/alerting-evidence.md)):
+   - Better Stack team + escalation policy for launch owner
+   - Vercel and Railway log drains → Better Stack Logs
+   - Keyword alert rules for all four categories (`queue_health`, `webhook_signature`, `provider_send`, `agent_failure`)
+   - Three uptime keyword monitors (dashboard `/api/health`, gateway `/health/deep`, gateway `/health/queues`)
+   - One controlled alert per category; record evidence in `alerting-evidence.md`
+   - Verify `OPS_ALERTS_ENABLED=false` silences threshold alerts on dashboard and gateway
+   - Deploy with default thresholds; tune only after observing real traffic
 2. **Review Redis lock fail-open for mutating agent runs** — decide fail-closed vs fail-open for high-risk mutations.
 
 Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup.
@@ -75,14 +82,46 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
   - Prioritize framework/runtime dependencies and document accepted risk for dev-only/tooling findings.
 
 - [ ] Confirm production alerting is live, not just implemented. **(pre-release priority)**
-  - Verify log-drain routing and queue/webhook/provider/agent failure alert paths in staging or production.
-  - Record evidence in the production runbook.
+  - Ops-alert instrumentation is complete ([operational-guardrails.md](production/operational-guardrails.md) Phases 0–4). Remaining work is Phase 5 / Better Stack Level 1:
+    - [ ] Better Stack team + escalation policy
+    - [ ] Vercel log drain → Better Stack (dashboard)
+    - [ ] Railway log drain → Better Stack (gateway)
+    - [ ] Log alert rules: `opsAlert` + each of the four `category` values
+    - [ ] Uptime monitors for dashboard health, gateway deep health, gateway queue health
+    - [ ] Controlled alert validation per category (`npm run verify:production:alerts` or runbook steps)
+    - [ ] Kill switch: `OPS_ALERTS_ENABLED=false` on dashboard and gateway
+    - [ ] Sign-off recorded in [alerting-evidence.md](production/alerting-evidence.md)
+  - Procedure: [runbook.md](production/runbook.md) (External Monitors, Ops Alert Log Routing, Controlled Alert Validation).
+
+## Billing Enforcement
+
+Shared write-gate for `past_due` and `canceled` orgs is implemented in `apps/dashboard/src/lib/billing/write-gate.ts` and `apps/gateway/src/billing/write-gate.ts`.
+
+- [ ] Finish the billing write-gate route sweep.
+  - Already gated: outbound messaging, internal outbound messaging, auto-ack, agent plan/execution/chat/quick-approve/voice, and org settings writes.
+  - Still need review: integrations connect/disconnect, thread mutations, KB and canned-response writes, `POST /api/agent/ask`, Shopify customer mutations, and other dashboard `POST`/`PATCH`/`DELETE` routes that create outbound or state-changing work.
+- [ ] Add a dashboard banner for `canceled` billing state.
+  - `past_due` already surfaces in `apps/dashboard/src/app/dashboard/layout.tsx`; `canceled` does not.
+- [ ] Broaden billing gate route tests after the sweep.
+  - Covered today: blocked writes on `/api/messages` and read-vs-write behavior on `/api/org`.
+  - Add regression tests for each newly gated route.
+
+## Onboarding Polish
+
+- [ ] Refocus first-run flow around v1: connect Shopify, configure email forwarding, see first agent reply.
+  - Onboarding still presents Gmail/Outlook OAuth as the primary email path instead of forwarding-first setup.
+- [ ] De-emphasize post-launch channels during onboarding.
+  - Instagram DM is still a first-class channel card in `apps/dashboard/src/app/(onboarding)/onboarding/_components/step-channels.tsx`.
+- [ ] Add a lightweight completion/progress state.
+  - Local step index is persisted in `concierge-onboarding-v1` localStorage; still need a clearer v1 completion signal tied to Shopify + forwarding + first reply.
 
 ## Documentation Cleanup
 
 - [ ] Fix stale production checklist references.
   - README, `docs/production/deployment.md`, `docs/production/runbook.md`, and `docs/telegram-operator-channel.md` reference `docs/production/checklist.md`, but that file is missing.
   - Either recreate the checklist or update references to point at `docs/production/runbook.md` and this list.
+  - Validate any recreated or replacement checklist against code and docs before launch.
+  - Confirm remaining unchecked production items are truly external or intentionally deferred.
 
 - [ ] Fix stale env file references.
   - `docs/production/runbook.md` links to `apps/dashboard/src/lib/env.ts`, but the current file is `apps/dashboard/src/lib/env/index.ts`.

@@ -5,21 +5,51 @@ import { BookOpen, Loader2, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/ui/cn"
+import { getEmailProvider, getEmailProviderLabel } from "@/lib/messaging/email/providers"
+import type { Integration } from "@/types"
 import { EmailForwardingDisclosure } from "./EmailForwardingDisclosure"
+
+function EmailRailStatus({ providerLabel }: { providerLabel: string }) {
+  return (
+    <div className="rounded-md border border-white/[0.06] bg-white/[0.015] px-3.5 py-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="size-1.5 rounded-full bg-emerald-400" />
+        <span className="text-xs font-medium text-white/70">Sending</span>
+        <span className="text-xs text-white/40">Connected via {providerLabel}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="size-1.5 rounded-full bg-amber-400" />
+        <span className="text-xs font-medium text-white/70">Receiving</span>
+        <span className="text-xs text-white/40">Forwarding required</span>
+      </div>
+      <p className="text-xs text-white/30 leading-relaxed">
+        {providerLabel} sign-in lets Shopkeeper send replies. Until native inbox sync ships,
+        forward your support inbox to the address below so incoming mail becomes tickets.
+      </p>
+    </div>
+  )
+}
 
 export function EmailConnectBody({
   isConnected,
+  connected,
   email,
   setEmail,
   loading,
   onSave,
 }: {
   isConnected: boolean
+  connected: Integration[]
   email: string
   setEmail: (v: string) => void
   loading: boolean
   onSave: () => void
 }) {
+  const oauthIntegration = connected.find((integration) => {
+    const provider = getEmailProvider(integration)
+    return provider === "gmail" || provider === "outlook"
+  })
+
   return (
     <div className="space-y-3">
       {!isConnected && (
@@ -49,11 +79,14 @@ export function EmailConnectBody({
           </form>
         </div>
       )}
+      {oauthIntegration && <EmailRailStatus providerLabel={getEmailProviderLabel(oauthIntegration)} />}
       <EmailForwardingDisclosure
         isConnected={isConnected}
         email={email}
         setEmail={setEmail}
         loading={loading}
+        defaultOpen={Boolean(oauthIntegration)}
+        label={oauthIntegration ? "Set up inbound forwarding" : undefined}
         onSave={onSave}
       />
     </div>
