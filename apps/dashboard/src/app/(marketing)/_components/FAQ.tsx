@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Reveal } from "./Reveal";
 
 const faqs = [
   {
@@ -54,17 +55,19 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
-      <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
-        Things people ask{" "}
-        <em className="italic text-[#2f7a4a]">before they trust an AI.</em>
-      </h2>
+      <Reveal>
+        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+          Things people ask{" "}
+          <em className="italic text-[#9c9285]">before they trust an AI.</em>
+        </h2>
+      </Reveal>
 
-      <div className="mx-auto max-w-[780px] text-left">
+      <Reveal delay={120} className="mx-auto max-w-[780px] text-left">
         {faqs.map(item => (
           <FaqItem key={item.q} {...item} />
         ))}
         <div className="border-t border-solid border-stone-900/10" />
-      </div>
+      </Reveal>
     </section>
   );
 }

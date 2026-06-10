@@ -13,9 +13,9 @@ export default function Home() {
     <main>
       <Navbar />
       <Hero />
+      <Integrations />
       <Channels />
       <Features />
-      <Integrations />
       <Pricing />
       <Faq />
       <Cta />

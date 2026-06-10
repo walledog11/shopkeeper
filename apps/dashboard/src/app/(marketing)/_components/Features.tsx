@@ -1,4 +1,5 @@
 import { ChatDemo, type ChatMessage } from "./ChatDemo";
+import { Reveal } from "./Reveal";
 
 interface Feature {
   num: string;
@@ -19,7 +20,7 @@ const FEATURES: Feature[] = [
     num: "01",
     title: (
       <>
-        Answers customers <em className="italic text-[#2f7a4a]">while you sleep.</em>
+        Answers customers <em className="italic text-[#9c9285]">while you sleep.</em>
       </>
     ),
     body: "Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and replies the way you would. When it isn't sure, it doesn't guess — it hands the thread to you.",
@@ -49,7 +50,7 @@ const FEATURES: Feature[] = [
     num: "02",
     title: (
       <>
-        Asks <em className="italic text-[#2f7a4a]">before it acts.</em>
+        Asks <em className="italic text-[#9c9285]">before it acts.</em>
       </>
     ),
     body: "You set the rules — refund caps, blocked actions, how much rope it gets. Shopkeeper starts cautious and earns autonomy one approval at a time, because one bad refund can undo months of trust.",
@@ -82,7 +83,7 @@ const FEATURES: Feature[] = [
     num: "03",
     title: (
       <>
-        Knows your store <em className="italic text-[#2f7a4a]">cold.</em>
+        Knows your store <em className="italic text-[#9c9285]">cold.</em>
       </>
     ),
     body: "Live Shopify orders and inventory, your policies, every past conversation. Ask it anything about your store and it answers from data, not vibes.",
@@ -121,7 +122,7 @@ export function Features() {
           key={f.num}
           className="grid items-center gap-12 border-t border-stone-900/10 py-20 md:grid-cols-2 md:gap-20"
         >
-          <div className={i % 2 === 1 ? "md:order-2" : ""}>
+          <Reveal className={i % 2 === 1 ? "md:order-2" : ""}>
             <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-500 [font-family:var(--m-mono)]">
               <span className="inline-block h-px w-6 bg-stone-400" />
               {f.num}
@@ -133,15 +134,15 @@ export function Features() {
             <ul className="m-0 flex list-none flex-col gap-3 p-0 text-[14px] text-stone-700">
               {f.bullets.map((b) => (
                 <li key={b} className="flex items-start gap-2.5">
-                  <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-[#2f7a4a] text-[9px] text-white">✓</span>
+                  <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-[#2b2118] text-[9px] text-[#f6f2eb]">✓</span>
                   {b}
                 </li>
               ))}
             </ul>
-          </div>
-          <div className={i % 2 === 1 ? "md:order-1" : ""}>
+          </Reveal>
+          <Reveal delay={120} className={i % 2 === 1 ? "md:order-1" : ""}>
             <ChatDemo {...f.chat} />
-          </div>
+          </Reveal>
         </div>
       ))}
     </section>

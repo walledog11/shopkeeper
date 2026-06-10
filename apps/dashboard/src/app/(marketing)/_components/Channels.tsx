@@ -1,3 +1,5 @@
+import { Reveal } from "./Reveal";
+
 const surfaces = [
   {
     name: "Telegram",
@@ -40,32 +42,35 @@ const surfaces = [
 export function Channels() {
   return (
     <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
-      <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
-        It fits into your day, <em className="italic text-[#2f7a4a]">not the other way around.</em>
-      </h2>
-      <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
-        Shopkeeper lives wherever you already are. Texting it feels like texting your best
-        employee — because that&apos;s what it is.
-      </p>
+      <Reveal>
+        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+          Reach it from <em className="italic text-[#9c9285]">wherever you already are.</em>
+        </h2>
+        <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
+          Texting Shopkeeper feels like texting your best employee — because that&apos;s what it is.
+        </p>
+      </Reveal>
 
       <div className="grid gap-5 text-left sm:grid-cols-3">
-        {surfaces.map((s) => (
-          <div key={s.name} className="rounded-3xl border border-stone-900/10 bg-[#fdfbf7] p-7">
-            <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#efe9df] text-stone-800">
-              {s.icon}
+        {surfaces.map((s, i) => (
+          <Reveal key={s.name} delay={i * 100}>
+            <div className="h-full rounded-3xl border border-stone-900/10 bg-[#fdfbf7] p-7 transition-transform duration-300 hover:-translate-y-1">
+              <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#efe9df] text-stone-800">
+                {s.icon}
+              </div>
+              <div className="mb-1 flex items-center gap-2">
+                <h3 className="text-[26px] font-normal tracking-tight [font-family:var(--m-serif)]">{s.name}</h3>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                    s.live ? "bg-[#2b2118]/10 text-[#2b2118]" : "bg-stone-900/5 text-stone-500"
+                  }`}
+                >
+                  {s.status}
+                </span>
+              </div>
+              <p className="text-[14px] leading-relaxed text-stone-700">{s.body}</p>
             </div>
-            <div className="mb-1 flex items-center gap-2">
-              <h3 className="text-[26px] font-normal tracking-tight [font-family:var(--m-serif)]">{s.name}</h3>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                  s.live ? "bg-[#2f7a4a]/10 text-[#2f7a4a]" : "bg-stone-900/5 text-stone-500"
-                }`}
-              >
-                {s.status}
-              </span>
-            </div>
-            <p className="text-[14px] leading-relaxed text-stone-700">{s.body}</p>
-          </div>
+          </Reveal>
         ))}
       </div>
     </section>

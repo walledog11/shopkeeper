@@ -13,13 +13,15 @@ const sans = Inter({ subsets: ["latin"], display: "swap" });
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <div
-      className={sans.className}
+      className={`${sans.className} m-grain`}
       style={{
-        /* Warm paper background and ink text — overrides body's dark theme */
-        background: "#f6f2eb",
-        color: "#161413",
+        /* Warm paper background and ink text — overrides body's dark theme.
+           overflow-x must be `clip`, not `hidden`: hidden creates a scroll
+           container and silently breaks position:sticky on the navbar. */
+        backgroundColor: "#f6f2eb",
+        color: "#2b2118",
         minHeight: "100vh",
-        overflowX: "hidden",
+        overflowX: "clip",
         "--m-serif": `${serif.style.fontFamily}, Georgia, 'Times New Roman', serif`,
         "--m-mono": "ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace",
       } as React.CSSProperties}

@@ -3,7 +3,7 @@
 This list comes from the production-readiness audit of the current dashboard,
 gateway, Prisma, auth, DB, and agent/gateway integration setup.
 
-Last reviewed: 2026-06-09.
+Last reviewed: 2026-06-10.
 
 ## Pre-Release Priority (open items)
 
@@ -17,7 +17,6 @@ Do these before treating production as ready:
    - One controlled alert per category; record evidence in `alerting-evidence.md`
    - Verify `OPS_ALERTS_ENABLED=false` silences threshold alerts on dashboard and gateway
    - Deploy with default thresholds; tune only after observing real traffic
-2. **Review Redis lock fail-open for mutating agent runs** — decide fail-closed vs fail-open for high-risk mutations.
 
 Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup.
 
@@ -70,10 +69,11 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
   - Reduce or justify `unsafe-inline` and `unsafe-eval`.
   - Keep Clerk and Cloudflare challenge requirements documented.
 
-- [ ] Review Redis lock fail-open behavior for mutating agent runs. **(pre-release priority)**
-  - `acquireThreadLock` in `apps/dashboard/src/lib/server/agent-lock.ts` proceeds with a no-op lock if Redis is unavailable.
-  - Decide whether mutating agent execution should fail closed while lower-risk paths can fail open.
-  - Risk: duplicate refunds, cancellations, or outbound replies during a Redis outage.
+- [X] Fail closed on Redis lock unavailability for mutating agent runs.
+  - `executeAgentTurn` passes `failClosed: true` for all mutating turns (`auditMode !== "read_only"`); read-only paths still fail open.
+  - `createRedisLockProvider` throws `ServiceUnavailableError` (503) when Redis is unavailable, times out, or errors under fail-closed acquire; lock contention still returns 409 Conflict.
+  - Dashboard (Upstash) and gateway (ioredis) lock providers unchanged at the host layer; composer ask (`POST /api/agent/ask`) bypasses `executeAgentTurn` and is unaffected.
+  - Tests: `packages/agent/src/lock/redis-lock.test.ts`, `packages/agent/src/turn.test.ts`, `apps/dashboard/src/lib/server/agent-lock.test.ts`, `apps/gateway/src/message-handlers/execute-operator-agent-turn.smoke.test.ts`.
 
 ## Observability And Operations
 
@@ -180,9 +180,10 @@ Two concepts exist today:
 
 - [X] Delete `packages/db/customer-memory.ts` and exports from `packages/db/index.ts`
 - [X] Prisma migration: drop `customers.memory`, `customers.memoryUpdatedAt`, and the `(organizationId, memoryUpdatedAt)` index
-- [ ] Drain/clear BullMQ queues `customer-memory` and `customer-memory-refresh` in Redis (one-time ops step after deploy)
-  - Remove repeatable job `customer-memory-stale-refresh-daily` from queue `customer-memory-refresh`
-  - Obliterate both queues so no stale jobs remain
+- [X] Drain/clear BullMQ queues `customer-memory` and `customer-memory-refresh` in Redis (one-time ops step after deploy)
+  - Script: `cd apps/gateway && npm run drain-legacy-customer-memory-queues` (dry-run) then `-- --execute`
+  - Removes repeatable job `customer-memory-stale-refresh-daily` / `refresh-stale-customer-memory` and obliterates both queues
+  - Local dev Redis drained 2026-06-10; run the same script against production Redis after deploy
 
 **Deploy order:** PR 3 before PR 4 (code must not reference columns before migration).
 
@@ -192,9 +193,9 @@ If agent quality regresses after removal, add a read-only substitute at context 
 
 ### Verification checklist
 
-- [ ] Open a ticket — sidebar has no "WHAT WE KNOW"; main column still shows thread summary
-- [ ] Resolve a ticket — no calls to `/internal/customer-memory/*`; no jobs in `customer-memory` queue
-- [ ] Run agent on a returning customer — prompt has no `## What you know about this customer` section
-- [ ] Test suite: `packages/agent`, `apps/gateway`, `apps/dashboard` (especially thread close/resolution paths)
+- [X] Open a ticket — sidebar has no "WHAT WE KNOW"; main column still shows thread summary (`ContextPanel.tsx` has no memory panel)
+- [X] Resolve a ticket — no calls to `/internal/customer-memory/*`; no jobs in `customer-memory` queue (code removed; thread PATCH tests pass)
+- [X] Run agent on a returning customer — prompt has no `## What you know about this customer` section (`packages/agent/src/prompting.test.ts`)
+- [X] Test suite: `packages/agent` (189), `apps/gateway` (298), dashboard thread routes (13) — all passed 2026-06-10
 - [ ] E2E: `core-agent-flow.spec.ts` still passes
-- [ ] Redis: stale repeatable job `customer-memory-stale-refresh-daily` removed
+- [X] Redis: stale repeatable job `customer-memory-stale-refresh-daily` removed (local dev; production pending same script)

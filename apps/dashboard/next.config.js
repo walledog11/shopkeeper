@@ -12,6 +12,7 @@ const CSP_DIRECTIVES = {
   ],
   'style-src': ["'self'", "'unsafe-inline'", 'https://*.clerk.com'],
   'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+  'media-src': ["'self'", 'https://*.public.blob.vercel-storage.com'],
   'font-src': ["'self'", 'data:'],
   'connect-src': [
     "'self'",
