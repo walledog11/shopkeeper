@@ -46,7 +46,9 @@ export const POST = withInternalRoute(
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    const result = await dispatchMessage(thread, org, settings.autoAckMessage);
+    const result = await dispatchMessage(thread, org, settings.autoAckMessage, {
+      source: 'auto_ack',
+    });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }

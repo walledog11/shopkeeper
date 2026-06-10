@@ -3,13 +3,18 @@ import { CONTACT_EMAIL } from "@/lib/brand";
 
 export function Footer() {
   return (
-    <div className="flex justify-between align-center flex-wrap gap-5 text-xs p-4 border-t border-t-solid border-t-white/[0.08] [font-family:var(--m-mono)] text-white/[0.5] bg-stone-900" >
-      <div>Shopkeeper · made for shopkeepers</div>
-      <div className="flex gap-4 flex-wrap" >
-        <Link href="/privacy" className="inherit">Privacy</Link>
-        <Link href="/terms" className="inherit">Terms</Link>
-        <a href={`mailto:${CONTACT_EMAIL}`} className="inherit">Contact</a>
+    <footer className="border-t border-stone-900/10 px-6 py-10">
+      <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-5">
+        <div>
+          <div className="text-[22px] leading-none tracking-tight [font-family:var(--m-serif)]">shopkeeper</div>
+          <div className="mt-1.5 text-[12px] text-stone-500">The AI employee for Shopify brands.</div>
+        </div>
+        <div className="flex flex-wrap gap-5 text-[13px] text-stone-600">
+          <Link href="/privacy" className="text-inherit transition-colors hover:text-stone-900">Privacy</Link>
+          <Link href="/terms" className="text-inherit transition-colors hover:text-stone-900">Terms</Link>
+          <a href={`mailto:${CONTACT_EMAIL}`} className="text-inherit transition-colors hover:text-stone-900">Contact</a>
+        </div>
       </div>
-    </div>
+    </footer>
   );
 }

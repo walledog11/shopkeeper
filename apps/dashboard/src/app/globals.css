@@ -234,6 +234,16 @@ body,
   50% { opacity: 0; }
 }
 
+@keyframes m-msg {
+  from { opacity: 0; transform: translateY(8px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes m-typedot {
+  0%, 60%, 100% { opacity: 0.35; transform: none; }
+  30%           { opacity: 1; transform: translateY(-2px); }
+}
+
 /* Custom Scrollbar */
 @layer utilities {
 .custom-scrollbar {

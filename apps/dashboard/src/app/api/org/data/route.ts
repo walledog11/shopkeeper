@@ -18,7 +18,7 @@ export const GET = withOrgRoute(
       throw new BadRequestError('Unknown action');
     }
 
-    const [customers, threads, kbArticles, cannedResponses] = await Promise.all([
+    const [customers, threads, kbArticles] = await Promise.all([
       db.customer.findMany({
         where: { organizationId: org.id, deletedAt: null },
         select: { id: true, name: true, platformId: true, createdAt: true },
@@ -50,11 +50,6 @@ export const GET = withOrgRoute(
         select: { id: true, title: true, body: true, tags: true, createdAt: true },
         orderBy: { createdAt: 'asc' },
       }),
-      db.cannedResponse.findMany({
-        where: { organizationId: org.id },
-        select: { id: true, title: true, body: true, tags: true, createdAt: true },
-        orderBy: { createdAt: 'asc' },
-      }),
     ]);
 
     const payload = {
@@ -63,7 +58,6 @@ export const GET = withOrgRoute(
       customers,
       threads,
       kbArticles,
-      cannedResponses,
     };
 
     const slug = org.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'workspace';

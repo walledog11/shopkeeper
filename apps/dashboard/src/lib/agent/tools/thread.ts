@@ -6,6 +6,10 @@ import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
 import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
 import { buildThreadReplyHeaders, formatReplySubject } from "@/lib/messaging/email/reply";
 import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
+import {
+  enqueueOutboundEmail,
+  isOutboundEmailAsyncEnabled,
+} from "@/lib/messaging/enqueue-outbound-email";
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
 import { toolError, toolEscalated, toolOk, type ToolResult } from "@shopkeeper/agent/tools";
 import type {
@@ -142,10 +146,44 @@ export async function sendEmail(
         customerId: customer.id,
         channelType: CHANNEL_TYPE.EMAIL,
         status: THREAD_STATUS.OPEN,
+        subject: input.subject,
         tag: input.subject,
       },
     });
     targetThreadId = newThread.id;
+  }
+
+  // Async path (OUTBOUND_EMAIL_ASYNC): pre-create the agent message as `pending`
+  // and hand the provider send to the gateway queue. The thread stores
+  // input.subject so the worker derives the outbound subject; the message row's
+  // sendStatus is the source of truth (retryable on failure).
+  if (isOutboundEmailAsyncEnabled()) {
+    const message = await createMessage(
+      {
+        threadId: targetThreadId,
+        senderType: SenderType.agent,
+        contentText: input.body,
+        sendStatus: 'pending',
+      },
+      { status: THREAD_STATUS.OPEN },
+    );
+    const enqueued = await enqueueOutboundEmail({
+      organizationId: ctx.orgId,
+      messageId: message.id,
+      threadId: targetThreadId,
+      integrationId: emailIntegration.id,
+      source: 'agent_send_email',
+    });
+    if (!enqueued) {
+      await db.message.update({
+        where: { id: message.id },
+        data: { sendStatus: 'failed', sendError: 'Could not queue email send' },
+      });
+      return toolError('Error: could not queue email send.');
+    }
+    return toolOk(existingThread
+      ? `Email queued to ${input.to} via their existing open ticket.`
+      : `Email queued to ${input.to} and a new ticket was opened.`);
   }
 
   const subject = existingThread ? formatReplySubject(input.subject) : input.subject;

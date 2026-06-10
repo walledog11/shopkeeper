@@ -45,12 +45,7 @@ describe("proxy path access policy", () => {
     });
   });
 
-  it("allows signed-in org-less feedback but blocks org-backed APIs", () => {
-    expect(getPathAccessPolicy("/api/feedback")).toEqual({
-      requiresAuth: true,
-      requiresOrganization: false,
-      missingOrganizationAction: "none",
-    });
+  it("requires an org for org-backed APIs", () => {
     expect(getPathAccessPolicy("/api/threads")).toEqual({
       requiresAuth: true,
       requiresOrganization: true,

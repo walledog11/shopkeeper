@@ -1,7 +1,6 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { X, ChevronLeft } from "lucide-react"
 import { ALL_CATEGORIES, type Category, type Article } from "./content/index"
 import HelpHome from "./HelpHome"
@@ -17,15 +16,9 @@ type View =
 export default function HelpPanel() {
   const { isOpen, closeHelp } = useHelp()
   const [view, setView] = useState<View>({ type: "home" })
-  const { push } = useRouter()
 
   function handleSelectArticle(category: Category, article: Article) {
-    if (category.id === "tips") {
-      closeHelp()
-      push(`/dashboard/learn/${article.id}`)
-    } else {
-      setView({ type: "article", category, article })
-    }
+    setView({ type: "article", category, article })
   }
 
   const handleClose = () => {

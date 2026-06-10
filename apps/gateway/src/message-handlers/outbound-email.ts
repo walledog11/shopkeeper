@@ -60,11 +60,15 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
 
   const provider = getEmailProvider(integration);
   const fromEmail = integration.fromEmail || integration.externalAccountId;
-  const subject = formatReplySubject(message.thread.subject);
-  const headers = buildThreadReplyHeaders(
-    message.thread.id,
-    message.thread.messages[0]?.externalMessageId,
-  );
+  const inReplyTo = message.thread.messages[0]?.externalMessageId;
+  // agent_send_email opening a brand-new thread (no inbound customer message) is
+  // a fresh email — send the agent's chosen subject verbatim. Every other case
+  // is a reply and gets the "Re: " prefix.
+  const isNewAgentEmail = source === 'agent_send_email' && !inReplyTo;
+  const subject = isNewAgentEmail
+    ? message.thread.subject?.trim() || 'Your inquiry'
+    : formatReplySubject(message.thread.subject);
+  const headers = buildThreadReplyHeaders(message.thread.id, inReplyTo);
 
   try {
     await getEmailSender(integration).send({

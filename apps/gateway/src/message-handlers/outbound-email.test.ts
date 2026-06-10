@@ -128,6 +128,81 @@ describe('handleOutboundEmailJob', () => {
     expect(after?.sendError).toContain('503 upstream');
   });
 
+  it('sends an agent-initiated new-thread email with the subject verbatim (no Re:)', async () => {
+    sendMock.mockResolvedValueOnce(undefined);
+    const integration = await createTestIntegration(org.id, {
+      externalAccountId: 'support@store.com',
+      accessToken: 'token',
+      fromEmail: 'support@store.com',
+    });
+    const customer = await createTestCustomer(org.id, 'prospect@example.com', { name: 'P' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({ where: { id: thread.id }, data: { subject: 'New product launch' } });
+    const message = await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: SenderType.agent,
+        contentText: 'Check this out',
+        sendStatus: 'pending',
+      },
+    });
+
+    await handleOutboundEmailJob(
+      makeJob({
+        organizationId: org.id,
+        messageId: message.id,
+        threadId: thread.id,
+        integrationId: integration.id,
+        source: 'agent_send_email',
+      }),
+    );
+
+    expect(sendMock.mock.calls[0][0]).toMatchObject({ subject: 'New product launch' });
+  });
+
+  it('prefixes Re: when agent_send_email replies into a thread with inbound mail', async () => {
+    sendMock.mockResolvedValueOnce(undefined);
+    const integration = await createTestIntegration(org.id, {
+      externalAccountId: 'support@store.com',
+      accessToken: 'token',
+      fromEmail: 'support@store.com',
+    });
+    const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'C' });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({ where: { id: thread.id }, data: { subject: 'Order help' } });
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: SenderType.customer,
+        contentText: 'help',
+        externalMessageId: '<inbound@x>',
+      },
+    });
+    const message = await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: SenderType.agent,
+        contentText: 'reply',
+        sendStatus: 'pending',
+      },
+    });
+
+    await handleOutboundEmailJob(
+      makeJob({
+        organizationId: org.id,
+        messageId: message.id,
+        threadId: thread.id,
+        integrationId: integration.id,
+        source: 'agent_send_email',
+      }),
+    );
+
+    expect(sendMock.mock.calls[0][0]).toMatchObject({ subject: 'Re: Order help' });
+  });
+
   it('marks failed without retrying on a configuration error', async () => {
     sendMock.mockRejectedValueOnce(new EmailNotConfiguredError('no creds'));
     const { message, data } = await seed('pending');

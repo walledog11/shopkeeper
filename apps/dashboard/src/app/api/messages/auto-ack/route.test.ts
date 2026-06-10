@@ -59,6 +59,7 @@ describe('POST /api/messages/auto-ack', () => {
       expect.objectContaining({ id: thread.id }),
       expect.objectContaining({ id: org!.id }),
       AGENT_SETTINGS_DEFAULTS.autoAckMessage,
+      { source: 'auto_ack' },
     );
   });
 

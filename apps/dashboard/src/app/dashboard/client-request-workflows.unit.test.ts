@@ -1,10 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import {
-  createCannedResponse,
-  deleteCannedResponse,
-  duplicateCannedResponse,
-  updateCannedResponse,
-} from "./canned-responses/_components/canned-response-requests"
 import { fetchCustomersPage } from "./customers/_components/customer-requests"
 import {
   fetchOrdersPage,
@@ -24,18 +18,6 @@ function stubApiError(message: string) {
     new Response(JSON.stringify({ error: message }), { status: 500 })
   )))
 }
-
-describe("saved reply requests", () => {
-  it("rejects create, update, duplicate, and delete failures", async () => {
-    stubApiError("Saved reply write failed")
-    const input = { title: "Shipping", body: "On the way", tags: ["shipping"] }
-
-    await expect(createCannedResponse(input)).rejects.toThrow("Saved reply write failed")
-    await expect(updateCannedResponse("reply_1", input)).rejects.toThrow("Saved reply write failed")
-    await expect(duplicateCannedResponse("reply_1")).rejects.toThrow("Saved reply write failed")
-    await expect(deleteCannedResponse("reply_1")).rejects.toThrow("Saved reply write failed")
-  })
-})
 
 describe("team deletion requests", () => {
   it("rejects member and invitation deletion failures", async () => {

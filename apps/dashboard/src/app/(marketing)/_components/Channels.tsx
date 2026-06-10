@@ -1,69 +1,70 @@
-import Image from "next/image";
-
-const channels = [
+const surfaces = [
   {
-    num: "CH/01",
-    logo: "/logos/instagram-logo.png",
-    toneDown: true,
-    title: "Instagram DMs",
-    body: "Story replies, comments, and direct messages. Shopkeeper knows the difference and routes accordingly.",
-    statLabel: "avg setup",
-    statVal: "90s",
+    name: "Telegram",
+    status: "Live now",
+    live: true,
+    body: "Approve replies, ask about any order, get the morning digest — all without opening a laptop.",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
+        <path d="M21.9 4.6a1.5 1.5 0 0 0-2-1.1L2.9 10.2c-1.3.5-1.2 2.3.1 2.7l4.3 1.4 1.7 5.2c.4 1.2 1.9 1.5 2.7.6l2.4-2.6 4.5 3.3c.9.6 2.1.2 2.4-.9l3-14.2-.1-.1zM9.4 13.7l8.4-5.3c.4-.2.7.3.4.6l-6.9 6.4-.3 3-1.6-4.7z" />
+      </svg>
+    ),
   },
   {
-    num: "CH/02",
-    logo: "/logos/shopify.svg",
-    toneDown: true,
-    title: "Shopify orders",
-    body: "Refunds, address changes, tracking , Shopkeeper pulls order data and can take action with your approval.",
-    statLabel: "avg setup",
-    statVal: "2m",
+    name: "Dashboard",
+    status: "When you want depth",
+    live: true,
+    body: "A full inbox with every conversation, analytics, your knowledge base, and team seats.",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-6">
+        <rect x="3" y="4" width="18" height="14" rx="2" />
+        <path d="M3 9h18" />
+        <path d="M8 21h8" />
+        <path d="M12 18v3" />
+      </svg>
+    ),
   },
   {
-    num: "CH/03",
-    logo: "/logos/email.svg",
-    toneDown: false,
-    title: "SMS, Email, WhatsApp",
-    body: "One thread per customer no matter where they reach out. Switch channels mid-conversation without losing context.",
-    statLabel: "avg setup",
-    statVal: "4m",
+    name: "WhatsApp",
+    status: "Next up",
+    live: false,
+    body: "The same employee, one more doorway. Coming soon.",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
+        <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5 13.7c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.1.1.6-.2 1.2z" />
+      </svg>
+    ),
   },
 ];
 
 export function Channels() {
   return (
-    <section id="channels" className="mx-auto max-w-7xl border-t border-solid border-stone-900/10 px-8 py-20">
-      <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
-        <span className="inline-block h-px w-6 bg-stone-700" />
-        01 · Channels
-      </div>
-      <h2 className="mb-6 max-w-[18ch] text-[clamp(40px,5vw,72px)] leading-[0.95] tracking-[-0.02em] [font-family:var(--m-serif)]">
-        Every place a customer might find you,{" "}
-        <em className="italic text-green-600">in one inbox.</em>
+    <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
+      <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+        It fits into your day, <em className="italic text-[#2f7a4a]">not the other way around.</em>
       </h2>
-      <p className="mb-12 max-w-[52ch] text-[19px] leading-[1.45] text-stone-700">
-        Connect once. Shopkeeper pulls every conversation into a single thread per customer , so you stop scrolling between four apps.
+      <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
+        Shopkeeper lives wherever you already are. Texting it feels like texting your best
+        employee — because that&apos;s what it is.
       </p>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-6">
-        {channels.map(ch => (
-          <div key={ch.num} className="relative overflow-hidden rounded-xl border border-stone-900/10 bg-stone-200 p-7">
-            <div className="mb-8 text-xs text-stone-700 [font-family:var(--m-mono)]">{ch.num}</div>
-            <div className="mb-3.5 inline-flex size-[52px] items-center justify-center rounded-[14px] border border-stone-900/10 bg-stone-100 shadow-sm">
-              <Image
-                src={ch.logo}
-                alt={ch.title}
-                width={28}
-                height={28}
-                className={`size-7 object-contain ${ch.toneDown ? "brightness-105 saturate-50" : ""}`}
-              />
+      <div className="grid gap-5 text-left sm:grid-cols-3">
+        {surfaces.map((s) => (
+          <div key={s.name} className="rounded-3xl border border-stone-900/10 bg-[#fdfbf7] p-7">
+            <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#efe9df] text-stone-800">
+              {s.icon}
             </div>
-            <h3 className="mb-2 text-3xl tracking-tight [font-family:var(--m-serif)]">{ch.title}</h3>
-            <p className="mb-8 text-sm leading-[1.55] text-stone-800">{ch.body}</p>
-            <div className="flex justify-between border-t border-solid border-stone-900/10 pt-4 text-sm">
-              <span className="text-stone-800">{ch.statLabel}</span>
-              <span className="font-mono font-medium">{ch.statVal}</span>
+            <div className="mb-1 flex items-center gap-2">
+              <h3 className="text-[26px] font-normal tracking-tight [font-family:var(--m-serif)]">{s.name}</h3>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
+                  s.live ? "bg-[#2f7a4a]/10 text-[#2f7a4a]" : "bg-stone-900/5 text-stone-500"
+                }`}
+              >
+                {s.status}
+              </span>
             </div>
+            <p className="text-[14px] leading-relaxed text-stone-700">{s.body}</p>
           </div>
         ))}
       </div>

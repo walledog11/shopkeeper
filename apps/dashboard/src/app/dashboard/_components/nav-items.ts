@@ -1,4 +1,4 @@
-import { Inbox, BarChart2, Users, Bot, Settings, BookOpen, UserCircle, MessageSquare, MessageCircle, NotebookTabs, Box, ShoppingBasket, Cable, MessageSquareDashed, BrainCircuit, IdCardLanyard, MessageSquareCode, Home, Play, ScanEye } from "lucide-react";
+import { Inbox, BarChart2, Users, Bot, Settings, Box, ShoppingBasket, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -24,7 +24,6 @@ export const navGroups: NavGroup[] = [
     label: "Support",
     items: [
       { name: "Inbox", href: "/dashboard/tickets", icon: Inbox, badge: true },
-      { name: "Saved Replies", href: "/dashboard/canned-responses", icon: MessageSquareDashed },
     ],
   },
   {
@@ -60,6 +59,5 @@ export const navGroups: NavGroup[] = [
 ];
 
 export const footerNavItems: NavItem[] = [
-  { name: "Feedback", href: "/dashboard/feedback", icon: MessageSquareCode },
   { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ];

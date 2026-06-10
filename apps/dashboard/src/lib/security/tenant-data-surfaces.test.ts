@@ -107,12 +107,6 @@ describe('tenant data surfaces', () => {
     });
     await createTestIntegration(callerOrg.id, { platform: ChannelType.email, externalAccountId: 'caller@example.com' });
     await createTestIntegration(otherOrg.id, { platform: ChannelType.email, externalAccountId: 'foreign@example.com' });
-    await db.cannedResponse.create({
-      data: { organizationId: callerOrg.id, title: 'Caller Canned', body: 'caller canned', tags: [], channels: [] },
-    });
-    await db.cannedResponse.create({
-      data: { organizationId: otherOrg.id, title: 'Foreign Canned', body: 'foreign canned', tags: [], channels: [] },
-    });
 
     const kbBody = await json<{ knowledgeBases: Array<{ name: string; articles: Array<{ title: string }> }> }>(await getKb());
     expect(kbBody.knowledgeBases.map(kb => kb.name)).toEqual(['Caller KB']);
@@ -126,13 +120,11 @@ describe('tenant data surfaces', () => {
       customers: Array<{ platformId: string }>;
       threads: Array<{ id: string; messages: Array<{ contentText: string | null }> }>;
       kbArticles: Array<{ title: string }>;
-      cannedResponses: Array<{ title: string }>;
     }>(exportResponse);
     expect(exportBody.customers.map(customer => customer.platformId)).toEqual(['caller-list@example.com']);
     expect(exportBody.threads.map(thread => thread.id)).toEqual([callerThread.id]);
     expect(exportBody.threads[0].messages.map(message => message.contentText)).toEqual(['caller export message']);
     expect(exportBody.kbArticles.map(article => article.title)).toEqual(['Caller Article']);
-    expect(exportBody.cannedResponses.map(response => response.title)).toEqual(['Caller Canned']);
   });
 
   it('keeps reports and analytics aggregates scoped to the active organization', async () => {

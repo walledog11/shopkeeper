@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 
 const signInLinkClass =
-  "hidden sm:inline-flex items-center py-2 px-4 rounded-full text-sm font-semibold border border-solid border-stone-500 text-stone-900 hover:text-stone-300 hover:border-stone-400 transition-colors";
+  "hidden sm:inline-flex items-center px-3 py-2 text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors";
 
 const primaryLinkClass =
-  "inline-flex items-center py-2 px-4 rounded-full text-sm font-semibold bg-stone-900 text-stone-100 border border-solid border-stone-500";
+  "inline-flex items-center rounded-full bg-stone-900 px-4 py-2 text-sm font-semibold text-[#f6f2eb] hover:bg-stone-700 transition-colors";
 
 export function AuthNavLinks() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -19,7 +19,7 @@ export function AuthNavLinks() {
           Sign in
         </Link>
         <Link href="/signup" className={primaryLinkClass}>
-          Start free →
+          Start free
         </Link>
       </>
     );

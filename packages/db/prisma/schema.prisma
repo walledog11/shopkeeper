@@ -73,11 +73,9 @@ model Organization {
   integrations     Integration[]
   members          OrgMember[]
   operatorContexts OperatorContext[]
-  cannedResponses  CannedResponse[]
   knowledgeBases   KnowledgeBase[]
   kbArticles       KbArticle[]
   kbCitations      KbCitation[]
-  feedbacks        Feedback[]
   agentActions     AgentAction[]
   voiceEdits       VoiceEdit[]
   llmDailySpend    LlmDailySpend[]
@@ -303,24 +301,6 @@ model OrgMemberTelegramChat {
   @@map("org_member_telegram_chats")
 }
 
-model CannedResponse {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  title          String    @db.VarChar(255)
-  body           String    @db.Text
-  tags           String[]  @default([])
-  channels       String[]  @default([])
-  useCount       Int       @default(0) @map("use_count")
-  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-
-  @@index([organizationId])
-  @@map("canned_responses")
-}
-
 model KnowledgeBase {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
@@ -368,22 +348,6 @@ model KbCitation {
   @@index([organizationId, createdAt])
   @@index([kbArticleId, createdAt])
   @@map("kb_citations")
-}
-
-model Feedback {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String?  @map("organization_id") @db.Uuid
-  userId         String   @map("user_id") @db.VarChar(255)
-  rating         Int
-  comment        String?  @db.Text
-  categories     String[] @default([])
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-
-  @@index([organizationId])
-  @@index([createdAt])
-  @@map("feedback")
 }
 
 // First-class audit record for every agent tool call. Replaces the

@@ -26,8 +26,13 @@ interface DispatchOrg {
   name: string;
 }
 
+type DispatchSource = Extract<
+  OutboundSource,
+  'dispatch_message' | 'agent_send_reply' | 'auto_ack'
+>;
+
 interface DispatchMessageOptions {
-  source?: Extract<OutboundSource, 'dispatch_message' | 'agent_send_reply'>;
+  source?: DispatchSource;
   emailSubjectFallback?: string;
 }
 
@@ -155,7 +160,7 @@ async function dispatchEmailAsync(
   thread: DispatchThread,
   org: DispatchOrg,
   text: string,
-  source: Extract<OutboundSource, 'dispatch_message' | 'agent_send_reply'>,
+  source: DispatchSource,
 ): Promise<DispatchMessageResult> {
   const integration = await db.integration.findFirst({
     where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
@@ -196,7 +201,7 @@ async function sendEmail(
   org: DispatchOrg,
   text: string,
   opts: {
-    source: Extract<OutboundSource, 'dispatch_message' | 'agent_send_reply'>;
+    source: DispatchSource;
     subjectFallback?: string;
     originalChannel?: string;
   },

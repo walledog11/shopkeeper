@@ -53,14 +53,10 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export function FAQ() {
   return (
-    <section className="mx-auto max-w-7xl border-t border-solid border-stone-900/10 px-7 py-20 text-center">
-      <div className="mb-4 flex items-center justify-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-700 [font-family:var(--m-mono)]">
-        <span className="inline-block h-px w-6 bg-stone-700" />
-        04 · Honest questions
-      </div>
-      <h2 className="mx-auto mb-12 max-w-[18ch] text-[clamp(40px,5vw,72px)] leading-[0.95] tracking-[-0.02em] [font-family:var(--m-serif)]">
+    <section id="faq" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
+      <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
         Things people ask{" "}
-        <em className="italic text-green-600">before they trust an AI.</em>
+        <em className="italic text-[#2f7a4a]">before they trust an AI.</em>
       </h2>
 
       <div className="mx-auto max-w-[780px] text-left">

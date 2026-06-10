@@ -25,8 +25,6 @@ const signedInNoOrgRoutePatterns = [
   "/onboarding(.*)",
 ] as const;
 
-const orgOptionalApiRoutePatterns = ["/api/feedback(.*)"] as const;
-
 const patternRegexCache = new Map<string, RegExp>();
 
 function getPatternRegex(pattern: string): RegExp {
@@ -50,10 +48,6 @@ function isSignedInNoOrgPath(pathname: string): boolean {
   return matchesPathname(pathname, signedInNoOrgRoutePatterns);
 }
 
-function isOrgOptionalApiPath(pathname: string): boolean {
-  return matchesPathname(pathname, orgOptionalApiRoutePatterns);
-}
-
 export function isApiPath(pathname: string): boolean {
   return pathname.startsWith("/api/");
 }
@@ -67,7 +61,7 @@ export function getPathAccessPolicy(pathname: string): PathAccessPolicy {
     };
   }
 
-  if (isSignedInNoOrgPath(pathname) || isOrgOptionalApiPath(pathname)) {
+  if (isSignedInNoOrgPath(pathname)) {
     return {
       requiresAuth: true,
       requiresOrganization: false,

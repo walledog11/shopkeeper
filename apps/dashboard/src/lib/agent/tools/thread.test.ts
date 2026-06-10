@@ -253,6 +253,85 @@ describe('sendEmail outbound recording', () => {
   });
 });
 
+describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
+  const originalFetch = global.fetch;
+  const mockFetch = vi.fn();
+
+  beforeEach(() => {
+    process.env.OUTBOUND_EMAIL_ASYNC = 'true';
+    global.fetch = mockFetch as typeof fetch;
+    mockFetch.mockReset();
+  });
+
+  afterEach(() => {
+    delete process.env.OUTBOUND_EMAIL_ASYNC;
+    global.fetch = originalFetch;
+  });
+
+  it('pre-creates a pending message, stores the subject, and enqueues instead of sending', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ enqueued: true, jobId: 'j1' }), { status: 202 }),
+    );
+    const emailAddress = `support_async_${org.id.slice(0, 8)}@example.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const result = await sendEmail(
+      { to: 'prospect-async@example.com', subject: 'Sizing question', body: 'Queued email.' },
+      { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
+    );
+
+    expect(result.message).toBe(
+      'Email queued to prospect-async@example.com and a new ticket was opened.',
+    );
+    expect(mockPostmarkSend).not.toHaveBeenCalled();
+
+    const saved = await db.message.findFirst({
+      where: { contentText: 'Queued email.', senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('pending');
+
+    // The new thread stores the subject so the worker can derive the outbound subject.
+    const thread = await db.thread.findUnique({ where: { id: saved!.threadId } });
+    expect(thread?.subject).toBe('Sizing question');
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('/internal/queue/outbound-email');
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      organizationId: org.id,
+      messageId: saved?.id,
+      threadId: saved?.threadId,
+      integrationId: integration.id,
+      source: 'agent_send_email',
+    });
+  });
+
+  it('marks the pending message failed when enqueue fails', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+    const emailAddress = `support_async_fail_${org.id.slice(0, 8)}@example.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+
+    const result = await sendEmail(
+      { to: 'prospect-fail@example.com', subject: 'Q', body: 'Will fail to queue.' },
+      { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
+    );
+
+    expect(result.status).toBe('error');
+    const saved = await db.message.findFirst({
+      where: { contentText: 'Will fail to queue.', senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('failed');
+    expect(saved?.sendError).toBe('Could not queue email send');
+  });
+});
+
 describe('updateThreadStatus', () => {
   it('updates thread status when the agent closes a thread', async () => {
     const customer = await createTestCustomer(org.id, 'agent-close@example.com');

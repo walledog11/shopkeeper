@@ -139,7 +139,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
   } = state
 
   return (
-    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, threads, messages, knowledge base, and canned responses.">
+    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, threads, messages, and knowledge base.">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <p className="text-xs text-white/35 max-w-md">
           Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.

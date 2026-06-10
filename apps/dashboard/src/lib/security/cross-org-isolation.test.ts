@@ -26,12 +26,6 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 import { auth } from '@clerk/nextjs/server';
 import {
-  PATCH as patchCannedResponse,
-  DELETE as deleteCannedResponse,
-} from '@/app/api/canned-responses/[id]/route';
-import { POST as duplicateCannedResponse } from '@/app/api/canned-responses/[id]/duplicate/route';
-import { POST as useCannedResponse } from '@/app/api/canned-responses/[id]/use/route';
-import {
   PATCH as patchKbArticle,
   DELETE as deleteKbArticle,
 } from '@/app/api/kb/[id]/route';
@@ -67,59 +61,6 @@ afterEach(async () => {
 });
 
 describe('cross-org isolation , id-style routes return 404 for foreign resources', () => {
-  it('PATCH /api/canned-responses/[id] returns 404 for another org id', async () => {
-    const foreign = await db.cannedResponse.create({
-      data: { organizationId: otherOrg.id, title: 't', body: 'b', tags: [], channels: [] },
-    });
-    const res = await patchCannedResponse(
-      jsonReq(`http://x/api/canned-responses/${foreign.id}`, { title: 'hax' }, 'PATCH'),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-
-    const unchanged = await db.cannedResponse.findUnique({ where: { id: foreign.id } });
-    expect(unchanged?.title).toBe('t');
-  });
-
-  it('DELETE /api/canned-responses/[id] returns 404 for another org id', async () => {
-    const foreign = await db.cannedResponse.create({
-      data: { organizationId: otherOrg.id, title: 't', body: 'b', tags: [], channels: [] },
-    });
-    const res = await deleteCannedResponse(
-      new Request(`http://x/api/canned-responses/${foreign.id}`, { method: 'DELETE' }),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-
-    const stillThere = await db.cannedResponse.findUnique({ where: { id: foreign.id } });
-    expect(stillThere).not.toBeNull();
-  });
-
-  it('POST /api/canned-responses/[id]/duplicate returns 404 for another org id', async () => {
-    const foreign = await db.cannedResponse.create({
-      data: { organizationId: otherOrg.id, title: 't', body: 'b', tags: [], channels: [] },
-    });
-    const res = await duplicateCannedResponse(
-      new Request(`http://x/api/canned-responses/${foreign.id}/duplicate`, { method: 'POST' }),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-
-    const callerCount = await db.cannedResponse.count({ where: { organizationId: callerOrg.id } });
-    expect(callerCount).toBe(0);
-  });
-
-  it('POST /api/canned-responses/[id]/use returns 404 for another org id', async () => {
-    const foreign = await db.cannedResponse.create({
-      data: { organizationId: otherOrg.id, title: 't', body: 'b', tags: [], channels: [] },
-    });
-    const res = await useCannedResponse(
-      new Request(`http://x/api/canned-responses/${foreign.id}/use`, { method: 'POST' }),
-      params(foreign.id),
-    );
-    expect(res.status).toBe(404);
-  });
-
   it('PATCH /api/kb/[id] returns 404 for another org article id', async () => {
     const foreignKb = await db.knowledgeBase.create({
       data: { organizationId: otherOrg.id, name: 'Other', source: 'user' },

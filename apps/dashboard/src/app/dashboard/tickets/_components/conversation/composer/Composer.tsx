@@ -17,22 +17,15 @@ export default function Composer(props: ComposerProps) {
     value,
   } = props
   const {
-    filteredCanned,
-    handleTextChange,
     handleViewTabSelect,
     igWindowExpired,
-    insertCanned,
     isEmailLike,
     isNoteTab,
-    listRef,
+    onChange,
     placeholder,
     rememberTextareaFocus,
-    selectedCannedIdx,
     senderEmail,
     sendDisabled,
-    setSelectedIdx,
-    setSlashQuery,
-    slashQuery,
     textareaRef,
   } = useComposerState(props)
 
@@ -71,42 +64,6 @@ export default function Composer(props: ComposerProps) {
       )}
 
       <div className="relative px-5 pt-3">
-        {/* Canned response popover */}
-        {slashQuery !== null && filteredCanned.length > 0 && (
-          <div
-            ref={listRef}
-            className="absolute left-5 right-5 bottom-full mb-2 rounded-md border border-white/[0.12] bg-popover shadow-lg overflow-hidden max-h-52 overflow-y-auto z-10"
-          >
-            {filteredCanned.map((r, idx) => (
-              <button type="button"
-                key={r.id}
-                onMouseDown={e => { e.preventDefault(); insertCanned(r) }}
-                onMouseEnter={() => setSelectedIdx(idx)}
-                className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors border-b border-white/[0.05] last:border-0 ${
-                  idx === selectedCannedIdx ? 'bg-white/[0.10]' : 'hover:bg-white/[0.07]'
-                }`}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs font-semibold text-white/70">{r.title}</p>
-                  <p className="text-xs text-white/35 truncate">{r.body}</p>
-                </div>
-                {r.channels.length > 0 && (
-                  <div className="flex items-center gap-1 shrink-0 pt-px">
-                    {r.channels.map(ch => (
-                      <span
-                        key={ch}
-                        className={`size-1.5 rounded-full ${
-                          ch === 'email' ? 'bg-blue-400' : ch === 'ig_dm' ? 'bg-pink-400' : 'bg-green-400'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div className="flex items-start gap-2">
           {isAgentMode && (
             <span className="inline-flex items-center gap-1 bg-violet-500/15 text-violet-400 text-xs font-semibold px-2.5 py-[5px] rounded-full shrink-0 mt-0.5">
@@ -119,31 +76,8 @@ export default function Composer(props: ComposerProps) {
             data-testid="reply-composer-textarea"
             ref={textareaRef}
             value={value}
-            onChange={e => handleTextChange(e.target.value)}
+            onChange={e => onChange(e.target.value)}
             onKeyDown={e => {
-              if (slashQuery !== null && filteredCanned.length > 0) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setSelectedIdx(i => (i + 1) % filteredCanned.length)
-                  return
-                }
-                if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  setSelectedIdx(i => (i - 1 + filteredCanned.length) % filteredCanned.length)
-                  return
-                }
-                if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
-                  e.preventDefault()
-                  insertCanned(filteredCanned[selectedCannedIdx])
-                  return
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault()
-                  setSlashQuery(null)
-                  return
-                }
-              }
-
               // ⌘/Ctrl + Enter sends; plain Enter inserts newline (default).
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault()

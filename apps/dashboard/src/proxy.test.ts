@@ -44,12 +44,6 @@ describe('proxy middleware auth handling', () => {
     expect(await res?.json()).toEqual({ error: 'Unauthorized' });
   });
 
-  it('returns 401 JSON for unauthenticated requests to org-optional API paths', async () => {
-    const { fn } = makeAuth(null, null);
-    const res = await capturedHandler(fn as never, makeReq('/api/feedback'));
-    expect(res?.status).toBe(401);
-  });
-
   it('lets public API paths through without auth', async () => {
     const { fn } = makeAuth(null, null);
     const res = await capturedHandler(fn as never, makeReq('/api/health'));

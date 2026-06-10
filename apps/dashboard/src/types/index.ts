@@ -84,19 +84,6 @@ export interface Message {
   sendStatus?: string | null;
 }
 
-export interface CannedResponse {
-  id: string;
-  organizationId: string;
-  title: string;
-  body: string;
-  tags: string[];
-  channels: string[];
-  useCount: number;
-  lastUsedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface KbArticle {
   id: string;
   organizationId: string;

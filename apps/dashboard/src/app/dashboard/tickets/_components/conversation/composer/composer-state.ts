@@ -1,29 +1,16 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { useOrganization } from "@clerk/nextjs"
+import { useCallback, useEffect, useRef } from "react"
 import useSWR from "swr"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { fetcher } from "@/lib/api/fetcher"
-import { buildShopifyCustomerKey } from "@/lib/shopify/customer-key"
-import type { CannedResponse } from "@/types"
-import type { ShopifyData } from "@/types/shopify"
 import type { ComposerProps, IntegrationRow } from "./composer-types"
-import {
-  buildCannedResponseBody,
-  buildComposerPlaceholder,
-  EMPTY_CANNED_RESPONSES,
-  filterCannedResponses,
-  insertCannedResponseValue,
-  isInstagramReplyWindowExpired,
-} from "./composer-utils"
+import { buildComposerPlaceholder, isInstagramReplyWindowExpired } from "./composer-utils"
 
 export function useComposerState({
   customerName,
   agentName = "Shopkeeper",
   channelType,
-  shopifyCustomerId,
-  customerPlatformId,
   lastCustomerMessageAt,
   value,
   isAgentMode = false,
@@ -32,12 +19,7 @@ export function useComposerState({
   isSending,
   onChange,
 }: ComposerProps) {
-  const { organization } = useOrganization()
-
-  const [slashQuery, setSlashQuery] = useState<string | null>(null)
-  const [selectedIdx, setSelectedIdx] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const shouldRestoreTextareaFocusRef = useRef(false)
 
   const isNoteTab = viewTab === "notes"
@@ -49,40 +31,12 @@ export function useComposerState({
     lastCustomerMessageAt,
   })
 
-  const { data: cannedData } = useSWR<{ responses: CannedResponse[] }>(
-    slashQuery !== null ? "/api/canned-responses" : null,
-    fetcher,
-  )
-
   const { data: integrations } = useSWR<IntegrationRow[]>(
     isEmailLike ? "/api/integrations" : null,
     fetcher,
   )
   const emailIntegration = integrations?.find(i => i.platform === "email")
   const senderEmail = emailIntegration?.fromEmail || emailIntegration?.externalAccountId || null
-
-  const shopifySwrKey = buildShopifyCustomerKey({
-    channelType,
-    customerPlatformId,
-    shopifyCustomerId,
-    orderLimit: 1,
-  })
-  const { data: shopifyData } = useSWR<ShopifyData>(shopifySwrKey, fetcher, {
-    revalidateOnFocus: false,
-  })
-
-  const cannedResponses = cannedData?.responses ?? EMPTY_CANNED_RESPONSES
-  const filteredCanned = useMemo(
-    () => filterCannedResponses(cannedResponses, slashQuery, channelType),
-    [cannedResponses, channelType, slashQuery],
-  )
-  const selectedCannedIdx = filteredCanned.length > 0 ? Math.min(selectedIdx, filteredCanned.length - 1) : 0
-
-  useEffect(() => {
-    if (!listRef.current) return
-    const item = listRef.current.children[selectedCannedIdx] as HTMLElement | undefined
-    item?.scrollIntoView({ block: "nearest" })
-  }, [selectedCannedIdx])
 
   const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current
@@ -113,28 +67,6 @@ export function useComposerState({
     }
   }, [])
 
-  const handleTextChange = (newValue: string) => {
-    onChange(newValue)
-    const match = newValue.match(/(^|\s)\/(\S*)$/)
-    setSlashQuery(match ? match[2] : null)
-    setSelectedIdx(0)
-  }
-
-  const insertCanned = (response: CannedResponse) => {
-    const shopifyCustomer = shopifyData?.customer
-    const shopifyOrders = shopifyData?.orders ?? []
-    const body = buildCannedResponseBody(response, {
-      customerFirstName: shopifyCustomer?.first_name,
-      orderName: shopifyOrders[0]?.name,
-      storeName: organization?.name,
-    })
-    onChange(insertCannedResponseValue(value, body))
-    setSlashQuery(null)
-    setSelectedIdx(0)
-    textareaRef.current?.focus()
-    fetch(`/api/canned-responses/${response.id}/use`, { method: "POST" }).catch(() => {})
-  }
-
   const isMobile = useMediaQuery("(max-width: 767px)") === true
   const placeholder = buildComposerPlaceholder({
     agentName,
@@ -158,22 +90,15 @@ export function useComposerState({
   }
 
   return {
-    filteredCanned,
-    handleTextChange,
     handleViewTabSelect,
     igWindowExpired,
-    insertCanned,
     isEmailLike,
     isNoteTab,
-    listRef,
+    onChange,
     placeholder,
     rememberTextareaFocus,
-    selectedCannedIdx,
     senderEmail,
     sendDisabled,
-    setSelectedIdx,
-    setSlashQuery,
-    slashQuery,
     textareaRef,
   }
 }

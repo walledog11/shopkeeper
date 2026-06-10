@@ -1,39 +1,85 @@
 import Link from "next/link";
+import { ChatDemo, type ChatMessage } from "./ChatDemo";
+
+const HERO_CHAT: ChatMessage[] = [
+  {
+    from: "agent",
+    text: "Morning ☀️ 14 customer messages came in overnight. I handled 12 — tracking links, sizing, one discount code. Two need your call.",
+    time: "7:02 AM",
+  },
+  {
+    from: "agent",
+    text: "First: Sarah on Instagram wants to swap order #2849 to a Medium before it ships. Medium's in stock. My draft: “Hey Sarah! Done — swapped you to a Medium, same delivery date 💛” Send it?",
+    time: "7:02 AM",
+  },
+  { from: "user", text: "send it", time: "7:08 AM" },
+  {
+    from: "agent",
+    text: "Sent ✓ Next: David's asking for a refund on #3012 — $84, inside your 30-day window. Approve?",
+    time: "7:08 AM",
+  },
+  { from: "user", text: "approve", time: "7:09 AM" },
+  {
+    from: "agent",
+    text: "Refunded $84 ✓ and his return label is in his inbox. That's everything — go enjoy your coffee.",
+    time: "7:09 AM",
+  },
+];
 
 export function Hero() {
   return (
-    <section className="pt-20 px-10 pb-12 max-w-3xl mx-auto text-center" >
-      
-      {/* Headline */}
-      <h1 className="mx-auto mb-6 mt-0 max-w-[14ch] [font-family:var(--m-serif)] font-normal text-[clamp(48px,7vw,108px)] leading-[0.92] tracking-[-0.03em]">
-        Your DMs answered themselves{" "}
-        <em className="font-italic text-green-700" >while you slept.</em>
-      </h1>
+    <section className="relative px-6 pb-20 pt-16 text-center sm:pt-24">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute left-1/2 top-[55%] -z-10 h-[600px] w-[900px] max-w-none -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(47,122,74,0.14),transparent)]"
+      />
 
-      {/* Subtitle */}
-      <p className="text-md text-stone-800 leading-relaxed max-w-[52ch] mx-auto mb-6" >
-        Shopkeeper is an AI support agent for Shopify brands. It reads every Instagram DM, email, and SMS , drafts replies that actually sound like you, and only sends after you tap approve.
+      <p className="mb-5 text-xs font-medium uppercase tracking-[0.18em] text-stone-500 [font-family:var(--m-mono)]">
+        ✦ AI support for Shopify brands
       </p>
 
-      {/* CTAs */}
-      <div className="flex flex-wrap gap-5 align-center mb-3 justify-center" >
-        <Link href="/signup" className="inline-flex align-center gap-3 py-2 px-4 rounded-full text-white text-sm bg-slate-900 font-semibold border border-solid border-black " >
-          Start free , 14 days
+      <h1 className="mx-auto mb-6 max-w-[16ch] text-[clamp(48px,8vw,104px)] font-normal leading-[0.95] tracking-[-0.02em] [font-family:var(--m-serif)]">
+        Meet Shopkeeper, <em className="italic text-[#2f7a4a]">your newest employee.</em>
+      </h1>
+
+      <p className="mx-auto mb-8 max-w-[52ch] text-[17px] leading-relaxed text-stone-700">
+        It answers your customers on Instagram, email, and SMS — in your voice, with your store&apos;s
+        real order data — and texts you when something needs a human. You approve; it does the typing.
+      </p>
+
+      <div className="mb-5 flex flex-wrap items-center justify-center gap-3">
+        <Link
+          href="/signup"
+          className="inline-flex items-center rounded-full bg-stone-900 px-6 py-3 text-sm font-semibold text-[#f6f2eb] no-underline transition-colors hover:bg-stone-700"
+        >
+          Hire Shopkeeper — free for 14 days
         </Link>
-        <Link href="#demo" className="inline-flex align-center gap-3 py-2 px-4 rounded-full text-sm font-semibold border border-solid border-stone-900/10 text-stone-900 " >
-          ▶ Watch a 90s walkthrough
+        <Link
+          href="#how"
+          className="inline-flex items-center rounded-full border border-stone-900/15 px-6 py-3 text-sm font-semibold text-stone-900 no-underline transition-colors hover:border-stone-900/35"
+        >
+          Watch it work ↓
         </Link>
       </div>
 
-      {/* Meta row */}
-      <div className="flex flex-wrap justify-center gap-14 text-sm text-slate-800 mt-7" >
-        {["No credit card", "Connect Shopify in 2 min", "Cancel any time"].map((item) => (
+      <div className="mb-14 flex flex-wrap justify-center gap-x-8 gap-y-2 text-[13px] text-stone-600">
+        {["No credit card", "Shopify connects in 2 min", "Cancel anytime"].map((item) => (
           <span key={item} className="inline-flex items-center gap-1.5">
-            <span className="inline-flex align-center justify-center text-xs size-4 rounded-full bg-green-700 text-white" >✓</span>
+            <span className="grid size-4 place-items-center rounded-full bg-[#2f7a4a] text-[9px] text-white">✓</span>
             {item}
           </span>
         ))}
       </div>
+
+      <ChatDemo
+        title="Shopkeeper"
+        subtitle="your store · online"
+        avatar="S"
+        messages={HERO_CHAT}
+      />
+      <p className="mt-6 text-[13px] text-stone-500 [font-family:var(--m-mono)]">
+        ↑ this morning&apos;s report, live from Telegram
+      </p>
     </section>
   );
 }

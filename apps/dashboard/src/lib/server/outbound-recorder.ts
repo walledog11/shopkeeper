@@ -1,6 +1,10 @@
 export type OutboundChannel = 'email' | 'ig_dm';
 export type OutboundProvider = 'postmark' | 'meta' | 'gmail' | 'outlook';
-export type OutboundSource = 'dispatch_message' | 'agent_send_reply' | 'agent_send_email';
+export type OutboundSource =
+  | 'dispatch_message'
+  | 'agent_send_reply'
+  | 'agent_send_email'
+  | 'auto_ack';
 
 export interface OutboundRecordInput {
   source: OutboundSource;
