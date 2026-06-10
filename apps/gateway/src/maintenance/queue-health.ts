@@ -15,28 +15,19 @@ import {
   type MaintenanceJobRegistration,
 } from './registration.js';
 
-export const QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT = 20;
+const QUEUE_HEALTH_ACTIVE_SAMPLE_LIMIT = 20;
 
 type QueueHealthQueueLabel = 'inbound' | 'aiSummary';
 type QueueHealthMetric = 'failed' | 'waiting' | 'active_stuck';
 
-export interface QueueHealthCounts {
+type QueueHealthJobCounts = {
   waiting: number;
   active: number;
   failed: number;
   [key: string]: number;
-}
+};
 
-export interface QueueHealthActiveJob {
-  id?: string | number;
-  name?: string;
-  attemptsMade?: number;
-  timestamp?: number;
-  processedOn?: number;
-  data?: unknown;
-}
-
-export interface QueueHealthActiveJobSnapshot {
+type ActiveJobSnapshot = {
   id: string | null;
   name: string | null;
   attemptsMade: number | null;
@@ -48,6 +39,15 @@ export interface QueueHealthActiveJobSnapshot {
   channel: string | null;
   organizationId: string | null;
   traceId: string | null;
+};
+
+export interface QueueHealthActiveJob {
+  id?: string | number;
+  name?: string;
+  attemptsMade?: number;
+  timestamp?: number;
+  processedOn?: number;
+  data?: unknown;
 }
 
 export interface QueueHealthInspectableQueue {
@@ -69,9 +69,9 @@ export interface QueueHealthMonitoredQueue {
 export interface QueueHealthSnapshot {
   label: QueueHealthQueueLabel;
   queueName: string;
-  counts: QueueHealthCounts;
+  counts: QueueHealthJobCounts;
   activeJobSampleSize: number;
-  oldestActiveJob: QueueHealthActiveJobSnapshot | null;
+  oldestActiveJob: ActiveJobSnapshot | null;
 }
 
 export interface QueueHealthAlertDecision {
@@ -189,7 +189,7 @@ export const registerQueueHealthMaintenanceJob: MaintenanceJobRegistration = asy
   };
 };
 
-export async function readQueueHealthSnapshot(
+async function readQueueHealthSnapshot(
   monitoredQueue: QueueHealthMonitoredQueue,
   options: { nowMs: number; activeSampleLimit?: number },
 ): Promise<QueueHealthSnapshot> {
@@ -209,11 +209,11 @@ export async function readQueueHealthSnapshot(
   };
 }
 
-export function getOldestActiveJobSnapshot(
+function getOldestActiveJobSnapshot(
   activeJobs: QueueHealthActiveJob[],
   nowMs: number,
-): QueueHealthActiveJobSnapshot | null {
-  let oldest: QueueHealthActiveJobSnapshot | null = null;
+): ActiveJobSnapshot | null {
+  let oldest: ActiveJobSnapshot | null = null;
 
   for (const job of activeJobs) {
     const startedAtMs = readTimestampMs(job.processedOn) ?? readTimestampMs(job.timestamp);
@@ -222,7 +222,7 @@ export function getOldestActiveJobSnapshot(
     const data = isRecord(job.data) ? job.data : {};
     const platform = readString(data.platform);
     const channel = readString(data.channelType) ?? platform;
-    const snapshot: QueueHealthActiveJobSnapshot = {
+    const snapshot: ActiveJobSnapshot = {
       id: job.id === undefined ? null : String(job.id),
       name: readString(job.name),
       attemptsMade: Number.isInteger(job.attemptsMade) ? job.attemptsMade! : null,
@@ -335,8 +335,8 @@ function buildQueueHealthFingerprint(
   return fingerprint;
 }
 
-function normalizeQueueCounts(rawCounts: Record<string, number | undefined>): QueueHealthCounts {
-  const counts: QueueHealthCounts = {
+function normalizeQueueCounts(rawCounts: Record<string, number | undefined>): QueueHealthJobCounts {
+  const counts: QueueHealthJobCounts = {
     waiting: 0,
     active: 0,
     failed: 0,

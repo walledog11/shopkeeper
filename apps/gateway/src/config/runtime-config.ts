@@ -127,3 +127,51 @@ export function getGatewayOpsAlertConfig(): GatewayOpsAlertConfig {
 export function isOrderRiskMonitorEnabled(): boolean {
   return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
 }
+
+function readOptionalTrimmedEnv(name: string): string | null {
+  const rawValue = process.env[name];
+  if (typeof rawValue !== 'string') {
+    return null;
+  }
+
+  const trimmedValue = rawValue.trim();
+  return trimmedValue.length > 0 ? trimmedValue : null;
+}
+
+export interface MetaWebhookConfig {
+  verifyToken: string | null;
+  appSecret: string | null;
+  appId: string | null;
+}
+
+export function getMetaWebhookConfig(): MetaWebhookConfig {
+  return {
+    verifyToken: readOptionalTrimmedEnv('META_VERIFY_TOKEN'),
+    appSecret: readOptionalTrimmedEnv('META_APP_SECRET'),
+    appId: readOptionalTrimmedEnv('META_APP_ID'),
+  };
+}
+
+export interface TelegramConfig {
+  botToken: string | null;
+  webhookSecret: string | null;
+}
+
+export function getTelegramConfig(): TelegramConfig {
+  return {
+    botToken: readOptionalTrimmedEnv('TELEGRAM_BOT_TOKEN'),
+    webhookSecret: readOptionalTrimmedEnv('TELEGRAM_WEBHOOK_SECRET'),
+  };
+}
+
+export interface PostmarkWebhookConfig {
+  inboundUsername: string | null;
+  inboundPassword: string | null;
+}
+
+export function getPostmarkWebhookConfig(): PostmarkWebhookConfig {
+  return {
+    inboundUsername: readOptionalTrimmedEnv('POSTMARK_INBOUND_USERNAME'),
+    inboundPassword: readOptionalTrimmedEnv('POSTMARK_INBOUND_PASSWORD'),
+  };
+}

@@ -11,7 +11,7 @@ Removed from the original plan as already complete:
 - Dashboard internal HTTP client — `clients/dashboard-internal.ts` centralizes auth headers; all outbound dashboard POSTs now go through `postDashboardInternal` (Phase 4).
 - Telegram routes reading `process.env.INTERNAL_API_SECRET` directly — no longer true; all outbound calls go through `buildDashboardInternalHeaders()`.
 
-**Progress (2026-06-09):** Phases 1–7 complete (except Phase 8). Phase 4 unified Meta Graph (`fetchInstagramUserProfile`), routed the last raw dashboard fetches through `postDashboardInternal`, and moved `formatChannelLabel` to `lib/channel-format.ts` (closing the Phase 3 routes-import follow-up). Phase 5 wired gateway `provider_send` (Telegram) and `agent_failure` (thread-sink dispatch hop) alerts. Phase 6 added `OperatorNotifyPolicy` (`critical` vs `best-effort`), made `telegram-client.sendMessage` return a boolean, and wired critical paths (plan approval prompts, escalations) to throw so BullMQ jobs retry while `provider_send` ops alerts fire on each failed attempt. Phase 2 documented legacy `whatsapp-*` BullMQ names in `constants.ts`, updated stale WhatsApp comments/tests to "operator", and kept live queue keys unchanged. Phase 7 added Redis/BullMQ singletons (`getGatewayRedis`, producer/worker connections), cached BullMQ `Queue` instances in `gateway-queues.ts`, and consolidated server connections from 4+ down to 2 per process. Next up: Phase 8.
+**Progress (2026-06-09):** Phases 1–8 complete. Phase 4 unified Meta Graph (`fetchInstagramUserProfile`), routed the last raw dashboard fetches through `postDashboardInternal`, and moved `formatChannelLabel` to `lib/channel-format.ts` (closing the Phase 3 routes-import follow-up). Phase 5 wired gateway `provider_send` (Telegram) and `agent_failure` (thread-sink dispatch hop) alerts. Phase 6 added `OperatorNotifyPolicy` (`critical` vs `best-effort`), made `telegram-client.sendMessage` return a boolean, and wired critical paths (plan approval prompts, escalations) to throw so BullMQ jobs retry while `provider_send` ops alerts fire on each failed attempt. Phase 2 documented legacy `whatsapp-*` BullMQ names in `constants.ts`, updated stale WhatsApp comments/tests to "operator", and kept live queue keys unchanged. Phase 7 added Redis/BullMQ singletons (`getGatewayRedis`, producer/worker connections), cached BullMQ `Queue` instances in `gateway-queues.ts`, and consolidated server connections from 4+ down to 2 per process. Phase 8 split `message-handlers/shared.ts` into focused modules, grouped webhook env reads in `runtime-config.ts`, split `worker.test.ts` into per-concern files under `test-fixtures/`, collapsed internal queue-health types, and trimmed stale Track comments.
 
 Do not revert or rewrite unrelated user-owned work in the worktree.
 
@@ -312,30 +312,31 @@ Lowest priority. Do only where a natural boundary exists — LOC targets are not
 ### 8.1 Slim `queue-health.ts` (383 LOC) and `message-handlers/shared.ts` (316 LOC)
 
 - [x] Move shared guards (`isRecord`, `readString`, normalizers) to `lib/typing.ts` (Phase 1).
-- [ ] Collapse internal-only interfaces in `queue-health.ts` that are not part of the public contract; keep exported surface (`checkGatewayQueueHealth`, registration helpers, DI types).
-- [ ] After Phase 1 moves `getInternalApiSecret` out of `shared.ts`, split remaining responsibilities (email classification, Shopify customer lookup, inbound persistence) only if a natural boundary exists. Avoid one-line helper files.
+- [x] Collapse internal-only interfaces in `queue-health.ts` that are not part of the public contract; keep exported surface (`checkGatewayQueueHealth`, registration helpers, DI types).
+- [x] After Phase 1 moves `getInternalApiSecret` out of `shared.ts`, split remaining responsibilities (email classification, Shopify customer lookup, inbound persistence) only if a natural boundary exists. Avoid one-line helper files. *(Split into `email-classification.ts` and `inbound-persistence.ts`; deleted `shared.ts`.)*
 
 ### 8.2 Group scattered env reads
 
-- [ ] Add grouped getters in `runtime-config.ts` where env is read in more than one place: `getMetaWebhookConfig()`, `getTelegramConfig()`, `getPostmarkWebhookConfig()`.
-- [ ] Replace ad-hoc `process.env` reads in route handlers with the getters; extend `runtime-config.test.ts`.
+- [x] Add grouped getters in `runtime-config.ts` where env is read in more than one place: `getMetaWebhookConfig()`, `getTelegramConfig()`, `getPostmarkWebhookConfig()`.
+- [x] Replace ad-hoc `process.env` reads in route handlers with the getters; extend `runtime-config.test.ts`.
 
 ### 8.3 Trim stale migration comments
 
-- [ ] Replace "Track 4.x" narration with brief "why" comments — **selectively**: several of these comments genuinely explain injection seams and should be kept or shortened, not deleted. Link to `docs/core-extraction-and-module-expansion-plan.md` where historical context is still useful.
-- Files: `generate-thread-plan.ts`, `agent-turn-deps.ts`, `agent-thread-sink.ts`, `internal-operator.ts`, `agent-runtime.ts`, `execute-operator-agent-turn.ts`, `agent-lock.ts`.
+- [x] Replace "Track 4.x" narration with brief "why" comments — **selectively**: several of these comments genuinely explain injection seams and should be kept or shortened, not deleted. Link to `docs/core-extraction-and-module-expansion-plan.md` where historical context is still useful.
+- Files: `generate-thread-plan.ts`, `agent-turn-deps.ts`, `agent-thread-sink.ts`, `internal-operator.ts`, `agent-runtime.ts`, `execute-operator-agent-turn.ts`, `agent-lock.ts`. *(Last "Track 4.x" reference removed from `scripts/backfill-plans.ts`; listed handler files already clean.)*
 
 ### 8.4 Split `worker.test.ts` (826 LOC)
 
-- [ ] Extract shared fixtures into `src/test-fixtures/` or a `worker-test-helpers.ts`.
-- [ ] Split by worker concern: inbound, ai-summary, order-review.
-- [ ] Add focused tests for the `generateThreadPlan` auto-execute path if not covered after split.
+- [x] Extract shared fixtures into `src/test-fixtures/` or a `worker-test-helpers.ts`.
+- [x] Split by worker concern: inbound, ai-summary, order-review. *(Split into `worker-inbound-*.test.ts` and `worker-ai-summary.test.ts`; original monolith had no order-review coverage.)*
+- [x] Add focused tests for the `generateThreadPlan` auto-execute path if not covered after split. *(Covered in `generate-thread-plan.test.ts`.)*
 
 **Phase 8 verification:**
 
-- [ ] `npm run lint -w apps/gateway`
-- [ ] `npm run test:integration -w apps/gateway`
-- [ ] Confirm total test count and coverage are unchanged or improved.
+- [x] `npm run lint -w apps/gateway`
+- [x] `npm run build -w apps/gateway`
+- [x] `npm run test:integration -w apps/gateway` *(44 files, 280 tests)*
+- [x] Confirm total test count and coverage are unchanged or improved.
 
 ---
 
@@ -350,7 +351,7 @@ Lowest priority. Do only where a natural boundary exists — LOC targets are not
 | 5 | Phase 6 — Notification failure policy | 1 day | Medium | Done |
 | 6 | Phase 2 — WhatsApp naming (comments/labels only) | 0.5 day | Low | Done |
 | 7 | Phase 7 — Redis singletons | 2–3 days | Medium | Done |
-| 8 | Phase 8 — God files, config, test split | 1–2 days | Low | Next |
+| 8 | Phase 8 — God files, config, test split | 1–2 days | Low | Done |
 
 Phase 5 should align with the error-tracking plan before Sentry work begins; Phase 6 depends on the Phase 5 decision.
 
@@ -376,4 +377,4 @@ The gateway cleanup is done when:
 - [x] No stale WhatsApp naming in gateway comments, labels, or tests (live BullMQ queue-name rename explicitly deferred and documented in `constants.ts`).
 - [x] Ops alert categories are either wired or removed — no half-built config.
 - [x] Unknown inbound platforms fail loudly.
-- [ ] `npm run lint`, `npm run build -w apps/gateway`, and `npm run test:integration -w apps/gateway` all pass. *(Lint/build and targeted integration tests pass for Phases 1, 3, and 4; full integration suite not yet re-run as part of this tracker.)*
+- [x] `npm run lint`, `npm run build -w apps/gateway`, and `npm run test:integration -w apps/gateway` all pass.

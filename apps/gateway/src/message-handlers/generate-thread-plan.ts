@@ -37,9 +37,9 @@ export interface GeneratedThreadPlan {
   autoExecutionError?: string;
 }
 
-// In-process auto-plan (Track 4.2): resolve the thread + settings, serve the plan
-// cache when warm, otherwise plan and cache it, then (when within business hours)
-// auto-execute via the moved orchestration with the gateway's ioredis lock + no-op shadow.
+// In-process auto-plan: resolve thread + settings, serve a warm plan cache or
+// plan and cache a fresh one, then auto-execute within business hours using the
+// gateway lock provider and no-op shadow recorder.
 export async function generateThreadPlan(
   organizationId: string,
   threadId: string,

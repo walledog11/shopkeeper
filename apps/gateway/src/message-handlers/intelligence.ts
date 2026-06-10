@@ -7,7 +7,7 @@ import { anthropic } from '@shopkeeper/agent/ai';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
   parseClassifierJson,
-} from './shared.js';
+} from './email-classification.js';
 
 export async function generateThreadIntelligence(
   threadId: string,

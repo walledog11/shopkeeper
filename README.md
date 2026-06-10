@@ -5,7 +5,7 @@ Shopkeeper is an AI operating layer for solo and small e-commerce businesses on 
 
 **Customer support is the V1 wedge and the current focus.** Think Zendesk but AI-first and purpose-built for Shopify: a multi-channel support inbox plus an AI agent that reads and acts on Shopify data (orders, customers, refunds, etc.) directly inside the workflow. The architecture is built so the same agent core — memory, approval/autonomy workflows, multi-channel interaction, tool use — extends into adjacent workflow modules over time: order operations → inventory & supplier comms → marketing ops → financial ops. Only the support module is built today; the codebase assumes the others will share the core.
 
-Roadmap: [`docs/core-extraction-and-module-expansion-plan.md`](docs/core-extraction-and-module-expansion-plan.md) and [`docs/autonomy-and-generality-plan.md`](docs/autonomy-and-generality-plan.md).
+Roadmap: [`docs/core-extraction-and-module-expansion-plan.md`](docs/core-extraction-and-module-expansion-plan.md).
 
 ## Docs
 - Production checklist: [`docs/production/checklist.md`](docs/production/checklist.md)

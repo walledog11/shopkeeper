@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState, useRef, useEffect, useMemo } from "react"
+import { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { AlertCircle, CheckCircle2, Inbox } from "lucide-react"
 import useSWR from 'swr'
@@ -9,6 +9,8 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useActiveThreadSelection } from '../_hooks/useActiveThreadSelection'
 import { useAgentTurns } from '../_hooks/useAgentTurns'
 import { usePaginatedThreads } from '../_hooks/usePaginatedThreads'
+import { useTicketTabCounts } from '../_hooks/useTicketTabCounts'
+import { useOpenThreadCountOverride } from '@/hooks/OpenThreadCountContext'
 import { useSummaryRefresh } from '../_hooks/useSummaryRefresh'
 import { useTicketActions } from '../_hooks/useTicketActions'
 import { useTicketSelection } from '../_hooks/useTicketSelection'
@@ -51,9 +53,57 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const { threads: openThreads, isLoading: openLoading, error, mutate: mutateOpen, removeThreadById: removeFromOpen, prependThread: prependToOpen, loadMore: loadMoreOpen, hasMore: hasMoreOpen, isLoadingMore: isLoadingMoreOpen } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply, activeTab === 'open')
-  const { threads: closedThreads, isLoading: closedLoading, mutate: mutateClosed, removeThreadById: removeFromClosed, prependThread: prependToClosed, loadMore: loadMoreClosed, hasMore: hasMoreClosed, isLoadingMore: isLoadingMoreClosed } = usePaginatedThreads('closed', undefined, true, undefined, false, activeTab === 'closed')
-  const { threads: filteredThreads, isLoading: filteredLoading, mutate: mutateFiltered, removeThreadById: removeFromFiltered, prependThread: prependToFiltered, loadMore: loadMoreFiltered, hasMore: hasMoreFiltered, isLoadingMore: isLoadingMoreFiltered } = usePaginatedThreads('open', undefined, true, 'filtered', false, activeTab === 'filtered')
+  const openTabEnabled = activeTab === 'open'
+  const closedTabEnabled = activeTab === 'closed'
+  const filteredTabEnabled = activeTab === 'filtered'
+
+  const {
+    threads: openThreads,
+    totalCount: openListTotalCount,
+    isLoading: openLoading,
+    error,
+    mutate: mutateOpen,
+    removeThreadById: removeFromOpen,
+    prependThread: prependToOpen,
+    loadMore: loadMoreOpen,
+    hasMore: hasMoreOpen,
+    isLoadingMore: isLoadingMoreOpen,
+  } = usePaginatedThreads('open', initialOpenThreads, true, undefined, needsReply, openTabEnabled)
+  const {
+    threads: closedThreads,
+    isLoading: closedLoading,
+    mutate: mutateClosed,
+    removeThreadById: removeFromClosed,
+    prependThread: prependToClosed,
+    loadMore: loadMoreClosed,
+    hasMore: hasMoreClosed,
+    isLoadingMore: isLoadingMoreClosed,
+  } = usePaginatedThreads('closed', undefined, true, undefined, false, closedTabEnabled)
+  const {
+    threads: filteredThreads,
+    isLoading: filteredLoading,
+    mutate: mutateFiltered,
+    removeThreadById: removeFromFiltered,
+    prependThread: prependToFiltered,
+    loadMore: loadMoreFiltered,
+    hasMore: hasMoreFiltered,
+    isLoadingMore: isLoadingMoreFiltered,
+  } = usePaginatedThreads('open', undefined, true, 'filtered', false, filteredTabEnabled)
+
+  const openCountFromList = openTabEnabled && openListTotalCount !== undefined
+    ? openListTotalCount
+    : null
+  const { openCount, closedCount, spamCount, mutateTabCounts } = useTicketTabCounts({
+    needsReply,
+    openCountFromList,
+  })
+  const { setOverride: setSidebarOpenCount } = useOpenThreadCountOverride()
+
+  useEffect(() => {
+    setSidebarOpenCount(openCount)
+    return () => setSidebarOpenCount(null)
+  }, [openCount, setSidebarOpenCount])
+
   const isSearchMode = searchQuery.length >= 2
 
   const { data: searchData, isLoading: isSearchLoading, mutate: mutateSearch } = useSWR<{ threads: Thread[] }>(
@@ -145,6 +195,10 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
     mutateActiveThread,
   })
 
+  const revalidateTicketData = useCallback(async () => {
+    await Promise.all([revalidateThreadCaches(), mutateTabCounts()])
+  }, [mutateTabCounts, revalidateThreadCaches])
+
   const { selectedIds, setSelectedIds, handleToggleSelect, handleClearSelection } = useTicketSelection()
 
   const {
@@ -160,7 +214,7 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
   } = useTicketActions({
     activeTicketId,
     patchThreadCaches,
-    revalidateThreadCaches,
+    revalidateThreadCaches: revalidateTicketData,
     moveThreadStatus,
     moveThreadFilterStatus,
     setActiveTicketId,
@@ -175,7 +229,7 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
     activeThread,
     agentActionsByTurnId: activeThreadData?.agentActionsByTurnId,
     patchThreadCaches,
-    revalidateThreadCaches,
+    revalidateThreadCaches: revalidateTicketData,
   })
 
   useEffect(() => {
@@ -257,9 +311,9 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
           activeTab={effectiveActiveTab}
           activeFilter={activeFilter}
           activeTicketId={activeTicketId}
-          openCount={openThreads.length}
-          closedCount={closedThreads.length}
-          spamCount={filteredThreads.length}
+          openCount={openCount}
+          closedCount={closedCount}
+          spamCount={spamCount}
           searchQuery={searchQuery}
           listState={{
             searchMode: isSearchMode,

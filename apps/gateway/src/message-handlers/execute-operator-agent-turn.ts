@@ -27,8 +27,8 @@ export interface ExecuteOperatorAgentTurnResult {
   actionsPerformed: AgentActionResult[];
 }
 
-// In-process operator agent turn (Track 4.3): billing gate + thread resolution +
-// executeAgentTurn with the gateway's ioredis lock and hop-back ThreadSink.
+// In-process operator agent turn: billing gate, thread resolution, then
+// executeAgentTurn with the gateway lock provider and hop-back ThreadSink.
 export async function executeOperatorAgentTurn(
   params: ExecuteOperatorAgentTurnParams,
 ): Promise<ExecuteOperatorAgentTurnResult> {

@@ -3,6 +3,9 @@ import {
   getGatewayRuntimeRole,
   getGatewayOpsAlertConfig,
   getGatewayWorkerRedisConfig,
+  getMetaWebhookConfig,
+  getPostmarkWebhookConfig,
+  getTelegramConfig,
   isOrderRiskMonitorEnabled,
   shouldRunGatewayServer,
   shouldRunGatewayWorker,
@@ -147,5 +150,104 @@ describe('isOrderRiskMonitorEnabled', () => {
   it('rejects invalid boolean strings', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
     expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
+  });
+});
+
+describe('getMetaWebhookConfig', () => {
+  it('returns nulls when Meta webhook env is unset', () => {
+    vi.stubEnv('META_VERIFY_TOKEN', '');
+    vi.stubEnv('META_APP_SECRET', '');
+    vi.stubEnv('META_APP_ID', '');
+
+    expect(getMetaWebhookConfig()).toEqual({
+      verifyToken: null,
+      appSecret: null,
+      appId: null,
+    });
+  });
+
+  it('trims Meta webhook env values', () => {
+    vi.stubEnv('META_VERIFY_TOKEN', '  verify-token  ');
+    vi.stubEnv('META_APP_SECRET', ' app-secret ');
+    vi.stubEnv('META_APP_ID', '12345');
+
+    expect(getMetaWebhookConfig()).toEqual({
+      verifyToken: 'verify-token',
+      appSecret: 'app-secret',
+      appId: '12345',
+    });
+  });
+
+  it('treats blank Meta webhook env values as unset', () => {
+    vi.stubEnv('META_VERIFY_TOKEN', '   ');
+    vi.stubEnv('META_APP_SECRET', '');
+    vi.stubEnv('META_APP_ID', '\t');
+
+    expect(getMetaWebhookConfig()).toEqual({
+      verifyToken: null,
+      appSecret: null,
+      appId: null,
+    });
+  });
+});
+
+describe('getTelegramConfig', () => {
+  it('returns nulls when Telegram env is unset', () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '');
+    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
+
+    expect(getTelegramConfig()).toEqual({
+      botToken: null,
+      webhookSecret: null,
+    });
+  });
+
+  it('trims Telegram env values', () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', ' bot-token ');
+    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', ' webhook-secret ');
+
+    expect(getTelegramConfig()).toEqual({
+      botToken: 'bot-token',
+      webhookSecret: 'webhook-secret',
+    });
+  });
+
+  it('treats blank Telegram env values as unset', () => {
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '');
+    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '  ');
+
+    expect(getTelegramConfig()).toEqual({
+      botToken: null,
+      webhookSecret: null,
+    });
+  });
+});
+
+describe('getPostmarkWebhookConfig', () => {
+  it('returns nulls when Postmark inbound auth env is unset', () => {
+    expect(getPostmarkWebhookConfig()).toEqual({
+      inboundUsername: null,
+      inboundPassword: null,
+    });
+  });
+
+  it('trims Postmark inbound auth env values', () => {
+    vi.stubEnv('POSTMARK_INBOUND_USERNAME', ' postmark ');
+    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', ' secret ');
+
+    expect(getPostmarkWebhookConfig()).toEqual({
+      inboundUsername: 'postmark',
+      inboundPassword: 'secret',
+    });
+  });
+
+  it('treats blank Postmark inbound auth env values as unset', () => {
+    vi.stubEnv('POSTMARK_INBOUND_USERNAME', '  ');
+    vi.stubEnv('POSTMARK_INBOUND_PASSWORD', '');
+
+    expect(getPostmarkWebhookConfig()).toEqual({
+      inboundUsername: null,
+      inboundPassword: null,
+    });
   });
 });

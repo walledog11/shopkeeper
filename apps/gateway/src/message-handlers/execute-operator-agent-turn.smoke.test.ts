@@ -21,9 +21,8 @@ import {
 //
 // Note: the operator path resolves agent settings from defaults, so the enforced
 // refund cap is the guarded-tier default ($50), not the org's configured tier.
-// That settings-source divergence from the dashboard is tracked separately in
-// docs/v1-launch-scoping-plan.md; this test only asserts that policy enforcement
-// holds on the live gateway operator path.
+// That settings-source divergence from the dashboard is deferred post-V1 work;
+// this test only asserts that policy enforcement holds on the live gateway operator path.
 
 const { acquireSpy, releaseSpy } = vi.hoisted(() => {
   const releaseSpy = vi.fn().mockResolvedValue(undefined);

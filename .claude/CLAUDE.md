@@ -10,7 +10,7 @@
 3. Trust is binary — one bad refund undoes months of goodwill. Bias toward escalation over confident wrong action; failure modes matter more than success modes.
 4. Every workflow module shares one general-purpose agent core. The core must not couple to support specifically.
 
-**Direction & roadmap:** `docs/autonomy-and-generality-plan.md` (chassis generalization + autonomy raise) and `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read these before assuming the support-only framing when touching agent architecture. The agent core now lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps (extraction Track 2 complete); the remaining roadmap direction is moving more execution into the gateway worker.
+**Direction & roadmap:** `docs/core-extraction-and-module-expansion-plan.md` (agent-core extraction into a shared package, durable gateway-worker runtime, module #2 order-ops). Read it before assuming the support-only framing when touching agent architecture. The agent core now lives in `packages/agent/` (`@shopkeeper/agent`) and is consumed by both apps (extraction Track 2 complete); the remaining roadmap direction is moving more execution into the gateway worker.
 
 ## Stack
 - `apps/dashboard/` — Next.js 15 (app router), Tailwind, SWR, Clerk.com auth → Vercel

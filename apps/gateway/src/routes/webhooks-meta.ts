@@ -1,5 +1,6 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
+import { getMetaWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
@@ -11,7 +12,7 @@ import {
 
 export function registerMetaWebhookRoutes(router: Router): void {
   router.get('/meta', (req: Request, res: Response) => {
-    const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN;
+    const { verifyToken: VERIFY_TOKEN } = getMetaWebhookConfig();
 
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -30,7 +31,7 @@ export function registerMetaWebhookRoutes(router: Router): void {
   });
 
   router.post('/meta', async (req: Request, res: Response) => {
-    const APP_SECRET = process.env.META_APP_SECRET;
+    const { appSecret: APP_SECRET } = getMetaWebhookConfig();
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
     if (!APP_SECRET) {

@@ -2,7 +2,7 @@
  * Backfill action plans for open tickets that have no cached plan.
  *
  * Finds every OPEN thread whose cachedPlanMessageId doesn't match the last
- * customer message, then runs generateThreadPlan() in-process (Track 4.5).
+ * customer message, then runs generateThreadPlan() in-process (same path as the worker).
  *
  * Usage (from apps/gateway/):
  *   tsx src/scripts/backfill-plans.ts

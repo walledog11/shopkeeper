@@ -1,6 +1,7 @@
 import type { Request, Response, Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '@shopkeeper/db';
+import { getPostmarkWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
 import { safeEqual } from '../lib/crypto.js';
@@ -12,8 +13,7 @@ function isProductionEnv(): boolean {
 }
 
 function hasValidPostmarkAuth(req: Request): boolean {
-  const expectedUser = process.env.POSTMARK_INBOUND_USERNAME?.trim();
-  const expectedPass = process.env.POSTMARK_INBOUND_PASSWORD?.trim();
+  const { inboundUsername: expectedUser, inboundPassword: expectedPass } = getPostmarkWebhookConfig();
   if (!expectedUser || !expectedPass) {
     return !isProductionEnv();
   }

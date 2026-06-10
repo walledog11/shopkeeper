@@ -6,10 +6,10 @@ import type { AgentContext } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../clients/agent-runtime.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 
-// The worker's injected turn seams (Track 4.2), the gateway counterpart to the
-// dashboard's buildDashboardTurnDeps. The shadow recorder is a no-op: the
-// AutonomyShadowDecision rig is a dashboard-rollout-only system (trim list), so
-// auto-execute in the worker only ever runs "live" plans (mode === "live").
+// Injected turn seams for the gateway worker — counterpart to the dashboard's
+// buildDashboardTurnDeps. The shadow recorder is a no-op because the
+// AutonomyShadowDecision rig is dashboard-only, so worker auto-execute only
+// runs live plans.
 //
 // runAgent is the core directly — the gateway has no ops-alert counter, so it
 // omits recordToolFailure; tool failures still surface as AgentAction error rows

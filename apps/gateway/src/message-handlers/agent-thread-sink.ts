@@ -21,12 +21,10 @@ interface ThreadSinkContext {
   orgName: string;
 }
 
-// The gateway worker's in-process ThreadSink (Track 4.2). DB-only operations
-// (note / tag / status / escalate) run in-process — the gateway already owns the
-// operator-notify path the dashboard sink hops to.
-// The two provider-coupled tools (send_reply / send_email) hop back to the
-// dashboard, where Postmark / Instagram delivery lives (package boundary: touches
-// a message provider , dashboard).
+// Gateway worker ThreadSink: DB-only tools (note / tag / status / escalate) run
+// in-process because the gateway already owns operator notify. Provider-coupled
+// tools (send_reply / send_email) hop to the dashboard where Postmark / Instagram
+// delivery lives.
 
 function recordDispatchFailure(
   op: 'send_reply' | 'send_email',

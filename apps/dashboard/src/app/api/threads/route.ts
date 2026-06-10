@@ -17,6 +17,7 @@ export const GET = withOrgRoute(
     const filterStatusParam = searchParams.get('filterStatus');
     const preview = searchParams.get('preview') === 'true';
     const countOnly = searchParams.get('count') === 'true';
+    const includeCount = searchParams.get('includeCount') === 'true';
     const cursor = searchParams.get('cursor') ?? undefined;
     const limitParam = searchParams.get('limit');
     const parsedLimit = limitParam ? parseInt(limitParam, 10) : NaN;
@@ -60,6 +61,10 @@ export const GET = withOrgRoute(
       nextCursor = threads[threads.length - 1].id;
     }
 
-    return NextResponse.json({ threads, nextCursor });
+    const totalCount = includeCount && !cursor
+      ? await db.thread.count({ where })
+      : undefined;
+
+    return NextResponse.json({ threads, nextCursor, ...(totalCount !== undefined ? { totalCount } : {}) });
   },
 );

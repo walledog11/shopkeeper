@@ -3,6 +3,7 @@ import {
   checkInstagramAccountAccess,
   exchangeFacebookLongLivedToken,
 } from '../clients/meta-graph.js';
+import { getMetaWebhookConfig } from '../config/runtime-config.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import {
@@ -18,8 +19,7 @@ const CONCURRENCY = 5;
 export async function runTokenHealthCheck(): Promise<void> {
   logger.info('[TokenHealth] Running daily Instagram token check');
 
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const { appId, appSecret } = getMetaWebhookConfig();
 
   const igIntegrations = await db.integration.findMany({
     where: { platform: CHANNEL.IG_DM, accessToken: { not: null } },

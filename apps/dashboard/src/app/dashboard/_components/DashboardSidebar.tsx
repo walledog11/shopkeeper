@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext";
 import { useOpenThreadCountQuery } from "@/hooks/useThreads";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { cn } from "@/lib/ui/cn";
@@ -13,14 +15,22 @@ import { MobileNavSheet } from "./sidebar/MobileNavSheet";
 import { SidebarNavContent } from "./sidebar/SidebarNavContent";
 import { useNavAuth } from "./sidebar/useNavAuth";
 
-export default function DashboardSidebar({
+function useDashboardOpenCount() {
+  const pathname = usePathname();
+  const onTickets = pathname.startsWith("/dashboard/tickets");
+  const { override } = useOpenThreadCountOverride();
+  const { count: polledCount } = useOpenThreadCountQuery(!onTickets);
+  return onTickets ? (override ?? polledCount) : polledCount;
+}
+
+function DashboardSidebarContent({
   children,
   initialAutonomyTier,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
 }) {
-  const { count: openCount } = useOpenThreadCountQuery();
+  const openCount = useDashboardOpenCount();
   const navAuth = useNavAuth(initialAutonomyTier);
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -91,5 +101,21 @@ export default function DashboardSidebar({
 
       <MobileBottomBar openCount={openCount} />
     </>
+  );
+}
+
+export default function DashboardSidebar({
+  children,
+  initialAutonomyTier,
+}: {
+  children: React.ReactNode;
+  initialAutonomyTier: AutonomyTier;
+}) {
+  return (
+    <OpenThreadCountProvider>
+      <DashboardSidebarContent initialAutonomyTier={initialAutonomyTier}>
+        {children}
+      </DashboardSidebarContent>
+    </OpenThreadCountProvider>
   );
 }

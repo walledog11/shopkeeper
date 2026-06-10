@@ -1,3 +1,4 @@
+import { getTelegramConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { recordProviderSendFailureInBackground } from '../provider-send-alerts.js';
 
@@ -9,8 +10,7 @@ export interface TelegramSendAlertContext {
 }
 
 function getToken(): string | null {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  return token && token.length > 0 ? token : null;
+  return getTelegramConfig().botToken;
 }
 
 export function isTelegramConfigured(): boolean {

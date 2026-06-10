@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
+import { getTelegramConfig } from '../../config/runtime-config.js';
 import { isTelegramConfigured, sendMessage } from '../../clients/telegram-client.js';
 import logger from '../../logger.js';
 import { rateLimit } from '../../rate-limit.js';
@@ -44,7 +45,7 @@ export async function validateTelegramWebhook(
     return null;
   }
 
-  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  const { webhookSecret: expectedSecret } = getTelegramConfig();
   if (!expectedSecret) {
     logger.error('[Telegram] TELEGRAM_WEBHOOK_SECRET is not configured — rejecting.');
     res.status(500).send('Internal Server Error');

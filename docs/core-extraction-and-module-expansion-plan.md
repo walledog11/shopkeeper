@@ -1,8 +1,7 @@
 # Shopkeeper — Core Extraction & Module Expansion Plan
 
-> Follow-on to `autonomy-and-generality-plan.md`. That plan hardened support, generalized
-> the chassis, and proved (its Track 4 fraud spike) that the **substrate is module-agnostic
-> but the orchestration is thread-coupled**.
+> Acts on the finding that the **substrate is module-agnostic but the orchestration is
+> thread-coupled** (validated by the order-ops fraud-risk spike).
 
 This plan acts on that finding plus a strategic shift: **the product is moving from
 dashboard-first to an agent reachable from anywhere** — Telegram now, WhatsApp near-term,

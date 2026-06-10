@@ -5,7 +5,7 @@ import type { Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;
 
-type ThreadsPage = { threads: Thread[]; nextCursor: string | null };
+type ThreadsPage = { threads: Thread[]; nextCursor: string | null; totalCount?: number };
 
 function useIsDocumentVisible() {
   const [isVisible, setIsVisible] = useState(
@@ -27,16 +27,18 @@ export function usePaginatedThreads(
   preview = false,
   filterStatus?: "filtered",
   needsReply = false,
-  active = true,
+  enabled = true,
 ) {
   const isVisible = useIsDocumentVisible();
   const baseInterval = status === "open" ? 15000 : 60000;
 
   const getKey = (pageIndex: number, previousPageData: ThreadsPage | null) => {
+    if (!enabled) return null;
     if (previousPageData && !previousPageData.nextCursor) return null;
     const filterParam = filterStatus ? `&filterStatus=${filterStatus}` : "";
     const needsReplyParam = needsReply ? "&needsReply=true" : "";
-    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}${needsReplyParam}`;
+    const countParam = pageIndex === 0 ? "&includeCount=true" : "";
+    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}${needsReplyParam}${countParam}`;
     if (pageIndex === 0) return base;
     return `${base}&cursor=${previousPageData!.nextCursor}`;
   };
@@ -49,13 +51,14 @@ export function usePaginatedThreads(
     getKey,
     fetcher,
     {
-      refreshInterval: isVisible && active ? baseInterval : 0,
+      refreshInterval: isVisible && enabled ? baseInterval : 0,
       fallbackData: fbData,
       revalidateFirstPage: true,
     }
   );
 
   const threads: Thread[] = pages?.flatMap(page => page.threads) ?? [];
+  const totalCount = pages?.[0]?.totalCount;
   const lastPage = pages?.[pages.length - 1];
   const hasMore = !!lastPage?.nextCursor;
   const isLoadingMore = size > (pages?.length ?? 0);
@@ -102,6 +105,7 @@ export function usePaginatedThreads(
 
   return {
     threads,
+    totalCount,
     isLoading,
     error,
     mutate,
