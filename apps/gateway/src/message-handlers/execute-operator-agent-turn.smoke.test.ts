@@ -84,7 +84,7 @@ describe('executeOperatorAgentTurn (smoke)', () => {
     });
 
     // (1) Lock acquired for this thread and released once the turn completes.
-    expect(acquireSpy).toHaveBeenCalledWith(threadId);
+    expect(acquireSpy).toHaveBeenCalledWith(threadId, { failClosed: true });
     expect(releaseSpy).toHaveBeenCalledTimes(1);
 
     // (2) The over-cap refund is escalated, not executed — Shopify is never touched.
