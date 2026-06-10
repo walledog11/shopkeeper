@@ -6,6 +6,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 
 async function main() {
   await runCommand('npm', ['run', 'build', '-w', 'packages/db'], { cwd: REPO_ROOT });
+  await runCommand('npm', ['run', 'build', '-w', 'packages/email'], { cwd: REPO_ROOT });
   await runCommand('npm', ['run', 'build', '-w', 'packages/agent'], { cwd: REPO_ROOT });
 
   try {
