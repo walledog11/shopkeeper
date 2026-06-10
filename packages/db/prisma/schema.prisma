@@ -234,6 +234,9 @@ model Message {
   mediaUrl          String?    @map("media_url") @db.Text
   attachments       String[]   @default([])
   externalMessageId String?    @map("external_message_id") @db.Text
+  sendStatus        String?    @map("send_status") @db.Text
+  providerMessageId String?    @map("provider_message_id") @db.Text
+  sendError         String?    @map("send_error") @db.Text
   sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
   deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz
 

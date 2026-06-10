@@ -5,6 +5,7 @@ import { getGatewayBullMqProducerConnection } from './redis-client.js';
 const DEFAULT_QUEUE_OPTIONS: Partial<Record<string, { defaultJobOptions: typeof PROCESSING_QUEUE_DEFAULTS }>> = {
   [QUEUE.INBOUND]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.ORDER_REVIEW]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
+  [QUEUE.OUTBOUND_EMAIL]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
 };
 
 const QUEUE_ALIASES: Record<string, string> = {

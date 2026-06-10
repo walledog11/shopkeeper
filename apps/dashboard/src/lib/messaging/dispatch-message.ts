@@ -8,6 +8,10 @@ import {
   recordEmailSendFailure,
   recordInstagramSendFailure,
 } from '@/lib/messaging/provider-send-failures';
+import {
+  enqueueOutboundEmail,
+  isOutboundEmailAsyncEnabled,
+} from '@/lib/messaging/enqueue-outbound-email';
 import type { OutboundSource } from '@/lib/server/outbound-recorder';
 
 interface DispatchThread {
@@ -48,6 +52,12 @@ export async function dispatchMessage(
 ): Promise<DispatchMessageResult> {
   const recipientId = thread.customer.platformId;
   const source = options.source ?? 'dispatch_message';
+
+  const isEmailChannel =
+    thread.channelType === CHANNEL_TYPE.EMAIL || thread.channelType === CHANNEL_TYPE.SHOPIFY;
+  if (isEmailChannel && isOutboundEmailAsyncEnabled()) {
+    return dispatchEmailAsync(thread, org, text, source);
+  }
 
   if (thread.channelType === CHANNEL_TYPE.IG_DM) {
     const igIntegration = await db.integration.findFirst({
@@ -133,6 +143,50 @@ export async function dispatchMessage(
     { threadId: thread.id, senderType: SenderType.agent, contentText: text },
     { status: THREAD_STATUS.OPEN },
   );
+
+  return { ok: true, message };
+}
+
+// Async outbound path (OUTBOUND_EMAIL_ASYNC): pre-create the agent message as
+// `pending`, hand the provider send to the gateway's BullMQ queue, and return
+// optimistically. The message row's sendStatus is the source of truth — the
+// worker flips it to `sent` or `failed`.
+async function dispatchEmailAsync(
+  thread: DispatchThread,
+  org: DispatchOrg,
+  text: string,
+  source: Extract<OutboundSource, 'dispatch_message' | 'agent_send_reply'>,
+): Promise<DispatchMessageResult> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+  });
+  if (!integration) return { ok: false, error: 'No email integration configured' };
+
+  const message = await createMessage(
+    {
+      threadId: thread.id,
+      senderType: SenderType.agent,
+      contentText: text,
+      sendStatus: 'pending',
+    },
+    { status: THREAD_STATUS.OPEN },
+  );
+
+  const enqueued = await enqueueOutboundEmail({
+    organizationId: org.id,
+    messageId: message.id,
+    threadId: thread.id,
+    integrationId: integration.id,
+    source,
+  });
+
+  if (!enqueued) {
+    await db.message.update({
+      where: { id: message.id },
+      data: { sendStatus: 'failed', sendError: 'Could not queue email send' },
+    });
+    return { ok: false, error: 'Could not queue email send' };
+  }
 
   return { ok: true, message };
 }

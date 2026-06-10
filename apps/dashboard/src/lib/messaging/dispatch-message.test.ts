@@ -42,12 +42,14 @@ const originalEnv = {
   E2E_OUTBOUND_MODE: process.env.E2E_OUTBOUND_MODE,
   E2E_OUTBOUND_RECORD_PATH: process.env.E2E_OUTBOUND_RECORD_PATH,
   INBOUND_EMAIL_DOMAIN: process.env.INBOUND_EMAIL_DOMAIN,
+  OUTBOUND_EMAIL_ASYNC: process.env.OUTBOUND_EMAIL_ASYNC,
 };
 
 beforeEach(async () => {
   org = await createTestOrg();
   process.env.E2E_OUTBOUND_MODE = 'live';
   process.env.INBOUND_EMAIL_DOMAIN = 'mail.test';
+  delete process.env.OUTBOUND_EMAIL_ASYNC;
   mockFetch.mockReset();
   mockPostmarkSend.mockReset().mockResolvedValue({ MessageID: 'mock-message-id' });
   mockRecordProviderSendFailure.mockReset().mockResolvedValue({ emitted: false });
@@ -58,6 +60,11 @@ afterEach(async () => {
   process.env.E2E_OUTBOUND_MODE = originalEnv.E2E_OUTBOUND_MODE;
   process.env.E2E_OUTBOUND_RECORD_PATH = originalEnv.E2E_OUTBOUND_RECORD_PATH;
   process.env.INBOUND_EMAIL_DOMAIN = originalEnv.INBOUND_EMAIL_DOMAIN;
+  if (originalEnv.OUTBOUND_EMAIL_ASYNC === undefined) {
+    delete process.env.OUTBOUND_EMAIL_ASYNC;
+  } else {
+    process.env.OUTBOUND_EMAIL_ASYNC = originalEnv.OUTBOUND_EMAIL_ASYNC;
+  }
 
   if (tempDir) {
     await rm(tempDir, { recursive: true, force: true });
@@ -215,5 +222,64 @@ describe('dispatchMessage', () => {
         text: 'Recorded Instagram DM.',
       },
     ]);
+  });
+});
+
+describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
+  beforeEach(() => {
+    process.env.OUTBOUND_EMAIL_ASYNC = 'true';
+  });
+
+  it('pre-creates a pending message and enqueues instead of sending synchronously', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ enqueued: true, jobId: 'j1' }), { status: 202 }));
+    const emailAddress = `support_async_${org.id.slice(0, 8)}@example.com`;
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+    const customer = await createTestCustomer(org.id, 'async-email@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Queued reply.');
+
+    expect(result).toMatchObject({ ok: true });
+    expect(mockPostmarkSend).not.toHaveBeenCalled();
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('/internal/queue/outbound-email');
+    expect(init?.method).toBe('POST');
+    const saved = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('pending');
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      organizationId: org.id,
+      messageId: saved?.id,
+      threadId: thread.id,
+      integrationId: integration.id,
+      source: 'dispatch_message',
+    });
+  });
+
+  it('marks the pending message failed when enqueue fails', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('boom', { status: 500 }));
+    const emailAddress = `support_async_fail_${org.id.slice(0, 8)}@example.com`;
+    await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      externalAccountId: emailAddress,
+      fromEmail: emailAddress,
+    });
+    const customer = await createTestCustomer(org.id, 'async-fail@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Will fail to queue.');
+
+    expect(result).toEqual({ ok: false, error: 'Could not queue email send' });
+    const saved = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('failed');
+    expect(saved?.sendError).toBe('Could not queue email send');
   });
 });

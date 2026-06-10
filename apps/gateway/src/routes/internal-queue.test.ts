@@ -5,6 +5,7 @@ import { registerInternalQueueRoutes } from './internal-queue.js';
 
 const removeFailedQueueJob = vi.fn();
 const clearQueueDiagnosticsCache = vi.fn();
+const queueAdd = vi.fn();
 
 vi.mock('../queue-maintenance.js', () => ({
   removeFailedQueueJob: (...args: unknown[]) => removeFailedQueueJob(...args),
@@ -12,6 +13,10 @@ vi.mock('../queue-maintenance.js', () => ({
 
 vi.mock('../health.js', () => ({
   clearQueueDiagnosticsCache: () => clearQueueDiagnosticsCache(),
+}));
+
+vi.mock('../clients/gateway-queues.js', () => ({
+  getGatewayBullMqQueue: () => ({ add: (...args: unknown[]) => queueAdd(...args) }),
 }));
 
 vi.mock('../config/env.js', async (importOriginal) => {
@@ -68,5 +73,61 @@ describe('POST /internal/queue/remove-failed', () => {
       .send({ queue: 'ai-summary', jobId: 'missing' });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('POST /internal/queue/outbound-email', () => {
+  beforeEach(() => {
+    queueAdd.mockReset();
+  });
+
+  const validBody = {
+    organizationId: 'org_1',
+    messageId: 'msg_1',
+    threadId: 'thread_1',
+    integrationId: 'int_1',
+    source: 'agent_send_reply',
+  };
+
+  it('returns 401 without x-internal-secret', async () => {
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .send(validBody);
+
+    expect(response.status).toBe(401);
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('enqueues the send and returns 202 when authorized', async () => {
+    queueAdd.mockResolvedValue({ id: 'job_42' });
+
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ enqueued: true, jobId: 'job_42' });
+    expect(queueAdd).toHaveBeenCalledWith('send-email', expect.objectContaining(validBody));
+  });
+
+  it('returns 400 when a required field is missing', async () => {
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send({ ...validBody, integrationId: '' });
+
+    expect(response.status).toBe(400);
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for an invalid source', async () => {
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send({ ...validBody, source: 'bogus' });
+
+    expect(response.status).toBe(400);
+    expect(queueAdd).not.toHaveBeenCalled();
   });
 });

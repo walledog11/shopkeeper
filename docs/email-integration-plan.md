@@ -2,8 +2,8 @@
 
 Plan for native Gmail inbox sync (no forwarding required for OAuth merchants), parallel Outlook improvements, and cleanup of the split Postmark / OAuth email model.
 
-**Status:** Phase 0 + Phase 1 complete (2026-06-09); Phase 1.5 / Phase 2 not started  
-**Last updated:** 2026-06-09 (Phase 1 shipped: `packages/email` shared package — token refresh, MIME build/parse, inbound normalize, address filter, providers, senders; dashboard email lib reduced to re-export shims)
+**Status:** Phase 0 + Phase 1 complete (2026-06-09); Phase 1.5 core path shipped (queue + worker + enqueue + dashboard dispatch + tests); Phase 1.5 sweeper/UI/rollout pending; Phase 2 not started  
+**Last updated:** 2026-06-09 (Phase 1.5 core: `Message.sendStatus/providerMessageId/sendError` + migration, gateway `outbound-email` queue/worker/handler, internal enqueue route (option A), dashboard async dispatch behind `OUTBOUND_EMAIL_ASYNC`, handler/route/dispatch tests green)
 
 ## Goal
 
@@ -226,9 +226,25 @@ Optional later migration: dedicated columns if JSON querying becomes necessary.
 
 ---
 
-### Phase 1.5 — outbound async send queue (parallel with Phase 1–2)
+### Phase 1.5 — outbound async send queue (parallel with Phase 1–2) — 🟡 CORE SHIPPED (2026-06-09)
 
 **Purpose:** close the inbound/outbound reliability gap. Runs in parallel with Phase 1 (shared package) and Phase 2 (Gmail inbound) — no dependency on native inbound.
+
+**Shipped (2026-06-09):**
+- ✅ Schema: `Message.sendStatus` / `providerMessageId` / `sendError` (nullable) + migration `20260609000000_message_send_status`.
+- ✅ `QUEUE.OUTBOUND_EMAIL` (`outbound-email`) + `JOB.SEND_EMAIL` (`send-email`) in `apps/gateway/src/constants.ts`; `OutboundEmailJobData` + `OutboundEmailSource` in `apps/gateway/src/types.ts`.
+- ✅ Worker handler `apps/gateway/src/message-handlers/outbound-email.ts` — loads the pre-created message + thread/customer/integration, **idempotency gate** (`sendStatus === 'sent'` → skip), builds reply headers/subject via `@shopkeeper/email`, sends, transitions row to `sent`/`failed`. Config errors fail fast (no retry); transient errors rethrow (BullMQ retries) and mark `failed` + `opsAlert` only on the final attempt.
+- ✅ Worker registration `apps/gateway/src/workers/outbound-email.ts`, wired into `workers/core.ts`; producer default opts (3 attempts + backoff) added in `clients/gateway-queues.ts`.
+- ✅ **Enqueue path = option (A)**: `POST /internal/queue/outbound-email` added to existing `apps/gateway/src/routes/internal-queue.ts` (auth via `x-internal-secret`, validates fields + source, returns `202`). Dashboard helper `apps/dashboard/src/lib/messaging/enqueue-outbound-email.ts`.
+- ✅ Dashboard `dispatchMessage` async branch (`dispatchEmailAsync`) behind `OUTBOUND_EMAIL_ASYNC`: pre-creates `pending` agent message, enqueues, returns optimistically; enqueue failure marks the row `failed`. Sync path unchanged when the flag is off.
+- ✅ Tests: handler idempotency/retry/config-error (real DB); enqueue route auth/validation/202; dashboard async dispatch + flag-off sync regression. Both apps typecheck + lint clean.
+
+**Still pending in Phase 1.5:**
+- ❌ Orphan-`pending` sweeper (rows stuck `pending` past N min with no live job).
+- ❌ UI: composer "Sending…" for `pending`, retry affordance for `failed`.
+- ❌ Rollout: enable `OUTBOUND_EMAIL_ASYNC` (internal orgs → agent/auto-ack → composer).
+- ❌ `agent_send_email` / `auto_ack` callers still send synchronously (route accepts the source; only `dispatch_message` / `agent_send_reply` are wired through `dispatchMessage`).
+- ⏸️ `providerMessageId` column exists but stays null — senders don't return IDs yet (populated in Phase 5).
 
 **Problem today:** every outbound email is synchronous in the HTTP handler (`dispatchMessage`, `io-send-internal`). Transient Gmail/Postmark/Graph failures fail the merchant or agent immediately with 502. Inbound already uses BullMQ with 3 retries.
 
@@ -493,11 +509,12 @@ Ship after Gmail path is stable — same patterns, different API surface.
 | `apps/gateway/src/clients/gmail-sync.ts` | watch, history.list, messages.get |
 | `apps/gateway/src/maintenance/gmail-watch.ts` | Watch renewal cron |
 | `apps/gateway/src/maintenance/email-token-health.ts` | Daily Gmail/Outlook token probe; sets epoch sentinel on failure |
-| `apps/gateway/src/message-handlers/outbound-email.ts` | Phase 1.5: `send-email` job handler |
-| `apps/gateway/src/workers/outbound-email.ts` | Phase 1.5: BullMQ worker registration |
+| `apps/gateway/src/message-handlers/outbound-email.ts` | ✅ Phase 1.5: `send-email` job handler |
+| `apps/gateway/src/workers/outbound-email.ts` | ✅ Phase 1.5: BullMQ worker registration |
+| `apps/dashboard/src/lib/messaging/enqueue-outbound-email.ts` | ✅ Phase 1.5: dashboard → gateway internal enqueue helper + flag check |
 | `apps/dashboard/src/app/api/integrations/gmail/addresses/route.ts` | Optional: list send-as addresses |
 | `apps/dashboard/src/components/integrations/GmailConnectFlow.tsx` | Post-OAuth support address + status |
-| `packages/db/prisma/migrations/*_message_send_status` | Phase 1.5: `sendStatus`, `providerMessageId`, `sendError` on `Message` |
+| `packages/db/prisma/migrations/20260609000000_message_send_status` | ✅ Phase 1.5: `sendStatus`, `providerMessageId`, `sendError` on `Message` |
 
 ### Modified
 
@@ -505,10 +522,10 @@ Ship after Gmail path is stable — same patterns, different API surface.
 |------|--------|
 | `apps/dashboard/src/app/api/integrations/_lib/email-oauth-providers.ts` | Gmail/Outlook read scopes |
 | `apps/dashboard/src/app/api/integrations/_lib/email-oauth.ts` | Trigger watch + metadata on connect |
-| `apps/dashboard/src/lib/messaging/dispatch-message.ts` | Phase 1.5: enqueue outbound job + pending message; sync fallback behind flag |
+| `apps/dashboard/src/lib/messaging/dispatch-message.ts` | ✅ Phase 1.5: enqueue outbound job + pending message; sync fallback behind flag |
 | `apps/dashboard/src/lib/messaging/email/*` | Phase 1: thin re-exports → `@shopkeeper/email`; delete after Phase 5 |
 | `apps/gateway/src/maintenance/workers.ts` | Register gmail-watch + email-token-health jobs |
-| `apps/gateway/src/constants.ts` | Phase 1.5: `QUEUE.OUTBOUND_EMAIL`, `JOB.SEND_EMAIL` |
+| `apps/gateway/src/constants.ts` | ✅ Phase 1.5: `QUEUE.OUTBOUND_EMAIL`, `JOB.SEND_EMAIL` |
 | `apps/gateway/src/index.ts` | Mount gmail webhook routes |
 | `apps/gateway/src/config/env.ts` | Pub/Sub env vars; conditional Postmark requirement |
 | `apps/dashboard/src/components/integrations/connect-bodies.tsx` | Connect flow UX |
@@ -581,7 +598,7 @@ No new required vars for Phase 2; optional feature flags via org settings later.
 0. **Google restricted-scope verification** — file *before* Phase 2 coding, in parallel with Phase 0/1. Long pole, externally gated. Phases 2–3 can be built and tested against `Internal`/test users while it's pending, but cannot reach external merchants until it clears.
 1. **Phase 0** — ✅ shipped (2026-06-09); no flag.
 2. **Phase 1** — ✅ shipped (2026-06-09); no user-visible change. Unblocked Phase 1.5 and Phase 2.
-3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. Ship in parallel with Phase 2 once `packages/email` exists. Internal orgs → agent/auto-ack paths first → merchant composer.
+3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. 🟡 Core path shipped (2026-06-09); flag not yet enabled in any env. Remaining before rollout: orphan-`pending` sweeper + composer pending/retry UI. Then internal orgs → agent/auto-ack paths first → merchant composer.
 4. **Phase 2** — behind `GMAIL_NATIVE_INBOUND=true` (gateway + dashboard). Internal orgs first. Can run in parallel with Phase 1.5.
 5. **Phase 3** — enable Gmail flag for all new connects; existing integrations prompt re-auth.
 6. **Phase 4** — Outlook flag `OUTLOOK_NATIVE_INBOUND=true` after Gmail stable.
@@ -623,7 +640,7 @@ Do not remove Postmark inbound until metrics show negligible `provider: postmark
 - [ ] Attachments work end-to-end on Gmail-native inbound
 - [ ] Watch renewal runs automatically; failures visible in Integrations UI
 - [ ] Email OAuth token health sets reconnect sentinel within 24h of refresh token revocation
-- [ ] Outbound async queue: transient provider failure retries and surfaces `failed` + retry in UI (Phase 1.5)
+- [~] Outbound async queue: transient provider failure retries and marks `failed` (Phase 1.5 — worker + status transitions done; `failed` + retry **UI** still pending)
 - [ ] `packages/email` is the single source for token refresh, MIME, and senders (Phase 1)
 - [ ] Production runbook documents GCP + Google verification steps
 - [ ] No regression in `npm run verify:pr` and gateway webhook tests

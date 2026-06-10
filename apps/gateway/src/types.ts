@@ -62,3 +62,18 @@ export interface OrderReviewJobData {
   orderId: string;
   traceId?: string;
 }
+
+export type OutboundEmailSource =
+  | 'dispatch_message'
+  | 'agent_send_reply'
+  | 'agent_send_email'
+  | 'auto_ack';
+
+export interface OutboundEmailJobData {
+  organizationId: string;
+  messageId: string;
+  threadId: string;
+  integrationId: string;
+  source: OutboundEmailSource;
+  traceId?: string;
+}

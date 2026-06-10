@@ -23,6 +23,7 @@ export const QUEUE = {
   VOICE_SYNTHESIS: 'voice-synthesis',
   ORDER_RISK: 'order-risk-monitor',
   ORDER_REVIEW: 'order-review',
+  OUTBOUND_EMAIL: 'outbound-email',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -46,6 +47,7 @@ export const JOB = {
   ORDER_RISK_SCAN: 'scan-order-risk',
   ORDER_RISK_ID: 'order-risk-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
+  SEND_EMAIL: 'send-email',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
 
