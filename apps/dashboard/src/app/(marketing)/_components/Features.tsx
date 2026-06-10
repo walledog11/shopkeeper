@@ -1,4 +1,4 @@
-import { ChatDemo, type ChatMessage } from "./ChatDemo";
+import { ChatDemo, type ChatMessage, type ChatVariant } from "./ChatDemo";
 import { Reveal } from "./Reveal";
 
 interface Feature {
@@ -7,6 +7,7 @@ interface Feature {
   body: string;
   bullets: string[];
   chat: {
+    variant: ChatVariant;
     title: string;
     subtitle: string;
     avatar: string;
@@ -30,6 +31,7 @@ const FEATURES: Feature[] = [
       "Escalates to you instead of bluffing",
     ],
     chat: {
+      variant: "instagram",
       title: "linen & loom",
       subtitle: "Instagram · typically replies instantly",
       avatar: "L",
@@ -60,8 +62,9 @@ const FEATURES: Feature[] = [
       "Every action logged on the thread",
     ],
     chat: {
+      variant: "imessage",
       title: "Shopkeeper",
-      subtitle: "your store · online",
+      subtitle: "iMessage · your store",
       avatar: "S",
       messages: [
         {
@@ -93,8 +96,9 @@ const FEATURES: Feature[] = [
       "Cites your policies and FAQs, not generic ones",
     ],
     chat: {
+      variant: "imessage",
       title: "Shopkeeper",
-      subtitle: "your store · online",
+      subtitle: "iMessage · your store",
       avatar: "S",
       messages: [
         { from: "user", text: "how many linen jumpsuits left in xs?", time: "4:20 PM" },
