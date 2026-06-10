@@ -1,7 +1,7 @@
 "use client"
 
 import { isImageAttachmentUrl } from "@/lib/attachments/blob-ref"
-import { AlertTriangle, MessageSquare } from "lucide-react"
+import { AlertTriangle, Loader2, MessageSquare } from "lucide-react"
 import Image from "next/image"
 import type { FailedMessage, Ticket } from "@/types"
 
@@ -11,6 +11,7 @@ interface Props {
   messages: Ticket["messages"]
   messagesEndRef: React.RefObject<HTMLDivElement | null>
   onRetry?: (id: string) => void
+  onRetrySend?: (id: string) => void
 }
 
 function AttachmentList({ attachments }: { attachments: string[] }) {
@@ -35,6 +36,7 @@ export default function ChatTimeline({
   messages,
   messagesEndRef,
   onRetry,
+  onRetrySend,
 }: Props) {
   if (messages.length === 0 && !isAgentRunning) {
     return (
@@ -49,30 +51,58 @@ export default function ChatTimeline({
 
   return (
     <>
-      {messages.map((msg) => (
-        <div
-          key={msg.id}
-          data-testid="chat-message"
-          data-message-id={msg.id}
-          data-sender={msg.sender}
-          className={`flex flex-col gap-1 ${msg.sender === "agent" || msg.sender === "ai" ? "items-end" : "items-start"}`}
-        >
+      {messages.map((msg) => {
+        const isOutbound = msg.sender === "agent" || msg.sender === "ai"
+        const isPending = isOutbound && msg.sendStatus === "pending"
+        const isFailed = isOutbound && msg.sendStatus === "failed"
+
+        return (
           <div
-            data-testid="chat-message-bubble"
+            key={msg.id}
+            data-testid="chat-message"
             data-message-id={msg.id}
             data-sender={msg.sender}
-            className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
-              msg.sender === "agent" || msg.sender === "ai"
-                ? "bg-white/[0.14] text-white rounded-md rounded-tr-sm"
-                : "bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm"
-            }`}
+            data-send-status={msg.sendStatus ?? undefined}
+            className={`flex flex-col gap-1 ${isOutbound ? "items-end" : "items-start"}`}
           >
-            {msg.text}
-            <AttachmentList attachments={msg.attachments ?? []} />
+            <div
+              data-testid="chat-message-bubble"
+              data-message-id={msg.id}
+              data-sender={msg.sender}
+              className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
+                isFailed
+                  ? "bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm"
+                  : isOutbound
+                    ? "bg-white/[0.14] text-white rounded-md rounded-tr-sm"
+                    : "bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm"
+              }`}
+            >
+              {msg.text}
+              <AttachmentList attachments={msg.attachments ?? []} />
+            </div>
+            {isPending ? (
+              <span className="flex items-center gap-1.5 text-xs text-white/30 mx-1">
+                <Loader2 className="size-3 animate-spin" />
+                Sending…
+              </span>
+            ) : isFailed ? (
+              <div className="flex items-center gap-1.5 mx-1">
+                <AlertTriangle className="size-3 text-red-400" />
+                <span className="text-xs text-red-400">Failed to send</span>
+                <span className="text-xs text-white/20">·</span>
+                <button type="button"
+                  onClick={() => onRetrySend?.(msg.id)}
+                  className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <span className="text-xs text-white/25 mx-1">{msg.time}</span>
+            )}
           </div>
-          <span className="text-xs text-white/25 mx-1">{msg.time}</span>
-        </div>
-      ))}
+        )
+      })}
 
       {failedMessages.map(failedMessage => (
         <div

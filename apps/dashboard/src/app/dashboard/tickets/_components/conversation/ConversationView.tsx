@@ -45,6 +45,7 @@ interface Props {
   onRefreshSummary: () => void
   failedMessages?: FailedMessage[]
   onRetry?: (id: string) => void
+  onRetrySend?: (id: string) => void
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
@@ -74,6 +75,7 @@ export default function ConversationView({
   onRefreshSummary,
   failedMessages = EMPTY_FAILED_MESSAGES,
   onRetry,
+  onRetrySend,
 }: Props) {
   const {
     threadLoading: isThreadLoading = false,
@@ -267,6 +269,7 @@ export default function ConversationView({
             messages={displayMessages}
             messagesEndRef={messagesEndRef}
             onRetry={onRetry}
+            onRetrySend={onRetrySend}
           />
         )}
       </div>

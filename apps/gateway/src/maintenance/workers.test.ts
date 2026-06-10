@@ -85,9 +85,9 @@ describe('createMaintenanceWorkers', () => {
 
     const resources = await createMaintenanceWorkers(workerConn, producerConn, workerOptions);
 
-    expect(maintenanceJobRegistrations).toHaveLength(7);
-    expect(resources.workers).toHaveLength(8);
-    expect(resources.queues).toHaveLength(11);
+    expect(maintenanceJobRegistrations).toHaveLength(8);
+    expect(resources.workers).toHaveLength(9);
+    expect(resources.queues).toHaveLength(12);
     expect(queueInstances.map((queue) => queue.name)).toEqual([
       QUEUE.TOKEN_HEALTH,
       QUEUE.EMAIL_TOKEN_HEALTH,
@@ -97,6 +97,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
       QUEUE.ORDER_REVIEW,
+      QUEUE.OUTBOUND_EMAIL_SWEEP,
       QUEUE.QUEUE_HEALTH,
       QUEUE.INBOUND,
       QUEUE.AI_SUMMARY,
@@ -109,6 +110,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.DIGEST,
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
+      QUEUE.OUTBOUND_EMAIL_SWEEP,
       QUEUE.QUEUE_HEALTH,
     ]);
 
@@ -161,6 +163,11 @@ describe('createMaintenanceWorkers', () => {
       name: JOB.ORDER_RISK_SCAN,
       jobId: JOB.ORDER_RISK_ID,
       every: ONE_HOUR_MS,
+    });
+    expect(readRepeatJob(QUEUE.OUTBOUND_EMAIL_SWEEP)).toEqual({
+      name: JOB.OUTBOUND_EMAIL_SWEEP,
+      jobId: JOB.OUTBOUND_EMAIL_SWEEP_ID,
+      every: FIVE_MINUTES_MS,
     });
     expect(readRepeatJob(QUEUE.QUEUE_HEALTH)).toEqual({
       name: JOB.QUEUE_HEALTH_CHECK,

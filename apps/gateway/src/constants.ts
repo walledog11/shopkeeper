@@ -24,6 +24,7 @@ export const QUEUE = {
   ORDER_RISK: 'order-risk-monitor',
   ORDER_REVIEW: 'order-review',
   OUTBOUND_EMAIL: 'outbound-email',
+  OUTBOUND_EMAIL_SWEEP: 'outbound-email-sweep',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -48,6 +49,8 @@ export const JOB = {
   ORDER_RISK_ID: 'order-risk-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
   SEND_EMAIL: 'send-email',
+  OUTBOUND_EMAIL_SWEEP: 'sweep-outbound-email',
+  OUTBOUND_EMAIL_SWEEP_ID: 'outbound-email-sweep-5min',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
 

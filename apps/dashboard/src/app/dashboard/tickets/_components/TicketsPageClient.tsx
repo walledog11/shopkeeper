@@ -205,7 +205,7 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
     replyText, setReplyText,
     isSending, sendError, setSendError,
     toast,
-    failedMessages, handleRetry,
+    failedMessages, handleRetry, handleRetrySend,
     handleSendMessage, handleResolve, handleReopen,
     handleLinkShopifyCustomer,
     handleBulkClose, handleBulkArchive, handleBulkTag,
@@ -374,6 +374,7 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
               messagesEndRef={messagesEndRef}
               failedMessages={failedMessages.filter(m => m.threadId === activeTicketId)}
               onRetry={handleRetry}
+              onRetrySend={handleRetrySend}
               onOpenContext={() => setShowContextDrawer(true)}
               onBack={() => { setActiveTicketId(null); setSendError(null); setShowContextDrawer(false) }}
               onResolve={handleResolve}

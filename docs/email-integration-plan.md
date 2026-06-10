@@ -2,8 +2,8 @@
 
 Plan for native Gmail inbox sync (no forwarding required for OAuth merchants), parallel Outlook improvements, and cleanup of the split Postmark / OAuth email model.
 
-**Status:** Phase 0 + Phase 1 complete (2026-06-09); Phase 1.5 core path shipped (queue + worker + enqueue + dashboard dispatch + tests); Phase 1.5 sweeper/UI/rollout pending; Phase 2 not started  
-**Last updated:** 2026-06-09 (Phase 1.5 core: `Message.sendStatus/providerMessageId/sendError` + migration, gateway `outbound-email` queue/worker/handler, internal enqueue route (option A), dashboard async dispatch behind `OUTBOUND_EMAIL_ASYNC`, handler/route/dispatch tests green)
+**Status:** Phase 0 + Phase 1 complete (2026-06-09); Phase 1.5 core path + orphan sweeper + pending/retry UI shipped (2026-06-09); remaining Phase 1.5 = wire `agent_send_email`/`auto_ack` async + enable the `OUTBOUND_EMAIL_ASYNC` flag (rollout); Phase 2 not started  
+**Last updated:** 2026-06-09 (Phase 1.5: added orphan-`pending` sweeper (`outbound-email-sweep.ts`, 5-min) and composer pending/retry UI (`ChatTimeline.tsx` + `POST /api/messages/retry`); sweeper + retry-route real-DB tests green, both apps typecheck + lint clean)
 
 ## Goal
 
@@ -240,8 +240,8 @@ Optional later migration: dedicated columns if JSON querying becomes necessary.
 - ✅ Tests: handler idempotency/retry/config-error (real DB); enqueue route auth/validation/202; dashboard async dispatch + flag-off sync regression. Both apps typecheck + lint clean.
 
 **Still pending in Phase 1.5:**
-- ❌ Orphan-`pending` sweeper (rows stuck `pending` past N min with no live job).
-- ❌ UI: composer "Sending…" for `pending`, retry affordance for `failed`.
+- ✅ Orphan-`pending` sweeper — `apps/gateway/src/maintenance/outbound-email-sweep.ts` (registered in `workers.ts`, runs every 5 min). Marks any `Message` stuck `sendStatus: 'pending'` with `sentAt` older than 10 min as `failed` (recoverable via the retry affordance) + `opsAlert` log. Mark-failed rather than re-enqueue: the row stores neither `integrationId` nor `source`, and a 10-min threshold is far beyond the ~15s queue retry window, so no double-send risk.
+- ✅ UI: chat timeline shows "Sending…" (spinner) for `pending` and a red "Failed to send · Retry" affordance for `failed` outbound messages (`ChatTimeline.tsx`). Retry re-enqueues via `POST /api/messages/retry` (flips the row back to `pending`, reverts to `failed` if the enqueue hop fails) wired through `useTicketActions.handleRetrySend`. `sendStatus` now flows Message type → `thread-to-ticket` → Ticket. Real-DB route tests cover re-enqueue / enqueue-failure revert / non-failed reject / cross-org 404.
 - ❌ Rollout: enable `OUTBOUND_EMAIL_ASYNC` (internal orgs → agent/auto-ack → composer).
 - ❌ `agent_send_email` / `auto_ack` callers still send synchronously (route accepts the source; only `dispatch_message` / `agent_send_reply` are wired through `dispatchMessage`).
 - ⏸️ `providerMessageId` column exists but stays null — senders don't return IDs yet (populated in Phase 5).
@@ -511,7 +511,9 @@ Ship after Gmail path is stable — same patterns, different API surface.
 | `apps/gateway/src/maintenance/email-token-health.ts` | Daily Gmail/Outlook token probe; sets epoch sentinel on failure |
 | `apps/gateway/src/message-handlers/outbound-email.ts` | ✅ Phase 1.5: `send-email` job handler |
 | `apps/gateway/src/workers/outbound-email.ts` | ✅ Phase 1.5: BullMQ worker registration |
+| `apps/gateway/src/maintenance/outbound-email-sweep.ts` | ✅ Phase 1.5: orphan-`pending` sweeper (5-min repeatable) |
 | `apps/dashboard/src/lib/messaging/enqueue-outbound-email.ts` | ✅ Phase 1.5: dashboard → gateway internal enqueue helper + flag check |
+| `apps/dashboard/src/app/api/messages/retry/route.ts` | ✅ Phase 1.5: re-enqueue a failed outbound send (retry affordance) |
 | `apps/dashboard/src/app/api/integrations/gmail/addresses/route.ts` | Optional: list send-as addresses |
 | `apps/dashboard/src/components/integrations/GmailConnectFlow.tsx` | Post-OAuth support address + status |
 | `packages/db/prisma/migrations/20260609000000_message_send_status` | ✅ Phase 1.5: `sendStatus`, `providerMessageId`, `sendError` on `Message` |
@@ -598,7 +600,7 @@ No new required vars for Phase 2; optional feature flags via org settings later.
 0. **Google restricted-scope verification** — file *before* Phase 2 coding, in parallel with Phase 0/1. Long pole, externally gated. Phases 2–3 can be built and tested against `Internal`/test users while it's pending, but cannot reach external merchants until it clears.
 1. **Phase 0** — ✅ shipped (2026-06-09); no flag.
 2. **Phase 1** — ✅ shipped (2026-06-09); no user-visible change. Unblocked Phase 1.5 and Phase 2.
-3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. 🟡 Core path shipped (2026-06-09); flag not yet enabled in any env. Remaining before rollout: orphan-`pending` sweeper + composer pending/retry UI. Then internal orgs → agent/auto-ack paths first → merchant composer.
+3. **Phase 1.5** — behind `OUTBOUND_EMAIL_ASYNC=true`. 🟡 Core path + orphan sweeper + pending/retry UI shipped (2026-06-09); flag not yet enabled in any env. Pre-rollout build work done; remaining is wiring `agent_send_email`/`auto_ack` async then enabling the flag: internal orgs → agent/auto-ack paths first → merchant composer.
 4. **Phase 2** — behind `GMAIL_NATIVE_INBOUND=true` (gateway + dashboard). Internal orgs first. Can run in parallel with Phase 1.5.
 5. **Phase 3** — enable Gmail flag for all new connects; existing integrations prompt re-auth.
 6. **Phase 4** — Outlook flag `OUTLOOK_NATIVE_INBOUND=true` after Gmail stable.
@@ -640,7 +642,7 @@ Do not remove Postmark inbound until metrics show negligible `provider: postmark
 - [ ] Attachments work end-to-end on Gmail-native inbound
 - [ ] Watch renewal runs automatically; failures visible in Integrations UI
 - [ ] Email OAuth token health sets reconnect sentinel within 24h of refresh token revocation
-- [~] Outbound async queue: transient provider failure retries and marks `failed` (Phase 1.5 — worker + status transitions done; `failed` + retry **UI** still pending)
+- [x] Outbound async queue: transient provider failure retries and marks `failed`; orphaned `pending` swept to `failed`; composer shows `Sending…` / `Failed to send · Retry` (Phase 1.5)
 - [ ] `packages/email` is the single source for token refresh, MIME, and senders (Phase 1)
 - [ ] Production runbook documents GCP + Google verification steps
 - [ ] No regression in `npm run verify:pr` and gateway webhook tests

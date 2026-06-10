@@ -50,6 +50,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
               : undefined,
           isAgentNote,
           attachments: (message.attachments ?? []).map(toAttachmentDisplayUrl),
+          sendStatus: message.sendStatus,
         }];
       }),
   };

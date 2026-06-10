@@ -81,6 +81,7 @@ export interface Message {
   mediaUrl: string | null;
   attachments: string[];
   sentAt: string;
+  sendStatus?: string | null;
 }
 
 export interface CannedResponse {
@@ -190,6 +191,7 @@ export interface Ticket {
     isAgentNote?: boolean;
     attachments: string[];
     rating?: number | null;
+    sendStatus?: string | null;
   }[];
 }
 

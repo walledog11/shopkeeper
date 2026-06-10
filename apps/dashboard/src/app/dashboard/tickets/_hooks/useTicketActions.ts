@@ -175,6 +175,29 @@ export function useTicketActions({
     }
   }, [failedMessages, patchThreadCaches, revalidateThreadCaches])
 
+  // Persisted async outbound send (sendStatus 'failed') — re-enqueue it. Distinct
+  // from handleRetry, which re-POSTs an optimistic message that never persisted.
+  const handleRetrySend = useCallback(async (messageId: string) => {
+    if (!activeTicketId) return
+    const threadId = activeTicketId
+
+    await patchThreadCaches(threadId, thread => ({
+      ...thread,
+      messages: thread.messages.map(m =>
+        m.id === messageId ? { ...m, sendStatus: 'pending' } : m,
+      ),
+    }))
+
+    try {
+      await requestOk('/api/messages/retry', jsonPost({ messageId }), 'Failed to retry message')
+      await revalidateThreadCaches()
+    } catch (err) {
+      console.error('Failed to retry send', err)
+      showToast(errorMessageFromUnknown(err, 'Failed to retry message.'), 'error')
+      await revalidateThreadCaches()
+    }
+  }, [activeTicketId, patchThreadCaches, revalidateThreadCaches, showToast])
+
   const handleBulkClose = useCallback(async (selectedIds: string[]) => {
     if (selectedIds.length === 0) return
     const ids = [...selectedIds]
@@ -257,6 +280,7 @@ export function useTicketActions({
     showToast,
     handleSendMessage,
     handleRetry,
+    handleRetrySend,
     handleResolve,
     handleReopen,
     handleLinkShopifyCustomer,
