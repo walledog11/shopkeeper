@@ -6,18 +6,20 @@ import { NavLinks } from "./NavLinks";
 export function Navbar() {
   return (
     <header className="sticky top-0 z-30 border-b border-stone-900/[0.08] bg-[#faf6ef]/95 backdrop-blur-md supports-[backdrop-filter]:bg-[#faf6ef]/88">
-      <nav className="mx-auto grid max-w-6xl grid-cols-[1fr_auto] items-center px-6 py-4 md:grid-cols-[1fr_auto_1fr]">
+      <nav className="relative mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
         <Link
           href="/"
-          className="flex items-center gap-2 text-[24px] leading-none tracking-tight text-[#2b2118] no-underline [font-family:var(--m-serif)]"
+          aria-label="Shopkeeper"
+          className="relative z-10 flex size-11 shrink-0 items-center justify-center text-[#2b2118] no-underline transition-colors hover:text-stone-600"
         >
-          <Store className="size-6" strokeWidth={1.8} />
-          shopkeeper
+          <Store className="size-7" strokeWidth={1.75} />
         </Link>
 
-        <NavLinks />
+        <div className="absolute left-1/2 hidden -translate-x-1/2 md:block">
+          <NavLinks />
+        </div>
 
-        <div className="flex items-center justify-end gap-4">
+        <div className="relative z-10 flex min-w-11 items-center justify-end gap-4">
           <AuthNavLinks />
         </div>
       </nav>

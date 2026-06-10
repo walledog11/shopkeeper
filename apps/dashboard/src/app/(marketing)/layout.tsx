@@ -1,9 +1,15 @@
 import type { ReactNode } from "react";
-import { Instrument_Serif, Inter } from "next/font/google";
+import { Fraunces, Instrument_Serif, Inter } from "next/font/google";
 
 const serif = Instrument_Serif({
   weight: "400",
   style: ["normal", "italic"],
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const heroSerif = Fraunces({
+  weight: "600",
   subsets: ["latin"],
   display: "swap",
 });
@@ -23,6 +29,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
         minHeight: "100vh",
         overflowX: "clip",
         "--m-serif": `${serif.style.fontFamily}, Georgia, 'Times New Roman', serif`,
+        "--m-hero-serif": `${heroSerif.style.fontFamily}, Georgia, serif`,
         "--m-mono": "ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace",
       } as React.CSSProperties}
     >
