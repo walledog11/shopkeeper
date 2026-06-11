@@ -21,8 +21,6 @@ export async function withOperatorPresence<T>(
   const { chatId, messageId, progress, reply } = opts;
 
   let progressSent = false;
-  let typingInterval: ReturnType<typeof setInterval> | undefined;
-  let progressTimer: ReturnType<typeof setTimeout> | undefined;
 
   if (messageId != null) {
     setMessageReaction(chatId, messageId, RECEIPT_REACTION_EMOJI).catch((err) => {
@@ -37,9 +35,9 @@ export async function withOperatorPresence<T>(
   };
 
   refreshTyping();
-  typingInterval = setInterval(refreshTyping, TYPING_REFRESH_MS);
+  const typingInterval = setInterval(refreshTyping, TYPING_REFRESH_MS);
 
-  progressTimer = setTimeout(() => {
+  const progressTimer = setTimeout(() => {
     if (progressSent) return;
     progressSent = true;
     reply(buildProgressCopy(progress)).catch((err) => {
@@ -50,7 +48,7 @@ export async function withOperatorPresence<T>(
   try {
     return await work();
   } finally {
-    if (typingInterval) clearInterval(typingInterval);
-    if (progressTimer) clearTimeout(progressTimer);
+    clearInterval(typingInterval);
+    clearTimeout(progressTimer);
   }
 }
