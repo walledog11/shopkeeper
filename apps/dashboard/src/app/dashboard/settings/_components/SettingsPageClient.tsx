@@ -27,7 +27,7 @@ interface Props {
 }
 
 const NAV_ITEMS = [
-  { id: 'agent',     label: 'Agent',     icon: Bot,           hint: 'what it can do without asking' },
+  { id: 'agent',     label: 'Agent',     icon: Bot,           hint: 'trust level and duty hours' },
   { id: 'workspace', label: 'Workspace', icon: Building2,     hint: 'workspace name and identity' },
   { id: 'billing',   label: 'Billing',   icon: CreditCard,    hint: 'plan and invoices' },
   { id: 'audit',     label: 'Audit Log', icon: ClipboardList, hint: 'who did what' },

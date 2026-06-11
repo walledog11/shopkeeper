@@ -10,7 +10,13 @@ import { SectionCard, ToggleRow } from "./shared"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
 
-export function BusinessHoursSection({ controller }: { controller: AgentTabController }) {
+export function BusinessHoursSection({
+  controller,
+  embedded = false,
+}: {
+  controller: AgentTabController
+  embedded?: boolean
+}) {
   const {
     settingsState,
     dispatch,
@@ -21,19 +27,18 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
     businessHoursInvalid,
   } = controller
 
-  return (
-    <SectionCard title="Business Hours" description="Automatically send an acknowledgment to customers who message outside your working hours. Overnight windows are supported.">
-      <div className="space-y-5">
-        <ToggleRow
+  const content = (
+    <div className="space-y-5">
+      <ToggleRow
           label="Enable business hours"
           description="When a message arrives outside your set hours, the auto-acknowledgment is sent to the customer instead of running a plan."
           checked={settingsState.businessHoursEnabled}
           onChange={value => dispatch({ type: "set", patch: { businessHoursEnabled: value } })}
-        />
+      />
 
-        {settingsState.businessHoursEnabled && (
-          <>
-            <div className="space-y-1.5">
+      {settingsState.businessHoursEnabled && (
+        <>
+          <div className="space-y-1.5">
               <span className="block text-xs font-semibold text-white/60">Opening days</span>
               <div className="flex gap-1.5 flex-wrap">
                 {DAY_OPTIONS.map(([value, label]) => (
@@ -109,10 +114,29 @@ export function BusinessHoursSection({ controller }: { controller: AgentTabContr
               placeholder="Thanks for reaching out! We're currently outside business hours and will get back to you soon."
               maxLength={500}
               rows={3}
-            />
-          </>
-        )}
+          />
+        </>
+      )}
+    </div>
+  )
+
+  if (embedded) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h3 className="text-sm font-semibold text-white/70">Business hours</h3>
+          <p className="text-xs text-white/35 mt-0.5 leading-relaxed">
+            Send an auto-acknowledgment when customers message outside your working hours.
+          </p>
+        </div>
+        {content}
       </div>
+    )
+  }
+
+  return (
+    <SectionCard title="Business Hours" description="Automatically send an acknowledgment to customers who message outside your working hours. Overnight windows are supported.">
+      {content}
     </SectionCard>
   )
 }

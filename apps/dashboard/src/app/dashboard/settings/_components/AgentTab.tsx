@@ -8,12 +8,11 @@ import {
   AgentIdentitySection,
   AgentResponseSection,
   AgentSampleRepliesSection,
-  BusinessHoursSection,
-  SpamFilterSection,
   StickySaveBar,
-  WhatsAppDigestSection,
 } from "./agent-tab-sections"
+import { SettingsDisclosure } from "./shared"
 import { useAgentTabState } from "./useAgentTabState"
+import { WhenOnDutySection } from "./WhenOnDutySection"
 
 interface Props {
   settings: OrgSettings
@@ -29,18 +28,31 @@ export default function AgentTab(props: Props) {
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold text-white/80">Agent</h1>
-        <p className="text-sm text-white/35 mt-0.5">Configure how your AI agent behaves, what it can do, and how it communicates.</p>
+        <p className="text-sm text-white/35 mt-0.5">
+          Pick a trust level and when you are on duty. Everything else is optional.
+        </p>
       </div>
 
       <AgentAutonomySection controller={controller} />
-      <AgentIdentitySection controller={controller} />
-      <AgentSampleRepliesSection controller={controller} />
-      <AgentDefaultBehaviorSection controller={controller} />
-      <AgentGuardrailsSection controller={controller} />
-      <AgentResponseSection controller={controller} />
-      <WhatsAppDigestSection controller={controller} />
-      <BusinessHoursSection controller={controller} />
-      <SpamFilterSection controller={controller} />
+      <WhenOnDutySection controller={controller} />
+
+      <SettingsDisclosure
+        title="Voice & style"
+        description="Name, brand voice, sample replies, and reply language."
+      >
+        <AgentIdentitySection controller={controller} />
+        <AgentSampleRepliesSection controller={controller} />
+        <AgentResponseSection controller={controller} />
+      </SettingsDisclosure>
+
+      <SettingsDisclosure
+        title="Behavior & limits"
+        description="Auto-planning, default instructions, and hard spending caps."
+      >
+        <AgentDefaultBehaviorSection controller={controller} />
+        <AgentGuardrailsSection controller={controller} />
+      </SettingsDisclosure>
+
       <StickySaveBar controller={controller} />
     </div>
   )

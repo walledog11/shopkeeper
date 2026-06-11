@@ -1,5 +1,7 @@
-import type { ReactNode } from "react"
-import { Check, Loader2 } from "lucide-react"
+"use client"
+
+import { useState, type ReactNode } from "react"
+import { Check, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -95,6 +97,44 @@ export function SectionCard({ title, description, children }: {
         </div>
         <div>{children}</div>
       </div>
+    </div>
+  )
+}
+
+export function SettingsDisclosure({
+  title,
+  description,
+  defaultOpen = false,
+  children,
+}: {
+  title: string
+  description: string
+  defaultOpen?: boolean
+  children: ReactNode
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <div className="bg-card rounded-md border border-border overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen(value => !value)}
+        aria-expanded={open}
+        className="flex w-full items-start gap-3 p-5 sm:p-6 text-left transition-colors hover:bg-white/[0.02]"
+      >
+        <ChevronRight
+          className={`size-4 shrink-0 mt-0.5 text-white/40 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-white/75">{title}</h2>
+          <p className="text-xs text-white/35 mt-1 leading-relaxed">{description}</p>
+        </div>
+      </button>
+      {open && (
+        <div className="border-t border-white/[0.06] px-5 sm:px-6 pb-5 sm:pb-6 pt-5 space-y-6">
+          {children}
+        </div>
+      )}
     </div>
   )
 }

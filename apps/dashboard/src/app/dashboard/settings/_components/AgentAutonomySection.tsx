@@ -1,6 +1,8 @@
 "use client"
 
-import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
+import { useState } from "react"
+import { ChevronRight } from "lucide-react"
+import { AUTONOMY_TIERS, visibleAutonomyTiers } from "@/lib/agent/autonomy-tiers"
 import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import type { OrgSettings } from "@/types"
 import {
@@ -100,6 +102,7 @@ const TOOL_PERMISSION_ROWS: Array<{
 ]
 
 export function AgentAutonomySection({ controller }: { controller: AgentTabController }) {
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const {
     settingsState,
     payload,
@@ -113,12 +116,17 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     setMaxRefundInput,
   } = controller
 
+  const tierOptions = visibleAutonomyTiers(settingsState.autonomyTier)
+
   return (
     <div id="autonomy" className="scroll-mt-4">
-      <SectionCard title="Autonomy" description="Set how much the agent can do before it asks for approval.">
+      <SectionCard
+        title="Trust level"
+        description="How much Shopkeeper can do before asking you. Most operators stay on Ask first."
+      >
         <div className="space-y-6">
-          <div role="radiogroup" aria-label="Autonomy tier" className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {AUTONOMY_TIERS.map(option => {
+          <div role="radiogroup" aria-label="Trust level" className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {tierOptions.map(option => {
               const selected = settingsState.autonomyTier === option.id
               const disabled = option.comingSoon
               return (
@@ -135,7 +143,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                       : "border-white/[0.10] bg-white/[0.025] hover:border-white/[0.22] hover:bg-white/[0.05]"
                   } ${disabled ? "opacity-45 cursor-not-allowed hover:border-white/[0.10] hover:bg-white/[0.025]" : ""}`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className={`size-2.5 rounded-full border ${selected ? "border-amber-300 bg-amber-300" : "border-white/25"}`} />
                     <span className="text-sm font-semibold text-white/75">{option.label}</span>
                     {option.recommended && (
@@ -150,109 +158,130 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                     )}
                   </div>
                   <p className="mt-2 text-xs leading-relaxed text-white/40">{option.blurb}</p>
-                  <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
+                  {option.merchantFacing && (
+                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
+                  )}
                 </button>
               )
             })}
           </div>
 
-          <div className="space-y-5 border-t border-white/[0.08] pt-5">
-            <div className="space-y-1">
-              <ToggleRow
-                label="Require approval before executing actions"
-                description="Show a plan card and wait for your confirmation before the agent runs Shopify or communication actions."
-                checked={settingsState.requireApprovalForActions}
-                onChange={v => setAutonomyOverride("requireApprovalForActions", v)}
+          <div className="border-t border-white/[0.08] pt-4">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen(value => !value)}
+              aria-expanded={advancedOpen}
+              className="flex w-full items-center gap-2 text-left text-sm font-semibold text-white/55 hover:text-white/75 transition-colors"
+            >
+              <ChevronRight
+                className={`size-4 shrink-0 text-white/40 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
               />
-              <OverrideHint
-                path="requireApprovalForActions"
-                tier={autonomyTier}
-                payload={payload}
-                explicitOverrideSet={explicitOverrideSet}
-                onReset={resetAutonomyOverride}
-              />
-            </div>
+              Advanced overrides
+            </button>
+            <p className="text-xs text-white/30 mt-1 ml-6">
+              Per-tool permissions and limits. Only change these if the presets above do not fit your store.
+            </p>
 
-            <div className="space-y-1.5">
-              <MoneyInput
-                label="Max refund amount"
-                hint="leave blank for no limit"
-                aria-label="Max refund amount"
-                value={maxRefundInput}
-                onValueChange={value => {
-                  markExplicit("maxRefundAmount")
-                  setMaxRefundInput(value)
-                }}
-                placeholder="e.g. 50"
-              />
-              <OverrideHint
-                path="maxRefundAmount"
-                tier={autonomyTier}
-                payload={payload}
-                explicitOverrideSet={explicitOverrideSet}
-                onReset={resetAutonomyOverride}
-              />
-            </div>
+            {advancedOpen && (
+              <div className="space-y-5 mt-5 border-t border-white/[0.06] pt-5">
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Require approval before executing actions"
+                    description="Show a plan card and wait for your confirmation before the agent runs Shopify or communication actions."
+                    checked={settingsState.requireApprovalForActions}
+                    onChange={v => setAutonomyOverride("requireApprovalForActions", v)}
+                  />
+                  <OverrideHint
+                    path="requireApprovalForActions"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
+                </div>
 
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-white/60">Tool permissions</p>
-                <p className="text-xs text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
-              </div>
-              <div className="space-y-4">
-                {TOOL_PERMISSION_ROWS.map(row => (
-                  <div key={row.path} className="space-y-1">
-                    <ToggleRow
-                      label={row.label}
-                      description={row.description}
-                      checked={Boolean(readSettingsPath(settingsState, row.path))}
-                      onChange={v => setAutonomyOverride(row.path, v)}
-                      badge={row.badge}
-                      badgeColor={row.badgeColor}
-                    />
-                    <OverrideHint
-                      path={row.path}
-                      tier={autonomyTier}
-                      payload={payload}
-                      explicitOverrideSet={explicitOverrideSet}
-                      onReset={resetAutonomyOverride}
-                    />
+                <div className="space-y-1.5">
+                  <MoneyInput
+                    label="Max refund amount"
+                    hint="leave blank for no limit"
+                    aria-label="Max refund amount"
+                    value={maxRefundInput}
+                    onValueChange={value => {
+                      markExplicit("maxRefundAmount")
+                      setMaxRefundInput(value)
+                    }}
+                    placeholder="e.g. 50"
+                  />
+                  <OverrideHint
+                    path="maxRefundAmount"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-white/60">Tool permissions</p>
+                    <p className="text-xs text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
                   </div>
-                ))}
+                  <div className="space-y-4">
+                    {TOOL_PERMISSION_ROWS.map(row => (
+                      <div key={row.path} className="space-y-1">
+                        <ToggleRow
+                          label={row.label}
+                          description={row.description}
+                          checked={Boolean(readSettingsPath(settingsState, row.path))}
+                          onChange={v => setAutonomyOverride(row.path, v)}
+                          badge={row.badge}
+                          badgeColor={row.badgeColor}
+                        />
+                        <OverrideHint
+                          path={row.path}
+                          tier={autonomyTier}
+                          payload={payload}
+                          explicitOverrideSet={explicitOverrideSet}
+                          onReset={resetAutonomyOverride}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Block order cancellations"
+                    description="Prevent the agent from cancelling orders entirely. Cancellations will require manual handling."
+                    checked={settingsState.blockCancellations}
+                    onChange={v => setAutonomyOverride("blockCancellations", v)}
+                  />
+                  <OverrideHint
+                    path="blockCancellations"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <ToggleRow
+                    label="Block custom line items"
+                    description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
+                    checked={settingsState.blockCustomLineItems}
+                    onChange={v => setAutonomyOverride("blockCustomLineItems", v)}
+                  />
+                  <OverrideHint
+                    path="blockCustomLineItems"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
+                </div>
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <ToggleRow
-                label="Block order cancellations"
-                description="Prevent the agent from cancelling orders entirely. Cancellations will require manual handling."
-                checked={settingsState.blockCancellations}
-                onChange={v => setAutonomyOverride("blockCancellations", v)}
-              />
-              <OverrideHint
-                path="blockCancellations"
-                tier={autonomyTier}
-                payload={payload}
-                explicitOverrideSet={explicitOverrideSet}
-                onReset={resetAutonomyOverride}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <ToggleRow
-                label="Block custom line items"
-                description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
-                checked={settingsState.blockCustomLineItems}
-                onChange={v => setAutonomyOverride("blockCustomLineItems", v)}
-              />
-              <OverrideHint
-                path="blockCustomLineItems"
-                tier={autonomyTier}
-                payload={payload}
-                explicitOverrideSet={explicitOverrideSet}
-                onReset={resetAutonomyOverride}
-              />
-            </div>
+            )}
           </div>
         </div>
       </SectionCard>
