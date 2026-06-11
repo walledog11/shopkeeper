@@ -20,6 +20,7 @@ export function createPostRedirectResponse(request: Request, label = "Continue")
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex">
   <title>${escapedLabel}</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@8..144,400..700&amp;display=swap">
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -30,7 +31,7 @@ export function createPostRedirectResponse(request: Request, label = "Continue")
       place-items: center;
       background: #070707;
       color: rgba(255, 255, 255, 0.88);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: "Google Sans Flex", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .shopkeeper-oauth-loading {
       width: min(100%, 22rem);

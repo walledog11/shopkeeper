@@ -3,12 +3,12 @@
 import { useReports } from "@/hooks/useReports"
 import { formatShortDate } from "@/lib/format/date"
 import type { DateRangePreset as Preset } from "@/lib/analytics/date-range"
-import { AgentActivityCard } from "@/app/dashboard/reports/_components/AgentActivityCard"
-import { CustomerContactCard } from "@/app/dashboard/reports/_components/CustomerContactCard"
-import { GdprExportSection } from "@/app/dashboard/reports/_components/GdprExportSection"
-import { SupportSummaryCard } from "@/app/dashboard/reports/_components/SupportSummaryCard"
-import { TopTopicsCard } from "@/app/dashboard/reports/_components/TopTopicsCard"
-import { BADGE_LABELS } from "@/app/dashboard/reports/_components/reports-helpers"
+import { AgentActivityCard } from "./export/AgentActivityCard"
+import { CustomerContactCard } from "./export/CustomerContactCard"
+import { GdprExportSection } from "./export/GdprExportSection"
+import { SupportSummaryCard } from "./export/SupportSummaryCard"
+import { TopTopicsCard } from "./export/TopTopicsCard"
+import { BADGE_LABELS } from "./export/reports-helpers"
 
 interface Props {
   preset: Preset

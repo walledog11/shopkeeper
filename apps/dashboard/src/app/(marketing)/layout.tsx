@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Fraunces, Instrument_Serif, Inter } from "next/font/google";
+import { Fraunces, Instrument_Serif } from "next/font/google";
 
 const serif = Instrument_Serif({
   weight: "400",
@@ -14,12 +14,10 @@ const heroSerif = Fraunces({
   display: "swap",
 });
 
-const sans = Inter({ subsets: ["latin"], display: "swap" });
-
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${sans.className} m-grain`}
+      className="m-grain"
       style={{
         /* Warm paper background and ink text — overrides body's dark theme.
            overflow-x must be `clip`, not `hidden`: hidden creates a scroll

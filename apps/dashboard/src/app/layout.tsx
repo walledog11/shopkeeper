@@ -1,6 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Google_Sans_Flex } from "next/font/google";
 import "./globals.css";
+
+const googleSansFlex = Google_Sans_Flex({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-google-sans-flex",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -24,8 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased">
+    <html lang="en" className={googleSansFlex.variable}>
+      <body className={`${googleSansFlex.className} antialiased`}>
         <ClerkProvider>
           {children}
         </ClerkProvider>

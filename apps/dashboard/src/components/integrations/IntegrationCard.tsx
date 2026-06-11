@@ -20,10 +20,17 @@ export type { ConnectType, PlatformConfig }
 const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1a1a]"
 
 export const CARD_SHELL = cn(
-  "rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
+  "group rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
   "transition-all duration-200",
   "hover:border-white/[0.10] hover:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.25)]",
 )
+const LOGO_TILE = cn(
+  "size-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden",
+  "transition-all duration-200",
+  "group-hover:ring-1 group-hover:ring-inset group-hover:ring-white/[0.10]",
+)
+const LOGO_SOFTEN = "opacity-[0.88] saturate-[0.9] transition-all duration-200 group-hover:opacity-100 group-hover:saturate-100"
+const LOGO_IMAGE = cn("object-contain", LOGO_SOFTEN)
 export const CARD_TITLE = "text-xl font-bold text-white leading-[22px]"
 export const CARD_DESCRIPTION = "text-[13.5px] leading-[18px] text-[#b8b8b8]"
 export const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
@@ -38,15 +45,14 @@ const FALLBACK_ICONS: Record<string, typeof Mail> = {
 
 export function CardLogo({ config }: { config: PlatformConfig }) {
   const Icon = FALLBACK_ICONS[config.id]
-  const tileClass = cn(
-    "size-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden",
-    config.tileClass,
-  )
+  const tileClass = cn(LOGO_TILE, config.tileClass)
 
   if (!config.logo) {
     return (
       <div className={tileClass}>
-        {Icon ? <Icon className="size-7 text-white" /> : null}
+        {Icon ? (
+          <Icon className="size-7 text-white opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100" />
+        ) : null}
       </div>
     )
   }
@@ -58,21 +64,14 @@ export function CardLogo({ config }: { config: PlatformConfig }) {
         alt={`${config.name} logo`}
         width={56}
         height={56}
-        className={cn("size-full", config.tileClass ? "object-cover" : "object-contain")}
+        className={cn(
+          "size-full",
+          config.tileClass ? "object-cover" : "object-contain",
+          LOGO_SOFTEN,
+        )}
       />
     )
-    if (config.tileClass) {
-      return <div className={cn(tileClass, "p-0")}>{image}</div>
-    }
-    return (
-      <Image
-        src={config.logo}
-        alt={`${config.name} logo`}
-        width={56}
-        height={56}
-        className="size-14 rounded-2xl object-contain shrink-0"
-      />
-    )
+    return <div className={cn(tileClass, config.tileClass && "p-0")}>{image}</div>
   }
 
   const logoSize = config.logoSize ?? 40
@@ -83,7 +82,7 @@ export function CardLogo({ config }: { config: PlatformConfig }) {
         alt={`${config.name} logo`}
         width={logoSize}
         height={logoSize}
-        className="object-contain"
+        className={LOGO_IMAGE}
       />
     </div>
   )

@@ -148,14 +148,14 @@ function IntegrationsPageContent() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      <div className="w-full px-6 py-8 space-y-8">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="px-6 pt-6 pb-5 border-b border-white/[0.06] shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight text-white">Integrations</h1>
+        <p className="text-sm text-white/40 mt-0.5">Connect your channels and tools to Shopkeeper.</p>
+      </div>
 
-        {/* Header */}
-        <div>
-          <h1 className="text-lg font-bold text-white/80">Integrations</h1>
-          <p className="text-sm text-white/35 mt-0.5">Connect your channels and tools to Shopkeeper.</p>
-        </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full px-6 py-6 space-y-6">
 
         {/* Attention banner — only when something needs fixing */}
         {alertCount > 0 && (
@@ -243,6 +243,7 @@ function IntegrationsPageContent() {
           </div>
         )}
 
+        </div>
       </div>
 
       {/* Toast */}

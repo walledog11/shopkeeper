@@ -29,11 +29,13 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Integration` — per platform per org (access token, expiry)
 - `Customer` — unique `(organizationId, platformId)`; `platformId` = email / IG sender ID / phone
 - `Thread` — `channelType`, `status` (open/pending/closed), `aiSummary`, `tag`, `shopifyCustomerId`, `cachedPlan`, soft-delete + archive
-- `Message` — `senderType`: customer/agent/ai/note. **Agent action logs are `note` rows prefixed `__shopkeeper_agent__`** (legacy: `__clerk_agent__`).
+- `Message` — `senderType`: customer/agent/ai/note. Agent turn transcripts in threads are `note` rows prefixed `__shopkeeper_agent__` (legacy: `__clerk_agent__`); the audit trail is `AgentAction`, not note-row parsing.
+- `AgentAction` — first-class audit record per agent tool call (tool, category, status, mode, approver); backs `/api/agent/actions` and the Review page
+- `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
 - `OperatorContext` — Telegram operator state per (org, chatId): history, pendingPlan, pendingDigest, lastOrderNumber. **DB-backed, not Redis.**
-- `OrgMember` — extends Clerk org membership with a bound Telegram chat
-- `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering)
-- `CannedResponse`, `Feedback`
+- `OrgMember` — extends Clerk org membership; Telegram chats bound via `OrgMemberTelegramChat`
+- `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering) / `KbCitation` (per-thread article citation events)
+- `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
 
 ## Channels
 Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), Shopify (OAuth + webhooks). TikTok: stubs only.
@@ -70,7 +72,7 @@ Modes:
 
 Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.
 
-`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted/broad/full), `autoExecuteEnabled` (hidden rollout flag), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
+`Organization.settings` keys: `agentName`, `aiContext`, `brandVoice`, `autoPlanOnOpen`, `defaultInstruction`, `requireApprovalForActions`, `autonomyTier` (watch/guarded/trusted/broad/full), `autoExecuteMode` (off/shadow/live; legacy boolean `autoExecuteEnabled` is migrated), `toolsEnabled` (action/communication/internal/read), `maxRefundAmount`, `blockCancellations`, `blockCustomLineItems`, `maxIterations` (default 10), `replyLanguage`.
 
 ## Key API routes (`apps/dashboard/src/app/api/`)
 - `agent/route.ts` — execute run on a ticket
@@ -96,7 +98,7 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 - `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
 ## Dashboard routes
-`/dashboard/{tickets, canned-responses, agent, kb, orders, customers, products, analytics, reports, team, integrations, feedback, settings}`
+`/dashboard/{tickets, agent, kb, orders, customers, products, analytics, review, team, integrations, settings}`
 
 ## Env (names only — values in Vercel/Railway; see each app's `.env.example` for the full list)
 **Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` + `MICROSOFT_CLIENT_ID`/`SECRET` (email OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)
