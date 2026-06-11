@@ -1,11 +1,16 @@
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import { READ_TOOLS } from '../../constants.js';
 import logger from '../../logger.js';
-import { updateContext, type OperatorContext, type ToolCall } from '../../operator-context.js';
+import {
+  extractOrderNumber,
+  updateContext,
+  type OperatorContext,
+  type ToolCall,
+} from '../../operator-context.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import type { PendingPlanCommand } from './command-parser.js';
-import { filler } from './format.js';
-import type { TelegramReply } from './types.js';
+import { withOperatorPresence } from './presence.js';
+import type { TelegramMessageContext } from './types.js';
 
 function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
   return toolCalls.map((toolCall) => {
@@ -21,12 +26,11 @@ function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
 export async function handlePendingPlanCommand(
   organizationId: string,
   clerkUserId: string,
-  chatId: string,
-  body: string,
+  message: TelegramMessageContext & { body: string },
   command: PendingPlanCommand,
   context: OperatorContext,
-  reply: TelegramReply,
 ): Promise<boolean> {
+  const { chatId, messageId, body, reply } = message;
   if (!context.pendingPlan) return false;
 
   const { threadId, instruction, rawToolCalls } = context.pendingPlan;
@@ -46,17 +50,28 @@ export async function handlePendingPlanCommand(
   }
 
   logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Telegram] Approving plan');
-  await reply(filler());
 
   let summary: string;
   try {
-    ({ summary } = await executeOperatorAgentTurn({
-      orgId: organizationId,
-      threadId,
-      instruction,
-      approvedToolCalls: normalizeApprovedToolCalls(approvedToolCalls),
-      clerkUserId,
-    }));
+    ({ summary } = await withOperatorPresence(
+      {
+        chatId,
+        messageId,
+        reply,
+        progress: {
+          kind: 'plan-run',
+          orderNumber: extractOrderNumber(instruction),
+          instruction,
+        },
+      },
+      () => executeOperatorAgentTurn({
+        orgId: organizationId,
+        threadId,
+        instruction,
+        approvedToolCalls: normalizeApprovedToolCalls(approvedToolCalls),
+        clerkUserId,
+      }),
+    ));
   } catch (err) {
     logger.error({ err }, '[Telegram] Operator agent turn failed (plan approval)');
     await reply('Something went wrong running the plan. Please try again.');

@@ -14,7 +14,15 @@ import { updateContext, getContext } from '../operator-context.js';
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 // In-memory backing store for the ioredis mock so the /start bind flow can
 // round-trip telegram:bind:<token> values.
-const { mockLogger, redisStore, incrStore, sendMessageSpy, executeOperatorAgentTurnSpy } = vi.hoisted(() => ({
+const {
+  mockLogger,
+  redisStore,
+  incrStore,
+  sendMessageSpy,
+  sendChatActionSpy,
+  setMessageReactionSpy,
+  executeOperatorAgentTurnSpy,
+} = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -24,6 +32,8 @@ const { mockLogger, redisStore, incrStore, sendMessageSpy, executeOperatorAgentT
   redisStore: new Map<string, string>(),
   incrStore: new Map<string, number>(),
   sendMessageSpy: vi.fn().mockResolvedValue(true),
+  sendChatActionSpy: vi.fn().mockResolvedValue(true),
+  setMessageReactionSpy: vi.fn().mockResolvedValue(true),
   executeOperatorAgentTurnSpy: vi.fn().mockResolvedValue({
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',
@@ -73,6 +83,8 @@ vi.mock('bullmq', () => ({
 vi.mock('../clients/telegram-client.js', () => ({
   isTelegramConfigured: vi.fn(() => process.env.TELEGRAM_BOT_TOKEN != null && process.env.TELEGRAM_BOT_TOKEN !== ''),
   sendMessage: sendMessageSpy,
+  sendChatAction: sendChatActionSpy,
+  setMessageReaction: setMessageReactionSpy,
   setWebhook: vi.fn(),
 }));
 
@@ -128,6 +140,8 @@ beforeEach(async () => {
   redisStore.clear();
   incrStore.clear();
   sendMessageSpy.mockClear();
+  sendChatActionSpy.mockClear();
+  setMessageReactionSpy.mockClear();
   executeOperatorAgentTurnSpy.mockClear();
   executeOperatorAgentTurnSpy.mockResolvedValue({
     summary: 'Done.',
@@ -155,7 +169,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
       const res = await request(app)
         .post('/webhooks/telegram')
         .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } });
+        .send({ message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'hi' } });
       expect(res.status).toBe(404);
     } finally {
       process.env.TELEGRAM_BOT_TOKEN = prev;
@@ -165,7 +179,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
   it('returns 403 when secret token header is missing', async () => {
     const res = await request(app)
       .post('/webhooks/telegram')
-      .send({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'hi' } });
     expect(res.status).toBe(403);
     expect(mockLogger.warn).toHaveBeenCalledWith('[Telegram] Missing secret token header — rejecting.');
   });
@@ -174,7 +188,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', 'wrong-secret')
-      .send({ message: { chat: { id: 1, type: 'private' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: 1, type: 'private' }, text: 'hi' } });
     expect(res.status).toBe(403);
     expect(mockLogger.warn).toHaveBeenCalledWith('[Telegram] Secret token mismatch — rejecting request.');
   });
@@ -192,7 +206,7 @@ describe('POST /webhooks/telegram — signature gating', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 1, type: 'group' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: 1, type: 'group' }, text: 'hi' } });
     expect(res.status).toBe(200);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/1:1 chats/i);
@@ -214,7 +228,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 9001, type: 'private' }, text: `/start ${token}` } });
+      .send({ message: { message_id: 1, chat: { id: 9001, type: 'private' }, text: `/start ${token}` } });
 
     expect(res.status).toBe(200);
     await waitForReplies(1);
@@ -245,7 +259,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 9100, type: 'private' }, text: `/start ${token}` } });
+      .send({ message: { message_id: 1, chat: { id: 9100, type: 'private' }, text: `/start ${token}` } });
 
     expect(res.status).toBe(200);
     await waitForReplies(1);
@@ -270,7 +284,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 9101, type: 'private' }, text: `/start ${token}` } });
+      .send({ message: { message_id: 1, chat: { id: 9101, type: 'private' }, text: `/start ${token}` } });
 
     await waitForReplies(2); // confirmation + alert to existing device
     const calls = sendMessageSpy.mock.calls as [string, string][];
@@ -282,7 +296,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 9002, type: 'private' }, text: '/start missing-token' } });
+      .send({ message: { message_id: 1, chat: { id: 9002, type: 'private' }, text: '/start missing-token' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/expired/i);
@@ -292,7 +306,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 9003, type: 'private' }, text: '/start' } });
+      .send({ message: { message_id: 1, chat: { id: 9003, type: 'private' }, text: '/start' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/isn't linked/i);
@@ -305,7 +319,7 @@ describe('POST /webhooks/telegram — unbound chat', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: 7777, type: 'private' }, text: 'hello' } });
+      .send({ message: { message_id: 1, chat: { id: 7777, type: 'private' }, text: 'hello' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/isn't connected/i);
@@ -345,10 +359,11 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'yes' } });
 
-    // Filler reply first, then the agent summary reply.
-    await waitForReplies(2);
+    await waitForReplies(1);
+    expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+    expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
       orgId: org.id,
@@ -383,9 +398,11 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
 
-    await waitForReplies(2);
+    await waitForReplies(1);
+    expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+    expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
     const call = executeOperatorAgentTurnSpy.mock.calls[0]?.[0] as {
       approvedToolCalls: Array<{ id: string }>;
     };
@@ -402,7 +419,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'no' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/dismissed/i);
@@ -446,7 +463,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'review' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'review' } });
 
     await waitForReplies(1);
     const text = lastReplyText();
@@ -461,7 +478,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'spam 1' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/spam/i);
@@ -480,10 +497,12 @@ describe('POST /webhooks/telegram — digest commands', () => {
       await request(app)
         .post('/webhooks/telegram')
         .set('x-telegram-bot-api-secret-token', SECRET)
-        .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Thanks for your patience!' } });
+        .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'reply 1 Thanks for your patience!' } });
 
-      // Filler reply + final reply.
-      await waitForReplies(2);
+      await waitForReplies(1);
+      expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+      expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
+      expect(lastReplyText()).toMatch(/Reply sent on ticket 1/);
       expect(fetchSpy).toHaveBeenCalledOnce();
       const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
       expect(url).toMatch(/\/api\/messages\/internal$/);
@@ -500,7 +519,7 @@ describe('POST /webhooks/telegram — digest commands', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'open 5' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'open 5' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/No flagged ticket 5/);
@@ -526,7 +545,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'help' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'help' } });
 
     await waitForReplies(1);
     const text = lastReplyText();
@@ -548,7 +567,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
 
     await waitForReplies(1);
     const text = lastReplyText();
@@ -567,7 +586,7 @@ describe('POST /webhooks/telegram — help & summary', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'summary' } });
 
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/inbox is empty/i);
@@ -591,7 +610,7 @@ describe('POST /webhooks/telegram — order lookup', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: '#4242' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: '#4242' } });
 
     await waitForReplies(1);
     const text = lastReplyText();
@@ -624,9 +643,11 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'how many orders today?' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'how many orders today?' } });
 
-    await waitForReplies(2);
+    await waitForReplies(1);
+    expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
+    expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
       orgId: org.id,
@@ -664,7 +685,7 @@ describe('POST /webhooks/telegram — per-chatId rate limit', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'hi' } });
 
     expect(res.status).toBe(200);
     await new Promise((r) => setTimeout(r, 30));
@@ -679,7 +700,7 @@ describe('POST /webhooks/telegram — per-chatId rate limit', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(chatId), type: 'private' }, text: 'hello' } });
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'hello' } });
 
     expect(res.status).toBe(200);
     await waitForReplies(1);
@@ -694,12 +715,12 @@ describe('POST /webhooks/telegram — per-chatId rate limit', () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(blockedChat), type: 'private' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: Number(blockedChat), type: 'private' }, text: 'hi' } });
 
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { chat: { id: Number(freeChat), type: 'private' }, text: 'hi' } });
+      .send({ message: { message_id: 1, chat: { id: Number(freeChat), type: 'private' }, text: 'hi' } });
 
     await waitForReplies(1);
     expect(sendMessageSpy.mock.calls.length).toBe(1);

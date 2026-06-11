@@ -17,6 +17,87 @@ export function isTelegramConfigured(): boolean {
   return getToken() !== null;
 }
 
+export type TelegramChatAction = 'typing';
+
+/** Returns true when Telegram accepted the action; false when skipped or HTTP-rejected. */
+export async function sendChatAction(
+  chatId: string,
+  action: TelegramChatAction,
+): Promise<boolean> {
+  const token = getToken();
+  if (!token) {
+    logger.warn('[Telegram] TELEGRAM_BOT_TOKEN not set — skipping sendChatAction');
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/sendChatAction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, action }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      logger.warn(
+        { status: res.status, chatId, action, body: errBody.slice(0, 300) },
+        '[Telegram] sendChatAction failed',
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error).message, chatId, action },
+      '[Telegram] sendChatAction errored',
+    );
+    return false;
+  }
+}
+
+/** Returns true when Telegram accepted the reaction; false when skipped or HTTP-rejected. */
+export async function setMessageReaction(
+  chatId: string,
+  messageId: number,
+  emoji: string,
+): Promise<boolean> {
+  const token = getToken();
+  if (!token) {
+    logger.warn('[Telegram] TELEGRAM_BOT_TOKEN not set — skipping setMessageReaction');
+    return false;
+  }
+
+  try {
+    const res = await fetch(`${TELEGRAM_API_BASE}/bot${token}/setMessageReaction`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        reaction: [{ type: 'emoji', emoji }],
+      }),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      logger.warn(
+        { status: res.status, chatId, messageId, emoji, body: errBody.slice(0, 300) },
+        '[Telegram] setMessageReaction failed',
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    logger.warn(
+      { err: (error as Error).message, chatId, messageId, emoji },
+      '[Telegram] setMessageReaction errored',
+    );
+    return false;
+  }
+}
+
 /** Returns true when Telegram accepted the message; false when skipped or HTTP-rejected. */
 export async function sendMessage(
   chatId: string,

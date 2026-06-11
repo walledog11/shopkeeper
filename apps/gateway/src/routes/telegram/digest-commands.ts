@@ -3,15 +3,17 @@ import { postDashboardInternal } from '../../clients/dashboard-internal.js';
 import logger from '../../logger.js';
 import type { OperatorContext } from '../../operator-context.js';
 import type { DigestCommand } from './command-parser.js';
-import { filler, relativeAge } from './format.js';
-import type { TelegramReply } from './types.js';
+import { relativeAge } from './format.js';
+import { withOperatorPresence } from './presence.js';
+import type { TelegramMessageContext } from './types.js';
 
 export async function handleDigestCommand(
   organizationId: string,
   command: DigestCommand,
   context: OperatorContext,
-  reply: TelegramReply,
+  message: TelegramMessageContext,
 ): Promise<boolean> {
+  const { chatId, messageId, reply } = message;
   if (!context.pendingDigest) return false;
 
   const { threadIds } = context.pendingDigest;
@@ -92,11 +94,21 @@ export async function handleDigestCommand(
     return true;
   }
 
-  await reply(filler());
-  const response = await postDashboardInternal('/api/messages/internal', {
-    threadId: targetId,
-    text: command.text,
-  });
+  const response = await withOperatorPresence(
+    {
+      chatId,
+      messageId,
+      reply,
+      progress: {
+        kind: 'digest-reply',
+        ticketIndex: command.index,
+      },
+    },
+    () => postDashboardInternal('/api/messages/internal', {
+      threadId: targetId,
+      text: command.text,
+    }),
+  );
   if (!response.ok) {
     logger.error({ status: response.status, err: response.responseBody, threadId: targetId }, '[Telegram] Digest REPLY failed');
     await reply('Reply failed to send. Please try again from the dashboard.');

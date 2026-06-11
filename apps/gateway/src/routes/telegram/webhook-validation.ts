@@ -17,6 +17,7 @@ const TELEGRAM_PER_CHAT_WINDOW_SECS = 60;
 export interface ValidatedTelegramWebhook {
   body: string;
   chatId: string;
+  messageId: number;
   reply: TelegramReply;
 }
 
@@ -76,7 +77,7 @@ export async function validateTelegramWebhook(
   }
 
   const message = (req.body as TelegramUpdate).message;
-  if (!message?.text || !message.chat) {
+  if (!message?.text || !message.chat || message.message_id == null) {
     res.status(200).send('OK');
     return null;
   }
@@ -109,5 +110,5 @@ export async function validateTelegramWebhook(
   }
 
   res.status(200).send('OK');
-  return { body, chatId, reply };
+  return { body, chatId, messageId: message.message_id, reply };
 }

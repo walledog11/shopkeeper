@@ -9,7 +9,12 @@ export function registerTelegramWebhookRoutes(router: Router): void {
     if (!webhook) return;
 
     try {
-      await handleTelegramMessage(webhook.chatId, webhook.body, webhook.reply);
+      await handleTelegramMessage({
+        chatId: webhook.chatId,
+        messageId: webhook.messageId,
+        body: webhook.body,
+        reply: webhook.reply,
+      });
     } catch (error) {
       logger.error({ err: error }, '[Telegram] Webhook error');
       await webhook.reply('An unexpected error occurred. Please try again.');

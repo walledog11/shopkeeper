@@ -82,7 +82,7 @@ CI can't talk to a real Telegram bot. Run this once end-to-end against staging a
 
 - [ ] **Connect.** Dashboard → Integrations → Telegram → "Connect Telegram". Tap the deep link, send `/start`. Bot replies "Connected.". Re-open the integrations page; card shows the bound chat.
 - [ ] **Plan-ready ping.** Send a customer inbound (email or IG) that triggers an auto-plan. Telegram receives a digest with the plan + `yes / no / skip N` options.
-- [ ] **Approve.** Reply `yes`. Filler ack arrives within ~1s, then the agent's summary. Verify the action ran in the dashboard ticket (action log row, message sent if applicable).
+- [ ] **Approve.** Reply `yes`. Bot reacts 👀 to your message and shows typing; the agent's summary arrives when the run finishes (no filler ack). Verify the action ran in the dashboard ticket (action log row, message sent if applicable).
 - [ ] **Digest review.** Wait for the next daily digest (or trigger manually). Reply `review`. List of flagged tickets arrives. Reply `spam 1` — the thread becomes `filtered` in the dashboard. Reply `reply 1 hello` on another flagged thread — the message is sent to the customer.
 - [ ] **Order lookup.** Reply `#1234` (a real order). Bot returns thread summary + tag + last message.
 - [ ] **Free-form.** Send `refund order #1234 for $5`. Plan arrives; approve to execute.

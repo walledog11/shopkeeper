@@ -18,7 +18,7 @@ vi.mock('../provider-send-alerts.js', () => ({
   recordProviderSendFailureInBackground: recordProviderSendFailureInBackgroundSpy,
 }));
 
-import { sendMessage } from './telegram-client.js';
+import { sendChatAction, sendMessage, setMessageReaction } from './telegram-client.js';
 
 const originalToken = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -34,6 +34,94 @@ afterEach(() => {
   } else {
     process.env.TELEGRAM_BOT_TOKEN = originalToken;
   }
+});
+
+describe('sendChatAction', () => {
+  it('returns true when Telegram accepts the typing action', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    try {
+      await expect(sendChatAction('chat_1', 'typing')).resolves.toBe(true);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.telegram.org/bottest-token/sendChatAction',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ chat_id: 'chat_1', action: 'typing' }),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns false when the bot token is not configured', async () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+
+    await expect(sendChatAction('chat_1', 'typing')).resolves.toBe(false);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      '[Telegram] TELEGRAM_BOT_TOKEN not set — skipping sendChatAction',
+    );
+  });
+
+  it('returns false on HTTP failure without throwing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('bad request', { status: 400 }),
+    );
+
+    try {
+      await expect(sendChatAction('chat_1', 'typing')).resolves.toBe(false);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
+
+describe('setMessageReaction', () => {
+  it('returns true when Telegram accepts the reaction', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    try {
+      await expect(setMessageReaction('chat_1', 42, '👀')).resolves.toBe(true);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://api.telegram.org/bottest-token/setMessageReaction',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            chat_id: 'chat_1',
+            message_id: 42,
+            reaction: [{ type: 'emoji', emoji: '👀' }],
+          }),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('returns false when the bot token is not configured', async () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+
+    await expect(setMessageReaction('chat_1', 42, '👀')).resolves.toBe(false);
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      '[Telegram] TELEGRAM_BOT_TOKEN not set — skipping setMessageReaction',
+    );
+  });
+
+  it('returns false on HTTP failure without throwing', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('bad request', { status: 400 }),
+    );
+
+    try {
+      await expect(setMessageReaction('chat_1', 42, '👀')).resolves.toBe(false);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });
 
 describe('sendMessage', () => {

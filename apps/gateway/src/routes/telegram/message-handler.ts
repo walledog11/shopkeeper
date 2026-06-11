@@ -12,7 +12,7 @@ import { handleDigestCommand } from './digest-commands.js';
 import { HELP_TEXT } from './format.js';
 import { handlePendingPlanCommand } from './pending-plan-commands.js';
 import { handleStartBinding } from './start-binding.js';
-import type { TelegramReply } from './types.js';
+import type { TelegramMessageContext } from './types.js';
 
 const DIGEST_COMMAND_TYPES = new Set([
   'digest-review',
@@ -35,10 +35,9 @@ function isPendingPlanCommand(command: { type: string }): command is PendingPlan
 }
 
 export async function handleTelegramMessage(
-  chatId: string,
-  body: string,
-  reply: TelegramReply,
+  message: TelegramMessageContext & { body: string },
 ): Promise<void> {
+  const { chatId, body, reply } = message;
   const command = parseTelegramCommand(body);
   if (command.type === 'start') {
     await handleStartBinding(chatId, command.token, reply);
@@ -77,13 +76,13 @@ export async function handleTelegramMessage(
     return;
   }
 
-  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, reply)) {
+  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, message)) {
     return;
   }
 
   if (
     isPendingPlanCommand(command)
-    && await handlePendingPlanCommand(organizationId, clerkUserId, chatId, body, command, context, reply)
+    && await handlePendingPlanCommand(organizationId, clerkUserId, message, command, context)
   ) {
     return;
   }
@@ -95,5 +94,5 @@ export async function handleTelegramMessage(
     return;
   }
 
-  await executeFreeFormInstruction(organizationId, clerkUserId, chatId, body, context, reply);
+  await executeFreeFormInstruction(organizationId, clerkUserId, message, context);
 }
