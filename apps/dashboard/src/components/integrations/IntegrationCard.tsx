@@ -8,17 +8,9 @@ import { formatLastActivityTime } from "@/lib/format/date"
 import { getEmailReauthorizePath } from "@/lib/messaging/email/providers"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
-import { StatusPill } from "./StatusPill"
-import { EmailForwardingDisclosure } from "./EmailForwardingDisclosure"
+import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
@@ -146,12 +138,14 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
 
   const dialogStatusLine = isConnected
     ? health.note ?? (
-        [
-          lastActivity ? `${activityLabel} ${formatLastActivityTime(lastActivity)}` : null,
-          ...(threadsThisWeek > 0
-            ? [`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`]
-            : []),
-        ].filter(Boolean).join(" · ") || null
+        config.connectType === "email"
+          ? null
+          : [
+              lastActivity ? `${activityLabel} ${formatLastActivityTime(lastActivity)}` : null,
+              ...(threadsThisWeek > 0
+                ? [`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`]
+                : []),
+            ].filter(Boolean).join(" · ") || null
       )
     : config.description
 
@@ -255,95 +249,78 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         </div>
       </div>
 
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          className={cn(
-            "bg-black border-white/10 rounded-2xl p-6 gap-5 sm:max-w-[420px]",
-            "max-h-[85vh] overflow-y-auto",
-            "[&>button]:text-white/40 [&>button]:hover:text-white/70",
-          )}
-        >
-          <DialogHeader className="gap-0">
-            <div className="flex items-center gap-3 text-left pr-6">
-              <CardLogo config={config} />
-              <div className="flex-1 min-w-0 space-y-1">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <DialogTitle className="text-base font-semibold text-white">{config.name}</DialogTitle>
-                  {isConnected && <StatusPill state={health.state} />}
-                </div>
-                {dialogStatusLine && (
-                  <DialogDescription className={cn("text-xs text-white/40", health.note && "text-amber-400/90")}>
-                    {dialogStatusLine}
-                  </DialogDescription>
-                )}
-              </div>
-            </div>
-          </DialogHeader>
+      <IntegrationConfigureDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        config={config}
+        statusState={isConnected ? health.state : undefined}
+        statusLine={dialogStatusLine}
+        statusNote={!!health.note}
+      >
+        {isConnected && config.connectType && (
+          <>
+            <ConnectedAccountRow
+              connectType={config.connectType}
+              integration={connected[0]}
+            />
+            <IntegrationPermissionsSection
+              config={config}
+              connected={connected}
+            />
+            <IntegrationActionsSection
+              config={config}
+              connected={connected}
+              kbSyncing={kbSyncing}
+              kbSyncResult={kbSyncResult}
+              onReauthorize={handleReauthorize}
+              onKbSync={handleKbSync}
+              onDisconnect={onDisconnect}
+              email={config.connectType === "email" ? email : undefined}
+              setEmail={config.connectType === "email" ? setEmail : undefined}
+              emailLoading={config.connectType === "email" ? loading : undefined}
+              onEmailSave={config.connectType === "email" ? handleEmailConnect : undefined}
+            />
+          </>
+        )}
 
-          <div className="space-y-5">
-            {isConnected && config.connectType && (
-              <>
-                <ConnectedAccountRow
-                  connectType={config.connectType}
-                  integration={connected[0]}
-                />
-                <IntegrationPermissionsSection
-                  config={config}
-                  connected={connected}
-                  isOAuthEmail={isOAuthEmail}
-                />
-                <IntegrationActionsSection
-                  config={config}
-                  connected={connected}
-                  kbSyncing={kbSyncing}
-                  kbSyncResult={kbSyncResult}
-                  onReauthorize={handleReauthorize}
-                  onKbSync={handleKbSync}
-                  onDisconnect={onDisconnect}
-                />
-              </>
-            )}
+        {!isConnected && config.emailProvider === "postmark" && (
+          <>
+            <IntegrationPermissionsSection
+              config={config}
+              connected={connected}
+            />
+            <IntegrationActionsSection
+              config={config}
+              connected={connected}
+              kbSyncing={kbSyncing}
+              kbSyncResult={kbSyncResult}
+              onReauthorize={handleReauthorize}
+              onKbSync={handleKbSync}
+              onDisconnect={onDisconnect}
+              email={email}
+              setEmail={setEmail}
+              emailLoading={loading}
+              onEmailSave={handleEmailConnect}
+              defaultForwardingOpen
+            />
+          </>
+        )}
 
-            {config.connectType === "shopify" && !isConnected && (
-              <ShopifyConnectBody
-                isConnected={isConnected}
-                shop={shop}
-                setShop={setShop}
-                loading={loading}
-                onConnect={handleShopifyConnect}
-              />
-            )}
+        {config.connectType === "shopify" && !isConnected && (
+          <ShopifyConnectBody
+            isConnected={isConnected}
+            shop={shop}
+            setShop={setShop}
+            loading={loading}
+            onConnect={handleShopifyConnect}
+          />
+        )}
 
-            {config.connectType === "ig" && !isConnected && (
-              <InstagramConnectBody isConnected={isConnected} />
-            )}
+        {config.connectType === "ig" && !isConnected && (
+          <InstagramConnectBody isConnected={isConnected} />
+        )}
 
-            {isOAuthEmail && isConnected && (
-              <EmailForwardingDisclosure
-                isConnected={isConnected}
-                email={email}
-                setEmail={setEmail}
-                loading={loading}
-                onSave={handleEmailConnect}
-                defaultOpen
-                label="Set up inbound forwarding"
-              />
-            )}
-
-            {config.emailProvider === "postmark" && (
-              <EmailForwardingDisclosure
-                isConnected={isConnected}
-                email={email}
-                setEmail={setEmail}
-                loading={loading}
-                onSave={handleEmailConnect}
-                defaultOpen
-                label="Email forwarding"
-              />
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      </IntegrationConfigureDialog>
     </>
   )
 }

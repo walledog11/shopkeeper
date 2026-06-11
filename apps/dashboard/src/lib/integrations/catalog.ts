@@ -83,6 +83,9 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     tileClass: "bg-gradient-to-b from-[#5AB1F5] to-[#1D77EF]",
     description: "Route custom-domain support mail, forward incoming threads, and send replies from your verified address.",
     connectType: 'email',
+    permissions: [
+      "Send replies from your verified address",
+    ],
   },
   {
     id: "outlook",

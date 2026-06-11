@@ -3,13 +3,6 @@ import type { PillState } from "./integration-card-types"
 
 export function StatusPill({ state }: { state: PillState }) {
   switch (state) {
-    case 'working':
-      return (
-        <span role="status" className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/30 rounded-full px-3 py-1">
-          <span className="size-1.5 rounded-full bg-emerald-400" />
-          Working
-        </span>
-      )
     case 'waiting':
       return (
         <span role="status" className="inline-flex items-center gap-1.5 text-xs font-medium text-white/55 bg-white/[0.03] border border-white/15 rounded-full px-3 py-1">
