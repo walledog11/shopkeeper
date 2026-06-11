@@ -9,7 +9,6 @@ interface ProductImageProps {
   title: string
 }
 
-// Same thumbnail behavior as products/_components/ProductsPageClient.tsx.
 export function ProductImage({ src, title }: ProductImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   if (!src || failedSrc === src) {

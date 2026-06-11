@@ -98,7 +98,7 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 - `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
 ## Dashboard routes
-`/dashboard/{tickets, agent, kb, orders, customers, products, analytics, review, team, integrations, settings}`
+`/dashboard/{tickets, agent, kb, orders, customers, analytics, review, team, integrations, settings}`
 
 ## Env (names only — values in Vercel/Railway; see each app's `.env.example` for the full list)
 **Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` + `MICROSOFT_CLIENT_ID`/`SECRET` (email OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)

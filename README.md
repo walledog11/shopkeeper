@@ -66,7 +66,6 @@ Automation
 Storefront
   Orders                 /dashboard/orders        — Shopify order browser
   Customers              /dashboard/customers     — Shopify customer browser
-  Products               /dashboard/products      — Shopify product browser with inventory
 Insights
   Analytics              /dashboard/analytics
   Reports                /dashboard/reports       — exportable reports + GDPR data export
@@ -170,10 +169,9 @@ Configurable per org via Settings → Agent tab:
 ### Analytics
 - Ticket volume chart, channel breakdown, top topics, overview stats, audit log
 
-### Orders / Customers / Products (Storefront)
+### Orders / Customers (Storefront)
 - `/dashboard/orders` — Shopify order browser with fulfillment/payment status filters, stat strip, search, pagination
 - `/dashboard/customers` — Shopify customer browser
-- `/dashboard/products` — Shopify product browser with search, status filters (active/draft/archived), stat strip (total/active/out-of-stock), per-product drawer showing variants/SKUs/pricing/inventory, Shopify admin deep-link, load-more pagination
 - Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
 
 ### Reports

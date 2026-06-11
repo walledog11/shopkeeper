@@ -52,7 +52,6 @@ import { GET as getReports } from '@/app/api/reports/route';
 import { GET as getGdprReport } from '@/app/api/reports/gdpr/route';
 import { GET as getShopifyCustomer } from '@/app/api/shopify/customer/route';
 import { GET as getShopifyCustomers } from '@/app/api/shopify/customers/route';
-import { GET as getProducts } from '@/app/api/shopify/products/route';
 import { POST as createShopifyThread } from '@/app/api/threads/shopify/route';
 import { GET as getTeam, POST as inviteTeamMember, DELETE as removeTeamMember } from '@/app/api/team/route';
 
@@ -205,12 +204,11 @@ describe('tenant data surfaces', () => {
     const routes = [
       getShopifyCustomer(new Request('http://localhost/api/shopify/customer?email=alice@example.com')),
       getShopifyCustomers(new Request('http://localhost/api/shopify/customers?q=alice')),
-      getProducts(new Request('http://localhost/api/shopify/products?q=shirt')),
       getOrders(new Request('http://localhost/api/orders?q=1001')),
     ];
 
     const responses = await Promise.all(routes);
-    expect(responses.map(response => response.status)).toEqual([404, 404, 404, 404]);
+    expect(responses.map(response => response.status)).toEqual([404, 404, 404]);
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
@@ -248,42 +246,6 @@ describe('tenant data surfaces', () => {
     const foreignUnchanged = await db.customer.findUniqueOrThrow({ where: { id: foreignCustomer.id } });
     expect(callerUpdated.name).toBe('Caller Shopper');
     expect(foreignUnchanged.name).toBe('Foreign Existing');
-  });
-
-  it('uses the active organization Shopify integration for product browsing', async () => {
-    await createTestIntegration(callerOrg.id, {
-      platform: ChannelType.shopify,
-      externalAccountId: 'caller-products.myshopify.com',
-      accessToken: 'caller-product-token',
-    });
-    mockFetch.mockResolvedValueOnce(jsonResponse({
-      products: [{
-        id: 456,
-        title: 'Caller Tee',
-        status: 'active',
-        vendor: 'Caller',
-        product_type: 'Shirt',
-        tags: 'summer, tee',
-        images: [{ src: 'https://cdn.example/tee.png', alt: null }],
-        variants: [{
-          id: 789,
-          title: 'Default',
-          price: '20.00',
-          sku: 'TEE',
-          inventory_quantity: 5,
-          compare_at_price: null,
-        }],
-      }],
-    }));
-
-    const res = await getProducts(new Request('http://localhost/api/shopify/products?q=tee'));
-    const body = await json<{ shop: string; products: Array<{ title: string; tags: string[] }> }>(res);
-
-    expect(res.status).toBe(200);
-    expect(String(mockFetch.mock.calls[0][0])).toContain('https://caller-products.myshopify.com/admin/api/2026-04/products.json');
-    expect(mockFetch.mock.calls[0][1]).toMatchObject({ headers: { 'X-Shopify-Access-Token': 'caller-product-token' } });
-    expect(body.shop).toBe('caller-products.myshopify.com');
-    expect(body.products).toEqual([expect.objectContaining({ title: 'Caller Tee', tags: ['summer', 'tee'] })]);
   });
 
   it('creates Shopify-started threads in the active organization without mutating a foreign customer', async () => {
