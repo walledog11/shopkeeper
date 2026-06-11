@@ -2,24 +2,110 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import { ChevronDown } from "lucide-react"
+import { BadgeCheck, Mail } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
 import { formatLastActivityTime } from "@/lib/format/date"
 import { getEmailReauthorizePath } from "@/lib/messaging/email/providers"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
-import { ConnectedAccounts } from "./ConnectedAccounts"
-import { ShopifyPermissionsPanel } from "./ShopifyPermissionsPanel"
-import { StatusPill } from "./StatusPill"
 import {
-  EmailConnectBody,
-  InstagramConnectBody,
-  ShopifyConnectBody,
-} from "./connect-bodies"
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { ConnectedAccountRow } from "./ConnectedAccountRow"
+import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
+import { StatusPill } from "./StatusPill"
+import { EmailForwardingDisclosure } from "./EmailForwardingDisclosure"
+import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
 
 export type { ConnectType, PlatformConfig }
+
+const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1a1a]"
+
+export const CARD_SHELL = cn(
+  "rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
+  "transition-all duration-200",
+  "hover:border-white/[0.10] hover:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.25)]",
+)
+export const CARD_TITLE = "text-xl font-bold text-white leading-[22px]"
+export const CARD_DESCRIPTION = "text-[13.5px] leading-[18px] text-[#b8b8b8]"
+export const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
+export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-[#3d3d3d] hover:bg-[#4a4a4a] text-white")
+export const CARD_BUTTON_SECONDARY = cn(CARD_BUTTON, "bg-[#1f1f1f] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#d5d5d5]")
+export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-400/10 hover:bg-amber-400/15 border border-amber-400/25 text-amber-300")
+export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-[#222222] text-white/30 cursor-default")
+
+const FALLBACK_ICONS: Record<string, typeof Mail> = {
+  email: Mail,
+}
+
+export function CardLogo({ config }: { config: PlatformConfig }) {
+  const Icon = FALLBACK_ICONS[config.id]
+  const tileClass = cn(
+    "size-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden",
+    config.tileClass,
+  )
+
+  if (!config.logo) {
+    return (
+      <div className={tileClass}>
+        {Icon ? <Icon className="size-7 text-white" /> : null}
+      </div>
+    )
+  }
+
+  if (config.fullBleedLogo) {
+    const image = (
+      <Image
+        src={config.logo}
+        alt={`${config.name} logo`}
+        width={56}
+        height={56}
+        className={cn("size-full", config.tileClass ? "object-cover" : "object-contain")}
+      />
+    )
+    if (config.tileClass) {
+      return <div className={cn(tileClass, "p-0")}>{image}</div>
+    }
+    return (
+      <Image
+        src={config.logo}
+        alt={`${config.name} logo`}
+        width={56}
+        height={56}
+        className="size-14 rounded-2xl object-contain shrink-0"
+      />
+    )
+  }
+
+  const logoSize = config.logoSize ?? 40
+  return (
+    <div className={tileClass}>
+      <Image
+        src={config.logo}
+        alt={`${config.name} logo`}
+        width={logoSize}
+        height={logoSize}
+        className="object-contain"
+      />
+    </div>
+  )
+}
+
+export function ShopkeeperBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 self-start">
+      <Image src="/logos/shopkeeper-shop-logo.png" alt="" width={20} height={20} className="rounded-[6px]" />
+      <span className="text-[13px] font-semibold leading-none text-white">shopkeeper</span>
+      <BadgeCheck aria-label="Verified" className="size-3.5 fill-[#1D9BF0] text-white" />
+    </span>
+  )
+}
 
 interface Props {
   config: PlatformConfig
@@ -40,16 +126,11 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
 
   const isConnected = connected.length > 0
+  const isOAuthEmail = config.emailProvider === "gmail" || config.emailProvider === "outlook"
 
-  const health = deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null)
-
-  const accountIdInline: string | null = isConnected
-    ? (config.connectType === "ig"
-        ? (connected[0].fromEmail || `@${connected[0].externalAccountId}`)
-        : config.connectType === "shopify"
-        ? (connected[0].fromEmail || connected[0].externalAccountId)
-        : connected[0].externalAccountId)
-    : null
+  const health = config.connectType
+    ? deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null)
+    : { state: 'not-connected' as const, note: null, canFix: false }
 
   const threadsThisWeek = isConnected ? connected[0].threadsThisWeek ?? 0 : 0
   const activityLabel = config.connectType === "shopify" ? "Last activity" : "Last message"
@@ -62,6 +143,17 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
           ? [`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`]
           : []),
       ].join(" · ")
+
+  const dialogStatusLine = isConnected
+    ? health.note ?? (
+        [
+          lastActivity ? `${activityLabel} ${formatLastActivityTime(lastActivity)}` : null,
+          ...(threadsThisWeek > 0
+            ? [`${threadsThisWeek} conversation${threadsThisWeek === 1 ? "" : "s"} this week`]
+            : []),
+        ].filter(Boolean).join(" · ") || null
+      )
+    : config.description
 
   async function handleEmailConnect() {
     if (!email) return
@@ -114,14 +206,14 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
       const total = syncedPolicies + syncedPages
       setKbSyncResult(`${total} article${total === 1 ? "" : "s"} synced to Knowledge Base`)
     } catch {
-      setKbSyncResult("Sync failed , please try again")
+      setKbSyncResult("Sync failed, please try again")
     } finally {
       setKbSyncing(false)
       setTimeout(() => setKbSyncResult(null), 4000)
     }
   }
 
-  function handleRowConnect() {
+  function handleConnectClick() {
     if (config.connectType === "ig") {
       launchOAuth("/api/integrations/instagram/auth", {})
       return
@@ -130,95 +222,128 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   }
 
   return (
-    <div id={config.id} className="rounded-xl border border-white/[0.08] bg-card overflow-hidden transition-colors scroll-mt-6">
-      <div className="relative">
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => onOpenChange(!open)}
-          className="w-full flex items-start gap-4 px-5 py-4 transition-colors hover:bg-white/[0.02] cursor-pointer border-0 bg-transparent text-left [font-family:inherit]"
-        >
-          <div className={cn(
-            "size-11 rounded-lg flex items-center justify-center shrink-0 border",
-            config.accentBg,
-            config.accentBorder,
-          )}>
-            <Image src={config.logo} alt={`${config.name} logo`} width={22} height={22} className="object-contain" />
-          </div>
+    <>
+      <div id={config.id} className={CARD_SHELL}>
+        <CardLogo config={config} />
 
-          <div className="flex-1 min-w-0 space-y-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <p className="text-[15px] font-bold text-white/95 leading-none">{config.name}</p>
-              <StatusPill state={health.state} />
-              {accountIdInline && (
-                <span className="text-xs text-white/45 truncate max-w-[260px]">{accountIdInline}</span>
+        <p className={cn("mt-4", CARD_TITLE)}>{config.name}</p>
+        <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
+
+        <div className="mt-3">
+          <ShopkeeperBadge />
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          {config.comingSoon ? (
+            <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
+          ) : !isConnected ? (
+            isOAuthEmail ? (
+              <form action={`/api/integrations/${config.emailProvider}/auth`} method="post" className="flex-1 flex">
+                <button type="submit" className={cn(CARD_BUTTON_PRIMARY, "w-full")}>Connect</button>
+              </form>
+            ) : (
+              <button type="button" onClick={handleConnectClick} className={CARD_BUTTON_PRIMARY}>Connect</button>
+            )
+          ) : (
+            <>
+              {health.canFix && (
+                <button type="button" onClick={handleReauthorize} className={CARD_BUTTON_AMBER}>Fix</button>
               )}
-            </div>
-            <p className={cn("text-xs leading-relaxed", health.note ? "text-amber-400/90" : "text-white/40")}>
-              {statusLine}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0 mt-1">
-            <ChevronDown className={cn("size-4 text-white/25 transition-transform duration-200", open && "rotate-180")} />
-          </div>
-        </button>
-        {health.canFix && (
-          <button type="button"
-            onClick={handleReauthorize}
-            className="absolute right-12 top-4 text-xs font-semibold text-amber-300 bg-amber-400/[0.08] hover:bg-amber-400/[0.14] border border-amber-400/[0.25] rounded-md px-3 py-1.5 transition-colors"
-          >
-            Fix
-          </button>
-        )}
-        {!isConnected && !open && (
-          <button type="button"
-            onClick={handleRowConnect}
-            className="absolute right-12 top-4 text-xs font-semibold text-white/90 bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.15] rounded-md px-3 py-1.5 transition-colors"
-          >
-            Connect
-          </button>
-        )}
-      </div>
-
-      {open && (
-        <div className="border-t border-white/[0.06] px-5 py-4 space-y-4">
-          <ShopifyPermissionsPanel enabled={config.connectType === "shopify" && isConnected} />
-          <ConnectedAccounts
-            connectType={config.connectType}
-            connected={connected}
-            onDisconnect={onDisconnect}
-          />
-
-          {config.connectType === "email" && (
-            <EmailConnectBody
-              isConnected={isConnected}
-              connected={connected}
-              email={email}
-              setEmail={setEmail}
-              loading={loading}
-              onSave={handleEmailConnect}
-            />
-          )}
-
-          {config.connectType === "ig" && (
-            <InstagramConnectBody isConnected={isConnected} />
-          )}
-
-          {config.connectType === "shopify" && (
-            <ShopifyConnectBody
-              isConnected={isConnected}
-              shop={shop}
-              setShop={setShop}
-              loading={loading}
-              onConnect={handleShopifyConnect}
-              kbSyncing={kbSyncing}
-              kbSyncResult={kbSyncResult}
-              onKbSync={handleKbSync}
-            />
+              <button type="button" onClick={() => onOpenChange(true)} className={CARD_BUTTON_SECONDARY}>Configure</button>
+            </>
           )}
         </div>
-      )}
-    </div>
+      </div>
+
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+          className={cn(
+            "bg-black border-white/10 rounded-2xl p-6 gap-5 sm:max-w-[420px]",
+            "max-h-[85vh] overflow-y-auto",
+            "[&>button]:text-white/40 [&>button]:hover:text-white/70",
+          )}
+        >
+          <DialogHeader className="gap-0">
+            <div className="flex items-center gap-3 text-left pr-6">
+              <CardLogo config={config} />
+              <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <DialogTitle className="text-base font-semibold text-white">{config.name}</DialogTitle>
+                  {isConnected && <StatusPill state={health.state} />}
+                </div>
+                {dialogStatusLine && (
+                  <DialogDescription className={cn("text-xs text-white/40", health.note && "text-amber-400/90")}>
+                    {dialogStatusLine}
+                  </DialogDescription>
+                )}
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {isConnected && config.connectType && (
+              <>
+                <ConnectedAccountRow
+                  connectType={config.connectType}
+                  integration={connected[0]}
+                />
+                <IntegrationPermissionsSection
+                  config={config}
+                  connected={connected}
+                  isOAuthEmail={isOAuthEmail}
+                />
+                <IntegrationActionsSection
+                  config={config}
+                  connected={connected}
+                  kbSyncing={kbSyncing}
+                  kbSyncResult={kbSyncResult}
+                  onReauthorize={handleReauthorize}
+                  onKbSync={handleKbSync}
+                  onDisconnect={onDisconnect}
+                />
+              </>
+            )}
+
+            {config.connectType === "shopify" && !isConnected && (
+              <ShopifyConnectBody
+                isConnected={isConnected}
+                shop={shop}
+                setShop={setShop}
+                loading={loading}
+                onConnect={handleShopifyConnect}
+              />
+            )}
+
+            {config.connectType === "ig" && !isConnected && (
+              <InstagramConnectBody isConnected={isConnected} />
+            )}
+
+            {isOAuthEmail && isConnected && (
+              <EmailForwardingDisclosure
+                isConnected={isConnected}
+                email={email}
+                setEmail={setEmail}
+                loading={loading}
+                onSave={handleEmailConnect}
+                defaultOpen
+                label="Set up inbound forwarding"
+              />
+            )}
+
+            {config.emailProvider === "postmark" && (
+              <EmailForwardingDisclosure
+                isConnected={isConnected}
+                email={email}
+                setEmail={setEmail}
+                loading={loading}
+                onSave={handleEmailConnect}
+                defaultOpen
+                label="Email forwarding"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

@@ -1,15 +1,11 @@
 "use client"
 
-import Image from "next/image"
-import { BookOpen, Loader2, Mail } from "lucide-react"
+import { BookOpen, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/ui/cn"
-import { getEmailProvider, getEmailProviderLabel } from "@/lib/messaging/email/providers"
-import type { Integration } from "@/types"
-import { EmailForwardingDisclosure } from "./EmailForwardingDisclosure"
 
-function EmailRailStatus({ providerLabel }: { providerLabel: string }) {
+export function EmailRailStatus({ providerLabel }: { providerLabel: string }) {
   return (
     <div className="rounded-md border border-white/[0.06] bg-white/[0.015] px-3.5 py-3 space-y-2">
       <div className="flex items-center gap-2">
@@ -26,69 +22,6 @@ function EmailRailStatus({ providerLabel }: { providerLabel: string }) {
         {providerLabel} sign-in lets Shopkeeper send replies. Until native inbox sync ships,
         forward your support inbox to the address below so incoming mail becomes tickets.
       </p>
-    </div>
-  )
-}
-
-export function EmailConnectBody({
-  isConnected,
-  connected,
-  email,
-  setEmail,
-  loading,
-  onSave,
-}: {
-  isConnected: boolean
-  connected: Integration[]
-  email: string
-  setEmail: (v: string) => void
-  loading: boolean
-  onSave: () => void
-}) {
-  const oauthIntegration = connected.find((integration) => {
-    const provider = getEmailProvider(integration)
-    return provider === "gmail" || provider === "outlook"
-  })
-
-  return (
-    <div className="space-y-3">
-      {!isConnected && (
-        <p className="text-xs text-white/40 leading-relaxed">
-          Connect your support inbox. Replies will be sent from your real address.
-        </p>
-      )}
-      {!isConnected && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <form action="/api/integrations/gmail/auth" method="post">
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
-            >
-              <Image src="/logos/gmail.png" alt="" width={16} height={16} className="object-contain" />
-              Connect Gmail
-            </button>
-          </form>
-          <form action="/api/integrations/outlook/auth" method="post">
-            <button
-              type="submit"
-              className="flex w-full items-center justify-center gap-2 h-10 px-4 rounded-md bg-white/[0.05] hover:bg-white/[0.08] border border-white/[0.10] text-sm font-medium text-white/85 transition-colors"
-            >
-              <Mail className="size-4 text-white/65" />
-              Connect Outlook
-            </button>
-          </form>
-        </div>
-      )}
-      {oauthIntegration && <EmailRailStatus providerLabel={getEmailProviderLabel(oauthIntegration)} />}
-      <EmailForwardingDisclosure
-        isConnected={isConnected}
-        email={email}
-        setEmail={setEmail}
-        loading={loading}
-        defaultOpen={Boolean(oauthIntegration)}
-        label={oauthIntegration ? "Set up inbound forwarding" : undefined}
-        onSave={onSave}
-      />
     </div>
   )
 }
@@ -123,18 +56,12 @@ export function ShopifyConnectBody({
   setShop,
   loading,
   onConnect,
-  kbSyncing,
-  kbSyncResult,
-  onKbSync,
 }: {
   isConnected: boolean
   shop: string
   setShop: (v: string) => void
   loading: boolean
   onConnect: () => void
-  kbSyncing: boolean
-  kbSyncResult: string | null
-  onKbSync: () => void
 }) {
   return (
     <div className="space-y-3">
@@ -170,29 +97,39 @@ export function ShopifyConnectBody({
           </Button>
         </div>
       )}
-      {isConnected && (
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={kbSyncing}
-            onClick={onKbSync}
-            className="h-8 px-3 text-xs font-medium text-white/40 hover:text-white/70 hover:bg-white/[0.04]"
-          >
-            {kbSyncing
-              ? <><Loader2 className="size-3 mr-1.5 animate-spin" />Syncing…</>
-              : <><BookOpen className="size-3 mr-1.5" />Sync to KB</>
-            }
-          </Button>
-          {kbSyncResult && (
-            <span className={cn(
-              "text-xs",
-              kbSyncResult.startsWith("Sync failed") ? "text-red-400" : "text-emerald-400",
-            )}>
-              {kbSyncResult}
-            </span>
-          )}
-        </div>
+    </div>
+  )
+}
+
+export function SyncToKbLink({
+  syncing,
+  result,
+  onSync,
+}: {
+  syncing: boolean
+  result: string | null
+  onSync: () => void
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        disabled={syncing}
+        onClick={onSync}
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-white/40 hover:text-white/70 transition-colors disabled:opacity-50"
+      >
+        {syncing
+          ? <><Loader2 className="size-3.5 animate-spin" />Syncing…</>
+          : <><BookOpen className="size-3.5" />Sync to KB</>
+        }
+      </button>
+      {result && (
+        <span className={cn(
+          "text-xs",
+          result.startsWith("Sync failed") ? "text-red-400" : "text-emerald-400",
+        )}>
+          {result}
+        </span>
       )}
     </div>
   )

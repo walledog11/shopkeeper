@@ -6,7 +6,8 @@ import useSWR from "swr"
 import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
-import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG } from "@/lib/integrations/catalog"
+import { getEmailProvider } from "@/lib/messaging/email/providers"
+import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG, type PlatformConfig } from "@/lib/integrations/catalog"
 import {
   isOAuthDoneMessage,
   openOAuthPopup,
@@ -115,9 +116,15 @@ function IntegrationsPageContent() {
     }
   }
 
-  const getConnected = (platform: string) => integrations.filter(i => i.platform === platform)
-  const getLastActivity = (platform: string) =>
-    integrations.find(i => i.platform === platform)?.lastActivity ?? null
+  const getConnected = (def: PlatformConfig) => {
+    if (!def.platform) return []
+    return integrations.filter(i =>
+      i.platform === def.platform &&
+      (!def.emailProvider || getEmailProvider(i) === def.emailProvider)
+    )
+  }
+  const getLastActivity = (def: PlatformConfig) =>
+    def.platform ? integrations.find(i => i.platform === def.platform)?.lastActivity ?? null : null
 
   const alertCount = integrations.filter(hasIntegrationTokenAlert).length
 
@@ -132,13 +139,17 @@ function IntegrationsPageContent() {
   const nextStepIndex = setupSteps.findIndex(s => !s.done)
 
   function goToStep(stepId: string) {
-    if (stepId !== 'telegram') setOpenId(stepId)
-    document.getElementById(stepId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (stepId === 'shopify') {
+      setOpenId('shopify')
+      return
+    }
+    const targetId = stepId === 'email' ? 'gmail' : stepId
+    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
-      <div className="max-w-4xl w-full mx-auto px-6 py-8 space-y-8">
+      <div className="w-full px-6 py-8 space-y-8">
 
         {/* Header */}
         <div>
@@ -200,31 +211,33 @@ function IntegrationsPageContent() {
 
         {/* Integrations */}
         {loaded ? (
-          <div className="space-y-3">
+          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
             {PLATFORM_CONFIG.map(def => (
-              <IntegrationCard
-                key={def.id}
-                config={def}
-                connected={def.platform ? getConnected(def.platform) : []}
-                lastActivity={def.platform ? getLastActivity(def.platform) : null}
-                onConnect={handleConnect}
-                onDisconnect={handleDisconnect}
-                onLaunchOAuth={launchOAuth}
-                open={openId === def.id}
-                onOpenChange={(o) => setOpenId(o ? def.id : null)}
-              />
+              def.id === 'telegram' ? (
+                <TelegramCard key={def.id} config={def} />
+              ) : (
+                <IntegrationCard
+                  key={def.id}
+                  config={def}
+                  connected={getConnected(def)}
+                  lastActivity={getLastActivity(def)}
+                  onConnect={handleConnect}
+                  onDisconnect={handleDisconnect}
+                  onLaunchOAuth={launchOAuth}
+                  open={openId === def.id}
+                  onOpenChange={(o) => setOpenId(o ? def.id : null)}
+                />
+              )
             ))}
-            <TelegramCard />
           </div>
         ) : (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-white/[0.08] bg-card px-5 py-4 flex items-start gap-4">
-                <Skeleton className="size-11 rounded-lg" />
-                <div className="flex-1 space-y-2 pt-0.5">
-                  <Skeleton className="h-4 w-44" />
-                  <Skeleton className="h-3 w-72" />
-                </div>
+          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 space-y-4">
+                <Skeleton className="size-14 rounded-2xl" />
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-10 w-full rounded-[10px]" />
               </div>
             ))}
           </div>
@@ -234,13 +247,17 @@ function IntegrationsPageContent() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1c1c1c] border border-white/[0.10] text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
+        <button
+          type="button"
+          onClick={() => setToast(null)}
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-secondary border border-border text-foreground text-sm font-medium px-4 py-2.5 rounded-md shadow-lg cursor-pointer hover:bg-accent transition-colors"
+        >
           {toast.tone === 'error'
             ? <AlertCircle className="size-4 text-red-400 shrink-0" />
             : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
           }
           {toast.message}
-        </div>
+        </button>
       )}
     </div>
   )

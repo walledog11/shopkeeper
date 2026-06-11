@@ -14,7 +14,7 @@ export function PermissionToggleRow({
   onChange: (v: boolean) => void
 }) {
   return (
-    <div className="flex items-center justify-between py-3">
+    <div className="flex items-center justify-between px-4 py-3.5">
       <div className="flex items-center gap-2 min-w-0">
         <p className="text-sm text-white/75 truncate">{label}</p>
         {required && (

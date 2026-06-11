@@ -6,6 +6,7 @@ import { getEmailProviderLabel } from "@/lib/messaging/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { CopyButton } from "./CopyButton"
+import { IntegrationSettingsSection } from "./IntegrationSettingsSection"
 import { isTokenExpired, isTokenExpiringSoon } from "./integration-card-helpers"
 
 const DISCONNECT_NOTES: Record<ConnectType, string> = {
@@ -28,14 +29,14 @@ export function ConnectedAccounts({
   if (!connected.length) return null
 
   return (
-    <div className="rounded-md overflow-hidden border border-white/[0.07] divide-y divide-white/[0.05]">
+    <IntegrationSettingsSection>
       {connected.map((integration) => (
-        <div key={integration.id} className="px-3.5 py-2.5 bg-white/[0.02]">
-          <div className="flex items-center gap-2.5">
+        <div key={integration.id}>
+          <div className="flex items-center gap-3 px-4 py-3">
             <div className="flex-1 min-w-0">
               {connectType === "ig" ? (
                 <div className="flex items-center gap-1.5">
-                  <p className="text-xs font-medium text-white/55 truncate">
+                  <p className="text-sm text-white/75 truncate">
                     {integration.fromEmail || integration.externalAccountId}
                   </p>
                   {isTokenExpired(integration) ? (
@@ -49,37 +50,39 @@ export function ConnectedAccounts({
                   ) : null}
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <p className="text-xs text-white/50 truncate">{integration.externalAccountId}</p>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <p className="text-sm text-white/75 truncate">{integration.externalAccountId}</p>
                   <CopyButton text={integration.externalAccountId} />
                   {connectType === "email" && (
-                    <span className="inline-flex items-center text-xs font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
+                    <span className="inline-flex items-center text-[10px] font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
                       {getEmailProviderLabel(integration)}
                     </span>
                   )}
                 </div>
               )}
             </div>
-            <button type="button"
+            <button
+              type="button"
               onClick={() => setConfirmingId(confirmingId === integration.id ? null : integration.id)}
-              className="text-xs font-medium text-white/25 hover:text-red-400 transition-colors whitespace-nowrap shrink-0"
+              className="text-sm font-medium text-white/40 hover:text-white/70 transition-colors whitespace-nowrap shrink-0"
             >
               {confirmingId === integration.id ? "Cancel" : "Disconnect"}
             </button>
           </div>
           {confirmingId === integration.id && (
-            <div className="mt-2 flex items-center justify-between gap-3 rounded-md border border-red-400/[0.15] bg-red-400/[0.04] px-3 py-2">
+            <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] bg-white/[0.02] px-4 py-3">
               <p className="text-xs text-white/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
-              <button type="button"
+              <button
+                type="button"
                 onClick={() => { setConfirmingId(null); onDisconnect(integration.id) }}
-                className="text-xs font-semibold text-red-400 bg-red-400/[0.08] hover:bg-red-400/[0.14] border border-red-400/[0.25] rounded-md px-3 py-1.5 transition-colors whitespace-nowrap shrink-0"
+                className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors whitespace-nowrap shrink-0"
               >
-                Disconnect
+                Confirm
               </button>
             </div>
           )}
         </div>
       ))}
-    </div>
+    </IntegrationSettingsSection>
   )
 }
