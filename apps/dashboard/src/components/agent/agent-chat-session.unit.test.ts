@@ -42,6 +42,28 @@ describe("sendAgentChatInstruction", () => {
     })
   })
 
+  it("returns awaiting approval responses from the chat API", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({
+      sessionId: "session-1",
+      summary: "Here's what I'll put together…",
+      actionsPerformed: [],
+      awaitingApproval: true,
+    }, { status: 200 }))
+
+    await expect(sendAgentChatInstruction({
+      fetchImpl,
+      instruction: "create an order",
+      sessionId: null,
+      storage: { removeItem: vi.fn() },
+    })).resolves.toEqual({
+      ok: true,
+      sessionId: "session-1",
+      summary: "Here's what I'll put together…",
+      actionsPerformed: [],
+      awaitingApproval: true,
+    })
+  })
+
   it("returns API errors as failed chat results", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ error: "Plan failed" }, { status: 500 }))
 

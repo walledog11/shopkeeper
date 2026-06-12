@@ -18,7 +18,13 @@ export function useCommandPalette() {
   return ctx;
 }
 
-export function CommandPaletteProvider({ children }: { children: React.ReactNode }) {
+export function CommandPaletteProvider({
+  children,
+  agentName,
+}: {
+  children: React.ReactNode;
+  agentName: string;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -39,7 +45,7 @@ export function CommandPaletteProvider({ children }: { children: React.ReactNode
   return (
     <CommandPaletteContext.Provider value={value}>
       {children}
-      <CommandPalette open={isOpen} onClose={close} />
+      <CommandPalette open={isOpen} onClose={close} agentName={agentName} />
     </CommandPaletteContext.Provider>
   );
 }

@@ -547,15 +547,6 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
           </div>
         </>
       )}
-
-      <div className="px-5 py-4 border-t border-white/[0.06] text-center">
-        <p className="text-xs text-white/35">
-          Need channel, tool, or date filters, or CSV export?{" "}
-          <Link href="/dashboard/settings?tab=audit" className="text-white/55 hover:text-white underline-offset-2 hover:underline">
-            Open Audit log in Settings
-          </Link>
-        </p>
-      </div>
     </>
   )
 }

@@ -3,16 +3,15 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import { Sidebar, SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext";
 import { useOpenThreadCountQuery } from "@/hooks/useThreads";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { cn } from "@/lib/ui/cn";
 import AutonomyPill from "./AutonomyPill";
+import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { Logo } from "./sidebar/Logo";
 import { MobileBottomBar } from "./sidebar/MobileBottomBar";
 import { MobileNavSheet } from "./sidebar/MobileNavSheet";
-import { SidebarNavContent } from "./sidebar/SidebarNavContent";
 import { useNavAuth } from "./sidebar/useNavAuth";
 
 function useDashboardOpenCount() {
@@ -58,40 +57,41 @@ function DashboardSidebarContent({
         </div>
       )}
 
-      <SidebarProvider className="flex-1 min-h-0 w-full overflow-x-hidden">
-        <Sidebar className="max-md:hidden border-r-0 bg-background" collapsible="offcanvas">
-          <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} navAuth={navAuth} agentName={agentName} />
-        </Sidebar>
+      <div className="flex-1 min-h-0 w-full overflow-x-hidden flex flex-col bg-background">
+        <DesktopTopBar
+          agentName={agentName}
+          openCount={openCount}
+          onSwitching={setIsSwitching}
+          navAuth={navAuth}
+        />
 
-        <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-neutral-950 flex flex-col">
-          <div
-            data-dashboard-mobile-header
-            className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar"
-          >
-            <Logo />
-            <div className="flex items-center gap-1">
-              <AutonomyPill tier={navAuth.autonomyTier} compact />
-              <button
-                type="button"
-                onClick={() => setMobileNavOpen(true)}
-                aria-label="Open navigation"
-                className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
-              >
-                <Menu className="size-5" />
-              </button>
-            </div>
+        <div
+          data-dashboard-mobile-header
+          className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar"
+        >
+          <Logo />
+          <div className="flex items-center gap-1">
+            <AutonomyPill tier={navAuth.autonomyTier} compact />
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open navigation"
+              className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+            >
+              <Menu className="size-5" />
+            </button>
           </div>
+        </div>
 
-          <div
-            className={cn(
-              "dashboard-content flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0",
-              "pb-16",
-            )}
-          >
-            {children}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+        <div
+          className={cn(
+            "dashboard-content flex-1 min-h-0 overflow-hidden flex flex-col md:pb-0",
+            "pb-16",
+          )}
+        >
+          {children}
+        </div>
+      </div>
 
       <MobileNavSheet
         open={mobileNavOpen}
@@ -99,10 +99,9 @@ function DashboardSidebarContent({
         openCount={openCount}
         onSwitching={setIsSwitching}
         navAuth={navAuth}
-        agentName={agentName}
       />
 
-      <MobileBottomBar openCount={openCount} agentName={agentName} />
+      <MobileBottomBar openCount={openCount} />
     </>
   );
 }

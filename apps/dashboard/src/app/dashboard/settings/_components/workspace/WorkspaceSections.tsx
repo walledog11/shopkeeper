@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Download, Loader2, Trash2, Upload } from "lucide-react"
 import { OrgAvatar } from "@/components/OrgAvatar"
 import { Button } from "@/components/ui/button"
@@ -273,7 +274,11 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
-                  This is your only workspace. Create another workspace first, or delete your account in Settings → Account to leave Shopkeeper.
+                  This is your only workspace. Create another workspace first, or delete your account from{" "}
+                  <Link href="/dashboard/account" className="font-semibold text-white/55 hover:text-white/75">
+                    Account settings
+                  </Link>{" "}
+                  to leave Shopkeeper.
                 </p>
               )}
             </div>

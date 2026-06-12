@@ -3,18 +3,16 @@
 import Link from "next/link"
 import { Sparkles } from "lucide-react"
 import { formatRefundCapSummary } from "@/lib/agent/autonomy-tiers"
+import { agentConfigureHref } from "@/lib/agent/configure"
 import type { OrgSettings } from "@/types"
-import type { SettingsTab } from "./SettingsPageClient"
 
 interface Props {
   orgName: string
   settings: OrgSettings
-  onJump: (tab: SettingsTab) => void
 }
 
-export default function ConciergeSummary({ orgName, settings, onJump }: Props) {
+export default function ConciergeSummary({ orgName, settings }: Props) {
   const lang = settings.replyLanguage === "auto" ? "the customer's language" : settings.replyLanguage
-  const jumpAgent = () => onJump("agent")
   const refundCap = formatRefundCapSummary(settings)
 
   return (
@@ -35,17 +33,18 @@ export default function ConciergeSummary({ orgName, settings, onJump }: Props) {
 
       <p className="mt-2.5 text-[14px] leading-relaxed text-white/80">
         I&apos;m set to{" "}
-        <Pill onClick={jumpAgent}>
+        <Pill href={agentConfigureHref("autonomy")}>
           {settings.autoPlanOnOpen ? "draft a plan the moment a ticket opens" : "wait for you to ask before planning"}
         </Pill> and{" "}
-        <Pill onClick={jumpAgent}>
+        <Pill href={agentConfigureHref("autonomy")}>
           {settings.requireApprovalForActions
             ? "pause for your approval before acting"
             : "send simple replies on my own (refunds and cancellations still need your OK)"}
         </Pill>. I can handle{" "}
-        <Pill onClick={jumpAgent}>{refundCap}</Pill> and reply in <Pill onClick={jumpAgent}>{lang}</Pill>.{" "}
-        Customer channels live in <Pill href="/dashboard/integrations">Integrations</Pill>; plan and invoices in{" "}
-        <Pill onClick={() => onJump("billing")}>billing</Pill>.
+        <Pill href={agentConfigureHref("autonomy")}>{refundCap}</Pill> and reply in{" "}
+        <Pill href={agentConfigureHref("autonomy")}>{lang}</Pill>. Customer channels live in{" "}
+        <Pill href="/dashboard/integrations">Integrations</Pill>; plan and invoices in{" "}
+        <Pill href="/dashboard/settings?tab=billing">billing</Pill>.
       </p>
     </div>
   )
@@ -54,19 +53,10 @@ export default function ConciergeSummary({ orgName, settings, onJump }: Props) {
 const PILL_CLASS =
   "inline-flex items-baseline rounded border border-white/[0.12] bg-white/[0.06] px-1.5 py-px align-baseline text-[13.5px] font-medium text-white transition-colors hover:bg-white/[0.10]"
 
-function Pill(
-  props: { children: React.ReactNode } & ({ onClick: () => void; href?: never } | { href: string; onClick?: never }),
-) {
-  if ("href" in props && props.href) {
-    return (
-      <Link href={props.href} className={PILL_CLASS}>
-        {props.children}
-      </Link>
-    )
-  }
+function Pill({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <button type="button" onClick={props.onClick} className={PILL_CLASS}>
-      {props.children}
-    </button>
+    <Link href={href} className={PILL_CLASS}>
+      {children}
+    </Link>
   )
 }

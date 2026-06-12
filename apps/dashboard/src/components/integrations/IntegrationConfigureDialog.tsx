@@ -15,9 +15,9 @@ import { StatusPill } from "./StatusPill"
 import type { PillState } from "./integration-card-types"
 
 export const INTEGRATION_CONFIGURE_DIALOG_CLASS = cn(
-  "bg-black border-white/10 rounded-2xl p-6 gap-5 sm:max-w-[420px]",
+  "bg-popover border-border rounded-2xl p-6 gap-5 sm:max-w-[420px]",
   "max-h-[85vh] overflow-y-auto",
-  "[&>button]:text-white/40 [&>button]:hover:text-white/70",
+  "[&>button]:text-muted-foreground [&>button]:hover:text-foreground",
 )
 
 export function IntegrationConfigureDialog({
@@ -48,11 +48,11 @@ export function IntegrationConfigureDialog({
             <CardLogo config={config} />
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <DialogTitle className="text-base font-semibold text-white">{config.name}</DialogTitle>
+                <DialogTitle className="text-base font-semibold text-popover-foreground">{config.name}</DialogTitle>
                 {showStatusPill && <StatusPill state={statusState} />}
               </div>
               {statusLine && (
-                <DialogDescription className={cn("text-xs text-white/40", statusNote && "text-amber-400/90")}>
+                <DialogDescription className={cn("text-xs text-muted-foreground", statusNote && "text-amber-400/90")}>
                   {statusLine}
                 </DialogDescription>
               )}

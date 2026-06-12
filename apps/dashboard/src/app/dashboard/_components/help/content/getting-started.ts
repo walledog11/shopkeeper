@@ -66,7 +66,7 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Settings",
-          text: "Configure your business name, AI context, and brand voice here. These settings directly affect how Shopkeeper drafts replies.",
+          text: "Workspace settings cover billing and workspace administration. Agent configuration lives under Agent → Configure in the top navigation. Personal account settings are in the avatar menu.",
         },
       ],
     },

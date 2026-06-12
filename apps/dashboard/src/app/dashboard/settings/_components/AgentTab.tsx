@@ -29,7 +29,7 @@ export default function AgentTab(props: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-bold text-white/80">Agent</h1>
+        <h1 className="text-lg font-bold text-white/80">Configure</h1>
         <p className="text-sm text-white/35 mt-0.5 max-w-prose">
           How much {agentName} can do alone, and when {agentName} is on duty. Everything else is optional.
         </p>

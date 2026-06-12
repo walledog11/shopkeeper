@@ -15,13 +15,8 @@ import type { Integration, KnowledgeBase } from "@/types"
 
 interface OrdersResponse {
   orders: Array<{
-    id: number
-    name: string
     fulfillment_status: string | null
     financial_status: string
-    total_price: string
-    customer: { name: string } | null
-    line_items: { title: string; variant_title: string | null }[]
   }>
 }
 
@@ -60,24 +55,6 @@ export function useHomeData({ initialSummary }: Options) {
     return ordersData.orders.filter(order => order.fulfillment_status == null && order.financial_status === "paid").length
   }, [ordersData])
 
-  const todaysOrders = useMemo(() => {
-    if (!ordersData?.orders) return []
-    return ordersData.orders.slice(0, 5).map((order) => {
-      const lineItem = order.line_items[0]
-      const summary = lineItem ? `${lineItem.title}${lineItem.variant_title ? ` — ${lineItem.variant_title}` : ""}` : ""
-      const status: "ship" | "refund" =
-        order.financial_status === "refunded" || order.financial_status === "partially_refunded" ? "refund" : "ship"
-      return {
-        id: order.id,
-        name: order.name,
-        customerName: order.customer?.name || "Guest",
-        summary,
-        status,
-        amount: status === "refund" ? order.total_price : null,
-      }
-    })
-  }, [ordersData])
-
   const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
   const hasTelegramBound = telegramData?.connected ?? false
   const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
@@ -94,7 +71,7 @@ export function useHomeData({ initialSummary }: Options) {
   const workflowSteps = useMemo(() => [
     { label: "Connect a channel", href: "/dashboard/integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
-    { label: "Configure agent", href: "/dashboard/settings?tab=agent", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
+    { label: "Configure agent", href: "/dashboard/agent/configure", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
     { label: "Add memory notes", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
     { label: "Send your first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
     { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
@@ -121,7 +98,6 @@ export function useHomeData({ initialSummary }: Options) {
     isLoading,
     ...home,
     ordersToShip,
-    todaysOrders,
     hasShopify,
     hasTelegramBound,
     workflowSteps,

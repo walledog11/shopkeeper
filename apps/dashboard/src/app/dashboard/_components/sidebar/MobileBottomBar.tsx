@@ -6,7 +6,7 @@ import { cn } from "@/lib/ui/cn";
 import { OpenCountBadge } from "./OpenCountBadge";
 import { dispatchNavProgressStart, isRouteActive, mobileTabs } from "./sidebar-helpers";
 
-export function MobileBottomBar({ openCount, agentName }: { openCount: number; agentName: string }) {
+export function MobileBottomBar({ openCount }: { openCount: number }) {
   const pathname = usePathname();
 
   return (
@@ -43,7 +43,7 @@ export function MobileBottomBar({ openCount, agentName }: { openCount: number; a
                 />
               )}
             </div>
-            <span className="text-xs font-medium leading-none">{tab.href === "/dashboard/agent" ? agentName : tab.name}</span>
+            <span className="text-xs font-medium leading-none">{tab.name}</span>
           </Link>
         );
       })}

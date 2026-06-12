@@ -2,11 +2,11 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Camera, Loader2, Mail, MessageSquare, ShoppingBag, Sparkles } from "lucide-react"
+import { AlertCircle, Camera, Loader2, Mail, MessageSquare, ShoppingBag } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
+import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
 
 interface Props {
   items: HomeNeedsAttentionItem[]
@@ -15,9 +15,9 @@ interface Props {
 }
 
 const CHANNEL_META: Record<string, { Icon: LucideIcon; className: string }> = {
-  Email: { Icon: Mail, className: "text-blue-400" },
-  Instagram: { Icon: Camera, className: "text-pink-400" },
-  Shopify: { Icon: ShoppingBag, className: "text-green-400" },
+  Email: { Icon: Mail, className: "text-blue-600" },
+  Instagram: { Icon: Camera, className: "text-pink-600" },
+  Shopify: { Icon: ShoppingBag, className: "text-green-600" },
 }
 
 export default function NeedsYou({ items, agentName, onApproved }: Props) {
@@ -26,7 +26,7 @@ export default function NeedsYou({ items, agentName, onApproved }: Props) {
   return (
     <section id="needs-you" className="flex flex-col gap-2.5">
       <div className="flex items-baseline gap-3">
-        <h2 className="text-sm font-bold text-white/85">Needs you</h2>
+        <h2 className="font-display-serif text-lg text-foreground">Needs you</h2>
       </div>
 
       <div className="space-y-2">
@@ -39,9 +39,8 @@ export default function NeedsYou({ items, agentName, onApproved }: Props) {
 }
 
 function NeedsYouRow({ item, agentName, onApproved }: { item: HomeNeedsAttentionItem; agentName: string; onApproved: () => void }) {
-  const channelMeta = CHANNEL_META[item.channelName] ?? { Icon: MessageSquare, className: "text-white/40" }
+  const channelMeta = CHANNEL_META[item.channelName] ?? { Icon: MessageSquare, className: "text-foreground/40" }
   const ChannelIcon = channelMeta.Icon
-  const tagStyle = getTagStyle(item.tag)
   const [isApproving, setIsApproving] = useState(false)
   const [approvalError, setApprovalError] = useState<string | null>(null)
 
@@ -72,100 +71,92 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: HomeNeedsAttention
     }
   }
 
-  return (
-    <Card className="bg-card border-border rounded-md overflow-hidden">
-      <div className="flex md:flex-row flex-col items-stretch">
-        <div className="flex-1 min-w-0 px-4 py-3">
-          <div className="flex items-center gap-2 mb-1">
-            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider shrink-0 ${tagStyle.className}`}>
-              {tagStyle.label}
-            </span>
-            <Link
-              href={`/dashboard/tickets?thread=${item.threadId}`}
-              className="text-sm font-semibold text-white/95 truncate hover:text-white transition-colors"
-            >
-              {item.headline}
-            </Link>
-          </div>
+  const isQuickReply = item.kind === "quick_reply" && item.replyText
 
-          <div className="flex items-center gap-1.5 text-xs text-white/40 mb-1.5">
+  return (
+    <Card className="bg-card border-border rounded-xl overflow-hidden">
+      <div className="flex md:flex-row flex-col items-stretch">
+        <div className="flex-1 min-w-0 px-4 py-3.5">
+          <Link
+            href={`/dashboard/tickets?thread=${item.threadId}`}
+            className="text-sm font-semibold text-foreground/90 hover:text-foreground transition-colors leading-snug"
+          >
+            {item.headline}
+          </Link>
+
+          <div className="flex items-center gap-1.5 text-xs text-foreground/45 mt-1 mb-2.5">
+            <span className="font-medium text-foreground/65 truncate">{item.customerName}</span>
+            <span className="text-foreground/20">·</span>
             <ChannelIcon aria-hidden className={`size-[11px] shrink-0 ${channelMeta.className}`} />
-            <span className={`${channelMeta.className} uppercase tracking-wide`}>{item.channelName}</span>
-            <span className="text-white/15">·</span>
-            <span className="truncate text-white/55">{item.customerName}</span>
+            <span>{item.channelName}</span>
             {item.orderRef && (
               <>
-                <span className="text-white/15">·</span>
-                <span className="tabular-nums text-white/55">{item.orderRef}</span>
+                <span className="text-foreground/20">·</span>
+                <span className="tabular-nums">{item.orderRef}</span>
               </>
             )}
-            <span className="text-white/15">·</span>
+            <span className="text-foreground/20">·</span>
             <span>{item.timeAgo}</span>
           </div>
 
           {item.contextLine && (
-            <p className="text-xs text-white/55 leading-snug mb-1.5">{item.contextLine}</p>
+            <p className="text-xs text-foreground/55 leading-snug mb-2">{item.contextLine}</p>
           )}
 
-          {item.kind === "quick_reply" && item.replyText ? (
-            <div className="px-2.5 py-2 rounded-md bg-gradient-to-r from-sky-600/[0.1] to-sky-400/[0.1] border border-blue-400/[0.12]">
-              <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-sky-400/80" />
-                <span>
-                  <span className="font-semibold text-white/85">{agentName} drafted: </span>
-                  <span className="text-white/80">{item.replyText}</span>
-                </span>
+          <div className="flex items-start gap-2.5">
+            <AgentAvatar agentName={agentName} size="sm" className="mt-4" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] text-foreground/45 mb-1">
+                {agentName} {isQuickReply ? "drafted this reply" : "proposes"}
               </p>
+              <div
+                className={
+                  isQuickReply
+                    ? "px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-foreground/[0.04] border border-border w-fit"
+                    : "px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-amber-600/[0.07] border border-amber-600/25 w-fit"
+                }
+              >
+                <p className="text-[13px] text-foreground/80 leading-relaxed">
+                  {isQuickReply ? item.replyText : item.proposalSummary}
+                </p>
+              </div>
             </div>
-          ) : (
-            <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
-              <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-amber-400/80" />
-                <span>
-                  <span className="font-semibold text-white/85">{agentName} proposes: </span>
-                  <span className="text-white/80">{item.proposalSummary}</span>
-                </span>
-              </p>
-            </div>
-          )}
+          </div>
 
           {approvalError && (
-            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-red-300">
+            <p className="mt-2 flex items-center gap-1.5 text-xs text-red-600">
               <AlertCircle aria-hidden className="size-3 shrink-0" />
               {approvalError}
             </p>
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5 justify-center p-3 md:border-l border-t border-border bg-white/[0.01]">
+        <div className="flex flex-col gap-1.5 justify-center p-3 md:border-l max-md:border-t border-border">
           {item.kind === "quick_reply" ? (
             <>
               <button
                 type="button"
                 onClick={approveQuickReply}
                 disabled={isApproving}
-                className="inline-flex items-center justify-center gap-1.5 text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-green-400 hover:bg-green-300 disabled:opacity-40 text-black transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-center md:text-xs text-sm font-semibold px-4 md:py-2.5 py-3.5 rounded-full bg-green-600 hover:bg-green-700 disabled:opacity-40 text-primary-foreground transition-colors"
               >
                 {isApproving && <Loader2 aria-hidden className="size-3 animate-spin" />}
                 {isApproving ? "Sending" : "Send as-is"}
               </button>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
+                className="text-center md:text-xs text-sm font-semibold px-4 md:py-2.5 py-3.5 rounded-full border border-border hover:bg-foreground/[0.04] text-foreground/70 transition-colors"
               >
                 View ticket
               </Link>
             </>
           ) : (
-            <>
-              <Link
-                href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-amber-400 hover:bg-amber-300 text-black transition-colors"
-              >
-                Review decision
-              </Link>
-
-            </>
+            <Link
+              href={`/dashboard/tickets?thread=${item.threadId}`}
+              className="text-center md:text-xs text-sm font-semibold px-4 md:py-2.5 py-3.5 rounded-full bg-amber-600 hover:bg-amber-700 text-primary-foreground transition-colors"
+            >
+              Review decision
+            </Link>
           )}
         </div>
       </div>

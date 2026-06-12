@@ -1,5 +1,6 @@
 import { isOperatorChannel } from "@shopkeeper/agent/thread-constants"
 import type { ActionLogEntry } from "@/types"
+import { buildAgentPanelHref } from "./panel"
 
 const ORDER_RISK_PREFIX = "order-risk-review:"
 
@@ -41,8 +42,10 @@ export function actionLogEntryHref(entry: ActionLogEntry): string | null {
     }
   }
 
+  if (isOperatorChannel(entry.channelType)) {
+    return buildAgentPanelHref({ session: entry.threadId ?? null })
+  }
   if (!entry.threadId) return null
-  if (isOperatorChannel(entry.channelType)) return "/dashboard/agent"
   return `/dashboard/tickets?thread=${entry.threadId}`
 }
 

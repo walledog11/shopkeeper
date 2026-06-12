@@ -8,6 +8,8 @@ interface Props {
   activeTab: "open" | "closed"
   customer: string
   platform: string
+  agentName?: string
+  onAskAgent?: () => void
   onBack: () => void
   onResolve: () => void
   onReopen: () => void
@@ -18,6 +20,8 @@ export default function ConversationHeader({
   activeTab,
   customer,
   platform,
+  agentName,
+  onAskAgent,
   onBack,
   onResolve,
   onReopen,
@@ -60,6 +64,16 @@ export default function ConversationHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        {onAskAgent && agentName && activeTab === "open" && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAskAgent}
+            className="hidden sm:inline-flex h-8 text-xs font-semibold border-border text-white/75 hover:text-white hover:bg-white/[0.06]"
+          >
+            Ask {agentName}
+          </Button>
+        )}
         {onOpenContext && (
           <Button
             variant="ghost"

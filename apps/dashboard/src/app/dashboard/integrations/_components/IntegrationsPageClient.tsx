@@ -13,7 +13,7 @@ import {
   openOAuthPopup,
   watchOAuthPopup,
 } from "@/lib/integrations/oauth-flow"
-import IntegrationCard from "@/components/integrations/IntegrationCard"
+import IntegrationCard, { CARD_SHELL } from "@/components/integrations/IntegrationCard"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -149,9 +149,9 @@ function IntegrationsPageContent() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 pt-6 pb-5 border-b border-white/[0.06] shrink-0">
-        <h1 className="text-xl font-semibold tracking-tight text-white">Integrations</h1>
-        <p className="text-sm text-white/40 mt-0.5">Connect your channels and tools to Shopkeeper.</p>
+      <div className="px-6 pt-6 pb-5 border-b border-border shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Connect your channels and tools to Shopkeeper.</p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -233,7 +233,7 @@ function IntegrationsPageContent() {
         ) : (
           <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 space-y-4">
+              <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
                 <Skeleton className="size-14 rounded-2xl" />
                 <Skeleton className="h-5 w-28" />
                 <Skeleton className="h-3 w-full" />

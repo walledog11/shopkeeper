@@ -141,6 +141,142 @@
   --sidebar-ring: rgba(255, 255, 255, 0.15);
 }
 
+/* ── Paper theme — the dashboard matches the marketing site's cream/ink world.
+   Hung on body:has() so portaled surfaces (dialogs, popovers, command palette)
+   inherit it too, not just descendants of the shell div.
+
+   Token inversion: Tailwind v4 resolves hardcoded `*-white` / `*-black`
+   utilities through --color-white / --color-black, so legacy dark-theme
+   classes (text-white/55, bg-white/[0.04], text-black on accent CTAs…)
+   retheme to ink-on-paper without touching component files.
+
+   Accent ramps: shades 100–400 were tuned for a black canvas, so they remap
+   to their readable-on-paper counterparts (200→800, 300→700, 400→600);
+   800/900 dark-surface tints remap to light chip tints (800→200, 900→100).
+   Shades 500–700 are identity — new code should use those directly. ── */
+body:has(.dashboard-shell) {
+  --color-white: #2b2118;
+  --color-black: #f6f2eb;
+
+  --background: #f6f2eb;
+  --foreground: #2b2118;
+  --card: #fbf8f1;
+  --card-foreground: #2b2118;
+  --popover: #faf6ef;
+  --popover-foreground: #2b2118;
+  --primary: #2b2118;
+  --primary-foreground: #f6f2eb;
+  --secondary: rgba(43, 33, 24, 0.06);
+  --secondary-foreground: rgba(43, 33, 24, 0.85);
+  --muted: rgba(43, 33, 24, 0.05);
+  --muted-foreground: rgba(43, 33, 24, 0.55);
+  --accent: rgba(43, 33, 24, 0.06);
+  --accent-foreground: #2b2118;
+  --destructive: #b91c1c;
+  --border: rgba(43, 33, 24, 0.10);
+  --input: rgba(43, 33, 24, 0.12);
+  --ring: rgba(43, 33, 24, 0.30);
+  --sidebar: #efe9df;
+  --sidebar-foreground: #2b2118;
+  --sidebar-primary: #2b2118;
+  --sidebar-primary-foreground: #f6f2eb;
+  --sidebar-accent: rgba(43, 33, 24, 0.06);
+  --sidebar-accent-foreground: #2b2118;
+  --sidebar-border: rgba(43, 33, 24, 0.08);
+  --sidebar-ring: rgba(43, 33, 24, 0.25);
+
+  --color-blue-200: #1e40af;
+  --color-blue-300: #1d4ed8;
+  --color-blue-400: #2563eb;
+  --color-blue-800: #bfdbfe;
+  --color-blue-900: #dbeafe;
+
+  --color-green-200: #166534;
+  --color-green-300: #15803d;
+  --color-green-400: #16a34a;
+  --color-green-800: #bbf7d0;
+  --color-green-900: #dcfce7;
+
+  --color-emerald-200: #065f46;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #d1fae5;
+
+  --color-amber-200: #92400e;
+  --color-amber-300: #b45309;
+  --color-amber-400: #d97706;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+
+  --color-red-200: #991b1b;
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-red-800: #fecaca;
+  --color-red-900: #fee2e2;
+
+  --color-violet-200: #5b21b6;
+  --color-violet-300: #6d28d9;
+  --color-violet-400: #7c3aed;
+  --color-violet-800: #ddd6fe;
+  --color-violet-900: #ede9fe;
+
+  --color-sky-200: #075985;
+  --color-sky-300: #0369a1;
+  --color-sky-400: #0284c7;
+
+  --color-rose-200: #9f1239;
+  --color-rose-300: #be123c;
+
+  --color-yellow-200: #854d0e;
+  --color-yellow-300: #a16207;
+
+  --color-orange-300: #c2410c;
+  --color-purple-300: #7e22ce;
+  --color-pink-400: #db2777;
+  --color-indigo-400: #4f46e5;
+
+  --color-slate-300: #57534e;
+  --color-slate-400: #57534e;
+
+  /* Hardcoded dark surfaces become recessed paper tones */
+  --color-neutral-950: #efe9df;
+  --color-zinc-950: #efe9df;
+  --color-zinc-900: #ece5d8;
+  --color-slate-900: #efe9df;
+  --color-neutral-800: #e3dbcc;
+}
+
+body:has(.dashboard-shell),
+body:has(.dashboard-shell) * {
+  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+}
+body:has(.dashboard-shell) ::-webkit-scrollbar-thumb {
+  background: rgba(43, 33, 24, 0.22);
+}
+body:has(.dashboard-shell) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(43, 33, 24, 0.34);
+}
+body:has(.dashboard-shell) .custom-scrollbar.is-scrolling {
+  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+}
+
+/* Paper grain over the whole shell, dialogs included */
+body:has(.dashboard-shell)::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+  opacity: 0.45;
+}
+
+.font-display-serif {
+  font-family: var(--m-serif, Georgia, 'Times New Roman', serif);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

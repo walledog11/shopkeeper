@@ -1,10 +1,11 @@
 import type { ActionEntry } from "@/lib/agent/runner"
 
+/** localStorage key for the active desk thread (agent chat session id). */
 export const SESSION_KEY = "dashboard_agent_session"
 
 export type ChatMessage =
   | { role: "user"; text: string; timestamp: Date }
-  | { role: "agent"; summary: string; actions: ActionEntry[]; timestamp: Date }
+  | { role: "agent"; summary: string; actions: ActionEntry[]; timestamp: Date; awaitingApproval?: boolean }
   | { role: "thinking" }
 
 export interface AgentSessionDetail {
@@ -38,11 +39,12 @@ interface AgentChatPayload {
   sessionId?: string
   summary?: string
   actionsPerformed?: ActionEntry[]
+  awaitingApproval?: boolean
   error?: string
 }
 
 export type SendAgentChatResult =
-  | { ok: true; sessionId: string; summary: string; actionsPerformed: ActionEntry[] }
+  | { ok: true; sessionId: string; summary: string; actionsPerformed: ActionEntry[]; awaitingApproval?: boolean }
   | { ok: false; error: string }
 
 function chatRequestBody(instruction: string, sessionId: string | null) {
@@ -95,6 +97,7 @@ export async function sendAgentChatInstruction({
     sessionId: data?.sessionId ?? "",
     summary: data?.summary ?? "",
     actionsPerformed: data?.actionsPerformed ?? [],
+    ...(data?.awaitingApproval === true ? { awaitingApproval: true as const } : {}),
   }
 }
 

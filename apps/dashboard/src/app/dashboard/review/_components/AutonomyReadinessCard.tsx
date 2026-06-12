@@ -4,6 +4,7 @@ import useSWR from "swr"
 import Link from "next/link"
 import { ShieldCheck, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
+import { agentConfigureHref } from "@/lib/agent/configure"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
 
 interface ReadinessSlice {
@@ -101,10 +102,10 @@ export default function AutonomyReadinessCard() {
 
       <div className="mt-3 flex justify-end">
         <Link
-          href="/dashboard/settings?tab=agent"
+          href={agentConfigureHref()}
           className="text-xs font-semibold text-white/45 hover:text-white transition-colors"
         >
-          Adjust trust level in Settings →
+          Adjust trust level in Configure →
         </Link>
       </div>
     </div>

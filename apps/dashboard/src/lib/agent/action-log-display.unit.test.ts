@@ -58,4 +58,14 @@ describe("action log display", () => {
     expect(formatActionLogHeadline(row)).toBe("alex@example.com")
     expect(actionLogEntryHref(row)).toBe("/dashboard/tickets?thread=thread-1")
   })
+
+  it("links operator desk chat sessions back to the panel", () => {
+    const row = entry({
+      threadId: "session-9",
+      channelType: "dashboard_agent",
+      instruction: "How many orders shipped today?",
+    })
+
+    expect(actionLogEntryHref(row)).toBe("/dashboard?openAgent=1&session=session-9")
+  })
 })

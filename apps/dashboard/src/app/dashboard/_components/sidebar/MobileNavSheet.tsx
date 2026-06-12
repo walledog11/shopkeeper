@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import type { MouseEvent } from "react";
 import { X } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { FooterLinks } from "./FooterLinks";
 import { NavGroupList } from "./NavGroupList";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { dispatchNavProgressStart } from "./sidebar-helpers";
@@ -17,14 +16,12 @@ export function MobileNavSheet({
   openCount,
   onSwitching,
   navAuth,
-  agentName,
 }: {
   open: boolean;
   onClose: () => void;
   openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
-  agentName: string;
 }) {
   const pathname = usePathname();
 
@@ -42,33 +39,30 @@ export function MobileNavSheet({
       <SheetContent
         side="top"
         showCloseButton={false}
-        className="bg-neutral-950 border-b border-white/[0.08] p-0 max-h-[90dvh] overflow-y-auto"
+        className="bg-sidebar border-b border-border p-0 max-h-[90dvh] overflow-y-auto"
       >
         <SheetTitle className="sr-only">Navigation</SheetTitle>
 
-        <div className="sticky top-0 z-50 flex bg-neutral-950 items-center gap-2 px-3 py-2 border-b border-white/[0.08] shrink-0">
+        <div className="sticky top-0 z-50 flex bg-sidebar items-center gap-2 px-3 py-2 border-b border-border shrink-0">
           <div className="flex-1 min-w-0">
-            <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="mobileCompact" />
+            <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="sheet" />
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close navigation"
-            className="p-2 rounded-md text-white/40 hover:text-white hover:bg-white/[0.08] transition-colors shrink-0"
+            className="p-2 rounded-md text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors shrink-0"
           >
             <X className="size-5" />
           </button>
         </div>
 
         <div className="px-3 py-2">
-          <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="mobile" agentName={agentName} />
+          <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} />
         </div>
 
-        <div className="sticky bottom-0 bg-neutral-950 w-full border-t border-white/[0.08] px-3 py-2">
-          <div className="flex items-center gap-1 ">
-            <UserMenu navAuth={navAuth} variant="mobile" />
-            <FooterLinks pathname={pathname} onNavigate={handleNavClick} variant="mobile" />
-          </div>
+        <div className="sticky bottom-0 bg-sidebar w-full border-t border-border px-3 py-2">
+          <UserMenu navAuth={navAuth} variant="sheet" />
         </div>
       </SheetContent>
     </Sheet>

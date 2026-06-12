@@ -1,11 +1,11 @@
-import { getOrCreateOrg } from "@/lib/server/org"
-import { resolveAgentSettings } from "@shopkeeper/agent/settings"
-import type { OrgSettings } from "@/types"
-import AgentPageClient from "./_components/AgentPageClient"
+import { redirect } from "next/navigation";
+import { buildAgentPanelHref } from "@/lib/agent/panel";
 
-export default async function AgentPage() {
-  const org = await getOrCreateOrg()
-  const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null)
-
-  return <AgentPageClient agentName={settings.agentName} />
+export default async function AgentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ session?: string }>;
+}) {
+  const { session } = await searchParams;
+  redirect(buildAgentPanelHref({ session: session ?? null }));
 }

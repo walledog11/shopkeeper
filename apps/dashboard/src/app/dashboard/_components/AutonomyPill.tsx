@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { Bot } from "lucide-react"
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers"
+import { agentConfigureHref } from "@/lib/agent/configure"
 import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import { cn } from "@/lib/ui/cn"
 
@@ -25,7 +26,7 @@ export default function AutonomyPill({ tier, compact = false, className }: Props
 
   return (
     <Link
-      href="/dashboard/settings?tab=agent#autonomy"
+      href={agentConfigureHref("autonomy")}
       aria-label={`Trust level: ${label}`}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border font-semibold transition-colors",

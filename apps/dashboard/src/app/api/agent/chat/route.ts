@@ -1,7 +1,7 @@
 /**
  * Dashboard Agent Chat API
  *
- * Clerk-auth'd endpoint for the standalone /dashboard/agent page.
+ * Clerk-auth'd endpoint for the dashboard desk chat panel.
  * Bootstraps a dashboard_agent session on first message, then reuses it.
  *
  * Body:    { instruction: string, sessionId?: string }

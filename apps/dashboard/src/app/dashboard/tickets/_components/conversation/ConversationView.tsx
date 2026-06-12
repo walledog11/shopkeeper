@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
+import { useAgentPanel } from "@/app/dashboard/_components/agent-panel/AgentPanelContext"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
 import ConversationHeader from "./ConversationHeader"
 import ConversationSummaryBar from "./ConversationSummaryBar"
@@ -89,6 +90,15 @@ export default function ConversationView({
   const composerRef = useRef<HTMLDivElement>(null)
   const { keyboardInset, visualViewportHeight } = useVisualKeyboard(conversationRef, activeTab === 'open')
   const keyboardLayoutOpen = keyboardInset > 0
+  const { open: openAgentPanel } = useAgentPanel()
+
+  const handleAskAgent = useCallback(() => {
+    openAgentPanel({
+      source: "tickets",
+      threadId: ticket.id,
+      customerName: ticket.customer,
+    })
+  }, [openAgentPanel, ticket.customer, ticket.id])
 
   const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
   const {
@@ -224,6 +234,8 @@ export default function ConversationView({
         activeTab={activeTab}
         customer={ticket.customer}
         platform={ticket.platform}
+        agentName={agentName}
+        onAskAgent={handleAskAgent}
         onBack={onBack}
         onResolve={onResolve}
         onReopen={onReopen}

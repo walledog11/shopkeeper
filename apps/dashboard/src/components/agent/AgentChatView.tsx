@@ -1,18 +1,37 @@
-import { AlertCircle, ArrowUp, Check, Loader2, Plus, Sparkles, X } from "lucide-react"
-import { TOOL_LABELS } from "@shopkeeper/agent/tools"
+import { AlertCircle, ArrowUp, Check, Loader2, MoreHorizontal, Search, X } from "lucide-react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { formatClockTime } from "@/lib/format/date"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
+import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
+import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
+import AgentPanelTelegramNudge from "@/app/dashboard/_components/agent-panel/AgentPanelTelegramNudge"
+import type { AgentPanelOpenContext } from "@/lib/agent/panel"
+import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
+import {
+  getToolChipLabel,
+  getToolChipVariant,
+  TOOL_CHIP_CLASS,
+} from "@/lib/agent/tool-action-display"
+import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import type { ChatMessage } from "./agent-chat-session"
 import { messageKey, type AgentChatState } from "./useAgentChatState"
 
 export interface AgentChatClientProps {
   agentName: string
+  autonomyTier?: AutonomyTier
   compact?: boolean
   embedded?: boolean
   onClose?: () => void
   restoreSession?: boolean
+  openContext?: AgentPanelOpenContext | null
 }
 
 function getToolResultHint(tool: string, result: string): string | null {
@@ -32,17 +51,22 @@ function getToolResultHint(tool: string, result: string): string | null {
 function AgentMessage({
   agentName,
   message,
+  onApprove,
+  onDismiss,
+  isRunning,
 }: {
   agentName: string
   message: Extract<ChatMessage, { role: "agent" }>
+  onApprove: () => void
+  onDismiss: () => void
+  isRunning: boolean
 }) {
   const visibleActions = message.actions.filter(a => a.tool !== "send_reply" && a.tool !== "add_internal_note")
+  const awaitingApproval = message.awaitingApproval === true
 
   return (
     <div className="flex items-start gap-3">
-      <div className="shrink-0 size-7 rounded-full bg-green-500 flex items-center justify-center mt-0.5">
-        <Sparkles className="size-4 text-green-800" />
-      </div>
+      <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
       <div className="flex-1 min-w-0 max-w-[75%]">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-xs font-medium text-foreground">{agentName}</span>
@@ -51,31 +75,54 @@ function AgentMessage({
         {visibleActions.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-2.5">
             {visibleActions.map((action) => {
-              const isError = action.result.startsWith("Error")
-              const hint = !isError ? getToolResultHint(action.tool, action.result) : null
+              const variant = getToolChipVariant(action)
+              const hint = variant !== "error" ? getToolResultHint(action.tool, action.result) : null
               return (
                 <span
                   key={`${action.tool}-${action.result}`}
-                  className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 ${
-                    isError
-                      ? "bg-red-500/10 text-red-400"
-                      : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  }`}
+                  className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 ${TOOL_CHIP_CLASS[variant]}`}
                 >
-                  {isError
-                    ? <AlertCircle className="size-3 shrink-0" />
-                    : <Check className="size-3 shrink-0" />
-                  }
-                  {TOOL_LABELS[action.tool] ?? action.tool}
-                  {hint && <span className="text-muted-foreground">· {hint}</span>}
+                  {variant === "error" && <AlertCircle className="size-3 shrink-0" />}
+                  {variant === "executed" && <Check className="size-3 shrink-0" />}
+                  {variant === "read" && <Search className="size-3 shrink-0 opacity-70" />}
+                  {variant === "pending" && <AlertCircle className="size-3 shrink-0" />}
+                  {getToolChipLabel(action)}
+                  {hint && <span className="opacity-70">· {hint}</span>}
                 </span>
               )
             })}
           </div>
         )}
-        <div className="bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm pl-4 py-2.5 shadow-sm">
+        <div className={
+          awaitingApproval
+            ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm pl-4 py-2.5 shadow-sm"
+            : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm pl-4 py-2.5 shadow-sm"
+        }>
           <AgentMessageMarkdown text={message.summary} />
         </div>
+        {awaitingApproval && (
+          <div className="mt-2.5 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              disabled={isRunning}
+              onClick={onApprove}
+              className="rounded-full bg-green-600 hover:bg-green-700 text-primary-foreground"
+            >
+              Send as-is
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isRunning}
+              onClick={onDismiss}
+              className="rounded-full"
+            >
+              Not now
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -83,9 +130,11 @@ function AgentMessage({
 
 export function AgentChatView({
   agentName,
+  autonomyTier,
   compact,
   embedded,
   onClose,
+  openContext,
   state,
 }: Omit<AgentChatClientProps, "restoreSession"> & { state: AgentChatState }) {
   const {
@@ -96,6 +145,7 @@ export function AgentChatView({
     handleKeyDown,
     handleNewSession,
     handleSend,
+    handleSendText,
     initial,
     input,
     isRunning,
@@ -107,26 +157,49 @@ export function AgentChatView({
     textareaRef,
   } = state
 
+  const [showStartFreshConfirm, setShowStartFreshConfirm] = useState(false)
+
+  const handleChipSelect = (chip: PanelSuggestionChip) => {
+    if (chip.autoSend) {
+      void handleSendText(chip.prompt)
+      return
+    }
+    setInput(chip.prompt)
+    textareaRef.current?.focus()
+  }
+
   return (
     <div className="flex flex-col h-full">
       {compact && (
         <div className="shrink-0 h-11 flex items-center justify-between px-4 bg-card border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="size-6 rounded-full bg-green-500 flex items-center justify-center">
-              <Plus className="size-3.5 text-white" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">{agentName}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <AgentAvatar agentName={agentName} size="sm" />
+            <span className="text-sm text-foreground truncate">
+              <span className="font-semibold">{agentName}</span>
+              <span className="text-muted-foreground"> · desk</span>
+            </span>
           </div>
-          <div className="flex items-center gap-1">
-            <button type="button"
-              onClick={handleNewSession}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1"
-            >
-              New session
-            </button>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Desk chat options"
+                  className="size-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <MoreHorizontal className="size-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" sideOffset={6}>
+                <DropdownMenuItem onClick={() => setShowStartFreshConfirm(true)}>
+                  Start fresh
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {onClose && (
               <button type="button"
                 onClick={onClose}
+                aria-label="Close desk chat"
                 className="size-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X className="size-4" />
@@ -140,9 +213,7 @@ export function AgentChatView({
         {messages.length === 0 && !compact && !embedded && (
           <div className="max-w-xl mx-auto">
             <div className="bg-card border border-border rounded-xl p-5">
-              <div className="size-8 rounded-full bg-green-500 flex items-center justify-center mb-3">
-                <Plus className="size-4 text-white" />
-              </div>
+              <AgentAvatar agentName={agentName} size="lg" className="mb-3" />
               <h2 className="text-base font-semibold text-foreground mb-1">
                 {greeting}, {firstName}.
               </h2>
@@ -154,14 +225,13 @@ export function AgentChatView({
         )}
 
         {messages.length === 0 && (compact || embedded) && (
-          <div className="flex flex-col items-center justify-center h-full text-center gap-2 pb-8">
-            <div className="size-10 rounded-full bg-green-500/10 flex items-center justify-center">
-              <Plus className="size-5 text-green-500" />
-            </div>
-            <p className="text-xs text-muted-foreground max-w-[200px]">
-              Ask {agentName} to take actions on your store.
-            </p>
-          </div>
+          <AgentPanelBriefing
+            agentName={agentName}
+            greeting={greeting}
+            firstName={firstName}
+            openContext={openContext}
+            onChipSelect={handleChipSelect}
+          />
         )}
 
         {messages.map((msg) => {
@@ -184,9 +254,7 @@ export function AgentChatView({
           if (msg.role === "thinking") {
             return (
               <div key={messageKey(msg)} className="flex items-start gap-3">
-                <div className="shrink-0 size-7 rounded-full bg-green-500 flex items-center justify-center mt-0.5">
-                  <Plus className="size-4 text-white" />
-                </div>
+                <AgentAvatar agentName={agentName} size="md" className="mt-0.5" />
                 <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
                   <Loader2 className="size-3.5 animate-spin text-green-500" />
                   {fillerPhrase}
@@ -195,11 +263,28 @@ export function AgentChatView({
             )
           }
 
-          return <AgentMessage key={messageKey(msg)} agentName={agentName} message={msg} />
+          return (
+            <AgentMessage
+              key={messageKey(msg)}
+              agentName={agentName}
+              message={msg}
+              isRunning={isRunning}
+              onApprove={() => void handleSendText("Yes, do it")}
+              onDismiss={() => void handleSendText("No")}
+            />
+          )
         })}
 
         <div ref={messagesEndRef} />
       </div>
+
+      {compact && (
+        <AgentPanelTelegramNudge
+          agentName={agentName}
+          enabled
+          showConnectBanner={messages.length === 0}
+        />
+      )}
 
       <div className="shrink-0 px-5 md:px-6 pt-3 pb-5 md:pb-4 space-y-2.5">
         <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-3 focus-within:border-green-400/50 focus-within:ring-1 focus-within:ring-violet-400/20 transition-all">
@@ -211,15 +296,20 @@ export function AgentChatView({
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isRunning}
-            placeholder="Ask about orders, draft replies, update customers…"
+            placeholder={compact
+              ? "Check order #1042, draft a reply to Sarah…"
+              : "Ask about orders, draft replies, update customers…"
+            }
             className="w-full bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[40px] max-h-50"
             style={{ fieldSizing: "content" } as React.CSSProperties}
           />
           <div className="flex items-center justify-end mt-2.5 gap-2">
             <div className="flex items-center gap-2 shrink-0">
-              <span className="hidden md:block text-xs text-muted-foreground whitespace-nowrap">
-                Shift + ↵ for new line
-              </span>
+              {!compact && (
+                <span className="hidden md:block text-xs text-muted-foreground whitespace-nowrap">
+                  Shift + ↵ for new line
+                </span>
+              )}
               <button type="button"
                 onClick={handleSend}
                 disabled={!input.trim() || isRunning}
@@ -235,6 +325,29 @@ export function AgentChatView({
           </div>
         </div>
       </div>
+
+      <Dialog open={showStartFreshConfirm} onOpenChange={setShowStartFreshConfirm}>
+        <DialogContent showCloseButton={false} className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Start fresh?</DialogTitle>
+            <DialogDescription>
+              Same person, clean slate for a new task. Your previous desk thread stays in history — this just clears the panel.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowStartFreshConfirm(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                setShowStartFreshConfirm(false)
+                handleNewSession()
+              }}
+            >
+              Start fresh
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showClearConfirm} onOpenChange={(open) => !open && setShowClearConfirm(false)}>
         <DialogContent showCloseButton={false} className="max-w-sm">

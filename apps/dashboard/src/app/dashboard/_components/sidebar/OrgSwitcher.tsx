@@ -30,11 +30,10 @@ export function OrgSwitcher({
   navAuth: NavAuth;
   onSwitching: (v: boolean) => void;
   onClose?: () => void;
-  variant: "desktop" | "mobile" | "mobileCompact";
+  variant: "topBar" | "sheet";
 }) {
   const { organization, userMemberships, setActive, mounted, planName, seatCount } = navAuth;
-  const isMobile = variant === "mobile";
-  const isCompact = variant === "desktop" || variant === "mobileCompact";
+  const isTopBar = variant === "topBar";
   const memberships = userMemberships.data as WorkspaceMembership[] | undefined;
 
   const switchOrganization = async (organizationId: string) => {
@@ -57,34 +56,47 @@ export function OrgSwitcher({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          aria-label={organization?.name ?? "Switch workspace"}
           className={cn(
-            "w-full flex items-center outline-none text-left transition-colors hover:bg-white/[0.06]",
-            isMobile ? "gap-2.5 px-3 py-2.5 mb-4 rounded-lg" : "gap-2 p-1 rounded-lg hover:bg-white/[0.04]",
+            "flex items-center outline-none text-left transition-colors",
+            isTopBar
+              ? "gap-2 px-2 py-1.5 rounded-md hover:bg-sidebar-accent shrink-0 max-w-[11rem]"
+              : "w-full gap-2 p-1 rounded-lg hover:bg-sidebar-accent/80",
           )}
         >
-          <OrgAvatar
-            name={organization?.name}
-            imageUrl={organization?.imageUrl}
-            className={cn(
-              "rounded-md bg-green-500/20 text-[13px] font-bold text-green-300 shrink-0",
-              isCompact ? "size-6" : "size-9",
-            )}
-          />
-          <div className="flex-1 min-w-0">
-            <p className={cn("font-bold text-white truncate leading-tight", isCompact ? "text-xs" : "text-sm")}>
-              {organization?.name ?? "Workspace"}
-            </p>
-            <p className="text-xs font-medium text-white/40 truncate leading-tight mt-0.5">
-              {planName} plan · {seatCount} seat{seatCount === 1 ? "" : "s"}
-            </p>
-          </div>
-          <ChevronDown className={cn("text-white/30 shrink-0", isCompact ? "size-3.5" : "size-4")} />
+          {!isTopBar && (
+            <OrgAvatar
+              name={organization?.name}
+              imageUrl={organization?.imageUrl}
+              className="size-6 rounded-md bg-green-500/20 text-[13px] font-bold text-green-300 shrink-0"
+            />
+          )}
+          {isTopBar ? (
+            <>
+              <span className="max-w-[8rem] truncate text-sm font-semibold text-sidebar-foreground">
+                {organization?.name ?? "Workspace"}
+              </span>
+              <ChevronDown className="size-3 text-sidebar-foreground/40 shrink-0" />
+            </>
+          ) : (
+            <>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-sidebar-foreground truncate leading-tight text-xs">
+                  {organization?.name ?? "Workspace"}
+                </p>
+                <p className="text-xs font-medium text-muted-foreground truncate leading-tight mt-0.5">
+                  {planName} plan · {seatCount} seat{seatCount === 1 ? "" : "s"}
+                </p>
+              </div>
+              <ChevronDown className="size-3.5 text-sidebar-foreground/40 shrink-0" />
+            </>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="bottom"
         align="start"
-        className="w-[var(--radix-dropdown-menu-trigger-width)] bg-popover border-white/[0.09] text-white"
+        className="w-[var(--radix-dropdown-menu-trigger-width)] bg-popover border-border text-popover-foreground"
       >
         {mounted &&
           memberships?.map((mem) => {
@@ -95,25 +107,25 @@ export function OrgSwitcher({
                 key={mem.organization.id}
                 onClick={() => switchOrganization(mem.organization.id)}
                 className={cn(
-                  "flex items-center gap-2.5 cursor-pointer focus:bg-white/[0.07]",
-                  isActive && "bg-white/[0.04]",
+                  "flex items-center gap-2.5 cursor-pointer focus:bg-accent",
+                  isActive && "bg-accent/70",
                 )}
               >
                 <OrgAvatar
                   name={mem.organization.name}
                   imageUrl={mem.organization.imageUrl}
-                  className="size-5 rounded bg-white/10 text-xs text-white/70 shrink-0"
+                  className="size-5 rounded bg-muted text-xs text-muted-foreground shrink-0"
                 />
-                <span className="flex-1 text-xs font-medium text-white/80 truncate">{mem.organization.name}</span>
+                <span className="flex-1 text-xs font-medium truncate">{mem.organization.name}</span>
                 {isActive && <span className="size-1.5 rounded-full bg-green-400 shrink-0" />}
               </DropdownMenuItem>
             );
           })}
-        <DropdownMenuSeparator className="bg-white/[0.09]" />
-        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-white/[0.07]">
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-accent">
           <Link href="/create-workspace" onClick={() => onClose?.()}>
-            <Plus className="size-4 shrink-0 text-white/50" />
-            <span className="text-xs font-medium text-white/80">Create workspace</span>
+            <Plus className="size-4 shrink-0 text-muted-foreground" />
+            <span className="text-xs font-medium">Create workspace</span>
           </Link>
         </DropdownMenuItem>
       </DropdownMenuContent>

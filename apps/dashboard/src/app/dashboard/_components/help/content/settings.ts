@@ -16,10 +16,10 @@ export const settings: Category = {
         {
           heading: "How to update it",
           steps: [
-            "Click Settings in the sidebar.",
-            "Find the Business Name field at the top of the page.",
-            "Type your new name and click Save.",
-            "The name in the header bar will update immediately.",
+            "Open Settings from the top navigation.",
+            "Select the Workspace tab.",
+            "Find the workspace name field and update it.",
+            "Save your changes.",
           ],
         },
       ],
@@ -30,6 +30,14 @@ export const settings: Category = {
       body: [
         {
           text: "These two settings are the most important for getting high-quality AI drafts. They tell Shopkeeper who you are and how you communicate.",
+        },
+        {
+          heading: "Where to find them",
+          steps: [
+            "Open Agent → Configure in the top navigation.",
+            "Expand Voice & style for brand voice, sample replies, and reply language.",
+            "Expand Behavior & limits for default instructions and spending caps.",
+          ],
         },
         {
           heading: "AI Context",

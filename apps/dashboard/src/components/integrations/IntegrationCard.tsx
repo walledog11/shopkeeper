@@ -17,27 +17,27 @@ import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
 
 export type { ConnectType, PlatformConfig }
 
-const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:ring-offset-2 focus-visible:ring-offset-[#1a1a1a]"
+const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
 
 export const CARD_SHELL = cn(
-  "group rounded-2xl bg-[#1a1a1a] border border-white/[0.06] px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
+  "group rounded-2xl bg-card border border-border px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
   "transition-all duration-200",
-  "hover:border-white/[0.10] hover:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_8px_24px_rgba(0,0,0,0.25)]",
+  "hover:border-border/80 hover:shadow-sm",
 )
 const LOGO_TILE = cn(
   "size-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden",
   "transition-all duration-200",
-  "group-hover:ring-1 group-hover:ring-inset group-hover:ring-white/[0.10]",
+  "group-hover:ring-1 group-hover:ring-inset group-hover:ring-border",
 )
 const LOGO_SOFTEN = "opacity-[0.88] saturate-[0.9] transition-all duration-200 group-hover:opacity-100 group-hover:saturate-100"
 const LOGO_IMAGE = cn("object-contain", LOGO_SOFTEN)
-export const CARD_TITLE = "text-xl font-bold text-white leading-[22px]"
-export const CARD_DESCRIPTION = "text-[13.5px] leading-[18px] text-[#b8b8b8]"
+export const CARD_TITLE = "text-xl font-bold text-card-foreground leading-[22px]"
+export const CARD_DESCRIPTION = "text-[13.5px] leading-[18px] text-muted-foreground"
 export const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
-export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-[#3d3d3d] hover:bg-[#4a4a4a] text-white")
-export const CARD_BUTTON_SECONDARY = cn(CARD_BUTTON, "bg-[#1f1f1f] hover:bg-[#2a2a2a] border border-[#3a3a3a] text-[#d5d5d5]")
+export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-primary text-primary-foreground hover:bg-primary/90")
+export const CARD_BUTTON_SECONDARY = cn(CARD_BUTTON, "bg-secondary hover:bg-accent border border-border text-secondary-foreground")
 export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-400/10 hover:bg-amber-400/15 border border-amber-400/25 text-amber-300")
-export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-[#222222] text-white/30 cursor-default")
+export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-muted text-muted-foreground cursor-default")
 
 const FALLBACK_ICONS: Record<string, typeof Mail> = {
   email: Mail,
@@ -51,7 +51,7 @@ export function CardLogo({ config }: { config: PlatformConfig }) {
     return (
       <div className={tileClass}>
         {Icon ? (
-          <Icon className="size-7 text-white opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100" />
+          <Icon className="size-7 text-card-foreground opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100" />
         ) : null}
       </div>
     )
@@ -92,8 +92,8 @@ export function ShopkeeperBadge() {
   return (
     <span className="inline-flex items-center gap-1.5 self-start">
       <Image src="/logos/shopkeeper-shop-logo.png" alt="" width={20} height={20} className="rounded-[6px]" />
-      <span className="text-[13px] font-semibold leading-none text-white">shopkeeper</span>
-      <BadgeCheck aria-label="Verified" className="size-3.5 fill-[#1D9BF0] text-white" />
+      <span className="text-[13px] font-semibold leading-none text-card-foreground">shopkeeper</span>
+      <BadgeCheck aria-label="Verified" className="size-3.5 fill-[#1D9BF0] text-card-foreground" />
     </span>
   )
 }

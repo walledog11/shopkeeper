@@ -1,0 +1,10 @@
+{
+  "/api/home-summary/route": "app/api/home-summary/route.js",
+  "/api/integrations/route": "app/api/integrations/route.js",
+  "/api/integrations/telegram/route": "app/api/integrations/telegram/route.js",
+  "/api/kb/route": "app/api/kb/route.js",
+  "/api/orders/route": "app/api/orders/route.js",
+  "/api/org/route": "app/api/org/route.js",
+  "/api/threads/route": "app/api/threads/route.js",
+  "/dashboard/page": "app/dashboard/page.js"
+}

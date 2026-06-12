@@ -1,48 +1,77 @@
 "use client"
 
+import Link from "next/link"
+import { Check, X } from "lucide-react"
 import { resolveAgentSettings } from "@shopkeeper/agent/settings"
+import { agentConfigureHref } from "@/lib/agent/configure"
 import { useOrg } from "@/hooks/useOrg"
-import type { OrgSettings } from "@/types"
-import { PermissionToggleRow } from "./PermissionToggleRow"
+import { PermissionRow } from "./PermissionRow"
+
+function StatusBadge({ enabled }: { enabled: boolean }) {
+  return enabled ? (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-300">
+      <Check className="size-3.5" />
+      On
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-white/35">
+      <X className="size-3.5" />
+      Off
+    </span>
+  )
+}
 
 export function ShopifyPermissionRows() {
-  const { data, mutate } = useOrg({ enabled: true })
+  const { data } = useOrg({ enabled: true })
   const settings = resolveAgentSettings(data?.settings)
   const refundCap = settings.maxRefundAmount == null ? null : `auto-approve up to $${settings.maxRefundAmount}`
 
-  async function patch(partial: Partial<OrgSettings>) {
-    await fetch("/api/org", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ settings: partial }),
-    })
-    await mutate()
-  }
+  const rows = [
+    {
+      label: "Read orders, customers, products",
+      enabled: true,
+      required: true,
+    },
+    {
+      label: "Issue refunds",
+      enabled: settings.toolsEnabled.action,
+      suffix: settings.toolsEnabled.action ? refundCap : null,
+    },
+    {
+      label: "Cancel unfulfilled orders",
+      enabled: settings.toolsEnabled.action && !settings.blockCancellations,
+    },
+    {
+      label: "Modify line items & discounts",
+      enabled: settings.toolsEnabled.action && !settings.blockCustomLineItems,
+    },
+  ] as const
 
   return (
     <>
-      <PermissionToggleRow
-        label="Read orders, customers, products"
-        required
-        checked
-        onChange={() => { /* required */ }}
-      />
-      <PermissionToggleRow
-        label="Issue refunds"
-        suffix={settings.toolsEnabled.action ? refundCap : null}
-        checked={settings.toolsEnabled.action}
-        onChange={(v) => { void patch({ toolsEnabled: { ...settings.toolsEnabled, action: v } }) }}
-      />
-      <PermissionToggleRow
-        label="Cancel unfulfilled orders"
-        checked={settings.toolsEnabled.action && !settings.blockCancellations}
-        onChange={(v) => { void patch({ blockCancellations: !v }) }}
-      />
-      <PermissionToggleRow
-        label="Modify line items & discounts"
-        checked={settings.toolsEnabled.action && !settings.blockCustomLineItems}
-        onChange={(v) => { void patch({ blockCustomLineItems: !v }) }}
-      />
+      {rows.map(row => (
+        <PermissionRow
+          key={row.label}
+          icon={Check}
+          title={row.label}
+          description={
+            "required" in row && row.required
+              ? "Required for Shopify integration"
+              : "suffix" in row && row.suffix
+                ? row.suffix
+                : undefined
+          }
+          action={<StatusBadge enabled={row.enabled} />}
+        />
+      ))}
+      <div className="border-t border-white/[0.06] px-4 py-3">
+        <Link
+          href={agentConfigureHref("autonomy")}
+          className="text-xs font-semibold text-amber-300 transition-colors hover:text-amber-200"
+        >
+          Change in Configure →
+        </Link>
+      </div>
     </>
   )
 }

@@ -36,11 +36,11 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
   const [input, setInput] = useState("")
   const [isRunning, setIsRunning] = useState(false)
   const fillerPhrase = useFillerPhrase([
-    "Making it happen…",
-    "Doing the thing…",
-    "Almost there…",
-    "Just a sec…",
-    "Finishing touches…",
+    "Checking Shopify…",
+    "Drafting reply…",
+    "Looking up the order…",
+    "Searching knowledge base…",
+    "Pulling customer history…",
   ], isRunning)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -111,23 +111,22 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const handleSend = useCallback(async () => {
-    const text = input.trim()
-    if (!text || isRunning) return
+  const sendInstruction = useCallback(async (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || isRunning) return
 
     const sentAt = new Date()
     const sessionId = sessionIdRef.current
-    setInput("")
     setIsRunning(true)
     setMessages(prev => [
       ...prev,
-      { role: "user", text, timestamp: sentAt },
+      { role: "user", text: trimmed, timestamp: sentAt },
       { role: "thinking" },
     ])
 
     try {
       const result = await sendAgentChatInstruction({
-        instruction: text,
+        instruction: trimmed,
         onStaleSession: () => {
           sessionIdRef.current = null
         },
@@ -148,7 +147,13 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
 
       setMessages(prev => [
         ...prev.slice(0, -1),
-        { role: "agent", summary: result.summary, actions: result.actionsPerformed, timestamp: new Date() },
+        {
+          role: "agent",
+          summary: result.summary,
+          actions: result.actionsPerformed,
+          timestamp: new Date(),
+          awaitingApproval: result.awaitingApproval,
+        },
       ])
     } catch {
       setMessages(prev => [
@@ -159,7 +164,18 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
       setIsRunning(false)
       textareaRef.current?.focus()
     }
-  }, [input, isRunning])
+  }, [isRunning])
+
+  const handleSend = useCallback(async () => {
+    const text = input.trim()
+    if (!text || isRunning) return
+    setInput("")
+    await sendInstruction(text)
+  }, [input, isRunning, sendInstruction])
+
+  const handleSendText = useCallback(async (text: string) => {
+    await sendInstruction(text)
+  }, [sendInstruction])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -186,6 +202,7 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     handleKeyDown,
     handleNewSession,
     handleSend,
+    handleSendText,
     initial,
     input,
     isRunning,
