@@ -72,7 +72,7 @@ describe('POST /api/integrations/outlook/callback', () => {
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(mockLogger.error).toHaveBeenCalledWith('[Outlook OAuth] State mismatch , possible CSRF attempt');
+    expect(mockLogger.error).toHaveBeenCalledWith('[Outlook OAuth] State mismatch — possible CSRF attempt');
   });
 
   it('rejects user session mismatch', async () => {
@@ -89,7 +89,7 @@ describe('POST /api/integrations/outlook/callback', () => {
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith(
       { savedUserId: 'someone_else', currentUserId: 'usr_oauth' },
-      '[Outlook OAuth] User session mismatch , possible CSRF attempt',
+      '[Outlook OAuth] User session mismatch — possible CSRF attempt',
     );
   });
 

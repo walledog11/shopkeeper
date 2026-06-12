@@ -18,7 +18,7 @@ export const aiFeatures: Category = {
           steps: [
             "The customer's core question or complaint.",
             "Key details mentioned (order numbers, product names, dates).",
-            "The current state of the conversation , whether it's been responded to or is still pending.",
+            "The current state of the conversation — whether it's been responded to or is still pending.",
           ],
         },
         {
@@ -32,7 +32,7 @@ export const aiFeatures: Category = {
         {
           tips: [
             "Summaries are generated automatically when a new message arrives.",
-            "Long conversations benefit most from refreshing , early summaries may not reflect recent messages.",
+            "Long conversations benefit most from refreshing — early summaries may not reflect recent messages.",
           ],
         },
       ],
@@ -50,7 +50,7 @@ export const aiFeatures: Category = {
             "Open any ticket in the Open tab.",
             "Click Draft with Shopkeeper in the bottom-left of the composer.",
             "Wait a moment while Shopkeeper analyses the thread.",
-            "The suggested reply appears in the text box , edit it as needed.",
+            "The suggested reply appears in the text box — edit it as needed.",
             "Click Send when you're happy with it.",
           ],
         },
@@ -58,13 +58,13 @@ export const aiFeatures: Category = {
           heading: "How to get better drafts",
           steps: [
             "Go to Settings and fill in the AI Context field with your brand name, what you sell, and any key policies (e.g. return window, shipping times).",
-            "Set a Brand Voice to tell Shopkeeper how to write , e.g. 'friendly and concise' or 'professional and formal'.",
+            "Set a Brand Voice to tell Shopkeeper how to write — e.g. 'friendly and concise' or 'professional and formal'.",
             "The more context you provide, the more accurate and on-brand the drafts will be.",
           ],
         },
         {
           tips: [
-            "Always review AI drafts before sending , they're a starting point, not a final answer.",
+            "Always review AI drafts before sending — they're a starting point, not a final answer.",
             "If a draft misses the point, try refreshing the Shopkeeper Context summary first, then draft again.",
           ],
         },

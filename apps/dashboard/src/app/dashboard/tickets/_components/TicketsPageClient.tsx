@@ -2,7 +2,7 @@
 
 import { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { AlertCircle, CheckCircle2, Inbox } from "lucide-react"
+import { AlertCircle, CheckCircle2, Inbox, X } from "lucide-react"
 import useSWR from 'swr'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -43,6 +43,8 @@ export default function TicketsPageClient(props: Props) {
 function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props) {
   const searchParams = useSearchParams()
   const queryThreadId = searchParams.get('thread')
+  const correctReply = searchParams.get('correct') === '1'
+  const [dismissCorrectHint, setDismissCorrectHint] = useState(false)
 
   const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
   const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
@@ -342,7 +344,21 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
       {/* ── Col 2+3: Conversation + Context panel ──────────────────────────── */}
       <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
         {conversationTicket ? (
-          <>
+          <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+            {correctReply && !dismissCorrectHint && (
+              <div className="flex items-center justify-between gap-3 border-b border-amber-800/40 bg-amber-900/25 px-4 py-2 text-xs text-amber-100 shrink-0">
+                <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
+                <button
+                  type="button"
+                  onClick={() => setDismissCorrectHint(true)}
+                  className="inline-flex items-center gap-1 text-amber-200/80 hover:text-amber-50 transition-colors shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+            <div className="flex flex-1 min-w-0 overflow-hidden">
             <ConversationView
               key={conversationTicket.id}
               ticket={conversationTicket}
@@ -417,15 +433,16 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
                 </SheetContent>
               </Sheet>
             )}
-          </>
+            </div>
+          </div>
         ) : activeTicketId ? (
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
             {activeThreadError ? (
               <>
                 <AlertCircle className="size-5 text-red-400" />
                 <div>
-                  <p className="text-sm font-semibold text-white/60">Unable to load conversation</p>
-                  <p className="text-xs text-white/30 mt-1">The thread may have been archived or is no longer available.</p>
+                  <p className="text-sm font-semibold text-white/60">Unable to load ticket</p>
+                  <p className="text-xs text-white/30 mt-1">The ticket may have been archived or is no longer available.</p>
                 </div>
               </>
             ) : null}
@@ -440,12 +457,12 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
             </div>
             <div>
               <p className="text-sm font-semibold text-white/60">
-                {effectiveActiveTab === 'open' && openThreads.length === 0 ? 'All caught up' : 'No conversation open'}
+                {effectiveActiveTab === 'open' && openThreads.length === 0 ? 'All caught up' : 'No ticket open'}
               </p>
               <p className="text-xs text-white/30 mt-1 max-w-[200px]">
                 {effectiveActiveTab === 'open' && openThreads.length === 0
                   ? 'No open tickets right now. Check back soon.'
-                  : 'Select a thread from the list to start replying.'}
+                  : 'Select a ticket from the list to start replying.'}
               </p>
             </div>
           </div>

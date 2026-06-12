@@ -89,7 +89,7 @@ export async function createShopifyOrder(
     const orderName = data.order.name ?? `#${data.order.id}`;
     const total = data.order.total_price ? `$${data.order.total_price}` : "unknown total";
     const adminUrl = `https://${ctx.shop}/admin/orders/${data.order.id}`;
-    return toolOk(`Done , order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`);
+    return toolOk(`Done — order ${orderName} is in for ${email}, total ${total}.\n\n[View in Shopify](${adminUrl})`);
   } catch (err) {
     return toolError(formatShopifyToolError("failed to create order", err));
   }

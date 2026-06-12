@@ -10,12 +10,6 @@ const CONNECTION_ICONS = {
   shopify: ShoppingBag,
 } as const
 
-const CONNECTION_DESCRIPTIONS: Record<ConnectType, string> = {
-  email: "Connected inbox",
-  ig: "Connected business account",
-  shopify: "Connected store",
-}
-
 export function ConnectedAccountRow({
   connectType,
   integration,
@@ -27,7 +21,6 @@ export function ConnectedAccountRow({
     <ConfigureAccountRow
       icon={CONNECTION_ICONS[connectType]}
       title={integration.fromEmail || integration.externalAccountId}
-      description={CONNECTION_DESCRIPTIONS[connectType]}
       action={<PermissionActionLink>Connected</PermissionActionLink>}
     />
   )

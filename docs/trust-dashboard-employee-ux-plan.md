@@ -22,7 +22,7 @@ Last drafted: 2026-06-10.
 
 ---
 
-## 1. Trust defaults and copy
+## 1. Trust defaults and copy [COMPLETED]
 
 ### 1.1 Change defaults, not just copy
 
@@ -207,7 +207,7 @@ Change `showSetup` on Integrations: banner until **Telegram + one customer chann
 
 ---
 
-## 3. Employee, not chatbot
+## 3. Employee, not chatbot [COMPLETED]
 
 ### 3.1 One employee, multiple doors
 

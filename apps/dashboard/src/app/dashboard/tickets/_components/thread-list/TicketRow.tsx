@@ -279,7 +279,7 @@ export function TicketRow({
                     )}
                     {ticket.filterStatus === "questionable" && !closed && (
                       <span
-                        title={`Possibly not a genuine customer message${ticket.filterReason ? ` , ${ticket.filterReason}` : ""}`}
+                        title={`Possibly not a genuine customer message${ticket.filterReason ? ` — ${ticket.filterReason}` : ""}`}
                         className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400"
                       >
                         <Flag className="size-2.5 mr-1" /> Unverified sender

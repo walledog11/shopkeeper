@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic'
 
 export const GET = withOrgRoute(
   {
-    context: 'Reports GDPR GET',
+    context: 'Org GDPR Export GET',
     errorMessage: 'Failed to export customer data',
-    rateLimit: { key: 'reports-gdpr', limit: 5, windowSecs: 60 },
+    rateLimit: { key: 'org:gdpr-export', limit: 5, windowSecs: 60 },
   },
   async ({ org, request }) => {
     const { searchParams } = new URL(request.url)

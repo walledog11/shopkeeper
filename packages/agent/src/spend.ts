@@ -11,7 +11,7 @@ import logger from "./logger.js";
 // Backstop on per-org daily LLM spend. Persisted in Postgres (one row per org
 // per UTC day) as integer nano-dollars, shared with the gateway so the cap is
 // enforced per-org across both apps. Concurrent calls can briefly overshoot the
-// cap by at most ~one call's worth per parallel run , acceptable for a backstop
+// cap by at most ~one call's worth per parallel run — acceptable for a backstop
 // whose job is to stop runaway loops, not enforce a billing meter to the cent.
 
 // Only field the cap needs. A full OrgSettings satisfies this; the gateway can

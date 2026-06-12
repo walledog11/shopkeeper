@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true, duplicate: true })
     }
   } catch {
-    // Redis unavailable , fall through. All event handlers below are idempotent.
+    // Redis unavailable — fall through. All event handlers below are idempotent.
   }
 
   switch (event.type) {

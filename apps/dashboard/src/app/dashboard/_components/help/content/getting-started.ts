@@ -14,24 +14,24 @@ export const gettingStarted: Category = {
           text: "Get Shopkeeper up and running in three steps. You'll be receiving and replying to customer messages in minutes.",
         },
         {
-          heading: "Step 1 , Connect a channel",
+          heading: "Step 1 — Connect a channel",
           steps: [
             "Go to the Integrations page from the sidebar.",
-            "Choose a channel , Gmail or Instagram are the best starting points.",
+            "Choose a channel — Gmail or Instagram are the best starting points.",
             "Follow the on-screen connection flow.",
             "Once connected, a green indicator will appear on the integration card.",
           ],
         },
         {
-          heading: "Step 2 , Receive your first ticket",
+          heading: "Step 2 — Receive your first ticket",
           steps: [
             "Ask someone to send a message to your connected email or Instagram account.",
-            "Within seconds, a new ticket will appear in the Support Tickets page.",
+            "Within seconds, a new ticket will appear in the Inbox.",
             "A badge on the sidebar icon shows the number of open tickets.",
           ],
         },
         {
-          heading: "Step 3 , Reply and resolve",
+          heading: "Step 3 — Reply and resolve",
           steps: [
             "Click a ticket to open the conversation.",
             "Type a reply in the composer at the bottom, or use Draft with Shopkeeper to generate an AI reply.",
@@ -54,11 +54,11 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Home",
-          text: "Your home page shows open ticket count, total resolved, and messages handled at a glance. Recent Activity shows the latest threads across all channels. Needs Attention surfaces the most active open tickets.",
+          text: "Your home page shows open ticket count, total resolved, and messages handled at a glance. Recent Activity shows the latest tickets across all channels. Needs Attention surfaces the most active open tickets.",
         },
         {
-          heading: "Support Tickets",
-          text: "The tickets page is your main workspace. The left panel lists all threads , filter by Open or Closed, and by channel using the icon chips. Click any ticket to open the conversation. The right panel shows customer info and the AI-generated context summary.",
+          heading: "Inbox",
+          text: "The Inbox is your main workspace. The left panel lists all tickets — filter by Open or Closed, and by channel using the icon chips. Click any ticket to open the conversation. The right panel shows customer info and the AI-generated context summary.",
         },
         {
           heading: "Integrations",

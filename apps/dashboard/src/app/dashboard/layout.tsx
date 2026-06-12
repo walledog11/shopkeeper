@@ -27,7 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       id: "no-integration",
       type: "info",
       title: "Connect your first channel",
-      message: "Start receiving support tickets from email, Instagram, SMS, and more.",
+      message: "Start receiving support tickets from email, Instagram, and more.",
       action: { label: "Add integration", href: "/dashboard/integrations" },
     });
   }
@@ -87,7 +87,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="dashboard-shell dark flex h-dvh w-full flex-col overflow-hidden bg-background font-sans">
         <NotificationBar notifications={notifications} />
         <NavProgressBar />
-        <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"}>
+        <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"} agentName={settings.agentName}>
           
           <div className="flex-1 overflow-hidden flex min-h-0">
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">

@@ -89,14 +89,12 @@ export function SectionCard({ title, description, children }: {
   children: ReactNode
 }) {
   return (
-    <div className="bg-card rounded-md border border-border overflow-hidden">
-      <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
-        <div>
-          <h2 className="text-sm font-semibold text-white/75">{title}</h2>
-          <p className="text-xs text-white/35 mt-1 leading-relaxed">{description}</p>
-        </div>
-        <div>{children}</div>
+    <div className="bg-card rounded-xl border border-border overflow-hidden p-5 sm:p-6 space-y-5">
+      <div>
+        <h2 className="text-sm font-semibold text-white/75">{title}</h2>
+        <p className="text-xs text-white/35 mt-1 leading-relaxed max-w-prose">{description}</p>
       </div>
+      <div>{children}</div>
     </div>
   )
 }
@@ -115,7 +113,7 @@ export function SettingsDisclosure({
   const [open, setOpen] = useState(defaultOpen)
 
   return (
-    <div className="bg-card rounded-md border border-border overflow-hidden">
+    <div className="bg-card rounded-xl border border-border overflow-hidden">
       <button
         type="button"
         onClick={() => setOpen(value => !value)}

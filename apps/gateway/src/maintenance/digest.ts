@@ -1,3 +1,4 @@
+import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
@@ -77,7 +78,27 @@ export function bucketDigestThreads(threads: DigestThreadRow[], now: Date): Dige
   return { genuine, questionable, filteredCount, urgent, stale, fresh, topTags };
 }
 
-export function formatDigestMessage(buckets: DigestBuckets): string {
+function formatDurationShort(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 24 * 60) return `${Math.round(minutes / 60)}h`;
+  return `${Math.round(minutes / (24 * 60))}d`;
+}
+
+export function formatWeeklySummaryLine(stats: SupportStatsSummary): string {
+  const parts = [`${stats.tickets.total} new ticket${stats.tickets.total === 1 ? '' : 's'}`];
+  const topTag = stats.tickets.byTag[0];
+  if (topTag) parts.push(`top topic ${topTag.tag} (${topTag.count})`);
+  if (stats.resolution.closedCount > 0) {
+    parts.push(
+      stats.resolution.avgMinutes != null
+        ? `${stats.resolution.closedCount} resolved, avg ${formatDurationShort(stats.resolution.avgMinutes)}`
+        : `${stats.resolution.closedCount} resolved`,
+    );
+  }
+  return `Last 7 days: ${parts.join(' · ')}`;
+}
+
+export function formatDigestMessage(buckets: DigestBuckets, weeklyLine?: string | null): string {
   const { genuine, questionable, filteredCount, urgent, stale, fresh, topTags } = buckets;
   const lines: string[] = [`Here's your support inbox:`, ``, `Open tickets: ${genuine.length}`];
 
@@ -105,6 +126,8 @@ export function formatDigestMessage(buckets: DigestBuckets): string {
 
   if (topTags) lines.push(``, `Topics: ${topTags}`);
 
+  if (weeklyLine) lines.push(``, weeklyLine);
+
   lines.push(``);
   if (questionable.length > 0) {
     lines.push(`Reply OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to relist`);
@@ -127,25 +150,29 @@ export interface OrgDigest {
  * worker and the on-demand `SUMMARY` operator command.
  */
 export async function buildOrgDigest(organizationId: string, now: Date): Promise<OrgDigest | null> {
-  const openThreads = await db.thread.findMany({
-    where: { organizationId, status: 'open', deletedAt: null },
-    select: {
-      id: true,
-      updatedAt: true,
-      tag: true,
-      filterStatus: true,
-      aiSummary: true,
-      filterReason: true,
-      customer: { select: { name: true } },
-    },
-    orderBy: { updatedAt: 'desc' },
-  });
+  const [openThreads, weeklyStats] = await Promise.all([
+    db.thread.findMany({
+      where: { organizationId, status: 'open', deletedAt: null },
+      select: {
+        id: true,
+        updatedAt: true,
+        tag: true,
+        filterStatus: true,
+        aiSummary: true,
+        filterReason: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+    }),
+    // The weekly line is garnish — never let it sink the digest itself.
+    getSupportStats(organizationId, 7).catch(() => null),
+  ]);
 
   if (openThreads.length === 0) return null;
 
   const buckets = bucketDigestThreads(openThreads, now);
   return {
-    message: formatDigestMessage(buckets),
+    message: formatDigestMessage(buckets, weeklyStats ? formatWeeklySummaryLine(weeklyStats) : null),
     pendingDigest: {
       threadIds: buckets.questionable.slice(0, DIGEST_QUESTIONABLE_LIMIT).map((t) => t.id),
       sentAt: now.toISOString(),

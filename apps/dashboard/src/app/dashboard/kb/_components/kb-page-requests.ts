@@ -15,7 +15,7 @@ export function createKnowledgeBase(name: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     },
-    "Failed to create collection.",
+    "Failed to create folder.",
   )
 }
 
@@ -23,7 +23,7 @@ export async function deleteKnowledgeBase(id: string) {
   await requestJson<{ ok: boolean }>(
     `/api/kb/bases/${id}`,
     { method: "DELETE" },
-    "Failed to delete collection.",
+    "Failed to delete folder.",
   )
 }
 
@@ -35,7 +35,7 @@ export function createArticle(knowledgeBaseId: string, input: ArticleInput) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     },
-    "Failed to create article.",
+    "Failed to create note.",
   )
 }
 
@@ -47,7 +47,7 @@ export function updateArticle(id: string, input: ArticleInput) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
     },
-    "Failed to update article.",
+    "Failed to update note.",
   )
 }
 
@@ -55,6 +55,6 @@ export async function deleteArticle(id: string) {
   await requestJson<{ ok: boolean }>(
     `/api/kb/${id}`,
     { method: "DELETE" },
-    "Failed to delete article.",
+    "Failed to delete note.",
   )
 }

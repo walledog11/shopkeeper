@@ -19,10 +19,12 @@ export function SidebarNavContent({
   openCount,
   onSwitching,
   navAuth,
+  agentName,
 }: {
   openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
+  agentName: string;
 }) {
   const pathname = usePathname();
   const { setOpenMobile, isMobile } = useSidebar();
@@ -81,7 +83,7 @@ export function SidebarNavContent({
           <kbd className="text-xs font-semibold bg-white/[0.08] px-1 py-0.5 rounded text-white/40 shrink-0 leading-none">⌘K</kbd>
         </button>
 
-        <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="desktop" />
+        <NavGroupList pathname={pathname} openCount={openCount} onNavigate={handleNavClick} variant="desktop" agentName={agentName} />
       </SidebarContent>
 
       <SidebarFooter className="border-t bg-neutral-950 border-sidebar-border p-2 gap-0">

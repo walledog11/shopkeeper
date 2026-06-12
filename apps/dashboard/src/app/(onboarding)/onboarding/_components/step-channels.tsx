@@ -13,7 +13,7 @@ export function StepChannels({ data, update, connected, onSkip, onOAuth }: {
     <div>
       <Kicker step={4} label="WHERE I'LL LISTEN" />
       <BigTitle>Where do customers reach you?</BigTitle>
-      <Lede>Connect the channels I should watch. You can add more later , this is just to start.</Lede>
+      <Lede>Connect the channels I should watch. You can add more later — this is just to start.</Lede>
 
       <div className="mt-7 grid grid-cols-1 gap-2.5 md:grid-cols-2">
         {CHANNEL_META.map(c => (

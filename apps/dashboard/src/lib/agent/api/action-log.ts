@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import type { Prisma } from "@prisma/client";
 import { db, Prisma as PrismaRuntime } from "@shopkeeper/db";
 import { TOOL_LABELS } from "@shopkeeper/agent/tools";
+import { OPERATOR_CHANNEL_TYPES } from "@shopkeeper/agent/thread-constants";
 import type { ActionLogFilters } from "@/lib/agent/api/validation";
 import type { ActionLogEntry } from "@/types";
 
@@ -49,6 +50,18 @@ function buildTurnGroupWhereSql(orgId: string, filters?: ActionLogFilters): Pris
   if (filters?.errorsOnly) {
     clauses.push(PrismaRuntime.sql`a.status IN (${PrismaRuntime.join(["error", "policy_block"])})`);
   }
+  if (filters?.attention) {
+    clauses.push(PrismaRuntime.sql`(
+      a.tool IN (${PrismaRuntime.join(["escalate_to_human", "flag_order"])})
+      OR a.status IN (${PrismaRuntime.join(["error", "policy_block"])})
+    )`);
+  }
+  if (filters?.excludeOperator) {
+    clauses.push(PrismaRuntime.sql`(
+      t.channel_type IS NULL
+      OR t.channel_type::text NOT IN (${PrismaRuntime.join([...OPERATOR_CHANNEL_TYPES])})
+    )`);
+  }
 
   return PrismaRuntime.sql`WHERE ${PrismaRuntime.join(clauses, " AND ")}`;
 }
@@ -73,6 +86,7 @@ interface RawActionRow {
   approverId: string | null;
   instruction: string | null;
   summary: string | null;
+  feedback: string | null;
   executedAt: Date;
   thread: {
     id: string;
@@ -95,6 +109,7 @@ const ACTION_LOG_SELECT = {
   approverId: true,
   instruction: true,
   summary: true,
+  feedback: true,
   executedAt: true,
   thread: {
     select: {
@@ -170,6 +185,7 @@ function buildEntryFromRows(turnId: string, rows: RawActionRow[]): ActionLogEntr
     actions,
     mode: isValidMode(first.mode) ? first.mode : null,
     approver: parseApprover(first.approverId),
+    feedback: first.feedback === "good" ? "good" : null,
   };
 }
 

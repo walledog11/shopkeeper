@@ -133,7 +133,7 @@ const SUPPORT_INSTRUCTIONS = `- When you are uncertain about the right action, w
 // ── Operator module ──
 const OPERATOR_INTEGRATION_GUIDANCE = `- When the operator describes a product by name, call search_shopify_products first to find the matching variant_id.
 - When given a customer name or email but no customer ID, call search_shopify_customers first, then call get_shopify_orders to fetch their current orders.
-- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly , do not ask for the order number.
+- When the operator says "that order", "this order", "the order", or "it" without a number, they mean the most recent order in the "Customer's recent orders" section below (or the order most recently discussed in conversation). Use that order's id directly — do not ask for the order number.
 - For order-status questions, use get_shopify_orders first. If the returned order has fulfillment_status: null, treat it as not fulfilled yet and answer from that data without calling get_order_tracking.
 - Call get_order_tracking only when an order is already fulfilled or partially fulfilled, or when the operator explicitly asks for tracking numbers, carrier scans, delivery events, or delivery exceptions.
 - To add an item to an existing order, call edit_shopify_order with variant_id and quantity. To remove an item, call edit_shopify_order with only remove_variant_id (no variant_id needed). To swap (change size/color), pass both variant_id (new) and remove_variant_id (old). Call search_shopify_products only if the needed variant_id isn't in the freshly fetched orders. Never claim you lack permission or that the API does not support this - the write_order_edits scope is active and the tool works. You MUST have a valid numeric order_id before calling this tool.
@@ -178,7 +178,7 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
       : "";
 
     const ordersSection = ctx.recentOrders.length > 0
-      ? `\n\n## Customer's recent orders (use these IDs directly , no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
+      ? `\n\n## Customer's recent orders (use these IDs directly — no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
       : "";
 
     return {

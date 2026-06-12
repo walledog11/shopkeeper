@@ -106,7 +106,7 @@ export function useKbPageState() {
       setNewKbName("")
       if (json.knowledgeBase.id) selectBase(json.knowledgeBase.id)
     } catch (error) {
-      setKbActionError(errorMessageFromUnknown(error, "Failed to create collection."))
+      setKbActionError(errorMessageFromUnknown(error, "Failed to create folder."))
     } finally {
       setIsCreatingKbSaving(false)
     }
@@ -120,7 +120,7 @@ export function useKbPageState() {
       else if (selectedArticle?.knowledgeBaseId === id) selectArticle(null)
       await mutate()
     } catch (error) {
-      setKbActionError(errorMessageFromUnknown(error, "Failed to delete collection."))
+      setKbActionError(errorMessageFromUnknown(error, "Failed to delete folder."))
     }
   }
 
@@ -139,7 +139,7 @@ export function useKbPageState() {
       setArticleDraft(emptyArticleDraft())
       if (json.article.id) selectArticle(json.article.id)
     } catch (error) {
-      setArticleCreateError(errorMessageFromUnknown(error, "Failed to create article."))
+      setArticleCreateError(errorMessageFromUnknown(error, "Failed to create note."))
     } finally {
       setIsArticleSaving(false)
     }
@@ -158,7 +158,7 @@ export function useKbPageState() {
       await mutate()
       setIsEditing(false)
     } catch (error) {
-      setEditError(errorMessageFromUnknown(error, "Failed to update article."))
+      setEditError(errorMessageFromUnknown(error, "Failed to update note."))
     } finally {
       setIsEditSaving(false)
     }
@@ -173,7 +173,7 @@ export function useKbPageState() {
       selectArticle(null)
       await mutate()
     } catch (error) {
-      setArticleDeleteError(errorMessageFromUnknown(error, "Failed to delete article."))
+      setArticleDeleteError(errorMessageFromUnknown(error, "Failed to delete note."))
     } finally {
       setIsArticleDeleting(false)
     }

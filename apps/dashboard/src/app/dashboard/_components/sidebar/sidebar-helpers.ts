@@ -1,8 +1,7 @@
-import { Bot, Box, Inbox, Settings } from "lucide-react";
+import { Box, Inbox, Settings } from "lucide-react";
 
 export const mobileTabs = [
   { name: "Inbox", href: "/dashboard/tickets", icon: Inbox, badge: true },
-  { name: "Concierge", href: "/dashboard/agent", icon: Bot, badge: false },
   { name: "Orders", href: "/dashboard/orders", icon: Box, badge: false },
   { name: "Settings", href: "/dashboard/settings", icon: Settings, badge: false },
 ];

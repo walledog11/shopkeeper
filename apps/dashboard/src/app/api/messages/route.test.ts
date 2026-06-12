@@ -16,7 +16,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
-// Mock outbound dispatch clients , we verify dispatch logic, not external APIs
+// Mock outbound dispatch clients — we verify dispatch logic, not external APIs
 vi.mock('postmark', () => ({
   ServerClient: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.sendEmail = vi.fn().mockResolvedValue({ MessageID: 'mock-msg-id' });
@@ -308,7 +308,7 @@ describe('POST /api/messages', () => {
     const req = new Request('http://localhost:3000/api/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ threadId: thread.id, text: 'Hi , sorry for the delay.' }),
+      body: JSON.stringify({ threadId: thread.id, text: 'Hi — sorry for the delay.' }),
     });
 
     const res = await POST(req);

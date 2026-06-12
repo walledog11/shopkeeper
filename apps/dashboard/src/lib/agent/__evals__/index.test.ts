@@ -6,7 +6,7 @@
 // (when `process.env.CI` is set). Override with `RUN_JUDGE_EVALS`:
 //   RUN_JUDGE_EVALS=1     → force-enable (e.g. nightly / scheduled CI runs)
 //   RUN_JUDGE_EVALS=0     → force-disable
-// Skipping keeps per-push spend in check , each judged fixture adds a Sonnet call.
+// Skipping keeps per-push spend in check — each judged fixture adds a Sonnet call.
 import { describe, it, expect, beforeEach, afterAll } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -55,7 +55,7 @@ describe("agent evals", () => {
 
   for (const fixture of fixtures) {
     it(
-      `${fixture.id} , ${fixture.description}`,
+      `${fixture.id} — ${fixture.description}`,
       async () => {
         const summary = await runFixtureRepeated(fixture, repeats);
         collected.push(summary);

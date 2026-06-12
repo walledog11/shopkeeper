@@ -6,7 +6,7 @@ import { Reveal } from "./Reveal";
 const faqs = [
   {
     q: "Will it ever send something embarrassing on my behalf?",
-    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply but waits for you to approve. As you build trust you can turn on auto-send for narrow cases like \"send tracking link if order is shipped.\" Everything else still pings you.",
+    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval via Telegram or inbox. As you build trust you can opt into Trusted mode to send simple replies on its own — refunds and cancellations still need your OK.",
   },
   {
     q: "How does it learn my voice?",
@@ -14,7 +14,7 @@ const faqs = [
   },
   {
     q: "Can I export my data?",
-    a: "Yes , full conversation history, customer notes, and tags export to CSV any time. We don't hold your data hostage.",
+    a: "Yes — full conversation history, customer notes, and tags export to CSV any time. We don't hold your data hostage.",
   },
   {
     q: "What if I don't use Shopify?",
@@ -22,11 +22,11 @@ const faqs = [
   },
   {
     q: "Can multiple team members use Shopkeeper?",
-    a: "Yes. Professional includes multi-member access, role-based permissions, and internal notes so teams can align privately before replying.",
+    a: "Yes. Pro includes two team seats, and internal notes let your team align privately before replying.",
   },
   {
     q: "Is my customers' data secure?",
-    a: "All customer data is encrypted in transit and at rest. Each organization's data is strictly isolated , no cross-tenant access.",
+    a: "All customer data is encrypted in transit and at rest. Each organization's data is strictly isolated — no cross-tenant access.",
   },
 ];
 
@@ -43,11 +43,15 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         <span>{q}</span>
         <span className={`ml-4 shrink-0 text-lg font-normal transition-transform duration-200 [font-family:var(--m-mono)] ${open ? "rotate-45" : ""}`}>+</span>
       </div>
-      {open && (
-        <div className="mt-3 max-h-[200px] overflow-hidden text-sm leading-[1.6] text-stone-700">
-          {a}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-3 text-sm leading-[1.6] text-stone-700">{a}</div>
         </div>
-      )}
+      </div>
     </button>
   );
 }

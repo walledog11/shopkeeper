@@ -18,12 +18,18 @@ export function NavGroupList({
   openCount,
   onNavigate,
   variant,
+  agentName,
 }: {
   pathname: string;
   openCount: number;
   onNavigate: (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => void;
   variant: "desktop" | "mobile";
+  agentName: string;
 }) {
+  // The agent is listed by its configured name, like any other teammate.
+  const itemLabel = (item: { name: string; href: string }) =>
+    item.href === "/dashboard/agent" ? agentName : item.name;
+
   if (variant === "mobile") {
     return (
       <>
@@ -49,7 +55,7 @@ export function NavGroupList({
                     )}
                   >
                     <item.icon className="w-[16px] h-[18px] shrink-0 mr-1 stroke-1" />
-                    <span className="text-sm">{item.name}</span>
+                    <span className="text-sm">{itemLabel(item)}</span>
                     {item.badge && (
                       <OpenCountBadge
                         openCount={openCount}
@@ -90,7 +96,7 @@ export function NavGroupList({
                   >
                     <Link href={item.href} onClick={(e) => onNavigate(e, isActive)}>
                       <item.icon className="size-[10px] shrink-0 stroke-1 mr-1" />
-                      <span>{item.name}</span>
+                      <span>{itemLabel(item)}</span>
                     </Link>
                   </SidebarMenuButton>
                   {item.badge && openCount > 0 && (

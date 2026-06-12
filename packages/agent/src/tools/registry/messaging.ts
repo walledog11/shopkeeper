@@ -23,7 +23,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     description:
       "Send an outbound email to any email address. Use this to proactively contact a customer (e.g. shipping delay notice) even when the current thread is not an email thread.",
     fields: {
-      to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address , never a name or phone number.", { required: true }),
+      to: stringArg("Recipient email address in user@domain format (e.g. 'jane@example.com'). Must be a valid SMTP address — never a name or phone number.", { required: true }),
       subject: stringArg("Email subject line.", { required: true }),
       body: stringArg("Email body text.", { required: true }),
     },

@@ -4,14 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Kicker } from "./primitives";
 import { AUTONOMY_TIERS, CHANNEL_META, type ChannelKey, type OnboardingData } from "./model";
 
+const DEFAULT_TIER = AUTONOMY_TIERS.find(t => t.id === "guarded") ?? AUTONOMY_TIERS[1];
+
 export function StepPlan({ data, connected, onStart, onBack }: {
   data: OnboardingData; connected: Set<ChannelKey>; onStart: () => void; onBack: () => void;
 }) {
   const storeName = data.storeName || "your store";
   const founder = data.founderName || "there";
-  const tier = AUTONOMY_TIERS.find(t => t.id === data.autonomy) ?? AUTONOMY_TIERS[2];
+  const tier = AUTONOMY_TIERS.find(t => t.id === data.autonomy) ?? DEFAULT_TIER;
   const channelNames = CHANNEL_META.flatMap(c => connected.has(c.key) ? [c.label] : []).join(", ");
   const hasShopify = connected.has("shopify");
+  const sendsOnOwn = tier.id === "trusted" || tier.id === "broad" || tier.id === "full";
 
   const planItems = [
     {
@@ -23,18 +26,22 @@ export function StepPlan({ data, connected, onStart, onBack }: {
       time: "First hour",
       title: "Build memory from your past replies",
       detail: hasShopify
-        ? "I'll skim the last 90 days of your customer threads, learn your voice, and build a draft knowledge base. You can edit it tomorrow in Memory."
-        : "Once you connect Shopify, I'll skim past threads and build memory. Until then I'll ask before sending.",
+        ? "I'll skim the last 90 days of your customer tickets, learn your voice, and save what I learn as memory notes. You can edit them tomorrow in Memory."
+        : "Once you connect Shopify, I'll skim past tickets and build memory. Until then I'll ask before sending.",
     },
     {
       time: "Overnight",
-      title: "Clear what I can, flag what I can't",
-      detail: `I'll auto-resolve WISMO, exchanges, address changes, and refunds up to $${tier.cap}. Bulk inquiries, anything over $${tier.cap}, and press/legal mentions all wait for you.`,
+      title: sendsOnOwn ? "Clear what I can, flag what I can't" : "Draft replies, wait for your OK",
+      detail: sendsOnOwn
+        ? `I'll auto-resolve WISMO, exchanges, address changes, and refunds up to $${tier.cap}. Bulk inquiries, anything over $${tier.cap}, and press/legal mentions all wait for you.`
+        : `I'll draft replies for WISMO, exchanges, and address changes — you approve via Telegram or inbox before anything goes out. Refunds, bulk inquiries, and press/legal mentions always wait for you.`,
     },
     {
       time: `Tomorrow ${greetingTime()}`,
       title: "Brief you with what happened",
-      detail: `You'll wake up to a summary: how many I cleared, what's waiting, who needs ${founder} specifically. The same format you'll see every morning.`,
+      detail: sendsOnOwn
+        ? `You'll wake up to a summary: how many I cleared, what's waiting, who needs ${founder} specifically. The same format you'll see every morning.`
+        : `You'll wake up to a summary: how many replies I drafted, what's waiting for your OK, who needs ${founder} specifically. The same format you'll see every morning.`,
     },
   ];
 
@@ -67,7 +74,7 @@ export function StepPlan({ data, connected, onStart, onBack }: {
           For tonight I&apos;m running at <SumPill>{tier.label}</SumPill> ,
           refunds capped at <SumPill>${tier.cap}</SumPill>,
           watching <SumPill>{channelNames || "your inbox"}</SumPill>.
-          Here&apos;s what to expect.
+          {sendsOnOwn ? " Here's what to expect." : " I draft every reply — you approve before anything sends."}
         </p>
 
         <div className="relative mt-6 flex flex-col gap-3">
@@ -95,8 +102,8 @@ export function StepPlan({ data, connected, onStart, onBack }: {
         </div>
         <div className="grid grid-cols-3 gap-3">
           <Waiting k="Inbox"     v="0 tickets" hint="filling up as I watch" />
-          <Waiting k="Memory"    v="0 articles" hint="builds from your replies" />
-          <Waiting k={PRODUCT_NAME} v="ready" hint="your AI teammate" />
+          <Waiting k="Memory"    v="0 notes" hint="builds from your replies" />
+          <Waiting k={PRODUCT_NAME} v="ready" hint="your newest teammate" />
         </div>
       </div>
     </div>

@@ -59,7 +59,7 @@ export default function AgentPanelRoot({ agentName }: Props) {
         )}
       </AnimatePresence>
 
-      {/* Desktop FAB , hidden on mobile (mobile uses header button) */}
+      {/* Desktop FAB — hidden on mobile (mobile uses header button) */}
       <AnimatePresence>
         {!isOpen && (
           <m.button

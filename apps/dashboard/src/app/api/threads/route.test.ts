@@ -85,7 +85,7 @@ describe('GET /api/threads', () => {
   });
 
   it('supports cursor-based pagination via limit', async () => {
-    // Each customer can only have one thread per channel , create 3 separate customers
+    // Each customer can only have one thread per channel — create 3 separate customers
     for (let i = 0; i < 3; i++) {
       const customer = await createTestCustomer(org.id, `cust_p_${i}@test.com`, { name: `Pager ${i}` });
       await createTestThread(org.id, customer.id, ChannelType.email);

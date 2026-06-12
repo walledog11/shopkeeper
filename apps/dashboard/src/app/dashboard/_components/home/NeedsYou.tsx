@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { AlertCircle, Bot, Camera, Loader2, Mail, MessageSquare, ShoppingBag, Smartphone, Sparkles } from "lucide-react"
+import { AlertCircle, Camera, Loader2, Mail, MessageSquare, ShoppingBag, Sparkles } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { getTagStyle } from "@/app/dashboard/_lib/ticket-tags"
@@ -17,11 +17,7 @@ interface Props {
 const CHANNEL_META: Record<string, { Icon: LucideIcon; className: string }> = {
   Email: { Icon: Mail, className: "text-blue-400" },
   Instagram: { Icon: Camera, className: "text-pink-400" },
-  TikTok: { Icon: MessageSquare, className: "text-cyan-300" },
   Shopify: { Icon: ShoppingBag, className: "text-green-400" },
-  SMS: { Icon: Smartphone, className: "text-emerald-400" },
-  "Agent Action": { Icon: Bot, className: "text-amber-400" },
-  "Dashboard Agent": { Icon: Bot, className: "text-amber-400" },
 }
 
 export default function NeedsYou({ items, agentName, onApproved }: Props) {
@@ -124,7 +120,7 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: HomeNeedsAttention
           ) : (
             <div className="px-2.5 py-2 rounded-md bg-black/30 border border-white/[0.04]">
               <p className="text-xs text-white/70 leading-snug flex items-start gap-1.5">
-                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-green-400/80 " />
+                <Sparkles aria-hidden className="size-3 mt-[2px] shrink-0 text-amber-400/80" />
                 <span>
                   <span className="font-semibold text-white/85">{agentName} proposes: </span>
                   <span className="text-white/80">{item.proposalSummary}</span>
@@ -148,23 +144,23 @@ function NeedsYouRow({ item, agentName, onApproved }: { item: HomeNeedsAttention
                 type="button"
                 onClick={approveQuickReply}
                 disabled={isApproving}
-                className="inline-flex items-center justify-center gap-1.5 text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-gradient-to-r from-sky-600 to-sky-400 hover:bg-sky-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black transition-colors"
+                className="inline-flex items-center justify-center gap-1.5 text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-green-400 hover:bg-green-300 disabled:opacity-40 text-black transition-colors"
               >
                 {isApproving && <Loader2 aria-hidden className="size-3 animate-spin" />}
-                {isApproving ? "Sending" : "Approve & send"}
+                {isApproving ? "Sending" : "Send as-is"}
               </button>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
                 className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md border border-white/[0.10] hover:border-white/[0.20] text-white/70 transition-colors"
               >
-                Edit
+                View ticket
               </Link>
             </>
           ) : (
             <>
               <Link
                 href={`/dashboard/tickets?thread=${item.threadId}`}
-                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-green-400 hover:bg-green-300 text-black transition-colors"
+                className="text-center md:text-xs text-sm font-semibold px-3 md:py-3 py-4 rounded-md bg-amber-400 hover:bg-amber-300 text-black transition-colors"
               >
                 Review decision
               </Link>

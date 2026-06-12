@@ -122,7 +122,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     <div id="autonomy" className="scroll-mt-4">
       <SectionCard
         title="Trust level"
-        description="How much Shopkeeper can do before asking you. Most operators stay on Ask first."
+        description={`How much ${settingsState.agentName} can do before asking you. Most stores stay on Ask first.`}
       >
         <div className="space-y-6">
           <div role="radiogroup" aria-label="Trust level" className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -139,12 +139,12 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                   onClick={() => selectTier(option.id)}
                   className={`min-h-[104px] rounded-md border p-3 text-left transition-all ${
                     selected
-                      ? "border-amber-300/60 bg-amber-300/[0.08]"
+                      ? "border-white/[0.40] bg-white/[0.07]"
                       : "border-white/[0.10] bg-white/[0.025] hover:border-white/[0.22] hover:bg-white/[0.05]"
                   } ${disabled ? "opacity-45 cursor-not-allowed hover:border-white/[0.10] hover:bg-white/[0.025]" : ""}`}
                 >
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`size-2.5 rounded-full border ${selected ? "border-amber-300 bg-amber-300" : "border-white/25"}`} />
+                    <span className={`size-2.5 rounded-full border ${selected ? "border-white bg-white" : "border-white/25"}`} />
                     <span className="text-sm font-semibold text-white/75">{option.label}</span>
                     {option.recommended && (
                       <span className="rounded-sm border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-300">

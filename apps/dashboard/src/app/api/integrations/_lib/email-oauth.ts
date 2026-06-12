@@ -124,7 +124,7 @@ export async function completeEmailOAuth(
     }
 
     if (!clerkOrgId) {
-      logger.error(`[${prefix}] Missing org cookie , session likely interrupted`);
+      logger.error(`[${prefix}] Missing org cookie — session likely interrupted`);
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });

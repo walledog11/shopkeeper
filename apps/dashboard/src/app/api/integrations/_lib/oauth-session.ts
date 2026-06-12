@@ -90,7 +90,7 @@ export async function validateOAuthCallbackSession(options: {
 
   const mismatchError = options.stateMismatchError ?? 'state_mismatch';
   if (!savedState || !options.state || !timingSafeIncludes([savedState], options.state)) {
-    logger.error(`[${options.logPrefix}] State mismatch , possible CSRF attempt`);
+    logger.error(`[${options.logPrefix}] State mismatch — possible CSRF attempt`);
     return {
       ok: false,
       response: NextResponse.redirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
@@ -101,7 +101,7 @@ export async function validateOAuthCallbackSession(options: {
   if (!currentUserId || currentUserId !== savedUserId) {
     logger.error(
       { savedUserId, currentUserId },
-      `[${options.logPrefix}] User session mismatch , possible CSRF attempt`,
+      `[${options.logPrefix}] User session mismatch — possible CSRF attempt`,
     );
     return {
       ok: false,

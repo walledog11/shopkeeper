@@ -6,6 +6,7 @@ import {
   clearWorkspaceTicketsRequest,
   deleteWorkspaceRequest,
   downloadBlob,
+  fetchCustomerGdprExport,
   fetchWorkspaceExport,
   logoValidationError,
   saveWorkspaceName,
@@ -134,6 +135,35 @@ function useWorkspaceExportFlow() {
   }
 }
 
+function useGdprExportFlow() {
+  const [gdprEmail, setGdprEmail] = useState("")
+  const [gdprExporting, setGdprExporting] = useState(false)
+  const [gdprError, setGdprError] = useState<string | null>(null)
+
+  async function exportGdprData() {
+    const email = gdprEmail.trim().toLowerCase()
+    if (!email) return
+    setGdprExporting(true)
+    setGdprError(null)
+    try {
+      const { blob, filename } = await fetchCustomerGdprExport(email)
+      downloadBlob(blob, filename)
+    } catch (err) {
+      setGdprError(err instanceof Error && err.message !== "Failed" ? err.message : "Failed to export. Check the email address and try again.")
+    } finally {
+      setGdprExporting(false)
+    }
+  }
+
+  return {
+    exportGdprData,
+    gdprEmail,
+    gdprError,
+    gdprExporting,
+    setGdprEmail,
+  }
+}
+
 function useClearTicketsFlow() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -218,6 +248,7 @@ export function useWorkspaceTabState(props: WorkspaceTabProps) {
   return {
     ...useClearTicketsFlow(),
     ...useDeleteWorkspaceFlow({ nextOrgId, orgName, setActive }),
+    ...useGdprExportFlow(),
     ...useWorkspaceExportFlow(),
     ...useWorkspaceLogoFlow(organization),
     ...useWorkspaceSaveFlow(props),

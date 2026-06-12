@@ -1,8 +1,8 @@
 /**
- * Internal agent send hop , called by the gateway worker's in-process ThreadSink
+ * Internal agent send hop — called by the gateway worker's in-process ThreadSink
  * (Track 4.2) for the two provider-coupled tools, send_reply and send_email.
  * Postmark / Instagram delivery stays in the dashboard (the package boundary:
- * touches a message provider , dashboard), so the worker hops here to dispatch.
+ * touches a message provider — dashboard), so the worker hops here to dispatch.
  *
  * Auth: x-internal-secret header. No Clerk session.
  *

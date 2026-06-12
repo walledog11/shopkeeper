@@ -62,7 +62,7 @@ export const getOrCreateOrg = cache(async () => {
 
   if (existing) return existing;
 
-  // First time this Clerk org is seen , provision it in our DB
+  // First time this Clerk org is seen — provision it in our DB
   const client = await clerkClient();
   const [clerkOrg, clerkUser] = await Promise.all([
     client.organizations.getOrganization({ organizationId: orgId }),

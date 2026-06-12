@@ -197,7 +197,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
       if (!res.ok) throw new Error()
       const { syncedPolicies, syncedPages } = await res.json() as { syncedPolicies: number; syncedPages: number }
       const total = syncedPolicies + syncedPages
-      setKbSyncResult(`${total} article${total === 1 ? "" : "s"} synced to Knowledge Base`)
+      setKbSyncResult(`${total} note${total === 1 ? "" : "s"} synced to Memory`)
     } catch {
       setKbSyncResult("Sync failed, please try again")
     } finally {

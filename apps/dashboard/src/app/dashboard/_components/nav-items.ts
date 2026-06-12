@@ -1,4 +1,4 @@
-import { Inbox, BarChart2, Users, Bot, Settings, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye } from "lucide-react";
+import { Inbox, Users, Bot, Settings, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -43,7 +43,6 @@ export const navGroups: NavGroup[] = [
   {
     label: "Insights",
     items: [
-      { name: "Analytics", href: "/dashboard/analytics", icon: BarChart2 },
       { name: "Review", href: "/dashboard/review", icon: ScanEye },
     ],
   },

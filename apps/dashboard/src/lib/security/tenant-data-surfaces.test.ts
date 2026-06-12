@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@shopkeeper/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -43,13 +43,11 @@ vi.mock('@/lib/server/rate-limit', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth, clerkClient } from '@clerk/nextjs/server';
-import { GET as getAnalytics } from '@/app/api/analytics/route';
 import { GET as getIntegrations } from '@/app/api/integrations/route';
 import { GET as getKb } from '@/app/api/kb/route';
 import { GET as getOrders } from '@/app/api/orders/route';
 import { GET as getOrgData, DELETE as deleteOrgData } from '@/app/api/org/data/route';
-import { GET as getReports } from '@/app/api/reports/route';
-import { GET as getGdprReport } from '@/app/api/reports/gdpr/route';
+import { GET as getGdprReport } from '@/app/api/org/gdpr-export/route';
 import { GET as getShopifyCustomer } from '@/app/api/shopify/customer/route';
 import { GET as getShopifyCustomers } from '@/app/api/shopify/customers/route';
 import { POST as createShopifyThread } from '@/app/api/threads/shopify/route';
@@ -126,39 +124,6 @@ describe('tenant data surfaces', () => {
     expect(exportBody.kbArticles.map(article => article.title)).toEqual(['Caller Article']);
   });
 
-  it('keeps reports and analytics aggregates scoped to the active organization', async () => {
-    const callerCustomer = await createTestCustomer(callerOrg.id, 'caller-analytics@example.com', { name: 'Caller Analytics' });
-    const callerThread = await createTestThread(callerOrg.id, callerCustomer.id, ChannelType.email, { tag: 'CallerTag' });
-    await createTestMessage(callerThread.id, 'caller asked');
-    await createTestMessage(callerThread.id, 'caller answered', SenderType.agent);
-
-    const otherCustomer = await createTestCustomer(otherOrg.id, 'foreign-analytics@example.com', { name: 'Foreign Analytics' });
-    const otherThread = await createTestThread(otherOrg.id, otherCustomer.id, ChannelType.shopify, { tag: 'ForeignTag' });
-    await createTestMessage(otherThread.id, 'foreign asked');
-    await createTestMessage(otherThread.id, 'foreign answered', SenderType.agent);
-
-    const url = 'http://localhost/api/reports?from=2020-01-01T00:00:00.000Z&to=2030-01-01T00:00:00.000Z';
-    const reportsBody = await json<{
-      support: { total: number; byTag: Array<{ tag: string; count: number }>; byChannel: Array<{ channel: string; count: number }> };
-      customers: { top: Array<{ platformId: string }> };
-    }>(await getReports(new Request(url)));
-    expect(reportsBody.support.total).toBe(1);
-    expect(reportsBody.support.byTag).toEqual([{ tag: 'CallerTag', count: 1 }]);
-    expect(reportsBody.support.byChannel).toEqual([{ channel: 'email', count: 1 }]);
-    expect(reportsBody.customers.top.map(customer => customer.platformId)).toEqual(['caller-analytics@example.com']);
-
-    const analyticsBody = await json<{
-      threads: { total: number; byTag: Array<{ tag: string; count: number }>; byChannel: Array<{ channel: string; count: number }> };
-      messages: { total: number; bySender: Record<string, number> };
-    }>(await getAnalytics(new Request(url.replace('/reports', '/analytics'))));
-    expect(analyticsBody.threads.total).toBe(1);
-    expect(analyticsBody.threads.byTag).toEqual([{ tag: 'CallerTag', count: 1 }]);
-    expect(analyticsBody.threads.byChannel).toEqual([{ channel: 'email', count: 1 }]);
-    expect(analyticsBody.messages.total).toBe(2);
-    expect(analyticsBody.messages.bySender.customer).toBe(1);
-    expect(analyticsBody.messages.bySender.agent).toBe(1);
-  });
-
   it('exports GDPR customer data only for the active organization even when another org has the same email', async () => {
     const sharedEmail = 'shared-customer@example.com';
     const callerCustomer = await createTestCustomer(callerOrg.id, sharedEmail, { name: 'Caller Shared' });
@@ -169,7 +134,7 @@ describe('tenant data surfaces', () => {
     const foreignThread = await createTestThread(otherOrg.id, foreignCustomer.id, ChannelType.email);
     await createTestMessage(foreignThread.id, 'foreign private message');
 
-    const res = await getGdprReport(new Request(`http://localhost/api/reports/gdpr?email=${encodeURIComponent(sharedEmail)}`));
+    const res = await getGdprReport(new Request(`http://localhost/api/org/gdpr-export?email=${encodeURIComponent(sharedEmail)}`));
     const bodyText = await res.text();
 
     expect(res.status).toBe(200);

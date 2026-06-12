@@ -8,8 +8,8 @@ import type { AgentTabController } from "./useAgentTabState"
 export function WhenOnDutySection({ controller }: { controller: AgentTabController }) {
   return (
     <SectionCard
-      title="When I'm on duty"
-      description="Set your working hours and how inbound mail is filtered when you're away."
+      title={`When ${controller.settingsState.agentName} is on duty`}
+      description="Working hours and how inbound mail is handled when you're away."
     >
       <div className="space-y-8">
         <BusinessHoursSection controller={controller} embedded />

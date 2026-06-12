@@ -17,6 +17,7 @@ import {
   editShopifyOrder,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
+import { getSupportStats } from "./support-stats.js";
 import { toolError, type ToolResult, type ToolStatus } from "./result.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import type {
@@ -114,6 +115,7 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
       })),
     });
   },
+  getSupportStats,
 };
 
 export async function executeTool(

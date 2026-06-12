@@ -24,7 +24,7 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
-    aiSummary: thread.aiSummary || "Shopkeeper is analyzing this conversation…",
+    aiSummary: thread.aiSummary || `${agentName ?? "Shopkeeper"} is reading this ticket…`,
     status: thread.status,
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,

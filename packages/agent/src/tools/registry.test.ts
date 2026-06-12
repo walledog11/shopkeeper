@@ -54,6 +54,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   update_thread_status: { status: "closed" },
   update_thread_tag: { tag: "Shipping" },
   escalate_to_human: { reason: "Needs manual review." },
+  get_support_stats: { days: 7 },
 };
 
 const SHOPIFY_TOOL_ROUTES = [
@@ -144,6 +145,18 @@ function makeDeps(): ToolExecutionDeps {
       tags: ["Returns"],
     }]),
     recordKnowledgeBaseCitations: vi.fn().mockResolvedValue(undefined),
+    getSupportStats: vi.fn().mockResolvedValue({
+      from: "2026-06-01T00:00:00.000Z",
+      to: "2026-06-08T00:00:00.000Z",
+      tickets: {
+        total: 12,
+        byTag: [{ tag: "Shipping", count: 7 }],
+        byChannel: [{ channel: "email", count: 12 }],
+        byDay: [{ day: "2026-06-02", count: 4 }],
+      },
+      messages: { customer: 20, agent: 5, ai: 11 },
+      resolution: { closedCount: 9, avgMinutes: 42 },
+    }),
   };
 }
 
@@ -207,6 +220,7 @@ describe("agent tool execution routing", () => {
   it("covers every registered tool with a routing assertion", () => {
     const routedNames = [
       "search_kb",
+      "get_support_stats",
       ...SHOPIFY_TOOL_ROUTES.map(([name]) => name),
       ...THREAD_TOOL_ROUTES.map(([name]) => name),
       "escalate_to_human",
@@ -230,6 +244,18 @@ describe("agent tool execution routing", () => {
     if (name === "create_refund") {
       expect(deps.incrementDailyRefundSpendCents).toHaveBeenCalledWith("org_1", 1234);
     }
+  });
+
+  it("routes get_support_stats through the stats dependency with clamped days", async () => {
+    const ctx = makeCtx();
+    const deps = makeDeps();
+    const definition = definitionFor("get_support_stats");
+    const input = definition.parse({ days: 500 });
+
+    const result = await definition.execute(input, ctx, AGENT_SETTINGS_DEFAULTS, deps);
+
+    expect(deps.getSupportStats).toHaveBeenCalledWith("org_1", 90);
+    expect(result.message).toContain("Shipping");
   });
 
   it("routes search_kb through the knowledge-base dependency and records thread citations", async () => {

@@ -125,7 +125,7 @@ export default function ActionLog({ sidebarLimit }: { sidebarLimit?: number }) {
                 href={`/dashboard/tickets?thread=${entry.threadId}`}
                 className="ml-auto flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300"
               >
-                View thread
+                View ticket
                 <ExternalLink className="size-3" />
               </a>
             )}

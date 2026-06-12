@@ -26,7 +26,7 @@ export default function AutonomyPill({ tier, compact = false, className }: Props
   return (
     <Link
       href="/dashboard/settings?tab=agent#autonomy"
-      aria-label={`Autopilot autonomy tier: ${label}`}
+      aria-label={`Trust level: ${label}`}
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border font-semibold transition-colors",
         "min-w-0 max-w-full",
@@ -36,7 +36,7 @@ export default function AutonomyPill({ tier, compact = false, className }: Props
       )}
     >
       <Bot className={cn("shrink-0", compact ? "size-3.5" : "size-4")} />
-      <span className="truncate">Autopilot: {label}</span>
+      <span className="truncate">Trust level: {label}</span>
     </Link>
   )
 }

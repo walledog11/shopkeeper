@@ -59,3 +59,14 @@ export function visibleAutonomyTiers(currentTier?: AutonomyTier): AutonomyTierOp
   const legacyTier = AUTONOMY_TIERS.find(option => option.id === currentTier);
   return legacyTier ? [...merchantTiers, legacyTier] : merchantTiers;
 }
+
+export function effectiveRefundCap(settings: { autonomyTier?: AutonomyTier; maxRefundAmount?: number | null }): number {
+  if (settings.maxRefundAmount != null) return settings.maxRefundAmount;
+  return AUTONOMY_TIERS.find(option => option.id === settings.autonomyTier)?.cap ?? 50;
+}
+
+export function formatRefundCapSummary(settings: { autonomyTier?: AutonomyTier; maxRefundAmount?: number | null }): string {
+  const cap = effectiveRefundCap(settings);
+  if (cap === 0) return "no refunds without your OK";
+  return `refunds up to $${cap}`;
+}

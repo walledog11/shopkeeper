@@ -23,6 +23,7 @@ export const publicRoutePatterns = [
 
 const signedInNoOrgRoutePatterns = [
   "/select-org(.*)",
+  "/create-workspace(.*)",
   "/onboarding(.*)",
 ] as const;
 

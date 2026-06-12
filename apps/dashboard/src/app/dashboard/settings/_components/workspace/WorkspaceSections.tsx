@@ -28,6 +28,7 @@ export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
       <GeneralSection orgName={orgName} state={state} />
       <BrandingSection orgName={orgName} state={state} />
       <DataExportSection state={state} />
+      <GdprExportSection state={state} />
       <DangerZone orgName={orgName} state={state} />
       <DeleteWorkspaceDialog orgName={orgName} state={state} />
     </div>
@@ -139,7 +140,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
   } = state
 
   return (
-    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, threads, messages, and knowledge base.">
+    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, tickets, messages, and memory.">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <p className="text-xs text-white/35 max-w-md">
           Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
@@ -157,6 +158,48 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
             Export JSON
           </Button>
         </div>
+      </div>
+    </SectionCard>
+  )
+}
+
+function GdprExportSection({ state }: { state: WorkspaceTabState }) {
+  const {
+    exportGdprData,
+    gdprEmail,
+    gdprError,
+    gdprExporting,
+    setGdprEmail,
+  } = state
+
+  return (
+    <SectionCard title="Customer data export" description="Download all support tickets and profile data for one customer as JSON. Use this to answer data access requests under GDPR (Art. 15) or CCPA.">
+      <div className="space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            aria-label="Customer email for data export"
+            type="email"
+            value={gdprEmail}
+            onChange={e => setGdprEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && exportGdprData()}
+            placeholder="customer@example.com"
+            className="h-9 flex-1 min-w-48 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportGdprData}
+            disabled={gdprExporting || !gdprEmail.trim()}
+            className="h-8 text-xs font-semibold border-white/[0.10] text-white/60 hover:bg-white/[0.08] shrink-0"
+          >
+            {gdprExporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
+            Export data
+          </Button>
+        </div>
+        {gdprError && <p className="text-xs text-red-400">{gdprError}</p>}
+        <p className="text-xs text-white/30">
+          Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
+        </p>
       </div>
     </SectionCard>
   )
@@ -226,7 +269,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
             <div>
               <p className="text-sm font-semibold text-white/70">Delete workspace</p>
               <p className="text-xs text-white/35 mt-0.5">
-                Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data , conversations, customers, integrations, knowledge base, and billing. Every member will lose access.
+                Permanently delete <span className="text-white/60 font-medium">{orgName}</span> and all of its data — tickets, customers, integrations, memory, and billing. Every member will lose access.
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
@@ -283,7 +326,7 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
         <DialogHeader>
           <DialogTitle className="text-white">Delete {orgName}?</DialogTitle>
           <DialogDescription>
-            This permanently removes the workspace, all conversations, customers, integrations, and knowledge base. Any active subscription will be cancelled. This cannot be undone.
+            This permanently removes the workspace, all tickets, customers, integrations, and memory. Any active subscription will be cancelled. This cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

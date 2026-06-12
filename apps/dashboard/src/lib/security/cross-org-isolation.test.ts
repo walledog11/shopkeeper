@@ -60,7 +60,7 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-describe('cross-org isolation , id-style routes return 404 for foreign resources', () => {
+describe('cross-org isolation — id-style routes return 404 for foreign resources', () => {
   it('PATCH /api/kb/[id] returns 404 for another org article id', async () => {
     const foreignKb = await db.knowledgeBase.create({
       data: { organizationId: otherOrg.id, name: 'Other', source: 'user' },

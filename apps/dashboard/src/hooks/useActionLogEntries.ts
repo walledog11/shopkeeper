@@ -12,6 +12,8 @@ export interface ActionLogQueryFilters {
   tools?: string[]
   modes?: ActionLogMode[]
   errorsOnly?: boolean
+  attention?: boolean
+  excludeOperator?: boolean
   from?: Date | string | null
   to?: Date | string | null
 }
@@ -33,6 +35,8 @@ interface NormalizedActionLogFilters {
   tools: string[]
   modes: ActionLogMode[]
   errorsOnly: boolean
+  attention: boolean
+  excludeOperator: boolean
   from: string | null
   to: string | null
 }
@@ -49,6 +53,8 @@ function normalizeFilters(filters: ActionLogQueryFilters): NormalizedActionLogFi
     tools: filters.tools ?? [],
     modes: filters.modes ?? [],
     errorsOnly: filters.errorsOnly ?? false,
+    attention: filters.attention ?? false,
+    excludeOperator: filters.excludeOperator ?? false,
     from: normalizeDateParam(filters.from),
     to: normalizeDateParam(filters.to),
   }
@@ -61,6 +67,8 @@ export function buildActionLogSearchParams(filters: ActionLogQueryFilters = {}):
   if (normalized.tools.length) params.set("tool", normalized.tools.join(","))
   if (normalized.modes.length) params.set("mode", normalized.modes.join(","))
   if (normalized.errorsOnly) params.set("errorsOnly", "true")
+  if (normalized.attention) params.set("attention", "true")
+  if (normalized.excludeOperator) params.set("excludeOperator", "true")
   if (normalized.from) params.set("from", normalized.from)
   if (normalized.to) params.set("to", normalized.to)
   return params

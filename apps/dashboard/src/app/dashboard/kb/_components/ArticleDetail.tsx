@@ -37,13 +37,13 @@ export function ArticleDetail({
     return (
       <div className="px-4 md:px-8 py-6 space-y-3 max-w-3xl">
         <input
-          aria-label="Article title"
+          aria-label="Note title"
           value={editDraft.title}
           onChange={e => onEditDraftChange(d => ({ ...d, title: e.target.value }))}
           className={`${inputCls} text-lg font-semibold`}
         />
         <textarea
-          aria-label="Article body"
+          aria-label="Note body"
           value={editDraft.body}
           onChange={e => onEditDraftChange(d => ({ ...d, body: e.target.value }))}
           rows={16}

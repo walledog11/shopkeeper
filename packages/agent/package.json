@@ -82,6 +82,10 @@
       "types": "./dist/tools/index.d.ts",
       "default": "./dist/tools/index.js"
     },
+    "./support-stats": {
+      "types": "./dist/tools/support-stats.d.ts",
+      "default": "./dist/tools/support-stats.js"
+    },
     "./executor": {
       "types": "./dist/tools/executor.d.ts",
       "default": "./dist/tools/executor.js"

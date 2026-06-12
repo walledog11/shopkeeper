@@ -86,23 +86,23 @@ export function KbPageView({ state }: KbPageViewProps) {
             className="hidden md:flex items-center gap-1.5 text-xs font-medium text-white/70 bg-white/[0.06] hover:bg-white/[0.10] border border-white/[0.12] px-3 py-1.5 rounded-md transition-colors"
           >
             <Plus className="size-3.5" />
-            New collection
+            New folder
           </button>
           <button type="button"
             onClick={() => { setIsCreatingArticle(true); setArticleCreateError(null); setMobileView("list") }}
             disabled={!articleTargetKb || isCreatingArticle}
-            title={!articleTargetKb ? "Select or create a custom collection first" : undefined}
+            title={!articleTargetKb ? "Select or create a folder first" : undefined}
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.10] hover:bg-white/[0.15] border border-white/[0.12] disabled:opacity-40 disabled:cursor-not-allowed px-2 md:px-3 py-1.5 rounded-md transition-colors"
           >
             <Plus className="size-3.5" />
-            <span className="hidden md:inline">New article</span>
+            <span className="hidden md:inline">New note</span>
           </button>
         </div>
       </div>
 
       <div className="flex flex-1 min-h-0">
         <aside className="hidden md:flex flex-col w-full md:w-[200px] shrink-0 border-r border-border overflow-y-auto custom-scrollbar py-4 px-3">
-          <p className="text-xs font-semibold text-white/30 uppercase tracking-wider px-2 mb-2">Collections</p>
+          <p className="text-xs font-semibold text-white/30 uppercase tracking-wider px-2 mb-2">Folders</p>
           <CollectionList
             knowledgeBases={knowledgeBases}
             allArticlesCount={allArticles.length}
@@ -142,7 +142,7 @@ export function KbPageView({ state }: KbPageViewProps) {
               <div className="flex items-center shrink-0">
                 <p className="text-xs text-white/60 mr-1 whitespace-nowrap">Sort: </p>
                 <select
-                  aria-label="Sort articles"
+                  aria-label="Sort notes"
                   value={sort}
                   onChange={e => setSort(e.target.value as SortKey)}
                   className="text-xs text-white bg-transparent focus:outline-none cursor-pointer hover:text-white/80"
@@ -164,16 +164,16 @@ export function KbPageView({ state }: KbPageViewProps) {
           {isCreatingArticle && (
             <div className="px-4 py-3 border-b border-border space-y-2 shrink-0 bg-white/[0.02]">
               <p className="text-xs text-white/40">
-                New article in <span className="text-white/70">{articleTargetKb?.name}</span>
+                New note in <span className="text-white/70">{articleTargetKb?.name}</span>
               </p>
-              <input aria-label="Article title"
-                placeholder="Article title"
+              <input aria-label="Note title"
+                placeholder="Note title"
                 value={articleDraft.title}
                 onChange={e => setArticleDraft(d => ({ ...d, title: e.target.value }))}
                 className={inputCls}
               />
-              <textarea aria-label="Write the article content here…"
-                placeholder="Write the article content here…"
+              <textarea aria-label="Write the note here…"
+                placeholder="Write the note here…"
                 value={articleDraft.body}
                 onChange={e => setArticleDraft(d => ({ ...d, body: e.target.value }))}
                 rows={5}
@@ -211,7 +211,7 @@ export function KbPageView({ state }: KbPageViewProps) {
             {!isLoading && visibleArticles.length === 0 && (
               <div className="px-4 py-12 text-center">
                 <p className="text-xs text-white/30">
-                  {search ? "No articles match your search." : "No articles in this collection."}
+                  {search ? "No notes match your search." : "No notes in this folder."}
                 </p>
               </div>
             )}
@@ -247,8 +247,8 @@ export function KbPageView({ state }: KbPageViewProps) {
             <div className="h-full flex items-center justify-center">
               <p className="text-xs text-white/25">
                 {allArticles.length === 0
-                  ? "Add an article to get started."
-                  : "Select an article from the list."}
+                  ? "Add a note to get started."
+                  : "Select a note from the list."}
               </p>
             </div>
           )}

@@ -26,9 +26,11 @@ function useDashboardOpenCount() {
 function DashboardSidebarContent({
   children,
   initialAutonomyTier,
+  agentName,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
+  agentName: string;
 }) {
   const openCount = useDashboardOpenCount();
   const navAuth = useNavAuth(initialAutonomyTier);
@@ -58,7 +60,7 @@ function DashboardSidebarContent({
 
       <SidebarProvider className="flex-1 min-h-0 w-full overflow-x-hidden">
         <Sidebar className="max-md:hidden border-r-0 bg-background" collapsible="offcanvas">
-          <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} navAuth={navAuth} />
+          <SidebarNavContent openCount={openCount} onSwitching={setIsSwitching} navAuth={navAuth} agentName={agentName} />
         </Sidebar>
 
         <SidebarInset className="flex-1 min-h-0 overflow-hidden bg-neutral-950 flex flex-col">
@@ -97,9 +99,10 @@ function DashboardSidebarContent({
         openCount={openCount}
         onSwitching={setIsSwitching}
         navAuth={navAuth}
+        agentName={agentName}
       />
 
-      <MobileBottomBar openCount={openCount} />
+      <MobileBottomBar openCount={openCount} agentName={agentName} />
     </>
   );
 }
@@ -107,13 +110,15 @@ function DashboardSidebarContent({
 export default function DashboardSidebar({
   children,
   initialAutonomyTier,
+  agentName,
 }: {
   children: React.ReactNode;
   initialAutonomyTier: AutonomyTier;
+  agentName: string;
 }) {
   return (
     <OpenThreadCountProvider>
-      <DashboardSidebarContent initialAutonomyTier={initialAutonomyTier}>
+      <DashboardSidebarContent initialAutonomyTier={initialAutonomyTier} agentName={agentName}>
         {children}
       </DashboardSidebarContent>
     </OpenThreadCountProvider>

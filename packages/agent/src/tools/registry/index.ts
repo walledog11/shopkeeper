@@ -7,6 +7,7 @@ import { MESSAGING_TOOL_DEFINITIONS } from "./messaging.js";
 import { ORDER_TOOL_DEFINITIONS } from "./order.js";
 import { PRODUCT_TOOL_DEFINITIONS } from "./product.js";
 import { ToolInputValidationError } from "./schema.js";
+import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
 import type { AgentToolDefinition, ToolGroup } from "./types.js";
 
@@ -31,6 +32,7 @@ export type {
   SearchShopifyProductsInput,
   SendEmailInput,
   SendReplyInput,
+  SupportStatsInput,
   ToolExecutionDeps,
   ToolGroup,
   ToolParser,
@@ -49,6 +51,7 @@ export const TOOL_DEFINITIONS = [
   ...ORDER_TOOL_DEFINITIONS,
   ...THREAD_TOOL_DEFINITIONS,
   ...MESSAGING_TOOL_DEFINITIONS,
+  ...STATS_TOOL_DEFINITIONS,
 ] as const;
 
 export type ToolName = (typeof TOOL_DEFINITIONS)[number]["name"];
@@ -57,7 +60,7 @@ export const TOOL_DEFINITION_REGISTRY: Record<string, AgentToolDefinition> = Obj
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition])
 );
 
-const TOOL_GROUP_ORDER = ["knowledge", "product", "customer", "order", "thread", "messaging"] as const;
+const TOOL_GROUP_ORDER = ["knowledge", "product", "customer", "order", "thread", "messaging", "insights"] as const;
 
 export const TOOL_CATEGORIES = Object.fromEntries(
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.category])

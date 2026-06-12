@@ -180,18 +180,18 @@ function summarizeActionChain(plan: AgentPlan, excludeStepId?: string): string {
 }
 
 function buildProposal(plan: AgentPlan | null, headlineStep?: PlanStep | null): string {
-  if (!plan) return "No plan generated , open ticket to draft reply"
+  if (!plan) return "No plan generated — open ticket to draft reply"
   const warnings = (plan.warnings ?? []).slice(0, 2).flatMap((warning) => {
     const lead = warningLead(warning)
     return lead ? [lead] : []
   })
   const action = summarizeActionChain(plan, headlineStep?.id)
   if (warnings.length === 0 && !action) {
-    return "No plan generated , open ticket to draft reply"
+    return "No plan generated — open ticket to draft reply"
   }
   if (warnings.length === 0) return action
   const left = warnings.join(". ")
-  return action ? `${left} , ${action}` : left
+  return action ? `${left} — ${action}` : left
 }
 
 function orderRefFromPlan(plan: AgentPlan): string | null {

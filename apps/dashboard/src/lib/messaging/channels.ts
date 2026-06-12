@@ -14,7 +14,7 @@ interface ChannelLabelOptions {
 const DEFAULT_CHANNEL_INFO: ChannelInfo = {
   name: 'Workspace',
   label: 'Workspace',
-  logo: '/logos/default.png',
+  logo: '/logos/default.svg',
   badgeClassName: 'bg-muted text-muted-foreground',
 }
 
@@ -50,14 +50,14 @@ const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = {
     badgeClassName: 'bg-emerald-500/15 text-emerald-400',
   },
   sms_agent: {
-    name: 'Agent Action',
-    label: 'SMS Agent',
+    name: 'Telegram',
+    label: 'Telegram',
     logo: '/logos/sms.svg',
     badgeClassName: 'bg-emerald-500/15 text-emerald-400',
   },
   dashboard_agent: {
-    name: 'Dashboard Agent',
-    label: 'Concierge',
+    name: 'Dashboard',
+    label: 'Dashboard',
     logo: '/logos/sms.svg',
     badgeClassName: 'bg-violet-500/15 text-violet-400',
   },
@@ -67,7 +67,7 @@ const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
   whatsapp: {
     name: 'WhatsApp',
     label: 'WhatsApp',
-    logo: '/logos/default.png',
+    logo: '/logos/default.svg',
     badgeClassName: 'bg-muted text-muted-foreground',
   },
 }
@@ -89,6 +89,17 @@ export function getChannelInfo(channelType: ChannelType | string | null | undefi
     name: channelType,
     label: channelType,
   }
+}
+
+export function getActionLogChannelInfo(entry: {
+  channelType: ChannelType | string | null | undefined
+  instruction?: string | null
+}): ChannelInfo {
+  const instruction = entry.instruction?.trim()
+  if (instruction?.startsWith('order-risk-review:')) {
+    return getChannelInfo('shopify')
+  }
+  return getChannelInfo(entry.channelType)
 }
 
 export function getChannelLabel(

@@ -35,6 +35,11 @@ describe("proxy path access policy", () => {
       requiresOrganization: false,
       missingOrganizationAction: "none",
     });
+    expect(getPathAccessPolicy("/create-workspace")).toEqual({
+      requiresAuth: true,
+      requiresOrganization: false,
+      missingOrganizationAction: "none",
+    });
   });
 
   it("requires an org for private pages and redirects when missing", () => {

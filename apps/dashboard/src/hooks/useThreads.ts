@@ -20,7 +20,7 @@ function useIsDocumentVisible() {
   return isVisible;
 }
 
-// Non-paginated , for analytics and other pages that need all threads
+// Non-paginated — for analytics and other pages that need all threads
 export function useThreads(
   status: 'open' | 'closed' = 'open',
   fallbackData?: Thread[],

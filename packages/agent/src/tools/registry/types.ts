@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import type { BaseAgentContext } from "../../agent-context.js";
 import type { OrgSettings, ToolCategory } from "../../types.js";
 import type { ToolResult } from "../result.js";
+import type { SupportStatsSummary } from "../support-stats-types.js";
 
 export interface SearchShopifyProductsInput {
   query: string;
@@ -123,13 +124,18 @@ export interface SearchKbInput {
   query: string;
 }
 
+export interface SupportStatsInput {
+  days: number;
+}
+
 export type ToolGroup =
   | "knowledge"
   | "product"
   | "customer"
   | "order"
   | "thread"
-  | "messaging";
+  | "messaging"
+  | "insights";
 
 export interface RefundToolResult extends ToolResult {
   refundedCents: number | null;
@@ -168,6 +174,7 @@ export interface ToolExecutionDeps {
   incrementDailyRefundSpendCents(orgId: string, cents: number): Promise<unknown>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
+  getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary>;
 }
 
 export interface ToolPolicyMetadata {

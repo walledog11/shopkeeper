@@ -280,8 +280,8 @@ function TeamPageContent(props: Props) {
                   onChange={e => setInviteRole(e.target.value)}
                   className="w-full px-3 py-2 text-sm text-white/70 border border-white/[0.12] bg-white/[0.06] rounded-md focus:outline-none focus:border-white/[0.25] transition"
                 >
-                  <option value="org:member">Member , can view and respond to tickets</option>
-                  <option value="org:admin">Admin , full access including settings</option>
+                  <option value="org:member">Member — can view and respond to tickets</option>
+                  <option value="org:admin">Admin — full access including settings</option>
                 </select>
               </div>
               {inviteError && (

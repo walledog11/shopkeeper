@@ -34,7 +34,7 @@ export default function NotesTimeline({
         <div>
           <p className="text-sm font-semibold text-white/50">No internal activity yet</p>
           <p className="text-xs text-white/30 mt-1">
-            Type <span className="font-mono font-semibold text-violet-400">@{agentName.toLowerCase()}</span> to ask the AI agent, or add a note for your team.
+            Type <span className="font-mono font-semibold text-violet-400">@{agentName.toLowerCase()}</span> to ask {agentName}, or add a note for your team.
           </p>
         </div>
       </div>

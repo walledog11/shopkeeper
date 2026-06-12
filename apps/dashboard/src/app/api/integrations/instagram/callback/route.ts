@@ -139,7 +139,7 @@ export async function POST(request: Request) {
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
     if (!clerkOrgId) {
-      logger.error('[IG OAuth] Missing org cookie , session likely interrupted');
+      logger.error('[IG OAuth] Missing org cookie — session likely interrupted');
       return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
     }
     const org = await db.organization.findUnique({ where: { clerkOrgId } });

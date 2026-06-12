@@ -197,7 +197,7 @@ describe('sendReply provider failures', () => {
 
     expect(result).toEqual({
       status: 'error',
-      message: 'Error: email dispatch failed , postmark down',
+      message: 'Error: email dispatch failed — postmark down',
     });
     expect(mockRecordEmailSendFailure).toHaveBeenCalledWith({
       provider: 'postmark',

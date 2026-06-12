@@ -24,8 +24,8 @@ export function NewKbForm({
 }) {
   return (
     <>
-      <input aria-label="Collection name"
-        placeholder="Collection name"
+      <input aria-label="Folder name"
+        placeholder="Folder name"
         value={name}
         onChange={e => onNameChange(e.target.value)}
         onKeyDown={e => {
@@ -233,7 +233,7 @@ export function CollectionsDropdown({
                 className="flex items-center gap-2 w-full px-2.5 py-1.5 text-xs text-white/70 hover:text-white hover:bg-white/[0.05] rounded transition-colors"
               >
                 <Plus className="size-3.5" />
-                New collection
+                New folder
               </button>
             )}
             {!isCreatingKb && actionError && (

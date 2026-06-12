@@ -83,7 +83,7 @@ function parseThreadIds(value: unknown): string[] {
     throw new BadRequestError('Missing ids');
   }
   if (value.length > 100) {
-    throw new BadRequestError('Too many ids , max 100 per request');
+    throw new BadRequestError('Too many ids — max 100 per request');
   }
   if (value.some(id => typeof id !== 'string' || !id.trim())) {
     throw new BadRequestError('ids must contain thread ids');

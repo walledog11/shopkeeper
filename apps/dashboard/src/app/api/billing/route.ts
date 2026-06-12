@@ -14,7 +14,7 @@ export async function GET() {
 
     const customerId = await getOrCreateStripeCustomer(org)
 
-    // Fetch subscription , expand payment method only (product fetched separately below)
+    // Fetch subscription — expand payment method only (product fetched separately below)
     let subscription: import('stripe').Stripe.Subscription | null = null
     if (org.stripeSubscriptionId) {
       subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId, {

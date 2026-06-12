@@ -31,7 +31,7 @@ export function WhatsAppDigestSection({ controller }: { controller: AgentTabCont
 
   const sendTimeLabel = settingsState.digestFrequency === "twice_daily" ? "First send time" : "Send time"
   const sendTimeHint = settingsState.digestFrequency.startsWith("every_")
-    ? "starting hour , repeats from here"
+    ? "starting hour — repeats from here"
     : "local hour (0–23)"
 
   return (

@@ -31,7 +31,7 @@ export function BusinessHoursSection({
     <div className="space-y-5">
       <ToggleRow
           label="Enable business hours"
-          description="When a message arrives outside your set hours, the auto-acknowledgment is sent to the customer instead of running a plan."
+          description={`When a message arrives outside these hours, ${settingsState.agentName} sends a quick auto-acknowledgment instead of running a plan.`}
           checked={settingsState.businessHoursEnabled}
           onChange={value => dispatch({ type: "set", patch: { businessHoursEnabled: value } })}
       />
@@ -126,7 +126,7 @@ export function BusinessHoursSection({
         <div>
           <h3 className="text-sm font-semibold text-white/70">Business hours</h3>
           <p className="text-xs text-white/35 mt-0.5 leading-relaxed">
-            Send an auto-acknowledgment when customers message outside your working hours.
+            When customers message outside these hours, I&apos;ll send a quick auto-acknowledgment instead of planning a reply.
           </p>
         </div>
         {content}

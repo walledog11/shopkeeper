@@ -374,6 +374,7 @@ model AgentAction {
   approvedAt       DateTime? @map("approved_at") @db.Timestamptz
   approvedPlanHash String?   @map("approved_plan_hash") @db.VarChar(64)
   instructionHash  String?   @map("instruction_hash") @db.VarChar(64)
+  feedback         String?   @db.VarChar(16)
   executedAt       DateTime  @default(now()) @map("executed_at") @db.Timestamptz
   durationMs       Int       @map("duration_ms")
 

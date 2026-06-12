@@ -240,6 +240,72 @@ describe("action-log reader (AgentAction-sourced)", () => {
     expect(refundOnly.entries[0].actions.map((a) => a.tool)).toEqual(["create_refund", "send_reply"]);
   });
 
+  it("attention filter keeps escalations, flags, and failures; excludeOperator drops operator turns", async () => {
+    org = await createTestOrg();
+    const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const operatorThread = await createTestThread(org.id, customer.id, ChannelType.sms_agent);
+
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      instruction: "Escalate this",
+      summary: "Escalated.",
+      actions: [{ tool: "escalate_to_human", result: "Escalated.", status: "escalated" }],
+    });
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      instruction: "Refund over limit",
+      summary: "Blocked.",
+      actions: [{ tool: "create_refund", result: "Refund exceeds limit.", status: "policy_block" }],
+    });
+    await seedTurn({
+      orgId: org.id,
+      threadId: null,
+      customerId: null,
+      instruction: "order-risk-review: gid://shopify/Order/1",
+      summary: "Order #PG1 flagged for review.",
+      mode: "auto_executed",
+      actions: [{ tool: "flag_order", result: "Flagged.", status: "success" }],
+    });
+    await seedTurn({
+      orgId: org.id,
+      threadId: thread.id,
+      customerId: customer.id,
+      instruction: "Just a reply",
+      summary: "Replied.",
+      actions: [{ tool: "send_reply", result: "Reply sent.", status: "success" }],
+    });
+    await seedTurn({
+      orgId: org.id,
+      threadId: operatorThread.id,
+      customerId: customer.id,
+      instruction: "Cancel order 1001",
+      summary: "Cancelled via Telegram.",
+      actions: [{ tool: "cancel_order", result: "Cancelled.", status: "success" }],
+    });
+
+    const attention = await listAgentActionLogEntries({
+      orgId: org.id,
+      filters: { attention: true },
+    });
+    expect(attention.entries.map((entry) => entry.instruction).sort()).toEqual([
+      "Escalate this",
+      "Refund over limit",
+      "order-risk-review: gid://shopify/Order/1",
+    ]);
+
+    const nonOperator = await listAgentActionLogEntries({
+      orgId: org.id,
+      filters: { excludeOperator: true },
+    });
+    expect(nonOperator.entries).toHaveLength(4);
+    expect(nonOperator.entries.every((entry) => entry.channelType !== "sms_agent")).toBe(true);
+  });
+
   it("streamAgentActionLogCsv emits a header row plus one row per turn", async () => {
     org = await createTestOrg();
     const customer = await createTestCustomer(org.id, "ada@example.com", { name: "Ada" });

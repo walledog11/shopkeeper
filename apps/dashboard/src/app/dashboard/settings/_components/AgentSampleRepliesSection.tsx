@@ -46,7 +46,7 @@ export function AgentSampleRepliesSection({ controller }: { controller: AgentTab
                   sampleReplies: sampleReplies.map(reply => reply.id === sample.id ? { ...reply, body: value } : reply),
                 },
               })}
-              placeholder="e.g. Hey! Totally hear you on the wait , let me chase that down and get back to you with an update."
+              placeholder="e.g. Hey! Totally hear you on the wait — let me chase that down and get back to you with an update."
               maxLength={SAMPLE_REPLY_BODY_MAX}
               rows={2}
               wrapperClassName="space-y-1"

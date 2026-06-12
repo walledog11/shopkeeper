@@ -311,7 +311,7 @@ export function CustomerDrawerView({
           {isStartingThread
             ? <Loader2 className="size-4 animate-spin" />
             : <MessageSquare className="size-4" />}
-          {isStartingThread ? "Opening…" : "Start Support Thread"}
+          {isStartingThread ? "Opening…" : "Open a Ticket"}
         </button>
         {threadError && (
           <p className="mt-2 text-xs text-red-400" aria-live="polite">{threadError}</p>

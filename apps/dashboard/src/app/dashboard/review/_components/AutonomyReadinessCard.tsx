@@ -1,6 +1,7 @@
 "use client"
 
 import useSWR from "swr"
+import Link from "next/link"
 import { ShieldCheck, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { TOOL_LABELS } from "@shopkeeper/agent/tools"
@@ -35,7 +36,7 @@ export default function AutonomyReadinessCard() {
     <div className="mt-4 rounded-xl border border-white/[0.08] bg-white/[0.03] p-4">
       <div className="flex items-center gap-2">
         <ShieldCheck className="size-4 text-emerald-300" />
-        <h2 className="text-sm font-semibold text-white/80">Autonomy readiness</h2>
+        <h2 className="text-sm font-semibold text-white/80">Trust readiness</h2>
         <span className="ml-auto text-xs text-white/30">last {data.resolved} of {data.windowSize}</span>
       </div>
       <p className="mt-0.5 text-xs text-white/40">
@@ -97,6 +98,15 @@ export default function AutonomyReadinessCard() {
           </div>
         </div>
       )}
+
+      <div className="mt-3 flex justify-end">
+        <Link
+          href="/dashboard/settings?tab=agent"
+          className="text-xs font-semibold text-white/45 hover:text-white transition-colors"
+        >
+          Adjust trust level in Settings →
+        </Link>
+      </div>
     </div>
   )
 }

@@ -1,25 +1,18 @@
 "use client"
 
 import Link from "next/link"
-import { Sparkles } from "lucide-react"
+import { MessageCircle, Sparkles } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { GridPattern } from "@/components/ui/grid-pattern"
-import { formatClockTime } from "@/lib/format/date"
 
 interface Props {
   greeting: string
   userName: string
   agentName: string
+  hasTelegramBound: boolean
   needsYouCount: number
   overnightClearedCount: number
   briefingChannels: string[]
-  timeSavedHours: number
-  repliesSent: number
-}
-
-function formatHours(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}m`
-  return `${hours.toFixed(1)}h`
 }
 
 function formatChannelList(channels: string[]): string {
@@ -33,42 +26,44 @@ export default function ConciergeBriefing({
   greeting,
   userName,
   agentName,
+  hasTelegramBound,
   needsYouCount,
   overnightClearedCount,
   briefingChannels,
-  timeSavedHours,
-  repliesSent,
 }: Props) {
   const channelText = formatChannelList(briefingChannels)
-  const now = formatClockTime(Date.now(), { hour: 'numeric' })
 
   let narrative: React.ReactNode
   if (overnightClearedCount === 0 && needsYouCount === 0) {
     narrative = (
-      <>You&apos;re all caught up , no new tickets since yesterday. {agentName} is on duty for anything that comes in.</>
+      <>You&apos;re all caught up — no new tickets since yesterday. I&apos;m on duty for anything that comes in.</>
     )
   } else if (overnightClearedCount === 0) {
     narrative = (
       <>
-        Nothing auto-resolved since yesterday, but{' '}
+        Nothing new since yesterday, but{' '}
         <span className="px-1.5 py-0.5 rounded bg-blue-400/15 text-blue-300 font-semibold tabular-nums">{needsYouCount}</span>
         {' '}ticket{needsYouCount === 1 ? '' : 's'} need your eye.
+      </>
+    )
+  } else if (needsYouCount > 0) {
+    narrative = (
+      <>
+        I drafted replies for{' '}
+        <span className="px-1.5 py-0.5 rounded bg-green-400/15 text-green-300 font-semibold tabular-nums">{overnightClearedCount}</span>
+        {' '}ticket{overnightClearedCount === 1 ? '' : 's'}
+        {channelText && <> across {channelText}</>}.
+        {' '}
+        <span className="px-1.5 py-0.5 rounded bg-blue-400/15 text-blue-300 font-semibold tabular-nums">{needsYouCount}</span>
+        {' '}still need{needsYouCount === 1 ? 's' : ''} your eye.
       </>
     )
   } else {
     narrative = (
       <>
-        Overnight I cleared{' '}
-        <span className="px-1.5 py-0.5 rounded bg-green-400/15 text-blue-300 font-semibold tabular-nums">{overnightClearedCount}</span>
-        {' '}ticket{overnightClearedCount === 1 ? '' : 's'}
-        {channelText && <> across {channelText}</>}.
-        {needsYouCount > 0 && (
-          <>
-            {' '}
-            <span className="px-1.5 py-0.5 rounded bg-blue-400/15 text-blue-300 font-semibold tabular-nums">{needsYouCount}</span>
-            {' '}need{needsYouCount === 1 ? 's' : ''} your eye.
-          </>
-        )}
+        <span className="px-1.5 py-0.5 rounded bg-green-400/15 text-green-300 font-semibold tabular-nums">{overnightClearedCount}</span>
+        {' '}ticket{overnightClearedCount === 1 ? ' is' : 's are'} ready for you
+        {channelText && <> from {channelText}</>}.
       </>
     )
   }
@@ -95,8 +90,9 @@ export default function ConciergeBriefing({
       />
 
       <div className="relative px-6 pt-5 pb-5">
-
-
+        <p className="text-[10.5px] font-bold tracking-[0.07em] uppercase text-white/35 font-mono mb-1.5">
+          {agentName} · Briefing
+        </p>
         <h1 className="text-2xl font-bold tracking-tight text-white leading-tight">
           {greeting}, {userName}.
         </h1>
@@ -108,7 +104,7 @@ export default function ConciergeBriefing({
           {needsYouCount > 0 && (
             <a
               href="#needs-you"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-green-400 hover:bg-green-300 text-black text-xs font-semibold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-amber-400 hover:bg-amber-300 text-black text-xs font-semibold transition-colors"
             >
               <span>▾</span> Review {needsYouCount}
             </a>
@@ -119,12 +115,29 @@ export default function ConciergeBriefing({
           >
             Open inbox
           </Link>
-          <Link
-            href="/dashboard/agent"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold text-white/60 hover:text-white/90 transition-colors"
-          >
-            <Sparkles className="size-3" /> Ask {agentName}
-          </Link>
+          {hasTelegramBound ? (
+            <Link
+              href="/dashboard/integrations#telegram"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-blue-400/15 hover:bg-blue-400/25 text-xs font-semibold text-blue-200 transition-colors"
+            >
+              <MessageCircle className="size-3" /> Message on Telegram
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/dashboard/integrations#telegram"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-blue-400/15 hover:bg-blue-400/25 text-xs font-semibold text-blue-200 transition-colors"
+              >
+                <MessageCircle className="size-3" /> Connect Telegram
+              </Link>
+              <Link
+                href="/dashboard/agent"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-semibold text-white/60 hover:text-white/90 transition-colors"
+              >
+                <Sparkles className="size-3" /> Open desk chat
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </Card>

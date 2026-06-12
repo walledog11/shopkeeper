@@ -2,12 +2,11 @@
 
 import WorkflowSetupBanner from "./WorkflowSetupBanner"
 import ConciergeBriefing from "./ConciergeBriefing"
-import StatCards from "./StatCards"
+import HomeDigest from "./HomeDigest"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import TodayShape from "./TodayShape"
 import TodayOrders from "./TodayOrders"
-import WeekChart from "./WeekChart"
 import { useHomeData } from "./useHomeData"
 import type { HomeSummary } from "@/lib/home/summary-contract"
 
@@ -43,23 +42,19 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
                 greeting={greeting}
                 userName={userName}
                 agentName={data.agentName}
+                hasTelegramBound={data.hasTelegramBound}
                 needsYouCount={data.needsYouCount}
                 overnightClearedCount={data.overnightClearedCount}
                 briefingChannels={data.briefingChannels}
-                timeSavedHours={data.timeSavedHours}
-                repliesSent={data.repliesSent24h}
               />
 
-              <StatCards
+              <HomeDigest
                 isLoading={data.isLoading}
                 openCount={data.openCount}
                 openDelta={data.openDelta}
                 firstReplyMinutes={data.firstReplyMinutes}
                 autoResolvedPct={data.autoResolvedPct}
                 weeklyVolume={data.weeklyVolume}
-                newThreadsByDay={data.newThreadsByDay}
-                aiResolvedByDay={data.aiResolvedByDay}
-                totalRepliesByDay={data.totalRepliesByDay}
               />
 
               <NeedsYou
@@ -84,7 +79,6 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
                 vipsInQueue={data.vipsInQueue}
               />
               <TodayOrders orders={data.todaysOrders} hasShopify={data.hasShopify} />
-              <WeekChart data={data.yourWeek} />
             </div>
           </div>
         </div>

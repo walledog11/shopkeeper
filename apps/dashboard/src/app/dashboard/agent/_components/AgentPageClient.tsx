@@ -19,14 +19,14 @@ export default function AgentPageClient({ agentName }: Props) {
       <div className="shrink-0 border-b border-border px-5 md:px-6 py-3.5 flex items-center justify-between gap-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold text-foreground">Concierge</h1>
+            <h1 className="text-sm font-semibold text-foreground">{agentName}</h1>
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
-            Direct line to your AI , ask about the store, draft campaigns, pull data.
+            Same {agentName} — ask about your store when you&apos;re at your desk.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {/* Activity log toggle , mobile only */}
+          {/* Activity log toggle — mobile only */}
           <button type="button"
             onClick={() => setShowActivity(v => !v)}
             className={`flex md:hidden items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-md border transition-colors ${
@@ -50,7 +50,7 @@ export default function AgentPageClient({ agentName }: Props) {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-hidden flex flex-row relative">
-        {/* Chat , always visible */}
+        {/* Chat — always visible */}
         <div className="flex-1 min-w-0 overflow-hidden flex flex-col">
           <AgentChatClient
             key={sessionResetKey}
@@ -59,7 +59,7 @@ export default function AgentPageClient({ agentName }: Props) {
           />
         </div>
 
-        {/* Desktop sidebar , always visible */}
+        {/* Desktop sidebar — always visible */}
         <div className="hidden md:flex w-100 shrink-0 border-l border-border overflow-y-auto flex-col">
           <div className="sticky top-0 px-4 py-3 border-b border-border bg-background">
             <p className="text-xs font-medium text-foreground">Activity log</p>
@@ -67,7 +67,7 @@ export default function AgentPageClient({ agentName }: Props) {
           <ActionLog sidebarLimit={999} />
         </div>
 
-        {/* Mobile dropdown , full overlay over chat, below header */}
+        {/* Mobile dropdown — full overlay over chat, below header */}
         {showActivity && (
           <div className="md:hidden absolute inset-0 z-10 bg-background flex flex-col overflow-hidden">
             <div className="shrink-0 px-4 py-3 border-b border-border flex items-center justify-between">

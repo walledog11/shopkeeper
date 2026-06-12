@@ -16,7 +16,7 @@ const surfaces = [
     name: "Dashboard",
     status: "When you want depth",
     live: true,
-    body: "A full inbox with every conversation, analytics, your knowledge base, and team seats.",
+    body: "A full inbox with every conversation, your knowledge base, and team seats.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-6">
         <rect x="3" y="4" width="18" height="14" rx="2" />
@@ -44,7 +44,7 @@ export function Channels() {
     <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
         <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
-          Reach it from <em className="italic text-[#9c9285]">wherever you already are.</em>
+          Reach your new hire from <em className="italic text-[#9c9285]">wherever you already are.</em>
         </h2>
         <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
           Texting Shopkeeper feels like texting your best employee — because that&apos;s what it is.

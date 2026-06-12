@@ -53,8 +53,8 @@ export interface OrgSettings {
   // Operator digest (Telegram)
   digestEnabled: boolean;
   digestFrequency: 'daily' | 'twice_daily' | 'every_4h' | 'every_6h' | 'every_8h' | 'every_12h';
-  digestHour: number;           // 0–23 local time , first (or only) send time
-  digestSecondHour: number;     // 0–23 local time , second send time, only used for twice_daily
+  digestHour: number;           // 0–23 local time — first (or only) send time
+  digestSecondHour: number;     // 0–23 local time — second send time, only used for twice_daily
   digestDays: 'every_day' | 'weekdays';
   digestTimezone?: string;      // IANA tz, e.g. "America/New_York". Preferred.
   digestTimezoneOffset: number; // integer UTC offset (legacy fallback for orgs that haven't migrated)
@@ -71,7 +71,7 @@ export interface OrgSettings {
   // Spam filter
   spamFilterEnabled?: boolean;
 
-  // Onboarding , chosen autonomy preset (see settings.ts mapping)
+  // Onboarding — chosen autonomy preset (see settings.ts mapping)
   autonomyTier?: 'watch' | 'guarded' | 'trusted' | 'broad' | 'full';
 }
 
@@ -79,7 +79,7 @@ export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {
   toolsEnabled?: Partial<AgentToolPermissions>;
 };
 
-// Agent plan , proposed steps before execution
+// Agent plan — proposed steps before execution
 export type ToolCategory = 'action' | 'communication' | 'internal' | 'read'
 
 export interface RawToolCall {

@@ -64,7 +64,7 @@ export function useHomeData({ initialSummary }: Options) {
     if (!ordersData?.orders) return []
     return ordersData.orders.slice(0, 5).map((order) => {
       const lineItem = order.line_items[0]
-      const summary = lineItem ? `${lineItem.title}${lineItem.variant_title ? ` , ${lineItem.variant_title}` : ""}` : ""
+      const summary = lineItem ? `${lineItem.title}${lineItem.variant_title ? ` — ${lineItem.variant_title}` : ""}` : ""
       const status: "ship" | "refund" =
         order.financial_status === "refunded" || order.financial_status === "partially_refunded" ? "refund" : "ship"
       return {
@@ -95,7 +95,7 @@ export function useHomeData({ initialSummary }: Options) {
     { label: "Connect a channel", href: "/dashboard/integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
     { label: "Configure agent", href: "/dashboard/settings?tab=agent", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
-    { label: "Add knowledge base content", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
+    { label: "Add memory notes", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
     { label: "Send your first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
     { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
     { label: "Connect Telegram for notifications", href: "/dashboard/integrations", status: (hasTelegramBound ? "done" : "pending") as "done" | "pending" },
@@ -123,6 +123,7 @@ export function useHomeData({ initialSummary }: Options) {
     ordersToShip,
     todaysOrders,
     hasShopify,
+    hasTelegramBound,
     workflowSteps,
     workflowDoneCount,
     agentName,

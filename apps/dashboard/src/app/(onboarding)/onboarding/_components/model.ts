@@ -30,7 +30,7 @@ export const DEFAULT_DATA: OnboardingData = {
   sells: "",
   founderName: "",
   primaryEmail: "",
-  autonomy: "trusted",
+  autonomy: "guarded",
 };
 
 export const STEPS: Array<{ id: StepId; label: string }> = [

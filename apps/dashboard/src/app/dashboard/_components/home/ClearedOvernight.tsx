@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Card } from "@/components/ui/card"
 import type { HomeClearedTopic } from "@/lib/home/summary-contract"
 
@@ -33,6 +34,12 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
         <span className="text-xs text-white/35">
           · Saved you ~{formatHours(timeSavedHours)} · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
         </span>
+        <Link
+          href="/dashboard/review?focus=auto&from=24h"
+          className="text-xs font-semibold text-white/45 hover:text-white/75 transition-colors"
+        >
+          See what was sent
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 @min-[800px]:grid-cols-4 gap-2">

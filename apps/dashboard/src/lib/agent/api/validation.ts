@@ -172,6 +172,10 @@ export interface ActionLogFilters {
   tools?: string[];
   modes?: ActionLogMode[];
   errorsOnly?: boolean;
+  // Turns that need a human: escalations, fraud flags, errors, policy blocks.
+  attention?: boolean;
+  // Drop operator-channel turns (Concierge/Telegram) — the merchant was the requester.
+  excludeOperator?: boolean;
   from?: Date;
   to?: Date;
 }
@@ -224,9 +228,25 @@ export function parseActionLogCursorQuery(request: Request): { cursor: AgentActi
     tools: parseCsvList(searchParams.get("tool")),
     modes,
     errorsOnly: searchParams.get("errorsOnly") === "true" ? true : undefined,
+    attention: searchParams.get("attention") === "true" ? true : undefined,
+    excludeOperator: searchParams.get("excludeOperator") === "true" ? true : undefined,
     from,
     to,
   };
 
   return { cursor, filters };
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function parseAgentActionFeedbackBody(body: unknown): { turnId: string; feedback: "good" | null } {
+  const candidate = requireObject(body);
+  const turnId = requireNonEmptyString(candidate.turnId, "turnId");
+  if (!UUID_RE.test(turnId)) {
+    invalidField("turnId", "turnId must be a UUID");
+  }
+  if (candidate.feedback !== null && candidate.feedback !== "good") {
+    invalidField("feedback", 'feedback must be "good" or null');
+  }
+  return { turnId, feedback: candidate.feedback as "good" | null };
 }

@@ -54,6 +54,20 @@ export async function fetchWorkspaceExport(fetchImpl: FetchLike = fetch, now = n
   }
 }
 
+export async function fetchCustomerGdprExport(email: string, fetchImpl: FetchLike = fetch, now = new Date()) {
+  const res = await fetchImpl(`/api/org/gdpr-export?email=${encodeURIComponent(email)}`)
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string }
+    throw new Error(body.error ?? "Failed")
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get("Content-Disposition") ?? ""
+  return {
+    blob,
+    filename: exportFilenameFromDisposition(disposition, now),
+  }
+}
+
 export function downloadBlob(blob: Blob, filename: string, doc: Document = document, urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL"> = URL) {
   const url = urlApi.createObjectURL(blob)
   const a = doc.createElement("a")

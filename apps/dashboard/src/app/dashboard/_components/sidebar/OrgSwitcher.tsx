@@ -1,11 +1,13 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, Plus } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
@@ -107,6 +109,13 @@ export function OrgSwitcher({
               </DropdownMenuItem>
             );
           })}
+        <DropdownMenuSeparator className="bg-white/[0.09]" />
+        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-white/[0.07]">
+          <Link href="/create-workspace" onClick={() => onClose?.()}>
+            <Plus className="size-4 shrink-0 text-white/50" />
+            <span className="text-xs font-medium text-white/80">Create workspace</span>
+          </Link>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

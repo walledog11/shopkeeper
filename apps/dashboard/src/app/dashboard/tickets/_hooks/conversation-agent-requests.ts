@@ -3,7 +3,7 @@ import type { ActionEntry } from "@/lib/agent/runner"
 import type { AgentPlan, AgentTurn, RawToolCall } from "@/types"
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const
-const NETWORK_ERROR = "Network error , please try again."
+const NETWORK_ERROR = "Network error — please try again."
 
 interface AgentActionPayload {
   actionsPerformed?: ActionEntry[]
@@ -134,5 +134,5 @@ export async function regenerateAgentPlan(
 }
 
 export function planRequestErrorTurn(instruction: string, error: unknown): Omit<AgentTurn, "id"> {
-  return requestErrorTurn(instruction, error, "Failed to generate plan , please try again.")
+  return requestErrorTurn(instruction, error, "Failed to generate plan — please try again.")
 }

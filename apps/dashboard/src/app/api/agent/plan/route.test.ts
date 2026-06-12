@@ -168,7 +168,7 @@ describe('POST /api/agent/plan', () => {
       },
     });
 
-    // New message arrives , cache is now stale
+    // New message arrives — cache is now stale
     await createTestMessage(thread.id, 'New message with new issue');
 
     const req = new Request('http://localhost:3000/api/agent/plan', {

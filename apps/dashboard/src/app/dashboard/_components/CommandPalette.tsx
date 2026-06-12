@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Home, Inbox, BarChart2, ScanEye, Users, Settings, Plug } from "lucide-react";
+import { Home, Inbox, ScanEye, Users, Settings, Plug } from "lucide-react";
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,8 +13,7 @@ import {
 
 const COMMANDS = [
   { label: "Home", href: "/dashboard", icon: Home, group: "Navigate" },
-  { label: "Support Tickets", href: "/dashboard/tickets", icon: Inbox, group: "Navigate" },
-  { label: "Analytics", href: "/dashboard/analytics", icon: BarChart2, group: "Navigate" },
+  { label: "Inbox", href: "/dashboard/tickets", icon: Inbox, group: "Navigate" },
   { label: "Review", href: "/dashboard/review", icon: ScanEye, group: "Navigate" },
   { label: "Team", href: "/dashboard/team", icon: Users, group: "Navigate" },
   { label: "Settings", href: "/dashboard/settings", icon: Settings, group: "Navigate" },

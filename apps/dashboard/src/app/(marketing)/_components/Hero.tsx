@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { GlassLink } from "./GlassLink";
 
 function rise(delayMs: number) {
@@ -10,11 +11,6 @@ function rise(delayMs: number) {
 export function Hero() {
   return (
     <section className="relative isolate px-6 pb-20 pt-14 text-center sm:pt-20">
-      {/* Soft blue wash behind the hero */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-1/2 top-[8%] -z-10 h-[760px] w-[1100px] max-w-none -translate-x-1/2 blur-3xl bg-[radial-gradient(60%_50%_at_50%_35%,rgba(220,235,245,0.85),transparent_72%),radial-gradient(45%_40%_at_20%_60%,rgba(200,220,240,0.35),transparent_70%),radial-gradient(45%_40%_at_80%_55%,rgba(210,228,242,0.3),transparent_70%)]"
-      />
 
       <div className="mb-7 inline-flex items-center gap-2.5" style={rise(0)}>
         <span className="rounded-full border border-stone-900/10 bg-white/80 px-2.5 py-1 text-[12px] font-medium text-stone-500">
@@ -32,7 +28,7 @@ export function Hero() {
       </div>
 
       <h1
-        className="mx-auto mb-4 max-w-[min(720px,92vw)] text-[clamp(38px,5vw,60px)] font-semibold leading-[1.08] tracking-[-0.02em] text-black [font-family:var(--m-hero-serif)]"
+        className="mx-auto mb-4 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-normal leading-[1.05] tracking-[-0.01em] [font-family:var(--m-serif)]"
         style={rise(80)}
       >
         Meet Shopkeeper,
@@ -47,7 +43,22 @@ export function Hero() {
         Try the new experience with rich actions in Apple Messages
       </p>
 
-      <div style={rise(320)} className="mt-2">
+      <div style={rise(320)} className="relative mt-2">
+        {/* Warm morning-light wash behind the demo film — placeholder photography,
+            swap /atmosphere/hero-light.jpg for the final shot. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -inset-x-32 -inset-y-16 -z-10 overflow-hidden [mask-image:radial-gradient(62%_60%_at_50%_50%,black_28%,transparent_74%)]"
+        >
+          <Image
+            src="/atmosphere/hero-light.jpg"
+            alt=""
+            fill
+            sizes="100vw"
+            className="scale-110 object-cover opacity-75 [filter:blur(26px)_sepia(0.18)_saturate(0.85)_brightness(1.07)]"
+          />
+          <div className="m-grain absolute inset-0" />
+        </div>
         {/* Raw HTML so the `muted` attribute is present at parse time — React only sets
             the property, and the browser blocks autoplay on a not-yet-muted video. */}
         <div

@@ -47,13 +47,13 @@ export function StepStore({ data, update }: { data: OnboardingData; update: (p: 
               From: <b className="text-white">{data.founderName || "Willa"} at {data.storeName || "Oat Milk Co."}</b>
               <span className="float-right">Re: order #10482</span>
             </div>
-            Hi Maya , so sorry the hoodie didn&apos;t fit. That&apos;s a quick fix: I&apos;ve created a free exchange and emailed you a return label.
+            Hi Maya — so sorry the hoodie didn&apos;t fit. That&apos;s a quick fix: I&apos;ve created a free exchange and emailed you a return label.
             <span className="ml-0.5 inline-block h-3.5 w-[1.5px] translate-y-[2px] bg-white animate-[ob-blink_1s_steps(2)_infinite]" />
             <div className="mt-3 text-white/70">, {data.founderName || "Willa"} &amp; the {data.storeName || "Oat Milk Co."} team</div>
           </div>
 
           <div className="mt-3.5 border-t border-dashed border-white/[0.07] pt-3 text-[11.5px] leading-snug text-white/45">
-            Updates as you type. I&apos;ll match your tone over time , you can dial warmth, formality, and length in Settings.
+            Updates as you type. I&apos;ll match your tone over time — you can dial warmth, formality, and length in Settings.
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getActionLogChannelInfo,
   getChannelBadgeClassName,
   getChannelInfo,
   getChannelLabel,
@@ -14,8 +15,8 @@ describe("channel metadata", () => {
       logo: "/logos/email.svg",
       badgeClassName: "bg-blue-500/15 text-blue-400",
     });
-    expect(getChannelLabel("dashboard_agent")).toBe("Concierge");
-    expect(getChannelLabel("sms_agent")).toBe("SMS Agent");
+    expect(getChannelLabel("dashboard_agent")).toBe("Dashboard");
+    expect(getChannelLabel("sms_agent")).toBe("Telegram");
     expect(getChannelBadgeClassName("ig_dm")).toBe("bg-pink-500/15 text-pink-400");
   });
 
@@ -23,19 +24,19 @@ describe("channel metadata", () => {
     expect(getChannelInfo(null)).toEqual({
       name: "Workspace",
       label: "Workspace",
-      logo: "/logos/default.png",
+      logo: "/logos/default.svg",
       badgeClassName: "bg-muted text-muted-foreground",
     });
     expect(getChannelInfo("whatsapp")).toEqual({
       name: "WhatsApp",
       label: "WhatsApp",
-      logo: "/logos/default.png",
+      logo: "/logos/default.svg",
       badgeClassName: "bg-muted text-muted-foreground",
     });
     expect(getChannelInfo("custom")).toEqual({
       name: "custom",
       label: "custom",
-      logo: "/logos/default.png",
+      logo: "/logos/default.svg",
       badgeClassName: "bg-muted text-muted-foreground",
     });
   });
@@ -43,8 +44,8 @@ describe("channel metadata", () => {
   it("builds dashboard channel options from shared labels", () => {
     expect(getChannelOptions(["email", "dashboard_agent", "sms_agent"])).toEqual([
       { id: "email", label: "Email" },
-      { id: "dashboard_agent", label: "Concierge" },
-      { id: "sms_agent", label: "SMS Agent" },
+      { id: "dashboard_agent", label: "Dashboard" },
+      { id: "sms_agent", label: "Telegram" },
     ]);
   });
 
@@ -52,5 +53,12 @@ describe("channel metadata", () => {
     expect(getChannelLabel("dashboard_agent", { operatorLabel: "internal" })).toBe("Internal");
     expect(getChannelLabel("sms_agent", { operatorLabel: "internal" })).toBe("Internal");
     expect(getChannelLabel("email", { operatorLabel: "internal" })).toBe("Email");
+  });
+
+  it("maps order-risk audit rows to Shopify branding", () => {
+    expect(getActionLogChannelInfo({
+      channelType: null,
+      instruction: "order-risk-review:998877",
+    })).toEqual(getChannelInfo("shopify"));
   });
 });

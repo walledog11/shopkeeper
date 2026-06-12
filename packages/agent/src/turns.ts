@@ -10,7 +10,7 @@ export type AgentTurnAction = AgentTurn["actions"][number];
 
 // The note carries only the metadata the threads UI needs to render a turn
 // inline. The canonical per-action record lives in the AgentAction table.
-// `id` is the turnId , the join key into AgentAction so we can hydrate actions
+// `id` is the turnId — the join key into AgentAction so we can hydrate actions
 // when reading.
 interface SerializedAgentTurnNote {
   id?: string;

@@ -83,10 +83,10 @@ function StartThreadButton({ order }: { order: OrderRow }) {
         onClick={startSupportThread}
         disabled={loading}
         className="inline-flex items-center justify-center gap-1.5 h-7 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/65 hover:bg-white/[0.06] hover:text-white hover:border-white/[0.18] disabled:opacity-40 transition-colors shrink-0"
-        title="New support thread"
+        title="Open a support ticket for this order"
       >
         {loading && <Loader2 className="size-3 animate-spin" />}
-        New thread
+        New ticket
       </button>
       {error && (
         <p className="max-w-28 text-right text-xs text-red-400" aria-live="polite">{error}</p>

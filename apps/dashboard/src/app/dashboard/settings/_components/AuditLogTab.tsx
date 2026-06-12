@@ -5,7 +5,8 @@ import Image from "next/image"
 import { useMemo, useState } from "react"
 import { AlertCircle, Check, ChevronDown, Download, ExternalLink, Loader2, X, Zap } from "lucide-react"
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
-import { getChannelInfo, getChannelOptions } from "@/lib/messaging/channels"
+import { actionLogEntryHref, formatActionLogHeadline } from "@/lib/agent/action-log-display"
+import { getActionLogChannelInfo, getChannelInfo, getChannelOptions } from "@/lib/messaging/channels"
 import { isOperatorChannel } from "@shopkeeper/agent/thread-constants"
 import { buildActionLogSearchParams, useActionLogEntries, type ActionLogQueryFilters } from "@/hooks/useActionLogEntries"
 import { formatDate, timeAgo } from "@/lib/format/date"
@@ -78,15 +79,12 @@ function ActionPill({ tool, result }: { tool: string; result: string }) {
 }
 
 function AuditEntryRow({ entry }: { entry: ActionLogEntry }) {
-  const channel = getChannelInfo(entry.channelType)
+  const channel = getActionLogChannelInfo(entry)
   const isOperator = isOperatorChannel(entry.channelType)
-  const href = entry.threadId
-    ? (isOperator
-      ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}`
-      : `/dashboard/tickets?thread=${entry.threadId}`)
-    : null
-  const linkLabel = isOperator ? "View Concierge" : "View thread"
-  const title = entry.customerHandle ?? entry.instruction ?? "Workspace action"
+  const href = actionLogEntryHref(entry)
+    ?? (entry.threadId && isOperator ? `/dashboard/agent?session=${encodeURIComponent(entry.threadId)}` : null)
+  const linkLabel = isOperator ? "View chat" : href?.startsWith("/dashboard/orders") ? "View order" : "View ticket"
+  const title = formatActionLogHeadline(entry)
 
   return (
     <div className="rounded-md border border-white/[0.07] bg-white/[0.03] px-4 py-3">

@@ -20,8 +20,8 @@ import { PermissionActionLink, PermissionRow } from "./PermissionRow"
 import { ShopifyPermissionRows } from "./ShopifyPermissionsPanel"
 
 const DISCONNECT_NOTES: Record<ConnectType, string> = {
-  email: "Your past conversations stay. New customer emails will stop arriving.",
-  ig: "Your past conversations stay. New Instagram DMs will stop arriving.",
+  email: "Your past tickets stay. New customer emails will stop arriving.",
+  ig: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
 }
 

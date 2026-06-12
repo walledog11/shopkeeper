@@ -14,10 +14,10 @@ export const tips: Category = {
       readingTime: 4,
       body: [
         {
-          text: "TikTok comments are one of the highest-intent signals a brand can get. When someone asks 'where can I buy this?' or 'does this come in blue?', that's a buying signal , and moving them into a DM conversation is where the sale happens.",
+          text: "TikTok comments are one of the highest-intent signals a brand can get. When someone asks 'where can I buy this?' or 'does this come in blue?', that's a buying signal — and moving them into a DM conversation is where the sale happens.",
         },
         {
-          callout: "TikTok's algorithm boosts videos with active comment threads. Responding fast doesn't just convert commenters , it pushes your video to more people.",
+          callout: "TikTok's algorithm boosts videos with active comment threads. Responding fast doesn't just convert commenters — it pushes your video to more people.",
         },
         {
           heading: "Reply fast to high-intent comments",
@@ -25,20 +25,20 @@ export const tips: Category = {
           steps: [
             "Pin a comment that says 'DM us for details' on product videos",
             "Use the TikTok comment reply feature to send a short video reply, then direct to DMs for specifics",
-            "Set up your AI agent to handle common DM questions instantly (sizing, shipping, availability)",
+            "Set up your agent to handle common DM questions instantly (sizing, shipping, availability)",
           ],
         },
         {
           heading: "What to say in the first DM",
           tips: [
-            "Reference the video they came from , it shows you're paying attention",
+            "Reference the video they came from — it shows you're paying attention",
             "Ask one qualifying question (e.g., 'Which color were you interested in?') before pitching",
-            "Keep it conversational , TikTok audiences expect casual, not corporate",
+            "Keep it conversational — TikTok audiences expect casual, not corporate",
           ],
         },
         {
           heading: "When to escalate to a human",
-          text: "Let your AI agent handle FAQs. Escalate to a human when: the customer mentions a problem with a past order, they ask for a discount or custom deal, or they've sent 3+ messages without converting.",
+          text: "Let your agent handle FAQs. Escalate to a human when: the customer mentions a problem with a past order, they ask for a discount or custom deal, or they've sent 3+ messages without converting.",
           warning: "Never let an upset customer wait more than 10 minutes without a human response. Sentiment can shift fast on social platforms.",
         },
       ],
@@ -51,19 +51,19 @@ export const tips: Category = {
       readingTime: 5,
       body: [
         {
-          text: "When a post goes viral or a campaign hits, DM volume can spike 10x overnight. Without a system, this overwhelms your team and tanks your response time , which Instagram's algorithm tracks and uses to rank your account.",
+          text: "When a post goes viral or a campaign hits, DM volume can spike 10x overnight. Without a system, this overwhelms your team and tanks your response time — which Instagram's algorithm tracks and uses to rank your account.",
         },
         {
           heading: "Triage before you reply",
           steps: [
             "Use tags to separate order issues, product questions, collabs, and spam",
             "Prioritize DMs from verified accounts and existing customers first",
-            "Set your AI agent to instantly acknowledge all new DMs so customers know they're in the queue",
+            "Set your agent to instantly acknowledge all new DMs so customers know they're in the queue",
           ],
         },
         {
           heading: "Build a response library",
-          text: "Your team spends 80% of their time answering 20% of the same questions. Identify your top 10 most common DM topics and write templated replies for each. Store these in your AI agent's knowledge base so it handles them automatically.",
+          text: "Your team spends 80% of their time answering 20% of the same questions. Identify your top 10 most common DM topics and write templated replies for each. Store these in your agent's memory so it handles them automatically.",
           tips: [
             "Shipping timelines",
             "Return and refund policy",
@@ -78,19 +78,19 @@ export const tips: Category = {
           callout: "Example: 'We reply to all DMs Monday–Friday, 9am–6pm EST. For urgent order issues, email us at support@…'",
         },
         {
-          warning: "Avoid the trap of responding to every DM manually during a spike , you'll burn out fast and still fall behind. Build the system first, then reply.",
+          warning: "Avoid the trap of responding to every DM manually during a spike — you'll burn out fast and still fall behind. Build the system first, then reply.",
         },
       ],
     },
     {
       id: "response-time-expectations",
       title: "Setting customer response time expectations that stick",
-      summary: "The #1 driver of customer frustration isn't slow responses , it's not knowing how long to wait.",
+      summary: "The #1 driver of customer frustration isn't slow responses — it's not knowing how long to wait.",
       tag: "Customer Service",
       readingTime: 3,
       body: [
         {
-          text: "The number one driver of customer frustration isn't slow response times , it's not knowing how long to wait. Setting clear expectations upfront prevents the follow-up 'hello??' message and buys your team breathing room.",
+          text: "The number one driver of customer frustration isn't slow response times — it's not knowing how long to wait. Setting clear expectations upfront prevents the follow-up 'hello??' message and buys your team breathing room.",
         },
         {
           heading: "The expectation-setting formula",
@@ -115,7 +115,7 @@ export const tips: Category = {
         {
           heading: "When you'll miss the window",
           text: "Send a proactive update before the deadline, not after. This resets the clock and builds trust instead of eroding it.",
-          callout: "Template: 'Hey! Still working on your question , we'll have an answer by tomorrow morning. Thanks for your patience.'",
+          callout: "Template: 'Hey! Still working on your question — we'll have an answer by tomorrow morning. Thanks for your patience.'",
         },
       ],
     },
@@ -131,7 +131,7 @@ export const tips: Category = {
         },
         {
           heading: "1. 'I completely understand why that's frustrating.'",
-          text: "Validates the customer's emotion without admitting fault. Use this before any explanation or solution , it's the difference between a customer feeling dismissed and a customer feeling heard.",
+          text: "Validates the customer's emotion without admitting fault. Use this before any explanation or solution — it's the difference between a customer feeling dismissed and a customer feeling heard.",
         },
         {
           heading: "2. 'Let me look into this personally for you.'",
@@ -139,7 +139,7 @@ export const tips: Category = {
         },
         {
           heading: "3. 'Here's exactly what's going to happen next.'",
-          text: "Removes uncertainty. Customers hate not knowing what comes next , giving a clear next step, even a small one, dramatically reduces anxiety and follow-up messages.",
+          text: "Removes uncertainty. Customers hate not knowing what comes next — giving a clear next step, even a small one, dramatically reduces anxiety and follow-up messages.",
         },
         {
           heading: "4. 'Is there anything else I can help you with today?'",
@@ -147,27 +147,27 @@ export const tips: Category = {
         },
         {
           heading: "5. 'Thank you for letting us know.'",
-          text: "Reframes complaints as gifts. Customers who complain are telling you how to improve , those who don't just leave quietly.",
+          text: "Reframes complaints as gifts. Customers who complain are telling you how to improve — those who don't just leave quietly.",
           callout: "Customers who have a complaint resolved well are actually more loyal than those who never had an issue at all.",
         },
       ],
     },
     {
       id: "ai-agent-templates",
-      title: "How to respond faster with AI agent templates",
-      summary: "Your AI agent is only as good as what you teach it. Here's how to build a template library that actually deflects tickets.",
+      title: "How to respond faster with agent templates",
+      summary: "Your agent is only as good as what you teach it. Here's how to build a template library that actually deflects tickets.",
       tag: "Agent Setup",
       readingTime: 5,
       body: [
         {
-          text: "Your AI agent is only as good as what you teach it. The fastest way to increase deflection rate , the % of conversations your agent resolves without human help , is to build a strong library of response templates.",
+          text: "Your agent is only as good as what you teach it. The fastest way to increase deflection rate — the % of conversations your agent resolves without human help — is to build a strong library of response templates.",
         },
         {
           heading: "Start with your 10 most common tickets",
           steps: [
             "Export your last 30 days of closed tickets from the inbox",
-            "Group them by topic , you'll likely find 5–10 categories cover 70%+ of volume",
-            "Write a clear, friendly response for each and add it to your agent's knowledge base",
+            "Group them by topic — you'll likely find 5–10 categories cover 70%+ of volume",
+            "Write a clear, friendly response for each and add it to your agent's memory",
           ],
         },
         {
@@ -179,12 +179,12 @@ export const tips: Category = {
           ],
         },
         {
-          callout: "A good template sounds like a person, not a policy document. Read it out loud , if it sounds robotic, rewrite it.",
+          callout: "A good template sounds like a person, not a policy document. Read it out loud — if it sounds robotic, rewrite it.",
         },
         {
           heading: "What to keep for humans",
           text: "Don't try to automate everything. Your agent should escalate to a human when the customer is upset, they've asked the same question twice, or the issue involves a specific order that needs investigation.",
-          warning: "Never let the AI agent apologize for something that wasn't the company's fault , it can create liability. Train it to empathize without assigning blame.",
+          warning: "Never let the agent apologize for something that wasn't the company's fault — it can create liability. Train it to empathize without assigning blame.",
         },
         {
           heading: "Measure and improve",
@@ -223,9 +223,9 @@ export const tips: Category = {
           ],
         },
         {
-          heading: "Let your AI agent tag automatically",
-          text: "Train your agent to apply topic tags based on message content. When a customer says 'I want to return my order', the agent tags it 'returns' and routes it instantly , no human triage needed.",
-          warning: "Review your agent's auto-tags weekly at first. Misrouted tickets are worse than untagged ones , they create confusion and delay.",
+          heading: "Let your agent tag automatically",
+          text: "Train your agent to apply topic tags based on message content. When a customer says 'I want to return my order', the agent tags it 'returns' and routes it instantly — no human triage needed.",
+          warning: "Review your agent's auto-tags weekly at first. Misrouted tickets are worse than untagged ones — they create confusion and delay.",
         },
       ],
     },

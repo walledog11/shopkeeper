@@ -69,6 +69,8 @@ export default function ConversationComposerArea({
             <div className="px-5 pb-2 pt-1 pointer-events-auto">
               <ActionPlanCard
                 plan={pendingPlan}
+                agentName={agentName}
+                customerName={composer.customerName}
                 isExecuting={isPlanExecuting}
                 isRegenerating={isRegenerating}
                 onApprove={onPlanApprove}

@@ -33,7 +33,7 @@ export const GET = withOrgRoute(
     const pageInfo = searchParams.get('page_info') ?? '';
     const limit = Math.min(parseInt(searchParams.get('limit') ?? '25', 10), 50);
 
-    // Build the query , cursor pagination (page_info) and search are mutually exclusive
+    // Build the query — cursor pagination (page_info) and search are mutually exclusive
     let query: Record<string, string | number>;
     if (pageInfo) {
       query = { page_info: pageInfo, limit, fields: ORDER_FIELDS };

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ThreadFilterStatus } from '@shopkeeper/db';
-import { bucketDigestThreads, formatDigestMessage } from './digest.js';
+import type { SupportStatsSummary } from '@shopkeeper/agent/support-stats';
+import { bucketDigestThreads, formatDigestMessage, formatWeeklySummaryLine } from './digest.js';
 
 const NOW = new Date('2026-04-29T12:00:00Z');
 const HOUR = 3_600_000;
@@ -146,5 +147,43 @@ describe('formatDigestMessage', () => {
     const msg = formatDigestMessage(buckets);
     expect(msg).not.toContain('OPEN <n>');
     expect(msg).toContain('order number');
+  });
+
+  it('includes the weekly summary line when provided and omits it otherwise', () => {
+    const buckets = bucketDigestThreads([makeThread({ filterStatus: 'genuine' })], NOW);
+    expect(formatDigestMessage(buckets, 'Last 7 days: 5 new tickets')).toContain('Last 7 days: 5 new tickets');
+    expect(formatDigestMessage(buckets)).not.toContain('Last 7 days');
+  });
+});
+
+describe('formatWeeklySummaryLine', () => {
+  function makeStats(overrides: Partial<SupportStatsSummary> = {}): SupportStatsSummary {
+    return {
+      from: '2026-04-22T12:00:00.000Z',
+      to: '2026-04-29T12:00:00.000Z',
+      tickets: { total: 38, byTag: [{ tag: 'Shipping', count: 12 }], byChannel: [], byDay: [] },
+      messages: { customer: 50, agent: 10, ai: 25 },
+      resolution: { closedCount: 29, avgMinutes: 42 },
+      ...overrides,
+    };
+  }
+
+  it('renders ticket count, top topic, and resolution', () => {
+    expect(formatWeeklySummaryLine(makeStats())).toBe(
+      'Last 7 days: 38 new tickets · top topic Shipping (12) · 29 resolved, avg 42m',
+    );
+  });
+
+  it('rounds long resolution times to hours', () => {
+    const line = formatWeeklySummaryLine(makeStats({ resolution: { closedCount: 4, avgMinutes: 200 } }));
+    expect(line).toContain('4 resolved, avg 3h');
+  });
+
+  it('drops the topic and resolution parts when there is no data', () => {
+    const line = formatWeeklySummaryLine(makeStats({
+      tickets: { total: 1, byTag: [], byChannel: [], byDay: [] },
+      resolution: { closedCount: 0, avgMinutes: null },
+    }));
+    expect(line).toBe('Last 7 days: 1 new ticket');
   });
 });

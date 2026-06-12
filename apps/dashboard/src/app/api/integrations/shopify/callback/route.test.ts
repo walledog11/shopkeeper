@@ -105,7 +105,7 @@ describe('POST /api/integrations/shopify/callback', () => {
         authorizedShopId: 1,
         requestedShopId: 2,
       },
-      '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
+      '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
     );
   });
 

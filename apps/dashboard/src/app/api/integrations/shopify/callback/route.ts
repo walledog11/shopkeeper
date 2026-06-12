@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     const accessToken: string = tokenData.access_token;
 
     if (!clerkOrgId) {
-      logger.error('[Shopify OAuth] Missing org cookie , session likely interrupted');
+      logger.error('[Shopify OAuth] Missing org cookie — session likely interrupted');
       return oauthComplete(appUrl, { error: 'shopify_server_error', returnTo });
     }
 
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
         if (!isSameShopifyStore(authorizedShop, requestedShop)) {
           logger.error(
             { shop: shopDomain, savedShop, authorizedShopId: authorizedShop.id, requestedShopId: requestedShop.id },
-            '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
+            '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
           );
           return oauthComplete(appUrl, { error: 'shopify_shop_mismatch', returnTo });
         }
@@ -144,7 +144,7 @@ export async function POST(request: Request) {
       } catch (err) {
         logger.error(
           { err, shop: shopDomain, savedShop },
-          '[Shopify OAuth] Shop domain mismatch , possible CSRF attempt',
+          '[Shopify OAuth] Shop domain mismatch — possible CSRF attempt',
         );
         return oauthComplete(appUrl, { error: 'shopify_shop_mismatch', returnTo });
       }
@@ -179,7 +179,7 @@ export async function POST(request: Request) {
     try {
       gatewayUrl = getGatewayBaseUrl();
     } catch (error) {
-      logger.warn({ err: error, shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL invalid , skipping webhook registration');
+      logger.warn({ err: error, shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL invalid — skipping webhook registration');
     }
 
     if (gatewayUrl) {
@@ -209,7 +209,7 @@ export async function POST(request: Request) {
         })
       );
     } else {
-      logger.warn({ shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL not set , skipping webhook registration');
+      logger.warn({ shop: canonicalShopDomain }, '[Shopify OAuth] Gateway URL not set — skipping webhook registration');
     }
 
     return oauthComplete(appUrl, { connected: 'shopify', returnTo });

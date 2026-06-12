@@ -12,6 +12,7 @@ import {
 } from "./agent-tab-sections"
 import { SettingsDisclosure } from "./shared"
 import { useAgentTabState } from "./useAgentTabState"
+import { TelegramApproveSection } from "./TelegramApproveSection"
 import { WhenOnDutySection } from "./WhenOnDutySection"
 
 interface Props {
@@ -23,17 +24,19 @@ interface Props {
 
 export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
+  const agentName = controller.settingsState.agentName
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-bold text-white/80">Agent</h1>
-        <p className="text-sm text-white/35 mt-0.5">
-          Pick a trust level and when you are on duty. Everything else is optional.
+        <p className="text-sm text-white/35 mt-0.5 max-w-prose">
+          How much {agentName} can do alone, and when {agentName} is on duty. Everything else is optional.
         </p>
       </div>
 
       <AgentAutonomySection controller={controller} />
+      <TelegramApproveSection />
       <WhenOnDutySection controller={controller} />
 
       <SettingsDisclosure

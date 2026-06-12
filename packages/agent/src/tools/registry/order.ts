@@ -31,7 +31,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "update_shopify_order_address",
     description:
-      "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context , use it directly. Pass ALL address components in a single call.",
+      "Update the shipping address on a specific Shopify order AND sync the customer's default address to match (only works for unfulfilled/unshipped orders). The order ID is available in the 'Customer's recent orders' context — use it directly. Pass ALL address components in a single call.",
     fields: {
       order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context.", { required: true }),
       customer_id: stringArg("Shopify customer ID.", { required: true }),
@@ -135,7 +135,7 @@ export const ORDER_TOOL_DEFINITIONS = [
   defineTool({
     name: "create_shopify_order",
     description:
-      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending , do not charge the customer.",
+      "Create a new Shopify order on behalf of a customer. Each line item must include either a variant_id (for a real catalog product) or a title + price (for a custom item, if allowed). Set financial_status to pending — do not charge the customer.",
     fields: {
       email: stringArg("Customer email address.", { required: true }),
       first_name: stringArg("Customer first name.", { required: true }),
@@ -182,7 +182,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       order_id: stringArg("Shopify order ID (numeric, e.g. '5678901234'). Use the id field from the orders context.", { required: true }),
       variant_id: stringArg("Variant ID to add. Required when adding or swapping. Omit for pure removal."),
       quantity: numberArg("Number of units to add. Required when variant_id is provided."),
-      remove_variant_id: stringArg("Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context , no search needed."),
+      remove_variant_id: stringArg("Variant ID of the existing item to remove. Use for removals and swaps. Available in the orders context — no search needed."),
     },
     category: "action",
     group: "order",

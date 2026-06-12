@@ -31,7 +31,7 @@ export async function getOrCreateStripeCustomer(org: OrgBillingInfo): Promise<st
     metadata: { clerkOrgId: org.clerkOrgId },
   })).id
 
-  // Atomic conditional update , only writes if stripeCustomerId is still null.
+  // Atomic conditional update — only writes if stripeCustomerId is still null.
   // If another request already committed a value, count will be 0.
   const result = await db.organization.updateMany({
     where: { id: org.id, stripeCustomerId: null },

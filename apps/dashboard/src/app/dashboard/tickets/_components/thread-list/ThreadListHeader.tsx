@@ -99,7 +99,7 @@ export function ThreadListHeader({
             </TabsTrigger>
             <TabsTrigger
               value="filtered"
-              title="Spam , automatically filtered messages"
+              title="Spam — automatically filtered messages"
               className="flex-1 gap-1.5 py-1.5 h-auto text-xs font-semibold data-[state=active]:bg-white/[0.12] data-[state=active]:text-white data-[state=active]:shadow-none data-[state=inactive]:text-white/35"
             >
               Spam
@@ -133,7 +133,7 @@ export function ThreadListHeader({
         <button
           type="button"
           onClick={() => onNeedsReplyChange(!needsReply)}
-          title="Show only threads where the customer sent the last message"
+          title="Show only tickets where the customer sent the last message"
           className={`w-full h-8 rounded-md border text-xs font-semibold transition-all ${
             needsReply
               ? "bg-white/[0.15] text-white border-white/[0.35]"

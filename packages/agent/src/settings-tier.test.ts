@@ -7,6 +7,11 @@ import {
 } from "./settings.js";
 
 describe("resolveAgentSettings", () => {
+  it("defaults new orgs to guarded tier", () => {
+    expect(AGENT_SETTINGS_DEFAULTS.autonomyTier).toBe("guarded");
+    expect(AGENT_SETTINGS_DEFAULTS.requireApprovalForActions).toBe(true);
+  });
+
   it("returns guarded-tier defaults when settings are null", () => {
     const resolved = resolveAgentSettings(null);
     expect(resolved.autonomyTier).toBe("guarded");

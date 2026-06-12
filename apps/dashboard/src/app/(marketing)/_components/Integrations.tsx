@@ -36,11 +36,22 @@ const tiles: { name: string; left: string; top: string; logo?: string; mark?: Re
 export function Integrations() {
   return (
     <section id="integrations" className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
-      {/* Watercolor wash bands */}
+      {/* Photographic wash band — placeholder photography, swap
+          /atmosphere/integrations-leaves.jpg for the final shot. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 blur-xl bg-[linear-gradient(180deg,transparent_0%,rgba(170,193,205,0.45)_42%,rgba(212,194,164,0.5)_82%,transparent_100%)]"
-      />
+        className="pointer-events-none absolute inset-0 -z-10 [mask-image:linear-gradient(180deg,transparent_10%,black_42%,black_72%,transparent_96%)]"
+      >
+        <Image
+          src="/atmosphere/integrations-leaves.jpg"
+          alt=""
+          fill
+          sizes="100vw"
+          className="object-cover object-[72%_center] [filter:sepia(0.1)_saturate(0.8)_brightness(1.12)_contrast(0.88)]"
+        />
+        <div className="absolute inset-0 bg-[#f6f2eb]/50" />
+        <div className="m-grain absolute inset-0" />
+      </div>
 
       <div className="mx-auto max-w-6xl px-6">
         <Reveal>

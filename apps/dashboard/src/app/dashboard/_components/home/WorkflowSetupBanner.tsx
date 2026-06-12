@@ -160,7 +160,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                 <span className="text-xs font-semibold text-white/80 shrink-0">
                   Workflow setup · {doneCount} of {totalCount}
                 </span>
-                <span className="text-white/15">,</span>
+                <span className="text-white/15">—</span>
                 <span className="text-xs text-white/45 truncate">{summary}</span>
               </div>
               <m.div

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useClerk, useOrganizationList } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, LogOut, Sparkles } from "lucide-react";
+import { ArrowRight, Loader2, LogOut, Plus, Sparkles } from "lucide-react";
 import AuthShell from "../_components/AuthShell";
 import { authCardClassName } from "../_components/auth-styles";
 import { AuthBackLink } from "../_components/AuthBackLink";
@@ -58,8 +59,8 @@ export default function SelectOrgPage() {
   return (
     <AuthShell
       variant="app"
-      title="Switch workspace"
-      description="Choose which workspace to open in the dashboard."
+      title="Workspaces"
+      description="Switch between workspaces or create a new one."
     >
       {!isLoaded ? (
         <AuthLoadingCard />
@@ -146,7 +147,13 @@ export default function SelectOrgPage() {
             ) : null}
 
             {!hasNoWorkspaces ? (
-              <div className="border-t border-border px-6 py-4">
+              <div className="space-y-3 border-t border-border px-6 py-4">
+                <Button asChild variant="outline" size="sm" className="w-full gap-2">
+                  <Link href="/create-workspace">
+                    <Plus className="size-4" />
+                    Create workspace
+                  </Link>
+                </Button>
                 <AuthBackLink href="/dashboard" label="Back to dashboard" />
               </div>
             ) : null}

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
-// Postmark inbound email webhook , proxied to the gateway.
+// Postmark inbound email webhook — proxied to the gateway.
 // In dev, Postmark can't reach localhost:8080 directly, so this
 // Next.js route (exposed via ngrok on port 3000) forwards the request.
 // Configure Postmark's inbound webhook URL to:

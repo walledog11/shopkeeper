@@ -72,10 +72,10 @@ export function validateDashboardEnv(): void {
 
   const dbUrl = requireEnv('DATABASE_URL');
   if (!dbUrl.includes('pgbouncer=true')) {
-    console.warn('[Dashboard] DATABASE_URL is missing pgbouncer=true , add it to avoid connection exhaustion in production');
+    console.warn('[Dashboard] DATABASE_URL is missing pgbouncer=true — add it to avoid connection exhaustion in production');
   }
   if (!dbUrl.includes('connection_limit=')) {
-    console.warn('[Dashboard] DATABASE_URL is missing connection_limit , add it (e.g. connection_limit=1) to avoid connection exhaustion in production');
+    console.warn('[Dashboard] DATABASE_URL is missing connection_limit — add it (e.g. connection_limit=1) to avoid connection exhaustion in production');
   }
 
   if (process.env.NODE_ENV === 'production') {

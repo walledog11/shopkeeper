@@ -136,7 +136,7 @@ export default function SignUpPage() {
           <span className="text-green-400">runs itself.</span>
         </>
       }
-      description="Every DM, SMS, and Shopify order in one inbox. Shopkeeper reads, drafts, and resolves , you just approve."
+      description="Every DM, SMS, and Shopify order in one inbox. Shopkeeper reads, drafts, and resolves — you just approve."
       aside={<SignupAside />}
     >
       <SignUp

@@ -198,7 +198,7 @@ export default function BillingTab() {
                         Download <ExternalLink className="size-3" />
                       </a>
                     ) : (
-                      <span className="text-xs text-muted-foreground/40">,</span>
+                      <span className="text-xs text-muted-foreground/40">—</span>
                     )}
                   </td>
                 </tr>
