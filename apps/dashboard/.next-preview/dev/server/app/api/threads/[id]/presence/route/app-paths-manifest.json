@@ -1,3 +1,0 @@
-{
-  "/api/threads/[id]/presence/route": "app/api/threads/[id]/presence/route.js"
-}

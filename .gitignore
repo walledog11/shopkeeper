@@ -12,6 +12,7 @@ node_modules/
 .next/
 apps/dashboard/.next-dev/
 apps/dashboard/.next-e2e/
+apps/dashboard/.next-preview/
 next-env.d.ts
 
 # Common build output
