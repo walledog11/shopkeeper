@@ -1,7 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useState } from "react";
 import { UserPlus, X, Shield, User, Mail, Trash2 } from "lucide-react";
 import { timeAgo } from "@/lib/format/date";
 import { errorMessageFromUnknown } from "@/lib/api/fetcher";
@@ -20,6 +19,7 @@ interface Props {
   initialInvitations: TeamInvitation[];
   currentUserId: string;
   isAdmin: boolean;
+  initialShowInviteModal: boolean;
 }
 
 function roleLabel(role: string) {
@@ -47,20 +47,21 @@ export default function TeamPageClient(props: Props) {
   );
 }
 
-function useTeamPageState({ initialMembers, initialInvitations, isAdmin }: Props) {
-  const searchParams = useSearchParams();
+function useTeamPageState({ initialMembers, initialInvitations, initialShowInviteModal }: Props) {
   const [members, setMembers] = useState(initialMembers);
   const [invitations, setInvitations] = useState(initialInvitations);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const params = new URLSearchParams(searchParams.toString());
-    if (params.get("invite") === "1") {
-      setShowInviteModal(true);
+  const [inviteParamDismissed, setInviteParamDismissed] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const showInviteModal = (initialShowInviteModal && !inviteParamDismissed) || inviteModalOpen;
+  const setShowInviteModal = useCallback((open: boolean) => {
+    if (!open && initialShowInviteModal) {
+      setInviteParamDismissed(true);
       window.history.replaceState(null, "", "/dashboard/team");
+    } else if (open) {
+      setInviteParamDismissed(false);
     }
-  }, [isAdmin, searchParams]);
+    setInviteModalOpen(open);
+  }, [initialShowInviteModal]);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("org:member");
   const [inviting, setInviting] = useState(false);

@@ -2,6 +2,7 @@ import type { ComponentProps } from "react"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/ui/cn"
+import { settingsSelectClassName } from "./settings-form-styles"
 
 function FieldLabel({ label, hint }: { label: string; hint?: string }) {
   return (
@@ -14,13 +15,6 @@ function FieldLabel({ label, hint }: { label: string; hint?: string }) {
 
 const SETTINGS_INPUT_CLASS =
   "h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
-
-const SETTINGS_SELECT_CLASS =
-  "h-9 rounded-md border border-white/[0.12] bg-white/[0.06] px-3 text-sm text-white/70 outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-400 transition-all"
-
-export function settingsSelectClassName(...classNames: Array<string | undefined | false>) {
-  return cn(SETTINGS_SELECT_CLASS, classNames)
-}
 
 type LabeledTextInputProps = Omit<ComponentProps<"input">, "className"> & {
   label: string

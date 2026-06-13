@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { ChevronDown, Search } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,6 +28,14 @@ import {
 import { UserMenu } from "./UserMenu";
 import type { NavAuth } from "./useNavAuth";
 
+function handleNavClick(e: MouseEvent<HTMLAnchorElement>, isActive: boolean) {
+  if (isActive) {
+    e.preventDefault();
+    return;
+  }
+  dispatchNavProgressStart();
+}
+
 function NavDropdown({
   label,
   items,
@@ -39,16 +47,47 @@ function NavDropdown({
 }) {
   const pathname = usePathname();
   const isGroupActive = items.some((item) => isRouteActive(pathname, item.href));
+  const [open, setOpen] = useState(false);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openMenu = () => {
+    clearCloseTimer();
+    setOpen(true);
+  };
+
+  const scheduleClose = () => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => setOpen(false), 120);
+  };
+
+  useEffect(() => () => clearCloseTimer(), []);
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+      <DropdownMenuTrigger
+        asChild
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleClose}
+      >
         <button type="button" className={cn("group", topBarNavTriggerClass(isGroupActive))}>
           <span>{label}</span>
           <ChevronDown className="size-3.5 text-sidebar-foreground/40 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" sideOffset={10} className={topBarDropdownPanelClass}>
+      <DropdownMenuContent
+        align="center"
+        sideOffset={10}
+        className={topBarDropdownPanelClass}
+        onMouseEnter={openMenu}
+        onMouseLeave={scheduleClose}
+      >
         {items.map((item) => {
           const itemIsActive = isRouteActive(pathname, item.href);
 
@@ -95,14 +134,6 @@ export function DesktopTopBar({
   const { open: openCmd } = useCommandPalette();
   const { open: openAgentPanel } = useAgentPanel();
   const inboxIsActive = isRouteActive(pathname, inboxNavItem.href);
-
-  const handleNavClick = (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => {
-    if (isActive) {
-      e.preventDefault();
-      return;
-    }
-    dispatchNavProgressStart();
-  };
 
   return (
     <header

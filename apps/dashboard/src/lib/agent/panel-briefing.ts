@@ -58,15 +58,16 @@ export function buildBriefingNarrativeSegments(input: BriefingCopyInput): Briefi
   if (overnightClearedCount === 0) {
     return [
       { kind: "text", value: "Nothing new since yesterday, but " },
-      { kind: "strong", value: `${needsYouCount} ticket${needsYouCount === 1 ? "" : "s"}` },
-      { kind: "text", value: ` need${needsYouCount === 1 ? "s" : ""} your eye.` },
+      { kind: "strong", value: String(needsYouCount) },
+      { kind: "text", value: ` ticket${needsYouCount === 1 ? "" : "s"} need${needsYouCount === 1 ? "s" : ""} your eye.` },
     ]
   }
 
   if (needsYouCount > 0) {
     const segments: BriefingNarrativeSegment[] = [
       { kind: "text", value: "I drafted replies for " },
-      { kind: "strong", value: `${overnightClearedCount} ticket${overnightClearedCount === 1 ? "" : "s"}` },
+      { kind: "strong", value: String(overnightClearedCount) },
+      { kind: "text", value: ` ticket${overnightClearedCount === 1 ? "" : "s"}` },
     ]
     if (channelText) {
       segments.push({ kind: "text", value: ` across ${channelText}` })
@@ -80,8 +81,8 @@ export function buildBriefingNarrativeSegments(input: BriefingCopyInput): Briefi
   }
 
   const segments: BriefingNarrativeSegment[] = [
-    { kind: "strong", value: `${overnightClearedCount} ticket${overnightClearedCount === 1 ? " is" : "s are"}` },
-    { kind: "text", value: " ready for you" },
+    { kind: "strong", value: String(overnightClearedCount) },
+    { kind: "text", value: ` ticket${overnightClearedCount === 1 ? " is" : "s are"} ready for you` },
   ]
   if (channelText) {
     segments.push({ kind: "text", value: ` from ${channelText}` })

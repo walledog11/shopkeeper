@@ -123,8 +123,10 @@ export async function DELETE(request: Request) {
       );
     }
 
-    await cancelWorkspaceSubscription(org);
-    await client.organizations.deleteOrganization(org.clerkOrgId);
+    await Promise.all([
+      cancelWorkspaceSubscription(org),
+      client.organizations.deleteOrganization(org.clerkOrgId),
+    ]);
     await db.organization.deleteMany({ where: { id: org.id } });
 
     return new NextResponse(null, { status: 204 });

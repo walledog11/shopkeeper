@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import Link from "next/link"
-import { AlertCircle, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
-import { AnimatePresence, LazyMotion, domMax, m, type Variants } from "motion/react"
+import { AlertCircle, Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
+import { AnimatePresence, LazyMotion, domMax, m, useMotionValue, useTransform, type Variants } from "motion/react"
 import { Card } from "@/components/ui/card"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 
@@ -32,9 +32,23 @@ const BUBBLE_TONE: Record<BubbleTone, { label: string; bubble: string }> = {
 }
 
 export default function NeedsYou({ items, agentName, onApproved }: Props) {
-  if (items.length === 0) return null
+  if (items.length === 0) return <AllClear agentName={agentName} />
 
   return <NeedsYouDeck items={items} agentName={agentName} onApproved={onApproved} />
+}
+
+function AllClear({ agentName }: { agentName: string }) {
+  return (
+    <section className="flex flex-col items-center gap-3 py-12 text-center">
+      <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
+        <Check aria-hidden className="size-5 text-foreground/40" />
+      </span>
+      <div className="flex flex-col gap-1">
+        <h2 className="font-display-serif text-lg text-foreground">You&apos;re all caught up</h2>
+        <p className="text-sm text-foreground/50">{agentName} will surface anything that needs your eye here.</p>
+      </div>
+    </section>
+  )
 }
 
 function NeedsYouDeck({ items, agentName, onApproved }: Props) {
@@ -44,7 +58,7 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
 
   const deck = items.filter(item => !dismissed.has(item.threadId))
   const n = deck.length
-  if (n === 0) return null
+  if (n === 0) return <AllClear agentName={agentName} />
 
   const mod = (value: number) => ((value % n) + n) % n
   const activeIndex = Math.max(0, deck.findIndex(item => item.threadId === currentId))
@@ -66,12 +80,8 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   }
 
   return (
-    <section id="needs-you" className="flex flex-col gap-2.5">
-      <div className="flex items-baseline gap-3">
-        <h2 className="font-display-serif text-lg text-foreground">Needs you</h2>
-      </div>
-
-      <div className="flex flex-col gap-3 w-full max-w-xl">
+    <section id="needs-you" className="mt-10 flex flex-col gap-2.5">
+      <div className="flex flex-col gap-3 w-full">
       <LazyMotion features={domMax}>
         <div className="relative select-none">
           {Array.from({ length: behind }).map((_, i) => {
@@ -80,10 +90,11 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
               <div
                 key={`strip-${i}`}
                 aria-hidden
-                className="absolute inset-x-0 top-0 h-full rounded-3xl border border-border bg-card"
+                className="absolute inset-x-0 top-0 h-full rounded-3xl border border-border bg-card shadow-sm"
                 style={{
-                  transform: `translateY(${depth * 8}px) scale(${1 - depth * 0.03})`,
-                  opacity: 1 - depth * 0.18,
+                  transform: `translateX(${-depth * 8}px) translateY(${-depth * 7}px) rotate(${-depth * 1.8}deg) scale(${1 - depth * 0.015})`,
+                  transformOrigin: "top center",
+                  opacity: 1 - depth * 0.16,
                   zIndex: 0,
                 }}
               />
@@ -98,20 +109,15 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
               initial="enter"
               animate="center"
               exit="exit"
-              drag={n > 1 ? "x" : false}
-              dragSnapToOrigin
-              dragElastic={0.5}
-              dragConstraints={{ left: 0, right: 0 }}
-              onDragEnd={(_, info) => {
-                if (n <= 1) return
-                const swiped = Math.abs(info.offset.x) > SWIPE_DISTANCE || Math.abs(info.velocity.x) > SWIPE_VELOCITY
-                if (!swiped) return
-                if (info.offset.x < 0) goToNeighbor(1, -1)
-                else goToNeighbor(-1, 1)
-              }}
-              className="relative z-10 touch-pan-y cursor-grab active:cursor-grabbing"
+              className="relative z-10"
             >
-              <NeedsYouCard item={current} agentName={agentName} onSent={() => dismiss(current.threadId)} />
+              <SwipeCard
+                draggable={n > 1}
+                onSwipeLeft={() => goToNeighbor(1, -1)}
+                onSwipeRight={() => goToNeighbor(-1, 1)}
+              >
+                <NeedsYouCard item={current} agentName={agentName} onSent={() => dismiss(current.threadId)} />
+              </SwipeCard>
             </m.div>
           </AnimatePresence>
         </div>
@@ -151,6 +157,40 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
       )}
       </div>
     </section>
+  )
+}
+
+function SwipeCard({
+  draggable,
+  onSwipeLeft,
+  onSwipeRight,
+  children,
+}: {
+  draggable: boolean
+  onSwipeLeft: () => void
+  onSwipeRight: () => void
+  children: ReactNode
+}) {
+  const x = useMotionValue(0)
+  const y = useTransform(x, (value) => (value * value) / 650)
+
+  return (
+    <m.div
+      drag={draggable ? "x" : false}
+      style={{ x, y }}
+      dragSnapToOrigin
+      dragElastic={0.5}
+      dragConstraints={{ left: 0, right: 0 }}
+      onDragEnd={(_, info) => {
+        const swiped = Math.abs(info.offset.x) > SWIPE_DISTANCE || Math.abs(info.velocity.x) > SWIPE_VELOCITY
+        if (!swiped) return
+        if (info.offset.x < 0) onSwipeLeft()
+        else onSwipeRight()
+      }}
+      className="touch-pan-y cursor-grab active:cursor-grabbing"
+    >
+      {children}
+    </m.div>
   )
 }
 
@@ -204,7 +244,7 @@ function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAttentionIte
 
   return (
     <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5">
-      <h3 className="font-display-serif text-2xl sm:text-3xl text-foreground leading-tight">
+      <h3 className="font-sans font-semibold text-2xl sm:text-3xl text-foreground leading-tight tracking-tight">
         {title}
       </h3>
 
@@ -225,7 +265,7 @@ function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAttentionIte
               {bubble.label}
             </span>
             <div className={`rounded-2xl px-4 py-3 border ${BUBBLE_TONE[bubble.tone].bubble}`}>
-              <p className="text-sm font-medium text-foreground/85 leading-relaxed">{bubble.text}</p>
+              <p className="text-sm font-medium text-foreground/85 leading-relaxed line-clamp-4">{bubble.text}</p>
             </div>
           </div>
         ))}

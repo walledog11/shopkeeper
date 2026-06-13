@@ -213,10 +213,7 @@ export function evalRepeats(): number {
 
 // Runs a fixture `repeats` times and folds the per-run results into one pass-rate.
 export async function runFixtureRepeated(fixture: Fixture, repeats: number): Promise<FixtureRunSummary> {
-  const results: EvalResult[] = [];
-  for (let i = 0; i < repeats; i += 1) {
-    results.push(await runFixture(fixture));
-  }
+  const results = await Promise.all(Array.from({ length: repeats }, () => runFixture(fixture)));
   const passes = results.filter((r) => r.pass).length;
   return {
     id: fixture.id,

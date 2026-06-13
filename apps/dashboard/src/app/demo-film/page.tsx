@@ -10,13 +10,18 @@
  * Capture mode: /demo-film?capture — static until __seek is called.
  */
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
-import { flushSync } from "react-dom";
 
 const DURATION = 38.5;
 
 const STAGE_W = 1200;
 const STAGE_H = 900;
+
+function stageScale() {
+  if (typeof window === "undefined") return 1;
+  return Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+}
 
 /* ---------- timeline helpers ---------- */
 
@@ -536,8 +541,7 @@ function SceneChannels({ t }: { t: number }) {
             {tile.mark ? (
               tile.mark(58)
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={tile.logo} alt={tile.name} className="size-[58px] object-contain" />
+              <Image src={tile.logo as string} alt={tile.name} width={58} height={58} className="size-[58px] object-contain" />
             )}
           </div>
         );
@@ -578,11 +582,10 @@ declare global {
 
 export default function DemoFilmPage() {
   const [t, setT] = useState(0);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(stageScale);
 
   useEffect(() => {
-    const fit = () => setScale(Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H));
-    fit();
+    const fit = () => setScale(stageScale());
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
   }, []);
@@ -593,7 +596,7 @@ export default function DemoFilmPage() {
     window.__seek = (sec: number) => {
       playing = false;
       cancelAnimationFrame(raf);
-      flushSync(() => setT(sec));
+      setT(sec);
     };
     window.__filmDuration = DURATION;
     if (playing) {

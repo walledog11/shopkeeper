@@ -24,8 +24,10 @@ export async function PUT(
   try {
     const client = getRedis();
     const key = presenceKey(orgId, threadId);
-    await client.zadd(key, { gt: true }, { score: now, member: userId });
-    await client.expire(key, PRESENCE_TTL * 4);
+    await Promise.all([
+      client.zadd(key, { gt: true }, { score: now, member: userId }),
+      client.expire(key, PRESENCE_TTL * 4),
+    ]);
     const active = await client.zrange(key, cutoff, '+inf', { byScore: true });
     const count = active.filter(uid => uid !== userId).length;
     return NextResponse.json({ count });

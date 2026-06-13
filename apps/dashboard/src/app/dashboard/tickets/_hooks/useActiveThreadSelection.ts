@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/api/fetcher'
 import { threadToTicket } from '../_lib/thread-to-ticket'
@@ -48,8 +48,19 @@ export function useActiveThreadSelection({
   searchThreads,
   agentName,
 }: UseActiveThreadSelectionProps) {
-  const [activeTicketId, setActiveTicketId] = useState<string | null>(null)
-  const appliedQueryThreadRef = useRef<string | null>(null)
+  const [selectedActiveTicketId, setSelectedActiveTicketId] = useState<string | null>(null)
+  const [dismissedQueryThreadId, setDismissedQueryThreadId] = useState<string | null>(null)
+  const queryActiveTicketId = queryThreadId && dismissedQueryThreadId !== queryThreadId ? queryThreadId : null
+  const activeTicketId = queryActiveTicketId ?? selectedActiveTicketId
+  const setActiveTicketId = useCallback((
+    value: string | null | ((current: string | null) => string | null),
+  ) => {
+    const next = typeof value === 'function' ? value(activeTicketId) : value
+    if (queryActiveTicketId && next !== queryActiveTicketId) {
+      setDismissedQueryThreadId(queryActiveTicketId)
+    }
+    setSelectedActiveTicketId(next)
+  }, [activeTicketId, queryActiveTicketId])
 
   const activeThreadKey = activeTicketId ? `/api/threads/${activeTicketId}` : null
   const {
@@ -58,16 +69,6 @@ export function useActiveThreadSelection({
     mutate: mutateActiveThread,
   } = useSWR<ActiveThreadData>(activeThreadKey, fetcher)
   const activeThread = activeThreadData?.thread
-
-  useEffect(() => {
-    if (!queryThreadId) {
-      appliedQueryThreadRef.current = null
-      return
-    }
-    if (appliedQueryThreadRef.current === queryThreadId) return
-    appliedQueryThreadRef.current = queryThreadId
-    setActiveTicketId(current => current === queryThreadId ? current : queryThreadId)
-  }, [queryThreadId])
 
   const effectiveActiveTab = useMemo(() => {
     if (queryThreadId) {

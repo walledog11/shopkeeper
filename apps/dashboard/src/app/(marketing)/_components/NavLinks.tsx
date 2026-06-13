@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   CircleHelp,
@@ -61,17 +61,15 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  const close = useCallback(() => setOpen(false), []);
-
   useEffect(() => {
     if (!open) return;
 
     function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) close();
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") setOpen(false);
     }
 
     document.addEventListener("mousedown", onPointerDown);
@@ -80,7 +78,7 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open, close]);
+  }, [open]);
 
   return (
     <div
@@ -118,7 +116,7 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
                 href={item.href}
                 role="menuitem"
                 className="m-nav-dropdown-item"
-                onClick={close}
+                onClick={() => setOpen(false)}
               >
                 <Icon className="m-nav-dropdown-icon size-[18px] shrink-0" strokeWidth={1.75} />
                 <span>

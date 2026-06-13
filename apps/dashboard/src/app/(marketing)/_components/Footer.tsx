@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { CONTACT_EMAIL } from "@/lib/brand";
 
+const COPYRIGHT_YEAR = 2026;
+
 export function Footer() {
   return (
     <footer className="relative isolate overflow-hidden border-t border-stone-900/10 px-6 pt-12">
@@ -24,7 +26,7 @@ export function Footer() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="text-[13px] text-stone-500">
-            © {new Date().getFullYear()} Shopkeeper · The AI employee for Shopify brands.
+            © {COPYRIGHT_YEAR} Shopkeeper · The AI employee for Shopify brands.
           </div>
           <div className="flex flex-wrap gap-5 text-[13px] text-stone-600">
             <Link href="/privacy" className="text-inherit transition-colors hover:text-stone-900">Privacy</Link>

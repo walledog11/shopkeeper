@@ -1,12 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import Image from "next/image"
-import { BadgeCheck, Mail } from "lucide-react"
+import { useReducer } from "react"
 import { cn } from "@/lib/ui/cn"
 import { formatLastActivityTime } from "@/lib/format/date"
 import { getEmailReauthorizePath } from "@/lib/messaging/email/providers"
-import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
+import type { PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
@@ -14,88 +12,56 @@ import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
+import { CardLogo, ShopkeeperBadge } from "./IntegrationCardParts"
+import {
+  CARD_BUTTON_AMBER,
+  CARD_BUTTON_DISABLED,
+  CARD_BUTTON_PRIMARY,
+  CARD_BUTTON_SECONDARY,
+  CARD_DESCRIPTION,
+  CARD_SHELL,
+  CARD_TITLE,
+} from "./integration-card-styles"
 
-export type { ConnectType, PlatformConfig }
-
-const CARD_BUTTON_FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
-
-export const CARD_SHELL = cn(
-  "group rounded-2xl bg-card border border-border px-5 pt-6 pb-5 flex flex-col scroll-mt-6",
-  "transition-all duration-200",
-  "hover:border-border/80 hover:shadow-sm",
-)
-const LOGO_TILE = cn(
-  "size-14 rounded-2xl flex items-center justify-center shrink-0 overflow-hidden",
-  "transition-all duration-200",
-  "group-hover:ring-1 group-hover:ring-inset group-hover:ring-border",
-)
-const LOGO_SOFTEN = "opacity-[0.88] saturate-[0.9] transition-all duration-200 group-hover:opacity-100 group-hover:saturate-100"
-const LOGO_IMAGE = cn("object-contain", LOGO_SOFTEN)
-export const CARD_TITLE = "text-xl font-bold text-card-foreground leading-[22px]"
-export const CARD_DESCRIPTION = "text-[13.5px] leading-[18px] text-muted-foreground"
-export const CARD_BUTTON = cn("h-10 flex-1 rounded-[10px] text-[17px] font-medium transition-colors", CARD_BUTTON_FOCUS)
-export const CARD_BUTTON_PRIMARY = cn(CARD_BUTTON, "bg-primary text-primary-foreground hover:bg-primary/90")
-export const CARD_BUTTON_SECONDARY = cn(CARD_BUTTON, "bg-secondary hover:bg-accent border border-border text-secondary-foreground")
-export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-400/10 hover:bg-amber-400/15 border border-amber-400/25 text-amber-300")
-export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-muted text-muted-foreground cursor-default")
-
-const FALLBACK_ICONS: Record<string, typeof Mail> = {
-  email: Mail,
+interface IntegrationCardState {
+  email: string
+  kbSyncing: boolean
+  kbSyncResult: string | null
+  loading: boolean
+  shop: string
 }
 
-export function CardLogo({ config }: { config: PlatformConfig }) {
-  const Icon = FALLBACK_ICONS[config.id]
-  const tileClass = cn(LOGO_TILE, config.tileClass)
+type IntegrationCardAction =
+  | { type: "emailChanged"; email: string }
+  | { type: "kbSyncingChanged"; kbSyncing: boolean }
+  | { type: "kbSyncResultChanged"; kbSyncResult: string | null }
+  | { type: "loadingChanged"; loading: boolean }
+  | { type: "shopChanged"; shop: string }
 
-  if (!config.logo) {
-    return (
-      <div className={tileClass}>
-        {Icon ? (
-          <Icon className="size-7 text-card-foreground opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100" />
-        ) : null}
-      </div>
-    )
-  }
-
-  if (config.fullBleedLogo) {
-    const image = (
-      <Image
-        src={config.logo}
-        alt={`${config.name} logo`}
-        width={56}
-        height={56}
-        className={cn(
-          "size-full",
-          config.tileClass ? "object-cover" : "object-contain",
-          LOGO_SOFTEN,
-        )}
-      />
-    )
-    return <div className={cn(tileClass, config.tileClass && "p-0")}>{image}</div>
-  }
-
-  const logoSize = config.logoSize ?? 40
-  return (
-    <div className={tileClass}>
-      <Image
-        src={config.logo}
-        alt={`${config.name} logo`}
-        width={logoSize}
-        height={logoSize}
-        className={LOGO_IMAGE}
-      />
-    </div>
-  )
+const INITIAL_INTEGRATION_CARD_STATE: IntegrationCardState = {
+  email: "",
+  kbSyncing: false,
+  kbSyncResult: null,
+  loading: false,
+  shop: "",
 }
 
-export function ShopkeeperBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 self-start">
-      <Image src="/logos/shopkeeper-shop-logo.png" alt="" width={20} height={20} className="rounded-[6px]" />
-      <span className="text-[13px] font-semibold leading-none text-card-foreground">shopkeeper</span>
-      <BadgeCheck aria-label="Verified" className="size-3.5 fill-[#1D9BF0] text-card-foreground" />
-    </span>
-  )
+function integrationCardReducer(
+  state: IntegrationCardState,
+  action: IntegrationCardAction,
+): IntegrationCardState {
+  switch (action.type) {
+    case "emailChanged":
+      return { ...state, email: action.email }
+    case "kbSyncingChanged":
+      return { ...state, kbSyncing: action.kbSyncing }
+    case "kbSyncResultChanged":
+      return { ...state, kbSyncResult: action.kbSyncResult }
+    case "loadingChanged":
+      return { ...state, loading: action.loading }
+    case "shopChanged":
+      return { ...state, shop: action.shop }
+  }
 }
 
 interface Props {
@@ -110,11 +76,10 @@ interface Props {
 }
 
 export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange }: Props) {
-  const [email, setEmail] = useState("")
-  const [shop, setShop] = useState("")
-  const [loading, setLoading] = useState(false)
-  const [kbSyncing, setKbSyncing] = useState(false)
-  const [kbSyncResult, setKbSyncResult] = useState<string | null>(null)
+  const [cardState, dispatchCardState] = useReducer(integrationCardReducer, INITIAL_INTEGRATION_CARD_STATE)
+  const { email, kbSyncing, kbSyncResult, loading, shop } = cardState
+  const setEmail = (nextEmail: string) => dispatchCardState({ type: "emailChanged", email: nextEmail })
+  const setShop = (nextShop: string) => dispatchCardState({ type: "shopChanged", shop: nextShop })
 
   const isConnected = connected.length > 0
   const isOAuthEmail = config.emailProvider === "gmail" || config.emailProvider === "outlook"
@@ -150,12 +115,12 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
 
   async function handleEmailConnect() {
     if (!email) return
-    setLoading(true)
+    dispatchCardState({ type: "loadingChanged", loading: true })
     try {
       const ok = await onConnect(config.platform!, email)
-      if (ok) setEmail("")
+      if (ok) dispatchCardState({ type: "emailChanged", email: "" })
     } finally {
-      setLoading(false)
+      dispatchCardState({ type: "loadingChanged", loading: false })
     }
   }
 
@@ -174,8 +139,8 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   function handleShopifyConnect() {
     const domain = shop.trim()
     if (!domain) return
-    setLoading(true)
-    launchOAuth("/api/integrations/shopify/auth", { shop: domain }, () => setLoading(false))
+    dispatchCardState({ type: "loadingChanged", loading: true })
+    launchOAuth("/api/integrations/shopify/auth", { shop: domain }, () => dispatchCardState({ type: "loadingChanged", loading: false }))
   }
 
   function handleReauthorize() {
@@ -190,19 +155,19 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   }
 
   async function handleKbSync() {
-    setKbSyncing(true)
-    setKbSyncResult(null)
+    dispatchCardState({ type: "kbSyncingChanged", kbSyncing: true })
+    dispatchCardState({ type: "kbSyncResultChanged", kbSyncResult: null })
     try {
       const res = await fetch("/api/integrations/shopify/kb-sync", { method: "POST" })
       if (!res.ok) throw new Error()
       const { syncedPolicies, syncedPages } = await res.json() as { syncedPolicies: number; syncedPages: number }
       const total = syncedPolicies + syncedPages
-      setKbSyncResult(`${total} note${total === 1 ? "" : "s"} synced to Memory`)
+      dispatchCardState({ type: "kbSyncResultChanged", kbSyncResult: `${total} note${total === 1 ? "" : "s"} synced to Memory` })
     } catch {
-      setKbSyncResult("Sync failed, please try again")
+      dispatchCardState({ type: "kbSyncResultChanged", kbSyncResult: "Sync failed, please try again" })
     } finally {
-      setKbSyncing(false)
-      setTimeout(() => setKbSyncResult(null), 4000)
+      dispatchCardState({ type: "kbSyncingChanged", kbSyncing: false })
+      setTimeout(() => dispatchCardState({ type: "kbSyncResultChanged", kbSyncResult: null }), 4000)
     }
   }
 

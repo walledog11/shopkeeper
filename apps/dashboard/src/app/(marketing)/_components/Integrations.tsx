@@ -74,7 +74,7 @@ export function Integrations() {
               style={{
                 left: t.left,
                 top: t.top,
-                animation: "m-float 5.5s ease-in-out infinite",
+                animation: "m-float 900ms ease-in-out infinite",
                 animationDelay: `${-i * 0.7}s`,
               }}
             >

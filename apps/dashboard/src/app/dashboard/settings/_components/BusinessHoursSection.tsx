@@ -4,8 +4,8 @@ import { DAY_OPTIONS } from "./agent-tab-helpers"
 import {
   CharacterCountTextarea,
   NumberInput,
-  settingsSelectClassName,
 } from "./settings-form-fields"
+import { settingsSelectClassName } from "./settings-form-styles"
 import { SectionCard, ToggleRow } from "./shared"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"

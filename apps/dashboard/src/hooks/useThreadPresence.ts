@@ -1,6 +1,5 @@
 "use client"
 
-import { useEffect } from "react"
 import useSWR from "swr"
 
 interface PresenceResponse {
@@ -20,12 +19,6 @@ export function useThreadPresence(ticketId: string) {
     refreshInterval: 15000,
     revalidateOnFocus: false,
   })
-
-  useEffect(() => {
-    return () => {
-      void fetch(presenceUrl, { method: "DELETE" }).catch(() => {})
-    }
-  }, [presenceUrl])
 
   return { presenceCount: data?.count ?? 0 }
 }

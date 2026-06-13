@@ -78,8 +78,6 @@ const nextConfig = {
   serverExternalPackages: ['stripe'],
   transpilePackages: ['@shopkeeper/db'],
   images: {
-    dangerouslyAllowSVG: true,
-    contentDispositionType: 'attachment',
     remotePatterns: [
       {
         protocol: 'https',

@@ -51,7 +51,8 @@ describe("buildBriefingNarrativeSegments", () => {
       ordersToShip: null,
     })
 
-    expect(segments.some(segment => segment.kind === "strong" && segment.value === "2 tickets")).toBe(true)
+    expect(segments.some(segment => segment.kind === "strong" && segment.value === "2")).toBe(true)
+    expect(segments.map(segment => ("value" in segment ? segment.value : "")).join("")).toContain("2 tickets")
   })
 
   it("mentions overnight work and remaining approvals", () => {

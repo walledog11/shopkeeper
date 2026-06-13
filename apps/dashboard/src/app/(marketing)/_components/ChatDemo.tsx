@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useReducer, useRef } from "react";
 
 export interface ChatMessage {
   from: "agent" | "user";
@@ -24,6 +24,32 @@ type ClusterPosition = "single" | "first" | "middle" | "last";
 
 const IOS_FONT =
   "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif";
+
+type ChatAnimationState = {
+  count: number | null;
+  typing: boolean;
+};
+
+type ChatAnimationAction =
+  | { type: "start" }
+  | { type: "showAll"; total: number }
+  | { type: "showTyping" }
+  | { type: "advance"; total: number };
+
+function chatAnimationReducer(state: ChatAnimationState, action: ChatAnimationAction): ChatAnimationState {
+  switch (action.type) {
+    case "start":
+      return state.count === null ? { count: 0, typing: false } : state;
+    case "showAll":
+      return { count: action.total, typing: false };
+    case "showTyping":
+      return state.count === null ? state : { ...state, typing: true };
+    case "advance":
+      return state.count === null
+        ? state
+        : { count: Math.min(state.count + 1, action.total), typing: false };
+  }
+}
 
 function getClusterPosition(messages: ChatMessage[], index: number): ClusterPosition {
   const curr = messages[index];
@@ -498,9 +524,11 @@ export function ChatDemo({
   variant = "instagram",
 }: ChatDemoProps) {
   const frameRef = useRef<HTMLDivElement>(null);
-  const [started, setStarted] = useState(false);
-  const [count, setCount] = useState(0);
-  const [typing, setTyping] = useState(false);
+  const messageCountRef = useRef(messages.length);
+  messageCountRef.current = messages.length;
+  const [animation, dispatchAnimation] = useReducer(chatAnimationReducer, { count: null, typing: false });
+  const count = animation.count ?? 0;
+  const typing = animation.typing;
 
   const isInstagram = variant === "instagram";
   const receivedBubble = "rounded-[18px] rounded-bl-[4px] bg-[#efefef] text-stone-900";
@@ -512,13 +540,13 @@ export function ChatDemo({
     const el = frameRef.current;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      setCount(messages.length);
+      dispatchAnimation({ type: "showAll", total: messageCountRef.current });
       return;
     }
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setStarted(true);
+          dispatchAnimation({ type: "start" });
           obs.disconnect();
         }
       },
@@ -526,25 +554,24 @@ export function ChatDemo({
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [messages.length]);
+  }, []);
 
   useEffect(() => {
-    if (!started || count >= messages.length) return;
+    if (animation.count === null || count >= messages.length) return;
     const next = messages[count];
     const timers: ReturnType<typeof setTimeout>[] = [];
     if (next.from === "agent") {
-      timers.push(setTimeout(() => setTyping(true), 400));
+      timers.push(setTimeout(() => dispatchAnimation({ type: "showTyping" }), 400));
       timers.push(
         setTimeout(() => {
-          setTyping(false);
-          setCount((c) => c + 1);
+          dispatchAnimation({ type: "advance", total: messages.length });
         }, 1600),
       );
     } else {
-      timers.push(setTimeout(() => setCount((c) => c + 1), 1000));
+      timers.push(setTimeout(() => dispatchAnimation({ type: "advance", total: messages.length }), 1000));
     }
     return () => timers.forEach(clearTimeout);
-  }, [started, count, messages]);
+  }, [animation.count, count, messages]);
 
   const phoneShell = (
     <div

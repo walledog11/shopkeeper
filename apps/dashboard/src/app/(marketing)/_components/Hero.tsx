@@ -59,12 +59,15 @@ export function Hero() {
           />
           <div className="m-grain absolute inset-0" />
         </div>
-        {/* Raw HTML so the `muted` attribute is present at parse time — React only sets
-            the property, and the browser blocks autoplay on a not-yet-muted video. */}
-        <div
-          dangerouslySetInnerHTML={{
-            __html: `<video src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4" autoplay muted loop playsinline class="mx-auto w-full max-w-[880px] rounded-[28px] bg-[#f6f2eb] shadow-[0_40px_80px_-30px_rgba(22,20,19,0.4)]"></video>`,
-          }}
+        <video
+          aria-label="Shopkeeper demo film"
+          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          className="mx-auto w-full max-w-[880px] rounded-[28px] bg-[#f6f2eb] shadow-[0_40px_80px_-30px_rgba(22,20,19,0.4)]"
         />
       </div>
 

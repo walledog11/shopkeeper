@@ -1,10 +1,9 @@
 "use client"
 
-import { Suspense, useState, useRef, useEffect, useMemo, useCallback } from "react"
+import { Suspense, useReducer, useRef, useEffect, useMemo, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { AlertCircle, CheckCircle2, Inbox, X } from "lucide-react"
+import { Inbox } from "lucide-react"
 import useSWR from 'swr'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { useActiveThreadSelection } from '../_hooks/useActiveThreadSelection'
 import { useAgentTurns } from '../_hooks/useAgentTurns'
@@ -17,10 +16,7 @@ import { useTicketSelection } from '../_hooks/useTicketSelection'
 import { useThreadCacheCoordinator } from '../_hooks/useThreadCacheCoordinator'
 import { threadToTicket } from '../_lib/thread-to-ticket'
 import { fetcher } from '@/lib/api/fetcher'
-import ThreadList from './thread-list/ThreadList'
-import ConversationView from './conversation/ConversationView'
-import ContextPanel from './context-panel/ContextPanel'
-import ContextPanelSkeleton from './context-panel/ContextPanelSkeleton'
+import { TicketsPageLayout } from './TicketsPageLayout'
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape'
 import type { Thread, Ticket, ChannelType } from '@/types'
 
@@ -31,6 +27,103 @@ interface Props {
 }
 
 const EMPTY_SEARCH_THREADS: Thread[] = []
+const TICKET_SKELETON_KEYS = [
+  "ticket-skeleton-1",
+  "ticket-skeleton-2",
+  "ticket-skeleton-3",
+  "ticket-skeleton-4",
+  "ticket-skeleton-5",
+  "ticket-skeleton-6",
+]
+
+type TicketListTab = 'open' | 'closed' | 'filtered'
+
+interface TicketsPageState {
+  activeFilter: ChannelType | null
+  activeTab: TicketListTab
+  dismissCorrectHint: boolean
+  needsReply: boolean
+  searchQuery: string
+  showContextDrawer: boolean
+}
+
+type TicketsPageAction =
+  | { type: 'activeFilterChanged'; activeFilter: ChannelType | null }
+  | { type: 'contextDrawerChanged'; open: boolean }
+  | { type: 'correctHintDismissed' }
+  | { type: 'needsReplyChanged'; needsReply: boolean }
+  | { type: 'searchChanged'; searchQuery: string }
+  | { type: 'tabChanged'; tab: TicketListTab }
+
+const INITIAL_TICKETS_PAGE_STATE: TicketsPageState = {
+  activeFilter: null,
+  activeTab: 'open',
+  dismissCorrectHint: false,
+  needsReply: false,
+  searchQuery: '',
+  showContextDrawer: false,
+}
+
+function ticketsPageReducer(state: TicketsPageState, action: TicketsPageAction): TicketsPageState {
+  switch (action.type) {
+    case 'activeFilterChanged':
+      return { ...state, activeFilter: action.activeFilter }
+    case 'contextDrawerChanged':
+      return { ...state, showContextDrawer: action.open }
+    case 'correctHintDismissed':
+      return { ...state, dismissCorrectHint: true }
+    case 'needsReplyChanged':
+      return { ...state, needsReply: action.needsReply }
+    case 'searchChanged':
+      return { ...state, searchQuery: action.searchQuery }
+    case 'tabChanged':
+      return {
+        ...state,
+        activeTab: action.tab,
+        needsReply: action.tab === 'open' ? state.needsReply : false,
+        searchQuery: '',
+      }
+  }
+}
+
+function renderTicketsLoadingState() {
+  return (
+    <div className="flex size-full overflow-hidden bg-background">
+      <div className="w-full md:w-72 md:min-w-[260px] md:max-w-[300px] shrink-0 border-r border-border flex flex-col bg-background">
+        <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
+          <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
+          <div className="h-8 bg-white/[0.04] rounded-md animate-pulse" />
+          <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
+        </div>
+        <div className="flex-1 divide-y divide-white/[0.05]">
+          {TICKET_SKELETON_KEYS.map((key) => (
+            <div key={key} className="px-4 py-3.5 animate-pulse space-y-2">
+              <div className="flex justify-between">
+                <div className="h-3 w-24 bg-white/[0.06] rounded" />
+                <div className="h-3 w-10 bg-white/[0.04] rounded" />
+              </div>
+              <div className="h-3 w-40 bg-white/[0.05] rounded" />
+              <div className="h-3 w-32 bg-white/[0.04] rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="hidden md:flex flex-1 items-center justify-center bg-background">
+        <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+          <Inbox className="size-6 text-white/20" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function renderTicketsErrorState() {
+  return (
+    <div className="flex size-full items-center justify-center bg-background">
+      <div className="text-red-400 text-sm font-medium">Failed to connect to database.</div>
+    </div>
+  )
+}
 
 export default function TicketsPageClient(props: Props) {
   return (
@@ -40,17 +133,19 @@ export default function TicketsPageClient(props: Props) {
   )
 }
 
-function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props) {
+function TicketsPageContent(props: Props) {
+  const view = useTicketsPageView(props)
+  if (view.kind === 'loading') return renderTicketsLoadingState()
+  if (view.kind === 'error') return renderTicketsErrorState()
+  return <TicketsPageLayout {...view.layoutProps} />
+}
+
+function useTicketsPageView({ initialOpenThreads, hasShopify, agentName }: Props) {
   const searchParams = useSearchParams()
   const queryThreadId = searchParams.get('thread')
   const correctReply = searchParams.get('correct') === '1'
-  const [dismissCorrectHint, setDismissCorrectHint] = useState(false)
-
-  const [activeFilter, setActiveFilter] = useState<ChannelType | null>(null)
-  const [activeTab, setActiveTab] = useState<'open' | 'closed' | 'filtered'>('open')
-  const [needsReply, setNeedsReply] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showContextDrawer, setShowContextDrawer] = useState(false)
+  const [pageState, dispatchPageState] = useReducer(ticketsPageReducer, INITIAL_TICKETS_PAGE_STATE)
+  const { activeFilter, activeTab, dismissCorrectHint, needsReply, searchQuery, showContextDrawer } = pageState
   const isDesktopContext = useMediaQuery('(min-width: 1280px)')
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -243,242 +338,123 @@ function TicketsPageContent({ initialOpenThreads, hasShopify, agentName }: Props
     showToast,
   })
 
-  const handleTabChange = (tab: 'open' | 'closed' | 'filtered') => {
-    setActiveTab(tab)
+  const handleTabChange = (tab: TicketListTab) => {
+    dispatchPageState({ type: 'tabChanged', tab })
     setActiveTicketId(null)
-    setSearchQuery('')
     setReplyText('')
     setSendError(null)
     setSelectedIds([])
-    if (tab !== 'open') setNeedsReply(false)
   }
 
   const handleSearchChange = (q: string) => {
-    setSearchQuery(q)
+    dispatchPageState({ type: 'searchChanged', searchQuery: q })
     setActiveTicketId(null)
     setSendError(null)
     if (!q) setSelectedIds([])
   }
 
   if (isLoading && dbThreads.length === 0 && !isSearchMode) {
-    return (
-      <div className="flex size-full overflow-hidden bg-background">
-        <div className="w-full md:w-72 md:min-w-[260px] md:max-w-[300px] shrink-0 border-r border-border flex flex-col bg-background">
-          <div className="px-3 pt-3 pb-2 border-b border-border space-y-2">
-            <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
-            <div className="h-8 bg-white/[0.04] rounded-md animate-pulse" />
-            <div className="h-9 bg-white/[0.04] rounded-md animate-pulse" />
-          </div>
-          <div className="flex-1 divide-y divide-white/[0.05]">
-            {["ticket-skeleton-1", "ticket-skeleton-2", "ticket-skeleton-3", "ticket-skeleton-4", "ticket-skeleton-5", "ticket-skeleton-6"].map((key) => (
-              <div key={key} className="px-4 py-3.5 animate-pulse space-y-2">
-                <div className="flex justify-between">
-                  <div className="h-3 w-24 bg-white/[0.06] rounded" />
-                  <div className="h-3 w-10 bg-white/[0.04] rounded" />
-                </div>
-                <div className="h-3 w-40 bg-white/[0.05] rounded" />
-                <div className="h-3 w-32 bg-white/[0.04] rounded" />
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="hidden md:flex flex-1 items-center justify-center bg-background">
-          <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-            <Inbox className="size-6 text-white/20" />
-          </div>
-        </div>
-      </div>
-    )
+    return { kind: 'loading' as const }
   }
 
   if (error) {
-    return (
-      <div className="flex size-full items-center justify-center bg-background">
-        <div className="text-red-400 text-sm font-medium">Failed to connect to database.</div>
-      </div>
-    )
+    return { kind: 'error' as const }
   }
 
-  return (
-    <div className="flex size-full overflow-hidden bg-background relative">
+  const currentHasMore = effectiveActiveTab === 'open'
+    ? hasMoreOpen
+    : effectiveActiveTab === 'closed'
+      ? hasMoreClosed
+      : hasMoreFiltered
+  const currentIsLoadingMore = effectiveActiveTab === 'open'
+    ? isLoadingMoreOpen
+    : effectiveActiveTab === 'closed'
+      ? isLoadingMoreClosed
+      : isLoadingMoreFiltered
+  const currentLoadMore = effectiveActiveTab === 'open'
+    ? loadMoreOpen
+    : effectiveActiveTab === 'closed'
+      ? loadMoreClosed
+      : loadMoreFiltered
 
-      {/* ── Col 1: Thread list ─────────────────────────────────────────────── */}
-      <div className={`
-        w-full md:w-72 md:min-w-[260px] md:max-w-[300px] shrink-0 border-r border-border flex-col bg-background
-        ${activeTicketId ? 'hidden md:flex' : 'flex'}
-      `}>
-        <ThreadList
-          tickets={filteredTickets}
-          totalCount={liveTickets.length}
-          activeTab={effectiveActiveTab}
-          activeFilter={activeFilter}
-          activeTicketId={activeTicketId}
-          openCount={openCount}
-          closedCount={closedCount}
-          spamCount={spamCount}
-          searchQuery={searchQuery}
-          listState={{
-            searchMode: isSearchMode,
-            searchLoading: isSearchLoading,
-            hasMore: effectiveActiveTab === 'open' ? hasMoreOpen : effectiveActiveTab === 'closed' ? hasMoreClosed : hasMoreFiltered,
-            loadingMore: effectiveActiveTab === 'open' ? isLoadingMoreOpen : effectiveActiveTab === 'closed' ? isLoadingMoreClosed : isLoadingMoreFiltered,
-          }}
-          selectedIds={selectedIds}
-          needsReply={needsReply}
-          onNeedsReplyChange={setNeedsReply}
-          onSearchChange={handleSearchChange}
-          onTabChange={handleTabChange}
-          onFilterChange={setActiveFilter}
-          onSelectTicket={id => { setActiveTicketId(id); setSendError(null) }}
-          onToggleSelect={handleToggleSelect}
-          onBulkClose={() => handleBulkClose(selectedIds)}
-          onBulkArchive={() => handleBulkArchive(selectedIds)}
-          onBulkTag={(tag) => handleBulkTag(selectedIds, tag)}
-          onClearSelection={handleClearSelection}
-          onLoadMore={effectiveActiveTab === 'open' ? loadMoreOpen : effectiveActiveTab === 'closed' ? loadMoreClosed : loadMoreFiltered}
-          onMarkAsSpam={handleMarkAsSpam}
-          onRecover={handleRecover}
-        />
-      </div>
-
-      {/* ── Col 2+3: Conversation + Context panel ──────────────────────────── */}
-      <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
-        {conversationTicket ? (
-          <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
-            {correctReply && !dismissCorrectHint && (
-              <div className="flex items-center justify-between gap-3 border-b border-amber-800/40 bg-amber-900/25 px-4 py-2 text-xs text-amber-100 shrink-0">
-                <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
-                <button
-                  type="button"
-                  onClick={() => setDismissCorrectHint(true)}
-                  className="inline-flex items-center gap-1 text-amber-200/80 hover:text-amber-50 transition-colors shrink-0"
-                  aria-label="Dismiss"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            )}
-            <div className="flex flex-1 min-w-0 overflow-hidden">
-            <ConversationView
-              key={conversationTicket.id}
-              ticket={conversationTicket}
-              agentName={agentName}
-              shopifyCustomerId={activeThread?.shopifyCustomerId}
-              customerPlatformId={activeThread?.customer?.platformId}
-              agentTurns={activeAgentTurns}
-              status={{
-                threadLoading: isConversationLoading,
-                sending: isSending,
-                agentRunning: isAgentRunning,
-                summaryRefreshing: activeThread ? refreshingSummaryId === activeThread.id : false,
-              }}
-              onAgentTurnAdd={handleAgentTurnAdd}
-              onAgentRunningChange={handleAgentRunningChange}
-              onAgentComplete={handleAgentComplete}
-              activeTab={isSearchMode || effectiveActiveTab === 'filtered'
-                ? ((activeThread?.status ?? activeThreadPreview?.status) === 'closed' ? 'closed' : 'open')
-                : effectiveActiveTab}
-              initialPlan={cachedPlan}
-              aiSummary={activeThread?.aiSummary ?? activeThreadPreview?.aiSummary ?? null}
-              onRefreshSummary={() => {
-                if (activeThread) {
-                  handleRefreshSummary(activeThread.id)
-                }
-              }}
-              replyText={replyText}
-              sendError={sendError}
-              messagesEndRef={messagesEndRef}
-              failedMessages={failedMessages.filter(m => m.threadId === activeTicketId)}
-              onRetry={handleRetry}
-              onRetrySend={handleRetrySend}
-              onOpenContext={() => setShowContextDrawer(true)}
-              onBack={() => { setActiveTicketId(null); setSendError(null); setShowContextDrawer(false) }}
-              onResolve={handleResolve}
-              onReopen={handleReopen}
-              onReplyChange={text => { setReplyText(text); if (sendError) setSendError(null) }}
-              onSend={handleSendMessage}
-            />
-            {/* Desktop context panel */}
-            {isDesktopContext && (
-              <div className="hidden xl:flex">
-                {activeThread && !isConversationLoading ? (
-                  <ContextPanel
-                    thread={activeThread}
-                    hasShopify={hasShopify}
-                    onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                  />
-                ) : (
-                  <ContextPanelSkeleton hasShopify={hasShopify} />
-                )}
-              </div>
-            )}
-
-            {/* Mobile/tablet context sheet */}
-            {activeThread && !isConversationLoading && (
-              <Sheet open={showContextDrawer} onOpenChange={setShowContextDrawer}>
-                <SheetContent
-                  side="bottom"
-                  className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
-                >
-                  <SheetHeader className="px-5 py-3 border-b border-border shrink-0">
-                    <SheetTitle className="text-sm font-semibold text-white/70 text-left">Customer Details</SheetTitle>
-                  </SheetHeader>
-                  <div className="flex-1 overflow-y-auto">
-                    <ContextPanel
-                      thread={activeThread}
-                      hasShopify={hasShopify}
-                      onLinkShopifyCustomer={handleLinkShopifyCustomer}
-                    />
-                  </div>
-                </SheetContent>
-              </Sheet>
-            )}
-            </div>
-          </div>
-        ) : activeTicketId ? (
-          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
-            {activeThreadError ? (
-              <>
-                <AlertCircle className="size-5 text-red-400" />
-                <div>
-                  <p className="text-sm font-semibold text-white/60">Unable to load ticket</p>
-                  <p className="text-xs text-white/30 mt-1">The ticket may have been archived or is no longer available.</p>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-4">
-            <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-              {effectiveActiveTab === 'open' && openThreads.length === 0
-                ? <CheckCircle2 className="size-6 text-green-400" />
-                : <Inbox className="size-6 text-white/20" />
-              }
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/60">
-                {effectiveActiveTab === 'open' && openThreads.length === 0 ? 'All caught up' : 'No ticket open'}
-              </p>
-              <p className="text-xs text-white/30 mt-1 max-w-[200px]">
-                {effectiveActiveTab === 'open' && openThreads.length === 0
-                  ? 'No open tickets right now. Check back soon.'
-                  : 'Select a ticket from the list to start replying.'}
-              </p>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1c1c1c] border border-white/[0.10] text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
-          {toast.tone === 'error'
-            ? <AlertCircle className="size-4 text-red-400 shrink-0" />
-            : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
-          }
-          {toast.message}
-        </div>
-      )}
-    </div>
-  )
+  return {
+    kind: 'ready' as const,
+    layoutProps: {
+      activeAgentTurns,
+      activeFilter,
+      activeTab,
+      activeThread,
+      activeThreadError,
+      activeThreadPreview,
+      activeTicketId,
+      agentName,
+      cachedPlan,
+      closedCount,
+      conversationTicket,
+      effectiveActiveTab,
+      failedMessages: failedMessages.filter(m => m.threadId === activeTicketId),
+      flags: {
+        correctReplyVisible: correctReply && !dismissCorrectHint,
+        hasMore: currentHasMore,
+        hasShopify,
+        isAgentRunning,
+        isConversationLoading,
+        isDesktopContext: Boolean(isDesktopContext),
+        isLoadingMore: currentIsLoadingMore,
+        isSearchLoading,
+        isSearchMode,
+        isSending,
+        needsReply,
+        showContextDrawer,
+      },
+      filteredTickets,
+      liveTicketCount: liveTickets.length,
+      messagesEndRef,
+      openCount,
+      openThreadCount: openThreads.length,
+      refreshingSummaryId,
+      replyText,
+      searchQuery,
+      selectedIds,
+      sendError,
+      spamCount,
+      toast,
+      onAgentComplete: handleAgentComplete,
+      onAgentRunningChange: handleAgentRunningChange,
+      onAgentTurnAdd: handleAgentTurnAdd,
+      onBack: () => {
+        setActiveTicketId(null)
+        setSendError(null)
+        dispatchPageState({ type: 'contextDrawerChanged', open: false })
+      },
+      onBulkArchive: () => handleBulkArchive(selectedIds),
+      onBulkClose: () => handleBulkClose(selectedIds),
+      onBulkTag: (tag: string) => handleBulkTag(selectedIds, tag),
+      onClearSelection: handleClearSelection,
+      onCorrectReplyDismiss: () => dispatchPageState({ type: 'correctHintDismissed' }),
+      onFilterChange: (next: ChannelType | null) => dispatchPageState({ type: 'activeFilterChanged', activeFilter: next }),
+      onLinkShopifyCustomer: handleLinkShopifyCustomer,
+      onLoadMore: currentLoadMore,
+      onMarkAsSpam: handleMarkAsSpam,
+      onNeedsReplyChange: (next: boolean) => dispatchPageState({ type: 'needsReplyChanged', needsReply: next }),
+      onOpenContext: () => dispatchPageState({ type: 'contextDrawerChanged', open: true }),
+      onRecover: handleRecover,
+      onRefreshSummary: () => {
+        if (activeThread) {
+          handleRefreshSummary(activeThread.id)
+        }
+      },
+      onReopen: handleReopen,
+      onReplyChange: (text: string) => { setReplyText(text); if (sendError) setSendError(null) },
+      onResolve: handleResolve,
+      onRetry: handleRetry,
+      onRetrySend: handleRetrySend,
+      onSearchChange: handleSearchChange,
+      onSelectTicket: (id: string) => { setActiveTicketId(id); setSendError(null) },
+      onSend: handleSendMessage,
+      onShowContextDrawerChange: (open: boolean) => dispatchPageState({ type: 'contextDrawerChanged', open }),
+      onTabChange: handleTabChange,
+      onToggleSelect: handleToggleSelect,
+    },
+  }
 }

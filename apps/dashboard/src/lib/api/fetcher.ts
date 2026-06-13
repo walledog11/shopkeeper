@@ -24,7 +24,10 @@ export async function readJsonResponse<T>(response: Response): Promise<T | null>
 function formatErrorValue(value: unknown): string | null {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
-    return value.map(formatErrorValue).filter(Boolean).join('; ') || null;
+    return value.flatMap((item) => {
+      const text = formatErrorValue(item);
+      return text ? [text] : [];
+    }).join('; ') || null;
   }
   if (value && typeof value === 'object') {
     const messages = Object.entries(value as Record<string, unknown>).flatMap(([key, nested]) => {

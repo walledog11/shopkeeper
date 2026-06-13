@@ -207,7 +207,8 @@ function groupByDay(entries: ActionLogEntry[]): DayGroup[] {
 }
 
 function FeedbackRow({ entry, hasReply }: { entry: ActionLogEntry; hasReply: boolean }) {
-  const [feedback, setFeedback] = useState(entry.feedback)
+  const [feedbackOverride, setFeedbackOverride] = useState<ActionLogEntry["feedback"] | undefined>(undefined)
+  const feedback = feedbackOverride === undefined ? entry.feedback : feedbackOverride
   const correctHref = correctReplyHref(entry)
   const showLooksGood = entry.mode === "auto_executed"
   const showSoundsOff = hasReply && correctHref !== null
@@ -215,7 +216,7 @@ function FeedbackRow({ entry, hasReply }: { entry: ActionLogEntry; hasReply: boo
   const toggleGood = useCallback(async () => {
     const previous = feedback
     const next = previous === "good" ? null : "good"
-    setFeedback(next)
+    setFeedbackOverride(next)
     try {
       const res = await fetch("/api/agent/actions/feedback", {
         method: "POST",
@@ -224,7 +225,7 @@ function FeedbackRow({ entry, hasReply }: { entry: ActionLogEntry; hasReply: boo
       })
       if (!res.ok) throw new Error("feedback failed")
     } catch {
-      setFeedback(previous)
+      setFeedbackOverride(previous)
     }
   }, [entry.id, feedback])
 
@@ -390,9 +391,10 @@ function SkeletonCard() {
 const LAST_VISIT_KEY = "shopkeeper:review:lastVisit"
 
 function useLastVisit(): string | null {
-  const [lastVisit, setLastVisit] = useState<string | null>(null)
+  const [lastVisit] = useState<string | null>(() => (
+    typeof window === "undefined" ? null : window.localStorage.getItem(LAST_VISIT_KEY)
+  ))
   useEffect(() => {
-    setLastVisit(window.localStorage.getItem(LAST_VISIT_KEY))
     window.localStorage.setItem(LAST_VISIT_KEY, new Date().toISOString())
   }, [])
   return lastVisit

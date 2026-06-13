@@ -1,10 +1,8 @@
 "use client"
 
 import Link from "next/link"
-import { MessageCircle, Sparkles } from "lucide-react"
+import { MessageCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
-import { buildAgentPanelHref } from "@/lib/agent/panel"
-import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
 import { BriefingNarrativeInline } from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import {
   buildBriefingNarrativeSegments,
@@ -15,8 +13,8 @@ import {
 interface Props {
   greeting: string
   userName: string
-  agentName: string
   hasTelegramBound: boolean
+  telegramBotUsername: string | null
   needsYouCount: number
   overnightClearedCount: number
   briefingChannels: string[]
@@ -48,8 +46,8 @@ function OpsNoteLink({ note }: { note: BriefingOpsNote }) {
 export default function ConciergeBriefing({
   greeting,
   userName,
-  agentName,
   hasTelegramBound,
+  telegramBotUsername,
   needsYouCount,
   overnightClearedCount,
   briefingChannels,
@@ -71,16 +69,11 @@ export default function ConciergeBriefing({
   return (
     <Card className="bg-card border-border rounded-2xl">
       <div className="flex items-start gap-3.5 px-6 pt-5 pb-5">
-        <AgentAvatar agentName={agentName} size="lg" />
-
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-foreground/45 leading-none mt-1">
-            <span className="font-semibold text-foreground/70">{agentName}</span> · briefing
-          </p>
-          <h1 className="mt-2.5 font-display-serif text-[27px] leading-tight text-foreground">
+          <h1 className="font-sans text-[27px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
             {greeting}, <span className="italic text-[#9c9285]">{userName}</span>.
           </h1>
-          <p className="mt-1.5 text-sm text-foreground/60 leading-relaxed max-w-2xl">
+          <p className="mt-1.5 text-sm text-foreground/60 leading-relaxed tracking-[-0.01em] max-w-2xl">
             <BriefingNarrativeInline segments={narrativeSegments} />
             {opsNotes.map(note => (
               <span key={note.id}> <OpsNoteLink note={note} />.</span>
@@ -102,28 +95,22 @@ export default function ConciergeBriefing({
             >
               Open inbox
             </Link>
-            {hasTelegramBound ? (
+            {hasTelegramBound && telegramBotUsername ? (
+              <a
+                href={`https://t.me/${telegramBotUsername}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-700 transition-colors"
+              >
+                <MessageCircle className="size-3" /> Message on Telegram
+              </a>
+            ) : (
               <Link
                 href="/dashboard/integrations#telegram"
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-700 transition-colors"
               >
-                <MessageCircle className="size-3" /> Message on Telegram
+                <MessageCircle className="size-3" /> Connect Telegram
               </Link>
-            ) : (
-              <>
-                <Link
-                  href="/dashboard/integrations#telegram"
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-700 transition-colors"
-                >
-                  <MessageCircle className="size-3" /> Connect Telegram
-                </Link>
-                <Link
-                  href={buildAgentPanelHref()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-foreground/55 hover:text-foreground/85 transition-colors"
-                >
-                  <Sparkles className="size-3" /> Open desk chat
-                </Link>
-              </>
             )}
           </div>
         </div>

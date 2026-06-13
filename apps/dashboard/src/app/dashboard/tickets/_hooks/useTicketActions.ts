@@ -231,8 +231,10 @@ export function useTicketActions({
   const handleMarkAsSpam = useCallback(async (threadId: string) => {
     try {
       await requestOk(`/api/threads/${threadId}`, jsonPatch({ filterStatus: 'filtered', filterFeedback: 'confirmed_spam' }), 'Failed to mark as spam')
-      await moveThreadFilterStatus(threadId, 'filtered', 'confirmed_spam')
-      await revalidateThreadCaches()
+      await Promise.all([
+        moveThreadFilterStatus(threadId, 'filtered', 'confirmed_spam'),
+        revalidateThreadCaches(),
+      ])
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Marked as spam')
     } catch (err) {
@@ -244,8 +246,10 @@ export function useTicketActions({
   const handleRecover = useCallback(async (threadId: string) => {
     try {
       await requestOk(`/api/threads/${threadId}`, jsonPatch({ filterStatus: 'genuine', filterFeedback: 'confirmed_genuine' }), 'Failed to recover thread')
-      await moveThreadFilterStatus(threadId, 'genuine', 'confirmed_genuine')
-      await revalidateThreadCaches()
+      await Promise.all([
+        moveThreadFilterStatus(threadId, 'genuine', 'confirmed_genuine'),
+        revalidateThreadCaches(),
+      ])
       if (activeTicketId === threadId) setActiveTicketId(null)
       showToast('Recovered to inbox')
     } catch (err) {

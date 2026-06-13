@@ -1,6 +1,7 @@
 import { Check, Loader2, Plus, Search } from "lucide-react"
 import { ArticleCard } from "./ArticleCard"
-import { ArticleDetail } from "./ArticleDetail"
+import { ArticleEditDetail } from "./ArticleEditDetail"
+import { ArticleReadDetail } from "./ArticleReadDetail"
 import { CollectionList, CollectionsDropdown, NewKbForm } from "./CollectionsPanel"
 import { SORT_OPTIONS, inputCls, type SortKey } from "./kb-page-utils"
 import type { KbPageState } from "./useKbPageState"
@@ -228,21 +229,25 @@ export function KbPageView({ state }: KbPageViewProps) {
 
         <main className={`${mobileView === "detail" ? "flex" : "hidden"} md:flex flex-col flex-1 min-w-0 overflow-y-auto custom-scrollbar bg-background`}>
           {selectedArticle ? (
-            <ArticleDetail
-              article={selectedArticle}
-              isEditing={isEditing}
-              editDraft={editDraft}
-              isEditSaving={isEditSaving}
-              editError={editError}
-              isDeleting={isArticleDeleting}
-              deleteError={articleDeleteError}
-              onEditDraftChange={setEditDraft}
-              onCancelEdit={() => { setIsEditing(false); setEditError(null) }}
-              onSaveEdit={handleUpdateArticle}
-              onStartEdit={startEdit}
-              onDelete={handleDeleteArticle}
-              onBack={() => setMobileView("list")}
-            />
+            isEditing ? (
+              <ArticleEditDetail
+                editDraft={editDraft}
+                editError={editError}
+                isSaving={isEditSaving}
+                onEditDraftChange={setEditDraft}
+                onCancelEdit={() => { setIsEditing(false); setEditError(null) }}
+                onSaveEdit={handleUpdateArticle}
+              />
+            ) : (
+              <ArticleReadDetail
+                article={selectedArticle}
+                deleteError={articleDeleteError}
+                isDeleting={isArticleDeleting}
+                onStartEdit={startEdit}
+                onDelete={handleDeleteArticle}
+                onBack={() => setMobileView("list")}
+              />
+            )
           ) : (
             <div className="h-full flex items-center justify-center">
               <p className="text-xs text-white/25">

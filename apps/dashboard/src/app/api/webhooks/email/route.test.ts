@@ -14,6 +14,8 @@ import { POST } from './route';
 
 beforeEach(() => {
   mockFetch.mockReset();
+  vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark');
+  vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'secret');
 });
 
 describe('POST /api/webhooks/email', () => {

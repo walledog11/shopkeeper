@@ -3,10 +3,16 @@ import { auth, clerkClient } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import TeamPageClient from './_components/TeamPageClient';
 
-export default async function TeamPage() {
+interface TeamPageProps {
+  searchParams?: Promise<{ invite?: string | string[] }>;
+}
+
+export default async function TeamPage({ searchParams }: TeamPageProps) {
   const { orgId, userId, orgRole } = await auth();
   if (!orgId || !userId) redirect('/login');
   const isAdmin = orgRole === 'org:admin';
+  const params = await searchParams;
+  const initialShowInviteModal = isAdmin && params?.invite === '1';
 
   const client = await clerkClient();
   const [memberships, invitations] = await Promise.all([
@@ -39,6 +45,7 @@ export default async function TeamPage() {
         initialInvitations={pendingInvitations}
         currentUserId={userId}
         isAdmin={isAdmin}
+        initialShowInviteModal={initialShowInviteModal}
       />
     </Suspense>
   );

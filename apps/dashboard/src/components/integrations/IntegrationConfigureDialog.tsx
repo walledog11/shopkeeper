@@ -10,15 +10,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { CardLogo } from "./IntegrationCard"
+import { CardLogo } from "./IntegrationCardParts"
 import { StatusPill } from "./StatusPill"
 import type { PillState } from "./integration-card-types"
-
-export const INTEGRATION_CONFIGURE_DIALOG_CLASS = cn(
-  "bg-popover border-border rounded-2xl p-6 gap-5 sm:max-w-[420px]",
-  "max-h-[85vh] overflow-y-auto",
-  "[&>button]:text-muted-foreground [&>button]:hover:text-foreground",
-)
+import { INTEGRATION_CONFIGURE_DIALOG_CLASS } from "./integration-card-styles"
 
 export function IntegrationConfigureDialog({
   open,

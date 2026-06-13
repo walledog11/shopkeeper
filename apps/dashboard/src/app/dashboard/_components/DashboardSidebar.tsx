@@ -7,6 +7,8 @@ import { OpenThreadCountProvider, useOpenThreadCountOverride } from "@/hooks/Ope
 import { useOpenThreadCountQuery } from "@/hooks/useThreads";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { cn } from "@/lib/ui/cn";
+import AgentAvatar from "./agent-panel/AgentAvatar";
+import { useAgentPanel } from "./agent-panel/AgentPanelContext";
 import AutonomyPill from "./AutonomyPill";
 import { DesktopTopBar } from "./sidebar/DesktopTopBar";
 import { Logo } from "./sidebar/Logo";
@@ -33,6 +35,7 @@ function DashboardSidebarContent({
 }) {
   const openCount = useDashboardOpenCount();
   const navAuth = useNavAuth(initialAutonomyTier);
+  const { open: openAgentPanel } = useAgentPanel();
   const [isSwitching, setIsSwitching] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -74,6 +77,15 @@ function DashboardSidebarContent({
             <AutonomyPill tier={navAuth.autonomyTier} compact />
             <button
               type="button"
+              onClick={() => openAgentPanel({ source: "command" })}
+              aria-label={`Chat with ${agentName}`}
+              title={`Chat with ${agentName}`}
+              className="p-1 rounded-full border border-border bg-card hover:bg-muted/60 transition-colors"
+            >
+              <AgentAvatar agentName={agentName} size="sm" />
+            </button>
+            <button
+              type="button"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
               className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
@@ -96,7 +108,7 @@ function DashboardSidebarContent({
       <MobileNavSheet
         open={mobileNavOpen}
         onClose={() => setMobileNavOpen(false)}
-        openCount={openCount}
+        agentName={agentName}
         onSwitching={setIsSwitching}
         navAuth={navAuth}
       />

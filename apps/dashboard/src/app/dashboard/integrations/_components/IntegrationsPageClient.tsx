@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useCallback, useState, useEffect, useRef } from "react"
+import { Suspense, useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react"
@@ -13,7 +13,8 @@ import {
   openOAuthPopup,
   watchOAuthPopup,
 } from "@/lib/integrations/oauth-flow"
-import IntegrationCard, { CARD_SHELL } from "@/components/integrations/IntegrationCard"
+import IntegrationCard from "@/components/integrations/IntegrationCard"
+import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -56,26 +57,29 @@ function IntegrationsPageContent() {
     else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
   }, [searchParams, showToast])
 
+  const handleOAuthMessage = useEffectEvent((event: MessageEvent) => {
+    if (event.origin !== window.location.origin || !isOAuthDoneMessage(event.data)) return
+    void mutate()
+    if (event.data.connected === 'instagram') {
+      showToast('success', 'Instagram connected.')
+    } else if (event.data.connected === 'shopify') {
+      showToast('success', 'Shopify store connected.')
+    } else if (event.data.connected === 'gmail') {
+      showToast('success', 'Gmail connected.')
+    } else if (event.data.connected === 'outlook') {
+      showToast('success', 'Outlook connected.')
+    } else if (event.data.error) {
+      showToast('error', OAUTH_ERROR_MESSAGES[event.data.error] ?? 'An unexpected error occurred.')
+    }
+  })
+
   useEffect(() => {
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin || !isOAuthDoneMessage(event.data)) return
-      void mutate()
-      if (event.data.connected === 'instagram') {
-        showToast('success', 'Instagram connected.')
-      } else if (event.data.connected === 'shopify') {
-        showToast('success', 'Shopify store connected.')
-      } else if (event.data.connected === 'gmail') {
-        showToast('success', 'Gmail connected.')
-      } else if (event.data.connected === 'outlook') {
-        showToast('success', 'Outlook connected.')
-      } else if (event.data.error) {
-        showToast('error', OAUTH_ERROR_MESSAGES[event.data.error] ?? 'An unexpected error occurred.')
-      }
+      handleOAuthMessage(event)
     }
-
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
-  }, [mutate, showToast])
+  }, [])
 
   const launchOAuth = useCallback((url: string, onClosed?: () => void) => {
     const popup = openOAuthPopup(url)

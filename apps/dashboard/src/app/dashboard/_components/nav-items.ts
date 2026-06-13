@@ -7,6 +7,15 @@ export interface NavItem {
   icon: LucideIcon;
   badge?: boolean;
   description?: string;
+  /** Friendlier label for mobile overflow nav */
+  mobileName?: string;
+}
+
+export interface NavSection {
+  heading: string;
+  /** When true, the section heading is replaced with the agent name at render time */
+  useAgentName?: boolean;
+  items: NavItem[];
 }
 
 export const homeNavItem: NavItem = {
@@ -25,12 +34,14 @@ export const inboxNavItem: NavItem = {
 export const topBarAgentItems: NavItem[] = [
   {
     name: "Configure",
+    mobileName: "Agent settings",
     href: "/dashboard/agent/configure",
     icon: SlidersHorizontal,
     description: "Autonomy, voice, and guardrails",
   },
   {
     name: "Memory",
+    mobileName: "Knowledge",
     href: "/dashboard/kb",
     icon: BrainCircuit,
     description: "Knowledge base and brand context",
@@ -43,6 +54,13 @@ export const topBarAgentItems: NavItem[] = [
   },
 ];
 
+export const customersNavItem: NavItem = {
+  name: "Customers",
+  href: "/dashboard/customers",
+  icon: Users,
+  description: "Profiles, history, and segments",
+};
+
 export const topBarShopItems: NavItem[] = [
   {
     name: "Orders",
@@ -50,12 +68,7 @@ export const topBarShopItems: NavItem[] = [
     icon: Box,
     description: "Track and fulfill customer orders",
   },
-  {
-    name: "Customers",
-    href: "/dashboard/customers",
-    icon: Users,
-    description: "Profiles, history, and segments",
-  },
+  customersNavItem,
 ];
 
 export const topBarSettingsItems: NavItem[] = [
@@ -85,10 +98,23 @@ export const topBarDropdowns = [
   { label: "Settings", items: topBarSettingsItems },
 ] as const;
 
-/** Mobile sheet: daily routes, then workspace upkeep. */
-export const navSections: NavItem[][] = [
-  [homeNavItem, inboxNavItem, ...topBarShopItems],
-  [...topBarAgentItems, ...topBarSettingsItems.slice().reverse()],
+/** Mobile overflow nav — excludes routes in the bottom tab bar (Inbox, Orders, Settings). */
+export const mobileNavSections: NavSection[] = [
+  { heading: "Today", items: [homeNavItem] },
+  { heading: "Shop", items: [customersNavItem] },
+  {
+    heading: "Agent",
+    useAgentName: true,
+    items: [
+      topBarAgentItems[2],
+      topBarAgentItems[1],
+      topBarAgentItems[0],
+    ],
+  },
+  {
+    heading: "Workspace",
+    items: [topBarSettingsItems[2], topBarSettingsItems[1]],
+  },
 ];
 
 export const commandPaletteSections = [

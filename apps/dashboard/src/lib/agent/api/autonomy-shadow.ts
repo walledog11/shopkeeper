@@ -10,9 +10,12 @@ import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 // the agent emitted tools in is preserved; non-mutation tools (replies, reads)
 // are excluded so a reworded reply does not read as a disagreement.
 export function hashMutationCalls(toolCalls: RawToolCall[]): string {
-  const mutations = toolCalls
-    .filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
-    .map((tc) => ({ name: tc.name, input: tc.input }));
+  const mutations = toolCalls.reduce<Array<{ name: string; input: RawToolCall["input"] }>>((items, tc) => {
+    if (TOOL_CATEGORIES[tc.name] === "action") {
+      items.push({ name: tc.name, input: tc.input });
+    }
+    return items;
+  }, []);
   return createHash("sha256").update(JSON.stringify(mutations)).digest("hex");
 }
 
@@ -21,9 +24,11 @@ function mutationCount(toolCalls: RawToolCall[]): number {
 }
 
 function mutationToolNames(toolCalls: RawToolCall[]): string[] {
-  return Array.from(
-    new Set(toolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action").map((tc) => tc.name)),
-  );
+  const names = new Set<string>();
+  for (const tc of toolCalls) {
+    if (TOOL_CATEGORIES[tc.name] === "action") names.add(tc.name);
+  }
+  return Array.from(names);
 }
 
 // Records what the agent would have auto-executed for this plan while the org is

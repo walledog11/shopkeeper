@@ -1,79 +1,25 @@
-import { Check, ChevronLeft, Pencil, Trash2, Loader2 } from "lucide-react"
+import { ChevronLeft, Loader2, Pencil, Trash2 } from "lucide-react"
 import { formatDate } from "@/lib/format/date"
-import { inputCls, type ArticleWithBase } from "./kb-page-utils"
+import type { ArticleWithBase } from "./kb-page-utils"
 
-export function ArticleDetail({
-  article,
-  isEditing,
-  editDraft,
-  isEditSaving,
-  editError,
-  isDeleting,
-  deleteError,
-  onEditDraftChange,
-  onCancelEdit,
-  onSaveEdit,
-  onStartEdit,
-  onDelete,
-  onBack,
-}: {
+interface ArticleReadDetailProps {
   article: ArticleWithBase
-  isEditing: boolean
-  editDraft: { title: string; body: string; tags: string }
-  isEditSaving: boolean
-  editError: string | null
-  isDeleting: boolean
   deleteError: string | null
-  onEditDraftChange: React.Dispatch<React.SetStateAction<{ title: string; body: string; tags: string }>>
-  onCancelEdit: () => void
-  onSaveEdit: () => void
-  onStartEdit: () => void
-  onDelete: () => void
+  isDeleting: boolean
   onBack: () => void
-}) {
-  const tags = article.tags ?? []
+  onDelete: () => void
+  onStartEdit: () => void
+}
 
-  if (isEditing) {
-    return (
-      <div className="px-4 md:px-8 py-6 space-y-3 max-w-3xl">
-        <input
-          aria-label="Note title"
-          value={editDraft.title}
-          onChange={e => onEditDraftChange(d => ({ ...d, title: e.target.value }))}
-          className={`${inputCls} text-lg font-semibold`}
-        />
-        <textarea
-          aria-label="Note body"
-          value={editDraft.body}
-          onChange={e => onEditDraftChange(d => ({ ...d, body: e.target.value }))}
-          rows={16}
-          className={`${inputCls} resize-y`}
-        />
-        <input aria-label="Tags (comma-separated)"
-          placeholder="Tags (comma-separated)"
-          value={editDraft.tags}
-          onChange={e => onEditDraftChange(d => ({ ...d, tags: e.target.value }))}
-          className={inputCls}
-        />
-        {editError && (
-          <p className="text-xs text-red-400" aria-live="polite">{editError}</p>
-        )}
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={onCancelEdit} className="text-xs text-white/40 hover:text-white/70 transition-colors px-3 py-1.5">
-            Cancel
-          </button>
-          <button type="button"
-            onClick={onSaveEdit}
-            disabled={isEditSaving || !editDraft.title.trim() || !editDraft.body.trim()}
-            className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.12] hover:bg-white/[0.18] disabled:opacity-40 px-3 py-1.5 rounded-md transition-colors"
-          >
-            {isEditSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-            Save
-          </button>
-        </div>
-      </div>
-    )
-  }
+export function ArticleReadDetail({
+  article,
+  deleteError,
+  isDeleting,
+  onBack,
+  onDelete,
+  onStartEdit,
+}: ArticleReadDetailProps) {
+  const tags = article.tags ?? []
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-3xl">

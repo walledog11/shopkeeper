@@ -13,15 +13,16 @@ function errorMessage(error: unknown, fallback: string) {
 
 export function useSummaryRefresh({ patchThreadCaches, showToast }: UseSummaryRefreshProps) {
   const [refreshingSummaryId, setRefreshingSummaryId] = useState<string | null>(null)
-  const refreshingSummaryIdsRef = useRef<Set<string>>(new Set())
+  const refreshingSummaryIdsRef = useRef<Set<string> | null>(null)
 
   const patchThreadSummary = useCallback(async (threadId: string, summary: string | null) => {
     await patchThreadCaches(threadId, thread => ({ ...thread, aiSummary: summary }))
   }, [patchThreadCaches])
 
   const handleRefreshSummary = useCallback(async (threadId: string) => {
-    if (refreshingSummaryIdsRef.current.has(threadId)) return
-    refreshingSummaryIdsRef.current.add(threadId)
+    const refreshingSummaryIds = refreshingSummaryIdsRef.current ?? (refreshingSummaryIdsRef.current = new Set<string>())
+    if (refreshingSummaryIds.has(threadId)) return
+    refreshingSummaryIds.add(threadId)
     setRefreshingSummaryId(threadId)
 
     try {
@@ -42,7 +43,7 @@ export function useSummaryRefresh({ patchThreadCaches, showToast }: UseSummaryRe
     } catch (err) {
       showToast(errorMessage(err, 'Failed to refresh summary.'), 'error')
     } finally {
-      refreshingSummaryIdsRef.current.delete(threadId)
+      refreshingSummaryIds.delete(threadId)
       setRefreshingSummaryId(current => current === threadId ? null : current)
     }
   }, [patchThreadSummary, showToast])

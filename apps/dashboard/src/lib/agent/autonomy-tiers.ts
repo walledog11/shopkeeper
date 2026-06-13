@@ -50,7 +50,10 @@ export const AUTONOMY_TIERS: AutonomyTierOption[] = [
 ];
 
 const MERCHANT_TIER_IDS = new Set<AutonomyTier>(
-  AUTONOMY_TIERS.filter(option => option.merchantFacing).map(option => option.id),
+  AUTONOMY_TIERS.reduce<AutonomyTier[]>((ids, option) => {
+    if (option.merchantFacing) ids.push(option.id);
+    return ids;
+  }, []),
 );
 
 export function visibleAutonomyTiers(currentTier?: AutonomyTier): AutonomyTierOption[] {

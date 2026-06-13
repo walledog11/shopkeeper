@@ -1,13 +1,7 @@
-import { AlertCircle, ArrowUp, Check, Loader2, MoreHorizontal, Search, X } from "lucide-react"
+import { AlertCircle, ArrowUp, Check, Loader2, Search, X } from "lucide-react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { formatClockTime } from "@/lib/format/date"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
@@ -158,6 +152,7 @@ export function AgentChatView({
   } = state
 
   const [showStartFreshConfirm, setShowStartFreshConfirm] = useState(false)
+  const isEmptyBriefing = messages.length === 0 && (compact || embedded)
 
   const handleChipSelect = (chip: PanelSuggestionChip) => {
     if (chip.autoSend) {
@@ -169,47 +164,26 @@ export function AgentChatView({
   }
 
   return (
-    <div className="flex flex-col h-full">
-      {compact && (
-        <div className="shrink-0 h-11 flex items-center justify-between px-4 bg-card border-b border-border">
-          <div className="flex items-center gap-2 min-w-0">
-            <AgentAvatar agentName={agentName} size="sm" />
-            <span className="text-sm text-foreground truncate">
-              <span className="font-semibold">{agentName}</span>
-              <span className="text-muted-foreground"> · desk</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Desk chat options"
-                  className="size-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <MoreHorizontal className="size-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={6}>
-                <DropdownMenuItem onClick={() => setShowStartFreshConfirm(true)}>
-                  Start fresh
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {onClose && (
-              <button type="button"
-                onClick={onClose}
-                aria-label="Close desk chat"
-                className="size-7 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="size-4" />
-              </button>
-            )}
-          </div>
+    <div className="relative flex h-full w-full min-w-0 flex-col overflow-hidden">
+      {compact && onClose && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end p-3">
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close desk chat"
+            className="pointer-events-auto size-8 rounded-full border border-border bg-background/95 backdrop-blur-sm flex items-center justify-center text-muted-foreground shadow-sm transition-colors hover:bg-background hover:text-foreground"
+          >
+            <X className="size-4" />
+          </button>
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto px-5 md:px-6 py-6 space-y-6">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div
+          className={`px-5 md:px-6 ${
+            compact ? "pb-6 pt-14" : "py-6"
+          } ${isEmptyBriefing ? "flex min-h-full flex-col justify-center" : "space-y-6"}`}
+        >
         {messages.length === 0 && !compact && !embedded && (
           <div className="max-w-xl mx-auto">
             <div className="bg-card border border-border rounded-xl p-5">
@@ -226,7 +200,6 @@ export function AgentChatView({
 
         {messages.length === 0 && (compact || embedded) && (
           <AgentPanelBriefing
-            agentName={agentName}
             greeting={greeting}
             firstName={firstName}
             openContext={openContext}
@@ -276,6 +249,7 @@ export function AgentChatView({
         })}
 
         <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {compact && (
@@ -286,8 +260,8 @@ export function AgentChatView({
         />
       )}
 
-      <div className="shrink-0 px-5 md:px-6 pt-3 pb-5 md:pb-4 space-y-2.5">
-        <div className="bg-card border border-border rounded-xl px-4 pt-3 pb-3 focus-within:border-green-400/50 focus-within:ring-1 focus-within:ring-violet-400/20 transition-all">
+      <div className="shrink-0 min-w-0 px-5 md:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:pb-4">
+        <div className="min-w-0 w-full rounded-xl border border-border bg-card px-4 pt-3 pb-3 transition-all focus-within:border-green-400/50 focus-within:ring-1 focus-within:ring-violet-400/20">
           <textarea
             aria-label="Agent message"
             ref={textareaRef}
@@ -300,11 +274,21 @@ export function AgentChatView({
               ? "Check order #1042, draft a reply to Sarah…"
               : "Ask about orders, draft replies, update customers…"
             }
-            className="w-full bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[40px] max-h-50"
+            className="w-full min-w-0 max-w-full bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground resize-none outline-none min-h-[40px] max-h-50"
             style={{ fieldSizing: "content" } as React.CSSProperties}
           />
-          <div className="flex items-center justify-end mt-2.5 gap-2">
-            <div className="flex items-center gap-2 shrink-0">
+          <div className={`flex min-w-0 items-center mt-2.5 gap-2 ${compact ? "justify-between" : "justify-end"}`}>
+            {compact && (
+              <button
+                type="button"
+                onClick={() => setShowStartFreshConfirm(true)}
+                disabled={isRunning}
+                className="shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Start fresh
+              </button>
+            )}
+            <div className="flex shrink-0 items-center gap-2">
               {!compact && (
                 <span className="hidden md:block text-xs text-muted-foreground whitespace-nowrap">
                   Shift + ↵ for new line

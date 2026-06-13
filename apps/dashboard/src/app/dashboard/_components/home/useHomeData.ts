@@ -25,7 +25,7 @@ interface Options {
 }
 
 export function useHomeData({ initialSummary }: Options) {
-  const { data: summaryData, isLoading, mutate: mutateSummary } = useSWR<HomeSummary>(
+  const { data: summaryData, mutate: mutateSummary } = useSWR<HomeSummary>(
     "/api/home-summary",
     fetcher,
     {
@@ -36,7 +36,7 @@ export function useHomeData({ initialSummary }: Options) {
   const { data: integrations = [] } = useSWR<Integration[]>("/api/integrations", fetcher)
   const { data: orgData } = useOrg()
   const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>("/api/kb", fetcher, { revalidateOnFocus: false })
-  const { data: telegramData } = useSWR<{ connected: boolean }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
+  const { data: telegramData } = useSWR<{ connected: boolean; botUsername: string | null }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const channelConnected = integrations.length > 0
@@ -57,6 +57,7 @@ export function useHomeData({ initialSummary }: Options) {
 
   const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
   const hasTelegramBound = telegramData?.connected ?? false
+  const telegramBotUsername = telegramData?.botUsername ?? null
   const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
   const hasMultipleChannels = integrations.length > 1
   const hasConfiguredAgent = useMemo(() => {
@@ -95,11 +96,11 @@ export function useHomeData({ initialSummary }: Options) {
   }, [mutateSummary])
 
   return {
-    isLoading,
     ...home,
     ordersToShip,
     hasShopify,
     hasTelegramBound,
+    telegramBotUsername,
     workflowSteps,
     workflowDoneCount,
     agentName,

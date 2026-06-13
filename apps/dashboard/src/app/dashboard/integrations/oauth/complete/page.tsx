@@ -1,19 +1,27 @@
 "use client";
 
 import { Suspense, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { OAUTH_DONE_MESSAGE_TYPE, OAUTH_POPUP_NAME } from "@/lib/integrations/oauth-flow";
 import { OAUTH_ERROR_MESSAGES } from "@/lib/integrations/catalog";
 import { cn } from "@/lib/ui/cn";
 
+const CONNECTED_VALUES = new Set(["instagram", "shopify", "gmail", "outlook"]);
+
+function safeConnected(value: string | null): string | null {
+  return value && CONNECTED_VALUES.has(value) ? value : null;
+}
+
+function safeError(value: string | null): string | null {
+  return value && Object.prototype.hasOwnProperty.call(OAUTH_ERROR_MESSAGES, value) ? value : null;
+}
+
 function OAuthCompleteContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const connected = searchParams.get("connected");
-  const error = searchParams.get("error");
-  const returnTo = searchParams.get("returnTo");
+  const connected = safeConnected(searchParams.get("connected"));
+  const error = safeError(searchParams.get("error"));
 
   useEffect(() => {
     const payload = {
@@ -32,12 +40,11 @@ function OAuthCompleteContent() {
       return;
     }
 
-    const fallbackPath = returnTo?.startsWith("/") ? returnTo : "/dashboard/integrations";
-    const nextUrl = new URL(fallbackPath, window.location.origin);
+    const nextUrl = new URL("/dashboard/integrations", window.location.origin);
     if (connected) nextUrl.searchParams.set("connected", connected);
     if (error) nextUrl.searchParams.set("error", error);
-    router.replace(`${nextUrl.pathname}${nextUrl.search}`);
-  }, [connected, error, returnTo, router]);
+    window.location.replace(`${nextUrl.pathname}${nextUrl.search}`);
+  }, [connected, error]);
 
   const success = Boolean(connected) && !error;
   const message = success

@@ -12,9 +12,11 @@ import {
   CARD_DESCRIPTION,
   CARD_SHELL,
   CARD_TITLE,
+} from "./integration-card-styles"
+import {
   CardLogo,
   ShopkeeperBadge,
-} from "./IntegrationCard"
+} from "./IntegrationCardParts"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import {
   TelegramActionsSection,

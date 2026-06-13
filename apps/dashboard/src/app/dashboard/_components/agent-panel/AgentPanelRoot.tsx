@@ -39,7 +39,7 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ type: "spring", stiffness: 300, damping: 35 }}
-              className="fixed inset-0 z-50 bg-background flex flex-col"
+              className="fixed inset-0 z-50 flex w-full max-w-full flex-col overflow-hidden bg-background"
             >
               <AgentChatClient
                 agentName={agentName}
@@ -56,9 +56,9 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
               animate={{ width: 420 }}
               exit={{ width: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 35 }}
-              className="flex-shrink-0 overflow-hidden h-full bg-background border-l border-border shadow-xl flex flex-col"
+              className="flex h-full min-w-0 flex-shrink-0 flex-col overflow-hidden border-l border-border bg-background shadow-xl"
             >
-              <div className="w-[420px] h-full flex flex-col">
+              <div className="flex h-full w-full min-w-0 flex-col">
                 <AgentChatClient
                   agentName={agentName}
                   autonomyTier={autonomyTier}

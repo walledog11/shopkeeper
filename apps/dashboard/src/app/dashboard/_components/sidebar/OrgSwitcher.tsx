@@ -32,7 +32,7 @@ export function OrgSwitcher({
   onClose?: () => void;
   variant: "topBar" | "sheet";
 }) {
-  const { organization, userMemberships, setActive, mounted, planName, seatCount } = navAuth;
+  const { organization, userMemberships, setActive, mounted } = navAuth;
   const isTopBar = variant === "topBar";
   const memberships = userMemberships.data as WorkspaceMembership[] | undefined;
 
@@ -61,7 +61,7 @@ export function OrgSwitcher({
             "flex items-center outline-none text-left transition-colors",
             isTopBar
               ? "gap-2 px-2 py-1.5 rounded-md hover:bg-sidebar-accent shrink-0 max-w-[11rem]"
-              : "w-full gap-2 p-1 rounded-lg hover:bg-sidebar-accent/80",
+              : "w-full gap-2 rounded-lg p-1 transition-colors hover:bg-foreground/[0.05]",
           )}
         >
           {!isTopBar && (
@@ -81,14 +81,11 @@ export function OrgSwitcher({
           ) : (
             <>
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-sidebar-foreground truncate leading-tight text-xs">
+                <p className="truncate text-sm font-semibold leading-tight text-foreground">
                   {organization?.name ?? "Workspace"}
                 </p>
-                <p className="text-xs font-medium text-muted-foreground truncate leading-tight mt-0.5">
-                  {planName} plan · {seatCount} seat{seatCount === 1 ? "" : "s"}
-                </p>
               </div>
-              <ChevronDown className="size-3.5 text-sidebar-foreground/40 shrink-0" />
+              <ChevronDown className="size-3.5 shrink-0 text-foreground/40" />
             </>
           )}
         </button>

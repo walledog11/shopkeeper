@@ -2,7 +2,6 @@
 
 import WorkflowSetupBanner from "./WorkflowSetupBanner"
 import ConciergeBriefing from "./ConciergeBriefing"
-import HomeDigest from "./HomeDigest"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
 import { useHomeData } from "./useHomeData"
@@ -27,35 +26,25 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
   return (
     <div className="@container h-full flex flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="flex flex-col min-h-full w-full max-w-6xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-6 gap-3">
+        <div className="flex flex-col min-h-full w-full max-w-2xl mx-auto px-5 md:px-6 lg:px-8 pt-3 pb-4 gap-3">
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}
             doneCount={data.workflowDoneCount}
           />
 
-          <div className="flex flex-col gap-4 min-w-0">
+          <div className="flex flex-col gap-3 min-w-0">
             <ConciergeBriefing
               greeting={greeting}
               userName={userName}
-              agentName={data.agentName}
               hasTelegramBound={data.hasTelegramBound}
+              telegramBotUsername={data.telegramBotUsername}
               needsYouCount={data.needsYouCount}
               overnightClearedCount={data.overnightClearedCount}
               briefingChannels={data.briefingChannels}
               refundsPending={data.refundsPending}
               vipsInQueue={data.vipsInQueue}
               ordersToShip={data.ordersToShip}
-            />
-
-            <HomeDigest
-              isLoading={data.isLoading}
-              openCount={data.openCount}
-              openDelta={data.openDelta}
-              firstReplyMinutes={data.firstReplyMinutes}
-              autoResolvedPct={data.autoResolvedPct}
-              weeklyVolume={data.weeklyVolume}
-              agentName={data.agentName}
             />
 
             <NeedsYou
