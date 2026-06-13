@@ -51,14 +51,26 @@ export interface PlanPreview {
   headline: string
   context: string
   proposal: string
+  actionText: string | null
   orderRef: string | null
 }
+
+const REPLY_TOOL_NAMES = ["send_reply", "send_email"]
 
 function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
   const input = toolCall?.input
   if (!input || typeof input !== "object" || Array.isArray(input)) return null
   const text = (input as { text?: unknown }).text
   return typeof text === "string" && text.trim() ? text.trim() : null
+}
+
+export function planReplyText(plan: AgentPlan | null): string | null {
+  if (!plan) return null
+  for (const name of REPLY_TOOL_NAMES) {
+    const text = replyTextFromToolCall(plan.rawToolCalls.find(toolCall => toolCall.name === name) ?? null)
+    if (text) return text
+  }
+  return null
 }
 
 function usesCustomerOrOrderContext(plan: AgentPlan): boolean {
@@ -208,16 +220,17 @@ export function buildPlanPreview(
 ): PlanPreview {
   const action = plan ? findActionStep(plan) : null
   const proposal = buildProposal(plan, action)
+  const actionText = action ? (action.description ? trim(action.description, 160) : (action.label || null)) : null
 
   if (action) {
     const headline = action.description ? trim(action.description, 90) : (action.label || "Run action")
     const context = aiSummary?.trim() ? trim(aiSummary, 140) : ""
-    return { headline, context, proposal, orderRef: plan ? orderRefFromPlan(plan) : null }
+    return { headline, context, proposal, actionText, orderRef: plan ? orderRefFromPlan(plan) : null }
   }
 
   const headline =
     aiSummary?.trim() ? trim(aiSummary, 100) :
     firstMessage?.trim() ? trim(firstMessage, 100) :
     "New customer message"
-  return { headline, context: "", proposal, orderRef: plan ? orderRefFromPlan(plan) : null }
+  return { headline, context: "", proposal, actionText, orderRef: plan ? orderRefFromPlan(plan) : null }
 }

@@ -1,7 +1,7 @@
 import { db, Prisma, SenderType } from "@shopkeeper/db"
 import type { ChannelType, OrgSettings } from "@/types"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
-import { buildPlanPreview, classifyHomePlan } from "@shopkeeper/agent/plan-preview"
+import { buildPlanPreview, classifyHomePlan, planReplyText } from "@shopkeeper/agent/plan-preview"
 import {
   HOME_NEEDS_ATTENTION_LIMIT,
   HOME_OVERNIGHT_TOPIC_LIMIT,
@@ -182,7 +182,8 @@ async function loadNeedsAttention(
       headline: copy.headline,
       contextLine: copy.context,
       proposalSummary: copy.proposal,
-      replyText: classification.replyText,
+      actionText: copy.actionText,
+      replyText: planReplyText(plan),
       orderRef: copy.orderRef,
       tag: thread.tag,
     }]

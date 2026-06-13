@@ -144,7 +144,7 @@ describe("POST /api/agent/quick-approve", () => {
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
 
-  it("rejects action plans", async () => {
+  it("executes an action plan as a human-approved one-tap approval", async () => {
     const actionPlan: AgentPlan = {
       instruction: "Handle this",
       steps: [{
@@ -165,8 +165,12 @@ describe("POST /api/agent/quick-approve", () => {
       body: JSON.stringify({ threadId: thread.id }),
     }));
 
-    expect(res.status).toBe(400);
-    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenCalledWith(expect.objectContaining({
+      threadId: thread.id,
+      approvedToolCalls: [{ id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1" } }],
+      auditMode: "human_approved",
+    }), expect.anything());
   });
 
   it("rejects auto-execute plans (server-side auto-execute runs in the gateway worker, not this route)", async () => {

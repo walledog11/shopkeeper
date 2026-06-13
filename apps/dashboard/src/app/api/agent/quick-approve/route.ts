@@ -46,7 +46,7 @@ export const POST = withOrgRoute(
       orgId: org.id,
       threadId,
       settings,
-      allowedKinds: ["quick_reply"],
+      allowedKinds: ["quick_reply", "needs_review"],
       failureRoute: "/api/agent/quick-approve",
       ...(approver ? { approver } : {}),
     });

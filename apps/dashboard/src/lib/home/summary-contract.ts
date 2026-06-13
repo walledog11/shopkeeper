@@ -12,6 +12,7 @@ export interface HomeNeedsAttentionItem {
   headline: string
   contextLine: string
   proposalSummary: string
+  actionText: string | null
   replyText: string | null
   orderRef: string | null
   tag: string | null

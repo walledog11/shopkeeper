@@ -64,10 +64,9 @@ function toolCallsForClassification(
   if (classification.kind === "quick_reply") {
     return classification.sendReplyToolCall ? [classification.sendReplyToolCall] : [];
   }
-  if (classification.kind === "auto_execute") {
-    return getExecutablePlanToolCalls(plan);
-  }
-  return [];
+  // auto_execute (system) and needs_review (human one-tap approve) both run the
+  // full executable plan; runtime policy in the executor remains the backstop.
+  return getExecutablePlanToolCalls(plan);
 }
 
 async function loadCurrentCachedHomePlan(params: {
