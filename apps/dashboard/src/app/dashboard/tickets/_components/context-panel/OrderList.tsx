@@ -15,7 +15,7 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
   if (orders.length === 0) {
     return (
       <section className={panelSectionClass}>
-        <SectionHeader title="ORDER" />
+        <SectionHeader title="Order" />
         <p className="text-xs text-white/40">No orders found.</p>
       </section>
     )

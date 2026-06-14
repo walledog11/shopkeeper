@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { classifyHomePlan } from "./plan-preview.js"
+import { classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 
 const sendReplyCall: RawToolCall = {
@@ -257,5 +257,34 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(classifyHomePlan(refundPlan(), settings({ autonomyTier: "full", maxRefundAmount: 1000 })).kind)
         .toBe("auto_execute")
     })
+  })
+})
+
+describe("planWarningTiers", () => {
+  const shopifyWarning = "Couldn't find a Shopify customer - verify the correct account is linked before approving."
+
+  it("treats a missing Shopify customer warning as informational for reply-only plans", () => {
+    const tiers = planWarningTiers(plan({ warnings: [shopifyWarning] }))
+    expect(tiers.blocking).toEqual([])
+    expect(tiers.informational).toEqual([shopifyWarning])
+    expect(isPlanWarningBlocking(shopifyWarning, plan({ warnings: [shopifyWarning] }))).toBe(false)
+  })
+
+  it("treats a missing Shopify customer warning as blocking when order context was used", () => {
+    const warnedPlan = plan({
+      rawToolCalls: [
+        { id: "read_1", name: "get_shopify_orders", input: { customer_id: "123" } },
+        sendReplyCall,
+      ],
+      warnings: [shopifyWarning],
+    })
+    const tiers = planWarningTiers(warnedPlan)
+    expect(tiers.blocking).toEqual([shopifyWarning])
+    expect(tiers.informational).toEqual([])
+    expect(isPlanWarningBlocking(shopifyWarning, warnedPlan)).toBe(true)
+  })
+
+  it("treats policy warnings as blocking", () => {
+    expect(isPlanWarningBlocking("Policy conflict", plan({ warnings: ["Policy conflict"] }))).toBe(true)
   })
 })

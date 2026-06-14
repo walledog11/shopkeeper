@@ -45,7 +45,7 @@ export function TicketRow({
   const gradient = getAvatarGradient(ticket.customer)
   const initials = getInitials(ticket.customer)
   const closed = ticket.status === "closed" || activeTab === "closed"
-  const overdue = sla?.dot === "bg-red-400"
+  const longWait = sla?.longWait ?? false
   const isSpam = ticket.filterStatus === "filtered"
 
   const isHoverCapable = useMediaQuery("(hover: hover) and (pointer: fine)")
@@ -246,7 +246,7 @@ export function TicketRow({
                 <span className="text-sm font-semibold text-white/90 truncate">{ticket.customer}</span>
                 <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
                   <span
-                    className={`text-xs transition-opacity ${overdue ? "text-red-400 font-semibold" : "text-white/30"} ${
+                    className={`text-xs transition-opacity ${longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
                       !useSwipe && rowAction ? "group-hover:opacity-0" : ""
                     }`}
                   >
@@ -274,7 +274,7 @@ export function TicketRow({
                     </span>
                     {ticket.hasPlan && !closed && (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400">
-                        <Sparkles className="size-2.5 mr-1"/> Plan ready
+                        <Sparkles className="size-2.5 mr-1"/> Draft ready
                       </span>
                     )}
                     {ticket.filterStatus === "questionable" && !closed && (

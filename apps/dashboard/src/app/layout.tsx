@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { Google_Sans_Flex } from "next/font/google";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const googleSansFlex = Google_Sans_Flex({
@@ -30,12 +30,17 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!publishableKey) {
+    throw new Error("Missing NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
+  }
+
   return (
     <html lang="en" className={googleSansFlex.variable}>
       <body className={`${googleSansFlex.className} antialiased`}>
-        <ClerkProvider>
+        <Providers publishableKey={publishableKey}>
           {children}
-        </ClerkProvider>
+        </Providers>
       </body>
     </html>
   );

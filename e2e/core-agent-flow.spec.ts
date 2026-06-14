@@ -180,7 +180,6 @@ test('approve a seeded AI plan and record the outbound email reply', async ({ pa
   await expect(planCard).toContainText('Proposed plan');
   await expect(planCard).toContainText(replyText);
   await expect(stepToggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('action-plan-dismiss')).toBeEnabled();
   await expect(runButton).toBeEnabled();
 
   const approveResponsePromise = page.waitForResponse((response) =>

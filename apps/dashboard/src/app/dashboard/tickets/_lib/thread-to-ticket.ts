@@ -10,8 +10,7 @@ import type { Thread, Ticket } from "@/types";
 export function threadToTicket(thread: Thread, agentName?: string): Ticket {
   const channel = getChannelInfo(thread.channelType);
   const lastMsg = thread.messages.filter((message) => message.senderType !== SENDER_TYPE.NOTE).at(-1);
-  const lastCustomerMessageId = lastMsg?.senderType === SENDER_TYPE.CUSTOMER ? lastMsg.id : null;
-  const planIsForLastMessage = getCurrentPlanForThread(thread, lastCustomerMessageId) !== null;
+  const planIsForLastMessage = getCurrentPlanForThread(thread, thread.messages) !== null;
 
   return {
     id: thread.id,

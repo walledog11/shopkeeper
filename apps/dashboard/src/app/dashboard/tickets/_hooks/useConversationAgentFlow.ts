@@ -1,6 +1,7 @@
 "use client"
 
 import { useReducer, useState } from "react"
+import { planReplyText } from "@shopkeeper/agent/plan-preview"
 import type { AgentPlan, AgentTurn, RawToolCall, Ticket } from "@/types"
 import {
   askAgentPrivately,
@@ -206,6 +207,13 @@ export function useConversationAgentFlow({
     setPendingPlan(null)
   }
 
+  const handlePlanEdit = () => {
+    if (!pendingPlan) return
+    const text = planReplyText(pendingPlan)
+    if (text) onReplyChange(text)
+    setPendingPlan(null)
+  }
+
   const handlePlanRegenerate = async () => {
     if (!pendingPlan || isRegenerating) return
 
@@ -221,10 +229,42 @@ export function useConversationAgentFlow({
     }
   }
 
+  const requestAgentPlan = async (instruction: string, options: { force?: boolean } = {}) => {
+    onReplyChange("")
+    setPendingInstruction(instruction)
+    setIsPlanLoading(true)
+
+    try {
+      const plan = await fetchAgentPlan(ticket.id, instruction, options)
+      const requiresApproval = planRequiresApproval(plan)
+
+      if (!requiresApproval) {
+        await answerPrivateQuestion(instruction)
+        return
+      }
+
+      setPendingPlan(resolvePendingPlan(plan, instruction))
+    } catch (err) {
+      onAgentTurnAdd(createAgentTurn(planRequestErrorTurn(instruction, err)))
+    } finally {
+      setIsPlanLoading(false)
+      setPendingInstruction(null)
+    }
+  }
+
+  const requestDraftReply = async (instruction = "draft a reply") => {
+    await requestAgentPlan(instruction)
+  }
+
+  const requestRefreshDraft = async (instruction = "draft a reply") => {
+    await requestAgentPlan(instruction, { force: true })
+  }
+
   return {
     agentInstruction,
     handlePlanApprove,
     handlePlanDismiss,
+    handlePlanEdit,
     handlePlanRegenerate,
     handleSend,
     isAgentMode,
@@ -233,5 +273,7 @@ export function useConversationAgentFlow({
     isRegenerating,
     pendingInstruction,
     pendingPlan,
+    requestDraftReply,
+    requestRefreshDraft,
   }
 }

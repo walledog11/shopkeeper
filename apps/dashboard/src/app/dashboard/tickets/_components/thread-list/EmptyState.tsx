@@ -20,7 +20,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   if (isSearchMode) {
     return (
-      <div className="text-center p-8 text-white/30 text-sm">
+      <div className="text-center p-8 text-foreground/40 text-sm">
         No results for &ldquo;{searchQuery}&rdquo;
       </div>
     )
@@ -29,13 +29,13 @@ export function EmptyState({
   if (totalCount === 0 && !searchQuery && !activeFilter) {
     return (
       <div className="flex flex-col items-center text-center p-8 gap-3">
-        <div className="size-12 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-          <Inbox className="size-5 text-white/20" />
-        </div>
+        <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
+          <Inbox className="size-5 text-foreground/30" />
+        </span>
         <div>
-          <p className="text-sm font-semibold text-white/50 mb-1">No tickets yet</p>
-          <p className="text-xs text-white/30 mb-3">Connect a channel to start receiving customer messages.</p>
-          <Link href="/dashboard/integrations" className="text-xs font-semibold text-white/50 hover:text-white/80 transition-colors">
+          <p className="text-sm font-semibold text-foreground/70 mb-1">No conversations yet</p>
+          <p className="text-xs text-foreground/45 mb-3">Connect a channel and customer messages will land here.</p>
+          <Link href="/dashboard/integrations" className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors">
             Set up integrations →
           </Link>
         </div>
@@ -43,13 +43,13 @@ export function EmptyState({
     )
   }
 
-  const tabLabel = activeTab === "filtered" ? "spam" : activeTab
+  const tabLabel = activeTab === "filtered" ? "spam" : activeTab === "closed" ? "closed" : "open"
 
   return (
-    <div className="text-center p-8 text-white/25 text-sm">
+    <div className="text-center p-8 text-foreground/40 text-sm">
       {searchQuery
         ? `No results for "${searchQuery}"`
-        : `No ${tabLabel} tickets${activeFilter ? ` from ${CHANNEL_FILTERS.find(channel => channel.id === activeFilter)?.label ?? activeFilter}` : ""}.`
+        : `No ${tabLabel} conversations${activeFilter ? ` from ${CHANNEL_FILTERS.find(channel => channel.id === activeFilter)?.label ?? activeFilter}` : ""}.`
       }
     </div>
   )

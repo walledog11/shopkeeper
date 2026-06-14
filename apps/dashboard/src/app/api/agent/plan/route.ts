@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { db } from "@shopkeeper/db";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
+import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agent/thread-auth";
 import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@shopkeeper/agent/plan-cache";
+import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
+import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -34,14 +36,20 @@ export const POST = withOrgRoute(
     }, "[agent:plan] POST");
 
     const thread = await requireOrgThread(threadId, org.id);
-    const lastCustomerMessage = thread.messages[0] ?? null;
+    const latestConversation = await getLatestConversationMessage(threadId);
+    const pendingCustomerMessageId = latestConversation
+      ? getPendingCustomerMessageId([latestConversation])
+      : null;
 
-    if (!lastCustomerMessage) {
+    if (!pendingCustomerMessageId) {
+      if (thread.cachedPlan || thread.cachedPlanMessageId) {
+        await clearThreadPlanCache({ orgId: org.id, threadId });
+      }
       logger.info({
         orgId: org.id,
         threadId,
         durationMs: Date.now() - startedAt,
-        reason: "no_last_customer_message",
+        reason: "thread_already_answered",
         instructionHash,
       }, "[agent:plan] skipped");
       return NextResponse.json({ instruction, steps: [], rawToolCalls: [] });
@@ -51,7 +59,7 @@ export const POST = withOrgRoute(
     if (!force && isAgentPlanCacheHit({
       cache: cachedPlan,
       instruction,
-      lastCustomerMessageId: lastCustomerMessage.id,
+      lastCustomerMessageId: pendingCustomerMessageId,
       settings,
     })) {
       logger.info({
@@ -73,10 +81,10 @@ export const POST = withOrgRoute(
     await db.thread.update({
       where: { id: threadId },
       data: {
-        cachedPlanMessageId: lastCustomerMessage.id,
+        cachedPlanMessageId: pendingCustomerMessageId,
         cachedPlan: buildAgentPlanCacheRecord({
           instruction,
-          lastCustomerMessageId: lastCustomerMessage.id,
+          lastCustomerMessageId: pendingCustomerMessageId,
           settings,
           plan,
         }) as object,

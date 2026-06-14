@@ -1,5 +1,5 @@
 import { db } from '@shopkeeper/db';
-import { requireOrgThread } from '@shopkeeper/agent/thread-auth';
+import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
@@ -9,9 +9,11 @@ import {
   readAgentPlanCache,
 } from '@shopkeeper/agent/plan-cache';
 import {
+  clearThreadPlanCache,
   findFailedToolResult,
   maybeAutoExecuteCurrentCachedHomePlan,
 } from '@shopkeeper/agent/plan-execution';
+import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import type { AgentPlan } from '../types.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
@@ -47,7 +49,17 @@ export async function generateThreadPlan(
 ): Promise<GeneratedThreadPlan> {
   const thread = await requireOrgThread(threadId, organizationId);
   const instruction = thread.aiSummary || "Handle this customer's latest request";
-  const lastCustomerMessage = thread.messages[0] ?? null;
+  const latestConversation = await getLatestConversationMessage(threadId);
+  const pendingCustomerMessageId = latestConversation
+    ? getPendingCustomerMessageId([latestConversation])
+    : null;
+
+  if (!pendingCustomerMessageId) {
+    if (thread.cachedPlan || thread.cachedPlanMessageId) {
+      await clearThreadPlanCache({ orgId: organizationId, threadId });
+    }
+    return { plan: null, instruction };
+  }
 
   const org = await db.organization.findUnique({
     where: { id: organizationId },
@@ -56,10 +68,10 @@ export async function generateThreadPlan(
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
 
   const cached = readAgentPlanCache(thread.cachedPlan);
-  if (lastCustomerMessage && isAgentPlanCacheHit({
+  if (isAgentPlanCacheHit({
     cache: cached,
     instruction,
-    lastCustomerMessageId: lastCustomerMessage.id,
+    lastCustomerMessageId: pendingCustomerMessageId,
     settings,
   })) {
     const autoExecution = allowAutoExecute
@@ -71,20 +83,18 @@ export async function generateThreadPlan(
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
   const plan = await planAgent(ctx, instruction, settings);
 
-  if (lastCustomerMessage) {
-    await db.thread.update({
-      where: { id: threadId },
-      data: {
-        cachedPlanMessageId: lastCustomerMessage.id,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction,
-          lastCustomerMessageId: lastCustomerMessage.id,
-          settings,
-          plan,
-        }) as object,
-      },
-    });
-  }
+  await db.thread.update({
+    where: { id: threadId },
+    data: {
+      cachedPlanMessageId: pendingCustomerMessageId,
+      cachedPlan: buildAgentPlanCacheRecord({
+        instruction,
+        lastCustomerMessageId: pendingCustomerMessageId,
+        settings,
+        plan,
+      }) as object,
+    },
+  });
 
   const autoExecution = allowAutoExecute
     ? await buildAutoExecutionResult(organizationId, threadId, settings)

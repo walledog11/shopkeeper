@@ -1,34 +1,37 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronUp, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
-import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
-import type { AgentPlan, RawToolCall } from "@/types"
-import {
-  formatPlanStepSentence,
-  getPlanApproveLabel,
-  getPlanCollapsedPreview,
-} from "./plan-step-display"
-
-const TRANSITION = {
-  layout:  { type: "spring" as const, stiffness: 420, damping: 32 },
-  opacity: { duration: 0.08, ease: "linear" as const },
-}
+import { Check, ChevronUp, Loader2, RefreshCw, AlertTriangle } from "lucide-react"
+import { isShopifyCustomerWarning, planReplyText, planWarningTiers } from "@shopkeeper/agent/plan-preview"
+import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools"
+import type { AgentPlan, PlanStep, RawToolCall } from "@/types"
+import { formatPlanStepSentence, getPlanCollapsedPreview } from "./plan-step-display"
+import { planRecipientDisplay } from "./plan-recipient-display"
 
 const HIGH_RISK_TOOLS = new Set(["send_reply", "create_refund"])
+const REPLY_TOOLS = new Set(["send_reply", "send_email"])
 
 function highRiskUncheckMessage(tool: string): string {
-  if (tool === "send_reply") {
-    return "Unchecking the reply step means no message goes to the customer. Continue?"
+  if (tool === "send_reply" || tool === "send_email") {
+    return "Dropping the reply means no message goes to the customer. Continue?"
   }
   if (tool === "create_refund") {
-    return "Unchecking the refund step skips the refund. Continue?"
+    return "Dropping the refund step skips the refund. Continue?"
   }
-  return "Unchecking this step skips a customer-facing action. Continue?"
+  return "Dropping this step skips a customer-facing action. Continue?"
 }
 
-const CONTENT_IN  = { duration: 0.13, delay: 0.1 }
-const CONTENT_OUT = { duration: 0.07 }
+function warningDisplayText(warning: string, blocking: boolean): string {
+  if (isShopifyCustomerWarning(warning) && !blocking) {
+    return "No Shopify customer linked — check the customer panel if this reply needs order context."
+  }
+  return warning
+}
+
+function stepChipLabel(step: PlanStep): string {
+  const text = (step.description || step.label || "").replace(/^"|"$/g, "").trim()
+  return text.length > 46 ? `${text.slice(0, 45)}…` : text
+}
 
 interface Props {
   plan: AgentPlan
@@ -37,7 +40,8 @@ interface Props {
   isExecuting: boolean
   isRegenerating?: boolean
   onApprove: (approvedToolCalls: RawToolCall[]) => void
-  onDismiss: () => void
+  onEdit?: () => void
+  onFocusShopifyLink?: () => void
   onRegenerate?: () => void
 }
 
@@ -48,11 +52,16 @@ export default function ActionPlanCard({
   isExecuting,
   isRegenerating,
   onApprove,
-  onDismiss,
+  onEdit,
+  onFocusShopifyLink,
   onRegenerate,
 }: Props) {
   const [disabledStepIds, setDisabledStepIds] = useState(() => new Set<string>())
   const [collapsed, setCollapsed] = useState(false)
+  const [compactHeader, setCompactHeader] = useState(false)
+  const [confirming, setConfirming] = useState(false)
+  const [warningsReviewed, setWarningsReviewed] = useState(false)
+
   const steps = plan.steps.map(step => ({
     ...step,
     enabled: !disabledStepIds.has(step.id),
@@ -64,6 +73,8 @@ export default function ActionPlanCard({
       if (!window.confirm(highRiskUncheckMessage(tool))) return
     }
 
+    setConfirming(false)
+    setWarningsReviewed(false)
     setDisabledStepIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -82,96 +93,199 @@ export default function ActionPlanCard({
     onApprove(approved)
   }
 
+  const replyStep = steps.find(s => REPLY_TOOLS.has(s.tool)) ?? null
+  const actionSteps = steps.filter(s => !REPLY_TOOLS.has(s.tool))
+  const replyText = planReplyText(plan)
+  const replyEnabled = replyStep?.enabled ?? false
+  const showReplyHero = Boolean(replyText && replyStep)
+  const showSkipReply = showReplyHero && actionSteps.length > 0
+  const showEditTakeover = Boolean(onEdit && showReplyHero && replyEnabled)
+
+  const recipient = planRecipientDisplay(customerName)
+  const { blocking: blockingWarnings, informational: informationalWarnings } = planWarningTiers(plan)
+  const hasBlockingWarnings = blockingWarnings.length > 0
+  const needsWarningReview = hasBlockingWarnings && !warningsReviewed
+
   const enabledCount = steps.filter(s => s.enabled).length
-  const approveLabel = getPlanApproveLabel(steps)
+  const consequential = steps.some(s => s.enabled && TOOL_CATEGORIES[s.tool] === "action")
+  const enabledActions = actionSteps.some(s => s.enabled)
+
+  const headerLabel = showReplyHero && replyEnabled
+    ? `${agentName} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
+    : `${agentName} proposes`
+
+  const inReviewFlow = needsWarningReview || confirming
+
+  const primaryLabel = isExecuting
+    ? null
+    : confirming
+      ? (showReplyHero && replyEnabled ? "Confirm & send" : "Confirm")
+      : needsWarningReview
+        ? "Review & send"
+        : showReplyHero && replyEnabled
+          ? (enabledActions ? "Approve & send" : "Send reply")
+          : "Approve"
+
+  const onApproveClick = () => {
+    if (needsWarningReview) {
+      setWarningsReviewed(true)
+      return
+    }
+    if (consequential && !confirming) {
+      setConfirming(true)
+      return
+    }
+    handleRun()
+  }
+
+  const onCancelReview = () => {
+    if (confirming) {
+      setConfirming(false)
+      return
+    }
+    if (warningsReviewed) {
+      setWarningsReviewed(false)
+    }
+  }
+
   const collapsedPreview = getPlanCollapsedPreview(plan)
+  const primaryNeedsCaution = needsWarningReview || confirming || (hasBlockingWarnings && !warningsReviewed) || consequential
+
+  const handleCollapse = () => {
+    setCollapsed(true)
+    setCompactHeader(true)
+  }
+
+  const handleExpand = () => setCollapsed(false)
+
+  const handleBodyTransitionEnd = (event: React.TransitionEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || event.propertyName !== "grid-template-rows") return
+    if (!collapsed) setCompactHeader(false)
+  }
 
   return (
-    <LazyMotion features={domAnimation}>
-    <div className="w-full">
-      <AnimatePresence initial={false} mode="popLayout">
-        {collapsed ? (
-          <m.button
-            key="bubble"
-            layoutId="plan-card"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={TRANSITION}
-            onClick={() => setCollapsed(false)}
-            className="w-full flex items-center gap-2 pl-3 pr-4 py-2 bg-card border border-white/[0.12] rounded-full shadow-lg hover:border-white/[0.20] transition-colors overflow-hidden"
+    <div
+      data-testid={compactHeader ? undefined : "action-plan-card"}
+      className="w-full rounded-2xl bg-card border border-border shadow-sm overflow-hidden"
+    >
+      <div className="flex h-11 items-center gap-2 px-3 sm:px-4 shrink-0">
+        {compactHeader ? (
+          <button
+            type="button"
+            onClick={handleExpand}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-80 transition-opacity"
           >
-            <m.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: CONTENT_IN }}
-              exit={{ opacity: 0, transition: CONTENT_OUT }}
-              className="flex items-center gap-2 w-full min-w-0"
-            >
-              <div className="size-5 rounded-full bg-white/[0.12] flex items-center justify-center shrink-0">
-                <ChevronUp className="size-3 text-white/60" />
-              </div>
-              <span className="text-[12px] font-semibold text-white/60 shrink-0">{agentName} wants to</span>
-              {collapsedPreview && (
-                <span className="text-[12px] text-white/45 truncate ml-auto italic">
-                  {collapsedPreview}
-                </span>
-              )}
-            </m.div>
-          </m.button>
+            <span className="size-5 rounded-full bg-foreground/[0.06] flex items-center justify-center shrink-0">
+              <ChevronUp className="size-3 text-foreground/55" />
+            </span>
+            <span className="text-xs font-semibold text-foreground/60 shrink-0">{agentName}&apos;s draft</span>
+            {collapsedPreview && (
+              <span className="text-xs text-foreground/45 truncate ml-auto">
+                {collapsedPreview}
+              </span>
+            )}
+          </button>
         ) : (
-          <m.div
-            key="card"
-            layoutId="plan-card"
-            data-testid="action-plan-card"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={TRANSITION}
-            className="w-full bg-card border border-white/[0.12] rounded-xl shadow-xl overflow-hidden"
-          >
-            <m.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: CONTENT_IN }}
-              exit={{ opacity: 0, transition: CONTENT_OUT }}
+          <>
+            <p className="flex-1 min-w-0 text-sm font-medium text-foreground/70 truncate">{headerLabel}</p>
+            {onRegenerate && (
+              <button type="button"
+                onClick={onRegenerate}
+                disabled={isExecuting || isRegenerating}
+                title="Rewrite"
+                className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors disabled:opacity-40"
+              >
+                <RefreshCw className={`size-3.5 ${isRegenerating ? "animate-spin" : ""}`} />
+              </button>
+            )}
+            <button type="button"
+              onClick={handleCollapse}
+              title="Collapse"
+              className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors"
             >
-              {/* Header */}
-              <div className="relative flex items-center px-4 py-2.5 border-b border-white/[0.08] bg-white/[0.04]">
-                <button type="button"
-                  onClick={() => setCollapsed(true)}
-                  className="flex-1 flex items-center gap-2 text-left min-w-0"
-                >
-                  <span className="text-[13px] font-semibold text-white/70 truncate">
-                    {agentName} wants to:
-                  </span>
-                  <ChevronUp className="size-3.5 text-white/35 shrink-0 ml-auto" />
-                </button>
-                {onRegenerate && (
-                  <button type="button"
-                    onClick={onRegenerate}
-                    disabled={isExecuting || isRegenerating}
-                    title="Regenerate plan"
-                    className="ml-2 shrink-0 p-1 rounded text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-colors disabled:opacity-40"
-                  >
-                    <RefreshCw className={`size-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-                  </button>
-                )}
-              </div>
+              <ChevronUp className="size-4" />
+            </button>
+          </>
+        )}
+      </div>
 
-              {/* Warnings */}
-              {plan.warnings && plan.warnings.length > 0 && (
-                <div className="px-4 py-2.5 border-b border-white/[0.06] space-y-1.5 bg-amber-400/[0.04]">
-                  {plan.warnings.map((w) => (
-                    <div key={w} className="flex items-start gap-2">
-                      <AlertTriangle className="size-3 text-amber-400 shrink-0 mt-0.5" />
-                      <p className="text-xs text-amber-300/80 leading-relaxed">{w}</p>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+        style={{ gridTemplateRows: collapsed ? "0fr" : "1fr" }}
+        onTransitionEnd={handleBodyTransitionEnd}
+      >
+        <div className="overflow-hidden min-h-0">
+          <div
+            className={`px-4 sm:px-5 pb-4 transition-opacity duration-200 ease-out ${
+              collapsed || compactHeader ? "opacity-0" : "opacity-100"
+            }`}
+          >
+            {(blockingWarnings.length > 0 || informationalWarnings.length > 0) && (
+              <div className="mt-0.5 space-y-2">
+                {blockingWarnings.map((w) => (
+                  <div key={w} className="flex items-start gap-2">
+                    <AlertTriangle className="size-3.5 text-red-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-red-600 leading-snug">{warningDisplayText(w, true)}</p>
+                      {isShopifyCustomerWarning(w) && onFocusShopifyLink && (
+                        <button
+                          type="button"
+                          onClick={onFocusShopifyLink}
+                          className="mt-1 text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+                        >
+                          Check customer panel →
+                        </button>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+                {informationalWarnings.map((w) => (
+                  <div key={w} className="flex items-start gap-2">
+                    <AlertTriangle className="size-3.5 text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-sm font-semibold text-red-600 leading-snug">
+                      {warningDisplayText(w, false)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {/* Steps */}
-              <ol className="divide-y divide-white/[0.06] max-h-[30vh] overflow-y-auto custom-scrollbar">
-                {steps.map((step, index) => (
+            {showReplyHero ? (
+              <div className="mt-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-foreground/40">
+                    To {recipient.draftTo}
+                  </span>
+                  {showSkipReply && replyStep && (
+                    <button type="button"
+                      data-testid="action-plan-step-toggle"
+                      data-step-id={replyStep.id}
+                      aria-pressed={replyEnabled}
+                      onClick={() => toggleStep(replyStep.id, replyStep.tool)}
+                      disabled={isExecuting}
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
+                        replyEnabled
+                          ? "border-border bg-foreground/[0.04] text-foreground/55 hover:border-foreground/20 hover:text-foreground/75"
+                          : "border-amber-600/30 bg-amber-600/[0.1] text-amber-700 hover:border-amber-600/45"
+                      }`}
+                    >
+                      {replyEnabled ? "Skip reply" : "Include reply"}
+                    </button>
+                  )}
+                </div>
+                <div className={`rounded-2xl border px-4 py-3 ${
+                  replyEnabled ? "bg-foreground/[0.04] border-border" : "border-dashed border-border opacity-50"
+                }`}>
+                  <p className={`text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar ${
+                    replyEnabled ? "" : "line-through"
+                  }`}>
+                    {replyText}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <ol className="mt-3 flex flex-col gap-1.5">
+                {actionSteps.map((step) => (
                   <li key={step.id}>
                     <button type="button"
                       data-testid="action-plan-step-toggle"
@@ -179,20 +293,18 @@ export default function ActionPlanCard({
                       aria-pressed={step.enabled}
                       onClick={() => toggleStep(step.id, step.tool)}
                       disabled={isExecuting}
-                      className="w-full flex items-start gap-3 px-4 py-2.5 text-left hover:bg-white/[0.04] transition-colors disabled:opacity-60"
+                      className="w-full flex items-start gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-foreground/[0.03] transition-colors disabled:opacity-60"
                     >
-                      <span className={`mt-0.5 size-4 shrink-0 rounded border flex items-center justify-center text-[10px] font-bold transition-colors ${
-                        step.enabled
-                          ? 'bg-white border-white text-black'
-                          : 'bg-transparent border-white/[0.20] text-white/25'
+                      <span className={`mt-0.5 size-4 shrink-0 rounded-md border flex items-center justify-center transition-colors ${
+                        step.enabled ? "bg-foreground border-foreground text-background" : "border-border text-foreground/25"
                       }`}>
                         {isExecuting && step.enabled
                           ? <Loader2 className="size-2.5 animate-spin" />
-                          : index + 1
+                          : <Check className="size-3" />
                         }
                       </span>
-                      <span className={`flex-1 min-w-0 text-[13px] leading-relaxed ${
-                        step.enabled ? 'text-white/80' : 'text-white/25 line-through'
+                      <span className={`flex-1 min-w-0 text-sm leading-relaxed ${
+                        step.enabled ? "text-foreground/85" : "text-foreground/30 line-through"
                       }`}>
                         {formatPlanStepSentence(step, customerName)}
                       </span>
@@ -200,34 +312,92 @@ export default function ActionPlanCard({
                   </li>
                 ))}
               </ol>
+            )}
 
-              {/* Actions */}
-              <div className="flex items-center gap-2 px-4 py-2.5 border-t border-white/[0.06] bg-white/[0.02]">
+            {showReplyHero && actionSteps.length > 0 && (
+              <div className="mt-3 flex flex-col gap-1.5">
+                <span className="text-[11px] font-semibold text-foreground/35">Also in Shopify</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {actionSteps.map((step) => {
+                    const isAction = TOOL_CATEGORIES[step.tool] === "action"
+                    return (
+                      <button type="button"
+                        key={step.id}
+                        data-testid="action-plan-step-toggle"
+                        data-step-id={step.id}
+                        aria-pressed={step.enabled}
+                        onClick={() => toggleStep(step.id, step.tool)}
+                        disabled={isExecuting}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          !step.enabled
+                            ? "border-border text-foreground/30 line-through"
+                            : isAction
+                              ? "border-amber-600/25 bg-amber-600/[0.08] text-amber-700/90"
+                              : "border-border bg-foreground/[0.04] text-foreground/70"
+                        }`}
+                      >
+                        {isExecuting && step.enabled
+                          ? <Loader2 className="size-3 animate-spin" />
+                          : <span className={`size-1.5 rounded-full ${
+                              step.enabled ? (isAction ? "bg-amber-600" : "bg-foreground/40") : "bg-foreground/20"
+                            }`} />
+                        }
+                        {stepChipLabel(step)}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 flex flex-col gap-2">
+              <div className="flex gap-2">
                 <button type="button"
                   data-testid="action-plan-run"
-                  onClick={handleRun}
+                  onClick={onApproveClick}
                   disabled={isExecuting || enabledCount === 0}
-                  className="flex items-center gap-1.5 h-8 px-4 bg-green-400 hover:bg-green-300 disabled:bg-white/[0.07] disabled:text-white/25 text-black text-xs font-semibold rounded-md transition-colors"
+                  className={`${showEditTakeover ? "flex-1" : "w-full"} inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-[15px] font-semibold transition-colors disabled:opacity-40 ${
+                    inReviewFlow || (hasBlockingWarnings && warningsReviewed)
+                      ? "bg-amber-600 hover:bg-amber-700 text-white"
+                      : primaryNeedsCaution
+                        ? "bg-foreground text-background hover:bg-foreground/90 ring-2 ring-amber-500/70 ring-offset-2 ring-offset-card"
+                        : "bg-foreground text-background hover:bg-foreground/90"
+                  }`}
                 >
                   {isExecuting
-                    ? <><Loader2 className="size-3 animate-spin" /> Running…</>
-                    : approveLabel
+                    ? <><Loader2 className="size-4 animate-spin" /> Sending…</>
+                    : primaryLabel
                   }
                 </button>
-                <button type="button"
-                  data-testid="action-plan-dismiss"
-                  onClick={onDismiss}
-                  disabled={isExecuting}
-                  className="h-8 px-3 text-xs font-semibold text-white/50 border border-white/[0.12] rounded-md hover:text-white/70 hover:border-white/[0.20] transition-colors disabled:opacity-40"
-                >
-                  I&apos;ll handle this
-                </button>
+                {showEditTakeover && (
+                  <button
+                    type="button"
+                    data-testid="action-plan-edit"
+                    onClick={onEdit}
+                    disabled={isExecuting}
+                    className="flex-1 inline-flex items-center justify-center py-3 rounded-2xl text-[15px] font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-foreground/70 transition-colors disabled:opacity-40"
+                  >
+                    Edit & send myself
+                  </button>
+                )}
               </div>
-            </m.div>
-          </m.div>
-        )}
-      </AnimatePresence>
+              {inReviewFlow && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    data-testid="action-plan-cancel"
+                    onClick={onCancelReview}
+                    disabled={isExecuting}
+                    className="text-xs font-medium text-foreground/40 hover:text-foreground/65 transition-colors disabled:opacity-40"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    </LazyMotion>
   )
 }

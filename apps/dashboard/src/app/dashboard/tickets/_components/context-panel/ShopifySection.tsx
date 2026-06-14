@@ -13,6 +13,7 @@ import { ShopifyCustomerSearch } from "./ShopifyCustomerSearch"
 import { ShopifyCustomerSkeleton } from "./ShopifyCustomerSkeleton"
 import { panelSectionClass } from "./constants"
 import type { ShopifyCustomerState } from "./useShopifyCustomer"
+import { SHOPIFY_LINK_FOCUS_EVENT } from "@/lib/messaging/shopify-link-focus"
 import type { ReactNode } from "react"
 import type { Thread } from "@/types"
 import type { ShopifyCustomer, ShopifyCustomerSearchResult } from "@/types/shopify"
@@ -122,6 +123,16 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   }
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    const handler = () => {
+      dispatch({ type: "mode", mode: "search" })
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    }
+    window.addEventListener(SHOPIFY_LINK_FOCUS_EVENT, handler)
+    return () => window.removeEventListener(SHOPIFY_LINK_FOCUS_EVENT, handler)
+  }, [])
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
@@ -212,7 +223,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
 
   const header = (
     <SectionHeader
-      title="CUSTOMER"
+      title="Customer"
       action={
         data?.customer ? (
           <div className="flex items-center ">
@@ -317,7 +328,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
 
   return (
     <>
-      <section className={panelSectionClass}>
+      <section ref={sectionRef} className={panelSectionClass}>
         {header}
         {body}
       </section>

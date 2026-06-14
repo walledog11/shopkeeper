@@ -44,6 +44,7 @@ interface TicketsPageLayoutProps {
   conversationTicket: Ticket | undefined
   effectiveActiveTab: TicketListTab
   failedMessages: ConversationViewProps["failedMessages"]
+  orgSettings?: ConversationViewProps["orgSettings"]
   flags: TicketsPageLayoutFlags
   filteredTickets: Ticket[]
   liveTicketCount: number
@@ -79,6 +80,8 @@ interface TicketsPageLayoutProps {
   onResolve: ConversationViewProps["onResolve"]
   onRetry: ConversationViewProps["onRetry"]
   onRetrySend: ConversationViewProps["onRetrySend"]
+  onTicketRefresh: ConversationViewProps["onTicketRefresh"]
+  onActionError: ConversationViewProps["onActionError"]
   onSearchChange: ThreadListProps["onSearchChange"]
   onSelectTicket: ThreadListProps["onSelectTicket"]
   onSend: ConversationViewProps["onSend"]
@@ -101,6 +104,7 @@ export function TicketsPageLayout({
   conversationTicket,
   effectiveActiveTab,
   failedMessages,
+  orgSettings,
   flags,
   filteredTickets,
   liveTicketCount,
@@ -136,6 +140,8 @@ export function TicketsPageLayout({
   onResolve,
   onRetry,
   onRetrySend,
+  onTicketRefresh,
+  onActionError,
   onSearchChange,
   onSelectTicket,
   onSend,
@@ -189,12 +195,12 @@ export function TicketsPageLayout({
         {conversationTicket ? (
           <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
             {flags.correctReplyVisible && (
-              <div className="flex items-center justify-between gap-3 border-b border-amber-800/40 bg-amber-900/25 px-4 py-2 text-xs text-amber-100 shrink-0">
+              <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-800 shrink-0">
                 <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
                 <button
                   type="button"
                   onClick={onCorrectReplyDismiss}
-                  className="inline-flex items-center gap-1 text-amber-200/80 hover:text-amber-50 transition-colors shrink-0"
+                  className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-900 transition-colors shrink-0"
                   aria-label="Dismiss"
                 >
                   <X className="size-3.5" />
@@ -206,6 +212,12 @@ export function TicketsPageLayout({
                 key={conversationTicket.id}
                 ticket={conversationTicket}
                 agentName={agentName}
+                hasShopify={flags.hasShopify}
+                orgSettings={orgSettings}
+                threadContext={activeThread ? {
+                  cachedPlan: activeThread.cachedPlan,
+                  cachedPlanMessageId: activeThread.cachedPlanMessageId,
+                } : null}
                 shopifyCustomerId={activeThread?.shopifyCustomerId}
                 customerPlatformId={activeThread?.customer?.platformId}
                 agentTurns={activeAgentTurns}
@@ -230,6 +242,8 @@ export function TicketsPageLayout({
                 failedMessages={failedMessages}
                 onRetry={onRetry}
                 onRetrySend={onRetrySend}
+                onTicketRefresh={onTicketRefresh}
+                onActionError={onActionError}
                 onOpenContext={onOpenContext}
                 onBack={onBack}
                 onResolve={onResolve}
@@ -275,30 +289,30 @@ export function TicketsPageLayout({
           <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
             {activeThreadError ? (
               <>
-                <AlertCircle className="size-5 text-red-400" />
+                <AlertCircle className="size-5 text-red-500" />
                 <div>
-                  <p className="text-sm font-semibold text-white/60">Unable to load ticket</p>
-                  <p className="text-xs text-white/30 mt-1">The ticket may have been archived or is no longer available.</p>
+                  <p className="text-sm font-semibold text-foreground/70">Unable to load conversation</p>
+                  <p className="text-xs text-foreground/40 mt-1">It may have been archived or is no longer available.</p>
                 </div>
               </>
             ) : null}
           </div>
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-4">
-            <div className="size-14 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
+          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
+            <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
               {allCaughtUp
-                ? <CheckCircle2 className="size-6 text-green-400" />
-                : <Inbox className="size-6 text-white/20" />
+                ? <CheckCircle2 className="size-5 text-foreground/40" />
+                : <Inbox className="size-5 text-foreground/30" />
               }
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white/60">
-                {allCaughtUp ? 'All caught up' : 'No ticket open'}
-              </p>
-              <p className="text-xs text-white/30 mt-1 max-w-[200px]">
+            </span>
+            <div className="flex flex-col gap-1">
+              <h2 className="font-display-serif text-lg text-foreground">
+                {allCaughtUp ? "You’re all caught up" : "Pick a conversation"}
+              </h2>
+              <p className="text-sm text-foreground/50 max-w-[230px]">
                 {allCaughtUp
-                  ? 'No open tickets right now. Check back soon.'
-                  : 'Select a ticket from the list to start replying.'}
+                  ? `${agentName} will flag anything that needs your eye.`
+                  : "Choose one from the list to jump in."}
               </p>
             </div>
           </div>
@@ -306,10 +320,10 @@ export function TicketsPageLayout({
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-[#1c1c1c] border border-white/[0.10] text-white text-sm font-medium px-4 py-2.5 rounded-md shadow-lg pointer-events-none">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-foreground text-background text-sm font-medium px-4 py-2.5 rounded-full shadow-lg pointer-events-none">
           {toast.tone === 'error'
             ? <AlertCircle className="size-4 text-red-400 shrink-0" />
-            : <CheckCircle2 className="size-4 text-green-400 shrink-0" />
+            : <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
           }
           {toast.message}
         </div>

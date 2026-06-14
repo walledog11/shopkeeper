@@ -18,12 +18,13 @@ import { threadToTicket } from '../_lib/thread-to-ticket'
 import { fetcher } from '@/lib/api/fetcher'
 import { TicketsPageLayout } from './TicketsPageLayout'
 import { getCurrentPlanForThread } from '@shopkeeper/agent/plan-cache-shape'
-import type { Thread, Ticket, ChannelType } from '@/types'
+import type { Thread, Ticket, ChannelType, OrgSettings } from '@/types'
 
 interface Props {
   initialOpenThreads: Thread[]
   hasShopify: boolean
   agentName: string
+  orgSettings?: Partial<OrgSettings> | null
 }
 
 const EMPTY_SEARCH_THREADS: Thread[] = []
@@ -140,7 +141,7 @@ function TicketsPageContent(props: Props) {
   return <TicketsPageLayout {...view.layoutProps} />
 }
 
-function useTicketsPageView({ initialOpenThreads, hasShopify, agentName }: Props) {
+function useTicketsPageView({ initialOpenThreads, hasShopify, agentName, orgSettings = null }: Props) {
   const searchParams = useSearchParams()
   const queryThreadId = searchParams.get('thread')
   const correctReply = searchParams.get('correct') === '1'
@@ -257,16 +258,9 @@ function useTicketsPageView({ initialOpenThreads, hasShopify, agentName }: Props
     [activeFilter, isSearchMode, liveTickets],
   )
 
-  const lastCustomerMessageId = useMemo(
-    () => activeThread?.messages.filter(m => m.senderType === 'customer').at(-1)?.id ?? null,
-    [activeThread?.messages],
-  )
-  const cachedPlanMessageId = activeThread?.cachedPlanMessageId ?? null
-  // Key memo on cachedPlanMessageId (content fingerprint) rather than the cachedPlan
-  // ref, which churns on every SWR poll and would re-fire downstream effects.
   const cachedPlan = useMemo(
-    () => activeThread ? getCurrentPlanForThread(activeThread, lastCustomerMessageId) : null,
-    [activeThread, lastCustomerMessageId],
+    () => activeThread ? getCurrentPlanForThread(activeThread, activeThread.messages) : null,
+    [activeThread],
   )
 
   const {
@@ -393,6 +387,7 @@ function useTicketsPageView({ initialOpenThreads, hasShopify, agentName }: Props
       conversationTicket,
       effectiveActiveTab,
       failedMessages: failedMessages.filter(m => m.threadId === activeTicketId),
+      orgSettings,
       flags: {
         correctReplyVisible: correctReply && !dismissCorrectHint,
         hasMore: currentHasMore,
@@ -449,6 +444,8 @@ function useTicketsPageView({ initialOpenThreads, hasShopify, agentName }: Props
       onResolve: handleResolve,
       onRetry: handleRetry,
       onRetrySend: handleRetrySend,
+      onTicketRefresh: revalidateTicketData,
+      onActionError: (message: string) => showToast(message, 'error'),
       onSearchChange: handleSearchChange,
       onSelectTicket: (id: string) => { setActiveTicketId(id); setSendError(null) },
       onSend: handleSendMessage,

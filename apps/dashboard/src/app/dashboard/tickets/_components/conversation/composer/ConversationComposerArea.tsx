@@ -9,6 +9,7 @@ import type { AgentPlan, RawToolCall, Ticket } from "@/types"
 interface Props {
   agentName: string
   containerRef?: Ref<HTMLDivElement>
+  planCardRef?: Ref<HTMLDivElement>
   agentInstruction: string
   isAgentMode: boolean
   isPlanExecuting: boolean
@@ -17,7 +18,8 @@ interface Props {
   onChange: (text: string) => void
   onClearAgentMode: () => void
   onPlanApprove: (approvedToolCalls: RawToolCall[]) => void
-  onPlanDismiss: () => void
+  onPlanEdit?: () => void
+  onFocusShopifyLink?: () => void
   onPlanRegenerate: () => void
   onSend: (isNote: boolean) => void
   onViewTabChange: (tab: "chat" | "notes") => void
@@ -38,6 +40,7 @@ interface Props {
 export default function ConversationComposerArea({
   agentName,
   containerRef,
+  planCardRef,
   agentInstruction,
   isAgentMode,
   isPlanExecuting,
@@ -46,7 +49,8 @@ export default function ConversationComposerArea({
   onChange,
   onClearAgentMode,
   onPlanApprove,
-  onPlanDismiss,
+  onPlanEdit,
+  onFocusShopifyLink,
   onPlanRegenerate,
   onSend,
   onViewTabChange,
@@ -60,24 +64,25 @@ export default function ConversationComposerArea({
       <AnimatePresence initial={false}>
         {pendingPlan && viewTab === "chat" && (
           <m.div
-            className="overflow-hidden"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0, transition: { duration: 0.2 } }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
+            ref={planCardRef}
+            data-testid="action-plan-card"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="px-5 pb-2 pt-1 pointer-events-auto"
           >
-            <div className="px-5 pb-2 pt-1 pointer-events-auto">
-              <ActionPlanCard
+            <ActionPlanCard
                 plan={pendingPlan}
                 agentName={agentName}
                 customerName={composer.customerName}
                 isExecuting={isPlanExecuting}
                 isRegenerating={isRegenerating}
                 onApprove={onPlanApprove}
-                onDismiss={onPlanDismiss}
+                onEdit={onPlanEdit}
+                onFocusShopifyLink={onFocusShopifyLink}
                 onRegenerate={onPlanRegenerate}
               />
-            </div>
           </m.div>
         )}
       </AnimatePresence>

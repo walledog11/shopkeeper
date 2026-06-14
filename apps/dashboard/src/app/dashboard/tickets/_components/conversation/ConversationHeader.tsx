@@ -1,28 +1,37 @@
 "use client"
 
-import { ArrowLeft, CheckCircle2, Info, RotateCcw } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Info, Loader2, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
 
 interface Props {
   activeTab: "open" | "closed"
+  cocoAction?: TicketCocoAction | null
   customer: string
   platform: string
-  agentName?: string
-  onAskAgent?: () => void
   onBack: () => void
+  onCocoAction?: () => void
   onResolve: () => void
   onReopen: () => void
   onOpenContext?: () => void
 }
 
+const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
+  send: "border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100",
+  draft: "border-violet-500/40 text-violet-200 hover:bg-violet-500/10 hover:text-violet-100",
+  caution: "border-amber-500/40 text-amber-200 hover:bg-amber-500/10 hover:text-amber-100",
+  neutral: "border-border text-white/75 hover:text-white hover:bg-white/[0.06]",
+  loading: "border-border text-white/50 hover:bg-transparent hover:text-white/50",
+}
+
 export default function ConversationHeader({
   activeTab,
+  cocoAction,
   customer,
   platform,
-  agentName,
-  onAskAgent,
   onBack,
+  onCocoAction,
   onResolve,
   onReopen,
   onOpenContext,
@@ -64,14 +73,21 @@ export default function ConversationHeader({
       </div>
 
       <div className="flex items-center gap-2">
-        {onAskAgent && agentName && activeTab === "open" && (
+        {cocoAction && onCocoAction && (
           <Button
             variant="outline"
             size="sm"
-            onClick={onAskAgent}
-            className="hidden sm:inline-flex h-8 text-xs font-semibold border-border text-white/75 hover:text-white hover:bg-white/[0.06]"
+            data-testid="ticket-coco-action"
+            data-coco-action={cocoAction.id}
+            disabled={cocoAction.disabled}
+            onClick={onCocoAction}
+            className={`inline-flex items-center gap-1.5 h-8 max-w-[9.5rem] sm:max-w-none text-xs font-semibold ${COCO_ACTION_CLASS[cocoAction.variant]}`}
           >
-            Ask {agentName}
+            {cocoAction.disabled ? (
+              <Loader2 className="size-3.5 animate-spin shrink-0" />
+            ) : null}
+            <span className="truncate sm:hidden">{cocoAction.shortLabel}</span>
+            <span className="truncate hidden sm:inline">{cocoAction.label}</span>
           </Button>
         )}
         {onOpenContext && (

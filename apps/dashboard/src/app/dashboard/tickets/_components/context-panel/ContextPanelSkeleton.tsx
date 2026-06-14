@@ -4,7 +4,7 @@ interface Props {
 
 export default function ContextPanelSkeleton({ hasShopify }: Props) {
   return (
-    <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-white/[0.12] flex flex-col xl:overflow-y-auto bg-[#030303] animate-pulse">
+    <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-border flex flex-col xl:overflow-y-auto bg-background animate-pulse">
       <section className="px-3.5 pt-3 pb-3 border-b border-white/[0.08]">
         <div className="flex flex-row items-center gap-4">
           <div className="size-8 rounded-full bg-white/[0.06] shrink-0" />

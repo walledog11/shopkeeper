@@ -44,6 +44,8 @@ const NOINDEX_HEADERS = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }];
 const NOINDEX_PATH_GROUP =
   '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|api)';
 
+const repoRoot = path.resolve(__dirname, '../..');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
@@ -73,7 +75,12 @@ const nextConfig = {
     ];
   },
   turbopack: {
-    root: path.resolve(__dirname, '../..'),
+    root: repoRoot,
+    resolveAlias: {
+      '@clerk/nextjs': path.join(repoRoot, 'node_modules/@clerk/nextjs'),
+      '@clerk/react': path.join(repoRoot, 'node_modules/@clerk/react'),
+      '@clerk/shared': path.join(repoRoot, 'node_modules/@clerk/shared'),
+    },
   },
   serverExternalPackages: ['stripe'],
   transpilePackages: ['@shopkeeper/db'],

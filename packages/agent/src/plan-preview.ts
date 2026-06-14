@@ -87,6 +87,25 @@ function warningBlocksQuickReply(warning: string, plan: AgentPlan): boolean {
   return true
 }
 
+export function isShopifyCustomerWarning(warning: string): boolean {
+  const lower = warning.toLowerCase()
+  return lower.includes("couldn't find a shopify customer") || lower.includes("could not find a shopify customer")
+}
+
+export function isPlanWarningBlocking(warning: string, plan: AgentPlan): boolean {
+  return warningBlocksQuickReply(warning, plan)
+}
+
+export function planWarningTiers(plan: AgentPlan): { blocking: string[]; informational: string[] } {
+  const blocking: string[] = []
+  const informational: string[] = []
+  for (const warning of plan.warnings ?? []) {
+    if (warningBlocksQuickReply(warning, plan)) blocking.push(warning)
+    else informational.push(warning)
+  }
+  return { blocking, informational }
+}
+
 const NEEDS_REVIEW: HomePlanClassification = {
   kind: "needs_review",
   replyText: null,

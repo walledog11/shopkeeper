@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { BadRequestError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
+import { requireOrgThread, getLatestConversationMessage } from "@shopkeeper/agent/thread-auth";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "@shopkeeper/agent/plan-cache";
+import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -58,11 +59,14 @@ export const POST = withOrgRoute(
     }
 
     const cachedPlan = readAgentPlanCache(thread.cachedPlan);
-    const lastCustomerMessage = thread.messages[0] ?? null;
-    const currentPlan = isAgentPlanCacheHit({
+    const latestConversation = await getLatestConversationMessage(threadId);
+    const pendingCustomerMessageId = latestConversation
+      ? getPendingCustomerMessageId([latestConversation])
+      : null;
+    const currentPlan = pendingCustomerMessageId && isAgentPlanCacheHit({
       cache: cachedPlan,
       instruction,
-      lastCustomerMessageId: lastCustomerMessage?.id ?? null,
+      lastCustomerMessageId: pendingCustomerMessageId,
       settings,
     }) ? cachedPlan?.plan : null;
     const plannedToolCallsById = new Map(
@@ -90,7 +94,6 @@ export const POST = withOrgRoute(
     }, "[agent] POST");
 
     const approver = await resolveSessionApprover();
-    const lastCustomerMessageId = lastCustomerMessage?.id ?? null;
     const result = await executeAgentTurn({
       orgId: org.id,
       threadId,
@@ -111,7 +114,7 @@ export const POST = withOrgRoute(
     }).finally(() => consumeThreadCachedPlan({
       orgId: org.id,
       threadId,
-      lastCustomerMessageId,
+      lastCustomerMessageId: pendingCustomerMessageId,
     }));
     await resolveShadowDecisionOnApproval({
       orgId: org.id,

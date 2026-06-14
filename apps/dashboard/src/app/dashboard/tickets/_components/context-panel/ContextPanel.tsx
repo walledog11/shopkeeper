@@ -47,11 +47,11 @@ export default function ContextPanel({
     .filter(t => t.id !== thread.id)
     .slice(0, 3)
 
-  const basePill = "inline-flex h-6 items-center gap-2 rounded border border-white/[0.10] bg-white/[0.035] px-2 text-xs font-medium text-white/80"
-  const actionPill = `${basePill} transition-colors hover:border-white/[0.18] hover:bg-white/[0.07]`
+  const basePill = "inline-flex h-6 items-center gap-2 rounded-full border border-border bg-foreground/[0.04] px-2.5 text-xs font-medium text-foreground/80"
+  const actionPill = `${basePill} transition-colors hover:border-foreground/20 hover:bg-foreground/[0.07]`
 
   return (
-    <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-white/[0.12] flex flex-col xl:overflow-y-auto bg-[#030303]">
+    <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-border flex flex-col xl:overflow-y-auto bg-background">
       <section className="px-3.5 pt-3 pb-3 border-b border-white/[0.08]">
         <div className="flex flex-row items-center gap-4">
           <div className="size-8 rounded-full overflow-hidden bg-[#ff7a1a] flex items-center justify-center text-white text-xs font-semibold shrink-0">
@@ -111,7 +111,7 @@ export default function ContextPanel({
       )}
 
       <section className="px-3.5 py-3">
-        <SectionHeader title="RECENT TICKETS" />
+        <SectionHeader title="Past conversations" />
         {recentThreads.length > 0 ? (
           <div className="divide-y divide-dashed divide-white/[0.08]">
             {recentThreads.map(t => {
@@ -141,7 +141,7 @@ export default function ContextPanel({
             })}
           </div>
         ) : (
-          <p className="text-xs text-white/40">No recent tickets.</p>
+          <p className="text-xs text-foreground/40">First time you&apos;re hearing from them.</p>
         )}
       </section>
     </aside>

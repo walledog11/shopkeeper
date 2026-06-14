@@ -16,6 +16,7 @@ import type { OrgSettings } from "@/types";
 
 export {
   consumeThreadCachedPlan,
+  clearThreadPlanCache,
   formatApproverId,
   isAutoExecuteEnabled,
   getExecutablePlanToolCalls,

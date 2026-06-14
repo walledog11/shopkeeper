@@ -23,16 +23,16 @@ export default function ConversationSummaryBar({
   const displaySummary = summary?.trim()
 
   return (
-    <div className="shrink-0 border-b border-border bg-[#050505] px-2 py-1 mt-1 md:px-6">
+    <div className="shrink-0 border-b border-border bg-foreground/[0.02] px-2 py-1 mt-1 md:px-6">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2">
-          <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-r from-slate-200 via-slate-400 to-slate-600 text-white">
+          <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md bg-foreground/10 text-foreground/60">
             <Brain className="size-2.5" />
           </div>
-          <p className="min-w-0 text-xs leading-6 text-white/55">
-            <span className="font-semibold text-white/90">Summary</span>
-            <span className="text-white/35"> · </span>
-            <span className={displaySummary ? "" : "text-white/35"}>
+          <p className="min-w-0 text-xs leading-6 text-foreground/60">
+            <span className="font-semibold text-foreground/85">Summary</span>
+            <span className="text-foreground/35"> · </span>
+            <span className={displaySummary ? "" : "text-foreground/35"}>
               {displaySummary || "Generating summary…"}
             </span>
           </p>

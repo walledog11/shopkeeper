@@ -1,8 +1,9 @@
 import { Prisma, db } from "@shopkeeper/db";
 import { BadRequestError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
-import { requireOrgThread } from "./thread-auth.js";
+import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
+import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
 import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "./plan-preview.js";
 import { resolveAutoExecuteMode } from "./settings.js";
@@ -76,14 +77,22 @@ async function loadCurrentCachedHomePlan(params: {
 }): Promise<CurrentCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   const cachedPlan = readAgentPlanCache(thread.cachedPlan);
-  const lastCustomerMessage = thread.messages[0] ?? null;
+  const latestConversation = await getLatestConversationMessage(params.threadId);
+  const pendingCustomerMessageId = latestConversation
+    ? getPendingCustomerMessageId([latestConversation])
+    : null;
   const instruction = cachedPlan?.instruction ?? "";
-  const plan = cachedPlan && thread.cachedPlanMessageId === lastCustomerMessage?.id && isAgentPlanCacheHit({
-    cache: cachedPlan,
-    instruction,
-    lastCustomerMessageId: lastCustomerMessage?.id ?? null,
-    settings: params.settings,
-  }) ? cachedPlan.plan : null;
+  const plan = cachedPlan
+    && pendingCustomerMessageId
+    && thread.cachedPlanMessageId === pendingCustomerMessageId
+    && isAgentPlanCacheHit({
+      cache: cachedPlan,
+      instruction,
+      lastCustomerMessageId: pendingCustomerMessageId,
+      settings: params.settings,
+    })
+    ? cachedPlan.plan
+    : null;
 
   return {
     instruction,
@@ -103,6 +112,22 @@ export async function consumeThreadCachedPlan(params: {
       id: params.threadId,
       organizationId: params.orgId,
       cachedPlanMessageId: params.lastCustomerMessageId,
+    },
+    data: {
+      cachedPlan: Prisma.DbNull,
+      cachedPlanMessageId: null,
+    },
+  });
+}
+
+export async function clearThreadPlanCache(params: {
+  orgId: string;
+  threadId: string;
+}) {
+  await db.thread.updateMany({
+    where: {
+      id: params.threadId,
+      organizationId: params.orgId,
     },
     data: {
       cachedPlan: Prisma.DbNull,

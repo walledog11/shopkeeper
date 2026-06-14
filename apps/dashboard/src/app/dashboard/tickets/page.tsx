@@ -42,6 +42,7 @@ export default async function TicketsPage() {
         initialOpenThreads={initialOpenThreads}
         hasShopify={hasShopify}
         agentName={settings.agentName}
+        orgSettings={org.settings as Partial<OrgSettings> | null}
       />
     </Suspense>
   )

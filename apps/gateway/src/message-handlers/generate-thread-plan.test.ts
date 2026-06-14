@@ -18,6 +18,7 @@ const {
 
 vi.mock('@shopkeeper/agent/thread-auth', () => ({
   requireOrgThread: mockRequireOrgThread,
+  getLatestConversationMessage: vi.fn(async () => ({ id: 'msg_1', senderType: 'customer' })),
 }));
 
 vi.mock('@shopkeeper/agent/build-context', () => ({

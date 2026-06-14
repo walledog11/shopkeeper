@@ -165,7 +165,7 @@ async function loadNeedsAttention(
     const latestMessage = thread?.messages[0]
     if (!thread || !latestMessage) return []
 
-    const plan = getCurrentPlanForThread(thread, latestMessage.id)
+    const plan = getCurrentPlanForThread(thread, thread.messages)
     if (!plan) return []
 
     const copy = buildPlanPreview(plan, thread.aiSummary, latestMessage.contentText)

@@ -1,8 +1,9 @@
 /**
  * Backfill action plans for open tickets that have no cached plan.
  *
- * Finds every OPEN thread whose cachedPlanMessageId doesn't match the last
- * customer message, then runs generateThreadPlan() in-process (same path as the worker).
+ * Finds every OPEN thread whose latest non-note message is still from the
+ * customer and whose cachedPlanMessageId doesn't match it, then runs
+ * generateThreadPlan() in-process (same path as the worker).
  *
  * Usage (from apps/gateway/):
  *   tsx src/scripts/backfill-plans.ts
@@ -13,7 +14,8 @@
  *   DATABASE_URL, ANTHROPIC_API_KEY, and other gateway agent runtime vars
  */
 
-import { db } from '@shopkeeper/db';
+import { db, SenderType } from '@shopkeeper/db';
+import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import { loadGatewayEnv } from '../config/load-env.js';
 import { generateThreadPlan } from '../message-handlers/generate-thread-plan.js';
 
@@ -83,19 +85,25 @@ async function main() {
       id: true,
       organizationId: true,
       cachedPlanMessageId: true,
+      cachedPlan: true,
       messages: {
-        where: { senderType: 'customer' },
+        where: { deletedAt: null, senderType: { not: SenderType.note } },
         orderBy: [{ sentAt: 'desc' }, { id: 'desc' }],
         take: 1,
-        select: { id: true },
+        select: { id: true, senderType: true },
       },
     },
   });
 
   const needsPlan = threads.filter(t => {
-    const lastMsgId = t.messages[0]?.id ?? null;
-    if (!lastMsgId) return false;
-    return t.cachedPlanMessageId !== lastMsgId;
+    const lastConversation = t.messages[0];
+    if (!lastConversation || lastConversation.senderType !== SenderType.customer) {
+      if (!dryRun && (t.cachedPlan || t.cachedPlanMessageId)) {
+        void clearThreadPlanCache({ orgId: t.organizationId, threadId: t.id });
+      }
+      return false;
+    }
+    return t.cachedPlanMessageId !== lastConversation.id;
   });
 
   console.log(`Found ${threads.length} open tickets — ${needsPlan.length} need a plan.\n`);

@@ -136,3 +136,23 @@ export async function regenerateAgentPlan(
 export function planRequestErrorTurn(instruction: string, error: unknown): Omit<AgentTurn, "id"> {
   return requestErrorTurn(instruction, error, "Failed to generate plan — please try again.")
 }
+
+export async function quickApproveCachedPlan(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await requestJson(
+      "/api/agent/quick-approve",
+      {
+        method: "POST",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ threadId }),
+      },
+      "Could not complete this action.",
+    )
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof ApiRequestError
+      ? error.message
+      : "Network error. Try again."
+    return { ok: false, error: message }
+  }
+}

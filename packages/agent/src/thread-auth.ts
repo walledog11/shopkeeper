@@ -1,5 +1,7 @@
 import { db } from "@shopkeeper/db";
 import { BadRequestError, NotFoundError } from "./errors.js";
+import { SENDER_TYPE } from "./thread-constants.js";
+import type { PlanThreadMessage } from "./plan-cache-shape.js";
 
 type DashboardCustomerClient = Pick<typeof db, "customer">;
 
@@ -57,6 +59,18 @@ export async function requireOrgThread(threadId: string, orgId: string) {
   }
 
   return thread;
+}
+
+export async function getLatestConversationMessage(threadId: string): Promise<PlanThreadMessage | null> {
+  return db.message.findFirst({
+    where: {
+      threadId,
+      deletedAt: null,
+      senderType: { not: SENDER_TYPE.NOTE },
+    },
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    select: { id: true, senderType: true },
+  });
 }
 
 export function requireTrimmedInstruction(instruction: unknown): string {

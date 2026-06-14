@@ -1,4 +1,10 @@
+import { SENDER_TYPE } from "./thread-constants.js"
 import type { AgentPlan, PlanStep, RawToolCall, ToolCategory } from "./types.js"
+
+export type PlanThreadMessage = {
+  id: string
+  senderType: string
+}
 
 export const AGENT_PLAN_CACHE_VERSION = 2
 
@@ -91,11 +97,37 @@ export function extractCachedDraftReply(cachedPlan: unknown): string | null {
   return null
 }
 
+export function getLastConversationMessage(messages: PlanThreadMessage[]): PlanThreadMessage | null {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.senderType !== SENDER_TYPE.NOTE) {
+      return message
+    }
+  }
+  return null
+}
+
+// The customer message this thread is waiting on, if any. Null once an outbound
+// reply (agent/ai) is the latest non-note message.
+export function getPendingCustomerMessageId(messages: PlanThreadMessage[]): string | null {
+  const lastConversation = getLastConversationMessage(messages)
+  if (!lastConversation || lastConversation.senderType !== SENDER_TYPE.CUSTOMER) {
+    return null
+  }
+  return lastConversation.id
+}
+
+export function isThreadAwaitingReply(messages: PlanThreadMessage[]): boolean {
+  return getPendingCustomerMessageId(messages) !== null
+}
+
 export function getCurrentPlanForThread(
   thread: { cachedPlan: unknown; cachedPlanMessageId: string | null },
-  lastCustomerMessageId: string | null,
+  messages: PlanThreadMessage[],
 ): AgentPlan | null {
-  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== lastCustomerMessageId) return null
+  const pendingCustomerMessageId = getPendingCustomerMessageId(messages)
+  if (!pendingCustomerMessageId) return null
+  if (!thread.cachedPlanMessageId || thread.cachedPlanMessageId !== pendingCustomerMessageId) return null
   const plan = readAgentPlanCachePlan(thread.cachedPlan)
   return plan && plan.steps.length > 0 ? plan : null
 }

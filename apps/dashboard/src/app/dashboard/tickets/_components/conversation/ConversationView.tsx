@@ -1,10 +1,15 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
-import { useAgentPanel } from "@/app/dashboard/_components/agent-panel/AgentPanelContext"
+import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
+import { quickApproveCachedPlan } from "../../_hooks/conversation-agent-requests"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import {
+  planMessagesFromTicketMessages,
+  resolveTicketCocoAction,
+} from "../../_lib/resolve-ticket-coco-action"
 import ConversationHeader from "./ConversationHeader"
 import ConversationSummaryBar from "./ConversationSummaryBar"
 import PresenceBanner from "./PresenceBanner"
@@ -14,12 +19,15 @@ import ConversationComposerArea from "./composer/ConversationComposerArea"
 import ConversationTabs from "./ConversationTabs"
 import { partitionConversationMessages } from "./utils/conversationViewUtils"
 import { useVisualKeyboard } from "./useVisualKeyboard"
-import type { Ticket, AgentTurn, AgentPlan, FailedMessage } from "@/types"
+import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, Thread } from "@/types"
 
 interface Props {
   ticket: Ticket
   activeTab: 'open' | 'closed'
   agentName: string
+  hasShopify?: boolean
+  orgSettings?: Partial<OrgSettings> | null
+  threadContext?: Pick<Thread, "cachedPlan" | "cachedPlanMessageId"> | null
   shopifyCustomerId?: string | null
   customerPlatformId?: string
   replyText: string
@@ -47,6 +55,8 @@ interface Props {
   failedMessages?: FailedMessage[]
   onRetry?: (id: string) => void
   onRetrySend?: (id: string) => void
+  onTicketRefresh?: () => void | Promise<void>
+  onActionError?: (message: string) => void
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
@@ -55,6 +65,9 @@ export default function ConversationView({
   ticket,
   activeTab,
   agentName,
+  hasShopify = false,
+  orgSettings = null,
+  threadContext = null,
   shopifyCustomerId,
   customerPlatformId,
   replyText,
@@ -77,6 +90,8 @@ export default function ConversationView({
   failedMessages = EMPTY_FAILED_MESSAGES,
   onRetry,
   onRetrySend,
+  onTicketRefresh,
+  onActionError,
 }: Props) {
   const {
     threadLoading: isThreadLoading = false,
@@ -88,23 +103,32 @@ export default function ConversationView({
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
+  const planCardRef = useRef<HTMLDivElement>(null)
   const { keyboardInset, visualViewportHeight } = useVisualKeyboard(conversationRef, activeTab === 'open')
   const keyboardLayoutOpen = keyboardInset > 0
-  const { open: openAgentPanel } = useAgentPanel()
+  const planMessages = useMemo(
+    () => planMessagesFromTicketMessages(ticket.messages),
+    [ticket.messages],
+  )
 
-  const handleAskAgent = useCallback(() => {
-    openAgentPanel({
-      source: "tickets",
-      threadId: ticket.id,
-      customerName: ticket.customer,
+  const handleFocusShopifyLink = useCallback(() => {
+    onOpenContext?.()
+    requestShopifyLinkFocus()
+  }, [onOpenContext])
+
+  const focusComposer = useCallback(() => {
+    requestAnimationFrame(() => {
+      composerRef.current
+        ?.querySelector<HTMLTextAreaElement>('[data-testid="reply-composer-textarea"]')
+        ?.focus()
     })
-  }, [openAgentPanel, ticket.customer, ticket.id])
+  }, [])
 
   const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
   const {
     agentInstruction,
     handlePlanApprove,
-    handlePlanDismiss,
+    handlePlanEdit,
     handlePlanRegenerate,
     handleSend,
     isAgentMode,
@@ -113,6 +137,8 @@ export default function ConversationView({
     isRegenerating,
     pendingInstruction,
     pendingPlan,
+    requestDraftReply,
+    requestRefreshDraft,
   } = useConversationAgentFlow({
     ticket,
     viewTab,
@@ -156,6 +182,80 @@ export default function ConversationView({
     }
     messagesEndRef.current?.scrollIntoView({ behavior, block: "end" })
   }, [messagesEndRef])
+
+  const agentBusy = isSending || isAgentRunning || isPlanLoading || isPlanExecuting
+
+  const cocoAction = useMemo(() => resolveTicketCocoAction({
+    activeTab,
+    agentBusy,
+    channelType: ticket.channelType,
+    hasShopify,
+    isNoteTab: viewTab === "notes",
+    lastCustomerMessageAt: ticket.lastCustomerMessageAt,
+    messages: planMessages,
+    orgSettings,
+    shopifyCustomerId,
+    thread: threadContext,
+  }), [
+    activeTab,
+    agentBusy,
+    hasShopify,
+    orgSettings,
+    planMessages,
+    shopifyCustomerId,
+    threadContext,
+    ticket.channelType,
+    ticket.lastCustomerMessageAt,
+    viewTab,
+  ])
+
+  const focusPlanCard = useCallback(() => {
+    setViewTab("chat")
+    requestAnimationFrame(() => {
+      planCardRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" })
+    })
+  }, [])
+
+  const handleCocoAction = useCallback(async () => {
+    if (!cocoAction || cocoAction.disabled) return
+
+    switch (cocoAction.handler) {
+      case "quick-approve": {
+        const result = await quickApproveCachedPlan(ticket.id)
+        if (!result.ok) {
+          onActionError?.(result.error)
+          return
+        }
+        await onTicketRefresh?.()
+        scrollTimelineToEnd("smooth")
+        return
+      }
+      case "focus-plan":
+        focusPlanCard()
+        return
+      case "draft-reply":
+        await requestDraftReply(cocoAction.instruction ?? "draft a reply")
+        focusPlanCard()
+        return
+      case "refresh-draft":
+        await requestRefreshDraft(cocoAction.instruction ?? "draft a reply")
+        focusPlanCard()
+        return
+      case "link-customer":
+        handleFocusShopifyLink()
+        return
+    }
+  }, [
+    cocoAction,
+    focusPlanCard,
+    handleFocusShopifyLink,
+    onActionError,
+    onTicketRefresh,
+    requestDraftReply,
+    requestRefreshDraft,
+    scrollTimelineToEnd,
+    ticket.id,
+  ])
 
   useEffect(() => {
     const root = conversationRef.current
@@ -232,10 +332,10 @@ export default function ConversationView({
     >
       <ConversationHeader
         activeTab={activeTab}
+        cocoAction={cocoAction}
         customer={ticket.customer}
         platform={ticket.platform}
-        agentName={agentName}
-        onAskAgent={handleAskAgent}
+        onCocoAction={() => { void handleCocoAction() }}
         onBack={onBack}
         onResolve={onResolve}
         onReopen={onReopen}
@@ -292,6 +392,7 @@ export default function ConversationView({
         ) : (
           <ConversationComposerArea
             containerRef={composerRef}
+            planCardRef={planCardRef}
             agentName={agentName}
             agentInstruction={agentInstruction}
             isAgentMode={isAgentMode}
@@ -301,7 +402,11 @@ export default function ConversationView({
             onChange={text => onReplyChange(isAgentMode ? `@${agentName.toLowerCase()} ` + text : text)}
             onClearAgentMode={() => onReplyChange('')}
             onPlanApprove={handlePlanApprove}
-            onPlanDismiss={handlePlanDismiss}
+            onPlanEdit={() => {
+              handlePlanEdit()
+              focusComposer()
+            }}
+            onFocusShopifyLink={handleFocusShopifyLink}
             onPlanRegenerate={handlePlanRegenerate}
             onSend={handleSend}
             onViewTabChange={setViewTab}

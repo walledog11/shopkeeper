@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, SenderType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestCustomer,
@@ -88,6 +88,46 @@ describe('POST /api/agent/plan', () => {
     const body = await res.json() as { steps: unknown[] };
     expect(body.steps).toHaveLength(0);
     expect(mockPlanAgent).not.toHaveBeenCalled();
+  });
+
+  it('returns empty steps and clears stale cache when the thread was already answered', async () => {
+    const customer = await createTestCustomer(org.id, 'answered@test.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, 'Please update my address');
+    await createTestMessage(thread.id, 'All set — address updated.', SenderType.agent);
+
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        cachedPlanMessageId: message.id,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: 'Handle address change',
+          lastCustomerMessageId: message.id,
+          settings: {},
+          plan: {
+            instruction: 'Handle address change',
+            steps: [{ id: 'step_1', tool: 'send_reply', label: 'Reply', description: 'Reply', category: 'communication', enabled: true }],
+            rawToolCalls: [{ id: 'step_1', name: 'send_reply', input: { text: 'All set.' } }],
+          },
+        }) as unknown as Parameters<typeof db.thread.update>[0]['data']['cachedPlan'],
+      },
+    });
+
+    const req = new Request('http://localhost:3000/api/agent/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ threadId: thread.id, instruction: 'Handle address change' }),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    const body = await res.json() as { steps: unknown[] };
+    expect(body.steps).toHaveLength(0);
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+
+    const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updatedThread?.cachedPlan).toBeNull();
+    expect(updatedThread?.cachedPlanMessageId).toBeNull();
   });
 
   it('calls planAgent and caches result on cache miss', async () => {
