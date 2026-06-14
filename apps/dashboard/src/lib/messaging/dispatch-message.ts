@@ -2,8 +2,10 @@ import { db, SenderType, createMessage } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
 import { CHANNEL_TYPE, THREAD_STATUS } from '@shopkeeper/agent/thread-constants';
 import { recordOutboundCall } from '@/lib/server/outbound-recorder';
-import { getEmailSender, getEmailProvider, EmailNotConfiguredError } from '@/lib/messaging/email';
-import { buildThreadReplyHeaders, formatReplySubject } from '@/lib/messaging/email/reply';
+import { getEmailProvider } from '@shopkeeper/email/providers';
+import { buildThreadReplyHeaders, formatReplySubject } from '@shopkeeper/email/reply';
+import { getEmailSender } from '@shopkeeper/email/senders';
+import { EmailNotConfiguredError } from '@shopkeeper/email/types';
 import {
   recordEmailSendFailure,
   recordInstagramSendFailure,

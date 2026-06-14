@@ -46,6 +46,7 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
                 autonomyTier={autonomyTier}
                 compact
                 openContext={openContext}
+                restoreSession={!openContext?.walkthrough}
                 onClose={close}
               />
             </m.div>
@@ -64,6 +65,7 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
                   autonomyTier={autonomyTier}
                   compact
                   openContext={openContext}
+                  restoreSession={!openContext?.walkthrough}
                   onClose={close}
                 />
               </div>

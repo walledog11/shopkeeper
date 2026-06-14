@@ -3,7 +3,7 @@
 import { useReducer } from "react"
 import { cn } from "@/lib/ui/cn"
 import { formatLastActivityTime } from "@/lib/format/date"
-import { getEmailReauthorizePath } from "@/lib/messaging/email/providers"
+import { getEmailReauthorizePath } from "@shopkeeper/email/providers"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { ConnectedAccountRow } from "./ConnectedAccountRow"

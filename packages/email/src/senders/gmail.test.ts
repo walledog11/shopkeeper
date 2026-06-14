@@ -1,24 +1,33 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
-import { GmailSender, buildRawMime } from './gmail';
+import { buildRawMime } from '../mime-build';
+
+const tokenMocks = vi.hoisted(() => ({
+  getEmailOAuthClient: vi.fn(),
+  persistRefreshedToken: vi.fn(),
+  requestTokenRefresh: vi.fn(),
+}));
+
+vi.mock('../token.js', () => tokenMocks);
+
+import { GmailSender } from './gmail';
 
 const mockFetch = vi.fn();
-vi.stubGlobal('fetch', mockFetch);
 
-let org: Awaited<ReturnType<typeof createTestOrg>> | null;
-
-beforeEach(async () => {
-  org = await createTestOrg();
-  vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
-  vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret');
+beforeEach(() => {
+  mockFetch.mockReset();
+  tokenMocks.getEmailOAuthClient.mockReset();
+  tokenMocks.persistRefreshedToken.mockReset();
+  tokenMocks.requestTokenRefresh.mockReset();
+  vi.stubGlobal('fetch', mockFetch);
+  tokenMocks.getEmailOAuthClient.mockReturnValue({
+    clientId: 'google-client-id',
+    clientSecret: 'google-client-secret',
+  });
+  tokenMocks.persistRefreshedToken.mockResolvedValue(undefined);
 });
 
-afterEach(async () => {
-  await cleanupTestData(org?.id);
-  org = null;
-  vi.clearAllMocks();
-  vi.unstubAllEnvs();
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('buildRawMime', () => {
@@ -66,28 +75,21 @@ describe('buildRawMime', () => {
 
 describe('GmailSender.send', () => {
   it('refreshes on 401, retries once, and persists the new token', async () => {
-    const integration = await db.integration.create({
-      data: {
-        organizationId: org!.id,
-        platform: ChannelType.email,
-        externalAccountId: 'merchant@gmail.test',
-        accessToken: 'old_token',
-        refreshToken: 'refresh_token',
-        tokenExpiresAt: new Date(Date.now() + 3600_000),
-        metadata: { provider: 'gmail' },
-      },
-    });
+    const refreshedToken = {
+      accessToken: 'new_token',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+    };
 
     mockFetch
       .mockResolvedValueOnce(new Response('Unauthorized', { status: 401 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'new_token', expires_in: 3600 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'msg_1' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    tokenMocks.requestTokenRefresh.mockResolvedValueOnce({ ok: true, token: refreshedToken });
 
     const sender = new GmailSender({
-      id: integration.id,
-      accessToken: integration.accessToken,
-      refreshToken: integration.refreshToken,
-      tokenExpiresAt: integration.tokenExpiresAt,
+      id: 'gmail-integration',
+      accessToken: 'old_token',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
     });
 
     await sender.send({
@@ -98,41 +100,33 @@ describe('GmailSender.send', () => {
       text: 'Hello',
     });
 
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
-    expect(String(mockFetch.mock.calls[1][0])).toBe('https://oauth2.googleapis.com/token');
-    expect(String(mockFetch.mock.calls[2][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
+    expect(String(mockFetch.mock.calls[1][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
+    expect(tokenMocks.requestTokenRefresh).toHaveBeenCalledWith('gmail', 'refresh_token', {
+      clientId: 'google-client-id',
+      clientSecret: 'google-client-secret',
+    });
+    expect(tokenMocks.persistRefreshedToken).toHaveBeenCalledWith('gmail-integration', refreshedToken);
 
-    const sendInit = mockFetch.mock.calls[2][1] as RequestInit;
+    const sendInit = mockFetch.mock.calls[1][1] as RequestInit;
     expect((sendInit.headers as Record<string, string>).Authorization).toBe('Bearer new_token');
-
-    const updated = await db.integration.findUnique({ where: { id: integration.id } });
-    expect(updated?.accessToken).toBe('new_token');
-    expect(updated?.tokenExpiresAt?.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('proactively refreshes when the token is near expiry', async () => {
-    const integration = await db.integration.create({
-      data: {
-        organizationId: org!.id,
-        platform: ChannelType.email,
-        externalAccountId: 'merchant@gmail.test',
-        accessToken: 'stale',
-        refreshToken: 'refresh_token',
-        tokenExpiresAt: new Date(Date.now() - 1000),
-        metadata: { provider: 'gmail' },
-      },
-    });
+    const refreshedToken = {
+      accessToken: 'fresh',
+      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
+    };
 
-    mockFetch
-      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'fresh', expires_in: 3600 }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'msg' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    tokenMocks.requestTokenRefresh.mockResolvedValueOnce({ ok: true, token: refreshedToken });
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ id: 'msg' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
 
     const sender = new GmailSender({
-      id: integration.id,
-      accessToken: integration.accessToken,
-      refreshToken: integration.refreshToken,
-      tokenExpiresAt: integration.tokenExpiresAt,
+      id: 'gmail-integration',
+      accessToken: 'stale',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date(Date.now() - 1000),
     });
 
     await sender.send({
@@ -143,9 +137,10 @@ describe('GmailSender.send', () => {
       text: 'Hi',
     });
 
-    expect(String(mockFetch.mock.calls[0][0])).toBe('https://oauth2.googleapis.com/token');
-    expect(String(mockFetch.mock.calls[1][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
-    const init = mockFetch.mock.calls[1][1] as RequestInit;
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(String(mockFetch.mock.calls[0][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
+    expect(tokenMocks.persistRefreshedToken).toHaveBeenCalledWith('gmail-integration', refreshedToken);
+    const init = mockFetch.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer fresh');
   });
 });

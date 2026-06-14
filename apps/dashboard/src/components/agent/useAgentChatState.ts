@@ -17,6 +17,10 @@ interface UseAgentChatStateProps {
   restoreSession?: boolean
 }
 
+interface SendInstructionOptions {
+  displayText?: string
+}
+
 export function messageKey(message: ChatMessage): string {
   if (message.role === "thinking") return "thinking"
   const time = message.timestamp.toISOString()
@@ -70,6 +74,10 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     textareaRef.current?.focus()
   }, [])
 
+  const appendAgentLine = useCallback((summary: string) => {
+    setMessages(prev => [...prev, { role: "agent", summary, actions: [], timestamp: new Date() }])
+  }, [])
+
   useEffect(() => {
     if (!restoreSessionRef.current) {
       localStorage.removeItem(SESSION_KEY)
@@ -111,16 +119,17 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  const sendInstruction = useCallback(async (text: string) => {
+  const sendInstruction = useCallback(async (text: string, options: SendInstructionOptions = {}) => {
     const trimmed = text.trim()
-    if (!trimmed || isRunning) return
+    const displayText = (options.displayText ?? text).trim()
+    if (!trimmed || !displayText || isRunning) return
 
     const sentAt = new Date()
     const sessionId = sessionIdRef.current
     setIsRunning(true)
     setMessages(prev => [
       ...prev,
-      { role: "user", text: trimmed, timestamp: sentAt },
+      { role: "user", text: displayText, timestamp: sentAt },
       { role: "thinking" },
     ])
 
@@ -173,8 +182,8 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
     await sendInstruction(text)
   }, [input, isRunning, sendInstruction])
 
-  const handleSendText = useCallback(async (text: string) => {
-    await sendInstruction(text)
+  const handleSendText = useCallback(async (text: string, options?: SendInstructionOptions) => {
+    await sendInstruction(text, options)
   }, [sendInstruction])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -195,6 +204,7 @@ export function useAgentChatState({ restoreSession = true }: UseAgentChatStatePr
   }, [handleNewSession])
 
   return {
+    appendAgentLine,
     fillerPhrase,
     firstName,
     greeting,

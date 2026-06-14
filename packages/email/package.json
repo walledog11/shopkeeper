@@ -53,6 +53,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
     "test:unit": "vitest run --config vitest.config.ts",
     "lint": "cd ../.. && eslint packages/email/src --max-warnings 0"

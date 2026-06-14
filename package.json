@@ -56,6 +56,9 @@
   "overrides": {
     "prisma": "6.19.3",
     "@prisma/client": "6.19.3",
-    "js-cookie": "^3.0.6"
+    "js-cookie": "^3.0.6",
+    "next": {
+      "postcss": "8.5.15"
+    }
   }
 }

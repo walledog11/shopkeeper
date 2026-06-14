@@ -6,7 +6,7 @@ import useSWR from "swr"
 import { CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
-import { getEmailProvider } from "@/lib/messaging/email/providers"
+import { getEmailProvider } from "@shopkeeper/email/providers"
 import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG, type PlatformConfig } from "@/lib/integrations/catalog"
 import {
   isOAuthDoneMessage,

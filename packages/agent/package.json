@@ -145,6 +145,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
     "test:unit": "vitest run --config vitest.config.ts",
     "lint": "cd ../.. && eslint packages/agent/src --max-warnings 0"
@@ -154,8 +155,8 @@
     "typescript": "latest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.80.0",
-    "@shopkeeper/db": "*",
-    "@prisma/client": "6.19.3"
+    "@anthropic-ai/sdk": "0.104.1",
+    "@prisma/client": "6.19.3",
+    "@shopkeeper/db": "*"
   }
 }

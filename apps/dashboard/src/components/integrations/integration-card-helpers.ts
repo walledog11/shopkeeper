@@ -1,7 +1,7 @@
 import {
   getEmailProvider,
   isEmailAuthReauthorizationRequired,
-} from "@/lib/messaging/email/providers"
+} from "@shopkeeper/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import type { PillState } from "./integration-card-types"

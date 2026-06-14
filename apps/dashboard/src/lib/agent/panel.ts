@@ -1,12 +1,19 @@
+import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract";
+
 export const OPEN_AGENT_SEARCH_PARAM = "openAgent";
 export const THREAD_SEARCH_PARAM = "thread";
 
 export type AgentPanelOpenSource = "home" | "tickets" | "review" | "command";
 
+// The fields the walkthrough spine needs per ticket — the home item minus its
+// deck-only context line.
+export type WalkthroughItem = Omit<HomeNeedsAttentionItem, "contextLine">;
+
 export interface AgentPanelOpenContext {
   source: AgentPanelOpenSource;
   threadId?: string;
   customerName?: string;
+  walkthrough?: { items: WalkthroughItem[] };
 }
 
 export function buildAgentPanelHref(options?: {

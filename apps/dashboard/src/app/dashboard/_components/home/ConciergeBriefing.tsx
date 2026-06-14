@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
-import { MessageCircle } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import { useAgentPanel } from "@/app/dashboard/_components/agent-panel/AgentPanelContext"
+import type { WalkthroughItem } from "@/lib/agent/panel"
 import { BriefingNarrativeInline } from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import {
   buildBriefingNarrativeSegments,
@@ -13,8 +14,9 @@ import {
 interface Props {
   greeting: string
   userName: string
-  hasTelegramBound: boolean
-  telegramBotUsername: string | null
+  agentName: string
+  walkthroughItems: WalkthroughItem[]
+  walkthroughCount: number
   needsYouCount: number
   overnightClearedCount: number
   briefingChannels: string[]
@@ -46,8 +48,9 @@ function OpsNoteLink({ note }: { note: BriefingOpsNote }) {
 export default function ConciergeBriefing({
   greeting,
   userName,
-  hasTelegramBound,
-  telegramBotUsername,
+  agentName,
+  walkthroughItems,
+  walkthroughCount,
   needsYouCount,
   overnightClearedCount,
   briefingChannels,
@@ -55,6 +58,7 @@ export default function ConciergeBriefing({
   vipsInQueue,
   ordersToShip,
 }: Props) {
+  const { open } = useAgentPanel()
   const briefingInput = {
     needsYouCount,
     overnightClearedCount,
@@ -80,38 +84,26 @@ export default function ConciergeBriefing({
             ))}
           </p>
 
-          <div className="flex items-center gap-2 mt-4 flex-wrap">
-            {needsYouCount > 0 && (
-              <a
-                href="#needs-you"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-600 hover:bg-amber-700 text-primary-foreground text-xs font-semibold transition-colors"
-              >
-                Review {needsYouCount}
-              </a>
-            )}
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            <button
+              type="button"
+              onClick={() =>
+                open(
+                  walkthroughCount > 0
+                    ? { source: "home", walkthrough: { items: walkthroughItems } }
+                    : { source: "home" },
+                )
+              }
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-foreground text-background text-xs font-semibold hover:bg-foreground/90 transition-colors"
+            >
+              {walkthroughCount > 0 ? `Walk me through ${walkthroughCount}` : `Ask ${agentName}`}
+            </button>
             <Link
               href="/dashboard/tickets"
-              className="px-4 py-1.5 rounded-full border border-border hover:bg-foreground/[0.04] text-xs font-semibold text-foreground/75 transition-colors"
+              className="text-xs font-medium text-foreground/45 hover:text-foreground/70 transition-colors"
             >
-              Open inbox
+              Browse all tickets
             </Link>
-            {hasTelegramBound && telegramBotUsername ? (
-              <a
-                href={`https://t.me/${telegramBotUsername}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-700 transition-colors"
-              >
-                <MessageCircle className="size-3" /> Message on Telegram
-              </a>
-            ) : (
-              <Link
-                href="/dashboard/integrations#telegram"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-blue-600/10 hover:bg-blue-600/20 text-xs font-semibold text-blue-700 transition-colors"
-              >
-                <MessageCircle className="size-3" /> Connect Telegram
-              </Link>
-            )}
           </div>
         </div>
       </div>

@@ -37,8 +37,9 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
             <ConciergeBriefing
               greeting={greeting}
               userName={userName}
-              hasTelegramBound={data.hasTelegramBound}
-              telegramBotUsername={data.telegramBotUsername}
+              agentName={data.agentName}
+              walkthroughItems={data.walkthroughItems}
+              walkthroughCount={data.walkthroughCount}
               needsYouCount={data.needsYouCount}
               overnightClearedCount={data.overnightClearedCount}
               briefingChannels={data.briefingChannels}

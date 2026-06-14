@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { AlertTriangle } from "lucide-react"
-import { getEmailProviderLabel } from "@/lib/messaging/email/providers"
+import { getEmailProviderLabel } from "@shopkeeper/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { CopyButton } from "./CopyButton"

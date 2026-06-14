@@ -17,6 +17,7 @@ export interface HomeNeedsAttentionItem {
   replyText: string | null
   orderRef: string | null
   tag: string | null
+  isVip: boolean
 }
 
 export interface HomeClearedTopic {

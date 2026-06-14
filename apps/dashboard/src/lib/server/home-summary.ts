@@ -174,6 +174,20 @@ async function loadNeedsAttention(
   })
   const byId = new Map(threads.map(thread => [thread.id, thread]))
 
+  const customerIds = [...new Set(threads.map(thread => thread.customerId))]
+  const threadCounts = await db.thread.groupBy({
+    by: ["customerId"],
+    where: {
+      ...canonicalInboxThreadWhere(organizationId),
+      customerId: { in: customerIds },
+      status: { in: ["open", "closed"] },
+    },
+    _count: { _all: true },
+  })
+  const vipCustomerIds = new Set(
+    threadCounts.filter(row => row._count._all >= 3).map(row => row.customerId),
+  )
+
   return ids.flatMap((id) => {
     const thread = byId.get(id)
     const latestMessage = thread?.messages[0]
@@ -201,6 +215,7 @@ async function loadNeedsAttention(
       replyText: planReplyText(plan),
       orderRef: copy.orderRef,
       tag: thread.tag,
+      isVip: vipCustomerIds.has(thread.customerId),
     }]
   })
 }

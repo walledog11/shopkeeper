@@ -57,7 +57,7 @@ Dispatch: `apps/dashboard/src/lib/messaging/dispatch-message.ts` → `getEmailSe
 - **Synchronous only** — no outbound queue; provider latency and transient failures return immediately to the caller (502). Contrast with inbound BullMQ (3 retries).
 - **Gateway hop for agent sends** — `gatewayThreadSink` calls `POST /api/agent/io-send-internal` on the dashboard for `send_reply` / `send_email`; auto-ack uses the same dashboard path.
 
-Threading: `buildThreadReplyHeaders` in `apps/dashboard/src/lib/messaging/email/reply.ts` sets `Message-ID`, `In-Reply-To`, `References`. Outbound agent messages do not store provider-assigned message IDs today.
+Threading: `buildThreadReplyHeaders` in `@shopkeeper/email/reply` sets `Message-ID`, `In-Reply-To`, `References`. Outbound agent messages do not store provider-assigned message IDs today.
 
 ### OAuth connect
 
@@ -151,7 +151,7 @@ flowchart TB
 - ✅ `packages/email` (`@shopkeeper/email`) created with subpath exports, consumed by both `apps/dashboard` and `apps/gateway`. Build wired into root `predev` + turbo `^build`; `packages/email/src` added to ESLint globs.
 - ✅ Modules: `types.ts`, `providers.ts`, `token.ts` (shared OAuth refresh — `requestTokenRefresh` / `persistRefreshedToken` / `getEmailOAuthClient`), `mime-build.ts`, `mime-parse.ts` (mailparser), `inbound-normalize.ts`, `address-filter.ts`, `reply.ts`, `logger.ts` (install seam, mirrors agent), `senders/` (Postmark/Gmail/Outlook + `getEmailSender`).
 - ✅ `GmailSender` / `OutlookSender` now refresh via shared `token.ts`.
-- ✅ Dashboard `apps/dashboard/src/lib/messaging/email/*` reduced to thin re-export shims (importers + existing tests unchanged; shims removed in Phase 5).
+- ✅ Dashboard imports use `@shopkeeper/email` package subpaths directly; the old `apps/dashboard/src/lib/messaging/email/*` re-export shims were removed during Phase 5 cleanup.
 - ✅ Both apps install the email logger (`installEmailLogger`) alongside the agent logger.
 - ✅ **Verify:** `packages/email` unit tests (MIME parse fixtures: multipart, attachments, Message-ID, HTML-only→text fallback; address-filter; inbound-normalize) pass; dashboard DB-backed sender tests still green through shims; gateway + dashboard typecheck clean; package lint clean.
 
@@ -182,7 +182,7 @@ packages/email/
 │   └── types.ts
 ```
 
-Gateway and dashboard import from `@shopkeeper/email`. Phase 1 migrates existing dashboard `apps/dashboard/src/lib/messaging/email/` incrementally; keep thin re-export shims until Phase 5 cleanup.
+Gateway and dashboard import from `@shopkeeper/email`; the former dashboard email shim directory was removed after Phase 5 cleanup.
 
 | Module | Responsibility |
 |--------|----------------|
@@ -528,7 +528,7 @@ Ship after Gmail path is stable — same patterns, different API surface.
 | `apps/dashboard/src/lib/agent/tools/thread.ts` | ✅ Phase 1.5: `agent_send_email` async branch (pending message + enqueue); new threads store `subject` |
 | `apps/dashboard/src/app/api/messages/auto-ack/route.ts` | ✅ Phase 1.5: dispatch with `source: 'auto_ack'` |
 | `apps/dashboard/src/lib/server/outbound-recorder.ts` | ✅ Phase 1.5: `OutboundSource` adds `auto_ack` |
-| `apps/dashboard/src/lib/messaging/email/*` | Phase 1: thin re-exports → `@shopkeeper/email`; delete after Phase 5 |
+| `apps/dashboard/src/lib/messaging/email/*` | Removed after dashboard imports migrated to `@shopkeeper/email` subpaths |
 | `apps/gateway/src/maintenance/workers.ts` | Register gmail-watch + email-token-health jobs |
 | `apps/gateway/src/constants.ts` | ✅ Phase 1.5: `QUEUE.OUTBOUND_EMAIL`, `JOB.SEND_EMAIL` |
 | `apps/gateway/src/index.ts` | Mount gmail webhook routes |

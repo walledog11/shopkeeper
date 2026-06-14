@@ -3,8 +3,10 @@ import { AGENT_NOTE_PREFIX, CHANNEL_TYPE, THREAD_STATUS } from "@shopkeeper/agen
 import { recordOutboundCall } from "@/lib/server/outbound-recorder";
 import logger from "@/lib/server/logger";
 import { getGatewayBaseUrl } from "@/lib/server/gateway-url";
-import { EmailNotConfiguredError, getEmailProvider, getEmailSender } from "@/lib/messaging/email";
-import { buildThreadReplyHeaders, formatReplySubject } from "@/lib/messaging/email/reply";
+import { getEmailProvider } from "@shopkeeper/email/providers";
+import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply";
+import { getEmailSender } from "@shopkeeper/email/senders";
+import { EmailNotConfiguredError } from "@shopkeeper/email/types";
 import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
 import {
   enqueueOutboundEmail,

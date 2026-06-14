@@ -9,6 +9,7 @@ import {
   type HomeSummary,
 } from "@/lib/home/summary-contract"
 import { buildHomeSummaryView } from "@/lib/home/summary-view"
+import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { useOrg } from "@/hooks/useOrg"
 import type { Integration, KnowledgeBase } from "@/types"
@@ -43,6 +44,11 @@ export function useHomeData({ initialSummary }: Options) {
   const hasShopify = integrations.some(integration => integration.platform === CHANNEL_TYPE.SHOPIFY)
   const summary = summaryData ?? createEmptyHomeSummary()
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
+  const walkthroughItems = useMemo(
+    () => selectWalkthroughItems(summary.needsAttention),
+    [summary],
+  )
+  const walkthroughCount = walkthroughItems.length
 
   const { data: ordersData } = useSWR<OrdersResponse>(
     hasShopify ? "/api/orders?limit=10" : null,
@@ -57,7 +63,6 @@ export function useHomeData({ initialSummary }: Options) {
 
   const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
   const hasTelegramBound = telegramData?.connected ?? false
-  const telegramBotUsername = telegramData?.botUsername ?? null
   const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
   const hasMultipleChannels = integrations.length > 1
   const hasConfiguredAgent = useMemo(() => {
@@ -97,10 +102,10 @@ export function useHomeData({ initialSummary }: Options) {
 
   return {
     ...home,
+    walkthroughItems,
+    walkthroughCount,
     ordersToShip,
     hasShopify,
-    hasTelegramBound,
-    telegramBotUsername,
     workflowSteps,
     workflowDoneCount,
     agentName,

@@ -16,10 +16,13 @@ const MAX_INPUT_LENGTH = 4000;
 // <customer_message> boundaries and the system prompt treats it as untrusted
 // data (see apps/dashboard agent prompt). A denylist that drops lines only
 // corrupted the stored message, so this just bounds length and preserves the
-// customer's words faithfully.
+// customer's words faithfully. NFKC normalization folds compatibility
+// codepoints (e.g. "fancy text" Unicode math-bold letters) back to plain
+// ASCII so they render at uniform weight everywhere; it's a no-op for text
+// that's already canonical.
 function sanitizeUserInput(text: string): string {
   if (!text) return text;
-  return text.slice(0, MAX_INPUT_LENGTH).trim();
+  return text.normalize('NFKC').slice(0, MAX_INPUT_LENGTH).trim();
 }
 
 export interface ProcessMessageOptions {

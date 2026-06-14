@@ -1,5 +1,6 @@
 import { AlertCircle, ArrowUp, Check, Loader2, Search, X } from "lucide-react"
-import { useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { KeyboardEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { formatClockTime } from "@/lib/format/date"
@@ -7,7 +8,15 @@ import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
 import AgentPanelBriefing from "@/app/dashboard/_components/agent-panel/AgentPanelBriefing"
 import AgentPanelTelegramNudge from "@/app/dashboard/_components/agent-panel/AgentPanelTelegramNudge"
-import type { AgentPanelOpenContext } from "@/lib/agent/panel"
+import type { AgentPanelOpenContext, WalkthroughItem } from "@/lib/agent/panel"
+import {
+  WalkthroughCard,
+  WALKTHROUGH_CLOSING,
+  buildWalkthroughContextPrefix,
+  buildWalkthroughOpening,
+  isWalkthroughComplete,
+  resolveWalkthroughDecision,
+} from "@/components/agent/WalkthroughBriefing"
 import type { PanelSuggestionChip } from "@/lib/agent/panel-briefing"
 import {
   getToolChipLabel,
@@ -89,8 +98,8 @@ function AgentMessage({
         )}
         <div className={
           awaitingApproval
-            ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm pl-4 py-2.5 shadow-sm"
-            : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm pl-4 py-2.5 shadow-sm"
+            ? "bg-amber-600/[0.07] border border-amber-600/25 text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm"
+            : "bg-green-600/20 border border-border text-foreground text-sm rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm"
         }>
           <AgentMessageMarkdown text={message.summary} />
         </div>
@@ -132,13 +141,12 @@ export function AgentChatView({
   state,
 }: Omit<AgentChatClientProps, "restoreSession"> & { state: AgentChatState }) {
   const {
+    appendAgentLine,
     fillerPhrase,
     firstName,
     greeting,
     handleClearHistory,
-    handleKeyDown,
     handleNewSession,
-    handleSend,
     handleSendText,
     initial,
     input,
@@ -153,6 +161,55 @@ export function AgentChatView({
 
   const [showStartFreshConfirm, setShowStartFreshConfirm] = useState(false)
   const isEmptyBriefing = messages.length === 0 && (compact || embedded)
+
+  const walkthrough = openContext?.walkthrough ?? null
+  const walkthroughItems = useMemo(() => walkthrough?.items ?? [], [walkthrough])
+  const [walkthroughIndex, setWalkthroughIndex] = useState(0)
+  const currentWalkthroughItem = walkthrough ? walkthroughItems[walkthroughIndex] ?? null : null
+  const walkthroughDone = walkthrough != null && isWalkthroughComplete(walkthroughItems, walkthroughIndex)
+
+  const openedRef = useRef(false)
+  useEffect(() => {
+    if (!walkthrough || openedRef.current) return
+    openedRef.current = true
+    appendAgentLine(buildWalkthroughOpening(walkthroughItems))
+  }, [walkthrough, walkthroughItems, appendAgentLine])
+
+  const closedRef = useRef(false)
+  useEffect(() => {
+    if (!walkthrough || !walkthroughDone || closedRef.current) return
+    closedRef.current = true
+    appendAgentLine(WALKTHROUGH_CLOSING)
+  }, [walkthrough, walkthroughDone, appendAgentLine])
+
+  const handleWalkthroughDecision = useCallback((item: WalkthroughItem, decision: "approved" | "skipped") => {
+    const result = resolveWalkthroughDecision({ item, index: walkthroughIndex, decision })
+    appendAgentLine(result.agentLine)
+    setWalkthroughIndex(result.nextIndex)
+  }, [appendAgentLine, walkthroughIndex])
+
+  const handleSendInput = useCallback(async () => {
+    const visibleText = input.trim()
+    if (!visibleText || isRunning) return
+
+    setInput("")
+    if (!currentWalkthroughItem) {
+      await handleSendText(visibleText)
+      return
+    }
+
+    await handleSendText(
+      `${buildWalkthroughContextPrefix(currentWalkthroughItem)}\n${visibleText}`,
+      { displayText: visibleText },
+    )
+  }, [currentWalkthroughItem, handleSendText, input, isRunning, setInput])
+
+  const handleComposerKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      void handleSendInput()
+    }
+  }, [handleSendInput])
 
   const handleChipSelect = (chip: PanelSuggestionChip) => {
     if (chip.autoSend) {
@@ -198,7 +255,7 @@ export function AgentChatView({
           </div>
         )}
 
-        {messages.length === 0 && (compact || embedded) && (
+        {messages.length === 0 && (compact || embedded) && !walkthrough && (
           <AgentPanelBriefing
             greeting={greeting}
             firstName={firstName}
@@ -248,6 +305,19 @@ export function AgentChatView({
           )
         })}
 
+        {currentWalkthroughItem && (
+          <WalkthroughCard
+            key={currentWalkthroughItem.threadId}
+            item={currentWalkthroughItem}
+            agentName={agentName}
+            position={walkthroughIndex + 1}
+            total={walkthroughItems.length}
+            disabled={isRunning}
+            onApproved={() => handleWalkthroughDecision(currentWalkthroughItem, "approved")}
+            onSkip={() => handleWalkthroughDecision(currentWalkthroughItem, "skipped")}
+          />
+        )}
+
         <div ref={messagesEndRef} />
         </div>
       </div>
@@ -268,9 +338,11 @@ export function AgentChatView({
             rows={1}
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={handleComposerKeyDown}
             disabled={isRunning}
-            placeholder={compact
+            placeholder={currentWalkthroughItem
+              ? "Ask about this ticket…"
+              : compact
               ? "Check order #1042, draft a reply to Sarah…"
               : "Ask about orders, draft replies, update customers…"
             }
@@ -295,7 +367,7 @@ export function AgentChatView({
                 </span>
               )}
               <button type="button"
-                onClick={handleSend}
+                onClick={() => void handleSendInput()}
                 disabled={!input.trim() || isRunning}
                 className="flex items-center gap-1 text-xs font-medium bg-green-600 text-white rounded-lg px-3 py-1.5 hover:bg-green-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
