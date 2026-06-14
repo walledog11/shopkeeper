@@ -1,11 +1,10 @@
 "use client"
 
-import { useEffect, useState, type ReactNode } from "react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
-import { AnimatePresence, LazyMotion, domMax, m, useMotionValue, useTransform, type Variants } from "motion/react"
+import { LazyMotion, animate, domMax, m, useMotionValue, useTransform } from "motion/react"
 import { Card } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 
 interface Props {
@@ -17,12 +16,21 @@ interface Props {
 const SWIPE_DISTANCE = 90
 const SWIPE_VELOCITY = 420
 const FLY_OFF = 340
+const FLY_OFF_DURATION = 0.28
 const STACK_DEPTH = { x: 8, y: 7, rotate: 1.8, scale: 0.015, opacity: 0.16 } as const
+const STACK_MARGIN_TOP = STACK_DEPTH.y * 2
+const STACK_MARGIN_LEFT = STACK_DEPTH.x * 2
 
-const cardVariants: Variants = {
-  enter: { scale: 0.95, y: 10, opacity: 0 },
-  center: { scale: 1, y: 0, opacity: 1, transition: { type: "spring", stiffness: 340, damping: 34 } },
-  exit: (x: number) => ({ x, opacity: 0, rotate: x > 0 ? 7 : -7, transition: { duration: 0.26, ease: "easeIn" } }),
+function arcY(x: number) {
+  return (x * x) / 650
+}
+
+function arcRotate(x: number) {
+  return x * 0.055
+}
+
+type SwipeCardHandle = {
+  flyOff: (sign: -1 | 1) => Promise<void>
 }
 
 type BubbleTone = "action" | "reply" | "flag"
@@ -56,19 +64,26 @@ function AllClear({ agentName }: { agentName: string }) {
 function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
-  const [exitX, setExitX] = useState(-FLY_OFF)
+  const [frontHeight, setFrontHeight] = useState(0)
+  const frontCardRef = useRef<HTMLDivElement>(null)
+  const swipeRef = useRef<SwipeCardHandle>(null)
   const stackDragX = useMotionValue(0)
-  const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / SWIPE_DISTANCE, 1))
+  const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / FLY_OFF, 1))
   const peekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * (1 - progress))
   const peekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * (1 - progress))
   const peekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * (1 - progress))
   const peekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * (1 - progress))
+  const peekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity) + STACK_DEPTH.opacity * progress)
   const secondPeekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * 2 * (1 - progress * 0.55))
   const secondPeekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * 2 * (1 - progress * 0.55))
   const secondPeekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * 2 * (1 - progress * 0.55))
   const secondPeekScale = useTransform(
     peekProgress,
     progress => 1 - STACK_DEPTH.scale * 2 * (1 - progress * 0.55),
+  )
+  const secondPeekOpacity = useTransform(
+    peekProgress,
+    progress => (1 - STACK_DEPTH.opacity * 2) + STACK_DEPTH.opacity * progress,
   )
 
   const deck = items.filter(item => !dismissed.has(item.threadId))
@@ -79,23 +94,44 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const nextItem = n > 1 ? deck[mod(activeIndex + 1)] : null
 
   useEffect(() => {
-    stackDragX.set(0)
+    const controls = animate(stackDragX, 0, {
+      type: "spring",
+      stiffness: 420,
+      damping: 34,
+    })
+    return () => controls.stop()
   }, [current?.threadId, stackDragX])
+
+  useEffect(() => {
+    const node = frontCardRef.current
+    if (!node) return
+
+    const updateHeight = () => setFrontHeight(node.offsetHeight)
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [current?.threadId])
 
   if (n === 0 || !current) return <AllClear agentName={agentName} />
 
+  const commitNeighbor = (indexDelta: 1 | -1) => {
+    setCurrentId(deck[mod(activeIndex + indexDelta)].threadId)
+  }
+
   const goToNeighbor = (indexDelta: 1 | -1, flySign: 1 | -1) => {
     if (n <= 1) return
-    setExitX(flySign * FLY_OFF)
-    setCurrentId(deck[mod(activeIndex + indexDelta)].threadId)
+    void swipeRef.current?.flyOff(flySign).then(() => commitNeighbor(indexDelta))
   }
 
   const dismiss = (threadId: string) => {
     const next = deck[mod(activeIndex + 1)]
-    setExitX(-FLY_OFF)
-    setDismissed(prev => new Set(prev).add(threadId))
-    setCurrentId(next && next.threadId !== threadId ? next.threadId : null)
-    onApproved()
+    void swipeRef.current?.flyOff(-1).then(() => {
+      setDismissed(prev => new Set(prev).add(threadId))
+      setCurrentId(next && next.threadId !== threadId ? next.threadId : null)
+      onApproved()
+    })
   }
 
   return (
@@ -103,60 +139,63 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
       <div className="flex flex-col gap-3 w-full">
       <LazyMotion features={domMax}>
         <div className="relative select-none">
-          {n > 2 && (
-            <m.div
-              aria-hidden
-              className="absolute inset-x-0 top-0 z-0 pointer-events-none"
-              style={{
-                x: secondPeekX,
-                y: secondPeekY,
-                rotate: secondPeekRotate,
-                scale: secondPeekScale,
-                transformOrigin: "top center",
-                opacity: 1 - STACK_DEPTH.opacity * 2,
-              }}
-            >
-              <NeedsYouCardSkeleton />
-            </m.div>
-          )}
+          <div
+            className="relative"
+            style={{ marginTop: STACK_MARGIN_TOP, marginLeft: STACK_MARGIN_LEFT }}
+          >
+            {(nextItem || n > 2) && (
+              <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
+                {n > 2 && (
+                  <m.div
+                    className="absolute inset-0"
+                    style={{
+                      x: secondPeekX,
+                      y: secondPeekY,
+                      rotate: secondPeekRotate,
+                      scale: secondPeekScale,
+                      opacity: secondPeekOpacity,
+                      transformOrigin: "top center",
+                    }}
+                  >
+                    <StackStrip minHeight={frontHeight > 0 ? frontHeight : undefined} />
+                  </m.div>
+                )}
 
-          {nextItem && (
-            <m.div
-              aria-hidden
-              className="absolute inset-x-0 top-0 z-[1] pointer-events-none"
-              style={{
-                x: peekX,
-                y: peekY,
-                rotate: peekRotate,
-                scale: peekScale,
-                transformOrigin: "top center",
-                opacity: 1 - STACK_DEPTH.opacity,
-              }}
-            >
-              <NeedsYouCardPeek item={nextItem} agentName={agentName} />
-            </m.div>
-          )}
+                {nextItem && (
+                  <m.div
+                    className="absolute inset-0 z-[1]"
+                    style={{
+                      x: peekX,
+                      y: peekY,
+                      rotate: peekRotate,
+                      scale: peekScale,
+                      opacity: peekOpacity,
+                      transformOrigin: "top center",
+                    }}
+                  >
+                    <NeedsYouCardPeek
+                      item={nextItem}
+                      agentName={agentName}
+                      minHeight={frontHeight > 0 ? frontHeight : undefined}
+                    />
+                  </m.div>
+                )}
+              </div>
+            )}
 
-          <AnimatePresence initial={false} mode="popLayout" custom={exitX}>
-            <m.div
-              key={current.threadId}
-              custom={exitX}
-              variants={cardVariants}
-              initial={false}
-              animate="center"
-              exit="exit"
-              className="relative z-10"
-            >
+            <div ref={frontCardRef} className="relative z-10">
               <SwipeCard
+                key={current.threadId}
+                ref={swipeRef}
                 stackDragX={stackDragX}
                 draggable={n > 1}
-                onSwipeLeft={() => goToNeighbor(1, -1)}
-                onSwipeRight={() => goToNeighbor(-1, 1)}
+                onCommitLeft={() => commitNeighbor(1)}
+                onCommitRight={() => commitNeighbor(-1)}
               >
                 <NeedsYouCard item={current} agentName={agentName} onSent={() => dismiss(current.threadId)} />
               </SwipeCard>
-            </m.div>
-          </AnimatePresence>
+            </div>
+          </div>
         </div>
       </LazyMotion>
 
@@ -197,22 +236,24 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   )
 }
 
-function SwipeCard({
-  stackDragX,
-  draggable,
-  onSwipeLeft,
-  onSwipeRight,
-  children,
-}: {
+const SwipeCard = forwardRef<SwipeCardHandle, {
   stackDragX: ReturnType<typeof useMotionValue<number>>
   draggable: boolean
-  onSwipeLeft: () => void
-  onSwipeRight: () => void
+  onCommitLeft: () => void
+  onCommitRight: () => void
   children: ReactNode
-}) {
+}>(function SwipeCard({
+  stackDragX,
+  draggable,
+  onCommitLeft,
+  onCommitRight,
+  children,
+}, ref) {
   const dragX = useMotionValue(0)
-  const dragY = useTransform(dragX, value => (value * value) / 650)
-  const dragRotate = useTransform(dragX, value => value * 0.055)
+  const dragY = useTransform(dragX, arcY)
+  const dragRotate = useTransform(dragX, arcRotate)
+  const opacity = useMotionValue(1)
+  const isFlying = useRef(false)
 
   useEffect(() => {
     return dragX.on("change", value => {
@@ -220,44 +261,74 @@ function SwipeCard({
     })
   }, [dragX, stackDragX])
 
+  const flyOff = useCallback(async (sign: -1 | 1) => {
+    if (isFlying.current) return
+    isFlying.current = true
+
+    try {
+      const targetX = sign * FLY_OFF
+      await Promise.all([
+        animate(dragX, targetX, { duration: FLY_OFF_DURATION, ease: [0.32, 0, 0.67, 0] }),
+        animate(stackDragX, targetX, { duration: FLY_OFF_DURATION, ease: [0.32, 0, 0.67, 0] }),
+        animate(opacity, 0, { duration: FLY_OFF_DURATION, ease: "easeIn" }),
+      ])
+    } finally {
+      isFlying.current = false
+    }
+  }, [dragX, opacity, stackDragX])
+
+  useImperativeHandle(ref, () => ({ flyOff }), [flyOff])
+
   return (
     <m.div
       drag={draggable ? "x" : false}
-      style={{ x: dragX, y: dragY, rotate: dragRotate, transformOrigin: "50% 100%" }}
-      dragSnapToOrigin
+      style={{ x: dragX, y: dragY, rotate: dragRotate, opacity, transformOrigin: "50% 100%" }}
+      dragSnapToOrigin={false}
       dragElastic={0.5}
       dragConstraints={{ left: 0, right: 0 }}
       onDragEnd={(_, info) => {
+        if (isFlying.current) return
+
         const swiped = Math.abs(info.offset.x) > SWIPE_DISTANCE || Math.abs(info.velocity.x) > SWIPE_VELOCITY
-        if (!swiped) return
-        if (info.offset.x < 0) onSwipeLeft()
-        else onSwipeRight()
+        if (!swiped) {
+          void Promise.all([
+            animate(dragX, 0, { type: "spring", stiffness: 420, damping: 32 }),
+            animate(stackDragX, 0, { type: "spring", stiffness: 420, damping: 32 }),
+          ])
+          return
+        }
+
+        const sign = info.offset.x < 0 ? -1 : 1
+        void flyOff(sign).then(() => {
+          if (sign < 0) onCommitLeft()
+          else onCommitRight()
+        })
       }}
       className="touch-pan-y cursor-grab active:cursor-grabbing"
     >
       {children}
     </m.div>
   )
-}
+})
 
-function NeedsYouCardSkeleton() {
+function StackStrip({ minHeight }: { minHeight?: number }) {
   return (
-    <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none">
-      <Skeleton className="h-8 w-2/3 rounded-lg" />
-      <div className="mt-2 flex items-center gap-2">
-        <Skeleton className="h-4 w-28 rounded-md" />
-        <Skeleton className="h-4 w-12 rounded-md" />
-        <Skeleton className="h-4 w-10 rounded-md" />
-      </div>
-      <Skeleton className="mt-4 h-4 w-24 rounded-md" />
-      <Skeleton className="mt-2 h-24 w-full rounded-2xl" />
-      <Skeleton className="mt-5 h-12 w-full rounded-2xl" />
-      <Skeleton className="mt-2 h-12 w-full rounded-2xl" />
-    </Card>
+    <div
+      className="h-full w-full rounded-3xl border border-border bg-card shadow-sm pointer-events-none box-border"
+      style={minHeight ? { minHeight, maxHeight: minHeight } : undefined}
+    />
   )
 }
 
-function NeedsYouCardPeek({ item, agentName }: { item: HomeNeedsAttentionItem; agentName: string }) {
+function NeedsYouCardPeek({
+  item,
+  agentName,
+  minHeight,
+}: {
+  item: HomeNeedsAttentionItem
+  agentName: string
+  minHeight?: number
+}) {
   const title = item.tag?.trim() || item.headline
   const preview =
     item.replyText?.trim() ||
@@ -265,7 +336,10 @@ function NeedsYouCardPeek({ item, agentName }: { item: HomeNeedsAttentionItem; a
     item.proposalSummary
 
   return (
-    <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none">
+    <Card
+      className="h-full w-full bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none box-border overflow-hidden"
+      style={minHeight ? { minHeight, maxHeight: minHeight } : undefined}
+    >
       <h3 className="font-sans font-semibold text-2xl sm:text-3xl text-foreground leading-tight tracking-tight line-clamp-2">
         {title}
       </h3>
