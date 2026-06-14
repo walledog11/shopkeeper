@@ -85,6 +85,8 @@ jobs:
     name: Build
     needs: [secret-scan, lint, unit]
     runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test-clerk-publishable-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

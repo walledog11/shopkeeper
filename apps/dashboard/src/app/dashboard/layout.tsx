@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { Instrument_Serif } from "next/font/google";
 import { HelpProvider } from "./_components/help/HelpContext";
 import NotificationBar, { type Notification } from "./_components/NotificationBar";
 import NavProgressBar from "./_components/NavProgressBar";
@@ -14,13 +13,6 @@ import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
-
-const serif = Instrument_Serif({
-  weight: "400",
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-  display: "swap",
-});
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -99,7 +91,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       </Suspense>
       <div
         className="dashboard-shell flex h-dvh w-full flex-col overflow-hidden bg-background font-sans"
-        style={{ "--m-serif": `${serif.style.fontFamily}, Georgia, 'Times New Roman', serif` } as React.CSSProperties}
+        style={{ "--m-serif": "Georgia, 'Times New Roman', serif" } as React.CSSProperties}
       >
         <NotificationBar notifications={notifications} />
         <NavProgressBar />

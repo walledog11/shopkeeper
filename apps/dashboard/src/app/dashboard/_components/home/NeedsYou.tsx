@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, Check, ChevronLeft, ChevronRight, Loader2 } from "lucide-react"
 import { AnimatePresence, LazyMotion, domMax, m, useMotionValue, useTransform, type Variants } from "motion/react"
 import { Card } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 const SWIPE_DISTANCE = 90
 const SWIPE_VELOCITY = 420
 const FLY_OFF = 340
+const STACK_DEPTH = { x: 8, y: 7, rotate: 1.8, scale: 0.015, opacity: 0.16 } as const
 
 const cardVariants: Variants = {
   enter: { scale: 0.95, y: 10, opacity: 0 },
@@ -55,15 +57,32 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
   const [exitX, setExitX] = useState(-FLY_OFF)
+  const stackDragX = useMotionValue(0)
+  const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / SWIPE_DISTANCE, 1))
+  const peekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * (1 - progress))
+  const peekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * (1 - progress))
+  const peekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * (1 - progress))
+  const peekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * (1 - progress))
+  const secondPeekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * 2 * (1 - progress * 0.55))
+  const secondPeekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * 2 * (1 - progress * 0.55))
+  const secondPeekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * 2 * (1 - progress * 0.55))
+  const secondPeekScale = useTransform(
+    peekProgress,
+    progress => 1 - STACK_DEPTH.scale * 2 * (1 - progress * 0.55),
+  )
 
   const deck = items.filter(item => !dismissed.has(item.threadId))
   const n = deck.length
-  if (n === 0) return <AllClear agentName={agentName} />
-
   const mod = (value: number) => ((value % n) + n) % n
-  const activeIndex = Math.max(0, deck.findIndex(item => item.threadId === currentId))
-  const current = deck[activeIndex]
-  const behind = Math.min(n - 1, 2)
+  const activeIndex = n > 0 ? Math.max(0, deck.findIndex(item => item.threadId === currentId)) : 0
+  const current = n > 0 ? deck[activeIndex] : null
+  const nextItem = n > 1 ? deck[mod(activeIndex + 1)] : null
+
+  useEffect(() => {
+    stackDragX.set(0)
+  }, [current?.threadId, stackDragX])
+
+  if (n === 0 || !current) return <AllClear agentName={agentName} />
 
   const goToNeighbor = (indexDelta: 1 | -1, flySign: 1 | -1) => {
     if (n <= 1) return
@@ -84,34 +103,52 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
       <div className="flex flex-col gap-3 w-full">
       <LazyMotion features={domMax}>
         <div className="relative select-none">
-          {Array.from({ length: behind }).map((_, i) => {
-            const depth = i + 1
-            return (
-              <div
-                key={`strip-${i}`}
-                aria-hidden
-                className="absolute inset-x-0 top-0 h-full rounded-3xl border border-border bg-card shadow-sm"
-                style={{
-                  transform: `translateX(${-depth * 8}px) translateY(${-depth * 7}px) rotate(${-depth * 1.8}deg) scale(${1 - depth * 0.015})`,
-                  transformOrigin: "top center",
-                  opacity: 1 - depth * 0.16,
-                  zIndex: 0,
-                }}
-              />
-            )
-          })}
+          {n > 2 && (
+            <m.div
+              aria-hidden
+              className="absolute inset-x-0 top-0 z-0 pointer-events-none"
+              style={{
+                x: secondPeekX,
+                y: secondPeekY,
+                rotate: secondPeekRotate,
+                scale: secondPeekScale,
+                transformOrigin: "top center",
+                opacity: 1 - STACK_DEPTH.opacity * 2,
+              }}
+            >
+              <NeedsYouCardSkeleton />
+            </m.div>
+          )}
+
+          {nextItem && (
+            <m.div
+              aria-hidden
+              className="absolute inset-x-0 top-0 z-[1] pointer-events-none"
+              style={{
+                x: peekX,
+                y: peekY,
+                rotate: peekRotate,
+                scale: peekScale,
+                transformOrigin: "top center",
+                opacity: 1 - STACK_DEPTH.opacity,
+              }}
+            >
+              <NeedsYouCardPeek item={nextItem} agentName={agentName} />
+            </m.div>
+          )}
 
           <AnimatePresence initial={false} mode="popLayout" custom={exitX}>
             <m.div
               key={current.threadId}
               custom={exitX}
               variants={cardVariants}
-              initial="enter"
+              initial={false}
               animate="center"
               exit="exit"
               className="relative z-10"
             >
               <SwipeCard
+                stackDragX={stackDragX}
                 draggable={n > 1}
                 onSwipeLeft={() => goToNeighbor(1, -1)}
                 onSwipeRight={() => goToNeighbor(-1, 1)}
@@ -161,23 +198,32 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
 }
 
 function SwipeCard({
+  stackDragX,
   draggable,
   onSwipeLeft,
   onSwipeRight,
   children,
 }: {
+  stackDragX: ReturnType<typeof useMotionValue<number>>
   draggable: boolean
   onSwipeLeft: () => void
   onSwipeRight: () => void
   children: ReactNode
 }) {
-  const x = useMotionValue(0)
-  const y = useTransform(x, (value) => (value * value) / 650)
+  const dragX = useMotionValue(0)
+  const dragY = useTransform(dragX, value => (value * value) / 650)
+  const dragRotate = useTransform(dragX, value => value * 0.055)
+
+  useEffect(() => {
+    return dragX.on("change", value => {
+      stackDragX.set(value)
+    })
+  }, [dragX, stackDragX])
 
   return (
     <m.div
       drag={draggable ? "x" : false}
-      style={{ x, y }}
+      style={{ x: dragX, y: dragY, rotate: dragRotate, transformOrigin: "50% 100%" }}
       dragSnapToOrigin
       dragElastic={0.5}
       dragConstraints={{ left: 0, right: 0 }}
@@ -191,6 +237,58 @@ function SwipeCard({
     >
       {children}
     </m.div>
+  )
+}
+
+function NeedsYouCardSkeleton() {
+  return (
+    <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none">
+      <Skeleton className="h-8 w-2/3 rounded-lg" />
+      <div className="mt-2 flex items-center gap-2">
+        <Skeleton className="h-4 w-28 rounded-md" />
+        <Skeleton className="h-4 w-12 rounded-md" />
+        <Skeleton className="h-4 w-10 rounded-md" />
+      </div>
+      <Skeleton className="mt-4 h-4 w-24 rounded-md" />
+      <Skeleton className="mt-2 h-24 w-full rounded-2xl" />
+      <Skeleton className="mt-5 h-12 w-full rounded-2xl" />
+      <Skeleton className="mt-2 h-12 w-full rounded-2xl" />
+    </Card>
+  )
+}
+
+function NeedsYouCardPeek({ item, agentName }: { item: HomeNeedsAttentionItem; agentName: string }) {
+  const title = item.tag?.trim() || item.headline
+  const preview =
+    item.replyText?.trim() ||
+    item.actionText?.trim() ||
+    item.proposalSummary
+
+  return (
+    <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none">
+      <h3 className="font-sans font-semibold text-2xl sm:text-3xl text-foreground leading-tight tracking-tight line-clamp-2">
+        {title}
+      </h3>
+
+      <div className="mt-2 flex items-center gap-1.5 text-sm text-foreground/45">
+        <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
+        <span className="shrink-0 text-foreground/25">·</span>
+        <span className="shrink-0">{item.channelName}</span>
+        <span className="shrink-0 text-foreground/25">·</span>
+        <span className="shrink-0 tabular-nums">{item.timeAgo}</span>
+      </div>
+
+      <p className="mt-4 text-sm text-foreground/55">{agentName} proposes:</p>
+
+      <div className={`mt-2 rounded-2xl px-4 py-3 border ${BUBBLE_TONE.reply.bubble}`}>
+        <p className="text-sm font-medium text-foreground/85 leading-relaxed line-clamp-4">{preview}</p>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-2">
+        <div className="h-12 rounded-2xl bg-foreground/[0.08]" />
+        <div className="h-12 rounded-2xl bg-foreground/[0.05]" />
+      </div>
+    </Card>
   )
 }
 

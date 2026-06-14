@@ -76,11 +76,6 @@ const nextConfig = {
   },
   turbopack: {
     root: repoRoot,
-    resolveAlias: {
-      '@clerk/nextjs': path.join(repoRoot, 'node_modules/@clerk/nextjs'),
-      '@clerk/react': path.join(repoRoot, 'node_modules/@clerk/react'),
-      '@clerk/shared': path.join(repoRoot, 'node_modules/@clerk/shared'),
-    },
   },
   serverExternalPackages: ['stripe'],
   transpilePackages: ['@shopkeeper/db'],
