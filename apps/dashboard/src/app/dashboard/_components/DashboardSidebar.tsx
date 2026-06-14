@@ -72,7 +72,7 @@ function DashboardSidebarContent({
           data-dashboard-mobile-header
           className="md:hidden flex items-center justify-between px-4 h-14 border-b border-border shrink-0 bg-sidebar"
         >
-          <Logo />
+          <Logo iconOnly />
           <div className="flex items-center gap-1">
             <AutonomyPill tier={navAuth.autonomyTier} compact />
             <button

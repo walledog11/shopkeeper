@@ -662,11 +662,16 @@ body,
   html[data-mobile-ticket-editing="true"] [data-dashboard-mobile-header],
   html[data-mobile-ticket-editing="true"] [data-dashboard-mobile-bottom-bar],
   html[data-mobile-ticket-editing="true"] [data-dashboard-nav-progress],
-  html[data-mobile-ticket-editing="true"] [data-dashboard-notification-bar] {
+  html[data-mobile-ticket-editing="true"] [data-dashboard-notification-bar],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-mobile-header],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-mobile-bottom-bar],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-nav-progress],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-notification-bar] {
     display: none !important;
   }
 
-  html[data-mobile-ticket-editing="true"] .dashboard-content {
+  html[data-mobile-ticket-editing="true"] .dashboard-content,
+  html[data-mobile-ticket-detail="true"] .dashboard-content {
     padding-bottom: 0 !important;
   }
 

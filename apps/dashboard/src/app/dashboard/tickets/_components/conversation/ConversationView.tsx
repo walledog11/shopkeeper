@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
+import { useIsMobile } from "@/hooks/useMobile"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { quickApproveCachedPlan } from "../../_hooks/conversation-agent-requests"
@@ -100,6 +101,7 @@ export default function ConversationView({
     summaryRefreshing: isSummaryRefreshing,
   } = status
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
+  const isMobile = useIsMobile()
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<HTMLDivElement>(null)
@@ -129,6 +131,7 @@ export default function ConversationView({
     agentInstruction,
     handlePlanApprove,
     handlePlanEdit,
+    handlePlanDismiss,
     handlePlanRegenerate,
     handleSend,
     isAgentMode,
@@ -322,6 +325,17 @@ export default function ConversationView({
     }
   }, [keyboardLayoutOpen])
 
+  useEffect(() => {
+    if (!isMobile) return
+
+    const root = document.documentElement
+    root.dataset.mobileTicketDetail = "true"
+
+    return () => {
+      delete root.dataset.mobileTicketDetail
+    }
+  }, [isMobile])
+
   return (
     <div
       ref={conversationRef}
@@ -332,7 +346,7 @@ export default function ConversationView({
     >
       <ConversationHeader
         activeTab={activeTab}
-        cocoAction={cocoAction}
+        cocoAction={isMobile && pendingPlan ? null : cocoAction}
         customer={ticket.customer}
         platform={ticket.platform}
         onCocoAction={() => { void handleCocoAction() }}
@@ -345,6 +359,7 @@ export default function ConversationView({
         summary={aiSummary}
         isRefreshing={isSummaryRefreshing}
         onRefresh={onRefreshSummary}
+        startCollapsed={isMobile && Boolean(pendingPlan)}
       />
 
       {activeTab === 'closed' && (
@@ -404,8 +419,9 @@ export default function ConversationView({
             onPlanApprove={handlePlanApprove}
             onPlanEdit={() => {
               handlePlanEdit()
-              focusComposer()
+              if (!isMobile) focusComposer()
             }}
+            onPlanDismiss={handlePlanDismiss}
             onFocusShopifyLink={handleFocusShopifyLink}
             onPlanRegenerate={handlePlanRegenerate}
             onSend={handleSend}

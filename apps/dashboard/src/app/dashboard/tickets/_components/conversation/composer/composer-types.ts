@@ -21,4 +21,5 @@ export interface ComposerProps {
   onChange: (text: string) => void
   onClearAgentMode?: () => void
   onSend: (isNote: boolean) => void
+  showComposerInput?: boolean
 }

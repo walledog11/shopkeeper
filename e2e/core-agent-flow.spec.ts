@@ -120,7 +120,9 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
 
   await expect(mobileConversation).toBeVisible();
   await expect(page.getByTestId('chat-timeline')).toHaveAttribute('data-thread-id', thread.id);
-  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-mobile-ticket-detail', 'true');
+  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeHidden();
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
 
   await mobileComposer.focus();
 

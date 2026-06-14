@@ -33,12 +33,16 @@ function stepChipLabel(step: PlanStep): string {
   return text.length > 46 ? `${text.slice(0, 45)}…` : text
 }
 
+const PLAN_CARD_CLASS =
+  "w-full rounded-2xl bg-card border border-border shadow-sm overflow-hidden"
+
 interface Props {
   plan: AgentPlan
   agentName?: string
   customerName?: string | null
   isExecuting: boolean
   isRegenerating?: boolean
+  layout?: "default" | "mobile-sticky"
   onApprove: (approvedToolCalls: RawToolCall[]) => void
   onEdit?: () => void
   onFocusShopifyLink?: () => void
@@ -51,11 +55,13 @@ export default function ActionPlanCard({
   customerName,
   isExecuting,
   isRegenerating,
+  layout = "default",
   onApprove,
   onEdit,
   onFocusShopifyLink,
   onRegenerate,
 }: Props) {
+  const isMobileSticky = layout === "mobile-sticky"
   const [disabledStepIds, setDisabledStepIds] = useState(() => new Set<string>())
   const [collapsed, setCollapsed] = useState(false)
   const [compactHeader, setCompactHeader] = useState(false)
@@ -163,13 +169,18 @@ export default function ActionPlanCard({
     if (!collapsed) setCompactHeader(false)
   }
 
+  const draftTextClass = isMobileSticky
+    ? "text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
+    : "text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
+
   return (
     <div
-      data-testid={compactHeader ? undefined : "action-plan-card"}
-      className="w-full rounded-2xl bg-card border border-border shadow-sm overflow-hidden"
+      data-testid="action-plan-card"
+      data-layout={isMobileSticky ? "mobile-floating" : "default"}
+      className={PLAN_CARD_CLASS}
     >
       <div className="flex h-11 items-center gap-2 px-3 sm:px-4 shrink-0">
-        {compactHeader ? (
+        {compactHeader && !isMobileSticky ? (
           <button
             type="button"
             onClick={handleExpand}
@@ -198,26 +209,28 @@ export default function ActionPlanCard({
                 <RefreshCw className={`size-3.5 ${isRegenerating ? "animate-spin" : ""}`} />
               </button>
             )}
-            <button type="button"
-              onClick={handleCollapse}
-              title="Collapse"
-              className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors"
-            >
-              <ChevronUp className="size-4" />
-            </button>
+            {!isMobileSticky && (
+              <button type="button"
+                onClick={handleCollapse}
+                title="Collapse"
+                className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors"
+              >
+                <ChevronUp className="size-4" />
+              </button>
+            )}
           </>
         )}
       </div>
 
       <div
         className="grid transition-[grid-template-rows] duration-300 ease-in-out"
-        style={{ gridTemplateRows: collapsed ? "0fr" : "1fr" }}
+        style={{ gridTemplateRows: collapsed && !isMobileSticky ? "0fr" : "1fr" }}
         onTransitionEnd={handleBodyTransitionEnd}
       >
         <div className="overflow-hidden min-h-0">
           <div
             className={`px-4 sm:px-5 pb-4 transition-opacity duration-200 ease-out ${
-              collapsed || compactHeader ? "opacity-0" : "opacity-100"
+              (collapsed && !isMobileSticky) || (compactHeader && !isMobileSticky) ? "opacity-0" : "opacity-100"
             }`}
           >
             {(blockingWarnings.length > 0 || informationalWarnings.length > 0) && (
@@ -276,8 +289,8 @@ export default function ActionPlanCard({
                 <div className={`rounded-2xl border px-4 py-3 ${
                   replyEnabled ? "bg-foreground/[0.04] border-border" : "border-dashed border-border opacity-50"
                 }`}>
-                  <p className={`text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar ${
-                    replyEnabled ? "" : "line-through"
+                  <p className={`${draftTextClass} ${
+                    replyEnabled ? "" : "line-through opacity-50"
                   }`}>
                     {replyText}
                   </p>
@@ -351,7 +364,7 @@ export default function ActionPlanCard({
             )}
 
             <div className="mt-4 flex flex-col gap-2">
-              <div className="flex gap-2">
+              <div className={`flex ${showEditTakeover ? "gap-2" : ""}`}>
                 <button type="button"
                   data-testid="action-plan-run"
                   onClick={onApproveClick}

@@ -86,6 +86,20 @@ function initialsOf(name: string): string {
     .toUpperCase() || "?"
 }
 
+function clampCustomerMessage(text: string | null, max = 300): string {
+  const cleaned = (text ?? "").trim()
+  return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
+}
+
+function realCustomerName(
+  customer: { name?: string | null; platformId?: string | null } | null,
+): string | null {
+  const name = getCustomerName(customer)
+  if (name.includes("@")) return null
+  if (customer?.platformId && name === customer.platformId) return null
+  return name
+}
+
 function timeAgoShort(date: Date, now: Date): string {
   const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
   if (minutes < 1) return "just now"
@@ -176,7 +190,8 @@ async function loadNeedsAttention(
     return [{
       threadId: thread.id,
       kind,
-      customerName: getCustomerName(thread.customer),
+      customerName: realCustomerName(thread.customer),
+      customerMessage: clampCustomerMessage(latestMessage.contentText),
       channelName: getChannelInfo(thread.channelType as ChannelType).name,
       timeAgo: timeAgoShort(latestMessage.sentAt, now),
       headline: copy.headline,

@@ -19,7 +19,6 @@ const FLY_OFF = 340
 const FLY_OFF_DURATION = 0.28
 const STACK_DEPTH = { x: 8, y: 7, rotate: 1.8, scale: 0.015, opacity: 0.16 } as const
 const STACK_MARGIN_TOP = STACK_DEPTH.y * 2
-const STACK_MARGIN_LEFT = STACK_DEPTH.x * 2
 
 function arcY(x: number) {
   return (x * x) / 650
@@ -141,7 +140,7 @@ function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         <div className="relative select-none">
           <div
             className="relative"
-            style={{ marginTop: STACK_MARGIN_TOP, marginLeft: STACK_MARGIN_LEFT }}
+            style={{ marginTop: STACK_MARGIN_TOP }}
           >
             {(nextItem || n > 2) && (
               <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
@@ -330,6 +329,12 @@ function NeedsYouCardPeek({
   minHeight?: number
 }) {
   const title = item.tag?.trim() || item.headline
+  const previewTone: BubbleTone = item.replyText?.trim() ? "reply" : item.actionText?.trim() ? "action" : "flag"
+  const previewLabel = item.replyText?.trim()
+    ? `${agentName} responds via ${item.channelName}`
+    : item.actionText?.trim()
+      ? `${agentName} updates Shopify`
+      : `${agentName} flagged this`
   const preview =
     item.replyText?.trim() ||
     item.actionText?.trim() ||
@@ -345,17 +350,33 @@ function NeedsYouCardPeek({
       </h3>
 
       <div className="mt-2 flex items-center gap-1.5 text-sm text-foreground/45">
-        <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
-        <span className="shrink-0 text-foreground/25">·</span>
+        {item.customerName && (
+          <>
+            <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
+            <span className="shrink-0 text-foreground/25">·</span>
+          </>
+        )}
         <span className="shrink-0">{item.channelName}</span>
         <span className="shrink-0 text-foreground/25">·</span>
         <span className="shrink-0 tabular-nums">{item.timeAgo}</span>
       </div>
 
-      <p className="mt-4 text-sm text-foreground/55">{agentName} proposes:</p>
+      {item.customerMessage && (
+        <div className="mt-4 flex flex-col gap-1">
+          <span className="self-start text-[11px] font-semibold text-foreground/35">Customer</span>
+          <div className="rounded-2xl px-4 py-3 border border-border bg-foreground/[0.04]">
+            <p className="text-sm text-foreground/70 leading-relaxed line-clamp-3">{item.customerMessage}</p>
+          </div>
+        </div>
+      )}
 
-      <div className={`mt-2 rounded-2xl px-4 py-3 border ${BUBBLE_TONE.reply.bubble}`}>
-        <p className="text-sm font-medium text-foreground/85 leading-relaxed line-clamp-4">{preview}</p>
+      <div className="mt-4 flex flex-col gap-1">
+        <span className={`self-start text-[11px] font-semibold ${BUBBLE_TONE[previewTone].label}`}>
+          {previewLabel}
+        </span>
+        <div className={`rounded-2xl px-4 py-3 border ${BUBBLE_TONE[previewTone].bubble}`}>
+          <p className="text-sm font-medium text-foreground/85 leading-relaxed line-clamp-4">{preview}</p>
+        </div>
       </div>
 
       <div className="mt-5 flex flex-col gap-2">
@@ -375,9 +396,9 @@ function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAttentionIte
   const title = item.tag?.trim() || item.headline
 
   const bubbles: { key: string; label: string; text: string; tone: BubbleTone }[] = []
-  if (item.actionText) bubbles.push({ key: "action", label: "Shopify", text: item.actionText, tone: "action" })
-  if (item.replyText) bubbles.push({ key: "reply", label: `${item.channelName} customer`, text: item.replyText, tone: "reply" })
-  if (bubbles.length === 0) bubbles.push({ key: "flag", label: "Flagged", text: item.proposalSummary, tone: "flag" })
+  if (item.actionText) bubbles.push({ key: "action", label: `${agentName} updates Shopify`, text: item.actionText, tone: "action" })
+  if (item.replyText) bubbles.push({ key: "reply", label: `${agentName} responds via ${item.channelName}`, text: item.replyText, tone: "reply" })
+  if (bubbles.length === 0) bubbles.push({ key: "flag", label: `${agentName} flagged this`, text: item.proposalSummary, tone: "flag" })
 
   const approve = async () => {
     if (isApproving) return
@@ -421,19 +442,30 @@ function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAttentionIte
       </h3>
 
       <div className="mt-2 flex items-center gap-1.5 text-sm text-foreground/45">
-        <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
-        <span className="shrink-0 text-foreground/25">·</span>
+        {item.customerName && (
+          <>
+            <span className="font-medium text-foreground/70 truncate min-w-0">{item.customerName}</span>
+            <span className="shrink-0 text-foreground/25">·</span>
+          </>
+        )}
         <span className="shrink-0">{item.channelName}</span>
         <span className="shrink-0 text-foreground/25">·</span>
         <span className="shrink-0 tabular-nums">{item.timeAgo}</span>
       </div>
 
-      <p className="mt-4 text-sm text-foreground/55">{agentName} proposes:</p>
+      {item.customerMessage && (
+        <div className="mt-4 flex flex-col gap-1">
+          <span className="self-start text-[11px] font-semibold text-foreground/35">Customer</span>
+          <div className="rounded-2xl px-4 py-3 border border-border bg-foreground/[0.04]">
+            <p className="text-sm text-foreground/70 leading-relaxed line-clamp-3">{item.customerMessage}</p>
+          </div>
+        </div>
+      )}
 
-      <div className="mt-2 flex flex-col gap-3">
+      <div className="mt-4 flex flex-col gap-3">
         {bubbles.map(bubble => (
           <div key={bubble.key} className="flex flex-col gap-1">
-            <span className={`self-end text-[11px] font-semibold ${BUBBLE_TONE[bubble.tone].label}`}>
+            <span className={`self-start text-[11px] font-semibold ${BUBBLE_TONE[bubble.tone].label}`}>
               {bubble.label}
             </span>
             <div className={`rounded-2xl px-4 py-3 border ${BUBBLE_TONE[bubble.tone].bubble}`}>

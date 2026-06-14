@@ -6,7 +6,8 @@ export const HOME_REPEAT_CUSTOMER_LIMIT = 4
 export interface HomeNeedsAttentionItem {
   threadId: string
   kind: "quick_reply" | "needs_review"
-  customerName: string
+  customerName: string | null
+  customerMessage: string
   channelName: string
   timeAgo: string
   headline: string
