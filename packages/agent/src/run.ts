@@ -7,13 +7,19 @@ import { resolveAgentSettings } from "./settings.js";
 import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
-import { executeToolWithStatus } from "./tools/executor.js";
 import { buildMessageHistory } from "./message-history.js";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path.js";
-import type { ActionEntry, AgentActionMode, AgentActionStatus, BaseAgentContext, SupportContext, AgentResult } from "./agent-context.js";
+import type { ActionEntry, AgentActionMode, BaseAgentContext, AgentResult } from "./agent-context.js";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
 import { enforceSpendCap, recordSpend } from "./spend.js";
-import { recordAgentActionsBatch, type AgentActionApproval } from "./agent-actions.js";
+import type { AgentActionApproval } from "./agent-actions.js";
+import {
+  createAgentFailureRecorder,
+  executeAgentToolCalls,
+  finishAgentRun,
+  isSupportContext,
+  type RecordToolFailure,
+} from "./run-execution.js";
 
 const DEFAULT_MAX_ITERATIONS = 10;
 const READ_ONLY_MAX_ITERATIONS = 4;
@@ -28,41 +34,12 @@ export interface RunAgentOptions {
   // Injected tool-failure recorder. The dashboard wires this to its ops-alert
   // counter; a thread-less / gateway host may omit it. Keeping it injected is
   // what keeps alerting infra (env, ops-alerts) out of the shared core.
-  recordToolFailure?: (
-    kind: "tool_result" | "tool_exception",
-    tool: string,
-    detail: string,
-  ) => Promise<unknown> | void;
+  recordToolFailure?: RecordToolFailure;
   mode?: AgentActionMode;
   approval?: AgentActionApproval;
   // Pre-generated turn id so the caller can embed it in the agent-turn note
   // and join AgentAction rows back to the note when rendering inline.
   turnId?: string;
-}
-
-function inputKeys(input: unknown): string[] {
-  return input && typeof input === "object" ? Object.keys(input) : [];
-}
-
-function inputChars(input: unknown): number {
-  return JSON.stringify(input ?? null).length;
-}
-
-function canExecuteBatchInParallel(toolNames: readonly string[]): boolean {
-  return toolNames.every((name) => TOOL_CATEGORIES[name] === "read");
-}
-
-function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEntry[]): boolean {
-  if (toolName !== "update_thread_status") return false;
-  return actionsPerformed.some((action) => (
-    action.tool === "send_reply" && action.status === "error"
-  ));
-}
-
-// A context carries a support thread iff it has a `thread`. Thread-less modules
-// (order-ops, Track 3) supply a BaseAgentContext with no thread/customer.
-function isSupportContext(ctx: BaseAgentContext): ctx is SupportContext {
-  return (ctx as Partial<SupportContext>).thread != null;
 }
 
 export async function runAgent(
@@ -92,173 +69,44 @@ export async function runAgent(
   const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
   const failureAlertPromises: Promise<unknown>[] = [];
   let escalationReason: string | null = null;
-
-  const finish = async (result: AgentResult, outcome: string): Promise<AgentResult> => {
-    if (failureAlertPromises.length > 0) {
-      await Promise.allSettled(failureAlertPromises);
-    }
-
-    if (result.actionsPerformed.length > 0) {
-      try {
-        await recordAgentActionsBatch({
-          orgId: ctx.orgId,
-          threadId: supportThread?.id ?? null,
-          customerId: supportCustomer?.id ?? null,
-          mode: effectiveMode,
-          actions: result.actionsPerformed,
-          instruction,
-          summary: result.summary,
-          ...(options?.turnId ? { turnId: options.turnId } : {}),
-          ...(approval ? { approval } : {}),
-        });
-      } catch (err) {
-        logger.error({
-          err,
-          orgId: ctx.orgId,
-          threadId: supportThread?.id ?? null,
-          actionCount: result.actionsPerformed.length,
-        }, "[agent] failed to persist agent action audit rows");
-      }
-    }
-
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: supportThread?.id ?? null,
-      channelType: supportThread?.channelType ?? null,
-      outcome,
+  const finish = (result: AgentResult, outcome: string) => finishAgentRun({
+    ctx,
+    result,
+    outcome,
+    failureAlertPromises,
+    supportThread,
+    supportCustomer,
+    effectiveMode,
+    instruction,
+    summaryStartedAt: startedAt,
+    usageTotals,
+    readOnly,
+    approvedToolCallCount: approvedToolCalls?.length ?? 0,
+    executedToolCalls,
+    instructionHash,
+    ...(options?.turnId ? { turnId: options.turnId } : {}),
+    ...(approval ? { approval } : {}),
+  });
+  const recordAgentFailureSafely = createAgentFailureRecorder({
+    ctx,
+    readOnly,
+    recordToolFailure,
+    supportThread,
+    failureAlertPromises,
+  });
+  const executeToolCalls = (toolCalls: { id: string; name: string; input: unknown }[]) =>
+    executeAgentToolCalls(toolCalls, {
+      ctx,
+      settings,
       readOnly,
-      durationMs: Date.now() - startedAt,
-      modelCalls: usageTotals.modelCalls,
-      usageTotals,
-      approvedToolCallCount: approvedToolCalls?.length ?? 0,
-      executedToolCallCount: executedToolCalls.length,
+      supportThread,
+      actionsPerformed,
       executedToolCalls,
-      actionCount: result.actionsPerformed.length,
-      summaryChars: result.summary.length,
-      instructionHash,
-    }, "[agent] run complete");
-    return result;
-  };
-
-  const recordAgentFailureSafely = (
-    kind: "tool_result" | "tool_exception",
-    tool: string,
-    detail: string,
-  ) => {
-    if (readOnly || !recordToolFailure) {
-      return;
-    }
-
-    const alertPromise = Promise.resolve(recordToolFailure(kind, tool, detail)).catch((error) => {
-      logger.error({
-        err: error,
-        orgId: ctx.orgId,
-        threadId: supportThread?.id ?? null,
-        tool,
-      }, "[agent] failure alert error");
+      recordAgentFailure: recordAgentFailureSafely,
+      setEscalationReason: reason => {
+        escalationReason = reason;
+      },
     });
-    failureAlertPromises.push(alertPromise);
-  };
-
-  const executeToolCall = async (toolCall: { id: string; name: string; input: unknown }) => {
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: supportThread?.id ?? null,
-      tool: toolCall.name,
-      inputKeys: inputKeys(toolCall.input),
-      inputChars: inputChars(toolCall.input),
-    }, "[agent] tool call");
-
-    const startedAt = Date.now();
-    let result: string;
-    let status: AgentActionStatus;
-    let errorDetail: string | undefined;
-    let threw = false;
-
-    if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
-      result = `Error: ${toolCall.name} is not available in private ask mode.`;
-      status = "error";
-      errorDetail = result;
-    } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
-      result = "Error: skipped status update because send_reply failed.";
-      status = "error";
-      errorDetail = result;
-    } else {
-      try {
-        const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings);
-        result = executed.result;
-        status = executed.status;
-        if (status !== "success") errorDetail = result;
-      } catch (err) {
-        threw = true;
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        result = `Error: tool "${toolCall.name}" threw - ${errorMessage}`;
-        status = "error";
-        errorDetail = errorMessage;
-        logger.error({ err, tool: toolCall.name }, "[agent] tool error");
-        recordAgentFailureSafely("tool_exception", toolCall.name, errorMessage);
-      }
-    }
-
-    // A hard policy block on a mutative action (over-cap refund, cancellations disabled,
-    // daily cap, custom line items) is not something the model should retry or talk its
-    // way around. Route it to a human deterministically instead of feeding the error back
-    // into the loop - the safe outcome no longer depends on the model choosing to escalate.
-    if (!threw && status === "policy_block" && TOOL_CATEGORIES[toolCall.name] === "action") {
-      const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
-      await ctx.escalate(reason);
-      result = reason;
-      status = "escalated";
-    }
-
-    if (!threw && status === "error") {
-      recordAgentFailureSafely("tool_result", toolCall.name, result);
-    }
-
-    if (status === "escalated") {
-      escalationReason = result.trim() || "No reason provided";
-      errorDetail = undefined;
-    }
-
-    const durationMs = Date.now() - startedAt;
-
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: supportThread?.id ?? null,
-      tool: toolCall.name,
-      resultChars: result.length,
-      isError: status === "error" || status === "policy_block",
-      status,
-      durationMs,
-    }, "[agent] tool result");
-    executedToolCalls.push(toolCall.name);
-    actionsPerformed.push({
-      tool: toolCall.name,
-      result,
-      input: toolCall.input,
-      durationMs,
-      status,
-      category: TOOL_CATEGORIES[toolCall.name],
-      ...(errorDetail ? { errorDetail } : {}),
-    });
-    return {
-      type: "tool_result" as const,
-      tool_use_id: toolCall.id,
-      content: result,
-    };
-  };
-
-  const executeToolCalls = async (toolCalls: { id: string; name: string; input: unknown }[]) => {
-    if (canExecuteBatchInParallel(toolCalls.map((toolCall) => toolCall.name))) {
-      return Promise.all(toolCalls.map(executeToolCall));
-    }
-
-    const results: Awaited<ReturnType<typeof executeToolCall>>[] = [];
-    for (const toolCall of toolCalls) {
-      results.push(await executeToolCall(toolCall));
-    }
-    return results;
-  };
 
   if (!readOnly && !approvedToolCalls?.length && isSupportContext(ctx)) {
     const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);

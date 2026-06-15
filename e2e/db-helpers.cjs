@@ -1,53 +1,35 @@
-const { createHash, randomUUID } = require('node:crypto');
+const { randomUUID } = require('node:crypto');
 const { Redis: IORedis } = require('ioredis');
 const { ChannelType, PrismaClient, SenderType } = require('@prisma/client');
 
 const db = new PrismaClient();
 const DEFAULT_POLL_TIMEOUT_MS = 10_000;
 const DEFAULT_POLL_INTERVAL_MS = 500;
-const AGENT_PLAN_CACHE_VERSION = 2;
-const AGENT_SETTINGS_DEFAULTS = {
-  aiContext: '',
-  brandVoice: '',
-  agentName: 'Shopkeeper',
-  autoPlanOnOpen: true,
-  defaultInstruction: '',
-  requireApprovalForActions: true,
-  toolsEnabled: {
-    action: true,
-    communication: true,
-    internal: true,
-    read: true,
-  },
-  maxRefundAmount: null,
-  dailyRefundCap: null,
-  dailyLLMSpendCapUsd: null,
-  blockCancellations: false,
-  blockCustomLineItems: false,
-  maxIterations: 10,
-  replyLanguage: 'auto',
-  digestEnabled: false,
-  digestFrequency: 'daily',
-  digestHour: 8,
-  digestSecondHour: 17,
-  digestDays: 'every_day',
-  digestTimezoneOffset: 0,
-  businessHoursEnabled: false,
-  businessHoursStart: 9,
-  businessHoursEnd: 17,
-  businessHoursDays: ['mon', 'tue', 'wed', 'thu', 'fri'],
-  businessHoursTimezoneOffset: 0,
-  autoAckMessage: "Thanks for reaching out! We're currently outside business hours and will get back to you soon.",
-  spamFilterEnabled: true,
-  autonomyTier: 'trusted',
-};
+let dbTestHelpersPromise;
+let agentPlanHelpersPromise;
+
+function getDbTestHelpers() {
+  dbTestHelpersPromise ??= import('@shopkeeper/db/test-helpers');
+  return dbTestHelpersPromise;
+}
+
+async function getAgentPlanHelpers() {
+  agentPlanHelpersPromise ??= Promise.all([
+    import('@shopkeeper/agent/plan-cache'),
+    import('@shopkeeper/agent/settings'),
+  ]).then(([planCache, settings]) => ({
+    buildAgentPlanCacheRecord: planCache.buildAgentPlanCacheRecord,
+    resolveAgentSettings: settings.resolveAgentSettings,
+  }));
+  return agentPlanHelpersPromise;
+}
 
 async function createTestOrg() {
-  const uid = randomUUID();
-  return db.organization.create({
+  const { createTestOrg: createSharedTestOrg } = await getDbTestHelpers();
+  const org = await createSharedTestOrg();
+  return db.organization.update({
+    where: { id: org.id },
     data: {
-      clerkOrgId: `org_test_${uid}`,
-      name: `Test Org ${uid.slice(0, 8)}`,
       settings: {
         autoPlanOnOpen: false,
         spamFilterEnabled: false,
@@ -56,18 +38,9 @@ async function createTestOrg() {
   });
 }
 
-async function createTestIntegration(
-  orgId,
-  {
-    platform = ChannelType.email,
-    externalAccountId = `test_${randomUUID()}`,
-    accessToken = null,
-    fromEmail = null,
-  } = {},
-) {
-  return db.integration.create({
-    data: { organizationId: orgId, platform, externalAccountId, accessToken, fromEmail },
-  });
+async function createTestIntegration(orgId, options) {
+  const { createTestIntegration: createSharedTestIntegration } = await getDbTestHelpers();
+  return createSharedTestIntegration(orgId, options);
 }
 
 async function getE2EOrg() {
@@ -250,7 +223,7 @@ async function seedEmailThreadWithCachedPlan(
   const customerMessage = await db.message.create({
     data: {
       threadId: thread.id,
-      organizationId: org.id,
+      organizationId: orgId,
       senderType: SenderType.customer,
       contentText: inboundText,
       externalMessageId: `<plan-e2e-${randomUUID()}@example.com>`,
@@ -276,10 +249,11 @@ async function seedEmailThreadWithCachedPlan(
       },
     ],
   };
+  const { buildAgentPlanCacheRecord, resolveAgentSettings } = await getAgentPlanHelpers();
   const cachedPlan = buildAgentPlanCacheRecord({
     instruction,
     lastCustomerMessageId: customerMessage.id,
-    settings: resolveE2EAgentSettings(org.settings),
+    settings: resolveAgentSettings(org.settings),
     plan,
   });
   const updatedThread = await db.thread.update({
@@ -300,12 +274,16 @@ async function seedEmailThreadWithCachedPlan(
 }
 
 async function cleanupTestData(orgId) {
-  if (!orgId) return;
-  await db.organization.delete({ where: { id: orgId } }).catch(() => undefined);
+  const { cleanupTestData: cleanupSharedTestData } = await getDbTestHelpers();
+  return cleanupSharedTestData(orgId);
 }
 
 async function disconnectDb() {
   await db.$disconnect();
+  if (dbTestHelpersPromise) {
+    const { db: sharedDb } = await import('@shopkeeper/db');
+    await sharedDb.$disconnect();
+  }
 }
 
 async function clearRateLimitKey(key, windowSecs = 60) {
@@ -325,34 +303,6 @@ async function clearRateLimitKey(key, windowSecs = 60) {
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function resolveE2EAgentSettings(settings) {
-  const base = isRecord(settings) ? settings : {};
-  const baseToolsEnabled = isRecord(base.toolsEnabled) ? base.toolsEnabled : {};
-
-  return {
-    ...AGENT_SETTINGS_DEFAULTS,
-    ...base,
-    toolsEnabled: {
-      ...AGENT_SETTINGS_DEFAULTS.toolsEnabled,
-      ...baseToolsEnabled,
-    },
-  };
-}
-
-function buildAgentPlanCacheRecord({ instruction, lastCustomerMessageId, settings, plan }) {
-  return {
-    version: AGENT_PLAN_CACHE_VERSION,
-    instruction,
-    lastCustomerMessageId,
-    settingsFingerprint: createHash('sha256').update(JSON.stringify(settings ?? null)).digest('hex'),
-    plan,
-  };
 }
 
 module.exports = {

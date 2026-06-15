@@ -96,16 +96,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <NotificationBar notifications={notifications} />
         <NavProgressBar />
         <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"} agentName={settings.agentName}>
-          
           <div className="flex-1 overflow-hidden flex min-h-0">
             <div className="flex-1 overflow-hidden flex flex-col min-w-0">
               {children}
             </div>
             <HelpPanel />
-            <AgentPanelRoot
-              agentName={settings.agentName}
-              autonomyTier={settings.autonomyTier ?? "guarded"}
-            />
+            <AgentPanelRoot agentName={settings.agentName} />
           </div>
         </DashboardSidebar>
       </div>

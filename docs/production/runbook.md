@@ -16,7 +16,7 @@ It is intentionally narrower than [`checklist.md`](checklist.md). This document 
 - Platform: Vercel
 - Build config: [vercel.json](../../vercel.json)
 - Health endpoint: [apps/dashboard/src/app/api/health/route.ts](../../apps/dashboard/src/app/api/health/route.ts)
-- Env validation: [apps/dashboard/src/lib/env.ts](../../apps/dashboard/src/lib/env.ts)
+- Env validation: [apps/dashboard/src/lib/env/index.ts](../../apps/dashboard/src/lib/env/index.ts)
 
 ### Gateway
 

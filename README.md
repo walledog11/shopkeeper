@@ -21,7 +21,7 @@ shopkeeper/
 ```
 
 ## Maintenance Commands
-- `npm run clean` — removes ignored build/test artifacts from the repo root and workspaces: `.turbo/`, `.next/`, `.next-e2e/`, `coverage/`, `dist/`, `playwright-report/`, `test-results/`, `.nyc_output/`, and `*.tsbuildinfo`.
+- `npm run clean` — removes ignored build/test artifacts from the repo root and workspaces: `.turbo/`, `.next/`, `.next-dev/`, `.next-e2e/`, `coverage/`, `dist/`, `playwright-report/`, `test-results/`, `.nyc_output/`, `*.tsbuildinfo`, and `.DS_Store`.
 - `npm run clean:deps` — removes `node_modules/` from the repo root and workspaces. Use this only when you intentionally want to reinstall dependencies.
 - Preview either cleanup without deleting files by running the underlying script with `--dry-run`, for example `node ./scripts/clean.mjs artifacts --dry-run`.
 

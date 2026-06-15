@@ -6,11 +6,11 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
 import ThreadList from "./thread-list/ThreadList"
+import type { TicketListTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
 import ContextPanel from "./context-panel/ContextPanel"
 import ContextPanelSkeleton from "./context-panel/ContextPanelSkeleton"
 
-type TicketListTab = 'open' | 'closed' | 'filtered'
 type ConversationViewProps = ComponentProps<typeof ConversationView>
 type ContextPanelProps = ComponentProps<typeof ContextPanel>
 type ThreadListProps = ComponentProps<typeof ThreadList>

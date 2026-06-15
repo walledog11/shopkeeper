@@ -18,7 +18,7 @@ Do these before treating production as ready:
    - Verify `OPS_ALERTS_ENABLED=false` silences threshold alerts on dashboard and gateway
    - Deploy with default thresholds; tune only after observing real traffic
 
-Lower urgency (still valid): CSP enforcement, dependency audit triage, documentation cleanup.
+Lower urgency (still valid): CSP enforcement.
 
 ## Release Blockers
 
@@ -77,9 +77,10 @@ Lower urgency (still valid): CSP enforcement, dependency audit triage, documenta
 
 ## Observability And Operations
 
-- [ ] Triage dependency audit findings.
-  - Verified 2026-06-07: `npm audit --audit-level=high` reports no high/critical issues; moderate findings remain in dev tooling deps.
-  - Prioritize framework/runtime dependencies and document accepted risk for dev-only/tooling findings.
+- [X] Triage dependency audit findings.
+  - Cleanup audit resolved the moderate findings by upgrading `@anthropic-ai/sdk` to `0.104.1` and adding a narrow root override for Next's `postcss` dependency.
+  - Verified 2026-06-14: `npm audit --audit-level=moderate` reports zero vulnerabilities.
+  - Remove the Next/PostCSS override once a compatible stable Next release includes the patched dependency.
 
 - [ ] Confirm production alerting is live, not just implemented. **(pre-release priority)**
   - Ops-alert instrumentation is complete ([operational-guardrails.md](production/operational-guardrails.md) Phases 0–4). Remaining work is Phase 5 / Better Stack Level 1:
@@ -117,23 +118,23 @@ Shared write-gate for `past_due` and `canceled` orgs is implemented in `apps/das
 
 ## Documentation Cleanup
 
-- [ ] Fix stale production checklist references.
-  - README, `docs/production/deployment.md`, `docs/production/runbook.md`, and `docs/telegram-operator-channel.md` reference `docs/production/checklist.md`, but that file is missing.
-  - Either recreate the checklist or update references to point at `docs/production/runbook.md` and this list.
-  - Validate any recreated or replacement checklist against code and docs before launch.
-  - Confirm remaining unchecked production items are truly external or intentionally deferred.
+- [X] Fix stale production checklist references.
+  - Recreated `docs/production/checklist.md` as the concise release gate.
+  - Kept README, deployment, and runbook links pointed at the restored checklist.
+  - Updated the Telegram operator-channel note so it no longer references a removed checklist section.
+  - Remaining unchecked production items stay tracked separately and should be explicitly deferred by the launch owner before release.
 
-- [ ] Fix stale env file references.
-  - `docs/production/runbook.md` links to `apps/dashboard/src/lib/env.ts`, but the current file is `apps/dashboard/src/lib/env/index.ts`.
+- [X] Fix stale env file references.
+  - `docs/production/runbook.md` now links to `apps/dashboard/src/lib/env/index.ts`.
 
 - [ ] Document the final production migration workflow.
   - Partially covered in `docs/production/deployment.md` (pooled `DATABASE_URL` vs direct `DIRECT_DATABASE_URL` for `npm run db:migrate:deploy`).
   - Still needed: one consolidated section with exact env vars for Vercel, Railway, local migration runs, and CI.
 
-- [ ] Add a short release-gate checklist.
+- [X] Add a short release-gate checklist.
   - Root `npm run verify:pr` already runs lint, unit tests, integration tests, e2e smoke, coverage, and build.
-  - Document the official pre-release command sequence, including `npx prisma validate`, `npm run verify:production:env`, and `npm run test:integration`.
-  - Record known sandbox-only caveats, such as Next/Turbopack needing permission to bind an internal worker port during build.
+  - `docs/production/checklist.md` documents the official pre-release command sequence, including `npx prisma validate`, `npm run verify:production:env`, `npm run test:integration`, and `npm run verify:pr`.
+  - The checklist records the known sandbox-only Next/Turbopack worker-port caveat.
 
 ## Customer Memory Removal
 

@@ -2,16 +2,14 @@
 
 import * as React from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
-import type { AutonomyTier } from "@shopkeeper/agent/settings"
 import AgentChatClient from "@/components/agent/AgentChatClient"
 import { useAgentPanel } from "./AgentPanelContext"
 
 interface Props {
   agentName: string
-  autonomyTier: AutonomyTier
 }
 
-export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
+export default function AgentPanelRoot({ agentName }: Props) {
   const { isOpen, openContext, close } = useAgentPanel()
   const isLargeScreen = React.useSyncExternalStore(
     (onStoreChange) => {
@@ -43,7 +41,6 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
             >
               <AgentChatClient
                 agentName={agentName}
-                autonomyTier={autonomyTier}
                 compact
                 openContext={openContext}
                 restoreSession={!openContext?.walkthrough}
@@ -62,7 +59,6 @@ export default function AgentPanelRoot({ agentName, autonomyTier }: Props) {
               <div className="flex h-full w-full min-w-0 flex-col">
                 <AgentChatClient
                   agentName={agentName}
-                  autonomyTier={autonomyTier}
                   compact
                   openContext={openContext}
                   restoreSession={!openContext?.walkthrough}

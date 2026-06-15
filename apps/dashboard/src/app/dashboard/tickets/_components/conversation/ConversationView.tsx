@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
@@ -18,7 +18,9 @@ import ChatTimeline from "./timeline/ChatTimeline"
 import NotesTimeline from "./timeline/NotesTimeline"
 import ConversationComposerArea from "./composer/ConversationComposerArea"
 import ConversationTabs from "./ConversationTabs"
+import { ComposerSkeleton, TimelineSkeleton } from "./ConversationSkeletons"
 import { partitionConversationMessages } from "./utils/conversationViewUtils"
+import { useConversationViewportEffects } from "./useConversationViewportEffects"
 import { useVisualKeyboard } from "./useVisualKeyboard"
 import type { Ticket, AgentTurn, AgentPlan, FailedMessage, OrgSettings, Thread } from "@/types"
 
@@ -260,81 +262,20 @@ export default function ConversationView({
     ticket.id,
   ])
 
-  useEffect(() => {
-    const root = conversationRef.current
-    if (activeTab !== 'open') {
-      root?.style.setProperty("--ticket-composer-height", "0px")
-      return
-    }
-
-    const element = composerRef.current
-    if (!element) return
-
-    const updateHeight = () => {
-      root?.style.setProperty("--ticket-composer-height", `${Math.ceil(element.getBoundingClientRect().height)}px`)
-    }
-
-    updateHeight()
-
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", updateHeight)
-      return () => window.removeEventListener("resize", updateHeight)
-    }
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(element)
-
-    return () => observer.disconnect()
-  }, [activeTab])
-
-  useEffect(() => {
-    if (!keyboardLayoutOpen) return
-
-    const settleScroll = () => scrollTimelineToEnd("smooth")
-    const first = window.setTimeout(settleScroll, 50)
-    const second = window.setTimeout(settleScroll, 300)
-
-    return () => {
-      window.clearTimeout(first)
-      window.clearTimeout(second)
-    }
-  }, [
-    displayMessages.length,
-    failedMessages.length,
+  useConversationViewportEffects({
+    activeTab,
+    composerRef,
+    conversationRef,
+    displayMessageCount: displayMessages.length,
+    failedMessageCount: failedMessages.length,
+    isMobile,
     keyboardInset,
     keyboardLayoutOpen,
     replyText,
     scrollTimelineToEnd,
     viewTab,
     visualViewportHeight,
-  ])
-
-  useEffect(() => {
-    const root = document.documentElement
-
-    if (keyboardLayoutOpen) {
-      root.dataset.mobileTicketEditing = "true"
-    } else if (root.dataset.mobileTicketEditing === "true") {
-      delete root.dataset.mobileTicketEditing
-    }
-
-    return () => {
-      if (root.dataset.mobileTicketEditing === "true") {
-        delete root.dataset.mobileTicketEditing
-      }
-    }
-  }, [keyboardLayoutOpen])
-
-  useEffect(() => {
-    if (!isMobile) return
-
-    const root = document.documentElement
-    root.dataset.mobileTicketDetail = "true"
-
-    return () => {
-      delete root.dataset.mobileTicketDetail
-    }
-  }, [isMobile])
+  })
 
   return (
     <div
@@ -441,50 +382,6 @@ export default function ConversationView({
           />
         )
       )}
-    </div>
-  )
-}
-
-function TimelineSkeleton() {
-  return (
-    <div className="animate-pulse space-y-4">
-      <div className="max-w-[75%] space-y-2">
-        <div className="h-3 w-16 rounded bg-white/[0.07]" />
-        <div className="h-3 w-56 max-w-full rounded bg-white/[0.06]" />
-        <div className="h-3 w-40 max-w-full rounded bg-white/[0.05]" />
-      </div>
-      <div className="ml-auto max-w-[70%] space-y-2">
-        <div className="ml-auto h-3 w-14 rounded bg-white/[0.07]" />
-        <div className="h-3 w-52 max-w-full rounded bg-white/[0.06]" />
-      </div>
-      <div className="max-w-[68%] space-y-2">
-        <div className="h-3 w-20 rounded bg-white/[0.07]" />
-        <div className="h-3 w-48 max-w-full rounded bg-white/[0.06]" />
-        <div className="h-3 w-36 max-w-full rounded bg-white/[0.05]" />
-      </div>
-    </div>
-  )
-}
-
-function ComposerSkeleton() {
-  return (
-    <div className="mobile-ticket-composer-row relative z-20 shrink-0 flex flex-col">
-      <div className="bg-background border-t border-border animate-pulse">
-        <div className="flex items-center gap-1 px-5 border-b border-border">
-          <div className="px-3 py-2">
-            <div className="h-4 w-10 rounded bg-white/[0.08]" />
-          </div>
-          <div className="px-3 py-2">
-            <div className="h-4 w-20 rounded bg-white/[0.05]" />
-          </div>
-        </div>
-        <div className="px-5 pt-3">
-          <div className="h-[85px] w-full rounded bg-white/[0.04]" />
-          <div className="flex items-center justify-end pt-3 pb-3">
-            <div className="h-8 w-20 rounded-md bg-white/[0.08]" />
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

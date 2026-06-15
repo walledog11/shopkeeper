@@ -19,6 +19,8 @@ const ARTIFACT_DIRECTORY_NAMES = [
   '.nyc_output',
 ];
 
+const ARTIFACT_FILE_NAMES = ['.DS_Store'];
+
 const SCAN_SKIP_DIRECTORY_NAMES = new Set([
   '.git',
   'node_modules',
@@ -31,6 +33,8 @@ const MODE_DETAILS = {
     `  ${ARTIFACT_DIRECTORY_NAMES.map((name) => `${name}/`).join(', ')}`,
     'Repo-wide TypeScript incremental build files:',
     '  *.tsbuildinfo',
+    'Repo-wide ignored metadata files:',
+    `  ${ARTIFACT_FILE_NAMES.join(', ')}`,
     'This mode does not remove .env files, app-local Clerk.com auth config, lockfiles, or node_modules.',
   ],
   deps: [
@@ -135,7 +139,7 @@ async function readWorkspaceDirectories() {
   return [...workspaceDirectories].sort();
 }
 
-async function collectTsBuildInfoTargets(directory, targets) {
+async function collectRepoArtifactFileTargets(directory, targets) {
   const entries = await readdir(directory, { withFileTypes: true });
 
   for (const entry of entries) {
@@ -143,13 +147,16 @@ async function collectTsBuildInfoTargets(directory, targets) {
 
     if (entry.isDirectory()) {
       if (!SCAN_SKIP_DIRECTORY_NAMES.has(entry.name)) {
-        await collectTsBuildInfoTargets(fullPath, targets);
+        await collectRepoArtifactFileTargets(fullPath, targets);
       }
 
       continue;
     }
 
-    if (entry.isFile() && entry.name.endsWith('.tsbuildinfo')) {
+    if (
+      entry.isFile() &&
+      (entry.name.endsWith('.tsbuildinfo') || ARTIFACT_FILE_NAMES.includes(entry.name))
+    ) {
       addTarget(targets, fullPath);
     }
   }
@@ -165,7 +172,7 @@ async function collectArtifactTargets() {
     }
   }
 
-  await collectTsBuildInfoTargets(REPO_ROOT, targets);
+  await collectRepoArtifactFileTargets(REPO_ROOT, targets);
 
   return sortTargets(targets);
 }

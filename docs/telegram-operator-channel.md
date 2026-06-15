@@ -1,6 +1,6 @@
 # Telegram operator channel
 
-Implements §2a of `docs/production/checklist.md`. Replaces Twilio (WhatsApp/SMS) as the operator channel a merchant uses to talk to their own agent.
+Implementation plan for the Telegram operator channel. Replaces Twilio (WhatsApp/SMS) as the operator channel a merchant uses to talk to their own agent. Current production release gates live in `docs/production/checklist.md`.
 
 ## Goal
 

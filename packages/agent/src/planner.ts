@@ -2,94 +2,21 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { anthropic, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import logger from "./logger.js";
-import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js";
-import { PLAN_STEP_LABELS, TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
+import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
+import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
-import { executeToolStructured } from "./tools/executor.js";
-import type { ToolStatus } from "./tools/result.js";
 import { buildMessageHistory } from "./message-history.js";
-import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
+import type { AgentContext } from "./agent-context.js";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
 import { enforceSpendCap, recordSpend } from "./spend.js";
 import { resolveAgentSettings } from "./settings.js";
-
-function describeTool(name: string, input: unknown): string {
-  const a = input as Record<string, unknown>;
-  switch (name) {
-    case "search_kb":
-      return `Search knowledge base for "${String(a.query ?? "")}"`;
-    case "update_shopify_order_address": {
-      const parts = [a.address1, a.city, a.province, a.zip].filter(Boolean);
-      return `Update their shipping address on Shopify to ${parts.join(", ")}`;
-    }
-    case "update_shopify_customer_info": {
-      const changes: string[] = [];
-      if (a.email) changes.push(`email -> ${a.email}`);
-      if (a.phone) changes.push(`phone -> ${a.phone}`);
-      if (a.first_name || a.last_name) changes.push(`name -> ${[a.first_name, a.last_name].filter(Boolean).join(" ")}`);
-      return changes.length ? `Update: ${changes.join(", ")}` : "Update customer info";
-    }
-    case "create_refund":
-      return a.amount ? `Issue $${a.amount} refund` : "Issue full refund";
-    case "cancel_order":
-      return `Cancel order${a.reason ? ` (${a.reason})` : ""}`;
-    case "create_shopify_order": {
-      const items = (a.line_items as { title?: string; variant_id?: string; quantity: number }[] ?? [])
-        .map(li => `${li.quantity}x ${li.title ?? `variant ${li.variant_id}`}`)
-        .join(", ");
-      return `Create order for ${a.first_name} ${a.last_name}${items ? ` - ${items}` : ""}`;
-    }
-    case "add_shopify_customer_note":
-      return "Add note to Shopify customer";
-    case "send_reply": {
-      const text = String(a.text ?? "");
-      return text.length > 80 ? `"${text.slice(0, 80)}…"` : `"${text}"`;
-    }
-    case "send_email": {
-      const body = String(a.body ?? "");
-      const preview = body.length > 60 ? `${body.slice(0, 60)}…` : body;
-      return `Email to ${a.to}: "${preview}"`;
-    }
-    case "add_internal_note":
-      return "Add internal note";
-    case "update_thread_status":
-      return `Set status to ${a.status}`;
-    case "update_thread_tag":
-      return `Tag as "${a.tag}"`;
-    case "get_order_by_name":
-      return `Look up order ${a.order_name}`;
-    case "edit_shopify_order": {
-      const qty = a.quantity as number | undefined;
-      if (a.variant_id && a.remove_variant_id) return "Swap order item - add new variant, remove old";
-      if (a.remove_variant_id) return `Remove item (variant ${a.remove_variant_id}) from order`;
-      return qty ? `Add ${qty}x item to order` : "Edit order";
-    }
-    default:
-      return name.replace(/_/g, " ");
-  }
-}
-
-function normalizeOrderName(name: string): string {
-  return name.replace(/^#/, "").trim().toLowerCase();
-}
-
-// Whether the order a lookup tool was asked about is already in the planning
-// context. If so, a live not-found is fixture/timing noise, not a real "order
-// not found", and must not raise the warning that downgrades the auto-execute
-// classifier.
-function orderAlreadyInContext(block: Anthropic.ToolUseBlock, recentOrders: ShopifyOrderSummary[]): boolean {
-  if (recentOrders.length === 0) return false;
-  if (block.name === "get_order_by_name") {
-    const requested = (block.input as { order_name?: unknown }).order_name;
-    if (typeof requested !== "string" || !requested.trim()) return false;
-    const target = normalizeOrderName(requested);
-    return recentOrders.some(o => normalizeOrderName(o.name) === target);
-  }
-  // get_shopify_orders is a customer-wide fetch: if context already holds the
-  // customer's orders, the redundant live lookup failing is noise.
-  return true;
-}
+import { buildPlanSteps } from "./planner-steps.js";
+import {
+  appendInitialPlanningWarnings,
+  appendPlanningReadWarnings,
+  executePlanningReadTools,
+} from "./planner-read-tools.js";
 
 export async function planAgent(
   ctx: AgentContext,
@@ -154,71 +81,19 @@ export async function planAgent(
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === "read");
   const warnings: string[] = [];
   const readResultsMap = new Map<string, string>();
-  const readStatusMap = new Map<string, ToolStatus>();
-
-  if (ctx.shopify && !ctx.thread.shopifyCustomerId && !operatorMode) {
-    warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
-  }
+  appendInitialPlanningWarnings({ ctx, operatorMode, warnings });
 
   if (readBlocks.length > 0) {
-    await Promise.all(
-      readBlocks.map(async (b) => {
-        readToolCalls.push(b.name);
-        const toolStartedAt = Date.now();
-        const inputKeys = b.input && typeof b.input === "object" ? Object.keys(b.input) : [];
-        logger.info({
-          orgId: ctx.orgId,
-          threadId: ctx.thread.id,
-          tool: b.name,
-          inputKeys,
-          inputChars: JSON.stringify(b.input ?? null).length,
-        }, "[agent:plan] read tool call");
-        let content: string;
-        let status: ToolStatus;
-        try {
-          const executed = await executeToolStructured(b.name, b.input, ctx, settings);
-          content = executed.message;
-          status = executed.status;
-        } catch {
-          // A thrown lookup is treated as "nothing found" for warning purposes.
-          content = "Lookup failed";
-          status = "not_found";
-        }
-        logger.info({
-          orgId: ctx.orgId,
-          threadId: ctx.thread.id,
-          tool: b.name,
-          durationMs: Date.now() - toolStartedAt,
-          resultChars: content.length,
-        }, "[agent:plan] read tool result");
-        readResultsMap.set(b.id, content);
-        readStatusMap.set(b.id, status);
-      })
-    );
-
-    const readBlocksById = new Map(readBlocks.map((block) => [block.id, block]));
-    let hasShopifyCustomerWarning = warnings.some(w => w.includes("Shopify customer"));
-    for (const id of readResultsMap.keys()) {
-      const block = readBlocksById.get(id);
-      if (!block) continue;
-      const isMissing = readStatusMap.get(id) === "not_found";
-      if (isMissing) {
-        if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerWarning) {
-          warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
-          hasShopifyCustomerWarning = true;
-        } else if (block.name === "get_shopify_orders" || block.name === "get_order_by_name") {
-          if (!orderAlreadyInContext(block, ctx.recentOrders)) {
-            warnings.push("No matching order found - confirm the order number with the customer before proceeding.");
-          }
-        } else if (block.name === "get_order_tracking") {
-          warnings.push("No tracking information found - the order may not have been fulfilled yet.");
-        } else if (block.name === "search_shopify_products") {
-          warnings.push("No matching product found - the order edit step may need a corrected product name.");
-        } else if (block.name === "search_kb") {
-          warnings.push("No relevant KB articles found - the reply is based only on the conversation, not your documentation.");
-        }
-      }
-    }
+    const readResults = await executePlanningReadTools({ ctx, settings, readBlocks });
+    readToolCalls.push(...readResults.readToolCalls);
+    for (const [id, content] of readResults.readResultsMap) readResultsMap.set(id, content);
+    appendPlanningReadWarnings({
+      warnings,
+      readBlocks,
+      readResultsMap,
+      readStatusMap: readResults.readStatusMap,
+      recentOrders: ctx.recentOrders,
+    });
 
     planMessages = [
       ...planMessages,
@@ -309,16 +184,7 @@ export async function planAgent(
     rawToolCalls.push(...phase2ToolUse.map((b) => ({ id: b.id, name: b.name, input: b.input })));
   }
 
-  const steps: PlanStep[] = rawToolCalls.flatMap((tc) => (
-    TOOL_CATEGORIES[tc.name] !== "read" ? [{
-      id: tc.id,
-      tool: tc.name,
-      label: PLAN_STEP_LABELS[tc.name] ?? tc.name.replace(/_/g, " "),
-      description: describeTool(tc.name, tc.input),
-      category: TOOL_CATEGORIES[tc.name] ?? "internal",
-      enabled: true,
-    }] : []
-  ));
+  const steps = buildPlanSteps(rawToolCalls);
 
   logger.info({
     orgId: ctx.orgId,
