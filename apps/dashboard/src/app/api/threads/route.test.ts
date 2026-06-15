@@ -189,6 +189,39 @@ describe('GET /api/threads', () => {
     expect(body.threads.map(t => t.id)).toEqual([waitingThread.id]);
   });
 
+  it('returns for-me threads when the customer is waiting or a draft is ready', async () => {
+    const waiting = await createTestCustomer(org.id, 'for_me_waiting@test.com', { name: 'ForMeWaiting' });
+    const waitingThread = await createTestThread(org.id, waiting.id, ChannelType.email);
+    await createMessage({ threadId: waitingThread.id, contentText: 'help', senderType: SenderType.customer });
+
+    const replied = await createTestCustomer(org.id, 'for_me_replied@test.com', { name: 'ForMeReplied' });
+    const repliedThread = await createTestThread(org.id, replied.id, ChannelType.email);
+    await createMessage({ threadId: repliedThread.id, contentText: 'hi', senderType: SenderType.customer });
+    await createMessage({ threadId: repliedThread.id, contentText: 'on it', senderType: SenderType.agent });
+
+    const req = new Request('http://localhost:3000/api/threads?forMe=true');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads.map(t => t.id)).toEqual([waitingThread.id]);
+  });
+
+  it('filters open threads by tag when ?tag=Returns', async () => {
+    const returnsCustomer = await createTestCustomer(org.id, 'returns@test.com', { name: 'Returns' });
+    const returnsThread = await createTestThread(org.id, returnsCustomer.id, ChannelType.email);
+    await db.thread.update({ where: { id: returnsThread.id }, data: { tag: 'Returns' } });
+
+    const otherCustomer = await createTestCustomer(org.id, 'shipping@test.com', { name: 'Shipping' });
+    const otherThread = await createTestThread(org.id, otherCustomer.id, ChannelType.email);
+    await db.thread.update({ where: { id: otherThread.id }, data: { tag: 'Shipping' } });
+
+    const req = new Request('http://localhost:3000/api/threads?tag=Returns');
+    const res = await GET(req);
+    const body = await res.json() as { threads: { id: string }[] };
+
+    expect(body.threads.map(t => t.id)).toEqual([returnsThread.id]);
+  });
+
   it('returns 403 when the user has no active organization', async () => {
     vi.mocked(auth).mockResolvedValueOnce(
       { userId: 'usr_test', orgId: null } as unknown as ReturnType<typeof auth> extends Promise<infer T>

@@ -1,20 +1,30 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import Image from "next/image"
-import { Ban, CheckSquare, Flag, RotateCcw, Sparkles, Square } from "lucide-react"
+import { Ban, CheckSquare, RotateCcw, Square } from "lucide-react"
+import { useIsMobile } from "@/hooks/useMobile"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { buildTicketListPresentationFromTicket } from "../../_lib/ticket-list-presentation"
 import { getSlaInfo } from "./sla"
-import { getAvatarGradient, getInitials, getTagStyle, type TicketListTab } from "./constants"
-import type { Ticket } from "@/types"
+import { getAvatarGradient, getInitials, isOpenListView, type TicketListView } from "./constants"
+import { hasTicketRowListAction, TicketRowActions } from "./TicketRowActions"
+import { TicketRowMobile } from "./TicketRowMobile"
+import { TicketRowStatusPill } from "./ticket-row-status-pill"
+import type { OrgSettings, Ticket } from "@/types"
 
 interface TicketRowProps {
-  activeTab: TicketListTab
+  activeView: TicketListView
   activeTicketId: string | null
+  approvingTicketId: string | null
   hasSelection: boolean
+  hasShopify: boolean
   isSearchMode?: boolean
   isSelected: boolean
+  orgSettings?: Partial<OrgSettings> | null
   ticket: Ticket
+  onQuickApproveFromList: (threadId: string) => void
+  onReviewFromList: (threadId: string) => void
   onSelectTicket: (id: string) => void
   onToggleSelect: (id: string) => void
   onMarkAsSpam?: (id: string) => void
@@ -26,32 +36,55 @@ const SWIPE_COMMIT_PX = 120
 const CLICK_SUPPRESS_PX = 6
 
 export function TicketRow({
-  activeTab,
+  activeView,
   activeTicketId,
+  approvingTicketId,
   hasSelection,
+  hasShopify,
   isSearchMode,
   isSelected,
+  orgSettings = null,
   ticket,
+  onQuickApproveFromList,
+  onReviewFromList,
   onSelectTicket,
   onToggleSelect,
   onMarkAsSpam,
   onRecover,
 }: TicketRowProps) {
+  const isMobile = useIsMobile()
   const lastRealMsg = [...ticket.messages].reverse().find(message => message.sender !== "note")
   const awaitingReply = ticket.status === "open" && lastRealMsg?.sender === "customer"
   const sla = awaitingReply ? getSlaInfo(ticket.lastCustomerMessageAt) : null
   const isActive = activeTicketId === ticket.id
-  const tagStyle = getTagStyle(ticket.tag)
-  const gradient = getAvatarGradient(ticket.customer)
-  const initials = getInitials(ticket.customer)
-  const closed = ticket.status === "closed" || activeTab === "closed"
+  const closed = ticket.status === "closed" || activeView === "closed"
   const longWait = sla?.longWait ?? false
   const isSpam = ticket.filterStatus === "filtered"
+  const useMobileLayout = isMobile && (isOpenListView(activeView) || isSearchMode)
+  const isApproving = approvingTicketId === ticket.id
+  const listActionsDisabled = approvingTicketId !== null && !isApproving
+
+  const presentation = useMemo(
+    () => buildTicketListPresentationFromTicket(ticket, {
+      orgSettings,
+      hasShopify,
+      listView: activeView,
+      isMobile,
+      activeTab: activeView === "closed" ? "closed" : "open",
+    }),
+    [activeView, hasShopify, isMobile, orgSettings, ticket],
+  )
+
+  const showListActions = activeView === "for_me"
+    && !hasSelection
+    && !isSearchMode
+    && !closed
+    && hasTicketRowListAction(presentation)
 
   const isHoverCapable = useMediaQuery("(hover: hover) and (pointer: fine)")
   const useSwipe = isHoverCapable === false
 
-  const recoverable = activeTab === "filtered" && !!onRecover
+  const recoverable = activeView === "spam" && !!onRecover
   const spammable = !closed && ticket.filterStatus !== "filtered" && !!onMarkAsSpam
   const rowAction = !hasSelection && !isSearchMode
     ? recoverable
@@ -172,6 +205,20 @@ export function TicketRow({
     onSelectTicket(ticket.id)
   }
 
+  const gradient = getAvatarGradient(presentation.customerLabel)
+  const initials = getInitials(presentation.customerLabel)
+  const desktopTime = isSearchMode ? ticket.time : presentation.timeAgo
+
+  const rowActions = showListActions ? (
+    <TicketRowActions
+      presentation={presentation}
+      isApproving={isApproving}
+      disabled={listActionsDisabled}
+      onSend={() => { void onQuickApproveFromList(ticket.id) }}
+      onReview={() => onReviewFromList(ticket.id)}
+    />
+  ) : null
+
   return (
     <div
       data-testid="ticket-row"
@@ -225,81 +272,89 @@ export function TicketRow({
             }
           </button>
 
-          <button
-            type="button"
-            data-testid="ticket-row-open"
-            data-ticket-id={ticket.id}
-            onClick={openTicketRow}
-            className={`flex w-full items-start gap-3 border-0 bg-transparent p-0 text-left transition-transform [font-family:inherit] ${hasSelection ? "translate-x-5" : "group-hover:translate-x-5"}`}
+          <div
+            className={`flex w-full items-stretch gap-2 transition-transform ${hasSelection ? "translate-x-5" : "group-hover:translate-x-5"}`}
           >
-            <div className="relative size-9 shrink-0">
-              <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
-                {initials}
-              </div>
-              <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-                <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
-              </div>
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                <span className="text-sm font-semibold text-white/90 truncate">{ticket.customer}</span>
-                <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
-                  <span
-                    className={`text-xs transition-opacity ${longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
-                      !useSwipe && rowAction ? "group-hover:opacity-0" : ""
-                    }`}
-                  >
-                    {ticket.time}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-[13px] font-medium text-white/80 truncate mb-0.5">{ticket.subject}</p>
-              {isSpam && ticket.filterReason ? (
-                <p className="text-xs text-white/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
+            <button
+              type="button"
+              data-testid="ticket-row-open"
+              data-ticket-id={ticket.id}
+              onClick={openTicketRow}
+              className="flex flex-1 min-w-0 items-start gap-3 border-0 bg-transparent p-0 text-left [font-family:inherit]"
+            >
+              {useMobileLayout ? (
+                <TicketRowMobile
+                  ticket={ticket}
+                  presentation={presentation}
+                  longWait={longWait}
+                />
               ) : (
-                <p className="text-xs text-white/40 line-clamp-1 mb-2">{ticket.preview}</p>
-              )}
+                <>
+                  <div className="relative size-9 shrink-0">
+                    <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+                      {initials}
+                    </div>
+                    <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                      <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
+                    </div>
+                  </div>
 
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                {isSpam ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-500/10 text-red-400 shrink-0">
-                    <Ban className="size-2.5 mr-1" /> Spam
-                  </span>
-                ) : (
-                  <>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${tagStyle.className}`}>
-                      {tagStyle.label}
-                    </span>
-                    {ticket.hasPlan && !closed && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400">
-                        <Sparkles className="size-2.5 mr-1"/> Draft ready
+                  <div className={`flex-1 min-w-0 ${showListActions ? "pr-16" : ""}`}>
+                    <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                      <span className="text-sm font-semibold text-white/90 truncate">
+                        {presentation.customerLabel}
                       </span>
+                      <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
+                        <span
+                          className={`text-xs transition-opacity ${longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
+                            !useSwipe && rowAction && !showListActions ? "group-hover:opacity-0" : ""
+                          }`}
+                        >
+                          {desktopTime}
+                        </span>
+                      </div>
+                    </div>
+
+                    {presentation.showSubject && (
+                      <p className="text-[13px] font-medium text-white/80 truncate mb-0.5">{ticket.subject}</p>
                     )}
-                    {ticket.filterStatus === "questionable" && !closed && (
-                      <span
-                        title={`Possibly not a genuine customer message${ticket.filterReason ? ` — ${ticket.filterReason}` : ""}`}
-                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-400"
-                      >
-                        <Flag className="size-2.5 mr-1" /> Unverified sender
-                      </span>
+
+                    {isSpam && ticket.filterReason ? (
+                      <p className="text-xs text-white/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
+                    ) : presentation.subline ? (
+                      <p className="text-xs text-white/40 line-clamp-1 mb-2">{presentation.subline}</p>
+                    ) : (
+                      <p className="text-xs text-white/40 line-clamp-1 mb-2">{ticket.preview}</p>
                     )}
-                    {closed && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-400/10 text-green-400">
-                        <span className="size-1.5 rounded-full bg-green-400" />
-                        Closed
-                      </span>
-                    )}
-                    {!sla && isSearchMode && ticket.status && !closed && (
-                      <span className="text-xs text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
-                    )}
-                  </>
-                )}
+
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      {isSpam ? (
+                        <TicketRowStatusPill label="Spam" tone="danger" />
+                      ) : (
+                        <>
+                          <TicketRowStatusPill
+                            label={presentation.primaryStatus.label}
+                            tone={presentation.primaryStatus.tone}
+                          />
+                          {!sla && isSearchMode && ticket.status && !closed && (
+                            <span className="text-xs text-white/25 font-medium capitalize ml-auto">{ticket.status}</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </button>
+
+            {showListActions && (
+              <div className={`flex shrink-0 items-end pb-0.5 ${useMobileLayout ? "" : "absolute right-4 top-1/2 -translate-y-1/2"}`}>
+                {rowActions}
               </div>
-            </div>
-          </button>
-          {!useSwipe && rowAction && (
+            )}
+          </div>
+
+          {!useSwipe && rowAction && !showListActions && (
             <button type="button"
               onClick={event => { event.stopPropagation(); rowAction.run() }}
               title={rowAction.kind === "spam" ? "Mark as spam" : "Recover to inbox"}

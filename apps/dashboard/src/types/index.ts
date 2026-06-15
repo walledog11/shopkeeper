@@ -159,7 +159,9 @@ export interface Ticket {
   platform: string;
   logo: string;
   customer: string;
+  customerRecord: Customer | null;
   time: string;
+  lastMessageAt: string;
   subject: string;
   preview: string;
   tag: string;
@@ -168,6 +170,9 @@ export interface Ticket {
   status: ThreadStatus;
   lastCustomerMessageAt: string | null;
   hasPlan: boolean;
+  cachedPlan: unknown | null;
+  cachedPlanMessageId: string | null;
+  shopifyCustomerId: string | null;
   filterStatus: ThreadFilterStatus;
   filterReason: string | null;
   messages: {

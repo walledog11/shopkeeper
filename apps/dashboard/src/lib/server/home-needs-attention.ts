@@ -8,30 +8,12 @@ import {
 } from "@/lib/home/summary-contract"
 import { canonicalInboxThreadWhere } from "@/lib/messaging/inbox-filter"
 import { getChannelInfo } from "@/lib/messaging/channels"
-import { getCustomerName } from "@/lib/messaging/customer-name"
+import { realCustomerName, timeAgoShort } from "@/lib/messaging/customer-display"
 import { currentPlanPredicate, type ThreadIdRow } from "@/lib/server/home-summary-queries"
 
 function clampCustomerMessage(text: string | null, max = 300): string {
   const cleaned = (text ?? "").trim()
   return cleaned.length > max ? `${cleaned.slice(0, max - 1)}…` : cleaned
-}
-
-function realCustomerName(
-  customer: { name?: string | null; platformId?: string | null } | null,
-): string | null {
-  const name = getCustomerName(customer)
-  if (name.includes("@")) return null
-  if (customer?.platformId && name === customer.platformId) return null
-  return name
-}
-
-function timeAgoShort(date: Date, now: Date): string {
-  const minutes = Math.floor((now.getTime() - date.getTime()) / 60_000)
-  if (minutes < 1) return "just now"
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
 }
 
 export async function loadNeedsAttention(

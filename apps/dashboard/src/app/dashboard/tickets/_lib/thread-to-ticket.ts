@@ -18,7 +18,9 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     platform: channel.name,
     logo: channel.logo,
     customer: getCustomerName(thread.customer),
+    customerRecord: thread.customer,
     time: formatTicketAge(thread.lastMessageAt),
+    lastMessageAt: thread.lastMessageAt,
     subject: thread.subject || "New Inquiry",
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
@@ -28,6 +30,9 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,
     hasPlan: planIsForLastMessage,
+    cachedPlan: thread.cachedPlan,
+    cachedPlanMessageId: thread.cachedPlanMessageId,
+    shopifyCustomerId: thread.shopifyCustomerId,
     filterStatus: thread.filterStatus,
     filterReason: thread.filterReason,
     messages: thread.messages.flatMap((message) => {

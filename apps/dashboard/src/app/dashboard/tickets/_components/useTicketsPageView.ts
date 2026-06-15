@@ -14,99 +14,167 @@ import { useSummaryRefresh } from "../_hooks/useSummaryRefresh"
 import { useThreadCacheCoordinator } from "../_hooks/useThreadCacheCoordinator"
 import { useTicketActions } from "../_hooks/useTicketActions"
 import { useTicketSelection } from "../_hooks/useTicketSelection"
+import { useTicketListRowActions } from "../_hooks/useTicketListRowActions"
 import { useTicketTabCounts } from "../_hooks/useTicketTabCounts"
 import { threadToTicket } from "../_lib/thread-to-ticket"
-import type { TicketListTab } from "./thread-list/constants"
+import {
+  buildTicketListPresentationFromTicket,
+  compareTicketTriageTier,
+} from "../_lib/ticket-list-presentation"
+import type {
+  TicketListView,
+  TicketTagFilter,
+} from "./thread-list/constants"
 import type { ChannelType, OrgSettings, Thread, Ticket } from "@/types"
 
 export interface TicketsPageClientProps {
-  initialOpenThreads: Thread[]
+  initialForMeThreads: Thread[]
   hasShopify: boolean
   agentName: string
+  connectedChannels: ChannelType[]
   orgSettings?: Partial<OrgSettings> | null
 }
 
 interface TicketsPageState {
-  activeFilter: ChannelType | null
-  activeTab: TicketListTab
+  activeView: TicketListView
+  channelFilter: ChannelType | null
   dismissCorrectHint: boolean
-  needsReply: boolean
   searchQuery: string
   showContextDrawer: boolean
+  tagFilter: TicketTagFilter | null
 }
 
 type TicketsPageAction =
-  | { type: "activeFilterChanged"; activeFilter: ChannelType | null }
+  | { type: "channelFilterChanged"; channelFilter: ChannelType | null }
   | { type: "contextDrawerChanged"; open: boolean }
   | { type: "correctHintDismissed" }
-  | { type: "needsReplyChanged"; needsReply: boolean }
   | { type: "searchChanged"; searchQuery: string }
-  | { type: "tabChanged"; tab: TicketListTab }
+  | { type: "tagFilterChanged"; tagFilter: TicketTagFilter | null }
+  | { type: "viewChanged"; view: TicketListView }
 
 const EMPTY_SEARCH_THREADS: Thread[] = []
 
+const VALID_VIEWS = new Set<TicketListView>(["for_me", "all_open", "closed", "spam"])
+
+function parseInitialView(viewParam: string | null): TicketListView {
+  if (viewParam && VALID_VIEWS.has(viewParam as TicketListView)) {
+    return viewParam as TicketListView
+  }
+  return "for_me"
+}
+
+function buildListQuery(
+  view: TicketListView,
+  tagFilter: TicketTagFilter | null,
+  channelFilter: ChannelType | null,
+) {
+  if (view === "closed") {
+    return { status: "closed" as const }
+  }
+  if (view === "spam") {
+    return { status: "open" as const, filterStatus: "filtered" as const }
+  }
+  const base = view === "for_me"
+    ? { status: "open" as const, forMe: true as const }
+    : { status: "open" as const }
+  return {
+    ...base,
+    ...(tagFilter ? { tag: tagFilter } : {}),
+    ...(channelFilter ? { channelType: channelFilter } : {}),
+  }
+}
+
 const INITIAL_TICKETS_PAGE_STATE: TicketsPageState = {
-  activeFilter: null,
-  activeTab: "open",
+  activeView: "for_me",
+  channelFilter: null,
   dismissCorrectHint: false,
-  needsReply: false,
   searchQuery: "",
   showContextDrawer: false,
+  tagFilter: null,
 }
 
 function ticketsPageReducer(state: TicketsPageState, action: TicketsPageAction): TicketsPageState {
   switch (action.type) {
-    case "activeFilterChanged":
-      return { ...state, activeFilter: action.activeFilter }
+    case "channelFilterChanged":
+      return { ...state, channelFilter: action.channelFilter }
     case "contextDrawerChanged":
       return { ...state, showContextDrawer: action.open }
     case "correctHintDismissed":
       return { ...state, dismissCorrectHint: true }
-    case "needsReplyChanged":
-      return { ...state, needsReply: action.needsReply }
     case "searchChanged":
       return { ...state, searchQuery: action.searchQuery }
-    case "tabChanged":
+    case "tagFilterChanged":
+      return { ...state, tagFilter: action.tagFilter }
+    case "viewChanged":
       return {
         ...state,
-        activeTab: action.tab,
-        needsReply: action.tab === "open" ? state.needsReply : false,
+        activeView: action.view,
         searchQuery: "",
       }
   }
 }
 
 export function useTicketsPageView({
-  initialOpenThreads,
+  initialForMeThreads,
   hasShopify,
   agentName,
+  connectedChannels,
   orgSettings = null,
 }: TicketsPageClientProps) {
   const searchParams = useSearchParams()
   const queryThreadId = searchParams.get("thread")
   const correctReply = searchParams.get("correct") === "1"
-  const [pageState, dispatchPageState] = useReducer(ticketsPageReducer, INITIAL_TICKETS_PAGE_STATE)
-  const { activeFilter, activeTab, dismissCorrectHint, needsReply, searchQuery, showContextDrawer } = pageState
+  const initialView = parseInitialView(searchParams.get("view"))
+  const [pageState, dispatchPageState] = useReducer(
+    ticketsPageReducer,
+    { ...INITIAL_TICKETS_PAGE_STATE, activeView: initialView },
+  )
+  const { activeView, channelFilter, dismissCorrectHint, searchQuery, showContextDrawer, tagFilter } = pageState
   const isDesktopContext = useMediaQuery("(min-width: 1280px)")
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const openTabEnabled = activeTab === "open"
-  const closedTabEnabled = activeTab === "closed"
-  const filteredTabEnabled = activeTab === "filtered"
+  const forMeQuery = useMemo(
+    () => buildListQuery("for_me", tagFilter, channelFilter),
+    [channelFilter, tagFilter],
+  )
+  const allOpenQuery = useMemo(
+    () => buildListQuery("all_open", tagFilter, channelFilter),
+    [channelFilter, tagFilter],
+  )
+  const closedQuery = useMemo(() => buildListQuery("closed", null, null), [])
+  const spamQuery = useMemo(() => buildListQuery("spam", null, null), [])
+
+  const forMeEnabled = true
+  const allOpenEnabled = true
+  const closedEnabled = true
+  const spamEnabled = true
 
   const {
-    threads: openThreads,
-    totalCount: openListTotalCount,
-    isLoading: openLoading,
+    threads: forMeThreads,
+    totalCount: forMeListTotalCount,
+    isLoading: forMeLoading,
     error,
-    mutate: mutateOpen,
-    removeThreadById: removeFromOpen,
-    prependThread: prependToOpen,
-    loadMore: loadMoreOpen,
-    hasMore: hasMoreOpen,
-    isLoadingMore: isLoadingMoreOpen,
-  } = usePaginatedThreads("open", initialOpenThreads, true, undefined, needsReply, openTabEnabled)
+    mutate: mutateForMe,
+    removeThreadById: removeFromForMe,
+    prependThread: prependToForMe,
+    loadMore: loadMoreForMe,
+    hasMore: hasMoreForMe,
+    isLoadingMore: isLoadingMoreForMe,
+  } = usePaginatedThreads(forMeQuery, initialForMeThreads, true, forMeEnabled)
+
+  const {
+    threads: allOpenThreads,
+    totalCount: allOpenListTotalCount,
+    isLoading: allOpenLoading,
+    mutate: mutateAllOpen,
+    removeThreadById: removeFromAllOpen,
+    prependThread: prependToAllOpen,
+    loadMore: loadMoreAllOpen,
+    hasMore: hasMoreAllOpen,
+    isLoadingMore: isLoadingMoreAllOpen,
+  } = usePaginatedThreads(allOpenQuery, undefined, true, allOpenEnabled)
+
   const {
     threads: closedThreads,
     isLoading: closedLoading,
@@ -116,31 +184,37 @@ export function useTicketsPageView({
     loadMore: loadMoreClosed,
     hasMore: hasMoreClosed,
     isLoadingMore: isLoadingMoreClosed,
-  } = usePaginatedThreads("closed", undefined, true, undefined, false, closedTabEnabled)
-  const {
-    threads: filteredThreads,
-    isLoading: filteredLoading,
-    mutate: mutateFiltered,
-    removeThreadById: removeFromFiltered,
-    prependThread: prependToFiltered,
-    loadMore: loadMoreFiltered,
-    hasMore: hasMoreFiltered,
-    isLoadingMore: isLoadingMoreFiltered,
-  } = usePaginatedThreads("open", undefined, true, "filtered", false, filteredTabEnabled)
+  } = usePaginatedThreads(closedQuery, undefined, true, closedEnabled)
 
-  const openCountFromList = openTabEnabled && openListTotalCount !== undefined
-    ? openListTotalCount
+  const {
+    threads: spamThreads,
+    isLoading: spamLoading,
+    mutate: mutateSpam,
+    removeThreadById: removeFromSpam,
+    prependThread: prependToSpam,
+    loadMore: loadMoreSpam,
+    hasMore: hasMoreSpam,
+    isLoadingMore: isLoadingMoreSpam,
+  } = usePaginatedThreads(spamQuery, undefined, true, spamEnabled)
+
+  const forMeCountFromList = forMeEnabled && forMeListTotalCount !== undefined
+    ? forMeListTotalCount
     : null
-  const { openCount, closedCount, spamCount, mutateTabCounts } = useTicketTabCounts({
-    needsReply,
-    openCountFromList,
+
+  const {
+    forMeCount,
+    spamCount,
+    mutateTabCounts,
+  } = useTicketTabCounts({
+    forMeCountFromList,
   })
+
   const { setOverride: setSidebarOpenCount } = useOpenThreadCountOverride()
 
   useEffect(() => {
-    setSidebarOpenCount(openCount)
+    setSidebarOpenCount(forMeCount)
     return () => setSidebarOpenCount(null)
-  }, [openCount, setSidebarOpenCount])
+  }, [forMeCount, setSidebarOpenCount])
 
   const isSearchMode = searchQuery.length >= 2
 
@@ -160,15 +234,16 @@ export function useTicketsPageView({
     activeThreadPreview,
     activeTicket,
     conversationTicket,
-    effectiveActiveTab,
+    effectiveActiveView,
     isConversationLoading,
     mutateActiveThread,
   } = useActiveThreadSelection({
     queryThreadId,
-    activeTab,
-    openThreads,
+    activeView,
+    forMeThreads,
+    allOpenThreads,
     closedThreads,
-    filteredThreads,
+    spamThreads,
     searchThreads,
     agentName,
   })
@@ -176,13 +251,21 @@ export function useTicketsPageView({
   const dbThreads = useMemo(
     () => {
       if (isSearchMode) return []
-      if (effectiveActiveTab === "open") return openThreads
-      if (effectiveActiveTab === "closed") return closedThreads
-      return filteredThreads
+      if (effectiveActiveView === "for_me") return forMeThreads
+      if (effectiveActiveView === "all_open") return allOpenThreads
+      if (effectiveActiveView === "closed") return closedThreads
+      return spamThreads
     },
-    [closedThreads, effectiveActiveTab, filteredThreads, isSearchMode, openThreads],
+    [allOpenThreads, closedThreads, effectiveActiveView, forMeThreads, isSearchMode, spamThreads],
   )
-  const isLoading = effectiveActiveTab === "open" ? openLoading : effectiveActiveTab === "closed" ? closedLoading : filteredLoading
+
+  const isLoading = effectiveActiveView === "for_me"
+    ? forMeLoading
+    : effectiveActiveView === "all_open"
+      ? allOpenLoading
+      : effectiveActiveView === "closed"
+        ? closedLoading
+        : spamLoading
 
   const listThreads = isSearchMode ? searchThreads : dbThreads
 
@@ -191,12 +274,38 @@ export function useTicketsPageView({
     [listThreads, agentName],
   )
 
-  const filteredTickets: Ticket[] = useMemo(
-    () => isSearchMode
-      ? liveTickets
-      : liveTickets.filter(t => !activeFilter || t.channelType === activeFilter),
-    [activeFilter, isSearchMode, liveTickets],
-  )
+  const filteredTickets = useMemo(() => {
+    const tickets = [...liveTickets]
+
+    if (!isSearchMode && effectiveActiveView === "for_me") {
+      tickets.sort((left, right) => {
+        const leftPresentation = buildTicketListPresentationFromTicket(left, {
+          orgSettings,
+          hasShopify,
+          listView: "for_me",
+          activeTab: "open",
+        })
+        const rightPresentation = buildTicketListPresentationFromTicket(right, {
+          orgSettings,
+          hasShopify,
+          listView: "for_me",
+          activeTab: "open",
+        })
+        const tierOrder = compareTicketTriageTier(leftPresentation.tier, rightPresentation.tier)
+        if (tierOrder !== 0) return tierOrder
+        return new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime()
+      })
+      return tickets
+    }
+
+    if (!isSearchMode) {
+      tickets.sort(
+        (left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
+      )
+    }
+
+    return tickets
+  }, [effectiveActiveView, hasShopify, isSearchMode, liveTickets, orgSettings])
 
   const cachedPlan = useMemo(
     () => activeThread ? getCurrentPlanForThread(activeThread, activeThread.messages) : null,
@@ -209,21 +318,25 @@ export function useTicketsPageView({
     moveThreadFilterStatus,
     revalidateThreadCaches,
   } = useThreadCacheCoordinator({
-    openThreads,
+    openThreads: forMeThreads,
+    allOpenThreads,
     closedThreads,
-    filteredThreads,
+    filteredThreads: spamThreads,
     activeThread: activeThreadData?.thread,
-    mutateOpen,
+    mutateOpen: mutateForMe,
     mutateClosed,
-    mutateFiltered,
-    removeFromOpen,
+    mutateFiltered: mutateSpam,
+    removeFromOpen: removeFromForMe,
     removeFromClosed,
-    removeFromFiltered,
-    prependToOpen,
+    removeFromFiltered: removeFromSpam,
+    prependToOpen: prependToForMe,
     prependToClosed,
-    prependToFiltered,
+    prependToFiltered: prependToSpam,
     mutateSearch,
     mutateActiveThread,
+    mutateAllOpen,
+    removeFromAllOpen,
+    prependToAllOpen,
   })
 
   const revalidateTicketData = useCallback(async () => {
@@ -252,6 +365,17 @@ export function useTicketsPageView({
     setSelectedIds,
   })
 
+  const { approvingTicketId, handleQuickApproveFromList } = useTicketListRowActions({
+    patchThreadCaches,
+    revalidateThreadCaches: revalidateTicketData,
+    showToast,
+  })
+
+  const handleReviewFromList = useCallback((threadId: string) => {
+    setActiveTicketId(threadId)
+    setSendError(null)
+  }, [setActiveTicketId, setSendError])
+
   const {
     activeAgentTurns, isAgentRunning,
     handleAgentTurnAdd, handleAgentRunningChange, handleAgentComplete,
@@ -272,8 +396,8 @@ export function useTicketsPageView({
     showToast,
   })
 
-  const handleTabChange = (tab: TicketListTab) => {
-    dispatchPageState({ type: "tabChanged", tab })
+  const handleViewChange = (view: TicketListView) => {
+    dispatchPageState({ type: "viewChanged", view })
     setActiveTicketId(null)
     setReplyText("")
     setSendError(null)
@@ -287,45 +411,50 @@ export function useTicketsPageView({
     if (!q) setSelectedIds([])
   }
 
-  if (isLoading && dbThreads.length === 0 && !isSearchMode) {
-    return { kind: "loading" as const }
-  }
+  const listLoading = isLoading && dbThreads.length === 0 && !isSearchMode
 
-  if (error) {
+  if (error && dbThreads.length === 0 && !isSearchMode) {
     return { kind: "error" as const }
   }
 
-  const currentHasMore = effectiveActiveTab === "open"
-    ? hasMoreOpen
-    : effectiveActiveTab === "closed"
-      ? hasMoreClosed
-      : hasMoreFiltered
-  const currentIsLoadingMore = effectiveActiveTab === "open"
-    ? isLoadingMoreOpen
-    : effectiveActiveTab === "closed"
-      ? isLoadingMoreClosed
-      : isLoadingMoreFiltered
-  const currentLoadMore = effectiveActiveTab === "open"
-    ? loadMoreOpen
-    : effectiveActiveTab === "closed"
-      ? loadMoreClosed
-      : loadMoreFiltered
+  const currentHasMore = effectiveActiveView === "for_me"
+    ? hasMoreForMe
+    : effectiveActiveView === "all_open"
+      ? hasMoreAllOpen
+      : effectiveActiveView === "closed"
+        ? hasMoreClosed
+        : hasMoreSpam
+  const currentIsLoadingMore = effectiveActiveView === "for_me"
+    ? isLoadingMoreForMe
+    : effectiveActiveView === "all_open"
+      ? isLoadingMoreAllOpen
+      : effectiveActiveView === "closed"
+        ? isLoadingMoreClosed
+        : isLoadingMoreSpam
+  const currentLoadMore = effectiveActiveView === "for_me"
+    ? loadMoreForMe
+    : effectiveActiveView === "all_open"
+      ? loadMoreAllOpen
+      : effectiveActiveView === "closed"
+        ? loadMoreClosed
+        : loadMoreSpam
 
   return {
     kind: "ready" as const,
     layoutProps: {
       activeAgentTurns,
-      activeFilter,
-      activeTab,
+      activeView,
+      effectiveActiveView,
+      channelFilter,
+      tagFilter,
       activeThread,
       activeThreadError,
       activeThreadPreview,
       activeTicketId,
       agentName,
       cachedPlan,
-      closedCount,
+      connectedChannels,
       conversationTicket,
-      effectiveActiveTab,
       failedMessages: failedMessages.filter(m => m.threadId === activeTicketId),
       orgSettings,
       flags: {
@@ -339,14 +468,13 @@ export function useTicketsPageView({
         isSearchLoading,
         isSearchMode,
         isSending,
-        needsReply,
+        listLoading,
         showContextDrawer,
       },
       filteredTickets,
       liveTicketCount: liveTickets.length,
       messagesEndRef,
-      openCount,
-      openThreadCount: openThreads.length,
+      openThreadCount: forMeThreads.length,
       refreshingSummaryId,
       replyText,
       searchQuery,
@@ -367,13 +495,16 @@ export function useTicketsPageView({
       onBulkTag: (tag: string) => handleBulkTag(selectedIds, tag),
       onClearSelection: handleClearSelection,
       onCorrectReplyDismiss: () => dispatchPageState({ type: "correctHintDismissed" }),
-      onFilterChange: (next: ChannelType | null) => dispatchPageState({ type: "activeFilterChanged", activeFilter: next }),
+      onChannelFilterChange: (next: ChannelType | null) => dispatchPageState({ type: "channelFilterChanged", channelFilter: next }),
+      onTagFilterChange: (next: TicketTagFilter | null) => dispatchPageState({ type: "tagFilterChanged", tagFilter: next }),
       onLinkShopifyCustomer: handleLinkShopifyCustomer,
       onLoadMore: currentLoadMore,
       onMarkAsSpam: handleMarkAsSpam,
-      onNeedsReplyChange: (next: boolean) => dispatchPageState({ type: "needsReplyChanged", needsReply: next }),
-      onOpenContext: () => dispatchPageState({ type: "contextDrawerChanged", open: true }),
       onRecover: handleRecover,
+      onOpenContext: () => dispatchPageState({ type: "contextDrawerChanged", open: true }),
+      approvingTicketId,
+      onQuickApproveFromList: handleQuickApproveFromList,
+      onReviewFromList: handleReviewFromList,
       onRefreshSummary: () => {
         if (activeThread) {
           handleRefreshSummary(activeThread.id)
@@ -390,8 +521,9 @@ export function useTicketsPageView({
       onSelectTicket: (id: string) => { setActiveTicketId(id); setSendError(null) },
       onSend: handleSendMessage,
       onShowContextDrawerChange: (open: boolean) => dispatchPageState({ type: "contextDrawerChanged", open }),
-      onTabChange: handleTabChange,
+      onViewChange: handleViewChange,
       onToggleSelect: handleToggleSelect,
+      onViewSpam: () => handleViewChange("spam"),
     },
   }
 }

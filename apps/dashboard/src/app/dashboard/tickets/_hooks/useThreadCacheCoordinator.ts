@@ -17,16 +17,20 @@ export interface ActiveThreadData {
 
 interface ThreadCacheCoordinatorDeps {
   openThreads: Thread[]
+  allOpenThreads?: Thread[]
   closedThreads: Thread[]
   filteredThreads: Thread[]
   activeThread: Thread | undefined
   mutateOpen: ThreadListMutate
+  mutateAllOpen?: ThreadListMutate
   mutateClosed: ThreadListMutate
   mutateFiltered: ThreadListMutate
   removeFromOpen: (id: string) => Promise<void>
+  removeFromAllOpen?: (id: string) => Promise<void>
   removeFromClosed: (id: string) => Promise<void>
   removeFromFiltered: (id: string) => Promise<void>
   prependToOpen: (thread: Thread) => Promise<void>
+  prependToAllOpen?: (thread: Thread) => Promise<void>
   prependToClosed: (thread: Thread) => Promise<void>
   prependToFiltered: (thread: Thread) => Promise<void>
   mutateSearch: KeyedMutator<ThreadSearchData>
@@ -50,6 +54,7 @@ function patchThreads(threads: Thread[], threadId: string, updateThread: ThreadL
 
 function findThread(deps: ThreadCacheCoordinatorDeps, threadId: string) {
   return deps.openThreads.find(thread => thread.id === threadId)
+    ?? deps.allOpenThreads?.find(thread => thread.id === threadId)
     ?? deps.closedThreads.find(thread => thread.id === threadId)
     ?? deps.filteredThreads.find(thread => thread.id === threadId)
     ?? (deps.activeThread?.id === threadId ? deps.activeThread : undefined)
@@ -85,6 +90,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
   const patchThreadCaches = async (threadId: string, updateThread: ThreadListUpdater) => {
     await Promise.all([
       deps.mutateOpen(patchThreads(deps.openThreads, threadId, updateThread), false),
+      deps.mutateAllOpen?.(patchThreads(deps.allOpenThreads ?? [], threadId, updateThread), false),
       deps.mutateClosed(patchThreads(deps.closedThreads, threadId, updateThread), false),
       deps.mutateFiltered(patchThreads(deps.filteredThreads, threadId, updateThread), false),
       patchSearchCache(deps.mutateSearch, threadId, updateThread),
@@ -102,12 +108,14 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
     if (updated.filterStatus === 'filtered') {
       await Promise.all([
         deps.removeFromOpen(threadId),
+        deps.removeFromAllOpen?.(threadId),
         deps.removeFromClosed(threadId),
         deps.mutateFiltered(patchThreads(deps.filteredThreads, threadId, updateThread), false),
       ])
     } else if (nextStatus === 'closed') {
       await Promise.all([
         deps.removeFromOpen(threadId),
+        deps.removeFromAllOpen?.(threadId),
         deps.removeFromFiltered(threadId),
         deps.prependToClosed(updated),
       ])
@@ -116,6 +124,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
         deps.removeFromClosed(threadId),
         deps.removeFromFiltered(threadId),
         deps.prependToOpen(updated),
+        deps.prependToAllOpen?.(updated),
       ])
     }
 
@@ -147,6 +156,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
     if (nextFilterStatus === 'filtered') {
       await Promise.all([
         deps.removeFromOpen(threadId),
+        deps.removeFromAllOpen?.(threadId),
         deps.removeFromClosed(threadId),
         deps.prependToFiltered(updated),
       ])
@@ -154,6 +164,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
       await Promise.all([
         deps.removeFromFiltered(threadId),
         deps.removeFromOpen(threadId),
+        deps.removeFromAllOpen?.(threadId),
         deps.prependToClosed(updated),
       ])
     } else {
@@ -161,6 +172,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
         deps.removeFromFiltered(threadId),
         deps.removeFromClosed(threadId),
         deps.prependToOpen(updated),
+        deps.prependToAllOpen?.(updated),
       ])
     }
 
@@ -173,6 +185,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
   const revalidateThreadCaches = async () => {
     await Promise.all([
       deps.mutateOpen(),
+      deps.mutateAllOpen?.(),
       deps.mutateClosed(),
       deps.mutateFiltered(),
       deps.mutateSearch(),
@@ -190,16 +203,20 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
 
 export function useThreadCacheCoordinator({
   openThreads,
+  allOpenThreads,
   closedThreads,
   filteredThreads,
   activeThread,
   mutateOpen,
+  mutateAllOpen,
   mutateClosed,
   mutateFiltered,
   removeFromOpen,
+  removeFromAllOpen,
   removeFromClosed,
   removeFromFiltered,
   prependToOpen,
+  prependToAllOpen,
   prependToClosed,
   prependToFiltered,
   mutateSearch,
@@ -208,16 +225,20 @@ export function useThreadCacheCoordinator({
   return useMemo(
     () => createThreadCacheCoordinator({
       openThreads,
+      allOpenThreads,
       closedThreads,
       filteredThreads,
       activeThread,
       mutateOpen,
+      mutateAllOpen,
       mutateClosed,
       mutateFiltered,
       removeFromOpen,
+      removeFromAllOpen,
       removeFromClosed,
       removeFromFiltered,
       prependToOpen,
+      prependToAllOpen,
       prependToClosed,
       prependToFiltered,
       mutateSearch,
@@ -225,17 +246,21 @@ export function useThreadCacheCoordinator({
     }),
     [
       activeThread,
+      allOpenThreads,
       closedThreads,
       filteredThreads,
       mutateActiveThread,
+      mutateAllOpen,
       mutateClosed,
       mutateFiltered,
       mutateOpen,
       mutateSearch,
       openThreads,
+      prependToAllOpen,
       prependToClosed,
       prependToFiltered,
       prependToOpen,
+      removeFromAllOpen,
       removeFromClosed,
       removeFromFiltered,
       removeFromOpen,

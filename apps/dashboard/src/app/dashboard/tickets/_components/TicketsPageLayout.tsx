@@ -6,7 +6,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
 import ThreadList from "./thread-list/ThreadList"
-import type { TicketListTab } from "./thread-list/constants"
+import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
+import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
 import ContextPanel from "./context-panel/ContextPanel"
 import ContextPanelSkeleton from "./context-panel/ContextPanelSkeleton"
@@ -26,30 +27,30 @@ interface TicketsPageLayoutFlags {
   isSearchLoading: boolean
   isSearchMode: boolean
   isSending: boolean
-  needsReply: boolean
+  listLoading: boolean
   showContextDrawer: boolean
 }
 
 interface TicketsPageLayoutProps {
   activeAgentTurns: ConversationViewProps["agentTurns"]
-  activeFilter: ChannelType | null
-  activeTab: TicketListTab
+  activeView: TicketListView
+  effectiveActiveView: TicketListView
+  channelFilter: ChannelType | null
+  tagFilter: TicketTagFilter | null
+  connectedChannels: ChannelType[]
   activeThread: Thread | undefined
   activeThreadError: unknown
   activeThreadPreview: Thread | undefined
   activeTicketId: string | null
   agentName: string
   cachedPlan: ConversationViewProps["initialPlan"]
-  closedCount: number
   conversationTicket: Ticket | undefined
-  effectiveActiveTab: TicketListTab
   failedMessages: ConversationViewProps["failedMessages"]
   orgSettings?: ConversationViewProps["orgSettings"]
   flags: TicketsPageLayoutFlags
   filteredTickets: Ticket[]
   liveTicketCount: number
   messagesEndRef: ConversationViewProps["messagesEndRef"]
-  openCount: number
   openThreadCount: number
   refreshingSummaryId: string | null
   replyText: string
@@ -67,13 +68,16 @@ interface TicketsPageLayoutProps {
   onBulkTag: (tag: string) => void
   onClearSelection: ThreadListProps["onClearSelection"]
   onCorrectReplyDismiss: () => void
-  onFilterChange: ThreadListProps["onFilterChange"]
+  onChannelFilterChange: ThreadListProps["onChannelFilterChange"]
+  onTagFilterChange: ThreadListProps["onTagFilterChange"]
   onLinkShopifyCustomer: ContextPanelProps["onLinkShopifyCustomer"]
   onLoadMore: () => void
   onMarkAsSpam: ThreadListProps["onMarkAsSpam"]
-  onNeedsReplyChange: ThreadListProps["onNeedsReplyChange"]
   onOpenContext: () => void
   onRecover: ThreadListProps["onRecover"]
+  approvingTicketId: string | null
+  onQuickApproveFromList: (threadId: string) => void
+  onReviewFromList: (threadId: string) => void
   onRefreshSummary: () => void
   onReopen: ConversationViewProps["onReopen"]
   onReplyChange: ConversationViewProps["onReplyChange"]
@@ -86,30 +90,31 @@ interface TicketsPageLayoutProps {
   onSelectTicket: ThreadListProps["onSelectTicket"]
   onSend: ConversationViewProps["onSend"]
   onShowContextDrawerChange: (open: boolean) => void
-  onTabChange: ThreadListProps["onTabChange"]
+  onViewChange: ThreadListProps["onViewChange"]
+  onViewSpam: ThreadListProps["onViewSpam"]
   onToggleSelect: ThreadListProps["onToggleSelect"]
 }
 
 export function TicketsPageLayout({
   activeAgentTurns,
-  activeFilter,
-  activeTab,
+  activeView,
+  effectiveActiveView,
+  channelFilter,
+  tagFilter,
+  connectedChannels,
   activeThread,
   activeThreadError,
   activeThreadPreview,
   activeTicketId,
   agentName,
   cachedPlan,
-  closedCount,
   conversationTicket,
-  effectiveActiveTab,
   failedMessages,
   orgSettings,
   flags,
   filteredTickets,
   liveTicketCount,
   messagesEndRef,
-  openCount,
   openThreadCount,
   refreshingSummaryId,
   replyText,
@@ -127,13 +132,16 @@ export function TicketsPageLayout({
   onBulkTag,
   onClearSelection,
   onCorrectReplyDismiss,
-  onFilterChange,
+  onChannelFilterChange,
+  onTagFilterChange,
   onLinkShopifyCustomer,
   onLoadMore,
   onMarkAsSpam,
-  onNeedsReplyChange,
   onOpenContext,
   onRecover,
+  approvingTicketId,
+  onQuickApproveFromList,
+  onReviewFromList,
   onRefreshSummary,
   onReopen,
   onReplyChange,
@@ -146,10 +154,15 @@ export function TicketsPageLayout({
   onSelectTicket,
   onSend,
   onShowContextDrawerChange,
-  onTabChange,
+  onViewChange,
+  onViewSpam,
   onToggleSelect,
 }: TicketsPageLayoutProps) {
-  const allCaughtUp = effectiveActiveTab === 'open' && openThreadCount === 0
+  const allCaughtUp = effectiveActiveView === "for_me" && openThreadCount === 0 && !flags.isSearchMode
+
+  const conversationTab = flags.isSearchMode || effectiveActiveView === "spam"
+    ? ((activeThread?.status ?? activeThreadPreview?.status) === "closed" ? "closed" : "open")
+    : toConversationTab(effectiveActiveView)
 
   return (
     <div className="flex size-full overflow-hidden bg-background relative">
@@ -160,25 +173,26 @@ export function TicketsPageLayout({
         <ThreadList
           tickets={filteredTickets}
           totalCount={liveTicketCount}
-          activeTab={effectiveActiveTab}
-          activeFilter={activeFilter}
-          activeTicketId={activeTicketId}
-          openCount={openCount}
-          closedCount={closedCount}
+          activeView={effectiveActiveView}
+          channelFilter={channelFilter}
+          connectedChannels={connectedChannels}
           spamCount={spamCount}
+          tagFilter={tagFilter}
+          activeTicketId={activeTicketId}
           searchQuery={searchQuery}
           listState={{
             searchMode: flags.isSearchMode,
             searchLoading: flags.isSearchLoading,
+            listLoading: flags.listLoading,
             hasMore: flags.hasMore,
             loadingMore: flags.isLoadingMore,
           }}
           selectedIds={selectedIds}
-          needsReply={flags.needsReply}
-          onNeedsReplyChange={onNeedsReplyChange}
+          onChannelFilterChange={onChannelFilterChange}
+          onTagFilterChange={onTagFilterChange}
           onSearchChange={onSearchChange}
-          onTabChange={onTabChange}
-          onFilterChange={onFilterChange}
+          onViewChange={onViewChange}
+          onViewSpam={onViewSpam}
           onSelectTicket={onSelectTicket}
           onToggleSelect={onToggleSelect}
           onBulkClose={onBulkClose}
@@ -188,6 +202,11 @@ export function TicketsPageLayout({
           onLoadMore={onLoadMore}
           onMarkAsSpam={onMarkAsSpam}
           onRecover={onRecover}
+          hasShopify={flags.hasShopify}
+          orgSettings={orgSettings}
+          approvingTicketId={approvingTicketId}
+          onQuickApproveFromList={onQuickApproveFromList}
+          onReviewFromList={onReviewFromList}
         />
       </div>
 
@@ -230,9 +249,7 @@ export function TicketsPageLayout({
                 onAgentTurnAdd={onAgentTurnAdd}
                 onAgentRunningChange={onAgentRunningChange}
                 onAgentComplete={onAgentComplete}
-                activeTab={flags.isSearchMode || effectiveActiveTab === 'filtered'
-                  ? ((activeThread?.status ?? activeThreadPreview?.status) === 'closed' ? 'closed' : 'open')
-                  : effectiveActiveTab}
+                activeTab={conversationTab}
                 initialPlan={cachedPlan}
                 aiSummary={activeThread?.aiSummary ?? activeThreadPreview?.aiSummary ?? null}
                 onRefreshSummary={onRefreshSummary}

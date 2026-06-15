@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { fetcher } from "@/lib/api/fetcher";
-import type { Thread } from "@/types";
+import type { ChannelType, Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;
 
 type ThreadsPage = { threads: Thread[]; nextCursor: string | null; totalCount?: number };
+
+export type ThreadListQuery = {
+  status?: "open" | "closed"
+  filterStatus?: "filtered"
+  forMe?: boolean
+  hasDraft?: boolean
+  tag?: string
+  channelType?: ChannelType
+}
 
 function useIsDocumentVisible() {
   const [isVisible, setIsVisible] = useState(
@@ -21,29 +30,49 @@ function useIsDocumentVisible() {
   return isVisible;
 }
 
+function buildThreadListUrl(query: ThreadListQuery, pageIndex: number, previousPageData: ThreadsPage | null, preview: boolean) {
+  const params = new URLSearchParams();
+  params.set("status", query.status ?? "open");
+  params.set("limit", String(PAGINATED_LIMIT));
+  if (preview) params.set("preview", "true");
+  if (query.filterStatus) params.set("filterStatus", query.filterStatus);
+  if (query.forMe) params.set("forMe", "true");
+  if (query.hasDraft) params.set("hasDraft", "true");
+  if (query.tag) params.set("tag", query.tag);
+  if (query.channelType) params.set("channelType", query.channelType);
+  if (pageIndex === 0) params.set("includeCount", "true");
+  if (pageIndex > 0 && previousPageData?.nextCursor) {
+    params.set("cursor", previousPageData.nextCursor);
+  }
+  return `/api/threads?${params.toString()}`;
+}
+
+function queryMatchesInitial(query: ThreadListQuery) {
+  return Boolean(query.forMe)
+    && !query.hasDraft
+    && !query.tag
+    && !query.channelType
+    && !query.filterStatus
+    && (query.status ?? "open") === "open"
+}
+
 export function usePaginatedThreads(
-  status: "open" | "closed" = "open",
+  query: ThreadListQuery,
   initialData?: Thread[],
   preview = false,
-  filterStatus?: "filtered",
-  needsReply = false,
   enabled = true,
 ) {
   const isVisible = useIsDocumentVisible();
-  const baseInterval = status === "open" ? 15000 : 60000;
+  const status = query.status ?? "open";
+  const baseInterval = status === "open" && !query.filterStatus ? 15000 : 60000;
 
   const getKey = (pageIndex: number, previousPageData: ThreadsPage | null) => {
     if (!enabled) return null;
     if (previousPageData && !previousPageData.nextCursor) return null;
-    const filterParam = filterStatus ? `&filterStatus=${filterStatus}` : "";
-    const needsReplyParam = needsReply ? "&needsReply=true" : "";
-    const countParam = pageIndex === 0 ? "&includeCount=true" : "";
-    const base = `/api/threads?status=${status}&limit=${PAGINATED_LIMIT}${preview ? "&preview=true" : ""}${filterParam}${needsReplyParam}${countParam}`;
-    if (pageIndex === 0) return base;
-    return `${base}&cursor=${previousPageData!.nextCursor}`;
+    return buildThreadListUrl(query, pageIndex, previousPageData, preview);
   };
 
-  const fbData: ThreadsPage[] | undefined = initialData && !needsReply
+  const fbData: ThreadsPage[] | undefined = initialData && queryMatchesInitial(query)
     ? [{ threads: initialData, nextCursor: null }]
     : undefined;
 

@@ -6,7 +6,7 @@ import { Search, X, ShoppingBag, RefreshCw, Download } from "lucide-react"
 import { isApiRequestError } from "@/lib/api/fetcher"
 import { formatSyncRelativeTime } from "@/lib/format/date"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
-import OrdersTable, { OrdersTableSkeleton } from "./OrdersTable"
+import OrderCardGrid, { OrderCardGridSkeleton } from "./OrderCard"
 import type { OrderRow } from "./OrdersTable"
 import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
 
@@ -135,12 +135,12 @@ export default function OrdersPageClient() {
   if (isApiRequestError(error, 404)) {
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4 text-center px-6">
-        <div className="size-12 rounded-md bg-white/[0.05] border border-white/[0.07] flex items-center justify-center">
-          <ShoppingBag className="size-5 text-[#96BF48]/60" />
+        <div className="size-12 rounded-2xl bg-card border border-border flex items-center justify-center">
+          <ShoppingBag className="size-5 text-[#96BF48]/70" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-white/50 mb-1">No Shopify store connected</p>
-          <p className="text-xs text-white/30 mb-3">Connect your store to view and manage orders here.</p>
+          <p className="text-sm font-semibold text-foreground mb-1">No Shopify store connected</p>
+          <p className="text-xs text-muted-foreground mb-3">Connect your store to view and manage orders here.</p>
           <Link
             href="/dashboard/integrations"
             className="text-xs font-semibold text-[#96BF48] hover:text-[#7da33a] transition-colors"
@@ -160,8 +160,8 @@ export default function OrdersPageClient() {
           {/* Header */}
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-baseline gap-3">
-              <h1 className="text-2xl font-bold text-white">Orders</h1>
-              <p className="text-xs text-white/35">
+              <h1 className="text-2xl font-bold text-foreground">Orders</h1>
+              <p className="text-xs text-muted-foreground">
                 Live from Shopify
                 {lastSyncedAt && <> · synced {formatSyncRelativeTime(lastSyncedAt)}</>}
               </p>
@@ -170,7 +170,7 @@ export default function OrdersPageClient() {
               <button type="button"
                 onClick={() => mutate()}
                 disabled={isValidating}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-white/60 hover:text-white hover:bg-white/[0.05] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-40 transition-colors"
               >
                 <RefreshCw className={`size-3.5 ${isValidating ? 'animate-spin' : ''}`} />
                 Refresh
@@ -178,7 +178,7 @@ export default function OrdersPageClient() {
               <button type="button"
                 onClick={handleExport}
                 disabled={allOrders.length === 0}
-                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/[0.10] bg-white/[0.03] text-xs font-medium text-white/75 hover:bg-white/[0.06] hover:border-white/[0.18] hover:text-white disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-border bg-secondary text-xs font-medium text-secondary-foreground hover:bg-accent disabled:opacity-40 transition-colors"
               >
                 <Download className="size-3.5" />
                 Export CSV
@@ -186,69 +186,65 @@ export default function OrdersPageClient() {
             </div>
           </div>
 
-          {/* Card: search + filters + table */}
-          <div className="rounded-lg border border-white/[0.07] bg-white/[0.015] overflow-hidden">
-
-            {/* Search + filter row */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.05] flex-wrap">
-              <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.06] rounded-md px-3 h-8 flex-1 min-w-[260px] max-w-[360px]">
-                <Search className="size-3.5 text-white/30 shrink-0" />
-                <input
-                  aria-label="Search orders"
-                  value={searchQuery}
-                  onChange={e => handleSearchChange(e.target.value)}
-                  placeholder="Search orders, customers, #numbers…"
-                  className="flex-1 bg-transparent text-xs text-white/75 placeholder:text-white/30 outline-none"
-                />
-                {searchQuery && (
-                  <button type="button" onClick={() => handleSearchChange('')} className="text-white/25 hover:text-white/55 transition-colors">
-                    <X className="size-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {!isSearchMode && (
-                <div className="flex items-center gap-1">
-                  {FILTERS.map(f => (
-                    <button type="button"
-                      key={f.id}
-                      onClick={() => handleFilterChange(f.id)}
-                      className={`h-7 px-3 rounded-md text-xs font-medium transition-all ${
-                        filter === f.id
-                          ? 'bg-white/[0.10] text-white'
-                          : 'text-white/45 hover:text-white/75 hover:bg-white/[0.04]'
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {isSearchMode && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/40">
-                    {isLoading ? 'Searching…' : `${allOrders.length} result${allOrders.length !== 1 ? 's' : ''}`}
-                  </span>
-                  <button type="button" onClick={() => handleSearchChange('')} className="text-xs text-white/35 hover:text-white/65 font-medium">
-                    Clear
-                  </button>
-                </div>
+          {/* Toolbar: search + filters */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 bg-secondary border border-border rounded-md px-3 h-8 flex-1 min-w-[260px] max-w-[360px]">
+              <Search className="size-3.5 text-muted-foreground shrink-0" />
+              <input
+                aria-label="Search orders"
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                placeholder="Search orders, customers, #numbers…"
+                className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground outline-none"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => handleSearchChange('')} className="text-muted-foreground hover:text-foreground transition-colors">
+                  <X className="size-3.5" />
+                </button>
               )}
             </div>
 
-            {/* Table */}
-            {isLoading && pages.length === 0
-              ? <OrdersTableSkeleton />
-              : <OrdersTable
-                  orders={allOrders}
-                  hasMore={!!nextPageInfo}
-                  isLoadingMore={isLoadingMore}
-                  loadMoreError={loadMoreError}
-                  onLoadMore={loadMore}
-                />
-            }
+            {!isSearchMode && (
+              <div className="flex items-center gap-1">
+                {FILTERS.map(f => (
+                  <button type="button"
+                    key={f.id}
+                    onClick={() => handleFilterChange(f.id)}
+                    className={`h-7 px-3 rounded-md text-xs font-medium transition-all ${
+                      filter === f.id
+                        ? 'bg-accent text-foreground'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-accent/60'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {isSearchMode && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {isLoading ? 'Searching…' : `${allOrders.length} result${allOrders.length !== 1 ? 's' : ''}`}
+                </span>
+                <button type="button" onClick={() => handleSearchChange('')} className="text-xs text-muted-foreground hover:text-foreground font-medium">
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Cards */}
+          {isLoading && pages.length === 0
+            ? <OrderCardGridSkeleton />
+            : <OrderCardGrid
+                orders={allOrders}
+                hasMore={!!nextPageInfo}
+                isLoadingMore={isLoadingMore}
+                loadMoreError={loadMoreError}
+                onLoadMore={loadMore}
+              />
+          }
 
         </div>
       </div>

@@ -2,32 +2,39 @@
 
 import { EmptyState } from "./EmptyState"
 import { ThreadListHeader } from "./ThreadListHeader"
+import { ThreadListLoading } from "./ThreadListLoading"
 import { TicketRow } from "./TicketRow"
-import type { TicketListTab } from "./constants"
-import type { ChannelType, Ticket } from "@/types"
+import type { TicketListView, TicketTagFilter } from "./constants"
+import type { ChannelType, OrgSettings, Ticket } from "@/types"
 
 interface Props {
   tickets: Ticket[]
   totalCount: number
-  activeTab: TicketListTab
-  activeFilter: ChannelType | null
-  activeTicketId: string | null
-  openCount: number
-  closedCount: number
+  activeView: TicketListView
+  channelFilter: ChannelType | null
+  connectedChannels: ChannelType[]
   spamCount: number
+  tagFilter: TicketTagFilter | null
+  activeTicketId: string | null
   searchQuery: string
+  hasShopify: boolean
+  orgSettings?: Partial<OrgSettings> | null
+  approvingTicketId: string | null
+  onQuickApproveFromList: (threadId: string) => void
+  onReviewFromList: (threadId: string) => void
   listState?: {
     searchMode?: boolean
     searchLoading?: boolean
+    listLoading?: boolean
     hasMore?: boolean
     loadingMore?: boolean
   }
   selectedIds: string[]
-  needsReply: boolean
-  onNeedsReplyChange: (value: boolean) => void
+  onChannelFilterChange: (id: ChannelType | null) => void
+  onTagFilterChange: (tag: TicketTagFilter | null) => void
   onSearchChange: (q: string) => void
-  onTabChange: (tab: TicketListTab) => void
-  onFilterChange: (id: ChannelType | null) => void
+  onViewChange: (view: TicketListView) => void
+  onViewSpam: () => void
   onSelectTicket: (id: string) => void
   onToggleSelect: (id: string) => void
   onBulkClose: () => void
@@ -42,20 +49,25 @@ interface Props {
 export default function ThreadList({
   tickets,
   totalCount,
-  activeTab,
-  activeFilter,
-  activeTicketId,
-  openCount,
-  closedCount,
+  activeView,
+  channelFilter,
+  connectedChannels,
   spamCount,
+  tagFilter,
+  activeTicketId,
   searchQuery,
+  hasShopify,
+  orgSettings = null,
+  approvingTicketId,
+  onQuickApproveFromList,
+  onReviewFromList,
   listState,
   selectedIds,
-  needsReply,
-  onNeedsReplyChange,
+  onChannelFilterChange,
+  onTagFilterChange,
   onSearchChange,
-  onTabChange,
-  onFilterChange,
+  onViewChange,
+  onViewSpam,
   onSelectTicket,
   onToggleSelect,
   onBulkClose,
@@ -70,6 +82,7 @@ export default function ThreadList({
   const {
     searchMode: isSearchMode,
     searchLoading: isSearchLoading,
+    listLoading,
     hasMore,
     loadingMore: isLoadingMore,
   } = listState ?? {}
@@ -77,67 +90,81 @@ export default function ThreadList({
   return (
     <>
       <ThreadListHeader
-        activeFilter={activeFilter}
-        activeTab={activeTab}
+        activeView={activeView}
+        channelFilter={channelFilter}
+        connectedChannels={connectedChannels}
+        spamCount={spamCount}
+        tagFilter={tagFilter}
         hasSelection={hasSelection}
         isSearchLoading={isSearchLoading}
         isSearchMode={isSearchMode}
-        openCount={openCount}
-        closedCount={closedCount}
-        spamCount={spamCount}
         searchQuery={searchQuery}
         selectedCount={selectedIds.length}
-        needsReply={needsReply}
-        onNeedsReplyChange={onNeedsReplyChange}
         onBulkArchive={onBulkArchive}
         onBulkClose={onBulkClose}
         onBulkTag={onBulkTag}
+        onChannelFilterChange={onChannelFilterChange}
         onClearSelection={onClearSelection}
-        onFilterChange={onFilterChange}
         onSearchChange={onSearchChange}
-        onTabChange={onTabChange}
+        onTagFilterChange={onTagFilterChange}
+        onViewChange={onViewChange}
+        onViewSpam={onViewSpam}
       />
 
       <div
         data-testid="tickets-list"
         className="flex-1 overflow-y-auto custom-scrollbar divide-y divide-white/[0.1]"
       >
-        {tickets.map(ticket => (
-          <TicketRow
-            key={ticket.id}
-            activeTab={activeTab}
-            activeTicketId={activeTicketId}
-            hasSelection={hasSelection}
-            isSearchMode={isSearchMode}
-            isSelected={selectedIds.includes(ticket.id)}
-            ticket={ticket}
-            onSelectTicket={onSelectTicket}
-            onToggleSelect={onToggleSelect}
-            onMarkAsSpam={onMarkAsSpam}
-            onRecover={onRecover}
-          />
-        ))}
+        {listLoading ? (
+          <ThreadListLoading />
+        ) : (
+          <>
+            {tickets.map(ticket => (
+              <TicketRow
+                key={ticket.id}
+                activeView={activeView}
+                activeTicketId={activeTicketId}
+                hasSelection={hasSelection}
+                hasShopify={hasShopify}
+                isSearchMode={isSearchMode}
+                isSelected={selectedIds.includes(ticket.id)}
+                orgSettings={orgSettings}
+                approvingTicketId={approvingTicketId}
+                onQuickApproveFromList={onQuickApproveFromList}
+                onReviewFromList={onReviewFromList}
+                ticket={ticket}
+                onSelectTicket={onSelectTicket}
+                onToggleSelect={onToggleSelect}
+                onMarkAsSpam={onMarkAsSpam}
+                onRecover={onRecover}
+              />
+            ))}
 
-        {tickets.length === 0 && (
-          <EmptyState
-            activeFilter={activeFilter}
-            activeTab={activeTab}
-            isSearchMode={isSearchMode}
-            searchQuery={searchQuery}
-            totalCount={totalCount}
-          />
-        )}
+            {tickets.length === 0 && (
+              <EmptyState
+                activeView={activeView}
+                channelFilter={channelFilter}
+                connectedChannels={connectedChannels}
+                isSearchMode={isSearchMode}
+                searchQuery={searchQuery}
+                tagFilter={tagFilter}
+                totalCount={totalCount}
+                onViewChange={onViewChange}
+              />
+            )}
 
-        {!isSearchMode && hasMore && tickets.length > 0 && (
-          <div className="px-4 py-3 border-t border-white/[0.05]">
-            <button type="button"
-              onClick={onLoadMore}
-              disabled={isLoadingMore}
-              className="w-full text-xs font-semibold text-white/40 hover:text-white/70 disabled:opacity-40 transition-colors py-1"
-            >
-              {isLoadingMore ? "Loading…" : "Load more"}
-            </button>
-          </div>
+            {!isSearchMode && hasMore && tickets.length > 0 && (
+              <div className="px-4 py-3 border-t border-white/[0.05]">
+                <button type="button"
+                  onClick={onLoadMore}
+                  disabled={isLoadingMore}
+                  className="w-full text-xs font-semibold text-white/40 hover:text-white/70 disabled:opacity-40 transition-colors py-1"
+                >
+                  {isLoadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </>

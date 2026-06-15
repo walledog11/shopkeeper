@@ -6,54 +6,47 @@ type ThreadCount = { count: number }
 
 const TAB_COUNT_REFRESH_MS = 60_000
 
-export function buildOpenThreadCountKey(needsReply: boolean) {
-  return needsReply
-    ? "/api/threads?status=open&count=true&needsReply=true"
-    : "/api/threads?status=open&count=true"
+function buildThreadCountKey(kind: "for_me" | "spam") {
+  const params = new URLSearchParams({ count: "true" })
+  if (kind === "for_me") {
+    params.set("status", "open")
+    params.set("forMe", "true")
+  } else {
+    params.set("status", "open")
+    params.set("filterStatus", "filtered")
+  }
+  return `/api/threads?${params.toString()}`
 }
-
-export const CLOSED_THREAD_COUNT_KEY = "/api/threads?status=closed&count=true"
-export const FILTERED_THREAD_COUNT_KEY = "/api/threads?status=open&count=true&filterStatus=filtered"
 
 interface Options {
-  needsReply: boolean
-  openCountFromList: number | null
+  forMeCountFromList: number | null
 }
 
-export function useTicketTabCounts({ needsReply, openCountFromList }: Options) {
-  const openCountKey = buildOpenThreadCountKey(needsReply)
-  const skipOpenCountPoll = openCountFromList !== null
+export function useTicketTabCounts({ forMeCountFromList }: Options) {
+  const skipForMePoll = forMeCountFromList !== null
 
-  const { data: openData, mutate: mutateOpenCount } = useSWR<ThreadCount>(
-    skipOpenCountPoll ? null : openCountKey,
+  const { data: forMeData, mutate: mutateForMeCount } = useSWR<ThreadCount>(
+    skipForMePoll ? null : buildThreadCountKey("for_me"),
     fetcher,
     { refreshInterval: TAB_COUNT_REFRESH_MS, revalidateOnFocus: false },
   )
 
-  const { data: closedData, mutate: mutateClosedCount } = useSWR<ThreadCount>(
-    CLOSED_THREAD_COUNT_KEY,
-    fetcher,
-    { refreshInterval: TAB_COUNT_REFRESH_MS, revalidateOnFocus: false },
-  )
-
-  const { data: filteredData, mutate: mutateFilteredCount } = useSWR<ThreadCount>(
-    FILTERED_THREAD_COUNT_KEY,
+  const { data: spamData, mutate: mutateSpamCount } = useSWR<ThreadCount>(
+    buildThreadCountKey("spam"),
     fetcher,
     { refreshInterval: TAB_COUNT_REFRESH_MS, revalidateOnFocus: false },
   )
 
   const mutateTabCounts = useCallback(async () => {
     await Promise.all([
-      skipOpenCountPoll ? Promise.resolve() : mutateOpenCount(),
-      mutateClosedCount(),
-      mutateFilteredCount(),
+      skipForMePoll ? Promise.resolve() : mutateForMeCount(),
+      mutateSpamCount(),
     ])
-  }, [mutateClosedCount, mutateFilteredCount, mutateOpenCount, skipOpenCountPoll])
+  }, [mutateForMeCount, mutateSpamCount, skipForMePoll])
 
   return {
-    openCount: openCountFromList ?? openData?.count ?? 0,
-    closedCount: closedData?.count ?? 0,
-    spamCount: filteredData?.count ?? 0,
+    forMeCount: forMeCountFromList ?? forMeData?.count ?? 0,
+    spamCount: spamData?.count ?? 0,
     mutateTabCounts,
   }
 }
