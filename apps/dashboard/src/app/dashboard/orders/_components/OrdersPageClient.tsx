@@ -154,19 +154,17 @@ export default function OrdersPageClient() {
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-background">
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="px-6 pt-6 pb-8 space-y-5 max-w-[1400px] mx-auto">
 
-          {/* Header */}
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-baseline gap-3">
-              <h1 className="text-2xl font-bold text-foreground">Orders</h1>
-              <p className="text-xs text-muted-foreground">
-                Live from Shopify
-                {lastSyncedAt && <> · synced {formatSyncRelativeTime(lastSyncedAt)}</>}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
+      {/* Header */}
+      <div className="px-6 pt-6 pb-5 border-b border-border shrink-0 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Orders</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Live from Shopify
+            {lastSyncedAt && <> · synced {formatSyncRelativeTime(lastSyncedAt)}</>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
               <button type="button"
                 onClick={() => mutate()}
                 disabled={isValidating}
@@ -184,7 +182,11 @@ export default function OrdersPageClient() {
                 Export CSV
               </button>
             </div>
-          </div>
+        </div>
+
+      {/* Scroll area */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="w-full px-6 py-6 space-y-5">
 
           {/* Toolbar: search + filters */}
           <div className="flex items-center gap-3 flex-wrap">

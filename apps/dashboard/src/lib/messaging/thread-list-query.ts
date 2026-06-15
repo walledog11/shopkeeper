@@ -123,7 +123,11 @@ function inboxScopeSql(organizationId: string, filters: ThreadListSqlFilters) {
     AND t.organization_id = ${organizationId}::uuid
     AND t.channel_type NOT IN ('sms_agent', 'dashboard_agent')
     AND t.filter_status <> 'filtered'
-    ${filters.status ? Prisma.sql`AND t.status = ${filters.status}` : Prisma.empty}
+    ${filters.status === "open"
+      ? Prisma.sql`AND t.status = 'open'`
+      : filters.status === "closed"
+        ? Prisma.sql`AND t.status = 'closed'`
+        : Prisma.empty}
     ${filters.needsReply ? Prisma.sql`AND t.last_message_sender_type = 'customer'` : Prisma.empty}
     ${filters.tag ? Prisma.sql`AND t.tag = ${filters.tag}` : Prisma.empty}
     ${filters.channelType ? Prisma.sql`AND t.channel_type = ${filters.channelType}` : Prisma.empty}

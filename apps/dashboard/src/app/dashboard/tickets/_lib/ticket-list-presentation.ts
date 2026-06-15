@@ -2,11 +2,15 @@ import {
   getCurrentPlanForThread,
   type PlanThreadMessage,
 } from "@shopkeeper/agent/plan-cache-shape"
-import { buildPlanPreview, classifyHomePlan } from "@shopkeeper/agent/plan-preview"
+import {
+  buildPlanPreview,
+  classifyHomePlan,
+  type HomePlanKind,
+} from "@shopkeeper/agent/plan-preview"
 import { SENDER_TYPE } from "@shopkeeper/agent/thread-constants"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { customerDisplayLabel, timeAgoShort } from "@/lib/messaging/customer-display"
-import type { OrgSettings, Thread, ThreadStatus } from "@/types"
+import type { OrgSettings, SenderType, Thread, ThreadStatus } from "@/types"
 import {
   resolveTicketCocoAction,
   type TicketCocoAction,
@@ -55,7 +59,6 @@ export interface BuildTicketListPresentationInput {
     | "filterStatus"
     | "shopifyCustomerId"
     | "customer"
-    | "messages"
   > & {
     messages: Array<Pick<Thread["messages"][number], "id" | "senderType" | "contentText" | "sentAt">>
   }
@@ -158,7 +161,7 @@ function resolveTier(
   activeTab: "open" | "closed",
   questionable: boolean,
   hasPlan: boolean,
-  classificationKind: "quick_reply" | "needs_review" | null,
+  classificationKind: HomePlanKind | null,
   awaitingReply: boolean,
 ): TicketTriageTier {
   if (status === "closed" || activeTab === "closed") return "closed"
@@ -261,8 +264,9 @@ export interface TicketPresentationSource {
   customerRecord: Thread["customer"] | null
   messages: Array<{
     id: string
-    sender: string
+    sender: SenderType
     text: string | null
+    time?: string
   }>
 }
 
@@ -295,7 +299,7 @@ export function buildTicketListPresentationFromTicket(
         id: message.id,
         senderType: message.sender,
         contentText: message.text,
-        sentAt: ticket.lastMessageAt,
+        sentAt: message.time ?? ticket.lastMessageAt,
       })),
     },
   })
