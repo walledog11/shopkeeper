@@ -168,7 +168,7 @@ export async function POST(request: Request) {
       organizationId: org.id,
       platform: 'shopify',
       externalAccountId: canonicalShopDomain,
-      data: { accessToken, fromEmail: shopName },
+      data: { accessToken, fromEmail: shopName, tokenExpiresAt: null },
     });
     const shopifyIntegrationId = shopifyIntegration.id;
 

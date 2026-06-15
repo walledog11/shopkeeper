@@ -62,6 +62,14 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     expect(result.sendReplyToolCall).toEqual(sendReplyCall)
   })
 
+  it("classifies an order-status fast-path plan as needs_review", () => {
+    const result = classifyHomePlan(plan({ orderStatusFastPath: true }))
+
+    expect(result.kind).toBe("needs_review")
+    expect(result.replyText).toBe("Yes, we ship to the UK.")
+    expect(result.sendReplyToolCall?.name).toBe("send_reply")
+  })
+
   it("allows read tools before send_reply", () => {
     const result = classifyHomePlan(plan({
       rawToolCalls: [
@@ -257,6 +265,20 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(classifyHomePlan(refundPlan(), settings({ autonomyTier: "full", maxRefundAmount: 1000 })).kind)
         .toBe("auto_execute")
     })
+  })
+})
+
+describe("classifyHomePlan — questionable sender policy", () => {
+  it("downgrades quick_reply to needs_review for questionable senders", () => {
+    expect(classifyHomePlan(plan(), null, { filterStatus: "questionable" }).kind).toBe("needs_review")
+  })
+
+  it("downgrades auto_execute to needs_review for questionable senders", () => {
+    expect(
+      classifyHomePlan(refundPlan(), settings({ autonomyTier: "guarded", maxRefundAmount: 100 }), {
+        filterStatus: "questionable",
+      }).kind,
+    ).toBe("needs_review")
   })
 })
 

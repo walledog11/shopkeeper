@@ -141,6 +141,10 @@
     "./plan-execution": {
       "types": "./dist/plan-execution.d.ts",
       "default": "./dist/plan-execution.js"
+    },
+    "./sender-trust": {
+      "types": "./dist/sender-trust.d.ts",
+      "default": "./dist/sender-trust.js"
     }
   },
   "scripts": {

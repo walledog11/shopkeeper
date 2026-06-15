@@ -1,6 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import { markShopifyIntegrationInvalidIfAuthFailure } from '@/lib/server/shopify-integration';
 import type { ShopifyCustomer, ShopifyOrder } from '@/types/shopify';
 import logger from '@/lib/server/logger';
 
@@ -40,8 +41,8 @@ export async function lookupShopifyCustomer({
   customerId,
   orderLimit,
 }: ShopifyCustomerLookupInput): Promise<ShopifyCustomerLookupResult> {
-  const { shop, ctx } = await getShopifyContext(organizationId);
-  const customer = await findShopifyCustomer(ctx, { email, customerId });
+  const { shop } = await getShopifyContext(organizationId);
+  const customer = await runShopifyCall(organizationId, (ctx) => findShopifyCustomer(ctx, { email, customerId }));
 
   if (!customer) {
     return { customer: null, orders: [] };
@@ -50,7 +51,7 @@ export async function lookupShopifyCustomer({
   await persistCustomerName(organizationId, customer);
 
   const orders = orderLimit > 0
-    ? await getCustomerOrdersWithImages(ctx, customer.id, orderLimit)
+    ? await runShopifyCall(organizationId, (ctx) => getCustomerOrdersWithImages(ctx, customer.id, orderLimit))
     : [];
 
   return { customer, orders, shop };
@@ -61,19 +62,20 @@ export async function updateShopifyCustomer(
   customerId: string | number,
   updates: ShopifyCustomerUpdates,
 ): Promise<unknown | null> {
-  const { ctx } = await getShopifyContext(organizationId);
   const customerPayload = buildShopifyCustomerPayload(customerId, updates);
 
-  const data = await shopifyRestJson<{ customer?: unknown }>(ctx, `customers/${customerId}.json`, {
-    method: 'PUT',
-    maxRetries: 0,
-    body: { customer: customerPayload },
-  });
+  const data = await runShopifyCall(organizationId, (ctx) =>
+    shopifyRestJson<{ customer?: unknown }>(ctx, `customers/${customerId}.json`, {
+      method: 'PUT',
+      maxRetries: 0,
+      body: { customer: customerPayload },
+    }),
+  );
 
   return data.customer ?? null;
 }
 
-async function getShopifyContext(organizationId: string): Promise<{ shop: string; ctx: ShopifyContext }> {
+async function getShopifyContext(organizationId: string): Promise<{ shop: string; ctx: ShopifyContext; integrationId: string }> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
   });
@@ -83,7 +85,20 @@ async function getShopifyContext(organizationId: string): Promise<{ shop: string
   }
 
   const shop = integration.externalAccountId;
-  return { shop, ctx: { shop, accessToken: integration.accessToken } };
+  return { shop, ctx: { shop, accessToken: integration.accessToken }, integrationId: integration.id };
+}
+
+async function runShopifyCall<T>(
+  organizationId: string,
+  fn: (ctx: ShopifyContext) => Promise<T>,
+): Promise<T> {
+  const { ctx, integrationId } = await getShopifyContext(organizationId);
+  try {
+    return await fn(ctx);
+  } catch (err) {
+    await markShopifyIntegrationInvalidIfAuthFailure(integrationId, organizationId, err);
+    throw err;
+  }
 }
 
 async function findShopifyCustomer(

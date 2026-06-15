@@ -1,9 +1,17 @@
 import { db } from "@shopkeeper/db";
+import { randomUUID } from "node:crypto";
 import type { OrgSettings } from "./types.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import { executeToolStructured } from "./tools/executor.js";
-import { looksLikeOrderStatusIntent, ORDER_REFERENCE_RE, isOperatorChannel } from "./intent.js";
+import {
+  looksLikeOrderStatusIntent,
+  hasMutativePlanningSignals,
+  ORDER_REFERENCE_RE,
+  isOperatorChannel,
+} from "./intent.js";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./agent-context.js";
+import type { AgentPlan } from "./types.js";
+import { buildPlanSteps } from "./planner-steps.js";
 
 const orderDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -161,6 +169,86 @@ function summarizeLatestOrder(customerName: string | null, orders: ShopifyOrderS
   const itemsPhrase = items ? ` Items: ${items}.` : "";
 
   return `${subject}${orderName}${datePhrase} is ${financial ? `${financial} and ` : ""}${fulfillment}.${total}${itemsPhrase}`;
+}
+
+function normalizeOrderName(name: string): string {
+  const trimmed = name.trim();
+  return (trimmed.startsWith("#") ? trimmed : `#${trimmed}`).toUpperCase();
+}
+
+function referencedOrderName(text: string): string | null {
+  const match = text.match(ORDER_REFERENCE_RE);
+  if (!match) return null;
+  const raw = match[0];
+  const orderNumberMatch = raw.match(/\border\s*#?\s*(\d+)/i);
+  if (orderNumberMatch?.[1]) return normalizeOrderName(orderNumberMatch[1]);
+  return normalizeOrderName(raw.replace(/^#/, ""));
+}
+
+function findReferencedOrder(
+  orders: ShopifyOrderSummary[],
+  text: string,
+): ShopifyOrderSummary | null {
+  const reference = referencedOrderName(text);
+  if (!reference) return null;
+  return orders.find((order) => order.name && normalizeOrderName(order.name) === reference) ?? null;
+}
+
+function latestCustomerMessage(ctx: AgentContext): string | null {
+  for (let index = ctx.recentMessages.length - 1; index >= 0; index -= 1) {
+    const message = ctx.recentMessages[index];
+    if (message.senderType === "customer" && message.contentText?.trim()) {
+      return message.contentText;
+    }
+  }
+  return null;
+}
+
+function pickOrdersForPlanFastPath(
+  recentOrders: ShopifyOrderSummary[],
+  intentTexts: string[],
+): ShopifyOrderSummary[] | null {
+  for (const text of intentTexts) {
+    const matched = findReferencedOrder(recentOrders, text);
+    if (matched) return [matched];
+    if (ORDER_REFERENCE_RE.test(text)) return null;
+  }
+  return recentOrders.length > 0 ? [recentOrders[0]] : null;
+}
+
+export function tryPlanOrderStatusFastPath(
+  ctx: AgentContext,
+  instruction: string,
+): AgentPlan | null {
+  if (isOperatorChannel(ctx.thread.channelType)) return null;
+
+  const customerMessage = latestCustomerMessage(ctx);
+  const instructionHasOrderStatusIntent = looksLikeOrderStatusIntent(instruction);
+  const customerHasOrderStatusIntent = Boolean(
+    customerMessage && looksLikeOrderStatusIntent(customerMessage),
+  );
+  if (!instructionHasOrderStatusIntent && !customerHasOrderStatusIntent) return null;
+
+  if (instructionHasOrderStatusIntent && hasMutativePlanningSignals(instruction)) return null;
+  if (customerHasOrderStatusIntent && customerMessage && hasMutativePlanningSignals(customerMessage)) {
+    return null;
+  }
+  if (ctx.recentOrders.length === 0) return null;
+
+  const intentTexts = [instruction, customerMessage ?? ""].filter((text) => text.trim().length > 0);
+  const orders = pickOrdersForPlanFastPath(ctx.recentOrders, intentTexts);
+  if (!orders) return null;
+
+  const replyText = summarizeLatestOrder(ctx.customer.name, orders);
+  const toolCallId = `fast_path_${randomUUID()}`;
+  const rawToolCalls = [{ id: toolCallId, name: "send_reply", input: { text: replyText } }];
+
+  return {
+    instruction,
+    steps: buildPlanSteps(rawToolCalls),
+    rawToolCalls,
+    orderStatusFastPath: true,
+  };
 }
 
 export function summarizeApprovedDashboardActions(actions: ActionEntry[]): string {

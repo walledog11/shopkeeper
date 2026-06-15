@@ -76,7 +76,7 @@ async function main() {
         }
       : {
           status: 'open',
-          filterStatus: { not: 'filtered' },
+          filterStatus: { notIn: ['filtered', 'questionable'] },
           archivedAt: null,
           deletedAt: null,
           channelType: { notIn: ['sms_agent', 'dashboard_agent'] },

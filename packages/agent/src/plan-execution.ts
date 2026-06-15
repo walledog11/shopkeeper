@@ -6,6 +6,7 @@ import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
 import { getPendingCustomerMessageId } from "./plan-cache-shape.js";
 import { hashInstruction, hashPlan, type AgentActionApproval } from "./agent-actions.js";
 import { classifyHomePlan, type HomePlanClassification, type HomePlanKind } from "./plan-preview.js";
+import { shouldBlockTrustedSendActions, shouldSkipAutoPlan } from "./sender-trust.js";
 import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { AgentResult } from "./agent-context.js";
@@ -98,7 +99,7 @@ async function loadCurrentCachedHomePlan(params: {
     instruction,
     lastCustomerMessageId: cachedPlan?.lastCustomerMessageId ?? null,
     plan,
-    classification: classifyHomePlan(plan, params.settings),
+    classification: classifyHomePlan(plan, params.settings, { filterStatus: thread.filterStatus }),
   };
 }
 
@@ -144,6 +145,11 @@ export async function executeCurrentCachedHomePlan(params: {
   failureRoute: string;
   approver?: ApproverIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
+  const thread = await requireOrgThread(params.threadId, params.orgId);
+  if (shouldBlockTrustedSendActions(thread.filterStatus)) {
+    throw new BadRequestError("Review the sender before sending");
+  }
+
   const current = await loadCurrentCachedHomePlan(params);
 
   if (!current.plan || !params.allowedKinds.includes(current.classification.kind)) {
@@ -205,6 +211,11 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan | null> {
   const mode = resolveAutoExecuteMode(params.settings);
   if (mode === "off") {
+    return null;
+  }
+
+  const thread = await requireOrgThread(params.threadId, params.orgId);
+  if (shouldSkipAutoPlan(thread.filterStatus)) {
     return null;
   }
 

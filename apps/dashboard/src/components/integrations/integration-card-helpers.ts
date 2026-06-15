@@ -3,6 +3,10 @@ import {
   isEmailAuthReauthorizationRequired,
 } from "@shopkeeper/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
+import {
+  isShopifyIntegrationLinked,
+  resolveShopifyConnectionState,
+} from "@/lib/integrations/shopify-connection"
 import type { Integration } from "@/types"
 import type { PillState } from "./integration-card-types"
 
@@ -20,6 +24,9 @@ export function isTokenExpiringSoon(integration: Integration) {
 }
 
 export function hasIntegrationTokenAlert(integration: Integration) {
+  if (integration.platform === "shopify") {
+    return resolveShopifyConnectionState(integration) === "invalid"
+  }
   return isTokenExpired(integration) || isTokenExpiringSoon(integration)
 }
 
@@ -29,10 +36,11 @@ export function isPostmarkEmail(integration: Integration): boolean {
 }
 
 const QUIET_CHANNEL_DAYS = 5
+const SHOPIFY_EXPIRED_NOTE =
+  "Your Shopify connection expired — order lookups and syncing have stopped."
 
 export interface IntegrationHealth {
   state: PillState
-  // Plain-language problem + consequence; null when nothing is wrong
   note: string | null
   canFix: boolean
 }
@@ -42,35 +50,43 @@ export function deriveIntegrationHealth(
   connected: Integration[],
   lastActivity: string | null,
 ): IntegrationHealth {
-  if (!connected.length) return { state: 'not-connected', note: null, canFix: false }
+  if (!connected.length) return { state: "not-connected", note: null, canFix: false }
+
+  if (connectType === "shopify") {
+    const shopifyState = resolveShopifyConnectionState(connected[0])
+    if (shopifyState === "invalid") {
+      return { state: "needs-attention", note: SHOPIFY_EXPIRED_NOTE, canFix: true }
+    }
+    if (!isShopifyIntegrationLinked(connected[0])) {
+      return { state: "not-connected", note: null, canFix: false }
+    }
+  }
 
   if (connected.some(isTokenExpired)) {
     const note =
-      connectType === 'shopify'
-        ? 'Your Shopify connection expired — order lookups and syncing have stopped.'
-        : connectType === 'ig'
+      connectType === "ig"
         ? "Your Instagram sign-in expired — new DMs aren't coming in."
         : "Your email sign-in expired — new customer emails aren't coming in."
-    return { state: 'needs-attention', note, canFix: true }
+    return { state: "needs-attention", note, canFix: true }
   }
 
   if (connected.some(isTokenExpiringSoon)) {
     return {
-      state: 'needs-attention',
-      note: 'Your sign-in expires soon — renew it now to avoid an interruption.',
+      state: "needs-attention",
+      note: "Your sign-in expires soon — renew it now to avoid an interruption.",
       canFix: true,
     }
   }
 
-  if (connectType === 'email') {
+  if (connectType === "email") {
     if (!lastActivity && connected.every(isPostmarkEmail)) {
-      return { state: 'waiting', note: null, canFix: false }
+      return { state: "waiting", note: null, canFix: false }
     }
     if (lastActivity) {
       const daysQuiet = Math.floor((Date.now() - new Date(lastActivity).getTime()) / 86_400_000)
       if (daysQuiet >= QUIET_CHANNEL_DAYS) {
         return {
-          state: 'needs-attention',
+          state: "needs-attention",
           note: `No new messages in ${daysQuiet} days — check that your support email is still routing to Shopkeeper.`,
           canFix: false,
         }
@@ -78,5 +94,5 @@ export function deriveIntegrationHealth(
     }
   }
 
-  return { state: 'working', note: null, canFix: false }
+  return { state: "working", note: null, canFix: false }
 }

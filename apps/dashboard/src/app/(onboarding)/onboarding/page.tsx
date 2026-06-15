@@ -3,17 +3,15 @@
 import { useState, useEffect, useMemo, useCallback, useEffectEvent, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useClerk, useUser, useOrganization, useOrganizationList } from "@clerk/nextjs";
-import useSWR from "swr";
-import { fetcher } from "@/lib/api/fetcher";
+import { useIntegrations } from "@/hooks/useIntegrations";
 import { Footer, Header } from "./_components/chrome";
-import { openOAuthPopup, watchOAuthPopup, isOAuthDoneMessage } from "@/lib/integrations/oauth-flow";
+import { openOAuthPopup, subscribeOAuthDone, watchOAuthPopup } from "@/lib/integrations/oauth-flow";
 import {
   CHANNEL_META,
   DEFAULT_DATA,
   STEPS,
   STORAGE_KEY,
   type ChannelKey,
-  type IntegrationRow,
   type OnboardingData,
 } from "./_components/model";
 import { StepIntro } from "./_components/step-intro";
@@ -58,11 +56,10 @@ export default function OnboardingPage() {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, idx })); } catch {}
   }, [data, idx]);
 
-  const { data: integrationData, mutate: refreshIntegrations } = useSWR<IntegrationRow[]>(
-    organization ? "/api/integrations" : null,
-    fetcher,
-    { refreshInterval: 3000 },
-  );
+  const { data: integrationData, mutate: refreshIntegrations } = useIntegrations({
+    enabled: !!organization,
+    refreshInterval: 3000,
+  });
   const rows = useMemo(() => integrationData ?? [], [integrationData]);
   const connected = useMemo(() => {
     const set = new Set<ChannelKey>();
@@ -120,14 +117,11 @@ export default function OnboardingPage() {
     });
   }, [ensureOrganization, refreshIntegrations]);
 
-  useEffect(() => {
-    function onMessage(e: MessageEvent) {
-      if (e.origin !== window.location.origin || !isOAuthDoneMessage(e.data)) return;
-      void refreshIntegrations();
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [refreshIntegrations]);
+  const handleOAuthResult = useEffectEvent(() => {
+    void refreshIntegrations();
+  });
+
+  useEffect(() => subscribeOAuthDone(() => handleOAuthResult()), []);
 
   const stepId = STEPS[idx].id;
 

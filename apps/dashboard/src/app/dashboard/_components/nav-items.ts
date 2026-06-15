@@ -1,4 +1,4 @@
-import { Inbox, Users, Settings, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
+import { Inbox, Settings, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -54,22 +54,14 @@ export const topBarAgentItems: NavItem[] = [
   },
 ];
 
-export const customersNavItem: NavItem = {
-  name: "Customers",
-  href: "/dashboard/customers",
-  icon: Users,
-  description: "Profiles, history, and segments",
+export const shopNavItem: NavItem = {
+  name: "Shop",
+  href: "/dashboard/orders",
+  icon: Box,
+  description: "Orders and customers from Shopify",
 };
 
-export const topBarShopItems: NavItem[] = [
-  {
-    name: "Orders",
-    href: "/dashboard/orders",
-    icon: Box,
-    description: "Track and fulfill customer orders",
-  },
-  customersNavItem,
-];
+export const topBarShopItems: NavItem[] = [shopNavItem];
 
 export const topBarSettingsItems: NavItem[] = [
   {
@@ -98,10 +90,9 @@ export const topBarDropdowns = [
   { label: "Settings", items: topBarSettingsItems },
 ] as const;
 
-/** Mobile overflow nav — excludes routes in the bottom tab bar (Inbox, Orders, Settings). */
+/** Mobile overflow nav — excludes routes in the bottom tab bar (Inbox, Shop, Settings). */
 export const mobileNavSections: NavSection[] = [
   { heading: "Today", items: [homeNavItem] },
-  { heading: "Shop", items: [customersNavItem] },
   {
     heading: "Agent",
     useAgentName: true,

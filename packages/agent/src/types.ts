@@ -103,6 +103,8 @@ export interface AgentPlan {
   rawToolCalls: RawToolCall[] // all tool calls including reads
   readResults?: Record<string, string> // tool_use.id → raw result string, for read-only tools
   warnings?: string[]
+  /** Templated order-status reply from plan-time fast path — always needs human review. */
+  orderStatusFastPath?: boolean
 }
 
 // Agent turn in the notes tab

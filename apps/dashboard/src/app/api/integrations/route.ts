@@ -5,14 +5,21 @@ import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateIntegrationBody } from '@/app/api/integrations/_lib/validation';
 import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
+import {
+  getShopifyConnectionState,
+  refreshShopifyIntegrationHealthIfDue,
+} from '@/lib/server/shopify-integration';
 import { saveForwardingEmailIntegration } from './_lib/email-integration';
 import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
+
+export const dynamic = 'force-dynamic';
 
 function serializeIntegration<T extends {
   accessToken?: string | null;
   refreshToken?: string | null;
   createdAt?: Date;
   tokenExpiresAt?: Date | null;
+  platform?: string;
 }>(integration: T, lastActivity?: string | null, threadsThisWeek?: number) {
   const safe = { ...integration } as Omit<T, 'accessToken' | 'refreshToken'> & {
     accessToken?: string | null;
@@ -20,8 +27,15 @@ function serializeIntegration<T extends {
   };
   delete safe.accessToken;
   delete safe.refreshToken;
+  const connectionState = integration.platform === 'shopify'
+    ? getShopifyConnectionState({
+        accessToken: integration.accessToken ?? null,
+        tokenExpiresAt: integration.tokenExpiresAt ?? null,
+      })
+    : undefined;
   return {
     ...safe,
+    ...(connectionState !== undefined && { connectionState }),
     ...(lastActivity !== undefined && { lastActivity }),
     ...(threadsThisWeek !== undefined && { threadsThisWeek }),
   };
@@ -57,13 +71,22 @@ export const GET = withOrgRoute(
       weeklyByChannel[row.channelType] = row._count._all;
     }
 
-    const result = integrations.map(i => serializeIntegration(
+    const refreshedIntegrations = await Promise.all(integrations.map(async (integration) => {
+      if (integration.platform !== 'shopify') return integration;
+      const tokenExpiresAt = await refreshShopifyIntegrationHealthIfDue(integration);
+      if (tokenExpiresAt === integration.tokenExpiresAt) return integration;
+      return { ...integration, tokenExpiresAt };
+    }));
+
+    const result = refreshedIntegrations.map(i => serializeIntegration(
       i,
       lastActivityByChannel[i.platform] ?? null,
       weeklyByChannel[i.platform] ?? 0,
     ));
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, {
+      headers: { 'Cache-Control': 'no-store' },
+    });
   },
 );
 

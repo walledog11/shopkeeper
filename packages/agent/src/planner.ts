@@ -16,7 +16,11 @@ import {
   appendInitialPlanningWarnings,
   appendPlanningReadWarnings,
   executePlanningReadTools,
+  partitionPlanningReadBlocks,
 } from "./planner-read-tools.js";
+import { derivePlanPath } from "./plan-path.js";
+import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, REPLAN_RETRY_PROMPT, replanNeedsSendReplyRetry, selectReplanRetryTools } from "./planner-tools.js";
+import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 
 export async function planAgent(
   ctx: AgentContext,
@@ -33,9 +37,29 @@ export async function planAgent(
   const { stable, volatile } = buildSystemPromptParts(ctx, settings);
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
   const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
+  const initialTools = selectInitialPlanningTools(tools);
   const resolvedSettings = resolveAgentSettings(settings);
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
+
+  const fastPathPlan = tryPlanOrderStatusFastPath(ctx, instruction);
+  if (fastPathPlan) {
+    const planPath = derivePlanPath({ fastPath: true, ranReplan: false });
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      durationMs: Date.now() - startedAt,
+      planPath,
+      modelCalls: 0,
+      rawToolCallCount: fastPathPlan.rawToolCalls.length,
+      rawToolCalls: fastPathPlan.rawToolCalls.map((toolCall) => toolCall.name),
+      visibleStepCount: fastPathPlan.steps.length,
+      visibleSteps: fastPathPlan.steps.map((step) => step.tool),
+      instructionHash,
+      orderStatusFastPath: true,
+    }, "[agent:plan] complete");
+    return fastPathPlan;
+  }
 
   logger.info({
     orgId: ctx.orgId,
@@ -43,7 +67,9 @@ export async function planAgent(
     channelType: ctx.thread.channelType,
     messageCount: baseMessages.length,
     toolCount: tools.length,
+    initialToolCount: initialTools.length,
     tools: tools.map(t => t.name),
+    initialTools: initialTools.map(t => t.name),
     instructionLength: instruction.length,
     instructionHash,
   }, "[agent:plan] start");
@@ -54,7 +80,7 @@ export async function planAgent(
     max_tokens: 2048,
     system: systemPromptBlocks,
     messages: baseMessages,
-    tools,
+    tools: initialTools,
   });
 
   const blocks1 = response1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
@@ -70,7 +96,7 @@ export async function planAgent(
     usage: usage1,
     usageTotals,
   }, "[agent:plan] model call");
-  const rawToolCalls: RawToolCall[] = blocks1.map((b) => ({ id: b.id, name: b.name, input: b.input }));
+  let rawToolCalls: RawToolCall[] = blocks1.map((b) => ({ id: b.id, name: b.name, input: b.input }));
 
   let planMessages: Anthropic.MessageParam[] = [
     ...baseMessages,
@@ -81,115 +107,200 @@ export async function planAgent(
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === "read");
   const warnings: string[] = [];
   const readResultsMap = new Map<string, string>();
+  let ranReplan = false;
+  let ranReplanRetry = false;
+  let contextSkippedReadIds = new Set<string>();
   appendInitialPlanningWarnings({ ctx, operatorMode, warnings });
 
   if (readBlocks.length > 0) {
-    const readResults = await executePlanningReadTools({ ctx, settings, readBlocks });
-    readToolCalls.push(...readResults.readToolCalls);
-    for (const [id, content] of readResults.readResultsMap) readResultsMap.set(id, content);
-    appendPlanningReadWarnings({
-      warnings,
-      readBlocks,
-      readResultsMap,
-      readStatusMap: readResults.readStatusMap,
-      recentOrders: ctx.recentOrders,
+    let activeReadBlocks = readBlocks;
+    let activeRawToolCalls = rawToolCalls;
+    let activePlanMessages = planMessages;
+    let activeLastBlocks = lastBlocks;
+    let allReadsSkippedRetried = false;
+
+    let readPartition = partitionPlanningReadBlocks({
+      readBlocks: activeReadBlocks,
+      ctx,
+      instruction,
     });
 
-    planMessages = [
-      ...planMessages,
-      {
-        role: "user",
-        content: blocks1.map(b => ({
-          type: "tool_result" as const,
-          tool_use_id: b.id,
-          content: readResultsMap.get(b.id) ?? "Not executed during planning.",
-        })),
-      },
-    ];
+    if (readPartition.executable.length === 0 && readPartition.skipped.length > 0) {
+      allReadsSkippedRetried = true;
+      logger.info({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        skippedReads: readPartition.skipped.map((block) => block.name),
+      }, "[agent:plan] all reads context-redundant — retrying initial call with full tool set");
 
-    await enforceSpendCap(ctx.orgId, resolvedSettings);
-    // Re-plan: the model now has the read results and decides the mutative
-    // action (refund/cancel/edit) or escalation. This is the judgment call, so
-    // it runs on Sonnet.
-    const replanModel = pickModel("plan_replan");
-    const response15 = await anthropic.messages.create({
-      model: replanModel,
-      max_tokens: 2048,
-      system: systemPromptBlocks,
-      messages: planMessages,
-      tools,
-    });
-    lastBlocks = response15.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-    const usage15 = recordModelUsage(usageTotals, response15);
-    await recordSpend(ctx.orgId, usage15, replanModel);
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      phase: "after_read_results",
-      model: replanModel,
-      stopReason: response15.stop_reason,
-      tools: lastBlocks.map(b => b.name),
-      usage: usage15,
-      usageTotals,
-    }, "[agent:plan] model call");
-    rawToolCalls.push(...lastBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
-    planMessages = [...planMessages, { role: "assistant", content: response15.content }];
-  }
+      await enforceSpendCap(ctx.orgId, resolvedSettings);
+      const retryResponse = await anthropic.messages.create({
+        model: initialModel,
+        max_tokens: 2048,
+        system: systemPromptBlocks,
+        messages: baseMessages,
+        tools,
+      });
+      const retryBlocks = retryResponse.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+      const retryUsage = recordModelUsage(usageTotals, retryResponse);
+      await recordSpend(ctx.orgId, retryUsage, initialModel);
+      logger.info({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        phase: "initial_full_tools_retry",
+        model: initialModel,
+        stopReason: retryResponse.stop_reason,
+        tools: retryBlocks.map((block) => block.name),
+        usage: retryUsage,
+        usageTotals,
+      }, "[agent:plan] model call");
 
-  const hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
-  const hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
-  const sendReplyTool = tools.find(t => t.name === "send_reply");
-  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool) {
-    const phase2Messages: Anthropic.MessageParam[] = [
-      ...planMessages,
-      ...(lastBlocks.length > 0
-        ? [{
-            role: "user" as const,
-            content: lastBlocks.map((b) => ({
-              type: "tool_result" as const,
-              tool_use_id: b.id,
-              content: "Not executed during planning.",
-            })),
-          }]
-        : [{ role: "user" as const, content: "Now call send_reply to respond to the customer." }]
-      ),
-    ];
+      activeReadBlocks = retryBlocks.filter((block) => TOOL_CATEGORIES[block.name] === "read");
+      activeRawToolCalls = retryBlocks.map((block) => ({ id: block.id, name: block.name, input: block.input }));
+      activeLastBlocks = retryBlocks;
+      activePlanMessages = [
+        ...baseMessages,
+        { role: "assistant", content: retryResponse.content },
+      ];
+      readPartition = partitionPlanningReadBlocks({
+        readBlocks: activeReadBlocks,
+        ctx,
+        instruction,
+      });
+    }
 
-    await enforceSpendCap(ctx.orgId, resolvedSettings);
-    const draftModel = pickModel("reply_draft");
-    const response2 = await anthropic.messages.create({
-      model: draftModel,
-      max_tokens: 2048,
-      system: systemPromptBlocks,
-      messages: phase2Messages,
-      tools: [sendReplyTool],
-      tool_choice: { type: "tool", name: "send_reply" },
-    });
-
-    const phase2ToolUse = response2.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply"
+    contextSkippedReadIds = new Set(readPartition.skipped.map((block) => block.id));
+    const shouldReplan = activeReadBlocks.length > 0 && (
+      readPartition.executable.length > 0
+      || (readPartition.skipped.length > 0 && allReadsSkippedRetried)
     );
-    const usage2 = recordModelUsage(usageTotals, response2);
-    await recordSpend(ctx.orgId, usage2, draftModel);
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      phase: "reply_preview",
-      model: draftModel,
-      stopReason: response2.stop_reason,
-      tools: phase2ToolUse.map(b => b.name),
-      usage: usage2,
-      usageTotals,
-    }, "[agent:plan] model call");
-    rawToolCalls.push(...phase2ToolUse.map((b) => ({ id: b.id, name: b.name, input: b.input })));
+
+    if (shouldReplan) {
+      const processedReadBlocks = [...readPartition.executable, ...readPartition.skipped];
+      const readResults = await executePlanningReadTools({
+        ctx,
+        settings,
+        readBlocks: readPartition.executable,
+        skippedBlocks: readPartition.skipped,
+      });
+      readToolCalls.push(...readResults.readToolCalls);
+      for (const [id, content] of readResults.readResultsMap) readResultsMap.set(id, content);
+      appendPlanningReadWarnings({
+        warnings,
+        readBlocks: processedReadBlocks,
+        readResultsMap,
+        readStatusMap: readResults.readStatusMap,
+        recentOrders: ctx.recentOrders,
+      });
+
+      planMessages = [
+        ...activePlanMessages,
+        {
+          role: "user",
+          content: processedReadBlocks.map((block) => ({
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: readResults.readResultsMap.get(block.id) ?? "Not executed during planning.",
+          })),
+        },
+        {
+          role: "user",
+          content: REPLAN_INCLUDE_REPLY_PROMPT,
+        },
+      ];
+      lastBlocks = activeLastBlocks;
+      rawToolCalls = activeRawToolCalls;
+
+      await enforceSpendCap(ctx.orgId, resolvedSettings);
+      // Re-plan: the model now has the read results and decides the mutative
+      // action (refund/cancel/edit) or escalation. This is the judgment call, so
+      // it runs on Sonnet.
+      const replanModel = pickModel("plan_replan");
+      const sendReplyTool = tools.find(t => t.name === "send_reply");
+      const runReplan = async (
+        messages: Anthropic.MessageParam[],
+        replanTools: Anthropic.Tool[],
+        phase: "after_read_results" | "replan_retry",
+      ) => {
+        const response = await anthropic.messages.create({
+          model: replanModel,
+          max_tokens: 2048,
+          system: systemPromptBlocks,
+          messages,
+          tools: replanTools,
+        });
+        const toolBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
+        const usage = recordModelUsage(usageTotals, response);
+        await recordSpend(ctx.orgId, usage, replanModel);
+        logger.info({
+          orgId: ctx.orgId,
+          threadId: ctx.thread.id,
+          phase,
+          model: replanModel,
+          stopReason: response.stop_reason,
+          tools: toolBlocks.map(b => b.name),
+          usage,
+          usageTotals,
+        }, "[agent:plan] model call");
+        return { response, toolBlocks };
+      };
+
+      let { response: replanResponse, toolBlocks: replanBlocks } = await runReplan(planMessages, tools, "after_read_results");
+      lastBlocks = replanBlocks;
+      planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
+
+      if (replanNeedsSendReplyRetry(replanBlocks, {
+        operatorMode,
+        sendReplyAvailable: Boolean(sendReplyTool),
+      })) {
+        planMessages = [
+          ...planMessages,
+          {
+            role: "user",
+            content: [
+              ...replanBlocks.map((block) => ({
+                type: "tool_result" as const,
+                tool_use_id: block.id,
+                content: "Not executed during planning.",
+              })),
+              { type: "text" as const, text: REPLAN_RETRY_PROMPT },
+            ],
+          },
+        ];
+        await enforceSpendCap(ctx.orgId, resolvedSettings);
+        const retryTools = selectReplanRetryTools(tools, replanBlocks);
+        ({ response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
+          planMessages,
+          retryTools,
+          "replan_retry",
+        ));
+        lastBlocks = replanBlocks;
+        planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
+        ranReplanRetry = true;
+      }
+
+      const filteredPhase1Calls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
+      rawToolCalls = mergeReplanToolCalls(
+        filteredPhase1Calls,
+        replanBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })),
+      );
+      ranReplan = true;
+    } else {
+      planMessages = activePlanMessages;
+      lastBlocks = activeLastBlocks;
+      rawToolCalls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
+    }
   }
 
   const steps = buildPlanSteps(rawToolCalls);
+  const planPath = derivePlanPath({ ranReplan });
 
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
     durationMs: Date.now() - startedAt,
+    planPath,
+    replanRetried: ranReplanRetry,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
     readToolCalls,

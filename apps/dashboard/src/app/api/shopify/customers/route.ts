@@ -4,7 +4,8 @@ import { readRequiredJsonObject } from '@/lib/api/body';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateShopifyCustomerBody } from '@/app/api/shopify/customer/_lib/validation';
-import { parseNextPageInfo, shopifyRest, shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { parseNextPageInfo, shopifyRest, shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
 const CUSTOMER_LIST_FIELDS = 'id,first_name,last_name,email,phone,orders_count,total_spent,created_at,default_address';
 
@@ -49,9 +50,8 @@ export const GET = withOrgRoute(
     try {
       ({ data, headers } = await shopifyRest<{ customers?: unknown[] }>(ctx, path, { query, maxRetries: 0 }));
     } catch (err) {
-      if (err instanceof ShopifyRequestError) {
-        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
-      }
+      const response = await shopifyRouteErrorResponse(err, integration, org.id);
+      if (response) return response;
       throw err;
     }
 
@@ -87,10 +87,8 @@ export const POST = withOrgRoute(
         },
       });
     } catch (err) {
-      if (err instanceof ShopifyRequestError) {
-        const errors = (err.payload as { errors?: unknown } | null)?.errors;
-        return NextResponse.json({ error: errors ?? 'Failed to create customer' }, { status: err.status ?? 502 });
-      }
+      const response = await shopifyRouteErrorResponse(err, integration, org.id);
+      if (response) return response;
       throw err;
     }
 

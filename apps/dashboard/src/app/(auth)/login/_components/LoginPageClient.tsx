@@ -28,17 +28,11 @@ export function LoginPageClient() {
 
   return (
     <AuthShell
+      panel="simple"
       backHref="/"
       backLabel="Back to home"
-      eyebrow="Welcome back"
-      title={
-        <>
-          Sign in to
-          <br />
-          <span className="text-green-400">Shopkeeper.</span>
-        </>
-      }
-      description="Access your inbox, drafts, and workspace settings."
+      title="Sign in"
+      description="Enter your email to access your workspace."
     >
       <SignIn
         routing="hash"

@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { parseNextPageInfo, shopifyRest, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { parseNextPageInfo, shopifyRest } from '@shopkeeper/agent/shopify';
+import {
+  isShopifyIntegrationOperational,
+  shopifyRouteErrorResponse,
+} from '@/lib/server/shopify-integration';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,15 +20,16 @@ export const GET = withOrgRoute(
   },
   async ({ org, request }) => {
     const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: 'shopify' },
+      where: { organizationId: org.id, platform: 'shopify', accessToken: { not: null } },
+      orderBy: { createdAt: 'desc' },
     });
 
-    if (!integration?.accessToken) {
+    if (!integration || !isShopifyIntegrationOperational(integration)) {
       throw new NotFoundError('no_integration');
     }
 
     const shop = integration.externalAccountId;
-    const ctx = { shop, accessToken: integration.accessToken };
+    const ctx = { shop, accessToken: integration.accessToken! };
     const { searchParams } = new URL(request.url);
 
     const fulfillmentStatus = searchParams.get('fulfillment_status') ?? 'any';
@@ -56,9 +61,8 @@ export const GET = withOrgRoute(
     try {
       ({ data, headers } = await shopifyRest<{ orders?: ShopifyOrderRaw[] }>(ctx, 'orders.json', { query, maxRetries: 0 }));
     } catch (err) {
-      if (err instanceof ShopifyRequestError) {
-        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
-      }
+      const response = await shopifyRouteErrorResponse(err, integration, org.id);
+      if (response) return response;
       throw err;
     }
 

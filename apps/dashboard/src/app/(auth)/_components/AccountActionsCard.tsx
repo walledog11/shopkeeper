@@ -48,7 +48,7 @@ export function AccountActionsCard({
           <Button
             asChild
             size="lg"
-            className="w-full gap-2 bg-blue-400 text-blue-950 hover:bg-blue-300"
+            className="w-full gap-2 rounded-full bg-[#2b2118] text-[#f6f2eb] hover:bg-[#1a120c]"
           >
             <Link href="/dashboard">
               Continue to dashboard

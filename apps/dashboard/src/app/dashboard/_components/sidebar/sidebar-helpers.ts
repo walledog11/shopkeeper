@@ -3,7 +3,7 @@ import { cn } from "@/lib/ui/cn";
 
 export const mobileTabs = [
   { name: "Inbox", href: "/dashboard/tickets", icon: Inbox, badge: true },
-  { name: "Orders", href: "/dashboard/orders", icon: Box, badge: false },
+  { name: "Shop", href: "/dashboard/orders", icon: Box, badge: false },
   { name: "Settings", href: "/dashboard/settings", icon: Settings, badge: false },
 ];
 

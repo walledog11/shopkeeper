@@ -72,7 +72,9 @@ export async function loadNeedsAttention(
     if (!plan) return []
 
     const copy = buildPlanPreview(plan, thread.aiSummary, latestMessage.contentText)
-    const classification = classifyHomePlan(plan, settings)
+    const classification = classifyHomePlan(plan, settings, {
+      filterStatus: thread.filterStatus,
+    })
     const kind: HomeNeedsAttentionItem["kind"] =
       classification.kind === "quick_reply" ? "quick_reply" : "needs_review"
 

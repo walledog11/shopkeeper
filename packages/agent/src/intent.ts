@@ -25,7 +25,7 @@ const ORDER_STATUS_PHRASES = [
   "wismo",
 ] as const;
 
-const ORDER_STATUS_ACTION_PHRASES = [
+export const ORDER_STATUS_ACTION_PHRASES = [
   "cancel",
   "refund",
   "return policy",
@@ -55,12 +55,16 @@ function hasPhrase(text: string, phrases: readonly string[]): boolean {
   return phrases.some((phrase) => text.includes(phrase));
 }
 
+export function hasMutativePlanningSignals(text: string): boolean {
+  return hasPhrase(text.toLowerCase(), ORDER_STATUS_ACTION_PHRASES);
+}
+
 export function looksLikeOrderStatusIntent(instruction: string): boolean {
   const text = instruction.toLowerCase();
   const mentionsOrderContext = text.includes("order") || text.includes("package") || text.includes("shipment") || ORDER_REFERENCE_RE.test(instruction);
   if (!mentionsOrderContext) return false;
   if (!hasPhrase(text, ORDER_STATUS_PHRASES)) return false;
-  if (hasPhrase(text, ORDER_STATUS_ACTION_PHRASES)) return false;
+  if (hasMutativePlanningSignals(instruction)) return false;
   return true;
 }
 

@@ -1,5 +1,6 @@
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE, type AutonomyTier } from "./settings.js"
+import { isQuestionableSender } from "./sender-trust.js"
 import { TOOL_CATEGORIES } from "./tools/registry/index.js"
 import { checkStaticToolPolicy } from "./tools/static-policy.js"
 
@@ -113,6 +114,15 @@ const NEEDS_REVIEW: HomePlanClassification = {
 }
 
 function detectQuickReply(plan: AgentPlan): HomePlanClassification {
+  if (plan.orderStatusFastPath) {
+    const sendReplyToolCall = plan.rawToolCalls.find((toolCall) => toolCall.name === "send_reply") ?? null;
+    return {
+      kind: "needs_review",
+      replyText: replyTextFromToolCall(sendReplyToolCall),
+      sendReplyToolCall,
+    };
+  }
+
   if (plan.steps.length !== 1 || plan.steps[0].tool !== "send_reply") {
     return NEEDS_REVIEW
   }
@@ -137,12 +147,30 @@ function detectQuickReply(plan: AgentPlan): HomePlanClassification {
   return { kind: "quick_reply", replyText, sendReplyToolCall }
 }
 
+export interface ClassifyHomePlanOptions {
+  filterStatus?: string | null
+}
+
+function applyQuestionableSenderPolicy(
+  classification: HomePlanClassification,
+  filterStatus?: string | null,
+): HomePlanClassification {
+  if (
+    isQuestionableSender(filterStatus)
+    && (classification.kind === "quick_reply" || classification.kind === "auto_execute")
+  ) {
+    return NEEDS_REVIEW
+  }
+  return classification
+}
+
 export function classifyHomePlan(
   plan: AgentPlan | null,
   settings?: Partial<OrgSettings> | OrgSettings | null,
+  options?: ClassifyHomePlanOptions,
 ): HomePlanClassification {
   if (!plan || (plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
-    return NEEDS_REVIEW
+    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }
 
   const resolved = resolveAgentSettings(settings ?? null)
@@ -152,22 +180,28 @@ export function classifyHomePlan(
 
   if (mutativeCalls.length > 0) {
     if (!TIERS_THAT_AUTO_EXECUTE.has(tier)) {
-      return NEEDS_REVIEW
+      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
     }
     const policyClean = mutativeCalls.every(tc => !checkStaticToolPolicy(tc.name, tc.input, resolved).blocked)
     if (!policyClean) {
-      return NEEDS_REVIEW
+      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
     }
     const sendReplyToolCall = plan.rawToolCalls.find(tc => tc.name === "send_reply") ?? null
     const replyText = replyTextFromToolCall(sendReplyToolCall)
-    return { kind: "auto_execute", replyText, sendReplyToolCall }
+    if (!sendReplyToolCall || !replyText) {
+      return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
+    }
+    return applyQuestionableSenderPolicy(
+      { kind: "auto_execute", replyText, sendReplyToolCall },
+      options?.filterStatus,
+    )
   }
 
   const quickReply = detectQuickReply(plan)
   if (quickReply.kind === "quick_reply" && tier === "watch") {
-    return NEEDS_REVIEW
+    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }
-  return quickReply
+  return applyQuestionableSenderPolicy(quickReply, options?.filterStatus)
 }
 
 function findActionStep(plan: AgentPlan): PlanStep | null {

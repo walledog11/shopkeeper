@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { NotFoundError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
-import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
+import { shopifyRestJson } from '@shopkeeper/agent/shopify';
+import { shopifyRouteErrorResponse } from '@/lib/server/shopify-integration';
 
 export const GET = withOrgRoute(
   { context: 'Shopify Customer Search', errorMessage: 'server_error' },
@@ -31,9 +32,8 @@ export const GET = withOrgRoute(
         maxRetries: 0,
       });
     } catch (err) {
-      if (err instanceof ShopifyRequestError) {
-        return NextResponse.json({ error: 'shopify_error', details: err.payload ?? {} }, { status: err.status ?? 502 });
-      }
+      const response = await shopifyRouteErrorResponse(err, integration, org.id);
+      if (response) return response;
       throw err;
     }
 

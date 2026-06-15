@@ -12,7 +12,9 @@ import { buildHomeSummaryView } from "@/lib/home/summary-view"
 import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { useOrg } from "@/hooks/useOrg"
-import type { Integration, KnowledgeBase } from "@/types"
+import { useIntegrations } from "@/hooks/useIntegrations"
+import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
+import type { KnowledgeBase } from "@/types"
 
 interface OrdersResponse {
   orders: Array<{
@@ -34,14 +36,16 @@ export function useHomeData({ initialSummary }: Options) {
       refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
     },
   )
-  const { data: integrations = [] } = useSWR<Integration[]>("/api/integrations", fetcher)
+  const { data: integrations = [] } = useIntegrations()
   const { data: orgData } = useOrg()
   const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>("/api/kb", fetcher, { revalidateOnFocus: false })
   const { data: telegramData } = useSWR<{ connected: boolean; botUsername: string | null }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
   const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
   const channelConnected = integrations.length > 0
-  const hasShopify = integrations.some(integration => integration.platform === CHANNEL_TYPE.SHOPIFY)
+  const hasShopify = integrations.some(integration =>
+    integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
+  )
   const summary = summaryData ?? createEmptyHomeSummary()
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
   const walkthroughItems = useMemo(

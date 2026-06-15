@@ -652,6 +652,61 @@ body,
   }
 }
 
+/* Auth pages — hide Clerk chrome that breaks the ink/paper layouts */
+.auth-clerk-root .cl-footer,
+.auth-clerk-root .cl-badge,
+.auth-clerk-root [class*="cl-internal-b"] {
+  display: none !important;
+}
+
+.auth-clerk-root,
+.auth-clerk-root .cl-rootBox,
+.auth-clerk-root .cl-cardBox,
+.auth-clerk-root .cl-card,
+.auth-clerk-root .cl-main {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+  font-family: var(--font-sans) !important;
+}
+
+/* Force readable primary buttons — Clerk variables alone don't always win */
+.auth-clerk-root .cl-formButtonPrimary {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.375rem !important;
+  line-height: 1 !important;
+  background-color: #2b2118 !important;
+  color: #f6f2eb !important;
+}
+.auth-clerk-root .cl-formButtonPrimary:hover {
+  background-color: #1a120c !important;
+}
+.auth-clerk-root .cl-formButtonPrimaryText {
+  line-height: 1 !important;
+}
+.auth-clerk-root .cl-formButtonPrimary svg,
+.auth-clerk-root .cl-formButtonPrimaryIcon {
+  position: static !important;
+  margin: 0 !important;
+  flex-shrink: 0;
+  color: #f6f2eb !important;
+}
+
+.auth-clerk-root .cl-card {
+  gap: 1.25rem;
+}
+
+.auth-clerk-root .cl-formFieldRow {
+  margin-bottom: 0.25rem;
+}
+
+.auth-clerk-root .cl-socialButtons {
+  gap: 0.75rem;
+}
+
 @media (max-width: 767px) {
   .dashboard-shell input:not([type="checkbox"]):not([type="radio"]),
   .dashboard-shell textarea,

@@ -10,7 +10,7 @@ export async function precomputeThreadPlan(
   organizationId: string,
   threadId: string,
   settings: Pick<OrgSettings, 'autoPlanOnOpen'>,
-  options: { allowAutoExecute?: boolean } = {},
+  options: { allowAutoExecute?: boolean; instruction?: string } = {},
 ): Promise<PrecomputedPlanResult | null> {
   if (settings.autoPlanOnOpen === false) {
     logger.warn({ threadId, organizationId }, '[Worker] autoPlanOnOpen disabled — no plan will be generated for this thread');
@@ -38,6 +38,7 @@ export async function precomputeThreadPlan(
       organizationId,
       threadId,
       options.allowAutoExecute === true,
+      { instruction: options.instruction },
     );
     if (!plan?.steps || plan.steps.length === 0) {
       return null;

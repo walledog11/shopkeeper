@@ -9,7 +9,8 @@ import {
   createEmptyHomeSummary,
   type HomeSummary,
 } from "@/lib/home/summary-contract"
-import type { Integration } from "@/types"
+import { useIntegrations } from "@/hooks/useIntegrations"
+import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
 
 interface OrdersResponse {
   orders: Array<{
@@ -29,13 +30,11 @@ export function usePanelBriefingData(enabled: boolean) {
     { refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS },
   )
 
-  const { data: integrations = [] } = useSWR<Integration[]>(
-    enabled ? "/api/integrations" : null,
-    fetcher,
-    { revalidateOnFocus: false },
-  )
+  const { data: integrations = [] } = useIntegrations({ enabled })
 
-  const hasShopify = integrations.some(integration => integration.platform === CHANNEL_TYPE.SHOPIFY)
+  const hasShopify = integrations.some(integration =>
+    integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
+  )
 
   const { data: ordersData } = useSWR<OrdersResponse>(
     enabled && hasShopify ? "/api/orders?limit=10" : null,

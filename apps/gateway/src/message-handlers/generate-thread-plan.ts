@@ -14,11 +14,13 @@ import {
   maybeAutoExecuteCurrentCachedHomePlan,
 } from '@shopkeeper/agent/plan-execution';
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
+import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import type { AgentPlan } from '../types.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import type { AgentActionResult } from './planning-types.js';
+import logger from '../logger.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
 
@@ -46,9 +48,24 @@ export async function generateThreadPlan(
   organizationId: string,
   threadId: string,
   allowAutoExecute: boolean,
+  options: { instruction?: string } = {},
 ): Promise<GeneratedThreadPlan> {
   const thread = await requireOrgThread(threadId, organizationId);
-  const instruction = thread.aiSummary || "Handle this customer's latest request";
+  const instruction = options.instruction?.trim()
+    || thread.aiSummary
+    || "Handle this customer's latest request";
+
+  if (shouldSkipAutoPlan(thread.filterStatus)) {
+    if (thread.cachedPlan || thread.cachedPlanMessageId) {
+      await clearThreadPlanCache({ orgId: organizationId, threadId });
+    }
+    logger.info(
+      { threadId, organizationId, filterStatus: thread.filterStatus },
+      '[gateway:auto-plan] Skipping plan generation for non-genuine sender',
+    );
+    return { plan: null, instruction };
+  }
+
   const latestConversation = await getLatestConversationMessage(threadId);
   const pendingCustomerMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])

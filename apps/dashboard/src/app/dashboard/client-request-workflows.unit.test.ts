@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { fetchCustomersPage } from "./customers/_components/customer-requests"
+import { fetchCustomersPage } from "./(shell)/orders/_components/customers/customer-requests"
 import {
   fetchOrdersPage,
   startOrderSupportThread,
-} from "./orders/_components/order-requests"
+} from "./(shell)/orders/_components/order-requests"
 import {
   deleteTeamMember,
   revokeTeamInvitation,
-} from "./team/_components/team-page-requests"
+} from "./(shell)/team/_components/team-page-requests"
 
 afterEach(() => {
   vi.unstubAllGlobals()

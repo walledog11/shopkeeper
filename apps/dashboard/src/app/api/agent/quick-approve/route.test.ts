@@ -230,4 +230,22 @@ describe("POST /api/agent/quick-approve", () => {
     expect(res.status).toBe(400);
     expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
   });
+
+  it("rejects quick approve for questionable senders", async () => {
+    const { thread } = await createThreadWithCachedPlan(quickReplyPlan);
+
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { filterStatus: "questionable", filterReason: "Unknown domain" },
+    });
+
+    const res = await POST(new Request("http://localhost:3000/api/agent/quick-approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId: thread.id }),
+    }));
+
+    expect(res.status).toBe(400);
+    expect(mockExecuteAgentTurn).not.toHaveBeenCalled();
+  });
 });

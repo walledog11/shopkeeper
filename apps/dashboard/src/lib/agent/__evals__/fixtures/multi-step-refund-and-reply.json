@@ -39,7 +39,7 @@
   "expectedPlan": {
     "mustCallTools": ["create_refund", "send_reply"],
     "mustCallToolsInOrder": ["create_refund", "send_reply"],
-    "mustNotCallTools": ["escalate_to_human", "cancel_order"],
+    "mustNotCallTools": ["escalate_to_human", "cancel_order", "get_order_by_name", "get_shopify_orders"],
     "mustCallToolsWithInput": [
       { "tool": "create_refund", "inputIncludes": { "order_id": "9000001040" } }
     ]

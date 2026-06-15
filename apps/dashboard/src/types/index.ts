@@ -58,6 +58,7 @@ export interface Integration {
   externalAccountId: string;
   fromEmail: string | null;
   tokenExpiresAt: string | null;
+  connectionState?: 'active' | 'invalid' | 'incomplete';
   metadata?: unknown;
   createdAt: string;
   lastActivity?: string | null;

@@ -16,6 +16,7 @@ describe('createPostRedirectResponse', () => {
     expect(html).toContain('method="post"');
     expect(html).toContain('action="/api/integrations/shopify/auth?shop=fixture-shop.myshopify.com"');
     expect(html).toContain('requestSubmit()');
-    expect(html).toContain('shopkeeper-oauth-loading');
+    expect(html).toContain('shopkeeper-oauth-popup');
+    expect(html).toContain('#fbbf24');
   });
 });

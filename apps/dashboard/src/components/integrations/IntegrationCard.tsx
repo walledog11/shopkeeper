@@ -10,6 +10,7 @@ import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
+import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
 import { CardLogo, ShopkeeperBadge } from "./IntegrationCardParts"
@@ -81,7 +82,9 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
   const setEmail = (nextEmail: string) => dispatchCardState({ type: "emailChanged", email: nextEmail })
   const setShop = (nextShop: string) => dispatchCardState({ type: "shopChanged", shop: nextShop })
 
-  const isConnected = connected.length > 0
+  const isConnected = config.connectType === "shopify"
+    ? isShopifyIntegrationLinked(connected[0])
+    : connected.length > 0
   const isOAuthEmail = config.emailProvider === "gmail" || config.emailProvider === "outlook"
 
   const health = config.connectType

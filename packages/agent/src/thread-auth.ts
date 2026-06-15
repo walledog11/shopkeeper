@@ -43,6 +43,7 @@ export async function requireOrgThread(threadId: string, orgId: string) {
       channelType: true,
       customerId: true,
       aiSummary: true,
+      filterStatus: true,
       cachedPlanMessageId: true,
       cachedPlan: true,
       messages: {
@@ -71,6 +72,20 @@ export async function getLatestConversationMessage(threadId: string): Promise<Pl
     orderBy: [{ sentAt: "desc" }, { id: "desc" }],
     select: { id: true, senderType: true },
   });
+}
+
+export async function getLatestCustomerMessageText(threadId: string): Promise<string | null> {
+  const message = await db.message.findFirst({
+    where: {
+      threadId,
+      deletedAt: null,
+      senderType: SENDER_TYPE.CUSTOMER,
+    },
+    orderBy: [{ sentAt: "desc" }, { id: "desc" }],
+    select: { contentText: true },
+  });
+  const text = message?.contentText?.trim();
+  return text || null;
 }
 
 export function requireTrimmedInstruction(instruction: unknown): string {
