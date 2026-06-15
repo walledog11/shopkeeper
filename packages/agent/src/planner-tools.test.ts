@@ -4,20 +4,22 @@ import { AGENT_TOOLS, TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { RawToolCall } from "./types.js";
 
 describe("selectInitialPlanningTools", () => {
-  it("includes read tools and escalate_to_human only", () => {
+  it("includes read tools, escalate_to_human, and send_reply only", () => {
     const selected = selectInitialPlanningTools(AGENT_TOOLS);
     const names = selected.map((tool) => tool.name);
 
     expect(names).toContain("search_kb");
     expect(names).toContain("get_order_by_name");
     expect(names).toContain("escalate_to_human");
+    expect(names).toContain("send_reply");
     expect(names).not.toContain("create_refund");
-    expect(names).not.toContain("send_reply");
     expect(names).not.toContain("add_internal_note");
 
     for (const name of names) {
       expect(
-        TOOL_CATEGORIES[name] === "read" || name === "escalate_to_human",
+        TOOL_CATEGORIES[name] === "read"
+        || name === "escalate_to_human"
+        || name === "send_reply",
       ).toBe(true);
     }
   });
@@ -54,6 +56,24 @@ describe("mergeReplanToolCalls", () => {
       "escalate_to_human",
       "send_reply",
     ]);
+  });
+
+  it("drops premature phase-1 send_reply when replan runs", () => {
+    const phase1: RawToolCall[] = [
+      { id: "tu_read", name: "search_kb", input: { query: "refund" } },
+      { id: "tu_reply_1", name: "send_reply", input: { text: "Too early." } },
+    ];
+    const replan: RawToolCall[] = [
+      { id: "tu_refund", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
+      { id: "tu_reply_2", name: "send_reply", input: { text: "Refund processed." } },
+    ];
+
+    expect(mergeReplanToolCalls(phase1, replan).map((call) => call.name)).toEqual([
+      "search_kb",
+      "create_refund",
+      "send_reply",
+    ]);
+    expect(mergeReplanToolCalls(phase1, replan).find((call) => call.name === "send_reply")?.id).toBe("tu_reply_2");
   });
 });
 

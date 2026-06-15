@@ -240,7 +240,7 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(result.kind).toBe("needs_review")
     })
 
-    it("auto-executes a mutative-only plan with no send_reply (replyText null)", () => {
+    it("routes a mutative-only plan with no send_reply to needs_review", () => {
       const result = classifyHomePlan(
         {
           instruction: "Refund order",
@@ -249,7 +249,7 @@ describe("classifyHomePlan — tier × action matrix", () => {
         },
         settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
       )
-      expect(result.kind).toBe("auto_execute")
+      expect(result.kind).toBe("needs_review")
       expect(result.replyText).toBeNull()
       expect(result.sendReplyToolCall).toBeNull()
     })

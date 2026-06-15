@@ -22,6 +22,11 @@ import { derivePlanPath } from "./plan-path.js";
 import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, REPLAN_RETRY_PROMPT, replanNeedsSendReplyRetry, selectReplanRetryTools } from "./planner-tools.js";
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 
+/** Phase-1 Haiku calls emit tool calls only (reads, send_reply, escalate). */
+export const PLAN_INITIAL_MAX_TOKENS = 1024;
+/** Replan may include send_reply body text alongside mutative tools. */
+export const PLAN_REPLAN_MAX_TOKENS = 2048;
+
 export async function planAgent(
   ctx: AgentContext,
   instruction: string,
@@ -77,7 +82,7 @@ export async function planAgent(
   const initialModel = pickModel("plan_initial");
   const response1 = await anthropic.messages.create({
     model: initialModel,
-    max_tokens: 2048,
+    max_tokens: PLAN_INITIAL_MAX_TOKENS,
     system: systemPromptBlocks,
     messages: baseMessages,
     tools: initialTools,
@@ -102,7 +107,6 @@ export async function planAgent(
     ...baseMessages,
     { role: "assistant", content: response1.content },
   ];
-  let lastBlocks: Anthropic.ToolUseBlock[] = blocks1;
 
   const readBlocks = blocks1.filter(b => TOOL_CATEGORIES[b.name] === "read");
   const warnings: string[] = [];
@@ -116,7 +120,6 @@ export async function planAgent(
     let activeReadBlocks = readBlocks;
     let activeRawToolCalls = rawToolCalls;
     let activePlanMessages = planMessages;
-    let activeLastBlocks = lastBlocks;
     let allReadsSkippedRetried = false;
 
     let readPartition = partitionPlanningReadBlocks({
@@ -136,7 +139,7 @@ export async function planAgent(
       await enforceSpendCap(ctx.orgId, resolvedSettings);
       const retryResponse = await anthropic.messages.create({
         model: initialModel,
-        max_tokens: 2048,
+        max_tokens: PLAN_INITIAL_MAX_TOKENS,
         system: systemPromptBlocks,
         messages: baseMessages,
         tools,
@@ -157,7 +160,6 @@ export async function planAgent(
 
       activeReadBlocks = retryBlocks.filter((block) => TOOL_CATEGORIES[block.name] === "read");
       activeRawToolCalls = retryBlocks.map((block) => ({ id: block.id, name: block.name, input: block.input }));
-      activeLastBlocks = retryBlocks;
       activePlanMessages = [
         ...baseMessages,
         { role: "assistant", content: retryResponse.content },
@@ -208,7 +210,6 @@ export async function planAgent(
           content: REPLAN_INCLUDE_REPLY_PROMPT,
         },
       ];
-      lastBlocks = activeLastBlocks;
       rawToolCalls = activeRawToolCalls;
 
       await enforceSpendCap(ctx.orgId, resolvedSettings);
@@ -224,7 +225,7 @@ export async function planAgent(
       ) => {
         const response = await anthropic.messages.create({
           model: replanModel,
-          max_tokens: 2048,
+          max_tokens: PLAN_REPLAN_MAX_TOKENS,
           system: systemPromptBlocks,
           messages,
           tools: replanTools,
@@ -246,7 +247,6 @@ export async function planAgent(
       };
 
       let { response: replanResponse, toolBlocks: replanBlocks } = await runReplan(planMessages, tools, "after_read_results");
-      lastBlocks = replanBlocks;
       planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
 
       if (replanNeedsSendReplyRetry(replanBlocks, {
@@ -274,7 +274,6 @@ export async function planAgent(
           retryTools,
           "replan_retry",
         ));
-        lastBlocks = replanBlocks;
         planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
         ranReplanRetry = true;
       }
@@ -286,8 +285,6 @@ export async function planAgent(
       );
       ranReplan = true;
     } else {
-      planMessages = activePlanMessages;
-      lastBlocks = activeLastBlocks;
       rawToolCalls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
     }
   }

@@ -16,7 +16,7 @@ Out of scope for this doc: gateway→dashboard dispatch hop, Telegram async queu
 |-------|--------------|-------|---------|
 | **1. Initial** | Always | Haiku (`plan_initial`) | Pick tools — usually reads |
 | **2. Replan** | Only if phase 1 returned read tools | Sonnet (`plan_replan`) | Decide mutative action after read results |
-| **3. Reply draft** | Customer channel only, and no `send_reply` / `escalate` yet | Haiku (`reply_draft`) | Force `send_reply` via `tool_choice` |
+| **3. Reply draft** | ~~Customer channel only, and no `send_reply` / `escalate` yet~~ **Removed (Phase 6)** | ~~Haiku (`reply_draft`)~~ | ~~Force `send_reply` via `tool_choice`~~ |
 
 Before any of that, the inbound pipeline adds a **4th LLM call** — `generateThreadIntelligence` (Haiku, 256 tokens) in `apps/gateway/src/workers/ai-summary.ts` — for summary/tag/classification. Planning then runs with `instruction = thread.aiSummary`.
 
@@ -61,7 +61,7 @@ sequenceDiagram
 > 4. **Phase 1 — Order-status fast path** ✓
 > 5. **Phase 5 — Parallel intelligence + plan** ✓
 > 6. **Phase 3 — Context-aware read skip** ✓
-> 7. **Phase 6 — Remove phase-3 fallback**, then **Phase 7 — Minor tuning** (remaining)
+> 7. **Phase 6 — Remove phase-3 fallback** ✓, then **Phase 7 — Minor tuning** ✓
 >
 > The per-phase savings figures below are estimates **to be validated against Phase 0's `planPath` distribution, not committed to in advance.** If production is already mostly 1-call, Phases 1/3/4 have little headroom.
 
@@ -70,7 +70,7 @@ sequenceDiagram
 Add a `planPath` enum to the `[agent:plan] complete` log in `planner.ts`:
 
 ```
-"fast-path" | "1-call" | "2-call-read" | "2-call-mutative" | "3-call"
+"fast-path" | "1-call" | "2-call-mutative"
 ```
 
 Derive from which phases ran and whether a fast path short-circuited. Use production logs to baseline before/after each phase.
@@ -180,7 +180,7 @@ Today `ai-summary.ts` runs sequentially: `generateThreadIntelligence` → `preco
 
 ---
 
-### Phase 6 — Remove phase 3 fallback (P3) [NOT STARTED]
+### Phase 6 — Remove phase 3 fallback (P3) [COMPLETE]
 
 Once Phase 4 metrics show phase-3 usage below ~5%:
 
@@ -190,14 +190,20 @@ Once Phase 4 metrics show phase-3 usage below ~5%:
 
 **Verify:** Full eval suite green. No increase in `needs_review` misclassifications on `quick_reply` fixtures.
 
+**Implemented:** Removed `reply_draft` fallback from `planner.ts` and `ModelTask`. Phase-1 tools now include `send_reply` so KB/quick-reply tickets stay 1-call. Mutative plans missing `send_reply` after replan retry classify as `needs_review` (no auto-execute without customer reply). Telemetry simplified to `fast-path` | `1-call` | `2-call-mutative`.
+
 ---
 
-### Phase 7 — Minor tuning (P3) [NOT STARTED]
+### Phase 7 — Minor tuning (P3) [COMPLETE]
 
-- Reduce `max_tokens` on phase 1 and phase 3 from 2048 → 1024 (tool-only outputs).
-- Consider Sonnet for phase 1 on mutative-heavy threads only after telemetry — trade token cost for fewer round-trips (A/B via eval suite).
+- Reduce `max_tokens` on phase 1 from 2048 → 1024 (tool-only outputs). Replan stays at 2048 (may include `send_reply` body). Phase-3 reply draft removed in Phase 6.
+- **Deferred:** Sonnet for phase 1 on mutative-heavy threads — revisit after Phase 0 `planPath` telemetry shows enough 2-call-mutative volume to justify the token-cost tradeoff; A/B via eval suite first.
 
-## Implementation order
+**Implemented:** `PLAN_INITIAL_MAX_TOKENS` (1024) and `PLAN_REPLAN_MAX_TOKENS` (2048) in `planner.ts`.
+
+---
+
+## Implementation order (complete)
 
 ```mermaid
 flowchart LR
@@ -206,8 +212,8 @@ flowchart LR
   P4 --> P1[Phase 1: Order-status fast path ✓]
   P1 --> P5[Phase 5: Parallel intelligence ✓]
   P5 --> P3[Phase 3: Context-aware read skip ✓]
-  P3 --> P6[Phase 6: Remove phase 3]
-  P6 --> P7[Phase 7: Minor tuning]
+  P3 --> P6[Phase 6: Remove phase 3 ✓]
+  P6 --> P7[Phase 7: Minor tuning ✓]
 ```
 
 Revised priorities (savings are pre-telemetry estimates, to be validated by Phase 0):
@@ -220,8 +226,8 @@ Revised priorities (savings are pre-telemetry estimates, to be validated by Phas
 | P2 | Order-status fast path (`needs_review` only) | ~1–3s on WISMO | **Medium-high** (customer-facing; auto-send forbidden) | **Complete** |
 | P2 | Parallel intelligence + plan | 1–2s on follow-ups / IG | Medium | **Complete** |
 | P3 | Context-aware read skip | 2–4s on redundant reads | **Medium** (stale context into Sonnet refund) | **Complete** |
-| P3 | Remove phase 3 | 1–2s | Medium-high | Not started |
-| P3 | Minor tuning | Token/latency | Low | Not started |
+| P3 | Remove phase 3 | 1–2s | Medium-high | **Complete** |
+| P3 | Minor tuning | Token/latency | Low | **Complete** |
 
 ## Regression gate
 
@@ -270,7 +276,7 @@ Key fixtures:
 1. ~~**Fast-path false positives:** Should `tryPlanOrderStatusFastPath` require a single unambiguous order in context, or allow "most recent order" when multiple exist?~~ **Resolved:** uses most recent order when no order number is referenced; matches `order-status-multiple-orders-pick-recent` fixture.
 2. ~~**KB read skip heuristic:** Tag match only, or lightweight keyword overlap on pre-loaded articles?~~ **Resolved:** tag match or title keyword overlap (`planner-read-skip.ts`).
 3. **Parallel intelligence UI:** If plan completes before intelligence and uses raw message, should inbox show a "planning…" state until `aiSummary` lands, or is stale summary acceptable for a few seconds? (Backend parallelization shipped; UI behavior unchanged.)
-4. **Phase 6 gate:** Phase-3 (`reply_draft`) fallback rate in production logs — remove fallback once below ~5%.
+4. ~~**Phase 6 gate:** Phase-3 (`reply_draft`) fallback rate in production logs — remove fallback once below ~5%.~~ **Resolved:** fallback removed; quick replies use phase-1 `send_reply`; mutative misses route to `needs_review`.
 
 ## Related docs
 

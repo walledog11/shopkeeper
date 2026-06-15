@@ -92,7 +92,6 @@ function completeLogPayload(logger: AgentLogger) {
     planPath: string;
     modelCalls: number;
     replanRetried?: boolean;
-    replyDraftFallback?: boolean;
   };
 }
 
@@ -156,41 +155,44 @@ describe("planAgent logging", () => {
     });
   });
 
-  it("restricts phase-1 model call to read tools and escalate_to_human", async () => {
+  it("restricts phase-1 model call to read tools, send_reply, and escalate_to_human", async () => {
     installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: "Checking order context." }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_2"));
+    mockCreate.mockResolvedValueOnce(
+      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
+    );
 
     await planAgent(makeCtx(), "Where is my order?");
 
     const firstCallTools = mockCreate.mock.calls[0]![0].tools.map((tool: { name: string }) => tool.name);
     expect(firstCallTools).toContain("search_kb");
     expect(firstCallTools).toContain("escalate_to_human");
+    expect(firstCallTools).toContain("send_reply");
     expect(firstCallTools).not.toContain("create_refund");
-    expect(firstCallTools).not.toContain("send_reply");
   });
 
-  it("logs planPath 2-call-read when reply draft runs after read-only initial", async () => {
+  it("uses a tighter max_tokens budget on phase-1 model calls", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(
+      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
+    );
+
+    await planAgent(makeCtx(), "Where is my order?");
+
+    expect(mockCreate.mock.calls[0]![0].max_tokens).toBe(1024);
+  });
+
+  it("logs planPath 1-call when initial returns send_reply directly", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: "Order is already in context." }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_2"));
+    mockCreate.mockResolvedValueOnce(
+      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
+    );
 
     await planAgent(makeCtx(), "Where is my order?");
 
     expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "2-call-read",
-      modelCalls: 2,
+      planPath: "1-call",
+      modelCalls: 1,
     });
   });
 
@@ -266,7 +268,6 @@ describe("planAgent logging", () => {
       planPath: "2-call-mutative",
       modelCalls: 3,
       replanRetried: true,
-      replyDraftFallback: false,
     });
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
       "search_kb",
@@ -275,23 +276,25 @@ describe("planAgent logging", () => {
     ]);
   });
 
-  it("logs planPath 3-call when replan retry still omits send_reply and reply draft runs", async () => {
+  it("logs planPath 2-call-mutative when replan retry still omits send_reply", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
     mockCreate
       .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
       .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
-      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund_retry"))
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"));
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund_retry"));
 
-    await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
+    const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
 
     expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "3-call",
-      modelCalls: 4,
+      planPath: "2-call-mutative",
+      modelCalls: 3,
       replanRetried: true,
-      replyDraftFallback: true,
     });
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
+      "search_kb",
+      "create_refund",
+    ]);
   });
 
   it("dedupes mutative phase-1 tool calls when replan runs", async () => {
