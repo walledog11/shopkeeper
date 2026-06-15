@@ -268,9 +268,17 @@ describe("dashboard approval helpers", () => {
         description: "Refund $20",
         category: "action",
         enabled: true,
+      }, {
+        id: "send_1",
+        tool: "send_reply",
+        label: "Notify customer",
+        description: "Tell Ada the refund was issued",
+        category: "communication",
+        enabled: true,
       }],
       rawToolCalls: [
         { id: "refund_1", name: "create_refund", input: { order_id: "gid://shopify/Order/1", amount: "20.00" } },
+        { id: "send_1", name: "send_reply", input: { text: "I've issued the $20 refund." } },
       ],
     };
     mockPlanAgent.mockResolvedValueOnce(refundPlan);

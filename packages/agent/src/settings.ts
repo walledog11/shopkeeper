@@ -117,7 +117,7 @@ export function normalizeStoredOrgSettings(value: unknown): OrgSettingsPatch {
 // (true -> live, false/unset -> off) for orgs that predate `autoExecuteMode`.
 export function resolveAutoExecuteMode(settings: unknown): AutoExecuteMode {
   const normalized = normalizeStoredOrgSettings(settings);
-  return normalized.autoExecuteMode ?? "off";
+  return normalized.autoExecuteMode ?? (normalized.autoExecuteEnabled ? "live" : "off");
 }
 
 export function resolveAgentSettings(settings: unknown): OrgSettings {
