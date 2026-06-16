@@ -51,12 +51,62 @@ export const ORDER_STATUS_ACTION_PHRASES = [
 export const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
+const CUSTOMER_MUTATIVE_PHRASES = [
+  "cancel",
+  "refund",
+  "return my order",
+  "return the order",
+  "chargeback",
+  "dispute",
+] as const;
+
 function hasPhrase(text: string, phrases: readonly string[]): boolean {
   return phrases.some((phrase) => text.includes(phrase));
 }
 
 export function hasMutativePlanningSignals(text: string): boolean {
   return hasPhrase(text.toLowerCase(), ORDER_STATUS_ACTION_PHRASES);
+}
+
+export function hasCustomerMutativeIntent(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (hasPhrase(lower, CUSTOMER_MUTATIVE_PHRASES)) return true;
+  if (/\b(change|update|edit)\b/.test(lower) && /\b(address|shipping)\b/.test(lower)) return true;
+  if (/\b(create|place|make)\b/.test(lower) && lower.includes("order")) return true;
+  return false;
+}
+
+export function hasActionableMutativeIntent(...texts: string[]): boolean {
+  return texts.some((text) => hasCustomerMutativeIntent(text));
+}
+
+export function planningIntentTexts(ctx: AgentContext, instruction: string): string[] {
+  const texts = [instruction];
+  for (let index = ctx.recentMessages.length - 1; index >= 0; index -= 1) {
+    const message = ctx.recentMessages[index];
+    if (message.senderType === "customer" && message.contentText?.trim()) {
+      texts.push(message.contentText);
+      break;
+    }
+  }
+  return texts;
+}
+
+const CONTRADICTION_PIVOT_RE = /\b(actually|wait|scratch|never mind|nevermind|on second thought)\b/i;
+
+export function hasContradictoryInstructionSignals(...texts: string[]): boolean {
+  const combined = texts.join(" ").toLowerCase();
+  const wantsCancel = /\bcancel(?:lation|led|ing)?\b/.test(combined);
+  const wantsRefund = /\brefund(?:ed|ing|s)?\b/.test(combined);
+  const wantsAddressChange = /\b(change|update|edit)\b/.test(combined)
+    && /\b(address|shipping)\b/.test(combined);
+  const wantsShipDespiteRefund = wantsRefund && /\bstill\s+(send|ship)\b/.test(combined);
+  const hasPivot = CONTRADICTION_PIVOT_RE.test(combined);
+
+  const distinctActions = [wantsCancel, wantsRefund, wantsAddressChange].filter(Boolean).length;
+  if (wantsShipDespiteRefund) return true;
+  if (distinctActions >= 2 && hasPivot) return true;
+  return false;
 }
 
 export function looksLikeOrderStatusIntent(instruction: string): boolean {

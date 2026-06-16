@@ -130,8 +130,16 @@ export function appendPlanningReadWarnings(input: {
   for (const id of readResultsMap.keys()) {
     const block = readBlocksById.get(id);
     if (!block) continue;
-    const isMissing = readStatusMap.get(id) === "not_found";
-    if (isMissing) {
+    const status = readStatusMap.get(id);
+    const isMissing = status === "not_found";
+    const isLookupError = status === "error"
+      && (block.name === "get_shopify_customer"
+        || block.name === "search_shopify_customers"
+        || block.name === "get_shopify_orders"
+        || block.name === "get_order_by_name");
+    if (isLookupError) {
+      warnings.push("Shopify lookup failed during planning - verify order/customer details before approving.");
+    } else if (isMissing) {
       if ((block.name === "get_shopify_customer" || block.name === "search_shopify_customers") && !hasShopifyCustomerWarning) {
         warnings.push("Couldn't find a Shopify customer - verify the correct account is linked before approving.");
         hasShopifyCustomerWarning = true;

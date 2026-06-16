@@ -21,6 +21,14 @@ import {
 import { derivePlanPath } from "./plan-path.js";
 import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, REPLAN_RETRY_PROMPT, replanNeedsSendReplyRetry, selectReplanRetryTools } from "./planner-tools.js";
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
+import {
+  ESCALATION_DRAFT_PROMPT,
+  replyDraftPrompt,
+  shouldForcePlanningEscalation,
+  shouldSkipReplyDraftForWatchTier,
+  stripNonEscalationTerminalTools,
+} from "./planner-safety.js";
+import type { ToolStatus } from "./tools/result.js";
 
 /** Phase-1 Haiku calls emit tool calls only (reads, send_reply, escalate). */
 export const PLAN_INITIAL_MAX_TOKENS = 1024;
@@ -44,6 +52,8 @@ export async function planAgent(
   const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
   const initialTools = selectInitialPlanningTools(tools);
   const resolvedSettings = resolveAgentSettings(settings);
+  let processedReadBlocks: Anthropic.ToolUseBlock[] = [];
+  const planningReadStatusMap = new Map<string, ToolStatus>();
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
@@ -181,7 +191,7 @@ export async function planAgent(
     );
 
     if (shouldReplan) {
-      const processedReadBlocks = [...readPartition.executable, ...readPartition.skipped];
+      processedReadBlocks = [...readPartition.executable, ...readPartition.skipped];
       const readResults = await executePlanningReadTools({
         ctx,
         settings,
@@ -190,6 +200,7 @@ export async function planAgent(
       });
       readToolCalls.push(...readResults.readToolCalls);
       for (const [id, content] of readResults.readResultsMap) readResultsMap.set(id, content);
+      for (const [id, status] of readResults.readStatusMap) planningReadStatusMap.set(id, status);
       appendPlanningReadWarnings({
         warnings,
         readBlocks: processedReadBlocks,
@@ -292,14 +303,90 @@ export async function planAgent(
     }
   }
 
+  // Safety backstop: contradictory instructions or failed Shopify lookups during
+  // planning must escalate instead of forcing a customer reply.
+  let ranEscalationDraft = false;
+  let ranReplyDraft = false;
+  let hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
+  let hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
+  const escalateTool = tools.find((t) => t.name === "escalate_to_human");
+  const sendReplyTool = tools.find((t) => t.name === "send_reply");
+
+  if (
+    !operatorMode
+    && escalateTool
+    && shouldForcePlanningEscalation({
+      ctx,
+      instruction,
+      rawToolCalls,
+      readBlocks: processedReadBlocks,
+      readStatusMap: planningReadStatusMap,
+      readResultsMap,
+      settings,
+      operatorMode,
+    })
+  ) {
+    rawToolCalls = stripNonEscalationTerminalTools(rawToolCalls);
+    hasSendReply = false;
+    hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
+
+    if (!hasEscalate) {
+      const lastMessage = planMessages[planMessages.length - 1];
+      const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
+        ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
+            (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+          )
+        : [];
+      const draftMessages: Anthropic.MessageParam[] = [...planMessages];
+      if (pendingToolUse.length > 0) {
+        draftMessages.push({
+          role: "user",
+          content: pendingToolUse.map((b) => ({
+            type: "tool_result" as const,
+            tool_use_id: b.id,
+            content: "Not executed during planning.",
+          })),
+        });
+      }
+      draftMessages.push({ role: "user", content: ESCALATION_DRAFT_PROMPT });
+
+      await enforceSpendCap(ctx.orgId, resolvedSettings);
+      const draftModel = pickModel("reply_draft");
+      const draftResponse = await anthropic.messages.create({
+        model: draftModel,
+        max_tokens: PLAN_REPLAN_MAX_TOKENS,
+        system: systemPromptBlocks,
+        messages: draftMessages,
+        tools: [escalateTool],
+        tool_choice: { type: "tool", name: "escalate_to_human" },
+      });
+      const draftBlocks = draftResponse.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "escalate_to_human",
+      );
+      const draftUsage = recordModelUsage(usageTotals, draftResponse);
+      await recordSpend(ctx.orgId, draftUsage, draftModel);
+      logger.info({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        phase: "escalation_draft",
+        model: draftModel,
+        stopReason: draftResponse.stop_reason,
+        tools: draftBlocks.map((b) => b.name),
+        usage: draftUsage,
+        usageTotals,
+      }, "[agent:plan] model call");
+      rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
+      ranEscalationDraft = true;
+      hasEscalate = true;
+    }
+  }
+
   // Terminal reply guarantee: on a customer channel every plan must end with a
   // send_reply (or an escalation). Phase 1 and replan can finish with a mutative
   // action and no reply, or with nothing at all — force one final send_reply.
-  let ranReplyDraft = false;
-  const hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
-  const hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
-  const sendReplyTool = tools.find((t) => t.name === "send_reply");
-  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool) {
+  hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
+  hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
+  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool && !shouldSkipReplyDraftForWatchTier(resolvedSettings, ctx)) {
     const lastMessage = planMessages[planMessages.length - 1];
     const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
       ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
@@ -317,7 +404,7 @@ export async function planAgent(
               content: "Not executed during planning.",
             })),
           }
-        : { role: "user", content: "Now call send_reply to respond to the customer." },
+        : { role: "user", content: replyDraftPrompt(resolvedSettings) },
     ];
 
     await enforceSpendCap(ctx.orgId, resolvedSettings);
@@ -349,6 +436,10 @@ export async function planAgent(
     ranReplyDraft = true;
   }
 
+  if (contextSkippedReadIds.size > 0) {
+    rawToolCalls = rawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
+  }
+
   const steps = buildPlanSteps(rawToolCalls);
   const planPath = derivePlanPath({ ranReplan });
 
@@ -358,6 +449,7 @@ export async function planAgent(
     durationMs: Date.now() - startedAt,
     planPath,
     replanRetried: ranReplanRetry,
+    escalationDrafted: ranEscalationDraft,
     replyDrafted: ranReplyDraft,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
