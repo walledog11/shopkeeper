@@ -138,13 +138,16 @@ export function DesktopTopBar({
   return (
     <header
       data-dashboard-desktop-header
-      className="hidden md:flex items-center gap-2 px-4 h-14 border-b border-border shrink-0 bg-sidebar"
+      className="relative hidden md:flex items-center gap-2 px-4 h-14 border-b border-border shrink-0 bg-sidebar"
     >
       <div className="flex items-center shrink-0">
         <Logo iconOnly />
       </div>
 
-      <nav aria-label="Dashboard" className="flex items-center gap-0.5 shrink-0 mx-auto">
+      <nav
+        aria-label="Dashboard"
+        className="flex items-center gap-0.5 shrink-0 mx-auto lg:absolute lg:left-1/2 lg:-translate-x-1/2"
+      >
         <Link
           href={inboxNavItem.href}
           onClick={(e) => handleNavClick(e, inboxIsActive)}
@@ -171,26 +174,26 @@ export function DesktopTopBar({
 
       </nav>
 
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex items-center gap-2 shrink-0 lg:ml-auto">
         <button
           type="button"
           onClick={() => openAgentPanel({ source: "command" })}
           title={`Chat with ${agentName}`}
-          className="flex items-center gap-2 p-1 lg:px-2.5 lg:py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 text-foreground transition-colors shrink-0"
+          className="flex items-center gap-2 p-1 xl:px-2.5 xl:py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 text-foreground transition-colors shrink-0"
         >
           <AgentAvatar agentName={agentName} size="sm" />
-          <span className="hidden lg:inline text-sm font-semibold truncate max-w-[120px]">{agentName}</span>
+          <span className="hidden xl:inline text-sm font-semibold truncate max-w-[120px]">{agentName}</span>
         </button>
 
         <button
           type="button"
           onClick={openCmd}
           aria-label="Search"
-          className="flex items-center justify-center lg:justify-start gap-2 h-9 w-9 lg:h-auto lg:w-44 xl:w-52 lg:px-3 lg:py-1.5 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
+          className="flex items-center justify-center xl:justify-start gap-2 h-9 w-9 xl:h-auto xl:w-44 2xl:w-52 xl:px-3 xl:py-1.5 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
         >
           <Search className="size-3.5 shrink-0" />
-          <span className="hidden lg:block flex-1 text-sm text-left truncate">Search</span>
-          <kbd className="hidden lg:inline text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
+          <span className="hidden xl:block flex-1 text-sm text-left truncate">Search</span>
+          <kbd className="hidden xl:inline text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
             ⌘K
           </kbd>
         </button>
