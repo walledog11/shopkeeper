@@ -17,6 +17,15 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 
 ## Status at a glance (2026-06-08)
 
+> **Update (2026-06-15) — the support eval gate is currently RED.** A re-run (`EVAL_REPEATS=1`) scored
+> **35/54 (64.8%)** and **failed the regression gate** (committed baseline **93.1%**, > 5 pt drop). The cause is the
+> *planner-optimization* work (`docs/planner-optimization-plan.md`), **not** the Track 1–4 orchestration — the
+> regression is concentrated in mutative/refund/tier/voice fixtures (phase-1 planning now includes `send_reply`, so
+> mutative tickets can skip the Sonnet replan; and the plan-time order-status fast path over-triggers). The "support
+> eval suite green" invariant cited throughout this doc (94.6% / 156–168, 2026-06-05/08) **no longer holds against
+> current `master`** until the planner regression is fixed or reverted. See the planner doc's 2026-06-15 status for
+> root causes and the fix.
+
 | Track | What | State | Next action |
 |---|---|---|---|
 | **0** | Decide how the worker runs an agent (A vs B) | ✅ decided → **B** (extract core, run in-process) | — |

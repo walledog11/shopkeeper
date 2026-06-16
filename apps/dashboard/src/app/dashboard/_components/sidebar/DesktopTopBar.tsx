@@ -138,13 +138,13 @@ export function DesktopTopBar({
   return (
     <header
       data-dashboard-desktop-header
-      className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 px-4 h-14 border-b border-border shrink-0 bg-sidebar min-w-0"
+      className="hidden md:flex items-center gap-2 px-4 h-14 border-b border-border shrink-0 bg-sidebar"
     >
-      <div className="flex items-center min-w-0">
+      <div className="flex items-center shrink-0">
         <Logo iconOnly />
       </div>
 
-      <nav aria-label="Dashboard" className="flex items-center gap-0.5 justify-self-center">
+      <nav aria-label="Dashboard" className="flex items-center gap-0.5 shrink-0 mx-auto">
         <Link
           href={inboxNavItem.href}
           onClick={(e) => handleNavClick(e, inboxIsActive)}
@@ -171,25 +171,26 @@ export function DesktopTopBar({
 
       </nav>
 
-      <div className="flex items-center gap-2 justify-self-end min-w-0">
+      <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
           onClick={() => openAgentPanel({ source: "command" })}
           title={`Chat with ${agentName}`}
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 text-foreground transition-colors shrink-0"
+          className="flex items-center gap-2 p-1 lg:px-2.5 lg:py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 text-foreground transition-colors shrink-0"
         >
           <AgentAvatar agentName={agentName} size="sm" />
-          <span className="text-sm font-semibold truncate max-w-[120px]">{agentName}</span>
+          <span className="hidden lg:inline text-sm font-semibold truncate max-w-[120px]">{agentName}</span>
         </button>
 
         <button
           type="button"
           onClick={openCmd}
-          className="flex items-center gap-2 w-44 lg:w-52 px-3 py-1.5 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none"
+          aria-label="Search"
+          className="flex items-center justify-center lg:justify-start gap-2 h-9 w-9 lg:h-auto lg:w-44 xl:w-52 lg:px-3 lg:py-1.5 rounded-md border border-border bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors outline-none shrink-0"
         >
           <Search className="size-3.5 shrink-0" />
-          <span className="flex-1 text-sm text-left truncate">Search</span>
-          <kbd className="text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
+          <span className="hidden lg:block flex-1 text-sm text-left truncate">Search</span>
+          <kbd className="hidden lg:inline text-[10px] font-semibold bg-secondary px-1.5 py-0.5 rounded text-muted-foreground leading-none">
             ⌘K
           </kbd>
         </button>

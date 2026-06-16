@@ -1,5 +1,34 @@
 # Planner optimization plan
 
+> **Status (2026-06-15) — eval gate RED. Do not treat the implemented phases as safe.**
+> A confirming `EVAL_REPEATS=1` gate run scored **35/54 (64.8%)** aggregate — **19 of 56 fixtures failed** — and
+> **threw the regression gate** (committed baseline **93.1%**, > 5 pt drop). Failures concentrate in the mutative
+> and voice paths: `refund` 2/6, `tier` 6/10, `multi-step` 1/3, `address-change` 1/3, `cancel` 1/2, `brand-voice`
+> 1/2, `sample-reply` 0/1, `no-tool` 0/1. Clean: `kb`, `operator`, `prompt-injection`, `quick-reply` (all 100%),
+> `order-status` 4/5.
+>
+> **Root causes (in committed code, from the gate output + a code read):**
+> 1. **Phase-1 tool set still includes `send_reply`** (`planner-tools.ts:18` `selectInitialPlanningTools`). On a
+>    mutative ticket whose order is already in `recentOrders`, phase 1 (Haiku) can emit a bare `send_reply` with
+>    **no read**, so `readBlocks.length === 0` and the Sonnet replan — the refund/cancel judgment — is **skipped
+>    entirely** (`planner.ts:119`). The `create_refund` / `cancel_order` never happens (e.g.
+>    `tier-broad-refund-under-250`, `tier-trusted-refund-under-cap`, `refund-under-cap` all produced `[send_reply]`
+>    only). Phase 1 must be **read + escalate only** (no `send_reply`), as the Phase 2 spec said.
+> 2. **The plan-time order-status fast path (Phase 1 below) is live and over-triggers.** `tryPlanOrderStatusFastPath`
+>    fires on any order-status-looking thread with an order in context and returns the templated
+>    `summarizeLatestOrder` string, intercepting threads that need a real brand-voice/sample reply — e.g.
+>    `sample-reply-shipping-delay-imitation` got the data-dump string instead of the 'Hang tight' sample imitation.
+>    (Safety: these plans **are** forced to `needs_review` — `plan-preview.ts:117` — so the templated reply is **not**
+>    auto-sent; the failures are quality/correctness, not an auto-send breach.)
+> 3. **Replan still drops `send_reply` on some mutative plans** (`tier-full-cancel-auto`,
+>    `tier-full-refund-in-policy-auto` fired the action but no reply → classified `needs_review` instead of
+>    `auto_execute`); the Phase-4 send_reply retry (`replanNeedsSendReplyRetry`) is not catching these.
+>
+> **Direction of failure is the safe one** (per product principle #3): the agent under-acts / over-reviews rather
+> than taking a wrong mutative action, and no templated reply auto-sends. But it guts the auto-execute value and
+> brand voice. **Fix or revert the phase-1 `send_reply` inclusion and the fast-path trigger before relying on these
+> phases.** Phase statuses below are annotated accordingly.
+
 Reduce inbound ticket → operator-notification latency by cutting redundant LLM calls, unnecessary Shopify reads, and sequential pipeline work in `planAgent` and the upstream `ai-summary` worker.
 
 ## Goal
@@ -79,7 +108,7 @@ Derive from which phases ran and whether a fast path short-circuited. Use produc
 
 ---
 
-### Phase 1 — Plan-time order-status fast path (P2 — gated; see constraint) [COMPLETE]
+### Phase 1 — Plan-time order-status fast path (P2 — gated; see constraint) [COMPLETE — OVER-TRIGGERING, regresses brand-voice/sample replies; see 2026-06-15 status]
 
 `run.ts` has `tryRunOperatorOrderStatusFastPath` for Telegram operator queries. **No equivalent exists at plan time** for customer tickets.
 
@@ -101,7 +130,7 @@ Derive from which phases ran and whether a fast path short-circuited. Use produc
 
 ---
 
-### Phase 2 — Phase-1 read-only tool filter (P0 — do first after telemetry) [COMPLETE]
+### Phase 2 — Phase-1 read-only tool filter (P0 — do first after telemetry) [COMPLETE — DEFECT: phase-1 set still includes `send_reply`, lets mutative tickets skip replan; see 2026-06-15 status]
 
 This is the one **correctness** fix in the plan, not just a perf win: it closes the double-refund exposure in "Structural issue" above. Promote ahead of Phase 1.
 

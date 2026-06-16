@@ -168,9 +168,7 @@ export function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAtten
           className={`inline-flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-base font-semibold transition-colors disabled:opacity-40 ${
             confirming
               ? "bg-amber-600 hover:bg-amber-700 text-white"
-              : isConsequential
-                ? "bg-foreground text-background hover:bg-foreground/90 ring-2 ring-amber-500/70 ring-offset-2 ring-offset-card"
-                : "bg-foreground text-background hover:bg-foreground/90"
+              : "bg-foreground text-background hover:bg-foreground/90"
           }`}
         >
           {isApproving && <Loader2 aria-hidden className="size-4 animate-spin" />}
