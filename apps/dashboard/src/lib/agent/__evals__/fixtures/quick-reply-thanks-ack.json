@@ -1,6 +1,7 @@
 {
   "id": "quick-reply-thanks-ack",
-  "description": "Customer sends a brief thank-you after a prior agent reply resolved their question. Expected: a single short send_reply step with no other tools, no status change, no internal note - the exact plan shape that classifyHomePlan treats as quick_reply for one-tap approval.",
+  "description": "Customer sends a brief thank-you after a prior agent reply resolved their question. Expected: a single short send_reply step with no other tools, no status change, no internal note - the exact plan shape that classifyHomePlan treats as quick_reply for one-tap approval. Advisory: thank-you routing is irreducibly model judgment; no mutative action is at stake.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

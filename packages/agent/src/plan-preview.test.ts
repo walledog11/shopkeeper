@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety.js"
 import { classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 
@@ -51,6 +52,21 @@ function refundPlan(refundOverrides: Partial<RawToolCall> = {}): AgentPlan {
 
 function settings(overrides: Partial<OrgSettings>): Partial<OrgSettings> {
   return overrides
+}
+
+const hollowRefundReplyCall: RawToolCall = {
+  id: "send_1",
+  name: "send_reply",
+  input: { text: "I've issued a refund for order #4003." },
+}
+
+function hollowRefundReplyPlan(overrides: Partial<AgentPlan> = {}): AgentPlan {
+  return plan({
+    instruction: "Refund order",
+    rawToolCalls: [hollowRefundReplyCall],
+    warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+    ...overrides,
+  })
 }
 
 describe("classifyHomePlan — info-only plans (existing behavior, default tier)", () => {
@@ -164,6 +180,16 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(classifyHomePlan(plan(), settings({ autonomyTier: "guarded" })).kind).toBe("quick_reply")
     })
 
+    it("classifies a reply-only refund plan as needs_review, not quick_reply", () => {
+      const result = classifyHomePlan(
+        hollowRefundReplyPlan(),
+        settings({ autonomyTier: "guarded", maxRefundAmount: 100 }),
+      )
+      expect(result.kind).toBe("needs_review")
+      expect(result.replyText).toBeNull()
+      expect(result.sendReplyToolCall).toBeNull()
+    })
+
     it("classifies a mutative plan as needs_review even when under cap", () => {
       const result = classifyHomePlan(refundPlan(), settings({ autonomyTier: "guarded", maxRefundAmount: 100 }))
       expect(result.kind).toBe("needs_review")
@@ -183,6 +209,30 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(result.kind).toBe("auto_execute")
       expect(result.replyText).toBe("Yes, we ship to the UK.")
       expect(result.sendReplyToolCall).toEqual(sendReplyCall)
+    })
+
+    it("classifies a reply-only refund plan as needs_review, not auto_execute", () => {
+      const result = classifyHomePlan(
+        hollowRefundReplyPlan(),
+        settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
+      )
+      expect(result.kind).toBe("needs_review")
+      expect(result.kind).not.toBe("auto_execute")
+      expect(result.replyText).toBeNull()
+      expect(result.sendReplyToolCall).toBeNull()
+    })
+
+    it("classifies a stripped hollow-refund plan with only the guard warning as needs_review", () => {
+      const result = classifyHomePlan(
+        {
+          instruction: "Refund order",
+          steps: [],
+          rawToolCalls: [],
+          warnings: [MUTATIVE_INTENT_NO_ACTION_WARNING],
+        },
+        settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
+      )
+      expect(result.kind).toBe("needs_review")
     })
 
     it("downgrades a refund over the per-call cap to needs_review", () => {
@@ -308,5 +358,13 @@ describe("planWarningTiers", () => {
 
   it("treats policy warnings as blocking", () => {
     expect(isPlanWarningBlocking("Policy conflict", plan({ warnings: ["Policy conflict"] }))).toBe(true)
+  })
+
+  it("treats mutative-intent guard warnings as blocking", () => {
+    const warnedPlan = hollowRefundReplyPlan()
+    const tiers = planWarningTiers(warnedPlan)
+    expect(tiers.blocking).toEqual([MUTATIVE_INTENT_NO_ACTION_WARNING])
+    expect(tiers.informational).toEqual([])
+    expect(isPlanWarningBlocking(MUTATIVE_INTENT_NO_ACTION_WARNING, warnedPlan)).toBe(true)
   })
 })

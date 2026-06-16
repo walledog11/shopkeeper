@@ -16,7 +16,7 @@
     "test:unit": "node ../../scripts/with-test-env.mjs vitest run --config vitest.unit.config.ts",
     "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts",
     "test:evals": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/lib/agent/__evals__",
-    "test:evals:baseline": "UPDATE_EVAL_BASELINE=1 node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/lib/agent/__evals__",
+    "test:evals:baseline": "EVAL_REPEATS=3 UPDATE_EVAL_BASELINE=1 node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts src/lib/agent/__evals__",
     "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.integration.config.ts",
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts"
   },

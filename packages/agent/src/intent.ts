@@ -140,6 +140,22 @@ export function hasForwardedInjectionRefundSignal(...texts: string[]): boolean {
   );
 }
 
+export function hasOutOfScopeCommercialRequestSignals(...texts: string[]): boolean {
+  for (const text of texts) {
+    const lower = text.toLowerCase();
+    if (/\bwholesale\b/.test(lower)) return true;
+    if (/\bbulk pricing\b/.test(lower)) return true;
+    if (/\bb2b\b/.test(lower)) return true;
+    if (/\bquote\b/.test(lower) && (/\bunits?\b/.test(lower) || /\bpricing\b/.test(lower))) {
+      return true;
+    }
+    if (/\b\d{2,}\s+units?\b/.test(lower) && /\b(pricing|quote|cost|price)\b/.test(lower)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function hasContradictoryInstructionSignals(...texts: string[]): boolean {
   const combined = texts.join(" ").toLowerCase();
   const wantsCancel = /\bcancel(?:lation|led|ing)?\b/.test(combined);

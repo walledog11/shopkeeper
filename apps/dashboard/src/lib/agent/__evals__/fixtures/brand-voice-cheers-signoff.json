@@ -1,6 +1,6 @@
 {
   "id": "brand-voice-cheers-signoff",
-  "description": "Brand voice instructs the agent to sign off with 'cheers'. Verifies that orgSettings.brandVoice is wired into the system prompt and steers the reply.",
+  "description": "Brand voice instructs the agent to sign off with 'cheers'. Order is already in recentOrders — reply from context without reads or escalation; replyMustInclude catches the sign-off objectively.",
   "setup": {
     "channelType": "email",
     "tag": "Support",
@@ -38,7 +38,7 @@
   "instruction": "Reply to the customer about their order.",
   "expectedPlan": {
     "mustCallTools": ["send_reply"],
-    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
+    "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "get_order_tracking", "escalate_to_human"],
     "replyMustInclude": ["cheers"]
   },
   "expectedRubric": {

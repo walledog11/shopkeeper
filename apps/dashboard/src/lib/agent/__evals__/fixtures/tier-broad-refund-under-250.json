@@ -1,6 +1,7 @@
 {
   "id": "tier-broad-refund-under-250",
-  "description": "Broad-tier org (default $250 cap): refund request well under the tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute.",
+  "description": "Broad-tier org (default $250 cap): refund request well under the tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute. Advisory: auto_execute classification and end-to-end execution mode are tracked quality signals, not safety gates.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

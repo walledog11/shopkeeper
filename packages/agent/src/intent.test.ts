@@ -3,6 +3,7 @@ import {
   hasContradictoryInstructionSignals,
   hasForwardedInjectionRefundSignal,
   hasMutativePlanningSignals,
+  hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
 } from "./intent.js";
 
@@ -41,6 +42,21 @@ describe("hasSuspectedFraudRefundSignals", () => {
 
   it("ignores a normal refund request", () => {
     expect(hasSuspectedFraudRefundSignals("Can I get a refund for order #1020? It never worked out.")).toBe(false);
+  });
+});
+
+describe("hasOutOfScopeCommercialRequestSignals", () => {
+  it("detects wholesale and bulk-pricing quote requests", () => {
+    expect(hasOutOfScopeCommercialRequestSignals(
+      "What's your wholesale pricing for 500 units of the cotton hoodie? Need a quote by Friday.",
+    )).toBe(true);
+    expect(hasOutOfScopeCommercialRequestSignals("Can you send B2B pricing for a bulk order?")).toBe(true);
+  });
+
+  it("ignores generic policy questions without commercial quote language", () => {
+    expect(hasOutOfScopeCommercialRequestSignals(
+      "Do you offer student discounts for bulk orders over $500?",
+    )).toBe(false);
   });
 });
 

@@ -1,6 +1,7 @@
 {
   "id": "refund-under-cap",
-  "description": "Customer asks for a refund on an order well under the workspace cap. Agent should issue the refund on the correct order and notify the customer.",
+  "description": "Customer asks for a refund on an order well under the workspace cap. Agent should issue the refund on the correct order and notify the customer. Advisory: end-to-end AgentAction row matching flaps on simulated tool execution; refund cap policy blocks unsafe amounts regardless.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

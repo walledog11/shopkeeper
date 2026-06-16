@@ -173,3 +173,53 @@ export function applySkippedPlanningReadResults(input: {
     input.readStatusMap.set(block.id, "ok");
   }
 }
+
+/** Synthetic read context for mutative replan when phase 1 emitted no reads. */
+export function synthesizeMutativeReplanContext(ctx: AgentContext): string {
+  const syntheticBlock = (
+    id: string,
+    name: string,
+    input: Record<string, unknown>,
+  ): Anthropic.ToolUseBlock => ({ type: "tool_use", id, name, input } as Anthropic.ToolUseBlock);
+
+  const parts: string[] = [];
+
+  if (ctx.recentOrders.length > 0) {
+    parts.push(
+      `Customer orders already in context (get_shopify_orders):\n${
+        synthesizeSkippedPlanningReadResult(
+          syntheticBlock("synthetic_orders", "get_shopify_orders", {}),
+          ctx,
+        )
+      }`,
+    );
+  }
+
+  if (ctx.thread.shopifyCustomerId) {
+    parts.push(
+      `Linked Shopify customer (get_shopify_customer):\n${
+        synthesizeSkippedPlanningReadResult(
+          syntheticBlock("synthetic_customer", "get_shopify_customer", {}),
+          ctx,
+        )
+      }`,
+    );
+  }
+
+  if (ctx.kbArticles.length > 0) {
+    parts.push(
+      `Pre-loaded knowledge base articles (search_kb):\n${
+        synthesizeSkippedPlanningReadResult(
+          syntheticBlock("synthetic_kb", "search_kb", { query: "" }),
+          ctx,
+        )
+      }`,
+    );
+  }
+
+  if (parts.length === 0) {
+    return "No order, customer, or KB data was pre-loaded in context.";
+  }
+
+  return `Planning context (equivalent to skipped read tools):\n\n${parts.join("\n\n")}`;
+}

@@ -18,14 +18,18 @@ import {
   executePlanningReadTools,
   partitionPlanningReadBlocks,
 } from "./planner-read-tools.js";
+import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
 import { derivePlanPath } from "./plan-path.js";
 import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, REPLAN_RETRY_PROMPT, replanNeedsSendReplyRetry, selectReplanRetryTools } from "./planner-tools.js";
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 import {
+  applyMutativeIntentNoActionGuard,
   ESCALATION_DRAFT_PROMPT,
   replyDraftPrompt,
   sendReplyHasText,
+  shouldForceMutativeReplan,
   shouldForcePlanningEscalation,
+  shouldSkipReplyDraftForMutativeIntent,
   shouldSkipReplyDraftForWatchTier,
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
@@ -37,6 +41,111 @@ import type { ToolStatus } from "./tools/result.js";
 export const PLAN_INITIAL_MAX_TOKENS = 1024;
 /** Replan may include send_reply body text alongside mutative tools. */
 export const PLAN_REPLAN_MAX_TOKENS = 2048;
+
+async function runMutativeReplan(input: {
+  ctx: AgentContext;
+  resolvedSettings: ReturnType<typeof resolveAgentSettings>;
+  systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
+  planMessages: Anthropic.MessageParam[];
+  phase1RawToolCalls: RawToolCall[];
+  tools: Anthropic.Tool[];
+  operatorMode: boolean;
+  usageTotals: ReturnType<typeof createModelUsageMetrics>;
+  contextSkippedReadIds: Set<string>;
+  initialPhase: "after_read_results" | "mutative_context";
+}): Promise<{
+  rawToolCalls: RawToolCall[];
+  planMessages: Anthropic.MessageParam[];
+  ranReplanRetry: boolean;
+}> {
+  const {
+    ctx,
+    resolvedSettings,
+    systemPromptBlocks,
+    tools,
+    operatorMode,
+    usageTotals,
+    contextSkippedReadIds,
+  } = input;
+  let planMessages = input.planMessages;
+  const activeRawToolCalls = input.phase1RawToolCalls;
+
+  await enforceSpendCap(ctx.orgId, resolvedSettings);
+  const replanModel = pickModel("plan_replan");
+  const sendReplyTool = tools.find((tool) => tool.name === "send_reply");
+  const runReplan = async (
+    messages: Anthropic.MessageParam[],
+    replanTools: Anthropic.Tool[],
+    phase: "after_read_results" | "replan_retry" | "mutative_context",
+  ) => {
+    const response = await anthropic.messages.create({
+      model: replanModel,
+      max_tokens: PLAN_REPLAN_MAX_TOKENS,
+      system: systemPromptBlocks,
+      messages,
+      tools: replanTools,
+    });
+    const toolBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+    const usage = recordModelUsage(usageTotals, response);
+    await recordSpend(ctx.orgId, usage, replanModel);
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      phase,
+      model: replanModel,
+      stopReason: response.stop_reason,
+      tools: toolBlocks.map((block) => block.name),
+      usage,
+      usageTotals,
+    }, "[agent:plan] model call");
+    return { response, toolBlocks };
+  };
+
+  let ranReplanRetry = false;
+  let { response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
+    planMessages,
+    tools,
+    input.initialPhase,
+  );
+  planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
+
+  if (replanNeedsSendReplyRetry(replanBlocks, {
+    operatorMode,
+    sendReplyAvailable: Boolean(sendReplyTool),
+  })) {
+    planMessages = [
+      ...planMessages,
+      {
+        role: "user",
+        content: [
+          ...replanBlocks.map((block) => ({
+            type: "tool_result" as const,
+            tool_use_id: block.id,
+            content: "Not executed during planning.",
+          })),
+          { type: "text" as const, text: REPLAN_RETRY_PROMPT },
+        ],
+      },
+    ];
+    await enforceSpendCap(ctx.orgId, resolvedSettings);
+    const retryTools = selectReplanRetryTools(tools, replanBlocks);
+    ({ response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
+      planMessages,
+      retryTools,
+      "replan_retry",
+    ));
+    planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
+    ranReplanRetry = true;
+  }
+
+  const filteredPhase1Calls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
+  const rawToolCalls = mergeReplanToolCalls(
+    filteredPhase1Calls,
+    replanBlocks.map((block) => ({ id: block.id, name: block.name, input: block.input })),
+  );
+
+  return { rawToolCalls, planMessages, ranReplanRetry };
+}
 
 export async function planAgent(
   ctx: AgentContext,
@@ -227,83 +336,56 @@ export async function planAgent(
           content: REPLAN_INCLUDE_REPLY_PROMPT,
         },
       ];
-      rawToolCalls = activeRawToolCalls;
 
-      await enforceSpendCap(ctx.orgId, resolvedSettings);
-      // Re-plan: the model now has the read results and decides the mutative
-      // action (refund/cancel/edit) or escalation. This is the judgment call, so
-      // it runs on Sonnet.
-      const replanModel = pickModel("plan_replan");
-      const sendReplyTool = tools.find(t => t.name === "send_reply");
-      const runReplan = async (
-        messages: Anthropic.MessageParam[],
-        replanTools: Anthropic.Tool[],
-        phase: "after_read_results" | "replan_retry",
-      ) => {
-        const response = await anthropic.messages.create({
-          model: replanModel,
-          max_tokens: PLAN_REPLAN_MAX_TOKENS,
-          system: systemPromptBlocks,
-          messages,
-          tools: replanTools,
-        });
-        const toolBlocks = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-        const usage = recordModelUsage(usageTotals, response);
-        await recordSpend(ctx.orgId, usage, replanModel);
-        logger.info({
-          orgId: ctx.orgId,
-          threadId: ctx.thread.id,
-          phase,
-          model: replanModel,
-          stopReason: response.stop_reason,
-          tools: toolBlocks.map(b => b.name),
-          usage,
-          usageTotals,
-        }, "[agent:plan] model call");
-        return { response, toolBlocks };
-      };
-
-      let { response: replanResponse, toolBlocks: replanBlocks } = await runReplan(planMessages, tools, "after_read_results");
-      planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
-
-      if (replanNeedsSendReplyRetry(replanBlocks, {
+      const replanResult = await runMutativeReplan({
+        ctx,
+        resolvedSettings,
+        systemPromptBlocks,
+        planMessages,
+        phase1RawToolCalls: activeRawToolCalls,
+        tools,
         operatorMode,
-        sendReplyAvailable: Boolean(sendReplyTool),
-      })) {
-        planMessages = [
-          ...planMessages,
-          {
-            role: "user",
-            content: [
-              ...replanBlocks.map((block) => ({
-                type: "tool_result" as const,
-                tool_use_id: block.id,
-                content: "Not executed during planning.",
-              })),
-              { type: "text" as const, text: REPLAN_RETRY_PROMPT },
-            ],
-          },
-        ];
-        await enforceSpendCap(ctx.orgId, resolvedSettings);
-        const retryTools = selectReplanRetryTools(tools, replanBlocks);
-        ({ response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
-          planMessages,
-          retryTools,
-          "replan_retry",
-        ));
-        planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
-        ranReplanRetry = true;
-      }
-
-      const filteredPhase1Calls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
-      rawToolCalls = mergeReplanToolCalls(
-        filteredPhase1Calls,
-        replanBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })),
-      );
+        usageTotals,
+        contextSkippedReadIds,
+        initialPhase: "after_read_results",
+      });
+      planMessages = replanResult.planMessages;
+      rawToolCalls = replanResult.rawToolCalls;
+      ranReplanRetry = replanResult.ranReplanRetry;
       ranReplan = true;
     } else {
       rawToolCalls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
     }
+  }
+
+  if (shouldForceMutativeReplan({ ctx, rawToolCalls, tools, operatorMode, ranReplan })) {
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+    }, "[agent:plan] mutative intent without action tools — running context replan");
+
+    planMessages = [
+      ...planMessages,
+      { role: "user", content: synthesizeMutativeReplanContext(ctx) },
+      { role: "user", content: REPLAN_INCLUDE_REPLY_PROMPT },
+    ];
+
+    const replanResult = await runMutativeReplan({
+      ctx,
+      resolvedSettings,
+      systemPromptBlocks,
+      planMessages,
+      phase1RawToolCalls: rawToolCalls,
+      tools,
+      operatorMode,
+      usageTotals,
+      contextSkippedReadIds,
+      initialPhase: "mutative_context",
+    });
+    planMessages = replanResult.planMessages;
+    rawToolCalls = replanResult.rawToolCalls;
+    ranReplanRetry = replanResult.ranReplanRetry;
+    ranReplan = true;
   }
 
   rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, rawToolCalls);
@@ -390,9 +472,17 @@ export async function planAgent(
   // Terminal reply guarantee: on a customer channel every plan must end with a
   // send_reply (or an escalation). Phase 1 and replan can finish with a mutative
   // action and no reply, or with nothing at all — force one final send_reply.
+  rawToolCalls = applyMutativeIntentNoActionGuard(ctx, rawToolCalls, warnings);
   hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
   hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
-  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool && !shouldSkipReplyDraftForWatchTier(resolvedSettings, ctx)) {
+  if (
+    !operatorMode
+    && !hasSendReply
+    && !hasEscalate
+    && sendReplyTool
+    && !shouldSkipReplyDraftForWatchTier(resolvedSettings, ctx)
+    && !shouldSkipReplyDraftForMutativeIntent(ctx, rawToolCalls)
+  ) {
     const lastMessage = planMessages[planMessages.length - 1];
     const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
       ? (lastMessage.content as Anthropic.ContentBlock[]).filter(

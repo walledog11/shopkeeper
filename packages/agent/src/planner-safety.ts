@@ -7,6 +7,7 @@ import {
   hasContradictoryInstructionSignals,
   hasActionableMutativeIntent,
   hasForwardedInjectionRefundSignal,
+  hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
   ORDER_REFERENCE_RE,
   planningIntentTexts,
@@ -156,6 +157,7 @@ export function shouldForcePlanningEscalation(input: {
     .map((message) => message.contentText as string);
 
   if (hasSuspectedFraudRefundSignals(...customerTexts)) return true;
+  if (hasOutOfScopeCommercialRequestSignals(...customerTexts)) return true;
   if (hasForwardedInjectionRefundSignal(...intentTexts)) return true;
   if (hasContradictoryInstructionSignals(...intentTexts)) return true;
   if (shouldEscalateFulfilledCancelRequest(input.ctx, input.instruction)) return true;
@@ -178,16 +180,70 @@ export function shouldForcePlanningEscalation(input: {
   return false;
 }
 
+function customerMessageTexts(ctx: AgentContext): string[] {
+  return ctx.recentMessages
+    .filter((message) => message.senderType === "customer" && message.contentText?.trim())
+    .map((message) => message.contentText as string);
+}
+
+function planHasActionTool(rawToolCalls: readonly RawToolCall[]): boolean {
+  return rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action");
+}
+
+function planHasEscalation(rawToolCalls: readonly RawToolCall[]): boolean {
+  return rawToolCalls.some((toolCall) => toolCall.name === "escalate_to_human");
+}
+
+function toolsIncludeActionCategory(tools: readonly { name: string }[]): boolean {
+  return tools.some((tool) => TOOL_CATEGORIES[tool.name] === "action");
+}
+
+export const MUTATIVE_INTENT_NO_ACTION_WARNING =
+  "Customer requested a refund/cancel but no action was planned — review before sending.";
+
+export function shouldForceMutativeReplan(input: {
+  ctx: AgentContext;
+  rawToolCalls: readonly RawToolCall[];
+  tools: readonly { name: string }[];
+  operatorMode: boolean;
+  ranReplan: boolean;
+}): boolean {
+  if (input.operatorMode || input.ranReplan) return false;
+  if (!hasActionableMutativeIntent(...customerMessageTexts(input.ctx))) return false;
+  if (planHasActionTool(input.rawToolCalls)) return false;
+  if (planHasEscalation(input.rawToolCalls)) return false;
+  return toolsIncludeActionCategory(input.tools);
+}
+
+export function shouldSkipReplyDraftForMutativeIntent(
+  ctx: AgentContext,
+  rawToolCalls: readonly RawToolCall[],
+): boolean {
+  if (!hasActionableMutativeIntent(...customerMessageTexts(ctx))) return false;
+  if (planHasActionTool(rawToolCalls)) return false;
+  if (planHasEscalation(rawToolCalls)) return false;
+  return true;
+}
+
+export function applyMutativeIntentNoActionGuard(
+  ctx: AgentContext,
+  rawToolCalls: RawToolCall[],
+  warnings: string[],
+): RawToolCall[] {
+  if (!shouldSkipReplyDraftForMutativeIntent(ctx, rawToolCalls)) return rawToolCalls;
+  if (!warnings.includes(MUTATIVE_INTENT_NO_ACTION_WARNING)) {
+    warnings.push(MUTATIVE_INTENT_NO_ACTION_WARNING);
+  }
+  return rawToolCalls.filter((toolCall) => toolCall.name !== "send_reply");
+}
+
 export function shouldSkipReplyDraftForWatchTier(
   settings: OrgSettings | undefined,
   ctx: AgentContext,
 ): boolean {
   const resolvedSettings = resolveAgentSettings(settings);
   if (resolvedSettings.autonomyTier !== "watch") return false;
-  const customerTexts = ctx.recentMessages
-    .filter((message) => message.senderType === "customer" && message.contentText?.trim())
-    .map((message) => message.contentText as string);
-  return hasActionableMutativeIntent(...customerTexts);
+  return hasActionableMutativeIntent(...customerMessageTexts(ctx));
 }
 
 export function shouldEscalateFulfilledCancelRequest(

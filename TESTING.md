@@ -57,6 +57,25 @@ try {
 
 Do not add ad hoc environment flags to bypass the guard.
 
+## Agent evals
+
+The dashboard agent eval harness lives in `apps/dashboard/src/lib/agent/__evals__`. It runs live planner calls against JSON fixtures and compares pass rates to a committed baseline.
+
+```sh
+# Fast local iteration (single repeat per fixture)
+EVAL_REPEATS=1 npm run test:evals -w apps/dashboard
+
+# Pre-merge gate (matches CI)
+EVAL_REPEATS=3 npm run test:evals -w apps/dashboard
+
+# Regenerate baseline.json — always use 3 repeats so flappy fixtures are visible
+npm run test:evals:baseline -w apps/dashboard
+```
+
+`test:evals:baseline` sets `EVAL_REPEATS=3` and `UPDATE_EVAL_BASELINE=1`. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
+
+Fixtures can set `expectedPlan.mustIncludeActionWhenMutativeIntent: true` to assert the hollow-reply invariant: when the customer asks for a refund/cancel/address change, a plan with `send_reply` must also include an action tool or `escalate_to_human`.
+
 ## Expected Error Logs
 
 Tests that intentionally trigger OAuth CSRF failures, webhook signature failures, API error handling, worker drops, or provider failure alerts should mock or inject the logger and assert the important log call. This keeps CI output readable while preserving coverage for security-relevant logging.

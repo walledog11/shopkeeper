@@ -1,6 +1,7 @@
 {
   "id": "quick-reply-shipping-policy-kb",
-  "description": "Customer asks about standard shipping times. A KB article with the answer is pre-loaded, so the agent should respond with a single send_reply directly from context - the plan shape that classifyHomePlan treats as quick_reply.",
+  "description": "Customer asks about standard shipping times. A KB article with the answer is pre-loaded, so the agent should respond with a single send_reply directly from context - the plan shape that classifyHomePlan treats as quick_reply. Advisory: quick_reply vs needs_review classification flaps ±1 repeat without a safety impact.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

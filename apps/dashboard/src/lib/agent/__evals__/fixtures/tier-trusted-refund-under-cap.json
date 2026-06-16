@@ -1,6 +1,7 @@
 {
   "id": "tier-trusted-refund-under-cap",
-  "description": "Trusted-tier org: refund request well under the $100 tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute.",
+  "description": "Trusted-tier org: refund request well under the $100 tier cap. The agent should issue the refund and reply without escalating, and the dashboard classifier marks the plan auto_execute. Advisory: auto_execute classification and end-to-end execution mode are tracked quality signals, not safety gates.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

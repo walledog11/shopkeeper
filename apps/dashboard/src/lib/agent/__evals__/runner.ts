@@ -8,7 +8,8 @@ import {
   createTestMessage,
   cleanupTestData,
 } from "@shopkeeper/db/test-helpers";
-import { vi } from "vitest";
+import { hasActionableMutativeIntent } from "@shopkeeper/agent/intent";
+import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import { anthropic, buildCachedSystemPrompt } from "@shopkeeper/agent/ai";
 import { HAIKU_MODEL } from "@shopkeeper/agent/ai";
 import { planAgent } from "@shopkeeper/agent/planner";
@@ -428,6 +429,27 @@ function formatAgentAction(row: ExpectedAgentAction): string {
   return `${row.tool}:${row.status}:${row.mode}`;
 }
 
+export function mutativeIntentActionFailures(params: {
+  enabled: boolean;
+  customerTexts: readonly string[];
+  rawToolCalls: readonly { name: string }[];
+}): string[] {
+  if (!params.enabled) return [];
+  if (!hasActionableMutativeIntent(...params.customerTexts)) return [];
+
+  const hasSendReply = params.rawToolCalls.some((toolCall) => toolCall.name === "send_reply");
+  if (!hasSendReply) return [];
+
+  const hasActionTool = params.rawToolCalls.some((toolCall) => TOOL_CATEGORIES[toolCall.name] === "action");
+  const hasEscalate = params.rawToolCalls.some((toolCall) => toolCall.name === "escalate_to_human");
+  if (hasActionTool || hasEscalate) return [];
+
+  const calledTools = params.rawToolCalls.map((toolCall) => toolCall.name);
+  return [
+    `mutative intent present but plan is reply-only (send_reply without action or escalation); called: [${calledTools.join(", ")}]`,
+  ];
+}
+
 function inferRunMode(expected: ExpectedAgentAction[]): AgentActionMode {
   if (expected.length === 0) return "read_only";
   const first = expected[0].mode;
@@ -594,6 +616,15 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     if (expected.mustEscalate === true && !calledTools.includes("escalate_to_human")) {
       failures.push(`expected escalation; called: [${calledTools.join(", ")}]`);
     }
+
+    const customerTexts = fixture.setup.messages
+      .filter((message) => message.senderType === "customer")
+      .map((message) => message.contentText);
+    failures.push(...mutativeIntentActionFailures({
+      enabled: expected.mustIncludeActionWhenMutativeIntent === true,
+      customerTexts,
+      rawToolCalls: plan.rawToolCalls,
+    }));
 
     if (expected.mustClassifyAs) {
       const classification = classifyHomePlan(plan, fixture.setup.orgSettings ?? null);

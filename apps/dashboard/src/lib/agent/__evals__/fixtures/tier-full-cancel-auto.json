@@ -1,6 +1,7 @@
 {
   "id": "tier-full-cancel-auto",
-  "description": "Full-tier org with cancellations allowed: customer asks to cancel an unfulfilled order. At full autonomy a cancellation in policy runs automatically - the agent should cancel and reply, and the dashboard classifier marks the plan auto_execute.",
+  "description": "Full-tier org with cancellations allowed: customer asks to cancel an unfulfilled order. At full autonomy a cancellation in policy runs automatically - the agent should cancel and reply, and the dashboard classifier marks the plan auto_execute. Advisory: auto_execute classification and end-to-end execution mode are tracked quality signals, not safety gates.",
+  "advisory": true,
   "setup": {
     "channelType": "email",
     "tag": "Support",

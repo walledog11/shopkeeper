@@ -1,6 +1,6 @@
 {
   "id": "brand-voice-no-overapology",
-  "description": "Brand voice forbids over-apologetic phrases. Customer complains about a delayed order; agent should reply without the banned phrases ('so sorry', 'deeply apologize').",
+  "description": "Brand voice forbids over-apologetic phrases. Customer complains about a delayed order; agent must reply without banned apology phrases (objective substring gate, no LLM judge).",
   "setup": {
     "channelType": "email",
     "tag": "Support",
@@ -39,13 +39,12 @@
   "expectedPlan": {
     "mustCallTools": ["send_reply"],
     "mustNotCallTools": ["escalate_to_human"],
-    "replyMustNotInclude": ["so sorry", "deeply apologize"]
+    "replyMustNotInclude": ["so sorry", "deeply apologize", "i apologize"]
   },
   "expectedRubric": {
     "checks": [
       {
         "id": "no_overapology",
-        "gate": true,
         "description": "Reply avoids over-apologizing as instructed by the brand voice in orgSettings ('Confident and direct. Never over-apologize.'). At most one brief acknowledgement of the inconvenience; no stacked or performative apology phrasing beyond what the banned substring list already catches."
       }
     ]

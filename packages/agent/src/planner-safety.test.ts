@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import {
+  applyMutativeIntentNoActionGuard,
   hasCriticalPlanningReadErrorsForBlocks,
   sendReplyHasText,
   shouldBlockCreateRefundForAlreadyRefundedOrder,
   shouldEscalateFulfilledCancelRequest,
+  shouldForceMutativeReplan,
   shouldForcePlanningEscalation,
+  shouldSkipReplyDraftForMutativeIntent,
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
   stripNonEscalationTerminalTools,
@@ -167,6 +170,24 @@ describe("shouldForcePlanningEscalation", () => {
     })).toBe(true);
   });
 
+  it("forces escalation for out-of-scope wholesale pricing requests", () => {
+    expect(shouldForcePlanningEscalation({
+      ctx: makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Hi - what's your wholesale pricing for 500 units of the cotton hoodie? Need a quote by Friday.",
+        }],
+        recentOrders: [],
+      }),
+      instruction: "Reply to the customer about their wholesale pricing inquiry.",
+      rawToolCalls: [{ id: "tu_note", name: "add_internal_note", input: { note: "Wholesale inquiry." } }],
+      readBlocks: [],
+      readStatusMap: new Map(),
+      readResultsMap: new Map(),
+      operatorMode: false,
+    })).toBe(true);
+  });
+
   it("does not force escalation when an order lookup error is irrelevant context", () => {
     const readBlocks = [
       { type: "tool_use", id: "tu_read", name: "search_kb", input: { query: "shipping" } },
@@ -263,5 +284,68 @@ describe("hasCriticalPlanningReadErrorsForBlocks", () => {
     expect(hasCriticalPlanningReadErrorsForBlocks(blocks, new Map([
       ["tu_kb", "error"],
     ]))).toBe(false);
+  });
+});
+
+describe("shouldForceMutativeReplan", () => {
+  it("returns true when mutative intent is present without action tools", () => {
+    expect(shouldForceMutativeReplan({
+      ctx: makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Please refund order #4003.",
+        }],
+      }),
+      rawToolCalls: [],
+      tools: [{ name: "create_refund" }, { name: "send_reply" }],
+      operatorMode: false,
+      ranReplan: false,
+    })).toBe(true);
+  });
+
+  it("returns false after replan already ran", () => {
+    expect(shouldForceMutativeReplan({
+      ctx: makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Please refund order #4003.",
+        }],
+      }),
+      rawToolCalls: [{ id: "tu_reply", name: "send_reply", input: { text: "Done." } }],
+      tools: [{ name: "create_refund" }, { name: "send_reply" }],
+      operatorMode: false,
+      ranReplan: true,
+    })).toBe(false);
+  });
+});
+
+describe("applyMutativeIntentNoActionGuard", () => {
+  it("strips hollow send_reply and adds a warning", () => {
+    const warnings: string[] = [];
+    const filtered = applyMutativeIntentNoActionGuard(
+      makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Please refund order #4003.",
+        }],
+      }),
+      [{ id: "tu_reply", name: "send_reply", input: { text: "Refunded." } }],
+      warnings,
+    );
+
+    expect(filtered).toEqual([]);
+    expect(warnings).toContain(
+      "Customer requested a refund/cancel but no action was planned — review before sending.",
+    );
+  });
+
+  it("leaves plans with action tools unchanged", () => {
+    const warnings: string[] = [];
+    const calls: RawToolCall[] = [
+      { id: "tu_refund", name: "create_refund", input: { order_id: "1" } },
+      { id: "tu_reply", name: "send_reply", input: { text: "Refunded." } },
+    ];
+    expect(applyMutativeIntentNoActionGuard(makeCtx(), calls, warnings)).toEqual(calls);
+    expect(shouldSkipReplyDraftForMutativeIntent(makeCtx(), calls)).toBe(false);
   });
 });
