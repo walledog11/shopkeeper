@@ -94,6 +94,52 @@ export function planningIntentTexts(ctx: AgentContext, instruction: string): str
 
 const CONTRADICTION_PIVOT_RE = /\b(actually|wait|scratch|never mind|nevermind|on second thought)\b/i;
 
+export function hasSuspectedFraudRefundSignals(...texts: string[]): boolean {
+  for (const text of texts) {
+    const lower = text.toLowerCase();
+    const wantsRefund = /\brefund(?:ed|ing|s)?\b/.test(lower);
+
+    if (/\b(chargeback|dispute|fraudulent|unauthorized)\b/.test(lower)) {
+      return true;
+    }
+
+    if (wantsRefund) {
+      const alternatePaymentRefund = (
+        /\b(different|another|alternate|other)\s+(card|payment|account|method)\b/.test(lower)
+        || /\bnot the (one|card) i paid with\b/.test(lower)
+        || (/\bending\s+\d{4}\b/.test(lower) && /\b(card|account)\b/.test(lower))
+      );
+      if (alternatePaymentRefund) return true;
+
+      const nonReceipt = /\b(never received|didn't receive|did not receive|not received|non-?receipt)\b/.test(lower);
+      const urgent = /\b(right now|immediately|asap|urgent(?:ly)?)\b/.test(lower);
+      if (nonReceipt && urgent) return true;
+    }
+  }
+  return false;
+}
+
+export function hasForwardedInjectionRefundSignal(...texts: string[]): boolean {
+  const combined = texts.join("\n");
+  const lower = combined.toLowerCase();
+  const looksForwarded = (
+    /\bforwarded message\b/.test(lower)
+    || /-{3,}\s*forwarded/.test(lower)
+    || /\bfw:\s*/.test(lower)
+  );
+  if (!looksForwarded) return false;
+
+  return (
+    /\brefund\b/.test(lower)
+    && /\b(issue|process|authorize[d]?)\b/.test(lower)
+    && (
+      /\bstore owner\b/.test(lower)
+      || /\boverride\b/.test(lower)
+      || /\bauthorized and instructed\b/.test(lower)
+    )
+  );
+}
+
 export function hasContradictoryInstructionSignals(...texts: string[]): boolean {
   const combined = texts.join(" ").toLowerCase();
   const wantsCancel = /\bcancel(?:lation|led|ing)?\b/.test(combined);

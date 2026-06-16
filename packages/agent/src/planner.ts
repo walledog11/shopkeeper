@@ -24,8 +24,11 @@ import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 import {
   ESCALATION_DRAFT_PROMPT,
   replyDraftPrompt,
+  sendReplyHasText,
   shouldForcePlanningEscalation,
   shouldSkipReplyDraftForWatchTier,
+  stripCreateRefundForAlreadyRefundedOrders,
+  stripEmptySendReplyToolCalls,
   stripNonEscalationTerminalTools,
 } from "./planner-safety.js";
 import type { ToolStatus } from "./tools/result.js";
@@ -303,6 +306,9 @@ export async function planAgent(
     }
   }
 
+  rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, rawToolCalls);
+  rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
+
   // Safety backstop: contradictory instructions or failed Shopify lookups during
   // planning must escalate instead of forcing a customer reply.
   let ranEscalationDraft = false;
@@ -409,31 +415,37 @@ export async function planAgent(
 
     await enforceSpendCap(ctx.orgId, resolvedSettings);
     const draftModel = pickModel("reply_draft");
-    const draftResponse = await anthropic.messages.create({
-      model: draftModel,
-      max_tokens: PLAN_REPLAN_MAX_TOKENS,
-      system: systemPromptBlocks,
-      messages: draftMessages,
-      tools: [sendReplyTool],
-      tool_choice: { type: "tool", name: "send_reply" },
-    });
-    const draftBlocks = draftResponse.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
-    );
-    const draftUsage = recordModelUsage(usageTotals, draftResponse);
-    await recordSpend(ctx.orgId, draftUsage, draftModel);
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      phase: "reply_draft",
-      model: draftModel,
-      stopReason: draftResponse.stop_reason,
-      tools: draftBlocks.map((b) => b.name),
-      usage: draftUsage,
-      usageTotals,
-    }, "[agent:plan] model call");
-    rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
-    ranReplyDraft = true;
+    let draftBlocks: Anthropic.ToolUseBlock[] = [];
+    for (let attempt = 0; attempt < 2 && draftBlocks.length === 0; attempt += 1) {
+      const draftResponse = await anthropic.messages.create({
+        model: draftModel,
+        max_tokens: PLAN_REPLAN_MAX_TOKENS,
+        system: systemPromptBlocks,
+        messages: draftMessages,
+        tools: [sendReplyTool],
+        tool_choice: { type: "tool", name: "send_reply" },
+      });
+      draftBlocks = draftResponse.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
+      ).filter((block) => sendReplyHasText({ id: block.id, name: block.name, input: block.input }));
+      const draftUsage = recordModelUsage(usageTotals, draftResponse);
+      await recordSpend(ctx.orgId, draftUsage, draftModel);
+      logger.info({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        phase: "reply_draft",
+        attempt: attempt + 1,
+        model: draftModel,
+        stopReason: draftResponse.stop_reason,
+        tools: draftBlocks.map((b) => b.name),
+        usage: draftUsage,
+        usageTotals,
+      }, "[agent:plan] model call");
+    }
+    if (draftBlocks.length > 0) {
+      rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
+      ranReplyDraft = true;
+    }
   }
 
   if (contextSkippedReadIds.size > 0) {
