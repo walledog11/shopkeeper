@@ -15,8 +15,8 @@ interface Props {
 export default function ConfigurePageClient(props: Props) {
   return (
     <div className="flex-1 overflow-y-auto min-w-0">
-      <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-neutral-950/95 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-neutral-950/88 sm:px-6 lg:px-8">
-        <section className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-b from-amber-400/[0.08] via-white/[0.02] to-transparent px-5 py-4 sm:px-6">
+      <div className="sticky top-0 z-20 border-b border-foreground/[0.06] bg-neutral-950/95 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-neutral-950/88 sm:px-6 lg:px-8">
+        <section className="relative overflow-hidden rounded-xl border border-foreground/[0.08] bg-gradient-to-b from-amber-400/[0.08] via-foreground/[0.02] to-transparent px-5 py-4 sm:px-6">
           <ConciergeSummary orgName={props.orgName} settings={props.settings} />
         </section>
       </div>

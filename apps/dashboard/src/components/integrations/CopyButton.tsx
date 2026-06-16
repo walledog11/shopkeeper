@@ -16,7 +16,7 @@ export function CopyButton({ text }: { text: string }) {
       }}
       aria-label="Copy"
       title="Copy"
-      className="ml-1 text-white/20 hover:text-white/50 transition-colors"
+      className="ml-1 text-foreground/20 hover:text-foreground/50 transition-colors"
     >
       {copied
         ? <Check className="size-3 text-emerald-400" />

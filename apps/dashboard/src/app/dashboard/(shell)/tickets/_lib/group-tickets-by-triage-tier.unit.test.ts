@@ -32,7 +32,6 @@ function quickReplyPlan(): AgentPlan {
 
 function baseTicket(overrides: Partial<Ticket> & Pick<Ticket, "id">): Ticket {
   return {
-    id: overrides.id,
     channelType: "email",
     platform: "Email",
     logo: "/channels/email.svg",
@@ -51,7 +50,7 @@ function baseTicket(overrides: Partial<Ticket> & Pick<Ticket, "id">): Ticket {
     cachedPlan: null,
     cachedPlanMessageId: null,
     shopifyCustomerId: null,
-    filterStatus: "active",
+    filterStatus: "genuine",
     filterReason: null,
     messages: [{
       id: "msg-customer-1",

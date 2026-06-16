@@ -18,14 +18,14 @@ import {
 
 function SkeletonCard() {
   return (
-    <div className="px-5 py-4 border-b border-white/[0.05] animate-pulse">
+    <div className="px-5 py-4 border-b border-foreground/[0.05] animate-pulse">
       <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-white/[0.07]" />
-        <div className="h-3 w-28 rounded bg-white/[0.07]" />
-        <div className="h-3 w-16 rounded bg-white/[0.05]" />
+        <div className="size-6 rounded-lg bg-foreground/[0.07]" />
+        <div className="h-3 w-28 rounded bg-foreground/[0.07]" />
+        <div className="h-3 w-16 rounded bg-foreground/[0.05]" />
       </div>
       <div className="mt-3 pl-8">
-        <div className="h-16 rounded-lg bg-white/[0.04]" />
+        <div className="h-16 rounded-lg bg-foreground/[0.04]" />
       </div>
     </div>
   )
@@ -80,7 +80,7 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
 
   return (
     <>
-      <div className="px-5 py-4 border-b border-white/[0.06]">
+      <div className="px-5 py-4 border-b border-foreground/[0.06]">
         <AutonomyReadinessCard />
 
         <div className="flex flex-wrap items-center gap-1.5 mt-3">
@@ -93,8 +93,8 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
                 onClick={() => setFocusAndUrl(opt.id)}
                 className={`text-xs font-semibold px-2.5 h-6 rounded border transition-colors ${
                   active
-                    ? "bg-white/[0.12] text-white border-white/[0.18]"
-                    : "bg-white/[0.04] text-white/55 border-white/[0.08] hover:bg-white/[0.08] hover:text-white/80"
+                    ? "bg-foreground/[0.12] text-white border-foreground/[0.18]"
+                    : "bg-foreground/[0.04] text-foreground/55 border-foreground/[0.08] hover:bg-foreground/[0.08] hover:text-foreground/80"
                 }`}
               >
                 {opt.label}
@@ -102,7 +102,7 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
             )
           })}
           {fromParam === "24h" && (
-            <span className="text-xs text-white/35 ml-1">{"\u00b7"} Last 24 hours</span>
+            <span className="text-xs text-foreground/35 ml-1">{"\u00b7"} Last 24 hours</span>
           )}
         </div>
       </div>
@@ -115,26 +115,26 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-          <p className="text-sm text-white/50">Failed to load agent outputs.</p>
+          <p className="text-sm text-foreground/50">Failed to load agent outputs.</p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-3 text-xs text-white/30 hover:text-white/60 transition-colors"
+            className="mt-3 text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
           >
             Try again
           </button>
         </div>
       ) : allEntries.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-          <div className="size-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-4">
+          <div className="size-10 rounded-xl bg-foreground/[0.06] flex items-center justify-center mb-4">
             {focus === "attention" ? (
-              <Eye className="size-5 text-white/30" />
+              <Eye className="size-5 text-foreground/30" />
             ) : (
-              <MessageSquare className="size-5 text-white/30" />
+              <MessageSquare className="size-5 text-foreground/30" />
             )}
           </div>
-          <p className="text-sm font-medium text-white/60 mb-1">{emptyState.title}</p>
-          <p className="text-xs text-white/30 max-w-xs">
+          <p className="text-sm font-medium text-foreground/60 mb-1">{emptyState.title}</p>
+          <p className="text-xs text-foreground/30 max-w-xs">
             {fromLabel ? `No outputs match this lens${fromLabel}.` : emptyState.body}
           </p>
         </div>
@@ -143,7 +143,7 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
           {dayGroups.map((group) => (
             <div key={group.key}>
               <div className="px-5 pt-4 pb-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-white/35">
+                <p className="text-xs font-semibold uppercase tracking-wider text-foreground/35">
                   {group.label}
                 </p>
               </div>
@@ -164,13 +164,13 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
                 type="button"
                 onClick={loadMore}
                 disabled={isLoadingMore}
-                className="text-xs font-medium text-white/35 hover:text-white/60 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
+                className="text-xs font-medium text-foreground/35 hover:text-foreground/60 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
               >
                 {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
                 {isLoadingMore ? "Loading…" : "Load more"}
               </button>
             ) : (
-              <p className="text-xs text-white/20">All caught up</p>
+              <p className="text-xs text-foreground/40">You&apos;re all caught up</p>
             )}
           </div>
         </>

@@ -143,7 +143,7 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
           </>
         ) : (
           <>
-            <ol className="text-xs text-white/40 space-y-1 list-decimal list-inside leading-relaxed">
+            <ol className="text-xs text-foreground/40 space-y-1 list-decimal list-inside leading-relaxed">
               <li>Click Connect Telegram — opens a chat with the Shopkeeper bot</li>
               <li>Tap Start in Telegram to link this device</li>
               <li>Reply to digests or send free-form instructions from there</li>

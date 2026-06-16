@@ -13,8 +13,8 @@ export function ProductImage({ src, title }: ProductImageProps) {
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   if (!src || failedSrc === src) {
     return (
-      <div className="size-7 rounded bg-white/[0.05] border border-white/[0.08] flex items-center justify-center shrink-0">
-        <Package className="size-3.5 text-white/20" />
+      <div className="size-7 rounded bg-foreground/[0.05] border border-foreground/[0.08] flex items-center justify-center shrink-0">
+        <Package className="size-3.5 text-foreground/20" />
       </div>
     )
   }
@@ -26,7 +26,7 @@ export function ProductImage({ src, title }: ProductImageProps) {
       height={28}
       unoptimized
       onError={() => setFailedSrc(src)}
-      className="size-7 rounded object-cover border border-white/[0.08] shrink-0"
+      className="size-7 rounded object-cover border border-foreground/[0.08] shrink-0"
     />
   )
 }

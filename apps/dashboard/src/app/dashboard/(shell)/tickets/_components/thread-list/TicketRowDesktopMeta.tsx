@@ -71,7 +71,7 @@ export function TicketRowDesktopMeta({
       ) : null}
 
       {showSlaStatus && isSearchMode && ticket.status && !closed ? (
-        <span className="text-xs text-white/25 font-medium capitalize ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="text-xs text-foreground/25 font-medium capitalize ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
           {ticket.status}
         </span>
       ) : null}

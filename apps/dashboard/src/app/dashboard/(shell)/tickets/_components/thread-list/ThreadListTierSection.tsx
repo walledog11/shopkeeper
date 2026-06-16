@@ -29,12 +29,12 @@ export function ThreadListTierSection({
       <span className="truncate">
         {label}
         {" "}
-        <span className="text-white/30">({count})</span>
+        <span className="text-foreground/30">({count})</span>
       </span>
       {collapsible ? (
         <ChevronDown
           className={cn(
-            "size-3.5 shrink-0 text-white/30 transition-transform duration-200",
+            "size-3.5 shrink-0 text-foreground/30 transition-transform duration-200",
             expanded && "rotate-180",
           )}
         />
@@ -44,8 +44,8 @@ export function ThreadListTierSection({
 
   const headerClassName = cn(
     "w-full flex items-center justify-between gap-2 px-4 py-2.5",
-    "border-t border-white/[0.08] bg-white/[0.02]",
-    "text-[11px] font-semibold uppercase tracking-wide text-white/45",
+    "border-t border-foreground/[0.08] bg-foreground/[0.02]",
+    "text-[11px] font-semibold uppercase tracking-wide text-foreground/45",
   )
 
   return (
@@ -55,7 +55,7 @@ export function ThreadListTierSection({
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded(current => !current)}
-          className={cn(headerClassName, "text-left transition-colors hover:text-white/60")}
+          className={cn(headerClassName, "text-left transition-colors hover:text-foreground/60")}
         >
           {headerContent}
         </button>
@@ -66,7 +66,7 @@ export function ThreadListTierSection({
       )}
 
       {expanded ? (
-        <div className="divide-y divide-white/[0.1]">
+        <div className="divide-y divide-foreground/[0.1]">
           {children}
         </div>
       ) : null}

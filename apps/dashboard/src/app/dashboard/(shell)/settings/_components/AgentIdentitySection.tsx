@@ -71,18 +71,18 @@ function VoiceProposalCard({
           <Sparkles className="size-3.5 text-violet-300" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-white/85">Suggested brand voice update</p>
-          <p className="text-xs text-white/40 mt-0.5">
+          <p className="text-sm font-semibold text-foreground/85">Suggested brand voice update</p>
+          <p className="text-xs text-foreground/40 mt-0.5">
             Learned from {basedOnCount} {basedOnCount === 1 ? "reply you edited" : "replies you edited"}. Review before it takes effect.
           </p>
         </div>
       </div>
-      <p className="text-sm text-white/80 leading-relaxed rounded border border-white/[0.08] bg-white/[0.03] px-3 py-2 whitespace-pre-wrap break-words">
+      <p className="text-sm text-foreground/80 leading-relaxed rounded border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2 whitespace-pre-wrap break-words">
         {brief}
       </p>
       {rationale && (
-        <p className="text-xs text-white/45 leading-relaxed">
-          <span className="font-semibold text-white/55">What changed: </span>{rationale}
+        <p className="text-xs text-foreground/45 leading-relaxed">
+          <span className="font-semibold text-foreground/55">What changed: </span>{rationale}
         </p>
       )}
       <div className="flex items-center gap-2">
@@ -99,7 +99,7 @@ function VoiceProposalCard({
           type="button"
           onClick={() => onResolve("dismiss")}
           disabled={busy !== null}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-white/[0.12] text-white/55 hover:text-white/80 hover:border-white/[0.22] disabled:opacity-50 text-xs font-semibold transition-colors"
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-foreground/[0.12] text-foreground/55 hover:text-foreground/80 hover:border-foreground/[0.22] disabled:opacity-50 text-xs font-semibold transition-colors"
         >
           {busy === "dismiss" ? <Loader2 className="size-3.5 animate-spin" /> : <X className="size-3.5" />}
           Dismiss

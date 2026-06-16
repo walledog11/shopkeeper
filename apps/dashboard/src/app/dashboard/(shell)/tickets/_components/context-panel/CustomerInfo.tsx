@@ -57,18 +57,18 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: 
   return (
     <div className="space-y-2.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-white/50 shrink-0">Orders</span>
-        <span className="text-xs leading-4 font-semibold text-white/80 tabular-nums">{customer.orders_count}</span>
+        <span className="text-xs leading-4 text-foreground/50 shrink-0">Orders</span>
+        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{customer.orders_count}</span>
       </div>
 
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-white/50 shrink-0">Total spent</span>
-        <span className="text-xs leading-4 font-semibold text-white/80 tabular-nums">{formatMoney(customer.total_spent, customer.currency)}</span>
+        <span className="text-xs leading-4 text-foreground/50 shrink-0">Total spent</span>
+        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{formatMoney(customer.total_spent, customer.currency)}</span>
       </div>
 
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-white/50 shrink-0">Since</span>
-        <span className="text-xs leading-4 font-semibold text-white/80 tabular-nums">{formatMonthYear(customer.created_at)}</span>
+        <span className="text-xs leading-4 text-foreground/50 shrink-0">Since</span>
+        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{formatMonthYear(customer.created_at)}</span>
       </div>
     </div>
   )
@@ -130,8 +130,8 @@ function CustomerInfoEditor({
     }
   }
 
-  const inputCls = "w-full text-xs text-white/80 bg-white/[0.05] border border-white/[0.12] rounded px-2 py-1.5 focus:outline-none focus:border-white/[0.25]"
-  const labelCls = "block text-xs text-white/30 mb-0.5"
+  const inputCls = "w-full text-xs text-foreground/80 bg-foreground/[0.05] border border-foreground/[0.12] rounded px-2 py-1.5 focus:outline-none focus:border-foreground/[0.25]"
+  const labelCls = "block text-xs text-foreground/30 mb-0.5"
   const field = (label: string, key: keyof EditState, textarea?: boolean) => (
       <div key={key}>
         <label htmlFor={`shopify-customer-${customer.id}-${key}`} className={labelCls}>{label}</label>
@@ -159,14 +159,14 @@ function CustomerInfoEditor({
 
   return (
     <div className="space-y-2.5">
-      <div className="rounded-md border border-white/[0.07] bg-white/[0.03] p-2.5 space-y-2">
-        <div className="flex items-center justify-between pb-1 border-b border-white/[0.07]">
-          <span className="text-xs text-white/30 font-medium">Edit customer</span>
+      <div className="rounded-md border border-foreground/[0.07] bg-foreground/[0.03] p-2.5 space-y-2">
+        <div className="flex items-center justify-between pb-1 border-b border-foreground/[0.07]">
+          <span className="text-xs text-foreground/30 font-medium">Edit customer</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => { onEditingChange(false); setSaveError(null) }}
-              className="text-xs text-white/30 hover:text-white/60 transition-colors"
+              className="text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
             >
               Cancel
             </button>

@@ -53,8 +53,8 @@ function DashboardSidebarContent({
     <>
       {isSwitching && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
-          <div className="flex items-center gap-3 text-white/60">
-            <div className="size-4 rounded-full border-2 border-white/20 border-t-white/70 animate-spin" />
+          <div className="flex items-center gap-3 text-foreground/60">
+            <div className="size-4 rounded-full border-2 border-foreground/20 border-t-foreground/70 animate-spin" />
             <span className="text-sm font-medium">Switching workspace…</span>
           </div>
         </div>
@@ -88,7 +88,7 @@ function DashboardSidebarContent({
               type="button"
               onClick={() => setMobileNavOpen(true)}
               aria-label="Open navigation"
-              className="p-2 rounded-md text-white/60 hover:text-white hover:bg-white/[0.08] transition-colors"
+              className="p-2 rounded-md text-foreground/60 hover:text-white hover:bg-foreground/[0.08] transition-colors"
             >
               <Menu className="size-5" />
             </button>

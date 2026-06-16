@@ -31,7 +31,7 @@ export function messageKey(message: ChatMessage): string {
 
 export function useAgentChatState({ restoreSession = true }: UseAgentChatStateProps) {
   const { user } = useUser()
-  const firstName = user?.firstName ?? "there"
+  const firstName = user?.firstName ?? ""
   const initial = (user?.firstName?.[0] ?? user?.emailAddresses?.[0]?.emailAddress?.[0] ?? "U").toUpperCase()
   const hour = new Date().getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"

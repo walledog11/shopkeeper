@@ -98,7 +98,7 @@ export default function AgentPanelBriefing({
     <div className="flex w-full flex-col gap-8 pb-4">
       <div className="space-y-3">
         <h2 className="font-display-serif text-2xl leading-snug text-foreground">
-          {greeting}, <span className="italic text-[#9c9285]">{firstName}</span>.
+          {greeting}{firstName ? <>, <span className="italic text-[#9c9285]">{firstName}</span></> : ""}.
         </h2>
         <p className="text-sm text-foreground/60 leading-relaxed">
           <BriefingNarrativeInline segments={narrativeSegments} />

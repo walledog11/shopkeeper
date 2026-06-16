@@ -18,9 +18,9 @@ interface NotificationBarProps {
 }
 
 const TYPE_STYLES: Record<NonNullable<Notification["type"]>, { bar: string; icon: string; title: string; action: string }> = {
-  info:    { bar: "bg-linear-to-b from-indigo-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-indigo-400", title: "text-white/80", action: "text-indigo-400" },
-  warning: { bar: "bg-linear-to-b from-amber-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-amber-400",  title: "text-amber-400", action: "text-amber-400" },
-  success: { bar: "bg-linear-to-b from-emerald-900/70 to-black/70 text-white/60 border-white[0.1]", icon: "text-emerald-400", title: "text-emerald-400", action: "text-emerald-400" },
+  info:    { bar: "bg-blue-600/10 text-foreground/70 border-border",  icon: "text-blue-700",  title: "text-foreground", action: "text-blue-700" },
+  warning: { bar: "bg-amber-500/10 text-foreground/70 border-border", icon: "text-amber-600", title: "text-foreground", action: "text-amber-700" },
+  success: { bar: "bg-green-600/10 text-foreground/70 border-border", icon: "text-green-700", title: "text-foreground", action: "text-green-700" },
 };
 
 const TYPE_ICONS = {
@@ -125,7 +125,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 <Icon className={`size-4 shrink-0 ${styles.icon}`} />
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
-                  {n.message && <span className="font-normal text-white/40 hidden sm:inline whitespace-nowrap">{n.message}</span>}
+                  {n.message && <span className="font-normal text-foreground/50 hidden sm:inline whitespace-nowrap">{n.message}</span>}
                   {n.action && (
                     <>
                       {" "}
@@ -155,7 +155,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
             onClick={() => dismiss(n.id)}
             whileHover={{ scale: 1.1 }}
             whileTap={{ scale: 0.9 }}
-            className="absolute right-3 p-1.5 rounded hover:bg-black/10 transition-colors"
+            className="absolute right-3 p-1.5 rounded hover:bg-foreground/10 transition-colors"
             aria-label="Dismiss"
           >
             <X className="size-4" />

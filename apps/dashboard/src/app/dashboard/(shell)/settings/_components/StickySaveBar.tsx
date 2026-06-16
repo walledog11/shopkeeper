@@ -11,7 +11,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
 
   return (
     <div className="sticky bottom-0 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-3 pb-4 z-10">
-      <div className="rounded-md border border-white/[0.10] bg-[#0c0c0c]/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center justify-between gap-3">
+      <div className="rounded-md border border-foreground/[0.10] bg-[#0c0c0c]/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           {staleVersion ? (
             <p className="text-xs text-amber-300 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>
@@ -24,7 +24,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
           ) : (
             <>
               <span className="size-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
-              <p className="text-xs text-white/70">Unsaved changes</p>
+              <p className="text-xs text-foreground/70">Unsaved changes</p>
             </>
           )}
         </div>
@@ -33,7 +33,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
             type="button"
             onClick={reset}
             disabled={saving || (!isDirty && !staleVersion)}
-            className="text-xs font-semibold text-white/50 hover:text-white/80 disabled:opacity-30 disabled:hover:text-white/50 transition-colors px-2 py-1.5"
+            className="text-xs font-semibold text-foreground/50 hover:text-foreground/80 disabled:opacity-30 disabled:hover:text-foreground/50 transition-colors px-2 py-1.5"
           >
             Reset
           </button>

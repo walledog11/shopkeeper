@@ -36,17 +36,17 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
   const footnoteOutcomes = outputs.length === 0 ? [] : outcomes
 
   return (
-    <div className="border-b border-white/[0.05] px-5 py-4 hover:bg-white/[0.02] transition-colors group">
+    <div className="border-b border-foreground/[0.05] px-5 py-4 hover:bg-foreground/[0.02] transition-colors group">
       <div className="flex items-center gap-2 flex-wrap">
-        <div className="size-6 rounded-lg bg-white/[0.06] border border-white/[0.08] flex items-center justify-center shrink-0">
+        <div className="size-6 rounded-lg bg-foreground/[0.06] border border-foreground/[0.08] flex items-center justify-center shrink-0">
           <Image src={channel.logo} alt={channel.name} width={13} height={13} className="object-contain" />
         </div>
         {href ? (
-          <Link href={href} className="text-sm font-semibold text-white/80 truncate hover:text-white">
+          <Link href={href} className="text-sm font-semibold text-foreground/80 truncate hover:text-white">
             {headline}
           </Link>
         ) : (
-          <span className="text-sm font-semibold text-white/80 truncate">{headline}</span>
+          <span className="text-sm font-semibold text-foreground/80 truncate">{headline}</span>
         )}
         {isNew && (
           <span className="text-xs font-semibold text-emerald-300 bg-emerald-900/[0.25] border border-emerald-800/40 px-1.5 py-0.5 rounded">
@@ -54,22 +54,22 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
           </span>
         )}
         {focus === "all" && entry.mode && (
-          <span className="text-xs font-bold uppercase tracking-wide text-white/40 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
+          <span className="text-xs font-bold uppercase tracking-wide text-foreground/40 bg-foreground/[0.05] border border-foreground/[0.08] px-1.5 py-0.5 rounded">
             {MODE_LABELS[entry.mode]}
           </span>
         )}
         {entry.threadTag && (
-          <span className="text-xs font-medium text-white/40 bg-white/[0.05] border border-white/[0.08] px-1.5 py-0.5 rounded">
+          <span className="text-xs font-medium text-foreground/40 bg-foreground/[0.05] border border-foreground/[0.08] px-1.5 py-0.5 rounded">
             {entry.threadTag}
           </span>
         )}
         {href ? (
           <Link href={href} className="ml-auto flex items-center gap-1.5 shrink-0">
-            <span className="text-xs text-white/25">{formatRelativeTime(entry.sentAt)}</span>
-            <ArrowRight className="size-3 text-white/15 group-hover:text-white/40 transition-colors" />
+            <span className="text-xs text-foreground/25">{formatRelativeTime(entry.sentAt)}</span>
+            <ArrowRight className="size-3 text-foreground/15 group-hover:text-foreground/40 transition-colors" />
           </Link>
         ) : (
-          <span className="ml-auto text-xs text-white/25 shrink-0">{formatRelativeTime(entry.sentAt)}</span>
+          <span className="ml-auto text-xs text-foreground/25 shrink-0">{formatRelativeTime(entry.sentAt)}</span>
         )}
       </div>
 
@@ -82,7 +82,7 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
                 <p className={`text-xs font-semibold uppercase tracking-wide mb-1.5 ${tone.label}`}>
                   {block.label}
                 </p>
-                <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
+                <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-words">
                   {block.text}
                 </p>
               </div>
@@ -101,7 +101,7 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
                   {toolLabel(action.tool)}
                 </p>
                 {action.result && (
-                  <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap break-words">
+                  <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-words">
                     {action.result}
                   </p>
                 )}
@@ -112,7 +112,7 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
       )}
 
       {outputs.length === 0 && bodyOutcomes.length === 0 && entry.summary && (
-        <p className="mt-2 pl-8 text-sm text-white/50">{entry.summary}</p>
+        <p className="mt-2 pl-8 text-sm text-foreground/50">{entry.summary}</p>
       )}
 
       {footnoteOutcomes.length > 0 && (
@@ -121,10 +121,10 @@ export function ReviewCard({ entry, focus, isNew }: { entry: ActionLogEntry; foc
             const isError = isErrorStatus(action.status)
             return (
               <div key={`${action.tool}-${idx}`} className="flex items-baseline gap-2 text-xs">
-                <span className={`font-semibold shrink-0 ${isError ? "text-red-300" : "text-white/55"}`}>
+                <span className={`font-semibold shrink-0 ${isError ? "text-red-300" : "text-foreground/55"}`}>
                   {toolLabel(action.tool)}
                 </span>
-                {action.result && <span className="text-white/40 truncate">{action.result}</span>}
+                {action.result && <span className="text-foreground/40 truncate">{action.result}</span>}
               </div>
             )
           })}
@@ -170,7 +170,7 @@ function FeedbackRow({ entry, hasReply }: { entry: ActionLogEntry; hasReply: boo
           className={`inline-flex items-center gap-1 text-xs font-semibold transition-colors ${
             feedback === "good"
               ? "text-emerald-300"
-              : "text-white/40 hover:text-emerald-200"
+              : "text-foreground/40 hover:text-emerald-200"
           }`}
         >
           <ThumbsUp className="size-3" />
@@ -180,7 +180,7 @@ function FeedbackRow({ entry, hasReply }: { entry: ActionLogEntry; hasReply: boo
       {showSoundsOff && correctHref && (
         <Link
           href={correctHref}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-white/40 hover:text-amber-200 transition-colors"
+          className="inline-flex items-center gap-1 text-xs font-semibold text-foreground/40 hover:text-amber-200 transition-colors"
         >
           <ThumbsDown className="size-3" />
           Sounds off

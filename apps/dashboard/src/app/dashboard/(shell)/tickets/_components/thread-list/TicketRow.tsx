@@ -253,7 +253,7 @@ export function TicketRow({
       >
         <div
           className={`cursor-pointer relative px-4 py-2 transition-colors group ${
-            isActive ? "bg-white/[0.07]" : "hover:bg-white/[0.04]"
+            isActive ? "bg-foreground/[0.07]" : "hover:bg-foreground/[0.04]"
           }`}
         >
           <div className={`absolute left-0 top-0 bottom-0 w-0.5 rounded-r-full ${
@@ -267,8 +267,8 @@ export function TicketRow({
             }`}
           >
             {isSelected
-              ? <CheckSquare className="size-3.5 text-white/70" />
-              : <Square className="size-3.5 text-white/20" />
+              ? <CheckSquare className="size-3.5 text-foreground/70" />
+              : <Square className="size-3.5 text-foreground/20" />
             }
           </button>
 
@@ -304,7 +304,7 @@ export function TicketRow({
 
                   <div className={`flex-1 min-w-0 ${showListActions ? "pr-16" : ""}`}>
                     <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                      <span className="text-sm font-semibold text-white/90 truncate">
+                      <span className="text-sm font-semibold text-foreground/90 truncate">
                         {presentation.customerLabel}
                       </span>
                       <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
@@ -319,15 +319,15 @@ export function TicketRow({
                     </div>
 
                     {presentation.showSubject && (
-                      <p className="text-[13px] font-medium text-white/80 truncate mb-0.5">{ticket.subject}</p>
+                      <p className="text-[13px] font-medium text-foreground/80 truncate mb-0.5">{ticket.subject}</p>
                     )}
 
                     {isSpam && ticket.filterReason ? (
-                      <p className="text-xs text-white/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
+                      <p className="text-xs text-foreground/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
                     ) : presentation.subline ? (
-                      <p className="text-xs text-white/40 line-clamp-1 mb-2">{presentation.subline}</p>
+                      <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{presentation.subline}</p>
                     ) : (
-                      <p className="text-xs text-white/40 line-clamp-1 mb-2">{ticket.preview}</p>
+                      <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{ticket.preview}</p>
                     )}
 
                     <TicketRowDesktopMeta
@@ -355,7 +355,7 @@ export function TicketRow({
               onClick={event => { event.stopPropagation(); rowAction.run() }}
               title={rowAction.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
               className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
-                rowAction.kind === "spam" ? "text-white/50 hover:text-red-400" : "text-white/50 hover:text-emerald-400"
+                rowAction.kind === "spam" ? "text-foreground/50 hover:text-red-400" : "text-foreground/50 hover:text-emerald-400"
               }`}
             >
               {rowAction.kind === "spam"

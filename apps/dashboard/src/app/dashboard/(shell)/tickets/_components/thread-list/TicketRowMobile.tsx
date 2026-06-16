@@ -35,16 +35,16 @@ export function TicketRowMobile({
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-white/90 truncate leading-snug">
+        <p className="text-sm font-semibold text-foreground/90 truncate leading-snug">
           {presentation.headline}
         </p>
 
-        <p className={`text-xs truncate mt-0.5 ${longWait ? "text-foreground/55 font-medium" : "text-white/40"}`}>
+        <p className={`text-xs truncate mt-0.5 ${longWait ? "text-foreground/55 font-medium" : "text-foreground/40"}`}>
           {meta}
         </p>
 
         {presentation.subline ? (
-          <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${browseMode ? "text-white/40" : "text-white/50"}`}>
+          <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${browseMode ? "text-foreground/40" : "text-foreground/50"}`}>
             {presentation.subline}
           </p>
         ) : null}

@@ -161,8 +161,8 @@ export function IntegrationActionsSection({
               onClick={() => setConfirmingId(integration.id)}
             />
             {confirmingId === integration.id && (
-              <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-white/[0.02]">
-                <p className="text-xs text-white/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
+              <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-foreground/[0.02]">
+                <p className="text-xs text-foreground/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
                 <button
                   type="button"
                   onClick={() => {

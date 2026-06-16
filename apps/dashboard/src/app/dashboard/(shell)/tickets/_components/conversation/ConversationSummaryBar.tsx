@@ -84,7 +84,7 @@ export default function ConversationSummaryBar({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                className="mt-0.5 shrink-0 text-white/35 hover:bg-white/[0.06] hover:text-white/75"
+                className="mt-0.5 shrink-0 text-foreground/35 hover:bg-foreground/[0.06] hover:text-foreground/75"
                 disabled={isRefreshing}
                 onClick={onRefresh}
                 aria-label="Refresh summary"

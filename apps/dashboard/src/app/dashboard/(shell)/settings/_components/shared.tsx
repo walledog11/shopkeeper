@@ -16,7 +16,7 @@ export function SaveButton({ saving, saved, onClick, disabled }: {
       size="sm"
       onClick={onClick}
       disabled={disabled || saving}
-      className="h-8 px-4 bg-white/[0.12] text-white hover:bg-white/[0.18] text-xs font-semibold disabled:opacity-40 min-w-[80px]"
+      className="h-8 px-4 bg-foreground/[0.12] text-white hover:bg-foreground/[0.18] text-xs font-semibold disabled:opacity-40 min-w-[80px]"
     >
       {saving ? (
         <Loader2 className="size-3.5 animate-spin" />
@@ -38,7 +38,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       aria-label={checked ? "Disable setting" : "Enable setting"}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-        checked ? 'bg-amber-400' : 'bg-white/[0.15]'
+        checked ? 'bg-amber-400' : 'bg-foreground/[0.15]'
       }`}
     >
       <span
@@ -69,14 +69,14 @@ export function ToggleRow({
     <div className="flex items-start justify-between gap-4">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold text-white/75">{label}</p>
+          <p className="text-sm font-semibold text-foreground/75">{label}</p>
           {badge && (
             <Badge variant="outline" className={`text-xs font-semibold ${badgeColor}`}>
               {badge}
             </Badge>
           )}
         </div>
-        <p className="text-xs text-white/35 mt-0.5 leading-relaxed">{description}</p>
+        <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">{description}</p>
       </div>
       <Toggle checked={checked} onChange={onChange} />
     </div>
@@ -91,8 +91,8 @@ export function SectionCard({ title, description, children }: {
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden p-5 sm:p-6 space-y-5">
       <div>
-        <h2 className="text-sm font-semibold text-white/75">{title}</h2>
-        <p className="text-xs text-white/35 mt-1 leading-relaxed max-w-prose">{description}</p>
+        <h2 className="text-sm font-semibold text-foreground/75">{title}</h2>
+        <p className="text-xs text-foreground/35 mt-1 leading-relaxed max-w-prose">{description}</p>
       </div>
       <div>{children}</div>
     </div>
@@ -118,18 +118,18 @@ export function SettingsDisclosure({
         type="button"
         onClick={() => setOpen(value => !value)}
         aria-expanded={open}
-        className="flex w-full items-start gap-3 p-5 sm:p-6 text-left transition-colors hover:bg-white/[0.02]"
+        className="flex w-full items-start gap-3 p-5 sm:p-6 text-left transition-colors hover:bg-foreground/[0.02]"
       >
         <ChevronRight
-          className={`size-4 shrink-0 mt-0.5 text-white/40 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`size-4 shrink-0 mt-0.5 text-foreground/40 transition-transform ${open ? "rotate-90" : ""}`}
         />
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-semibold text-white/75">{title}</h2>
-          <p className="text-xs text-white/35 mt-1 leading-relaxed">{description}</p>
+          <h2 className="text-sm font-semibold text-foreground/75">{title}</h2>
+          <p className="text-xs text-foreground/35 mt-1 leading-relaxed">{description}</p>
         </div>
       </button>
       {open && (
-        <div className="border-t border-white/[0.06] px-5 sm:px-6 pb-5 sm:pb-6 pt-5 space-y-6">
+        <div className="border-t border-foreground/[0.06] px-5 sm:px-6 pb-5 sm:pb-6 pt-5 space-y-6">
           {children}
         </div>
       )}

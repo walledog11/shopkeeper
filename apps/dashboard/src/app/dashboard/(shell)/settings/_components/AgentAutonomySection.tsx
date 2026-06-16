@@ -44,7 +44,7 @@ function OverrideHint({
   const currentValue = formatOverrideValue(path, readSettingsPath(payload, path))
 
   return (
-    <p className="text-xs text-white/30">
+    <p className="text-xs text-foreground/30">
       Default for {tierLabel(tier)}: {defaultValue}
       {explicit ? (
         <>
@@ -97,7 +97,7 @@ const TOOL_PERMISSION_ROWS: Array<{
     label: "Read",
     description: "Fetch Shopify customer profiles and order history. Read-only.",
     badge: "Read-only",
-    badgeColor: "text-white/50 bg-white/[0.05] border-white/[0.10]",
+    badgeColor: "text-foreground/50 bg-foreground/[0.05] border-foreground/[0.10]",
   },
 ]
 
@@ -139,51 +139,51 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                   onClick={() => selectTier(option.id)}
                   className={`min-h-[104px] rounded-md border p-3 text-left transition-all ${
                     selected
-                      ? "border-white/[0.40] bg-white/[0.07]"
-                      : "border-white/[0.10] bg-white/[0.025] hover:border-white/[0.22] hover:bg-white/[0.05]"
-                  } ${disabled ? "opacity-45 cursor-not-allowed hover:border-white/[0.10] hover:bg-white/[0.025]" : ""}`}
+                      ? "border-foreground/[0.40] bg-foreground/[0.07]"
+                      : "border-foreground/[0.10] bg-foreground/[0.025] hover:border-foreground/[0.22] hover:bg-foreground/[0.05]"
+                  } ${disabled ? "opacity-45 cursor-not-allowed hover:border-foreground/[0.10] hover:bg-foreground/[0.025]" : ""}`}
                 >
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`size-2.5 rounded-full border ${selected ? "border-white bg-white" : "border-white/25"}`} />
-                    <span className="text-sm font-semibold text-white/75">{option.label}</span>
+                    <span className={`size-2.5 rounded-full border ${selected ? "border-white bg-white" : "border-foreground/25"}`} />
+                    <span className="text-sm font-semibold text-foreground/75">{option.label}</span>
                     {option.recommended && (
                       <span className="rounded-sm border border-emerald-300/25 bg-emerald-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-emerald-300">
                         Recommended
                       </span>
                     )}
                     {option.comingSoon && (
-                      <span className="rounded-sm border border-white/[0.12] bg-white/[0.05] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-white/45">
+                      <span className="rounded-sm border border-foreground/[0.12] bg-foreground/[0.05] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-foreground/45">
                         Coming soon
                       </span>
                     )}
                   </div>
-                  <p className="mt-2 text-xs leading-relaxed text-white/40">{option.blurb}</p>
+                  <p className="mt-2 text-xs leading-relaxed text-foreground/40">{option.blurb}</p>
                   {option.merchantFacing && (
-                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-white/30">Refund cap ${option.cap}</p>
+                    <p className="mt-2 font-mono text-xs uppercase tracking-[0.06em] text-foreground/30">Refund cap ${option.cap}</p>
                   )}
                 </button>
               )
             })}
           </div>
 
-          <div className="border-t border-white/[0.08] pt-4">
+          <div className="border-t border-foreground/[0.08] pt-4">
             <button
               type="button"
               onClick={() => setAdvancedOpen(value => !value)}
               aria-expanded={advancedOpen}
-              className="flex w-full items-center gap-2 text-left text-sm font-semibold text-white/55 hover:text-white/75 transition-colors"
+              className="flex w-full items-center gap-2 text-left text-sm font-semibold text-foreground/55 hover:text-foreground/75 transition-colors"
             >
               <ChevronRight
-                className={`size-4 shrink-0 text-white/40 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
+                className={`size-4 shrink-0 text-foreground/40 transition-transform ${advancedOpen ? "rotate-90" : ""}`}
               />
               Advanced overrides
             </button>
-            <p className="text-xs text-white/30 mt-1 ml-6">
+            <p className="text-xs text-foreground/30 mt-1 ml-6">
               Per-tool permissions and limits. Only change these if the presets above do not fit your store.
             </p>
 
             {advancedOpen && (
-              <div className="space-y-5 mt-5 border-t border-white/[0.06] pt-5">
+              <div className="space-y-5 mt-5 border-t border-foreground/[0.06] pt-5">
                 <div className="space-y-1">
                   <ToggleRow
                     label="Require approval before executing actions"
@@ -223,8 +223,8 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
 
                 <div className="space-y-3">
                   <div>
-                    <p className="text-xs font-semibold text-white/60">Tool permissions</p>
-                    <p className="text-xs text-white/30 mt-0.5">Override which tool categories this tier can use.</p>
+                    <p className="text-xs font-semibold text-foreground/60">Tool permissions</p>
+                    <p className="text-xs text-foreground/30 mt-0.5">Override which tool categories this tier can use.</p>
                   </div>
                   <div className="space-y-4">
                     {TOOL_PERMISSION_ROWS.map(row => (

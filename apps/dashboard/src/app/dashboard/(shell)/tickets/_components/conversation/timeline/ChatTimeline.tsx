@@ -23,7 +23,7 @@ function AttachmentList({ attachments }: { attachments: string[] }) {
     <div className="flex flex-wrap gap-2 mt-2">
       {attachments.map((url) => (
         isImageAttachmentUrl(url)
-          ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-white/[0.10]" />
+          ? <Image key={url} src={url} alt="attachment" width={240} height={160} unoptimized className="h-auto max-w-[240px] rounded-md border border-foreground/[0.10]" />
           : <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 underline">Download attachment</a>
       ))}
     </div>
@@ -41,10 +41,10 @@ export default function ChatTimeline({
   if (messages.length === 0 && !isAgentRunning) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-        <div className="size-10 rounded-md bg-white/[0.05] border border-border flex items-center justify-center">
-          <MessageSquare className="size-4 text-white/20" />
+        <div className="size-10 rounded-md bg-foreground/[0.05] border border-border flex items-center justify-center">
+          <MessageSquare className="size-4 text-foreground/20" />
         </div>
-        <p className="text-sm text-white/30">No messages yet</p>
+        <p className="text-sm text-foreground/30">No messages yet</p>
       </div>
     )
   }
@@ -71,17 +71,17 @@ export default function ChatTimeline({
               data-sender={msg.sender}
               className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
                 isFailed
-                  ? "bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm"
+                  ? "bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-md rounded-tr-sm"
                   : isOutbound
-                    ? "bg-white/[0.14] text-white rounded-md rounded-tr-sm"
-                    : "bg-white/[0.07] border border-white/[0.10] text-white/75 rounded-md rounded-tl-sm"
+                    ? "bg-foreground/[0.14] text-white rounded-md rounded-tr-sm"
+                    : "bg-foreground/[0.07] border border-foreground/[0.10] text-foreground/75 rounded-md rounded-tl-sm"
               }`}
             >
               {msg.text}
               <AttachmentList attachments={msg.attachments ?? []} />
             </div>
             {isPending ? (
-              <span className="flex items-center gap-1.5 text-xs text-white/30 mx-1">
+              <span className="flex items-center gap-1.5 text-xs text-foreground/30 mx-1">
                 <Loader2 className="size-3 animate-spin" />
                 Sending…
               </span>
@@ -89,7 +89,7 @@ export default function ChatTimeline({
               <div className="flex items-center gap-1.5 mx-1">
                 <AlertTriangle className="size-3 text-red-400" />
                 <span className="text-xs text-red-400">Failed to send</span>
-                <span className="text-xs text-white/20">·</span>
+                <span className="text-xs text-foreground/20">·</span>
                 <button type="button"
                   onClick={() => onRetrySend?.(msg.id)}
                   className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"
@@ -98,7 +98,7 @@ export default function ChatTimeline({
                 </button>
               </div>
             ) : (
-              <span className="text-xs text-white/25 mx-1">{msg.time}</span>
+              <span className="text-xs text-foreground/25 mx-1">{msg.time}</span>
             )}
           </div>
         )
@@ -114,14 +114,14 @@ export default function ChatTimeline({
           <div
             data-testid="failed-chat-message-bubble"
             data-message-id={failedMessage.id}
-            className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-white/70 rounded-md rounded-tr-sm"
+            className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-md rounded-tr-sm"
           >
             {failedMessage.text}
           </div>
           <div className="flex items-center gap-1.5 mx-1">
             <AlertTriangle className="size-3 text-red-400" />
             <span className="text-xs text-red-400">Failed to send</span>
-            <span className="text-xs text-white/20">·</span>
+            <span className="text-xs text-foreground/20">·</span>
             <button type="button"
               onClick={() => onRetry?.(failedMessage.id)}
               className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors"

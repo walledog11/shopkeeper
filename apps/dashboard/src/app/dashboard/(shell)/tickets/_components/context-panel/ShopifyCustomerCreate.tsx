@@ -30,8 +30,8 @@ export function ShopifyCustomerCreate({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-white/30">New Shopify customer</p>
-        <button type="button" onClick={onBack} className="text-xs text-white/40 hover:text-white/70 transition-colors">Back</button>
+        <p className="text-xs text-foreground/30">New Shopify customer</p>
+        <button type="button" onClick={onBack} className="text-xs text-foreground/40 hover:text-foreground/70 transition-colors">Back</button>
       </div>
       <div className="space-y-1.5">
         {(['first_name', 'last_name', 'email'] as const).map(field => (
@@ -42,7 +42,7 @@ export function ShopifyCustomerCreate({
             aria-label={field === 'first_name' ? 'First name' : field === 'last_name' ? 'Last name' : 'Email'}
             value={draft[field]}
             onChange={e => onDraftChange({ ...draft, [field]: e.target.value })}
-            className="w-full text-xs text-white/70 rounded-md border border-white/[0.12] bg-white/[0.06] px-2.5 py-1.5 focus:outline-none focus:border-white/[0.25] placeholder:text-white/20"
+            className="w-full text-xs text-foreground/70 rounded-md border border-foreground/[0.12] bg-foreground/[0.06] px-2.5 py-1.5 focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/20"
           />
         ))}
       </div>

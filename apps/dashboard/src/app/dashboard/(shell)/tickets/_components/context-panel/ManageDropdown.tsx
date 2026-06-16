@@ -40,7 +40,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex size-6 items-center justify-center rounded text-white/40 hover:bg-white/[0.05] hover:text-white/70 transition-colors"
+        className="flex size-6 items-center justify-center rounded text-foreground/40 hover:bg-foreground/[0.05] hover:text-foreground/70 transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Manage customer"
@@ -49,7 +49,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
         <MoreHorizontal className="size-3.5" />
       </button>
       {open && (
-        <div role="menu" className="absolute right-0 top-7 z-10 w-44 rounded-md border border-white/[0.09] bg-popover shadow-md py-1">
+        <div role="menu" className="absolute right-0 top-7 z-10 w-44 rounded-md border border-foreground/[0.09] bg-popover shadow-md py-1">
           {items.map(item => (
             <button
               type="button"
@@ -58,8 +58,8 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
               role="menuitem"
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                 item.danger
-                  ? 'text-white/50 hover:text-red-400 hover:bg-red-400/[0.08]'
-                  : 'text-white/60 hover:bg-white/[0.05]'
+                  ? 'text-foreground/50 hover:text-red-400 hover:bg-red-400/[0.08]'
+                  : 'text-foreground/60 hover:bg-foreground/[0.05]'
               }`}
             >
               {item.icon}

@@ -22,17 +22,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const notifications: Notification[] = [];
 
-  // No channel connected yet
-  const integrationCount = await db.integration.count({ where: { organizationId: org.id } });
-  if (integrationCount === 0) {
-    notifications.push({
-      id: "no-integration",
-      type: "info",
-      title: "Connect your first channel",
-      message: "Start receiving support tickets from email, Instagram, and more.",
-      action: { label: "Add integration", href: "/dashboard/integrations" },
-    });
-  }
+  // Onboarding progress (incl. "connect your first channel") lives in the home
+  // WorkflowSetupBanner — the single source of truth. The top bar carries only
+  // time-sensitive alerts below.
 
   // Integration token expired or expiring within 7 days
   const expiringIntegrations = await db.integration.findMany({

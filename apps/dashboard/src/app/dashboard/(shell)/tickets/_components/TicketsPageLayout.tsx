@@ -291,7 +291,7 @@ export function TicketsPageLayout({
                     className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
                   >
                     <SheetHeader className="px-5 py-3 border-b border-border shrink-0">
-                      <SheetTitle className="text-sm font-semibold text-white/70 text-left">Customer Details</SheetTitle>
+                      <SheetTitle className="text-sm font-semibold text-foreground/70 text-left">Customer Details</SheetTitle>
                     </SheetHeader>
                     <div className="flex-1 overflow-y-auto">
                       <ContextPanel
@@ -327,7 +327,7 @@ export function TicketsPageLayout({
             </span>
             <div className="flex flex-col gap-1">
               <h2 className="font-display-serif text-lg text-foreground">
-                {allCaughtUp ? "You’re all caught up" : "Pick a conversation"}
+                {allCaughtUp ? "You're all caught up" : "Pick a conversation"}
               </h2>
               <p className="text-sm text-foreground/50 max-w-[230px]">
                 {allCaughtUp

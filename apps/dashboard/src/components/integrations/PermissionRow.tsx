@@ -14,11 +14,11 @@ export function PermissionRow({
 }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3.5">
-      <Icon className="size-[18px] text-white/50 shrink-0" strokeWidth={1.75} />
+      <Icon className="size-[18px] text-foreground/50 shrink-0" strokeWidth={1.75} />
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-white/90 leading-tight">{title}</p>
+        <p className="text-sm font-semibold text-foreground/90 leading-tight">{title}</p>
         {description ? (
-          <p className="text-xs text-white/40 mt-0.5 leading-relaxed">{description}</p>
+          <p className="text-xs text-foreground/40 mt-0.5 leading-relaxed">{description}</p>
         ) : null}
       </div>
       {action ? <div className="shrink-0">{action}</div> : null}
@@ -41,7 +41,7 @@ export function PermissionActionLink({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="text-sm font-semibold text-white/90 hover:text-white transition-colors disabled:opacity-50"
+        className="text-sm font-semibold text-foreground/90 hover:text-white transition-colors disabled:opacity-50"
       >
         {children}
       </button>
@@ -49,6 +49,6 @@ export function PermissionActionLink({
   }
 
   return (
-    <span className="text-sm font-semibold text-white/90">{children}</span>
+    <span className="text-sm font-semibold text-foreground/90">{children}</span>
   )
 }

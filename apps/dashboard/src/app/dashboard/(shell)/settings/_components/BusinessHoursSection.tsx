@@ -39,7 +39,7 @@ export function BusinessHoursSection({
       {settingsState.businessHoursEnabled && (
         <>
           <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-white/60">Opening days</span>
+              <span className="block text-xs font-semibold text-foreground/60">Opening days</span>
               <div className="flex gap-1.5 flex-wrap">
                 {DAY_OPTIONS.map(([value, label]) => (
                   <button
@@ -55,8 +55,8 @@ export function BusinessHoursSection({
                     })}
                     className={`h-8 w-12 rounded-md border text-xs font-semibold transition-all ${
                       settingsState.businessHoursDays.includes(value)
-                        ? "bg-white/[0.15] text-white border-white/[0.35]"
-                        : "bg-transparent border-white/[0.12] text-white/40 hover:border-white/[0.22] hover:text-white/60"
+                        ? "bg-foreground/[0.15] text-white border-foreground/[0.35]"
+                        : "bg-transparent border-foreground/[0.12] text-foreground/40 hover:border-foreground/[0.22] hover:text-foreground/60"
                     }`}
                   >
                     {label}
@@ -95,14 +95,14 @@ export function BusinessHoursSection({
             )}
 
             <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-white/60">Timezone</span>
+              <span className="block text-xs font-semibold text-foreground/60">Timezone</span>
               <TimezoneSelect
                 aria-label="Business hours timezone"
                 value={settingsState.businessHoursTimezone ?? ""}
                 onChange={value => dispatch({ type: "set", patch: { businessHoursTimezone: value } })}
                 className={settingsSelectClassName("w-80")}
               />
-              <p className="text-xs text-white/30">Daylight Saving Time is handled automatically.</p>
+              <p className="text-xs text-foreground/30">Daylight Saving Time is handled automatically.</p>
             </div>
 
             <CharacterCountTextarea
@@ -124,8 +124,8 @@ export function BusinessHoursSection({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-white/70">Business hours</h3>
-          <p className="text-xs text-white/35 mt-0.5 leading-relaxed">
+          <h3 className="text-sm font-semibold text-foreground/70">Business hours</h3>
+          <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">
             When customers message outside these hours, I&apos;ll send a quick auto-acknowledgment instead of planning a reply.
           </p>
         </div>

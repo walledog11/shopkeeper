@@ -21,8 +21,8 @@ const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string
   send: "border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100",
   draft: "border-violet-500/40 text-violet-200 hover:bg-violet-500/10 hover:text-violet-100",
   caution: "border-amber-500/40 text-amber-200 hover:bg-amber-500/10 hover:text-amber-100",
-  neutral: "border-border text-white/75 hover:text-white hover:bg-white/[0.06]",
-  loading: "border-border text-white/50 hover:bg-transparent hover:text-white/50",
+  neutral: "border-border text-foreground/75 hover:text-white hover:bg-foreground/[0.06]",
+  loading: "border-border text-foreground/50 hover:bg-transparent hover:text-foreground/50",
 }
 
 export default function ConversationHeader({
@@ -42,7 +42,7 @@ export default function ConversationHeader({
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden shrink-0 -ml-2 text-white/40 hover:text-white/80 hover:bg-white/[0.06] size-8"
+          className="md:hidden shrink-0 -ml-2 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8"
           onClick={onBack}
         >
           <ArrowLeft className="size-4" />
@@ -53,19 +53,19 @@ export default function ConversationHeader({
             className="min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit] xl:pointer-events-none xl:cursor-auto"
             onClick={onOpenContext}
           >
-            <h3 className="text-[15px] font-semibold text-white/80 truncate leading-tight">
+            <h3 className="text-[15px] font-semibold text-foreground/80 truncate leading-tight">
               {customer}
             </h3>
-            <p className="text-xs text-white/35 font-medium capitalize">
+            <p className="text-xs text-foreground/35 font-medium capitalize">
               via {platform}
             </p>
           </button>
         ) : (
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-white/80 truncate leading-tight">
+            <h3 className="text-[15px] font-semibold text-foreground/80 truncate leading-tight">
               {customer}
             </h3>
-            <p className="text-xs text-white/35 font-medium capitalize">
+            <p className="text-xs text-foreground/35 font-medium capitalize">
               via {platform}
             </p>
           </div>
@@ -94,7 +94,7 @@ export default function ConversationHeader({
           <Button
             variant="ghost"
             size="icon"
-            className="xl:hidden shrink-0 text-white/40 hover:text-white/80 hover:bg-white/[0.06] size-8"
+            className="xl:hidden shrink-0 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8"
             onClick={onOpenContext}
           >
             <Info className="size-4" />
@@ -104,7 +104,7 @@ export default function ConversationHeader({
           <Button
             size="sm"
             onClick={onResolve}
-            className="bg-white hover:bg-white/90 text-black text-xs font-semibold flex items-center gap-1.5 h-8"
+            className="bg-white hover:bg-foreground/90 text-black text-xs font-semibold flex items-center gap-1.5 h-8"
           >
             <CheckCircle2 className="size-3.5" />
             <span className="hidden sm:inline">Close Ticket</span>
@@ -119,7 +119,7 @@ export default function ConversationHeader({
               variant="outline"
               size="sm"
               onClick={onReopen}
-              className="text-white/50 border-border hover:bg-white/[0.06] hover:text-white/80 text-xs font-semibold flex items-center gap-1.5 h-8"
+              className="text-foreground/50 border-border hover:bg-foreground/[0.06] hover:text-foreground/80 text-xs font-semibold flex items-center gap-1.5 h-8"
             >
               <RotateCcw className="size-3.5" /> Reopen
             </Button>

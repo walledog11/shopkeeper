@@ -44,13 +44,13 @@ export function ArticleEditDetail({
         <p className="text-xs text-red-400" aria-live="polite">{editError}</p>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancelEdit} className="text-xs text-white/40 hover:text-white/70 transition-colors px-3 py-1.5">
+        <button type="button" onClick={onCancelEdit} className="text-xs text-foreground/40 hover:text-foreground/70 transition-colors px-3 py-1.5">
           Cancel
         </button>
         <button type="button"
           onClick={onSaveEdit}
           disabled={isSaving || !editDraft.title.trim() || !editDraft.body.trim()}
-          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-white/[0.12] hover:bg-white/[0.18] disabled:opacity-40 px-3 py-1.5 rounded-md transition-colors"
+          className="flex items-center gap-1.5 text-xs font-semibold text-white bg-foreground/[0.12] hover:bg-foreground/[0.18] disabled:opacity-40 px-3 py-1.5 rounded-md transition-colors"
         >
           {isSaving ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
           Save

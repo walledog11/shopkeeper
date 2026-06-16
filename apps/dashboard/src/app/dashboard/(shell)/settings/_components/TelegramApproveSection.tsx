@@ -30,10 +30,10 @@ export function TelegramApproveSection() {
           <Smartphone className="size-5 shrink-0 text-amber-400 mt-0.5" />
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-white/80">
+          <h3 className="text-sm font-semibold text-foreground/80">
             {connected ? "Approve from your phone" : "Link Telegram to approve from your phone"}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-white/45">
+          <p className="mt-1 text-xs leading-relaxed text-foreground/45">
             {connected ? (
               <>
                 Telegram is linked

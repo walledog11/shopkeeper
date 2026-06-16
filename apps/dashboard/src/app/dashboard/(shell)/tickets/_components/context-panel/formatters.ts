@@ -7,7 +7,7 @@ export function fulfillmentLabel(status: string | null): { label: string; textCl
   switch (status) {
     case 'fulfilled': return { label: 'Fulfilled', textClass: 'text-emerald-400', dotClass: 'bg-emerald-500' }
     case 'partial': return { label: 'Partial', textClass: 'text-amber-400', dotClass: 'bg-amber-500' }
-    case 'restocked': return { label: 'Restocked', textClass: 'text-white/50', dotClass: 'bg-white/30' }
+    case 'restocked': return { label: 'Restocked', textClass: 'text-foreground/50', dotClass: 'bg-foreground/30' }
     default: return { label: 'Unfulfilled', textClass: 'text-amber-400', dotClass: 'bg-amber-500' }
   }
 }

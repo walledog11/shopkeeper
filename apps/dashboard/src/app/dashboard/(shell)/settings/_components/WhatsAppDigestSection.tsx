@@ -81,7 +81,7 @@ export function WhatsAppDigestSection({ controller }: { controller: AgentTabCont
             </div>
 
             <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-white/60">Days</span>
+              <span className="block text-xs font-semibold text-foreground/60">Days</span>
               <div className="flex gap-2">
                 {DIGEST_DAYS_OPTIONS.map(([value, label]) => (
                   <button
@@ -90,8 +90,8 @@ export function WhatsAppDigestSection({ controller }: { controller: AgentTabCont
                     onClick={() => dispatch({ type: "set", patch: { digestDays: value } })}
                     className={`h-8 px-3 rounded-md border text-xs font-semibold transition-all ${
                       settingsState.digestDays === value
-                        ? "bg-white/[0.15] text-white border-white/[0.35]"
-                        : "bg-transparent border-white/[0.12] text-white/40 hover:border-white/[0.22] hover:text-white/60"
+                        ? "bg-foreground/[0.15] text-white border-foreground/[0.35]"
+                        : "bg-transparent border-foreground/[0.12] text-foreground/40 hover:border-foreground/[0.22] hover:text-foreground/60"
                     }`}
                   >
                     {label}
@@ -101,14 +101,14 @@ export function WhatsAppDigestSection({ controller }: { controller: AgentTabCont
             </div>
 
             <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-white/60">Timezone</span>
+              <span className="block text-xs font-semibold text-foreground/60">Timezone</span>
               <TimezoneSelect
                 aria-label="Digest timezone"
                 value={settingsState.digestTimezone ?? ""}
                 onChange={value => dispatch({ type: "set", patch: { digestTimezone: value } })}
                 className={settingsSelectClassName("w-80")}
               />
-              <p className="text-xs text-white/30">Daylight Saving Time is handled automatically.</p>
+              <p className="text-xs text-foreground/30">Daylight Saving Time is handled automatically.</p>
             </div>
           </>
         )}

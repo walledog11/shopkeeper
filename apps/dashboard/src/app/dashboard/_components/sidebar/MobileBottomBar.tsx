@@ -12,7 +12,7 @@ export function MobileBottomBar({ openCount }: { openCount: number }) {
   return (
     <div
       data-dashboard-mobile-bottom-bar
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-neutral-950 border-t border-white/[0.08] flex items-stretch"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-neutral-950 border-t border-foreground/[0.08] flex items-stretch"
     >
       {mobileTabs.map((tab) => {
         const isActive = isRouteActive(pathname, tab.href);
@@ -30,7 +30,7 @@ export function MobileBottomBar({ openCount }: { openCount: number }) {
             }}
             className={cn(
               "flex-1 flex flex-col items-center justify-center gap-1 py-2.5 relative transition-colors",
-              isActive ? "text-white" : "text-white/70",
+              isActive ? "text-white" : "text-foreground/70",
             )}
           >
             {isActive && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 rounded-full bg-sky-400" />}

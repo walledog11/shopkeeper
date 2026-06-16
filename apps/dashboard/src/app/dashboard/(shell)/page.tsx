@@ -8,7 +8,7 @@ export default async function DashboardPage() {
   const [org, user] = await Promise.all([getOrCreateOrg(), currentUser()])
   const initialSummary = await getHomeSummary(org.id, org.settings as Partial<OrgSettings> | null)
 
-  const userName = user?.firstName ?? user?.fullName ?? "there"
+  const userName = user?.firstName ?? user?.fullName ?? ""
 
   return (
     <DashboardHomeClient

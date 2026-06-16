@@ -40,7 +40,7 @@ export function EmptyState({
             <CheckCircle2 className="size-5 text-foreground/40" />
           </span>
           <div>
-            <p className="text-sm font-semibold text-foreground/70 mb-1">You&apos;re caught up</p>
+            <p className="text-sm font-semibold text-foreground/70 mb-1">You&apos;re all caught up</p>
             <p className="text-xs text-foreground/45 mb-3">
               Nothing needs your reply right now.
             </p>

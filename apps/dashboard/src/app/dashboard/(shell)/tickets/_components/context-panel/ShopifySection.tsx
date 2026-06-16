@@ -231,7 +231,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
               <button
                 type="button"
                 onClick={() => dispatch({ type: "editing", editing: true })}
-                className="flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/[0.05] hover:text-white/70"
+                className="flex size-6 items-center justify-center rounded text-foreground/40 transition-colors hover:bg-foreground/[0.05] hover:text-foreground/70"
                 aria-label="Edit customer"
                 title="Edit customer"
               >
@@ -285,7 +285,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
       />
     )
   } else if (isEmailThread && !isLoading && !data?.customer) {
-    body = <p className="text-xs text-white/40">No Shopify account found for this email.</p>
+    body = <p className="text-xs text-foreground/40">No Shopify account found for this email.</p>
   } else if (canLoadCustomer && data?.customer) {
     body = (
       <>

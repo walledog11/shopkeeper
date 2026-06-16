@@ -6,15 +6,15 @@ import { settingsSelectClassName } from "./settings-form-styles"
 
 function FieldLabel({ label, hint }: { label: string; hint?: string }) {
   return (
-    <span className="block text-xs font-semibold text-white/60">
+    <span className="block text-xs font-semibold text-foreground/60">
       {label}
-      {hint && <span className="ml-1.5 font-normal text-white/30">· {hint}</span>}
+      {hint && <span className="ml-1.5 font-normal text-foreground/30">· {hint}</span>}
     </span>
   )
 }
 
 const SETTINGS_INPUT_CLASS =
-  "h-9 text-sm bg-white/[0.06] border-white/[0.12] text-white/80 placeholder:text-white/25"
+  "h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-foreground/80 placeholder:text-foreground/25"
 
 type LabeledTextInputProps = Omit<ComponentProps<"input">, "className"> & {
   label: string
@@ -40,7 +40,7 @@ export function LabeledTextInput({
       <div className={inputWidthClassName}>
         <Input {...inputProps} className={cn(SETTINGS_INPUT_CLASS, inputClassName)} />
       </div>
-      {description && <p className="text-xs text-white/30">{description}</p>}
+      {description && <p className="text-xs text-foreground/30">{description}</p>}
     </div>
   )
 }
@@ -81,7 +81,7 @@ export function NumberInput({
           className={cn(SETTINGS_INPUT_CLASS, inputClassName)}
         />
       </div>
-      {description && <p className="text-xs text-white/30">{description}</p>}
+      {description && <p className="text-xs text-foreground/30">{description}</p>}
     </div>
   )
 }
@@ -112,7 +112,7 @@ export function MoneyInput({
     <div className={cn("space-y-1.5", wrapperClassName)}>
       <FieldLabel label={label} hint={hint} />
       <div className={cn("relative", inputWidthClassName)}>
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-white/30">$</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-foreground/30">$</span>
         <Input
           {...inputProps}
           value={value}
@@ -120,7 +120,7 @@ export function MoneyInput({
           className={cn(SETTINGS_INPUT_CLASS, "pl-7", inputClassName)}
         />
       </div>
-      {description && <p className="text-xs text-white/30">{description}</p>}
+      {description && <p className="text-xs text-foreground/30">{description}</p>}
     </div>
   )
 }
@@ -168,7 +168,7 @@ export function SelectField<TValue extends string>({
           </option>
         ))}
       </select>
-      {description && <p className="text-xs text-white/30">{description}</p>}
+      {description && <p className="text-xs text-foreground/30">{description}</p>}
     </div>
   )
 }
@@ -203,7 +203,7 @@ export function CharacterCountTextarea({
         maxLength={maxLength}
         className={textareaClassName}
       />
-      <p className="text-xs text-white/30 text-right">{value.length}/{maxLength}</p>
+      <p className="text-xs text-foreground/30 text-right">{value.length}/{maxLength}</p>
     </div>
   )
 }

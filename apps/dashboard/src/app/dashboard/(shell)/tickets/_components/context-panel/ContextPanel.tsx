@@ -52,7 +52,7 @@ export default function ContextPanel({
 
   return (
     <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-border flex flex-col xl:overflow-y-auto bg-background">
-      <section className="px-3.5 pt-3 pb-3 border-b border-white/[0.08]">
+      <section className="px-3.5 pt-3 pb-3 border-b border-foreground/[0.08]">
         <div className="flex flex-row items-center gap-4">
           <div className="size-8 rounded-full overflow-hidden bg-[#ff7a1a] flex items-center justify-center text-white text-xs font-semibold shrink-0">
             {thread.customer?.profilePicUrl ? (
@@ -61,12 +61,12 @@ export default function ContextPanel({
           </div>
 
           <div className="mt-1 min-w-0">
-            <p className="text-sm leading-5 font-semibold text-white/90 truncate">{displayName}</p>
+            <p className="text-sm leading-5 font-semibold text-foreground/90 truncate">{displayName}</p>
             {secondaryHandle && secondaryHandle !== displayName && (
-              <p className="mt-0.5 text-xs leading-4 text-white/50 truncate">{secondaryHandle}</p>
+              <p className="mt-0.5 text-xs leading-4 text-foreground/50 truncate">{secondaryHandle}</p>
             )}
             {location && (
-              <p className="mt-0.5 flex items-center gap-1 text-xs italic leading-4 text-white/40 truncate">
+              <p className="mt-0.5 flex items-center gap-1 text-xs italic leading-4 text-foreground/40 truncate">
                 {location}
               </p>
             )}
@@ -113,7 +113,7 @@ export default function ContextPanel({
       <section className="px-3.5 py-3">
         <SectionHeader title="Past conversations" />
         {recentThreads.length > 0 ? (
-          <div className="divide-y divide-dashed divide-white/[0.08]">
+          <div className="divide-y divide-dashed divide-foreground/[0.08]">
             {recentThreads.map(t => {
               const preview = t.messages[0]?.contentText
               const title = t.tag || t.aiSummary || preview || 'No content'
@@ -124,16 +124,16 @@ export default function ContextPanel({
                   className="flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0 group"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-xs leading-4 text-white/80 group-hover:text-white transition-colors">
+                    <span className="block truncate text-xs leading-4 text-foreground/80 group-hover:text-white transition-colors">
                       {title}
                     </span>
                     {preview && preview !== title && (
-                      <span className="mt-0.5 block truncate text-xs leading-3 text-white/40">
+                      <span className="mt-0.5 block truncate text-xs leading-3 text-foreground/40">
                         {preview}
                       </span>
                     )}
                   </span>
-                  <span className="text-xs leading-4 text-white/50 shrink-0">
+                  <span className="text-xs leading-4 text-foreground/50 shrink-0">
                     {formatShortDate(t.updatedAt)}
                   </span>
                 </NextLink>

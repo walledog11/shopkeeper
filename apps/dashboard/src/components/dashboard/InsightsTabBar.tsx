@@ -28,7 +28,7 @@ export function InsightsTabBar<T extends string>({
         "inline-flex flex-wrap items-center gap-1 rounded-lg border p-1",
         variant === "light"
           ? "border-border bg-muted/40"
-          : "border-white/[0.08] bg-white/[0.03]",
+          : "border-foreground/[0.08] bg-foreground/[0.03]",
         className,
       )}
     >
@@ -46,8 +46,8 @@ export function InsightsTabBar<T extends string>({
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
                 : isActive
-                  ? "bg-white/[0.12] text-white"
-                  : "text-white/55 hover:text-white/80",
+                  ? "bg-foreground/[0.12] text-white"
+                  : "text-foreground/55 hover:text-foreground/80",
             )}
           >
             {tab.label}

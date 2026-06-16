@@ -31,7 +31,7 @@ function RolePill({ role }: { role: string }) {
   const isAdmin = role === "org:admin";
   return (
     <Badge variant="ghost" className={`text-xs font-semibold gap-1 ${
-      isAdmin ? "bg-violet-400/10 text-violet-400" : "bg-white/[0.08] text-white/40"
+      isAdmin ? "bg-violet-400/10 text-violet-400" : "bg-foreground/[0.08] text-foreground/40"
     }`}>
       {isAdmin ? <Shield className="size-2.5" /> : <User className="size-2.5" />}
       {roleLabel(role)}
@@ -158,8 +158,8 @@ function TeamPageContent(props: Props) {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-white/80">Team</h1>
-            <p className="text-sm text-white/30 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
+            <h1 className="text-xl font-bold tracking-tight text-foreground/80">Team</h1>
+            <p className="text-sm text-foreground/30 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
           </div>
           {isAdmin && (
             <button type="button"
@@ -176,33 +176,33 @@ function TeamPageContent(props: Props) {
         )}
 
         {/* Members list */}
-        <div className="bg-card rounded-md border border-white/[0.08] overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-white/[0.07]">
-            <h2 className="text-sm font-semibold text-white/70">Members</h2>
+        <div className="bg-card rounded-md border border-foreground/[0.08] overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-foreground/[0.07]">
+            <h2 className="text-sm font-semibold text-foreground/70">Members</h2>
           </div>
-          <div className="divide-y divide-white/[0.05]">
+          <div className="divide-y divide-foreground/[0.05]">
             {members.map(member => {
               const fullName = [member.firstName, member.lastName].filter(Boolean).join(" ") || member.identifier;
               const isSelf = member.userId === currentUserId;
               return (
                 <div key={member.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="size-9 rounded-full bg-white/[0.10] text-white/60 font-semibold text-xs shrink-0" />
+                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="size-9 rounded-full bg-foreground/[0.10] text-foreground/60 font-semibold text-xs shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-white/80 truncate">{fullName}</span>
-                      {isSelf && <Badge variant="ghost" className="text-xs font-semibold text-white/30 bg-white/[0.08]">You</Badge>}
+                      <span className="text-sm font-semibold text-foreground/80 truncate">{fullName}</span>
+                      {isSelf && <Badge variant="ghost" className="text-xs font-semibold text-foreground/30 bg-foreground/[0.08]">You</Badge>}
                     </div>
-                    <p className="text-xs text-white/30 truncate">{member.identifier}</p>
+                    <p className="text-xs text-foreground/30 truncate">{member.identifier}</p>
                   </div>
                   <RolePill role={member.role} />
-                  <span className="hidden md:block text-xs text-white/25 shrink-0">
+                  <span className="hidden md:block text-xs text-foreground/25 shrink-0">
                     Joined {timeAgo(new Date(member.createdAt).toISOString())}
                   </span>
                   {isAdmin && !isSelf && (
                     <button type="button"
                       onClick={() => handleRemoveMember(member.userId)}
                       disabled={removing === member.userId}
-                      className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-foreground/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                       title="Remove member"
                     >
                       <Trash2 className="size-4" />
@@ -216,27 +216,27 @@ function TeamPageContent(props: Props) {
 
         {/* Pending invitations */}
         {invitations.length > 0 && (
-          <div className="bg-card rounded-md border border-white/[0.08] overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/[0.07]">
-              <h2 className="text-sm font-semibold text-white/70">Pending invitations</h2>
-              <Badge variant="ghost" className="text-xs font-semibold text-white/30 bg-white/[0.08]">{invitations.length}</Badge>
+          <div className="bg-card rounded-md border border-foreground/[0.08] overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-foreground/[0.07]">
+              <h2 className="text-sm font-semibold text-foreground/70">Pending invitations</h2>
+              <Badge variant="ghost" className="text-xs font-semibold text-foreground/30 bg-foreground/[0.08]">{invitations.length}</Badge>
             </div>
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-foreground/[0.05]">
               {invitations.map(invite => (
                 <div key={invite.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="size-9 rounded-full bg-white/[0.08] flex items-center justify-center shrink-0">
-                    <Mail className="size-4 text-white/30" />
+                  <div className="size-9 rounded-full bg-foreground/[0.08] flex items-center justify-center shrink-0">
+                    <Mail className="size-4 text-foreground/30" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white/60 truncate">{invite.emailAddress}</p>
-                    <p className="text-xs text-white/30">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
+                    <p className="text-sm font-medium text-foreground/60 truncate">{invite.emailAddress}</p>
+                    <p className="text-xs text-foreground/30">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
                   </div>
                   <RolePill role={invite.role} />
                   {isAdmin && (
                     <button type="button"
                       onClick={() => handleRevokeInvite(invite.id)}
                       disabled={removing === invite.id}
-                      className="p-1.5 rounded-md text-white/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-foreground/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                       title="Revoke invitation"
                     >
                       <X className="size-4" />
@@ -253,16 +253,16 @@ function TeamPageContent(props: Props) {
       {showInviteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button type="button" aria-label="Close invite dialog" className="absolute inset-0 border-0 bg-neutral-950/60 p-0" onClick={() => setShowInviteModal(false)} />
-          <div className="relative bg-card border border-white/[0.10] rounded-md shadow-2xl w-full max-w-md p-6">
+          <div className="relative bg-card border border-foreground/[0.10] rounded-md shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-bold text-white/80">Invite team member</h2>
-              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 rounded-md text-white/30 hover:text-white/70 hover:bg-white/[0.08] transition-colors">
+              <h2 className="text-base font-bold text-foreground/80">Invite team member</h2>
+              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 rounded-md text-foreground/30 hover:text-foreground/70 hover:bg-foreground/[0.08] transition-colors">
                 <X className="size-4" />
               </button>
             </div>
             <form onSubmit={handleInvite} className="space-y-4">
               <div>
-                <span className="block text-xs font-semibold text-white/50 mb-1.5">Email address</span>
+                <span className="block text-xs font-semibold text-foreground/50 mb-1.5">Email address</span>
                 <input
                   aria-label="Email address"
                   type="email"
@@ -270,16 +270,16 @@ function TeamPageContent(props: Props) {
                   onChange={e => setInviteEmail(e.target.value)}
                   placeholder="colleague@company.com"
                   required
-                  className="w-full px-3 py-2 text-sm text-white/70 border border-white/[0.12] bg-white/[0.06] rounded-md focus:outline-none focus:border-white/[0.25] placeholder:text-white/20 transition"
+                  className="w-full px-3 py-2 text-sm text-foreground/70 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/20 transition"
                 />
               </div>
               <div>
-                <span className="block text-xs font-semibold text-white/50 mb-1.5">Role</span>
+                <span className="block text-xs font-semibold text-foreground/50 mb-1.5">Role</span>
                 <select
                   aria-label="Role"
                   value={inviteRole}
                   onChange={e => setInviteRole(e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-white/70 border border-white/[0.12] bg-white/[0.06] rounded-md focus:outline-none focus:border-white/[0.25] transition"
+                  className="w-full px-3 py-2 text-sm text-foreground/70 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] transition"
                 >
                   <option value="org:member">Member — can view and respond to tickets</option>
                   <option value="org:admin">Admin — full access including settings</option>
@@ -292,7 +292,7 @@ function TeamPageContent(props: Props) {
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="flex-1 py-2 text-sm font-medium text-white/50 border border-white/[0.10] rounded-md hover:bg-white/[0.05] transition-colors"
+                  className="flex-1 py-2 text-sm font-medium text-foreground/50 border border-foreground/[0.10] rounded-md hover:bg-foreground/[0.05] transition-colors"
                 >
                   Cancel
                 </button>

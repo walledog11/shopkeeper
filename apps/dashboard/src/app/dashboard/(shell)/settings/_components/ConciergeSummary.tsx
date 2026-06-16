@@ -31,7 +31,7 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
         </span>
       </div>
 
-      <p className="mt-2.5 text-[14px] leading-relaxed text-white/80">
+      <p className="mt-2.5 text-[14px] leading-relaxed text-foreground/80">
         I&apos;m set to{" "}
         <Pill href={agentConfigureHref("autonomy")}>
           {settings.autoPlanOnOpen ? "draft a plan the moment a ticket opens" : "wait for you to ask before planning"}
@@ -51,7 +51,7 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
 }
 
 const PILL_CLASS =
-  "inline-flex items-baseline rounded border border-white/[0.12] bg-white/[0.06] px-1.5 py-px align-baseline text-[13.5px] font-medium text-white transition-colors hover:bg-white/[0.10]"
+  "inline-flex items-baseline rounded border border-foreground/[0.12] bg-foreground/[0.06] px-1.5 py-px align-baseline text-[13.5px] font-medium text-white transition-colors hover:bg-foreground/[0.10]"
 
 function Pill({ href, children }: { href: string; children: React.ReactNode }) {
   return (

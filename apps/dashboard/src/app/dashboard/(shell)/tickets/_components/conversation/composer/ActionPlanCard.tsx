@@ -30,7 +30,10 @@ function warningDisplayText(warning: string, blocking: boolean): string {
 
 function stepChipLabel(step: PlanStep): string {
   const text = (step.description || step.label || "").replace(/^"|"$/g, "").trim()
-  return text.length > 46 ? `${text.slice(0, 45)}…` : text
+  if (text.length <= 72) return text
+  const clipped = text.slice(0, 71)
+  const lastSpace = clipped.lastIndexOf(" ")
+  return `${(lastSpace > 40 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`
 }
 
 const PLAN_CARD_CLASS =

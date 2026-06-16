@@ -116,7 +116,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
           animate={{ opacity: 1, height: "auto", y: 0 }}
           exit={{ opacity: 0, height: 0, y: -6 }}
           transition={bannerTransition}
-          className="rounded-md border border-white/[0.07] bg-white/[0.02] shrink-0 overflow-hidden"
+          className="rounded-md border border-foreground/[0.07] bg-foreground/[0.02] shrink-0 overflow-hidden"
         >
           <div className="flex items-center gap-3 px-4 py-2.5">
             <button
@@ -157,18 +157,18 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                 </svg>
               </m.div>
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                <span className="text-xs font-semibold text-white/80 shrink-0">
+                <span className="text-xs font-semibold text-foreground/80 shrink-0">
                   Workflow setup · {doneCount} of {totalCount}
                 </span>
-                <span className="text-white/15">—</span>
-                <span className="text-xs text-white/45 truncate">{summary}</span>
+                <span className="text-foreground/15">—</span>
+                <span className="text-xs text-foreground/45 truncate">{summary}</span>
               </div>
               <m.div
                 animate={{ rotate: expanded ? 180 : 0 }}
                 transition={{ duration: 0.18, ease: "easeInOut" }}
                 className="shrink-0"
               >
-                <ChevronDown className="size-3.5 text-white/40" />
+                <ChevronDown className="size-3.5 text-foreground/40" />
               </m.div>
             </button>
             <m.button
@@ -176,7 +176,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
               onClick={dismiss}
               whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.94 }}
-              className="size-6 rounded flex items-center justify-center text-white/30 hover:text-white/70 hover:bg-white/[0.04] transition-colors shrink-0"
+              className="size-6 rounded flex items-center justify-center text-foreground/30 hover:text-foreground/70 hover:bg-foreground/[0.04] transition-colors shrink-0"
               aria-label="Dismiss"
             >
               <X className="size-3.5" />
@@ -193,7 +193,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                 exit="collapsed"
                 className="overflow-hidden"
               >
-                <ul className="border-t border-white/[0.06] px-2 py-1.5">
+                <ul className="border-t border-foreground/[0.06] px-2 py-1.5">
                   {steps.map((step) => {
                     const isDone = step.status === "done"
                     const stepKey = getStepKey(step)
@@ -207,7 +207,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                           <span className="size-4 rounded-full bg-green-400/15 border border-green-400/40 flex items-center justify-center shrink-0">
                             <Check className="size-2.5 text-green-400" />
                           </span>
-                          <span className="text-xs text-white/40 line-through truncate flex-1">
+                          <span className="text-xs text-foreground/40 line-through truncate flex-1">
                             {step.label}
                           </span>
                         </m.li>
@@ -217,13 +217,13 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                       <m.li key={stepKey} variants={stepItemVariants}>
                         <Link
                           href={step.href}
-                          className="group flex items-center gap-3 px-2.5 py-2 rounded-md hover:bg-white/[0.03] transition-colors"
+                          className="group flex items-center gap-3 px-2.5 py-2 rounded-md hover:bg-foreground/[0.03] transition-colors"
                         >
-                          <span className="size-4 rounded-full border border-white/25 shrink-0" />
-                          <span className="text-xs text-white/80 group-hover:text-white truncate flex-1">
+                          <span className="size-4 rounded-full border border-foreground/25 shrink-0" />
+                          <span className="text-xs text-foreground/80 group-hover:text-white truncate flex-1">
                             {step.label}
                           </span>
-                          <ChevronRight className="size-3.5 text-white/30 group-hover:text-white/60 shrink-0 transition-colors" />
+                          <ChevronRight className="size-3.5 text-foreground/30 group-hover:text-foreground/60 shrink-0 transition-colors" />
                         </Link>
                       </m.li>
                     )

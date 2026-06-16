@@ -66,14 +66,14 @@ function SettingsPageContent({ orgName, version }: Props) {
 
   return (
     <div className="flex-1 overflow-y-auto min-w-0">
-      <div className="sticky top-0 z-20 border-b border-white/[0.06] bg-neutral-950/95 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-neutral-950/88 sm:px-6 lg:px-8">
+      <div className="sticky top-0 z-20 border-b border-foreground/[0.06] bg-neutral-950/95 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-neutral-950/88 sm:px-6 lg:px-8">
         <nav
           aria-label="Workspace settings sections"
-          className="overflow-hidden rounded-xl border border-white/[0.08] bg-card"
+          className="overflow-hidden rounded-xl border border-foreground/[0.08] bg-card"
         >
           <div
             role="tablist"
-            className="grid grid-cols-2 divide-x divide-white/[0.06] sm:flex sm:w-full"
+            className="grid grid-cols-2 divide-x divide-foreground/[0.06] sm:flex sm:w-full"
           >
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id
@@ -89,13 +89,13 @@ function SettingsPageContent({ orgName, version }: Props) {
                     "sm:min-w-0 sm:flex-1",
                     active
                       ? "text-white"
-                      : "text-white/40 hover:bg-white/[0.03] hover:text-white/65",
+                      : "text-foreground/40 hover:bg-foreground/[0.03] hover:text-foreground/65",
                   )}
                 >
                   <Icon
                     className={cn(
                       "size-3.5 shrink-0",
-                      active ? "text-white/70" : "text-white/35",
+                      active ? "text-foreground/70" : "text-foreground/35",
                     )}
                   />
                   <span>{label}</span>
@@ -103,7 +103,7 @@ function SettingsPageContent({ orgName, version }: Props) {
                     aria-hidden
                     className={cn(
                       "absolute inset-x-3 bottom-0 h-0.5 rounded-full transition-colors",
-                      active ? "bg-white/70" : "bg-transparent",
+                      active ? "bg-foreground/70" : "bg-transparent",
                     )}
                   />
                 </button>

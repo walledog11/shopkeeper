@@ -18,7 +18,7 @@ export function ConfigureSection({
         <h3 className="text-sm font-semibold text-white">{title}</h3>
         {action}
       </div>
-      <div className="rounded-xl border border-white/[0.10] bg-white/[0.02] overflow-hidden divide-y divide-white/[0.06]">
+      <div className="rounded-xl border border-foreground/[0.10] bg-foreground/[0.02] overflow-hidden divide-y divide-foreground/[0.06]">
         {children}
       </div>
     </section>

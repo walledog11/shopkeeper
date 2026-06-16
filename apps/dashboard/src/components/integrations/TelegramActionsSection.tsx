@@ -42,8 +42,8 @@ export function TelegramActionsSection({
             disabled={disconnecting !== null}
           />
           {confirmingDisconnectAll && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-white/[0.02]">
-              <p className="text-xs text-white/55 leading-relaxed">{DISCONNECT_ALL_NOTE}</p>
+            <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-foreground/[0.02]">
+              <p className="text-xs text-foreground/55 leading-relaxed">{DISCONNECT_ALL_NOTE}</p>
               <button
                 type="button"
                 onClick={() => {

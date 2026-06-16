@@ -206,7 +206,7 @@ export default function ThreadList({
       <div
         data-testid="tickets-list"
         className={`flex-1 overflow-y-auto custom-scrollbar ${
-          useTieredForMeLayout ? "" : "divide-y divide-white/[0.1]"
+          useTieredForMeLayout ? "" : "divide-y divide-foreground/[0.1]"
         }`}
       >
         {listLoading ? (
@@ -248,11 +248,11 @@ export default function ThreadList({
             )}
 
             {!isSearchMode && hasMore && tickets.length > 0 && (
-              <div className="px-4 py-3 border-t border-white/[0.05]">
+              <div className="px-4 py-3 border-t border-foreground/[0.05]">
                 <button type="button"
                   onClick={onLoadMore}
                   disabled={isLoadingMore}
-                  className="w-full text-xs font-semibold text-white/40 hover:text-white/70 disabled:opacity-40 transition-colors py-1"
+                  className="w-full text-xs font-semibold text-foreground/40 hover:text-foreground/70 disabled:opacity-40 transition-colors py-1"
                 >
                   {isLoadingMore ? "Loading…" : "Load more"}
                 </button>

@@ -25,8 +25,8 @@ export function SpamFilterSection({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-white/70">Spam filter</h3>
-          <p className="text-xs text-white/35 mt-0.5 leading-relaxed">
+          <h3 className="text-sm font-semibold text-foreground/70">Spam filter</h3>
+          <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">
             When on, filtered emails are hidden from your inbox and purged after 7 days unless you recover them.
           </p>
         </div>

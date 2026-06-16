@@ -72,23 +72,23 @@ export function EmailForwardingSetupPanel({
   const guide = FORWARDING_GUIDES.find(g => g.id === provider) ?? FORWARDING_GUIDES[0]
 
   return (
-    <div className="px-4 py-3.5 bg-white/[0.02] space-y-3">
+    <div className="px-4 py-3.5 bg-foreground/[0.02] space-y-3">
       <div className="space-y-2">
-        <p className="text-xs text-white/40">Forward incoming mail to</p>
-        <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+        <p className="text-xs text-foreground/40">Forward incoming mail to</p>
+        <div className="flex items-center gap-2 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2.5">
           {inboundAddress ? (
             <>
-              <p className="text-sm font-mono text-white/75 truncate flex-1">{inboundAddress}</p>
+              <p className="text-sm font-mono text-foreground/75 truncate flex-1">{inboundAddress}</p>
               <CopyButton text={inboundAddress} />
             </>
           ) : (
-            <p className="text-sm text-white/35">Loading…</p>
+            <p className="text-sm text-foreground/35">Loading…</p>
           )}
         </div>
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs text-white/40">Set up forwarding</p>
+        <p className="text-xs text-foreground/40">Set up forwarding</p>
         <div className="flex flex-wrap gap-1.5">
           {FORWARDING_GUIDES.map(g => (
             <button
@@ -98,21 +98,21 @@ export function EmailForwardingSetupPanel({
               className={cn(
                 "text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors",
                 provider === g.id
-                  ? "bg-white/[0.08] border-white/[0.15] text-white/85"
-                  : "bg-transparent border-white/[0.08] text-white/40 hover:text-white/65 hover:border-white/[0.12]",
+                  ? "bg-foreground/[0.08] border-foreground/[0.15] text-foreground/85"
+                  : "bg-transparent border-foreground/[0.08] text-foreground/40 hover:text-foreground/65 hover:border-foreground/[0.12]",
               )}
             >
               {g.label}
             </button>
           ))}
         </div>
-        <ol className="text-xs text-white/40 space-y-1 list-decimal list-inside leading-relaxed">
+        <ol className="text-xs text-foreground/40 space-y-1 list-decimal list-inside leading-relaxed">
           {guide.steps.map((step) => <li key={step}>{step}</li>)}
         </ol>
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs text-white/40">Your support address</p>
+        <p className="text-xs text-foreground/40">Your support address</p>
         <div className="flex items-center gap-3">
           <Input
             aria-label="support@yourstore.com"
@@ -121,16 +121,16 @@ export function EmailForwardingSetupPanel({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") onSave() }}
-            className="h-10 flex-1 border-white/[0.10] bg-white/[0.03] text-sm text-white placeholder:text-white/30"
+            className="h-10 flex-1 border-foreground/[0.10] bg-foreground/[0.03] text-sm text-white placeholder:text-foreground/30"
           />
           <div className="shrink-0 flex items-center gap-1.5">
-            {loading && <Loader2 className="size-3.5 animate-spin text-white/50" />}
+            {loading && <Loader2 className="size-3.5 animate-spin text-foreground/50" />}
             <PermissionActionLink onClick={onSave} disabled={!email || loading}>
               {isConnected ? "Replace" : "Save"}
             </PermissionActionLink>
           </div>
         </div>
-        <p className="text-xs text-white/35 leading-relaxed">
+        <p className="text-xs text-foreground/35 leading-relaxed">
           Replies go out under this address.
         </p>
       </div>

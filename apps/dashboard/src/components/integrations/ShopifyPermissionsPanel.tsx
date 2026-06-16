@@ -14,7 +14,7 @@ function StatusBadge({ enabled }: { enabled: boolean }) {
       On
     </span>
   ) : (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold text-white/35">
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground/35">
       <X className="size-3.5" />
       Off
     </span>
@@ -64,7 +64,7 @@ export function ShopifyPermissionRows() {
           action={<StatusBadge enabled={row.enabled} />}
         />
       ))}
-      <div className="border-t border-white/[0.06] px-4 py-3">
+      <div className="border-t border-foreground/[0.06] px-4 py-3">
         <Link
           href={agentConfigureHref("autonomy")}
           className="text-xs font-semibold text-amber-300 transition-colors hover:text-amber-200"

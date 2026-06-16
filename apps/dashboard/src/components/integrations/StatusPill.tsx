@@ -5,8 +5,8 @@ export function StatusPill({ state }: { state: PillState }) {
   switch (state) {
     case 'waiting':
       return (
-        <output className="inline-flex items-center gap-1.5 text-xs font-medium text-white/55 bg-white/[0.03] border border-white/15 rounded-full px-3 py-1">
-          <span className="size-1.5 rounded-full bg-white/40" />
+        <output className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground/55 bg-foreground/[0.03] border border-foreground/15 rounded-full px-3 py-1">
+          <span className="size-1.5 rounded-full bg-foreground/40" />
           Waiting for first message
         </output>
       )
@@ -21,7 +21,7 @@ export function StatusPill({ state }: { state: PillState }) {
     default:
       return (
         <output className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground border border-border rounded-full px-3 py-1">
-          <span className="size-1.5 rounded-full bg-white/25" />
+          <span className="size-1.5 rounded-full bg-foreground/25" />
           Not connected
         </output>
       )

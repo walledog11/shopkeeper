@@ -58,7 +58,7 @@ export function fulfillmentStyle(status: string | null) {
   switch (status) {
     case "fulfilled":  return { label: "Fulfilled",   cls: "text-green-400 bg-green-400/10 border-green-400/20" }
     case "partial":    return { label: "Partial",     cls: "text-amber-400 bg-amber-400/10 border-amber-400/20" }
-    case "restocked":  return { label: "Restocked",   cls: "text-white/40 bg-white/[0.06] border-white/[0.10]" }
+    case "restocked":  return { label: "Restocked",   cls: "text-foreground/40 bg-foreground/[0.06] border-foreground/[0.10]" }
     default:           return { label: "Unfulfilled", cls: "text-amber-400 bg-amber-400/10 border-amber-400/20" }
   }
 }

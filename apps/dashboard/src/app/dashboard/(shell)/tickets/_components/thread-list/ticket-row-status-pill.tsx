@@ -3,7 +3,7 @@ import type { TicketListPresentationStatusTone } from "../../_lib/ticket-list-pr
 const TONE_CLASS: Record<TicketListPresentationStatusTone, string> = {
   send: "bg-emerald-500 text-white shadow-sm",
   caution: "bg-amber-500/15 text-amber-400",
-  neutral: "bg-white/10 text-white/55",
+  neutral: "bg-foreground/10 text-foreground/55",
   danger: "bg-red-500/10 text-red-400",
 }
 

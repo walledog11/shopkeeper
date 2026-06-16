@@ -36,7 +36,7 @@ export function ConnectedAccounts({
             <div className="flex-1 min-w-0">
               {connectType === "ig" ? (
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm text-white/75 truncate">
+                  <p className="text-sm text-foreground/75 truncate">
                     {integration.fromEmail || integration.externalAccountId}
                   </p>
                   {isTokenExpired(integration) ? (
@@ -51,10 +51,10 @@ export function ConnectedAccounts({
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <p className="text-sm text-white/75 truncate">{integration.externalAccountId}</p>
+                  <p className="text-sm text-foreground/75 truncate">{integration.externalAccountId}</p>
                   <CopyButton text={integration.externalAccountId} />
                   {connectType === "email" && (
-                    <span className="inline-flex items-center text-[10px] font-semibold text-white/45 bg-white/[0.05] border border-white/[0.10] rounded px-1.5 py-0.5 shrink-0">
+                    <span className="inline-flex items-center text-[10px] font-semibold text-foreground/45 bg-foreground/[0.05] border border-foreground/[0.10] rounded px-1.5 py-0.5 shrink-0">
                       {getEmailProviderLabel(integration)}
                     </span>
                   )}
@@ -64,14 +64,14 @@ export function ConnectedAccounts({
             <button
               type="button"
               onClick={() => setConfirmingId(confirmingId === integration.id ? null : integration.id)}
-              className="text-sm font-medium text-white/40 hover:text-white/70 transition-colors whitespace-nowrap shrink-0"
+              className="text-sm font-medium text-foreground/40 hover:text-foreground/70 transition-colors whitespace-nowrap shrink-0"
             >
               {confirmingId === integration.id ? "Cancel" : "Disconnect"}
             </button>
           </div>
           {confirmingId === integration.id && (
-            <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] bg-white/[0.02] px-4 py-3">
-              <p className="text-xs text-white/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
+            <div className="flex items-center justify-between gap-3 border-t border-foreground/[0.06] bg-foreground/[0.02] px-4 py-3">
+              <p className="text-xs text-foreground/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
               <button
                 type="button"
                 onClick={() => { setConfirmingId(null); onDisconnect(integration.id) }}

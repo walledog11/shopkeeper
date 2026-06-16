@@ -49,7 +49,7 @@ export default function Composer(props: ComposerProps) {
           Internal note
           {noteCount > 0 && (
             <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-xs font-bold ${
-              isNoteTab ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/[0.08] text-white/35'
+              isNoteTab ? 'bg-emerald-500/20 text-emerald-400' : 'bg-foreground/[0.08] text-foreground/35'
             }`}>
               {noteCount}
             </span>
@@ -94,7 +94,7 @@ export default function Composer(props: ComposerProps) {
                 }}
                 disabled={isSending}
                 rows={2}
-                className="flex-1 w-0 min-h-[85px] max-h-[40vh] overflow-y-auto bg-transparent resize-none outline-none text-base md:text-sm text-white/80 placeholder:text-white/30 disabled:opacity-50"
+                className="flex-1 w-0 min-h-[85px] max-h-[40vh] overflow-y-auto bg-transparent resize-none outline-none text-base md:text-sm text-foreground/80 placeholder:text-foreground/30 disabled:opacity-50"
                 placeholder={placeholder}
               />
             </div>
@@ -103,8 +103,8 @@ export default function Composer(props: ComposerProps) {
               <div />
               <div className="flex items-center gap-3">
                 {isEmailLike && senderEmail && !isNoteTab && !isAgentMode && (
-                  <span className="text-xs text-white/40 hidden sm:block">
-                    Replies as <span className="font-semibold text-white/70">{senderEmail}</span>
+                  <span className="text-xs text-foreground/40 hidden sm:block">
+                    Replies as <span className="font-semibold text-foreground/70">{senderEmail}</span>
                   </span>
                 )}
                 <button type="button"
@@ -127,7 +127,7 @@ export default function Composer(props: ComposerProps) {
                         <span className="text-sm leading-none">↑</span>
                         {isAgentMode ? `Ask ${agentName}` : isNoteTab ? 'Save note' : 'Send'}
                       </span>
-                      <kbd className="hidden md:inline bg-black/25 text-white/80 text-xs font-semibold rounded px-1.5 py-0.5 leading-none">
+                      <kbd className="hidden md:inline bg-black/25 text-foreground/80 text-xs font-semibold rounded px-1.5 py-0.5 leading-none">
                         ⌘↵
                       </kbd>
                     </>
@@ -158,7 +158,7 @@ function TabButton({ active, onClick, onPointerDown, children }: TabButtonProps)
       onClick={onClick}
       onPointerDown={onPointerDown}
       className={`relative inline-flex items-center text-sm font-semibold px-3 py-2 transition-colors ${
-        active ? 'text-white' : 'text-white/35 hover:text-white/60'
+        active ? 'text-white' : 'text-foreground/35 hover:text-foreground/60'
       }`}
     >
       {children}

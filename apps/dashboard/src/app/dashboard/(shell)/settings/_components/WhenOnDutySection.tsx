@@ -13,7 +13,7 @@ export function WhenOnDutySection({ controller }: { controller: AgentTabControll
     >
       <div className="space-y-8">
         <BusinessHoursSection controller={controller} embedded />
-        <div className="border-t border-white/[0.08] pt-8">
+        <div className="border-t border-foreground/[0.08] pt-8">
           <SpamFilterSection controller={controller} embedded />
         </div>
       </div>
