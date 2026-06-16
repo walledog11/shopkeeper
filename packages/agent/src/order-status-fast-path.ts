@@ -219,8 +219,15 @@ function pickOrdersForPlanFastPath(
 export function tryPlanOrderStatusFastPath(
   ctx: AgentContext,
   instruction: string,
+  settings?: OrgSettings,
 ): AgentPlan | null {
   if (isOperatorChannel(ctx.thread.channelType)) return null;
+
+  // The fast path returns a templated, non-brand-voice order summary. Skip it
+  // whenever the merchant has configured brand voice or sample replies — those
+  // threads need a real LLM draft that honors the configured voice, not a data
+  // dump. (The fast-path plan is always `needs_review`, never auto-sent.)
+  if (settings?.brandVoice?.trim() || (settings?.sampleReplies?.length ?? 0) > 0) return null;
 
   const customerMessage = latestCustomerMessage(ctx);
   const instructionHasOrderStatusIntent = looksLikeOrderStatusIntent(instruction);

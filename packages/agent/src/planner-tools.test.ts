@@ -1,27 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { mergeReplanToolCalls, replanNeedsSendReplyRetry, selectInitialPlanningTools, selectReplanRetryTools } from "./planner-tools.js";
-import { AGENT_TOOLS, TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { AGENT_TOOLS } from "./tools/registry/index.js";
 import type { RawToolCall } from "./types.js";
 
 describe("selectInitialPlanningTools", () => {
-  it("includes read tools, escalate_to_human, and send_reply only", () => {
+  it("includes every tool except send_reply", () => {
     const selected = selectInitialPlanningTools(AGENT_TOOLS);
     const names = selected.map((tool) => tool.name);
 
     expect(names).toContain("search_kb");
     expect(names).toContain("get_order_by_name");
     expect(names).toContain("escalate_to_human");
-    expect(names).toContain("send_reply");
-    expect(names).not.toContain("create_refund");
-    expect(names).not.toContain("add_internal_note");
+    expect(names).toContain("create_refund");
+    expect(names).not.toContain("send_reply");
 
-    for (const name of names) {
-      expect(
-        TOOL_CATEGORIES[name] === "read"
-        || name === "escalate_to_human"
-        || name === "send_reply",
-      ).toBe(true);
-    }
+    expect(AGENT_TOOLS.some((tool) => tool.name === "send_reply")).toBe(true);
+    expect(selected).toHaveLength(AGENT_TOOLS.length - 1);
   });
 });
 

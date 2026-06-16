@@ -47,7 +47,7 @@ export async function planAgent(
 
   await enforceSpendCap(ctx.orgId, resolvedSettings);
 
-  const fastPathPlan = tryPlanOrderStatusFastPath(ctx, instruction);
+  const fastPathPlan = tryPlanOrderStatusFastPath(ctx, instruction, resolvedSettings);
   if (fastPathPlan) {
     const planPath = derivePlanPath({ fastPath: true, ranReplan: false });
     logger.info({
@@ -137,12 +137,15 @@ export async function planAgent(
       }, "[agent:plan] all reads context-redundant — retrying initial call with full tool set");
 
       await enforceSpendCap(ctx.orgId, resolvedSettings);
+      // Reads were context-redundant — re-ask with the mutative tools so the model
+      // can pick the action it skipped the read for. Still no send_reply (the
+      // terminal reply-draft owns that), so it can't bail to a bare reply here.
       const retryResponse = await anthropic.messages.create({
         model: initialModel,
         max_tokens: PLAN_INITIAL_MAX_TOKENS,
         system: systemPromptBlocks,
         messages: baseMessages,
-        tools,
+        tools: tools.filter((tool) => tool.name !== "send_reply"),
       });
       const retryBlocks = retryResponse.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
       const retryUsage = recordModelUsage(usageTotals, retryResponse);
@@ -289,6 +292,63 @@ export async function planAgent(
     }
   }
 
+  // Terminal reply guarantee: on a customer channel every plan must end with a
+  // send_reply (or an escalation). Phase 1 and replan can finish with a mutative
+  // action and no reply, or with nothing at all — force one final send_reply.
+  let ranReplyDraft = false;
+  const hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
+  const hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
+  const sendReplyTool = tools.find((t) => t.name === "send_reply");
+  if (!operatorMode && !hasSendReply && !hasEscalate && sendReplyTool) {
+    const lastMessage = planMessages[planMessages.length - 1];
+    const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
+      ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+        )
+      : [];
+    const draftMessages: Anthropic.MessageParam[] = [
+      ...planMessages,
+      pendingToolUse.length > 0
+        ? {
+            role: "user",
+            content: pendingToolUse.map((b) => ({
+              type: "tool_result" as const,
+              tool_use_id: b.id,
+              content: "Not executed during planning.",
+            })),
+          }
+        : { role: "user", content: "Now call send_reply to respond to the customer." },
+    ];
+
+    await enforceSpendCap(ctx.orgId, resolvedSettings);
+    const draftModel = pickModel("reply_draft");
+    const draftResponse = await anthropic.messages.create({
+      model: draftModel,
+      max_tokens: PLAN_REPLAN_MAX_TOKENS,
+      system: systemPromptBlocks,
+      messages: draftMessages,
+      tools: [sendReplyTool],
+      tool_choice: { type: "tool", name: "send_reply" },
+    });
+    const draftBlocks = draftResponse.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
+    );
+    const draftUsage = recordModelUsage(usageTotals, draftResponse);
+    await recordSpend(ctx.orgId, draftUsage, draftModel);
+    logger.info({
+      orgId: ctx.orgId,
+      threadId: ctx.thread.id,
+      phase: "reply_draft",
+      model: draftModel,
+      stopReason: draftResponse.stop_reason,
+      tools: draftBlocks.map((b) => b.name),
+      usage: draftUsage,
+      usageTotals,
+    }, "[agent:plan] model call");
+    rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
+    ranReplyDraft = true;
+  }
+
   const steps = buildPlanSteps(rawToolCalls);
   const planPath = derivePlanPath({ ranReplan });
 
@@ -298,6 +358,7 @@ export async function planAgent(
     durationMs: Date.now() - startedAt,
     planPath,
     replanRetried: ranReplanRetry,
+    replyDrafted: ranReplyDraft,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
     readToolCalls,

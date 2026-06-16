@@ -92,6 +92,7 @@ function completeLogPayload(logger: AgentLogger) {
     planPath: string;
     modelCalls: number;
     replanRetried?: boolean;
+    replyDrafted?: boolean;
   };
 }
 
@@ -155,10 +156,10 @@ describe("planAgent logging", () => {
     });
   });
 
-  it("restricts phase-1 model call to read tools, send_reply, and escalate_to_human", async () => {
+  it("offers every tool except send_reply on the phase-1 model call", async () => {
     installAgentLogger(makeLogger());
     mockCreate.mockResolvedValueOnce(
-      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
+      singleToolUse("escalate_to_human", { reason: "Out of scope." }, "tu_1"),
     );
 
     await planAgent(makeCtx(), "Where is my order?");
@@ -166,8 +167,8 @@ describe("planAgent logging", () => {
     const firstCallTools = mockCreate.mock.calls[0]![0].tools.map((tool: { name: string }) => tool.name);
     expect(firstCallTools).toContain("search_kb");
     expect(firstCallTools).toContain("escalate_to_human");
-    expect(firstCallTools).toContain("send_reply");
-    expect(firstCallTools).not.toContain("create_refund");
+    expect(firstCallTools).toContain("create_refund");
+    expect(firstCallTools).not.toContain("send_reply");
   });
 
   it("uses a tighter max_tokens budget on phase-1 model calls", async () => {
@@ -276,24 +277,29 @@ describe("planAgent logging", () => {
     ]);
   });
 
-  it("logs planPath 2-call-mutative when replan retry still omits send_reply", async () => {
+  it("forces a reply draft when replan retry still omits send_reply", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
     mockCreate
       .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
       .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
-      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund_retry"));
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund_retry"))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_draft"));
 
     const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
 
     expect(completeLogPayload(injectedLogger)).toMatchObject({
       planPath: "2-call-mutative",
-      modelCalls: 3,
+      modelCalls: 4,
       replanRetried: true,
+      replyDrafted: true,
     });
+    const draftCall = mockCreate.mock.calls[3]![0];
+    expect(draftCall.tool_choice).toEqual({ type: "tool", name: "send_reply" });
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
       "search_kb",
       "create_refund",
+      "send_reply",
     ]);
   });
 
@@ -415,4 +421,34 @@ describe("planAgent logging", () => {
       modelCalls: 0,
     });
   });
+
+  it("skips the order status fast path when brand voice is configured", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(
+      singleToolUse("send_reply", { text: "Your order #1001 shipped — cheers!" }, "tu_reply"),
+    );
+
+    const plan = await planAgent(
+      makeCtx({
+        recentOrders: [{
+          id: "9000000001",
+          name: "#1001",
+          created_at: "2026-05-18T10:00:00-07:00",
+          financial_status: "paid",
+          fulfillment_status: "fulfilled",
+          total_price: "59.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+        recentMessages: [{ senderType: "customer", contentText: "Hi, where is my order #1001?" }],
+      }),
+      "Reply to the customer about their order.",
+      { ...AGENT_SETTINGS_DEFAULTS, brandVoice: "Always sign off with 'cheers'." },
+    );
+
+    expect(mockCreate).toHaveBeenCalled();
+    expect(plan.orderStatusFastPath).toBeUndefined();
+  });
+
 });

@@ -14,13 +14,17 @@ const REPLAN_RETRY_SUPPORT_TOOLS = new Set([
   "update_thread_status",
 ]);
 
-/** Phase-1 planning is read-only (+ escalation + direct reply). Mutative tools run on replan. */
+/**
+ * Phase-1 planning offers every tool except `send_reply`: the model can read,
+ * escalate, or take a mutative action directly, but it cannot reply. That is the
+ * one change from the full tool set — it stops a mutative ticket from bailing to
+ * a bare reply (which would skip the action), while the customer reply is always
+ * supplied by the terminal reply-draft phase. Any mutative call made here is
+ * replaced by the replan output via `mergeReplanToolCalls` when a read runs, so
+ * there is no double-action exposure.
+ */
 export function selectInitialPlanningTools(tools: Anthropic.Tool[]): Anthropic.Tool[] {
-  return tools.filter((tool) => (
-    TOOL_CATEGORIES[tool.name] === "read"
-    || tool.name === "escalate_to_human"
-    || tool.name === "send_reply"
-  ));
+  return tools.filter((tool) => tool.name !== "send_reply");
 }
 
 function keepPhase1ToolCall(toolCall: RawToolCall): boolean {

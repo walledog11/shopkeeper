@@ -22,8 +22,9 @@ export const AI_MODEL = HAIKU_MODEL;
 // A call's purpose, not its channel. Enumerated in full so each call site is
 // explicit about its tier even when it resolves to Haiku.
 export type ModelTask =
-  | "plan_initial"  // planner first pass: read-tool selection / direct reply
+  | "plan_initial"  // planner first pass: read-tool selection / escalation
   | "plan_replan"   // planner re-plan: the refund/cancel/edit/escalate decision
+  | "reply_draft"   // planner terminal phase: force a customer-facing send_reply
   | "agent_run"     // run.ts mutative agent loop (operator + end-to-end)
   | "composer_ask"; // run.ts read-only Q&A
 
