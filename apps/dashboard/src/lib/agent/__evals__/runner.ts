@@ -8,6 +8,7 @@ import {
   createTestMessage,
   cleanupTestData,
 } from "@shopkeeper/db/test-helpers";
+import { vi } from "vitest";
 import { hasActionableMutativeIntent } from "@shopkeeper/agent/intent";
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import { anthropic, buildCachedSystemPrompt } from "@shopkeeper/agent/ai";
@@ -212,9 +213,13 @@ export function evalRepeats(): number {
   return Math.floor(parsed);
 }
 
-// Runs a fixture `repeats` times and folds the per-run results into one pass-rate.
+// Runs a fixture `repeats` times sequentially — parallel repeats shared one global
+// simState hook and caused flaky tool mocks when vitest ran fixtures concurrently.
 export async function runFixtureRepeated(fixture: Fixture, repeats: number): Promise<FixtureRunSummary> {
-  const results = await Promise.all(Array.from({ length: repeats }, () => runFixture(fixture)));
+  const results: EvalResult[] = [];
+  for (let index = 0; index < repeats; index += 1) {
+    results.push(await runFixture(fixture));
+  }
   const passes = results.filter((r) => r.pass).length;
   return {
     id: fixture.id,
@@ -223,6 +228,17 @@ export async function runFixtureRepeated(fixture: Fixture, repeats: number): Pro
     passRate: repeats === 0 ? 0 : passes / repeats,
     results,
   };
+}
+
+function buildSimulatedToolResults(fixture: Fixture): Map<string, string> {
+  const map = new Map<string, string>(
+    (fixture.setup.simulateToolResults ?? []).map((entry) => [entry.tool, entry.result]),
+  );
+  const sendReply = map.get("send_reply");
+  if (sendReply && !map.has("send_email")) {
+    map.set("send_email", sendReply);
+  }
+  return map;
 }
 
 export function writeBaseline(summary: EvalBaseline): void {
@@ -563,9 +579,7 @@ export async function runFixture(fixture: Fixture): Promise<EvalResult> {
     // restore fires late (mid-way through this fixture), it must not clobber our patch.
     spy = { mockRestore: () => { if (messages.create === wrappedCreate) messages.create = originalCreate; } };
 
-    const simulatedResults = new Map<string, string>(
-      (fixture.setup.simulateToolResults ?? []).map((r) => [r.tool, r.result]),
-    );
+    const simulatedResults = buildSimulatedToolResults(fixture);
     simState.current = simulatedResults.size > 0 ? simulatedResults : null;
 
     const ctx = buildContext(fixture, org.id, thread.id, customer.id);

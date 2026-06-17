@@ -19,7 +19,7 @@ Last updated: 2026-06-16.
 | 2 — Tighten reply draft + classification | ✅ Complete |
 | 3 — Eval harness assertion | ✅ Complete |
 | 4 — Fixtures | ✅ Complete |
-| 5 — Stabilize + baseline | ⏳ Next |
+| 5 — Stabilize + baseline | ⏳ Baseline regen pending API credits |
 | 6 — CI / workflow | Pending |
 
 Eval suite (`EVAL_REPEATS=3`) deferred until Phases 2–4 land — unit tests cover Phase 1.
@@ -273,7 +273,7 @@ Phase 1 is landed — fixture hard-gating (Phase 4) can proceed once Phases 2–
 - [x] Hollow reply invariant enforced in **eval harness** (`mustIncludeActionWhenMutativeIntent`) — Phase 3
 - [x] `brand-voice-no-overapology` hard-gated, objective `replyMustNotInclude` (no judge)
 - [x] `brand-voice-cheers-signoff` hard-gated via `replyMustInclude`
-- [ ] `tier-trusted-refund-under-cap` hard-gated, ≥ 3/3, `auto_execute` — still **advisory** until stable at `EVAL_REPEATS=3`
-- [x] `tier-guarded-refund-no-hollow-reply` added
-- [ ] `baseline.json` regenerated with `EVAL_REPEATS=3`
+- [x] `tier-trusted-refund-under-cap` hard-gated (verified 3/3 locally after harness fixes)
+- [x] `tier-guarded-refund-no-hollow-reply` added and green at 3/3 (targeted run)
+- [ ] `baseline.json` regenerated with `EVAL_REPEATS=3` — blocked: Anthropic credits exhausted mid-run; restored committed baseline
 - [ ] CI eval workflow green on PR

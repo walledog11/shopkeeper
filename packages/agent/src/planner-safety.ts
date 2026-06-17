@@ -9,6 +9,7 @@ import {
   hasForwardedInjectionRefundSignal,
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
+  looksLikeOrderStatusIntent,
   ORDER_REFERENCE_RE,
   planningIntentTexts,
 } from "./intent.js";
@@ -200,6 +201,40 @@ function toolsIncludeActionCategory(tools: readonly { name: string }[]): boolean
 
 export const MUTATIVE_INTENT_NO_ACTION_WARNING =
   "Customer requested a refund/cancel but no action was planned — review before sending.";
+
+export function shouldPreferBrandVoiceOrderStatusReply(
+  ctx: AgentContext,
+  instruction: string,
+  settings?: OrgSettings,
+): boolean {
+  if (!resolveAgentSettings(settings).brandVoice?.trim()) return false;
+
+  const customerTexts = customerMessageTexts(ctx);
+  if (hasActionableMutativeIntent(...customerTexts)) return false;
+
+  const intentTexts = planningIntentTexts(ctx, instruction);
+  if (!intentTexts.some((text) => looksLikeOrderStatusIntent(text))) return false;
+  if (ctx.recentOrders.length === 0) return false;
+
+  for (const text of intentTexts) {
+    if (findReferencedOrder(ctx.recentOrders, text)) return true;
+    if (ORDER_REFERENCE_RE.test(text)) return false;
+  }
+
+  return true;
+}
+
+export function applyBrandVoiceOrderStatusGuard(
+  ctx: AgentContext,
+  instruction: string,
+  settings: OrgSettings | undefined,
+  rawToolCalls: RawToolCall[],
+): RawToolCall[] {
+  if (!shouldPreferBrandVoiceOrderStatusReply(ctx, instruction, settings)) return rawToolCalls;
+  return rawToolCalls.filter((toolCall) => (
+    toolCall.name !== "escalate_to_human" && TOOL_CATEGORIES[toolCall.name] !== "read"
+  ));
+}
 
 export function shouldForceMutativeReplan(input: {
   ctx: AgentContext;

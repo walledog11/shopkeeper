@@ -24,6 +24,8 @@ import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 import {
   applyMutativeIntentNoActionGuard,
+  applyBrandVoiceOrderStatusGuard,
+  shouldPreferBrandVoiceOrderStatusReply,
   ESCALATION_DRAFT_PROMPT,
   replyDraftPrompt,
   sendReplyHasText,
@@ -390,6 +392,7 @@ export async function planAgent(
 
   rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, rawToolCalls);
   rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
+  rawToolCalls = applyBrandVoiceOrderStatusGuard(ctx, instruction, settings, rawToolCalls);
 
   // Safety backstop: contradictory instructions or failed Shopify lookups during
   // planning must escalate instead of forcing a customer reply.
@@ -489,19 +492,25 @@ export async function planAgent(
           (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
         )
       : [];
-    const draftMessages: Anthropic.MessageParam[] = [
-      ...planMessages,
-      pendingToolUse.length > 0
-        ? {
-            role: "user",
-            content: pendingToolUse.map((b) => ({
-              type: "tool_result" as const,
-              tool_use_id: b.id,
-              content: "Not executed during planning.",
-            })),
-          }
-        : { role: "user", content: replyDraftPrompt(resolvedSettings) },
-    ];
+    const draftMessages: Anthropic.MessageParam[] = [...planMessages];
+    if (pendingToolUse.length > 0) {
+      draftMessages.push({
+        role: "user",
+        content: pendingToolUse.map((b) => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id,
+          content: "Not executed during planning.",
+        })),
+      });
+      draftMessages.push({ role: "user", content: replyDraftPrompt(resolvedSettings) });
+    } else if (shouldPreferBrandVoiceOrderStatusReply(ctx, instruction, resolvedSettings)) {
+      draftMessages.push(
+        { role: "user", content: synthesizeMutativeReplanContext(ctx) },
+        { role: "user", content: replyDraftPrompt(resolvedSettings) },
+      );
+    } else {
+      draftMessages.push({ role: "user", content: replyDraftPrompt(resolvedSettings) });
+    }
 
     await enforceSpendCap(ctx.orgId, resolvedSettings);
     const draftModel = pickModel("reply_draft");

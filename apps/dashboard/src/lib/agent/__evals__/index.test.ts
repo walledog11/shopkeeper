@@ -39,7 +39,7 @@ const hasRealKey =
   process.env.ANTHROPIC_API_KEY !== "test-anthropic-key";
 const ANTHROPIC_API_HOST = "api.anthropic.com";
 
-describe("agent evals", () => {
+describe.sequential("agent evals", () => {
   if (!hasRealKey) {
     it.skip("requires ANTHROPIC_API_KEY to be set to a real key", () => {});
     return;

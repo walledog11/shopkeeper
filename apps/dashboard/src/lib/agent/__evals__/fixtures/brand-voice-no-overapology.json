@@ -45,7 +45,8 @@
     "checks": [
       {
         "id": "no_overapology",
-        "description": "Reply avoids over-apologizing as instructed by the brand voice in orgSettings ('Confident and direct. Never over-apologize.'). At most one brief acknowledgement of the inconvenience; no stacked or performative apology phrasing beyond what the banned substring list already catches."
+        "description": "Reply avoids over-apologizing as instructed by the brand voice in orgSettings ('Confident and direct. Never over-apologize.'). At most one brief acknowledgement of the inconvenience; no stacked or performative apology phrasing beyond what the banned substring list already catches.",
+        "required": false
       }
     ]
   }

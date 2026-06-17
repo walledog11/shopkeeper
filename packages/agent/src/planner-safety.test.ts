@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import {
   applyMutativeIntentNoActionGuard,
+  applyBrandVoiceOrderStatusGuard,
+  shouldPreferBrandVoiceOrderStatusReply,
   hasCriticalPlanningReadErrorsForBlocks,
   sendReplyHasText,
   shouldBlockCreateRefundForAlreadyRefundedOrder,
@@ -347,5 +349,68 @@ describe("applyMutativeIntentNoActionGuard", () => {
     ];
     expect(applyMutativeIntentNoActionGuard(makeCtx(), calls, warnings)).toEqual(calls);
     expect(shouldSkipReplyDraftForMutativeIntent(makeCtx(), calls)).toBe(false);
+  });
+});
+
+describe("applyBrandVoiceOrderStatusGuard", () => {
+  const ctx = makeCtx({
+    recentMessages: [{
+      senderType: "customer",
+      contentText: "Hi, where is my order #2001? It's been a few days.",
+    }],
+    recentOrders: [{
+      id: "9000002001",
+      name: "#2001",
+      created_at: "2026-05-18T10:00:00-07:00",
+      financial_status: "paid",
+      fulfillment_status: "fulfilled",
+      total_price: "59.00",
+      currency: "USD",
+      items: [],
+    }],
+  });
+
+  it("strips reads and escalation for brand-voice order-status threads with order in context", () => {
+    const settings = { brandVoice: "Always sign off with 'cheers'." };
+    expect(shouldPreferBrandVoiceOrderStatusReply(
+      ctx,
+      "Reply to the customer about their order.",
+      settings,
+    )).toBe(true);
+
+    const filtered = applyBrandVoiceOrderStatusGuard(
+      ctx,
+      "Reply to the customer about their order.",
+      settings,
+      [
+        { id: "read_1", name: "get_order_tracking", input: { order_id: "9000002001" } },
+        { id: "esc_1", name: "escalate_to_human", input: { reason: "Needs help" } },
+      ],
+    );
+    expect(filtered).toEqual([]);
+  });
+
+  it("does not apply to refund requests", () => {
+    const refundCtx = makeCtx({
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "Please refund order #4003.",
+      }],
+      recentOrders: [{
+        id: "9000004003",
+        name: "#4003",
+        created_at: "2026-05-15T10:00:00-07:00",
+        financial_status: "paid",
+        fulfillment_status: "fulfilled",
+        total_price: "42.00",
+        currency: "USD",
+        items: [],
+      }],
+    });
+    expect(shouldPreferBrandVoiceOrderStatusReply(
+      refundCtx,
+      "Reply to the customer and process their refund request.",
+      { brandVoice: "Warm tone." },
+    )).toBe(false);
   });
 });
