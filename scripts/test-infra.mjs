@@ -113,6 +113,7 @@ export async function seedE2ETestData(baseEnv = process.env) {
         settings: {
           autoPlanOnOpen: false,
           spamFilterEnabled: false,
+          onboardingCompletedAt: '2020-01-01T00:00:00.000Z',
         },
       },
       update: {
@@ -120,6 +121,7 @@ export async function seedE2ETestData(baseEnv = process.env) {
         settings: {
           autoPlanOnOpen: false,
           spamFilterEnabled: false,
+          onboardingCompletedAt: '2020-01-01T00:00:00.000Z',
         },
       },
     });
