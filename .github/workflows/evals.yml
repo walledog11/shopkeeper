@@ -51,11 +51,18 @@ jobs:
             if [ "${{ steps.evals.outcome }}" = "success" ]; then
               echo "Suite passed."
             else
-              echo "Suite failed. Per-fixture log lines:"
+              echo "Suite failed."
             fi
             echo ""
+            GATE_LINE=$(grep -E '^\[eval:gates\]' eval-output.log | tail -1 || true)
+            if [ -n "$GATE_LINE" ]; then
+              echo "**${GATE_LINE#\[eval:gates\] }**"
+              echo ""
+              echo "_Hard-gated fixtures must pass at least one repeat; advisory fixtures are tracked but do not fail the PR gate._"
+              echo ""
+            fi
             echo '```'
-            grep -E '^\[eval(:summary|:cache)?\]' eval-output.log || echo "(no per-fixture lines captured)"
+            grep -E '^\[eval(:summary|:gates|:cache)?\]' eval-output.log || echo "(no summary lines captured)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Stop test services
@@ -101,11 +108,16 @@ jobs:
             if [ "${{ steps.evals.outcome }}" = "success" ]; then
               echo "Suite passed (judge on)."
             else
-              echo "Suite did not pass clean against the judge-off baseline (expected — tracking signal, non-blocking). Per-fixture log lines:"
+              echo "Suite did not pass clean against the judge-off baseline (expected — tracking signal, non-blocking)."
             fi
             echo ""
+            GATE_LINE=$(grep -E '^\[eval:gates\]' eval-output.log | tail -1 || true)
+            if [ -n "$GATE_LINE" ]; then
+              echo "**${GATE_LINE#\[eval:gates\] }**"
+              echo ""
+            fi
             echo '```'
-            grep -E '^\[eval(:summary|:cache)?\]' eval-output.log || echo "(no per-fixture lines captured)"
+            grep -E '^\[eval(:summary|:gates|:cache)?\]' eval-output.log || echo "(no summary lines captured)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Stop test services

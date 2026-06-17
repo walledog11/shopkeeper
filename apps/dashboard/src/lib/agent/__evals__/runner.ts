@@ -41,6 +41,8 @@ import type {
   CategoryScore,
   FixtureScore,
   FixtureRunSummary,
+  GateScore,
+  GateSummary,
 } from "./types";
 
 // The executor now lives in @shopkeeper/agent; run.ts calls it through the
@@ -167,6 +169,38 @@ export function summarizeResults(summaries: readonly FixtureRunSummary[]): EvalB
     categories: Object.fromEntries(Object.keys(categories).sort().map((k) => [k, categories[k]])),
     fixtures: Object.fromEntries(Object.keys(fixtures).sort().map((k) => [k, fixtures[k]])),
   };
+}
+
+function emptyGateScore(): GateScore {
+  return { fixtureCount: 0, total: 0, passed: 0, passRate: 0 };
+}
+
+export function summarizeGates(
+  summaries: readonly FixtureRunSummary[],
+  fixtures: readonly Pick<Fixture, "id" | "advisory">[],
+): GateSummary {
+  const advisoryIds = new Set(fixtures.filter((fixture) => fixture.advisory === true).map((fixture) => fixture.id));
+  const hardGated = emptyGateScore();
+  const advisory = emptyGateScore();
+
+  for (const summary of summaries) {
+    const bucket = advisoryIds.has(summary.id) ? advisory : hardGated;
+    bucket.fixtureCount += 1;
+    bucket.total += summary.repeats;
+    bucket.passed += summary.passes;
+  }
+
+  for (const bucket of [hardGated, advisory]) {
+    bucket.passRate = bucket.total === 0 ? 0 : bucket.passed / bucket.total;
+  }
+
+  return { hardGated, advisory };
+}
+
+export function formatGateSummary(gates: GateSummary): string {
+  const part = (label: string, score: GateScore) =>
+    `${label} ${score.passed}/${score.total} (${(score.passRate * 100).toFixed(1)}%)`;
+  return `[eval:gates] ${part("hard-gated", gates.hardGated)} | ${part("advisory", gates.advisory)}`;
 }
 
 export function formatSummary(summary: EvalBaseline): string {

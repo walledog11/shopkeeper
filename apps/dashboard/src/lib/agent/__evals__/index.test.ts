@@ -15,7 +15,9 @@ import {
   runFixtureRepeated,
   probeSystemPromptCacheRead,
   summarizeResults,
+  summarizeGates,
   formatSummary,
+  formatGateSummary,
   formatUsageBreakdown,
   shouldUpdateBaseline,
   writeBaseline,
@@ -94,6 +96,7 @@ describe.sequential("agent evals", () => {
   afterAll(() => {
     if (collected.length === 0) return;
     const summary = summarizeResults(collected);
+    console.log(formatGateSummary(summarizeGates(collected, fixtures)));
     console.log(formatSummary(summary));
     console.log(formatUsageBreakdown(collected));
 

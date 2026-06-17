@@ -154,3 +154,16 @@ export interface EvalBaseline {
   categories: Record<string, CategoryScore>;
   fixtures: Record<string, FixtureScore>;
 }
+
+/** Run-weighted pass rate for hard-gated vs advisory fixture groups. */
+export interface GateScore {
+  fixtureCount: number;
+  total: number;
+  passed: number;
+  passRate: number;
+}
+
+export interface GateSummary {
+  hardGated: GateScore;
+  advisory: GateScore;
+}

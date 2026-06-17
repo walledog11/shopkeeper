@@ -1,5 +1,30 @@
 import { describe, expect, it } from "vitest";
-import { mutativeIntentActionFailures } from "./runner";
+import { formatGateSummary, mutativeIntentActionFailures, summarizeGates } from "./runner";
+import type { FixtureRunSummary } from "./types";
+
+describe("summarizeGates", () => {
+  const summaries: FixtureRunSummary[] = [
+    { id: "hard-a", repeats: 3, passes: 3, passRate: 1, results: [] },
+    { id: "hard-b", repeats: 3, passes: 1, passRate: 1 / 3, results: [] },
+    { id: "soft-a", repeats: 3, passes: 0, passRate: 0, results: [] },
+  ];
+  const fixtures = [
+    { id: "hard-a", advisory: false as const },
+    { id: "hard-b" },
+    { id: "soft-a", advisory: true as const },
+  ];
+
+  it("splits run-weighted pass rates by advisory flag", () => {
+    const gates = summarizeGates(summaries, fixtures);
+    expect(gates.hardGated).toEqual({ fixtureCount: 2, total: 6, passed: 4, passRate: 4 / 6 });
+    expect(gates.advisory).toEqual({ fixtureCount: 1, total: 3, passed: 0, passRate: 0 });
+  });
+
+  it("formats a CI-parseable gate summary line", () => {
+    const line = formatGateSummary(summarizeGates(summaries, fixtures));
+    expect(line).toBe("[eval:gates] hard-gated 4/6 (66.7%) | advisory 0/3 (0.0%)");
+  });
+});
 
 describe("mutativeIntentActionFailures", () => {
   it("does nothing when the flag is off", () => {
