@@ -93,6 +93,11 @@ function refundTargetOrders(ctx: AgentContext, instruction: string): ShopifyOrde
   return [];
 }
 
+function refundTargetsAlreadyFullyRefunded(ctx: AgentContext, instruction: string): boolean {
+  const targets = refundTargetOrders(ctx, instruction);
+  return targets.length > 0 && targets.every(isOrderFullyRefunded);
+}
+
 function refundOrderIdFromToolCall(toolCall: RawToolCall): string | null {
   const input = toolCall.input;
   if (!input || typeof input !== "object") return null;
@@ -245,6 +250,7 @@ export function shouldForceMutativeReplan(input: {
 }): boolean {
   if (input.operatorMode || input.ranReplan) return false;
   if (!hasActionableMutativeIntent(...customerMessageTexts(input.ctx))) return false;
+  if (refundTargetsAlreadyFullyRefunded(input.ctx, "")) return false;
   if (planHasActionTool(input.rawToolCalls)) return false;
   if (planHasEscalation(input.rawToolCalls)) return false;
   return toolsIncludeActionCategory(input.tools);
@@ -255,6 +261,7 @@ export function shouldSkipReplyDraftForMutativeIntent(
   rawToolCalls: readonly RawToolCall[],
 ): boolean {
   if (!hasActionableMutativeIntent(...customerMessageTexts(ctx))) return false;
+  if (refundTargetsAlreadyFullyRefunded(ctx, "")) return false;
   if (planHasActionTool(rawToolCalls)) return false;
   if (planHasEscalation(rawToolCalls)) return false;
   return true;

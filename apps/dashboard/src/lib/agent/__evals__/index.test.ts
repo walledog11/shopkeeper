@@ -115,8 +115,8 @@ describe.sequential("agent evals", () => {
     }
 
     const threshold = regressionThreshold();
-    const { aggregate, categories, fixtures } = compareToBaseline(summary, baseline, threshold);
-    for (const msg of [...categories, ...fixtures]) {
+    const { aggregate, categories, fixtures: fixtureRegressions } = compareToBaseline(summary, baseline, threshold);
+    for (const msg of [...categories, ...fixtureRegressions]) {
       console.log(`[eval:baseline] WARN ${msg}`);
     }
     if (aggregate) {

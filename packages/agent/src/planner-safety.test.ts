@@ -350,6 +350,33 @@ describe("applyMutativeIntentNoActionGuard", () => {
     expect(applyMutativeIntentNoActionGuard(makeCtx(), calls, warnings)).toEqual(calls);
     expect(shouldSkipReplyDraftForMutativeIntent(makeCtx(), calls)).toBe(false);
   });
+
+  it("allows reply-only plans when the refund target is already fully refunded", () => {
+    const ctx = makeCtx({
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "Can I get a refund for order #1020?",
+      }],
+      recentOrders: [{
+        id: "9000001020",
+        name: "#1020",
+        created_at: null,
+        financial_status: "refunded",
+        fulfillment_status: "fulfilled",
+        total_price: "38.00",
+        currency: "USD",
+        items: [],
+      }],
+    });
+    const warnings: string[] = [];
+    const calls: RawToolCall[] = [
+      { id: "tu_reply", name: "send_reply", input: { text: "That order was already refunded." } },
+    ];
+
+    expect(shouldSkipReplyDraftForMutativeIntent(ctx, calls)).toBe(false);
+    expect(applyMutativeIntentNoActionGuard(ctx, calls, warnings)).toEqual(calls);
+    expect(warnings).toEqual([]);
+  });
 });
 
 describe("applyBrandVoiceOrderStatusGuard", () => {
