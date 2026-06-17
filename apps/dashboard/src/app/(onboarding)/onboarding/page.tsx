@@ -4,32 +4,52 @@ import { useState, useEffect, useMemo, useCallback, useEffectEvent, useRef } fro
 import { useRouter } from "next/navigation";
 import { useClerk, useUser, useOrganization, useOrganizationList } from "@clerk/nextjs";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import {
+  countOnboardingEssentials,
+  isEmailIntegrationConfigured,
+  resolveOnboardingStepIndex,
+  type OnboardingResumeStep,
+} from "@/lib/integrations/onboarding-setup";
+import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
 import { Footer, Header } from "./_components/chrome";
 import { openOAuthPopup, subscribeOAuthDone, watchOAuthPopup } from "@/lib/integrations/oauth-flow";
 import {
-  CHANNEL_META,
   DEFAULT_DATA,
   STEPS,
   STORAGE_KEY,
-  type ChannelKey,
   type OnboardingData,
+  type StepId,
 } from "./_components/model";
 import { StepIntro } from "./_components/step-intro";
 import { StepStore } from "./_components/step-store";
 import { StepShopify } from "./_components/step-shopify";
-import { StepChannels } from "./_components/step-channels";
+import { StepEmail } from "./_components/step-email";
 import { StepAutonomy } from "./_components/step-autonomy";
 import { StepPlan } from "./_components/step-plan";
+
+function readStepParam(): OnboardingResumeStep | null {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("step");
+  if (value === "shopify" || value === "email" || value === "plan") return value;
+  return null;
+}
 
 function readInitialOnboardingState() {
   if (typeof window === "undefined") return { data: DEFAULT_DATA, idx: 0 };
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { data: DEFAULT_DATA, idx: 0 };
+    const stepParam = readStepParam();
+    if (!raw) {
+      return {
+        data: DEFAULT_DATA,
+        idx: resolveOnboardingStepIndex(stepParam, 0, STEPS.map(step => step.id)),
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<OnboardingData & { idx: number }>;
+    const savedIdx = typeof parsed.idx === "number" ? Math.min(STEPS.length - 1, Math.max(0, parsed.idx)) : 0;
     return {
       data: { ...DEFAULT_DATA, ...parsed },
-      idx: typeof parsed.idx === "number" ? Math.min(STEPS.length - 1, Math.max(0, parsed.idx)) : 0,
+      idx: resolveOnboardingStepIndex(stepParam, savedIdx, STEPS.map(step => step.id)),
     };
   } catch {
     return { data: DEFAULT_DATA, idx: 0 };
@@ -37,7 +57,7 @@ function readInitialOnboardingState() {
 }
 
 export default function OnboardingPage() {
-  const { push } = useRouter();
+  const router = useRouter();
   const { user } = useUser();
   const { signOut } = useClerk();
   const { organization } = useOrganization();
@@ -49,8 +69,11 @@ export default function OnboardingPage() {
   const [idx, setIdx] = useState(initialState.idx);
   const [data, setData] = useState<OnboardingData>(initialState.data);
   const [saving, setSaving] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [orgEnsuring, setOrgEnsuring] = useState(false);
+  const [orgEnsureFailed, setOrgEnsureFailed] = useState(false);
   const orgCreationInFlight = useRef(false);
-
+  const emailPrefilled = useRef(false);
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...data, idx })); } catch {}
@@ -61,49 +84,116 @@ export default function OnboardingPage() {
     refreshInterval: 3000,
   });
   const rows = useMemo(() => integrationData ?? [], [integrationData]);
-  const connected = useMemo(() => {
-    const set = new Set<ChannelKey>();
-    for (const r of rows) {
-      if (r.platform === "email" || r.platform === "ig_dm" || r.platform === "shopify") set.add(r.platform);
-    }
-    return set;
-  }, [rows]);
   const shopifyRow = rows.find(r => r.platform === "shopify");
+  const emailRow = rows.find(r => r.platform === "email");
+  const hasShopify = isShopifyIntegrationActive(shopifyRow);
+  const hasEmailReady = isEmailIntegrationConfigured(emailRow);
+  const storeBriefed = data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
+  const essentialsDone = countOnboardingEssentials({ storeBriefed, hasShopify, hasEmail: hasEmailReady });
+
+  const isStepComplete = useCallback((step: StepId) => {
+    if (step === "intro") return idx > 0;
+    if (step === "store") return storeBriefed;
+    if (step === "shopify") return hasShopify;
+    if (step === "email") return hasEmailReady;
+    if (step === "autonomy") return idx > STEPS.findIndex(item => item.id === "autonomy");
+    if (step === "plan") return false;
+    return false;
+  }, [idx, storeBriefed, hasShopify, hasEmailReady]);
 
   const update = useCallback((patch: Partial<OnboardingData>) => setData(d => ({ ...d, ...patch })), []);
 
-  const persistSettings = useCallback(async () => {
+  useEffect(() => {
+    if (emailPrefilled.current || !emailRow) return;
+    const saved = (emailRow.fromEmail ?? emailRow.externalAccountId)?.trim();
+    if (!saved) return;
+    emailPrefilled.current = true;
+    setData(d => (d.primaryEmail.trim() ? d : { ...d, primaryEmail: saved }));
+  }, [emailRow]);
+
+  const persistSettings = useCallback(async (opts?: { markOnboardingComplete?: boolean }): Promise<boolean> => {
     const name = data.storeName.trim();
     const aiContext = data.sells.trim();
     const firstName = data.founderName.trim();
-    const tasks: Promise<unknown>[] = [];
-    tasks.push(fetch("/api/org", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, settings: { aiContext, autonomyTier: data.autonomy } }),
-    }));
-    if (user && firstName && firstName !== user.firstName) {
-      tasks.push(user.update({ firstName }));
+    const body: {
+      name?: string;
+      settings: {
+        aiContext: string;
+        autonomyTier: OnboardingData["autonomy"];
+        onboardingCompletedAt?: string;
+      };
+    } = {
+      settings: {
+        aiContext,
+        autonomyTier: data.autonomy,
+        ...(opts?.markOnboardingComplete && { onboardingCompletedAt: new Date().toISOString() }),
+      },
+    };
+    if (name) body.name = name;
+
+    try {
+      const res = await fetch("/api/org", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) return false;
+
+      if (user && firstName && firstName !== user.firstName) {
+        await user.update({ firstName });
+      }
+      return true;
+    } catch {
+      return false;
     }
-    await Promise.allSettled(tasks);
   }, [data, user]);
 
   const ensureOrganization = useCallback(async (): Promise<boolean> => {
-    if (organization) return true;
+    if (organization) {
+      setOrgEnsureFailed(false);
+      return true;
+    }
     if (!createOrganization || !setActive || orgCreationInFlight.current) return false;
     const name = data.storeName.trim();
     if (!name) return false;
     orgCreationInFlight.current = true;
+    setOrgEnsuring(true);
+    setOrgEnsureFailed(false);
     try {
       const created = await createOrganization({ name });
       await setActive({ organization: created.id }).then(() => persistSettings());
       return true;
     } catch {
+      setOrgEnsureFailed(true);
       return false;
     } finally {
       orgCreationInFlight.current = false;
+      setOrgEnsuring(false);
     }
   }, [organization, createOrganization, setActive, data.storeName, persistSettings]);
+
+  const saveEmailIntegration = useCallback(async (email: string): Promise<boolean> => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return false;
+    setEmailSaving(true);
+    try {
+      const ready = await ensureOrganization();
+      if (!ready) return false;
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: "email", externalAccountId: normalized }),
+      });
+      if (!res.ok) return false;
+      update({ primaryEmail: normalized });
+      await refreshIntegrations();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setEmailSaving(false);
+    }
+  }, [ensureOrganization, refreshIntegrations, update]);
 
   const launchOAuth = useCallback(async (url: string) => {
     setSaving(true);
@@ -125,20 +215,35 @@ export default function OnboardingPage() {
 
   const stepId = STEPS[idx].id;
 
+  useEffect(() => {
+    if (stepId !== "email") return;
+    void ensureOrganization();
+  }, [stepId, ensureOrganization]);
+
   const canContinue = useMemo(() => {
-    if (stepId === "store")    return data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
-    if (stepId === "channels") return connected.size > 0;
+    if (stepId === "store") return data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
+    if (stepId === "shopify") return hasShopify;
+    if (stepId === "email") return hasEmailReady;
     return true;
-  }, [stepId, data, connected]);
+  }, [stepId, data, hasShopify, hasEmailReady]);
 
   const next = useCallback(async () => {
     if (!canContinue || saving) return;
-    if (organization && (stepId === "store" || stepId === "autonomy")) {
+    if (stepId === "store") {
+      setSaving(true);
+      try {
+        const ready = await ensureOrganization();
+        if (!ready) return;
+        await persistSettings();
+      } finally {
+        setSaving(false);
+      }
+    } else if (organization && stepId === "autonomy") {
       setSaving(true);
       try { await persistSettings(); } finally { setSaving(false); }
     }
     setIdx(i => Math.min(STEPS.length - 1, i + 1));
-  }, [canContinue, organization, persistSettings, saving, stepId]);
+  }, [canContinue, ensureOrganization, organization, persistSettings, saving, stepId]);
   const advanceFromKeyboard = useEffectEvent(() => {
     void next();
   });
@@ -149,12 +254,23 @@ export default function OnboardingPage() {
     try {
       const ready = await ensureOrganization();
       if (!ready) return;
-      if (organization) await persistSettings();
+      if (!hasShopify) return;
+
+      if (!hasEmailReady) {
+        if (!data.primaryEmail.trim()) return;
+        const saved = await saveEmailIntegration(data.primaryEmail);
+        if (!saved) return;
+      }
+
+      const completed = await persistSettings({ markOnboardingComplete: true });
+      if (!completed) return;
+
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      router.push("/dashboard");
+      router.refresh();
     } finally {
       setSaving(false);
     }
-    try { localStorage.removeItem(STORAGE_KEY); } catch {}
-    push("/dashboard");
   }
 
   const otherMembership = userMemberships?.data?.find(m => m.organization.id !== organization?.id);
@@ -166,7 +282,7 @@ export default function OnboardingPage() {
         action: async () => {
           try { localStorage.removeItem(STORAGE_KEY); } catch {}
           try { await setActive({ organization: target.organization.id }); } catch {}
-          push("/dashboard");
+          router.push("/dashboard");
         },
       };
     }
@@ -177,7 +293,7 @@ export default function OnboardingPage() {
         await signOut({ redirectUrl: "/login" });
       },
     };
-  }, [otherMembership, setActive, signOut, push]);
+  }, [otherMembership, setActive, signOut, router]);
 
   // Keyboard: Enter advances on non-textarea steps.
   useEffect(() => {
@@ -195,22 +311,51 @@ export default function OnboardingPage() {
   }, [stepId, canContinue, saving]);
 
   const step = STEPS[idx];
+  const orgReady = !!organization && !orgEnsuring && !orgEnsureFailed;
 
   return (
     <div className="dark relative flex min-h-screen w-full flex-col overflow-hidden bg-background text-foreground">
       <div aria-hidden className="pointer-events-none fixed -right-52 -top-64 size-[640px] rounded-full bg-[radial-gradient(circle,rgba(74,222,128,0.18)_0%,transparent_60%)] opacity-60" />
       <div aria-hidden className="pointer-events-none fixed -bottom-72 -left-52 size-[560px] rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.10)_0%,transparent_70%)] opacity-60" />
 
-      <Header idx={idx} onGoto={i => i <= idx && setIdx(i)} exitLabel={exit.label} onExit={exit.action} />
+      <Header
+        idx={idx}
+        essentialsDone={essentialsDone}
+        isStepComplete={isStepComplete}
+        onGoto={i => (i <= idx || isStepComplete(STEPS[i].id)) && setIdx(i)}
+        exitLabel={exit.label}
+        onExit={exit.action}
+      />
 
       <main className="relative z-10 flex flex-1 justify-center px-7 pb-6 pt-8">
         <div key={step.id} className="w-full max-w-[820px] animate-[ob-fade-in_360ms_ease]">
           {stepId === "intro"    && <StepIntro />}
           {stepId === "store"    && <StepStore    data={data} update={update} />}
-          {stepId === "shopify"  && <StepShopify  data={data} connected={connected.has("shopify")} shopifyRow={shopifyRow} onOAuth={launchOAuth} />}
-          {stepId === "channels" && <StepChannels data={data} update={update} connected={connected} onSkip={() => setIdx(i => Math.min(STEPS.length - 1, i + 1))} onOAuth={launchOAuth} />}
+          {stepId === "shopify"  && <StepShopify  data={data} connected={hasShopify} shopifyRow={shopifyRow} onOAuth={launchOAuth} />}
+          {stepId === "email" && (
+            <StepEmail
+              data={data}
+              update={update}
+              emailConnected={hasEmailReady}
+              orgReady={orgReady}
+              orgLoading={orgEnsuring}
+              orgError={orgEnsureFailed}
+              onRetryOrg={() => { void ensureOrganization(); }}
+              emailSaving={emailSaving}
+              onSaveEmail={() => { void saveEmailIntegration(data.primaryEmail); }}
+              onOAuth={launchOAuth}
+            />
+          )}
           {stepId === "autonomy" && <StepAutonomy data={data} update={update} />}
-          {stepId === "plan"     && <StepPlan     data={data} connected={connected} onStart={finish} onBack={back} />}
+          {stepId === "plan"     && (
+            <StepPlan
+              data={data}
+              hasEmail={hasEmailReady}
+              hasShopify={hasShopify}
+              onStart={finish}
+              onBack={back}
+            />
+          )}
         </div>
       </main>
 

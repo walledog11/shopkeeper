@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { db } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
@@ -73,6 +74,11 @@ export async function PATCH(request: Request) {
         }),
       },
     });
+
+    if (settingsUpdate.changed) {
+      revalidatePath('/dashboard', 'layout');
+      revalidatePath('/onboarding', 'layout');
+    }
 
     // Keep Clerk org name in sync so the sidebar switcher shows the same name
     if (name !== undefined) {

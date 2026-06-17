@@ -3,7 +3,7 @@ import type { Category } from "./index"
 export const gettingStarted: Category = {
   id: "getting-started",
   title: "Getting Started",
-  description: "Connect your first channel and receive your first ticket",
+  description: "Connect Shopify, set up email forwarding, and receive your first ticket",
   icon: "🚀",
   articles: [
     {
@@ -11,22 +11,24 @@ export const gettingStarted: Category = {
       title: "Quick start guide",
       body: [
         {
-          text: "Get Shopkeeper up and running in three steps. You'll be receiving and replying to customer messages in minutes.",
+          text: "Get Shopkeeper up and running in three steps. Connect Shopify, forward your support inbox, and you'll be receiving and replying to customer messages in minutes.",
         },
         {
-          heading: "Step 1 — Connect a channel",
+          heading: "Step 1 — Connect Shopify and set up email forwarding",
           steps: [
             "Go to the Integrations page from the sidebar.",
-            "Choose a channel — Gmail or Instagram are the best starting points.",
-            "Follow the on-screen connection flow.",
-            "Once connected, a green indicator will appear on the integration card.",
+            "Connect Shopify with your store domain.",
+            "Open the Email card and choose Set up forwarding.",
+            "Copy your Shopkeeper inbound address (orgId@inbound.shopkeeper.app) and add it as a forwarding destination in Gmail, Outlook, cPanel, or Cloudflare.",
+            "Save your support address (for example support@yourstore.com) so replies go out under the right name.",
+            "Send a test email to your support address — it should appear in your inbox within a minute once forwarding is working.",
           ],
         },
         {
           heading: "Step 2 — Receive your first ticket",
           steps: [
-            "Ask someone to send a message to your connected email or Instagram account.",
-            "Within seconds, a new ticket will appear in the Inbox.",
+            "Ask someone to send a message to your support address, or send yourself a test email.",
+            "Within a minute, a new ticket should appear in the Inbox.",
             "A badge on the sidebar icon shows the number of open tickets.",
           ],
         },

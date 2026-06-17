@@ -1,4 +1,3 @@
-import { AtSign, Camera, ShoppingBag } from "lucide-react";
 import type { AutonomyTier } from "@shopkeeper/agent/settings";
 import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers";
 
@@ -7,8 +6,8 @@ export { AUTONOMY_TIERS };
 
 export const RETURN_TO = "/onboarding";
 export const STORAGE_KEY = "concierge-onboarding-v1";
-export type StepId = "intro" | "store" | "shopify" | "channels" | "autonomy" | "plan";
-export type ChannelKey = "email" | "ig_dm" | "shopify";
+export type StepId = "intro" | "store" | "shopify" | "email" | "autonomy" | "plan";
+export type OnboardingPlatform = "email" | "shopify";
 
 export interface OnboardingData {
   storeName: string;
@@ -36,14 +35,10 @@ export const DEFAULT_DATA: OnboardingData = {
 export const STEPS: Array<{ id: StepId; label: string }> = [
   { id: "intro",    label: "Meet me" },
   { id: "store",    label: "Your store" },
-  { id: "shopify",  label: "Shopify" },
-  { id: "channels", label: "Channels" },
+  { id: "shopify",  label: "Connect Shopify" },
+  { id: "email",    label: "Set up email" },
   { id: "autonomy", label: "My limits" },
   { id: "plan",     label: "First night" },
 ];
 
-export const CHANNEL_META: Array<{ key: ChannelKey; label: string; description: string; Icon: typeof AtSign }> = [
-  { key: "email",   label: "Email",        description: "Primary channel for most stores. I read, draft, and send.", Icon: AtSign },
-  { key: "ig_dm",   label: "Instagram DM", description: "DMs, story replies, and tag mentions.",                     Icon: Camera },
-  { key: "shopify", label: "Shopify",      description: "Customer messages from your storefront and admin.",         Icon: ShoppingBag },
-];
+export const ONBOARDING_ESSENTIALS_TOTAL = 3;

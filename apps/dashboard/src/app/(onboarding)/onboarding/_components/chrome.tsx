@@ -2,10 +2,12 @@ import { ChevronLeft, ChevronRight, Loader2, LogOut, Sparkles } from "lucide-rea
 import { Button } from "@/components/ui/button";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { cn } from "@/lib/ui/cn";
-import { STEPS } from "./model";
+import { ONBOARDING_ESSENTIALS_TOTAL, STEPS, type StepId } from "./model";
 
-export function Header({ idx, onGoto, exitLabel, onExit }: {
+export function Header({ idx, essentialsDone, isStepComplete, onGoto, exitLabel, onExit }: {
   idx: number;
+  essentialsDone: number;
+  isStepComplete: (stepId: StepId) => boolean;
   onGoto: (i: number) => void;
   exitLabel?: string;
   onExit?: () => void | Promise<void>;
@@ -25,16 +27,17 @@ export function Header({ idx, onGoto, exitLabel, onExit }: {
       <div className="flex flex-1 items-center justify-center gap-1.5">
         {STEPS.map((s, i) => {
           const active = i === idx;
-          const done = i < idx;
+          const done = isStepComplete(s.id);
+          const reachable = i <= idx || done;
           return (
             <button type="button"
               key={s.id}
-              onClick={() => onGoto(i)}
-              disabled={i > idx}
+              onClick={() => reachable && onGoto(i)}
+              disabled={!reachable}
               className={cn(
                 "flex items-center gap-1.5 rounded-full px-2 py-1 transition-colors",
                 active ? "bg-white/[0.06]" : "bg-transparent",
-                i <= idx ? "cursor-pointer" : "cursor-default"
+                reachable ? "cursor-pointer" : "cursor-default"
               )}
             >
               <span className={cn(
@@ -63,7 +66,7 @@ export function Header({ idx, onGoto, exitLabel, onExit }: {
           </button>
         )}
         <span className="inline-block size-1.5 rounded-full bg-green-400 animate-[ob-pulse-bg_2s_ease-in-out_infinite]" />
-        ≈ {Math.max(1, 4 - idx)} min left
+        {essentialsDone} of {ONBOARDING_ESSENTIALS_TOTAL} essentials done
       </div>
     </header>
   );

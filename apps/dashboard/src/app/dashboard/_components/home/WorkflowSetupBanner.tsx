@@ -71,27 +71,29 @@ interface Step {
   label: string
   href: string
   status: "done" | "pending"
+  optional?: boolean
 }
 
 interface Props {
   steps: Step[]
-  doneCount: number
 }
 
 function getStepKey(step: Step) {
   return `${step.label}:${step.href}`
 }
 
-export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
+export default function WorkflowSetupBanner({ steps }: Props) {
   const [dismissed, setDismissed] = useState(() => readStoredBoolean(DISMISS_KEY))
   const [expanded, setExpanded] = useState(() => readStoredBoolean(EXPAND_KEY))
 
-  const totalCount = steps.length
+  const trackedSteps = steps.filter(step => !step.optional)
+  const trackedDoneCount = trackedSteps.filter(step => step.status === "done").length
+  const totalCount = trackedSteps.length
 
-  const isVisible = dismissed === false && doneCount < totalCount
+  const isVisible = dismissed === false && trackedDoneCount < totalCount
 
-  const remaining = Math.max(totalCount - doneCount, 0)
-  const progress = totalCount > 0 ? Math.min(Math.max(doneCount / totalCount, 0), 1) : 0
+  const remaining = Math.max(totalCount - trackedDoneCount, 0)
+  const progress = totalCount > 0 ? Math.min(Math.max(trackedDoneCount / totalCount, 0), 1) : 0
   const progressOffset = PROGRESS_RING_CIRCUMFERENCE * (1 - progress)
   const summary = `${remaining} left to finish setup`
 
@@ -158,7 +160,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
               </m.div>
               <div className="flex items-center gap-2.5 min-w-0 flex-1">
                 <span className="text-xs font-semibold text-foreground/80 shrink-0">
-                  Workflow setup · {doneCount} of {totalCount}
+                  Workflow setup · {trackedDoneCount} of {totalCount}
                 </span>
                 <span className="text-foreground/15">—</span>
                 <span className="text-xs text-foreground/45 truncate">{summary}</span>
@@ -222,6 +224,7 @@ export default function WorkflowSetupBanner({ steps, doneCount }: Props) {
                           <span className="size-4 rounded-full border border-foreground/25 shrink-0" />
                           <span className="text-xs text-foreground/80 group-hover:text-white truncate flex-1">
                             {step.label}
+                            {step.optional ? <span className="text-foreground/35"> · optional</span> : null}
                           </span>
                           <ChevronRight className="size-3.5 text-foreground/30 group-hover:text-foreground/60 shrink-0 transition-colors" />
                         </Link>
