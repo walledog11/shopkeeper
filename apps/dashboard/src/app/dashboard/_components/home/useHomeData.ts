@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react"
 import useSWR from "swr"
-import { useOrganization } from "@clerk/nextjs"
 import { AGENT_SETTINGS_DEFAULTS } from "@shopkeeper/agent/settings"
 import { fetcher } from "@/lib/api/fetcher"
 import {
@@ -13,8 +12,8 @@ import { selectWalkthroughItems } from "@/lib/home/walkthrough"
 import { CHANNEL_TYPE } from "@shopkeeper/agent/thread-constants"
 import { useOrg } from "@/hooks/useOrg"
 import { useIntegrations } from "@/hooks/useIntegrations"
+import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection"
-import type { KnowledgeBase } from "@/types"
 
 interface OrdersResponse {
   orders: Array<{
@@ -38,14 +37,15 @@ export function useHomeData({ initialSummary }: Options) {
   )
   const { data: integrations = [] } = useIntegrations()
   const { data: orgData } = useOrg()
-  const { data: kbData } = useSWR<{ knowledgeBases: KnowledgeBase[] }>("/api/kb", fetcher, { revalidateOnFocus: false })
   const { data: telegramData } = useSWR<{ connected: boolean; botUsername: string | null }>("/api/integrations/telegram", fetcher, { revalidateOnFocus: false })
-  const { memberships } = useOrganization({ memberships: { infinite: false, pageSize: 10 } })
 
-  const channelConnected = integrations.length > 0
   const hasShopify = integrations.some(integration =>
     integration.platform === CHANNEL_TYPE.SHOPIFY && isShopifyIntegrationActive(integration),
   )
+  const emailIntegration = integrations.find(integration => integration.platform === CHANNEL_TYPE.EMAIL)
+  const hasEmailForwarding = isEmailIntegrationConfigured(emailIntegration)
+  const hasTelegramBound = telegramData?.connected ?? false
+
   const summary = summaryData ?? createEmptyHomeSummary()
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
   const walkthroughItems = useMemo(
@@ -65,39 +65,26 @@ export function useHomeData({ initialSummary }: Options) {
     return ordersData.orders.filter(order => order.fulfillment_status == null && order.financial_status === "paid").length
   }, [ordersData])
 
-  const hasKbArticle = (kbData?.knowledgeBases ?? []).some(kb => kb.articles.length > 0)
-  const hasTelegramBound = telegramData?.connected ?? false
-  const hasInvitedTeam = (memberships?.data?.length ?? 1) > 1
-  const hasMultipleChannels = integrations.length > 1
-  const hasConfiguredAgent = useMemo(() => {
-    const settings = orgData?.settings ?? {}
-    return !!(
-      (settings.aiContext && settings.aiContext.trim().length > 0) ||
-      (settings.brandVoice && settings.brandVoice.trim().length > 0) ||
-      (settings.agentName && settings.agentName !== AGENT_SETTINGS_DEFAULTS.agentName)
-    )
-  }, [orgData])
+  const hasReceivedTicket = useMemo(() => (
+    summary.metrics.openCount > 0
+    || summary.metrics.hasSentReply
+    || summary.metrics.weeklyVolume > 0
+    || summary.needsAttention.length > 0
+  ), [summary])
 
   const workflowSteps = useMemo(() => [
-    { label: "Connect a channel", href: "/dashboard/integrations", status: (channelConnected ? "done" : "pending") as "done" | "pending" },
     { label: "Connect Shopify", href: "/dashboard/integrations", status: (hasShopify ? "done" : "pending") as "done" | "pending" },
-    { label: "Configure agent", href: "/dashboard/agent/configure", status: (hasConfiguredAgent ? "done" : "pending") as "done" | "pending" },
-    { label: "Add memory notes", href: "/dashboard/kb", status: (hasKbArticle ? "done" : "pending") as "done" | "pending" },
-    { label: "Send your first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
-    { label: "Invite team members", href: "/dashboard/team", status: (hasInvitedTeam ? "done" : "pending") as "done" | "pending" },
-    { label: "Connect Telegram for notifications", href: "/dashboard/integrations", status: (hasTelegramBound ? "done" : "pending") as "done" | "pending" },
-    { label: "Add more channels", href: "/dashboard/integrations", status: (hasMultipleChannels ? "done" : "pending") as "done" | "pending" },
+    { label: "Set up email forwarding", href: "/dashboard/integrations", status: (hasEmailForwarding ? "done" : "pending") as "done" | "pending" },
+    { label: "Connect Telegram (optional)", href: "/dashboard/integrations", status: (hasTelegramBound ? "done" : "pending") as "done" | "pending", optional: true },
+    { label: "Receive first ticket", href: "/dashboard/tickets", status: (hasReceivedTicket ? "done" : "pending") as "done" | "pending" },
+    { label: "Send first reply", href: "/dashboard/tickets", status: (home.hasSentReply ? "done" : "pending") as "done" | "pending" },
   ], [
-    channelConnected,
     hasShopify,
-    hasConfiguredAgent,
-    hasKbArticle,
-    home.hasSentReply,
-    hasInvitedTeam,
+    hasEmailForwarding,
     hasTelegramBound,
-    hasMultipleChannels,
+    hasReceivedTicket,
+    home.hasSentReply,
   ])
-  const workflowDoneCount = workflowSteps.filter(step => step.status === "done").length
 
   const agentName = (orgData?.settings?.agentName ?? AGENT_SETTINGS_DEFAULTS.agentName) as string
   const refreshHomeSummary = useCallback(() => {
@@ -110,8 +97,8 @@ export function useHomeData({ initialSummary }: Options) {
     walkthroughCount,
     ordersToShip,
     hasShopify,
+    hasTelegramBound,
     workflowSteps,
-    workflowDoneCount,
     agentName,
     refreshHomeSummary,
   }

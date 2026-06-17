@@ -37,6 +37,7 @@ export function getTestEnv(baseEnv = process.env) {
     REDIS_URL: baseEnv.TEST_REDIS_URL || DEFAULT_REDIS_URL,
     NEON_SERVERLESS_HTTP: 'false',
     APP_URL: baseEnv.APP_URL || 'http://127.0.0.1:3100',
+    NEXT_PUBLIC_APP_URL: baseEnv.APP_URL || 'http://127.0.0.1:3100',
     DASHBOARD_URL: baseEnv.DASHBOARD_URL || 'http://127.0.0.1:3100',
     DASHBOARD_INTERNAL_URL: baseEnv.DASHBOARD_INTERNAL_URL || 'http://127.0.0.1:3100',
     GATEWAY_INTERNAL_URL: baseEnv.GATEWAY_INTERNAL_URL || 'http://127.0.0.1:8180',

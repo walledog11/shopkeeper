@@ -2,18 +2,20 @@ import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { PRODUCT_NAME } from "@/lib/brand";
 import { Button } from "@/components/ui/button";
 import { Kicker } from "./primitives";
-import { AUTONOMY_TIERS, CHANNEL_META, type ChannelKey, type OnboardingData } from "./model";
+import { AUTONOMY_TIERS, type OnboardingData } from "./model";
 
 const DEFAULT_TIER = AUTONOMY_TIERS.find(t => t.id === "guarded") ?? AUTONOMY_TIERS[1];
 
-export function StepPlan({ data, connected, onStart, onBack }: {
-  data: OnboardingData; connected: Set<ChannelKey>; onStart: () => void; onBack: () => void;
+export function StepPlan({ data, hasEmail, hasShopify, onStart, onBack }: {
+  data: OnboardingData; hasEmail: boolean; hasShopify: boolean; onStart: () => void; onBack: () => void;
 }) {
   const storeName = data.storeName || "your store";
   const founder = data.founderName || "there";
   const tier = AUTONOMY_TIERS.find(t => t.id === data.autonomy) ?? DEFAULT_TIER;
-  const channelNames = CHANNEL_META.flatMap(c => connected.has(c.key) ? [c.label] : []).join(", ");
-  const hasShopify = connected.has("shopify");
+  const channelNames = [
+    hasEmail && (data.primaryEmail.trim() || "your support inbox"),
+    hasShopify && "Shopify",
+  ].filter(Boolean).join(" and ");
   const sendsOnOwn = tier.id === "trusted" || tier.id === "broad" || tier.id === "full";
 
   const planItems = [
@@ -24,10 +26,10 @@ export function StepPlan({ data, connected, onStart, onBack }: {
     },
     {
       time: "First hour",
-      title: "Build memory from your past replies",
+      title: "Sync Shopify policies to Memory",
       detail: hasShopify
-        ? "I'll skim the last 90 days of your customer tickets, learn your voice, and save what I learn as memory notes. You can edit them tomorrow in Memory."
-        : "Once you connect Shopify, I'll skim past tickets and build memory. Until then I'll ask before sending.",
+        ? "I'll pull your Shopify policies and pages into Memory so I can answer product and policy questions accurately."
+        : "Once you connect Shopify, I'll sync policies and pages into Memory. Until then I'll ask before sending.",
     },
     {
       time: "Overnight",

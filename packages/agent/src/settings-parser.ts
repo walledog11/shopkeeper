@@ -61,6 +61,7 @@ const SETTINGS_KEYS = [
   "autoAckMessage",
   "spamFilterEnabled",
   "autonomyTier",
+  "onboardingCompletedAt",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const BOOLEAN_FIELDS = [
@@ -81,6 +82,7 @@ const STRING_FIELDS = [
   ["defaultInstruction", 2000],
   ["replyLanguage", 100],
   ["autoAckMessage", 500],
+  ["onboardingCompletedAt", 64],
 ] as const satisfies readonly [keyof OrgSettings, number][];
 
 const NULLABLE_NON_NEGATIVE_FIELDS = [

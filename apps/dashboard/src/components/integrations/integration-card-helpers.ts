@@ -3,12 +3,15 @@ import {
   isEmailAuthReauthorizationRequired,
 } from "@shopkeeper/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
+import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
 import {
   isShopifyIntegrationLinked,
   resolveShopifyConnectionState,
 } from "@/lib/integrations/shopify-connection"
 import type { Integration } from "@/types"
 import type { PillState } from "./integration-card-types"
+
+export { isEmailIntegrationConfigured }
 
 export function isTokenExpired(integration: Integration) {
   if (!integration.tokenExpiresAt) return false

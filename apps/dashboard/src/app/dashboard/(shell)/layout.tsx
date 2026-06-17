@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { HelpProvider } from "../_components/help/HelpContext";
 import NotificationBar, { type Notification } from "../_components/NotificationBar";
 import NavProgressBar from "../_components/NavProgressBar";
@@ -9,6 +10,7 @@ import AgentPanelUrlSync from "../_components/agent-panel/AgentPanelUrlSync";
 import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext";
 import { CommandPaletteProvider } from "../_components/CommandPaletteContext";
 import { getOrCreateOrg } from "@/lib/server/org";
+import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
 import { db } from "@shopkeeper/db";
@@ -18,6 +20,9 @@ const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const org = await getOrCreateOrg();
+  const incompleteOnboardingPath = await getIncompleteOnboardingRedirect(org.id, org.settings);
+  if (incompleteOnboardingPath) redirect(incompleteOnboardingPath);
+
   const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
 
   const notifications: Notification[] = [];

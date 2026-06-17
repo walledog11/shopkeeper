@@ -73,6 +73,9 @@ export interface OrgSettings {
 
   // Onboarding — chosen autonomy preset (see settings.ts mapping)
   autonomyTier?: 'watch' | 'guarded' | 'trusted' | 'broad' | 'full';
+
+  // Onboarding — set when merchant completes the v1 onboarding flow
+  onboardingCompletedAt?: string;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {

@@ -79,13 +79,6 @@ export function StepShopify({ data, connected, shopifyRow, onOAuth }: {
           <AccessRow kind="action" label="Cancel orders"        hint="always asks first"        on={connected} />
         </div>
       </div>
-
-      <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3.5 py-3 text-[12.5px] leading-snug text-white/70">
-        <span className="text-[14px] text-white/45">◇</span>
-        <span>
-          Not on Shopify? You can <span className="font-semibold text-green-400"> skip this step </span> and I&apos;ll answer general questions until you connect a store.
-        </span>
-      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import WorkflowSetupBanner from "./WorkflowSetupBanner"
+import HomeTelegramNudge from "./HomeTelegramNudge"
 import ConciergeBriefing from "./ConciergeBriefing"
 import NeedsYou from "./NeedsYou"
 import ClearedOvernight from "./ClearedOvernight"
@@ -30,8 +31,9 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
 
           <WorkflowSetupBanner
             steps={data.workflowSteps}
-            doneCount={data.workflowDoneCount}
           />
+
+          <HomeTelegramNudge connected={data.hasTelegramBound} />
 
           <div className="flex flex-col gap-3 min-w-0">
             <ConciergeBriefing

@@ -7,6 +7,10 @@ vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: vi.fn(),
 }));
 
+vi.mock('next/cache', () => ({
+  revalidatePath: vi.fn(),
+}));
+
 import { GET, PATCH, DELETE } from './route';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 

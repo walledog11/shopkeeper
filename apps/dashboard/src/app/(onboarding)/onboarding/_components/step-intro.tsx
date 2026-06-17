@@ -20,8 +20,8 @@ export function StepIntro() {
       </div>
 
       <p className="m-0 mt-4 max-w-[620px] text-pretty text-[16px] leading-relaxed text-white/70">
-        I&apos;ll handle your customer support — refunds, exchanges, where-is-my-order, product questions, the rest.
-        Spend <b className="text-white">four minutes</b> briefing me and I can start working tonight.
+        Connect Shopify, forward your support email, and I can start working tonight.
+        Spend <b className="text-white">four minutes</b> briefing me on your store and limits.
       </p>
 
       <div className="mt-7 grid grid-cols-1 gap-3 md:grid-cols-3">
