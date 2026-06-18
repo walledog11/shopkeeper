@@ -185,7 +185,8 @@ Settled in review. The plan assumes these and does not relitigate them.
 1. **Channels.** Telegram is the operator surface today. WhatsApp is the near-term target
    (reachable via the existing Meta app: `META_APP_ID` / `META_APP_SECRET` / `META_CONFIG_ID`).
    iMessage is aspirational only — Apple has no first-party programmatic API; treat it as a possible
-   third-party *adapter* behind the channel interface, never a constraint on the core.
+   third-party *adapter* behind the channel interface, never a constraint on the core. A concrete
+   adapter sketch (Photon Spectrum) lives in [imessage-integration-plan.md](imessage-integration-plan.md).
 2. **Thread-optional refactor happens now.** It is the foundation under module #2, not speculative —
    a thread-less proactive module literally cannot reuse `run.ts` without it. **Three named seams
    only — no module framework.**
@@ -658,8 +659,10 @@ Only when channel expansion is actually scheduled. Not on the critical path for 
   part of the WhatsApp work**, not before — order-ops adds no channel, so the split isn't needed earlier.
 - [ ] **WhatsApp adapter** via the existing Meta app (Cloud API; same vendor as IG DM). Slot into the same
   inbound→core→outbound path the channel interface defines.
-- [ ] **iMessage:** keep the channel interface able to accept a third-party adapter (Sendblue / LoopMessage /
-  self-hosted bridge) without core changes. Do not build it; do not let its constraints shape the core.
+- [ ] **iMessage:** keep the channel interface able to accept a third-party adapter (Photon Spectrum / Sendblue /
+  LoopMessage / self-hosted bridge) without core changes. Do not build it; do not let its constraints shape the core.
+  Concrete adapter plan (Photon Spectrum, with the deliverability/no-receipt constraints worked out):
+  [imessage-integration-plan.md](imessage-integration-plan.md).
 
 ---
 

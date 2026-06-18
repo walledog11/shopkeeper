@@ -20,6 +20,7 @@ enum ChannelType {
   sms
   sms_agent
   dashboard_agent
+  imessage
 }
 
 enum ThreadStatus {
@@ -196,6 +197,7 @@ model Thread {
   subject               String?
   tag                   String?              @default("Support")
   shopifyCustomerId     String?              @map("shopify_customer_id") @db.VarChar(255)
+  externalSpaceId       String?              @map("external_space_id")
   cachedPlanMessageId   String?              @map("cached_plan_message_id") @db.Uuid
   cachedPlan            Json?                @map("cached_plan") @db.JsonB
   archivedAt            DateTime?            @map("archived_at") @db.Timestamptz

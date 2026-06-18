@@ -1,4 +1,4 @@
-export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify' } as const;
+export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', IMESSAGE: 'imessage' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',
@@ -25,10 +25,12 @@ export const QUEUE = {
   ORDER_REVIEW: 'order-review',
   OUTBOUND_EMAIL: 'outbound-email',
   OUTBOUND_EMAIL_SWEEP: 'outbound-email-sweep',
+  OUTBOUND_IMESSAGE: 'outbound-imessage',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
   EMAIL: 'process-email',
+  IMESSAGE: 'process-imessage',
   TOKEN_HEALTH_CHECK: 'check-ig-tokens',
   TOKEN_HEALTH_ID: 'ig-token-health-daily',
   EMAIL_TOKEN_HEALTH_CHECK: 'check-email-tokens',
@@ -49,6 +51,7 @@ export const JOB = {
   ORDER_RISK_ID: 'order-risk-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
   SEND_EMAIL: 'send-email',
+  SEND_IMESSAGE: 'send-imessage',
   OUTBOUND_EMAIL_SWEEP: 'sweep-outbound-email',
   OUTBOUND_EMAIL_SWEEP_ID: 'outbound-email-sweep-5min',
 } as const;

@@ -3,6 +3,7 @@ export const CHANNEL_TYPE = {
   EMAIL: 'email',
   TIKTOK: 'tiktok',
   SHOPIFY: 'shopify',
+  IMESSAGE: 'imessage',
   SMS: 'sms',
   SMS_AGENT: 'sms_agent',
   DASHBOARD_AGENT: 'dashboard_agent',
