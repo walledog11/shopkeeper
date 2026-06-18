@@ -126,6 +126,13 @@ for these phases.
     gateway Spectrum client test and gateway typecheck.
 - **Phase 3 — Inbound (B, after 2).** §3. Verify: POST a captured Spectrum webhook body to the route
   → a customer/thread/message appears with `externalSpaceId` set, and a replay dedupes.
+  - **Status (2026-06-18): COMPLETE.** Added the Photon/Spectrum webhook route at
+    `/webhooks/photon/:integrationId`, raw-body handoff to Spectrum's webhook verifier, iMessage
+    content normalization + attachment upload, inbound queue payloads with `externalSpaceId`, the
+    inbound worker branch, `handleImessageJob`, and thread persistence/backfill for the Space id.
+    Verified with gateway typecheck, lint, full gateway integration suite, and mocked-Spectrum
+    webhook tests for text, attachments, missing raw body, worker persistence, and replay dedupe.
+    Live Photon send/receive remains the Phase 0 residual pending real credentials.
 - **Phase 4 — Outbound (B, after 2; heaviest but fully templated).** §4, the 3-part clone. Verify: an
   approved reply flips a `pending` row to `sent` and the test line receives it; a forced `send()`
   throw lands `failed` with an `opsAlert` log.

@@ -218,6 +218,35 @@ function trim(text: string, max = 110): string {
   return cleaned.length > max ? `${cleaned.slice(0, max - 3)}…` : cleaned
 }
 
+// Refusal / meta patterns an older summarizer produced for sparse messages.
+// A summary matching these is unusable as a title — fall through to the raw
+// message instead of surfacing "I don't have a thread to summarize."
+const LOW_QUALITY_SUMMARY_PATTERNS = [
+  /^i (don'?t|do not) have/i,
+  /^i (can'?t|cannot|am unable)/i,
+  /^i'?m unable/i,
+  /no (customer )?support thread/i,
+  /could you (please )?(share|provide|send)/i,
+  /please (share|provide|send) (the|more|details)/i,
+]
+
+function isLowQualitySummary(summary: string): boolean {
+  const trimmed = summary.trim()
+  if (trimmed.length < 6) return true
+  return LOW_QUALITY_SUMMARY_PATTERNS.some((rx) => rx.test(trimmed))
+}
+
+// Turns the third-person summary ("Customer is asking whether…") into a clean
+// subject-line fragment ("Asking whether…"). Strips the "Customer" lead-in and
+// any trailing auxiliary so we never leave a dangling verb ("Is asking…").
+function subjectFromSummary(summary: string): string {
+  const stripped = summary
+    .replace(/^\s*(the\s+)?customer\s+(is\s+|are\s+|was\s+|were\s+|has\s+|have\s+|had\s+|been\s+)*/i, "")
+    .trim()
+  if (!stripped) return trim(summary, 100)
+  return trim(stripped[0].toUpperCase() + stripped.slice(1), 100)
+}
+
 function warningLead(warning: string): string {
   const head = warning.split(/\s[-–,]\s/)[0] ?? warning
   return head.replace(/[.?!]+$/, "").trim()
@@ -281,8 +310,9 @@ export function buildPlanPreview(
     return { headline, context, proposal, actionText, orderRef: plan ? orderRefFromPlan(plan) : null }
   }
 
+  const usableSummary = aiSummary?.trim() && !isLowQualitySummary(aiSummary) ? aiSummary : null
   const headline =
-    aiSummary?.trim() ? trim(aiSummary, 100) :
+    usableSummary ? subjectFromSummary(usableSummary) :
     firstMessage?.trim() ? trim(firstMessage, 100) :
     "New customer message"
   return { headline, context: "", proposal, actionText, orderRef: plan ? orderRefFromPlan(plan) : null }

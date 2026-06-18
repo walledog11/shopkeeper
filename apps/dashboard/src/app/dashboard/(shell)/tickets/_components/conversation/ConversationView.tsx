@@ -7,6 +7,7 @@ import { useThreadPresence } from "@/hooks/useThreadPresence"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { quickApproveCachedPlan } from "../../_hooks/conversation-agent-requests"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
+import { buildTicketBriefSummary } from "../../_lib/ticket-brief-summary"
 import {
   planMessagesFromTicketMessages,
   resolveTicketCocoAction,
@@ -60,6 +61,8 @@ interface Props {
   onRetrySend?: (id: string) => void
   onTicketRefresh?: () => void | Promise<void>
   onActionError?: (message: string) => void
+  embedded?: boolean
+  aiTitle?: string | null
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
@@ -95,6 +98,8 @@ export default function ConversationView({
   onRetrySend,
   onTicketRefresh,
   onActionError,
+  embedded = false,
+  aiTitle,
 }: Props) {
   const {
     threadLoading: isThreadLoading = false,
@@ -117,7 +122,7 @@ export default function ConversationView({
 
   const handleFocusShopifyLink = useCallback(() => {
     onOpenContext?.()
-    requestShopifyLinkFocus()
+    requestAnimationFrame(() => requestShopifyLinkFocus())
   }, [onOpenContext])
 
   const focusComposer = useCallback(() => {
@@ -216,6 +221,24 @@ export default function ConversationView({
     viewTab,
   ])
 
+  const headerCocoAction = useMemo(() => {
+    if (pendingPlan) return null
+    if (cocoAction && (cocoAction.handler === "draft-reply" || cocoAction.handler === "refresh-draft")) {
+      return { ...cocoAction, label: "Generate Plan", shortLabel: "Generate" }
+    }
+    return cocoAction
+  }, [cocoAction, pendingPlan])
+
+  const summaryText = useMemo(
+    () => buildTicketBriefSummary({
+      ticket,
+      aiSummary,
+      aiTitle,
+      plan: pendingPlan,
+    }),
+    [aiSummary, aiTitle, pendingPlan, ticket],
+  )
+
   const focusPlanCard = useCallback(() => {
     setViewTab("chat")
     requestAnimationFrame(() => {
@@ -284,12 +307,15 @@ export default function ConversationView({
       ref={conversationRef}
       data-keyboard-open={keyboardLayoutOpen ? "true" : "false"}
       data-testid="ticket-conversation"
-      className="mobile-ticket-conversation flex-1 flex flex-col min-w-0 min-h-0 bg-background"
+      data-embedded={embedded ? "true" : "false"}
+      className={`mobile-ticket-conversation flex flex-col min-w-0 min-h-0 bg-background ${
+        embedded ? "h-full" : "flex-1"
+      }`}
       style={conversationStyle}
     >
       <ConversationHeader
         activeTab={activeTab}
-        cocoAction={isMobile && pendingPlan ? null : cocoAction}
+        cocoAction={headerCocoAction}
         customer={ticket.customer}
         platform={ticket.platform}
         onCocoAction={() => { void handleCocoAction() }}
@@ -297,9 +323,10 @@ export default function ConversationView({
         onResolve={onResolve}
         onReopen={onReopen}
         onOpenContext={onOpenContext}
+        embedded={embedded}
       />
       <ConversationSummaryBar
-        summary={aiSummary}
+        summary={summaryText}
         isRefreshing={isSummaryRefreshing}
         onRefresh={onRefreshSummary}
         startCollapsed={isMobile && Boolean(pendingPlan)}

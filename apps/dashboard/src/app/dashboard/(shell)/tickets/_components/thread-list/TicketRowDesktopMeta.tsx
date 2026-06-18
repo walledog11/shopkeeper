@@ -6,8 +6,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { TicketListPresentation } from "../../_lib/ticket-list-presentation"
-import { getMeaningfulTagStyle } from "./constants"
 import { TicketRowStatusPill } from "./ticket-row-status-pill"
+import { TicketTagPill } from "./ticket-tag-pill"
 import type { Ticket } from "@/types"
 
 interface TicketRowDesktopMetaProps {
@@ -27,7 +27,6 @@ export function TicketRowDesktopMeta({
   isSearchMode,
   showSlaStatus,
 }: TicketRowDesktopMetaProps) {
-  const secondaryTag = getMeaningfulTagStyle(ticket.tag)
   const planSnippet = ticket.hasPlan && presentation.subline.trim()
     ? presentation.subline.trim()
     : null
@@ -62,13 +61,7 @@ export function TicketRowDesktopMeta({
         statusPill
       )}
 
-      {secondaryTag ? (
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 ${secondaryTag.className}`}
-        >
-          {secondaryTag.label}
-        </span>
-      ) : null}
+      <TicketTagPill tag={ticket.tag} className="shrink-0" />
 
       {showSlaStatus && isSearchMode && ticket.status && !closed ? (
         <span className="text-xs text-foreground/25 font-medium capitalize ml-auto opacity-0 group-hover:opacity-100 transition-opacity">

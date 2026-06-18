@@ -412,6 +412,26 @@ export function useTicketsPageView({
   }
 
   const listLoading = isLoading && dbThreads.length === 0 && !isSearchMode
+  const isBoardView = !isSearchMode && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open")
+
+  useEffect(() => {
+    if (!isBoardView || !activeTicketId || queryThreadId || listLoading) return
+    if (filteredTickets.some(ticket => ticket.id === activeTicketId)) return
+
+    setActiveTicketId(null)
+    setReplyText("")
+    setSendError(null)
+    dispatchPageState({ type: "contextDrawerChanged", open: false })
+  }, [
+    activeTicketId,
+    filteredTickets,
+    isBoardView,
+    listLoading,
+    queryThreadId,
+    setActiveTicketId,
+    setReplyText,
+    setSendError,
+  ])
 
   if (error && dbThreads.length === 0 && !isSearchMode) {
     return { kind: "error" as const }

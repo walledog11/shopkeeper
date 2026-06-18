@@ -4,7 +4,8 @@ import {
   buildTicketListPresentation,
   compareTicketTriageTier,
 } from "./ticket-list-presentation"
-import type { AgentPlan, Thread } from "@/types"
+import { buildTicketBriefSummary } from "./ticket-brief-summary"
+import type { AgentPlan, Thread, Ticket } from "@/types"
 
 const customerMessageId = "msg-customer-1"
 const now = new Date("2026-06-14T12:00:00.000Z")
@@ -67,6 +68,7 @@ function baseThread(overrides: Partial<Thread> = {}): BuildTicketListPresentatio
     channelType: "email",
     status: "open",
     lastMessageAt: "2026-06-14T11:30:00.000Z",
+    aiTitle: null,
     aiSummary: "Customer asking about shipping times",
     subject: "Shipping question",
     tag: "Shipping",
@@ -98,6 +100,20 @@ function baseThread(overrides: Partial<Thread> = {}): BuildTicketListPresentatio
 type BuildTicketListPresentationThread = Parameters<typeof buildTicketListPresentation>[0]["thread"]
 
 describe("buildTicketListPresentation", () => {
+  it("prefers the AI title for card headlines", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        aiTitle: "Shipping Timeline Question",
+        aiSummary: "Customer asking about shipping times",
+      }),
+      orgSettings: { autonomyTier: "guarded" },
+      now,
+    })
+
+    expect(presentation.headline).toBe("Shipping Timeline Question")
+    expect(presentation.subline).toBe("We ship in 2-3 days.")
+  })
+
   it("assigns approve tier for quick_reply with a clean sender", () => {
     const presentation = buildTicketListPresentation({
       thread: baseThread(),
@@ -232,5 +248,56 @@ describe("compareTicketTriageTier", () => {
     expect(compareTicketTriageTier("review", "waiting")).toBeLessThan(0)
     expect(compareTicketTriageTier("waiting", "noise")).toBeLessThan(0)
     expect(compareTicketTriageTier("noise", "closed")).toBeLessThan(0)
+  })
+})
+
+describe("buildTicketBriefSummary", () => {
+  function ticket(overrides: Partial<Ticket> = {}): Ticket {
+    return {
+      id: "thread-1",
+      channelType: "email",
+      platform: "Email",
+      logo: "/email.svg",
+      customer: "Alex Rivera",
+      customerRecord: null,
+      time: "30m",
+      lastMessageAt: "2026-06-14T11:30:00.000Z",
+      subject: "Shipping question",
+      preview: "How long does shipping take?",
+      tag: "Shipping",
+      tagColor: "text-slate-500 bg-slate-100 border-slate-200",
+      aiSummary: "Customer is asking about shipping times.",
+      aiTitle: null,
+      status: "open",
+      lastCustomerMessageAt: "2026-06-14T11:30:00.000Z",
+      hasPlan: true,
+      cachedPlan: cacheRecord(quickReplyPlan()),
+      cachedPlanMessageId: customerMessageId,
+      shopifyCustomerId: null,
+      filterStatus: "genuine",
+      filterReason: null,
+      messages: [{
+        id: customerMessageId,
+        sender: "customer",
+        text: "How long does shipping take?",
+        time: "2026-06-14T11:30:00.000Z",
+        attachments: [],
+      }],
+      ...overrides,
+    }
+  }
+
+  it("uses the same title-style summary as action plan cards", () => {
+    expect(buildTicketBriefSummary({
+      ticket: ticket({ aiTitle: "Shipping Timeline Question" }),
+      plan: quickReplyPlan(),
+    })).toBe("Shipping Timeline Question")
+  })
+
+  it("falls back to the plan preview title style when no AI title exists", () => {
+    expect(buildTicketBriefSummary({
+      ticket: ticket(),
+      plan: quickReplyPlan(),
+    })).toBe("Asking about shipping times.")
   })
 })

@@ -68,7 +68,7 @@ export default function ConversationComposerArea({
   const showMobileFloatingSurface =
     isMobile && viewTab === "chat" && (Boolean(pendingPlan) || mobileManualEdit)
   const showDesktopPlan = !isMobile && Boolean(pendingPlan) && viewTab === "chat"
-  const showFullComposer = !showMobileFloatingSurface
+  const showFullComposer = !showMobileFloatingSurface && !showDesktopPlan
 
   useEffect(() => {
     setMobileManualEdit(false)

@@ -52,6 +52,7 @@ export interface BuildTicketListPresentationInput {
     | "channelType"
     | "status"
     | "lastMessageAt"
+    | "aiTitle"
     | "aiSummary"
     | "subject"
     | "tag"
@@ -106,6 +107,7 @@ function headlineFallback(
   thread: BuildTicketListPresentationInput["thread"],
   planHeadline: string,
 ): string {
+  if (thread.aiTitle?.trim()) return clampText(thread.aiTitle, 100)
   if (planHeadline.trim()) return planHeadline
   if (thread.tag && thread.tag !== "General") return thread.tag
   if (thread.subject?.trim()) return clampText(thread.subject, 100)
@@ -259,6 +261,7 @@ export interface TicketPresentationSource {
   status: ThreadStatus
   lastMessageAt: string
   aiSummary: string
+  aiTitle?: string | null
   subject: string
   tag: string
   cachedPlan: unknown | null
@@ -284,6 +287,7 @@ export function buildTicketListPresentationFromTicket(
       channelType: ticket.channelType,
       status: ticket.status,
       lastMessageAt: ticket.lastMessageAt,
+      aiTitle: ticket.aiTitle ?? null,
       aiSummary: ticket.aiSummary,
       subject: ticket.subject,
       tag: ticket.tag,

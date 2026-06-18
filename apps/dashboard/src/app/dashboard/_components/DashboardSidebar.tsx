@@ -78,11 +78,11 @@ function DashboardSidebarContent({
             <button
               type="button"
               onClick={() => openAgentPanel({ source: "command" })}
-              aria-label={`Chat with ${agentName}`}
-              title={`Chat with ${agentName}`}
-              className="p-1 rounded-full border border-border bg-card hover:bg-muted/60 transition-colors"
+              aria-label="Open agent"
+              title="Open agent"
+              className="p-0.5 rounded-full border border-border bg-white hover:bg-white/90 transition-colors"
             >
-              <AgentAvatar agentName={agentName} size="sm" />
+              <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
             </button>
             <button
               type="button"

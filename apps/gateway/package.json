@@ -18,6 +18,7 @@
     "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.config.ts",
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
+    "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",
     "drain-legacy-customer-memory-queues": "tsx src/scripts/drain-legacy-customer-memory-queues.ts"
   },
   "dependencies": {

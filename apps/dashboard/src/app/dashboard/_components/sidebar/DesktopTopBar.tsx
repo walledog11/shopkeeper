@@ -178,11 +178,11 @@ export function DesktopTopBar({
         <button
           type="button"
           onClick={() => openAgentPanel({ source: "command" })}
-          title={`Chat with ${agentName}`}
-          className="flex items-center gap-2 p-1 xl:px-2.5 xl:py-1.5 rounded-full border border-border bg-card hover:bg-muted/60 text-foreground transition-colors shrink-0"
+          aria-label="Open agent"
+          title="Open agent"
+          className="flex items-center justify-center p-0.5 rounded-full border border-border bg-white hover:bg-white/90 transition-colors shrink-0"
         >
-          <AgentAvatar agentName={agentName} size="sm" />
-          <span className="hidden xl:inline text-sm font-semibold truncate max-w-[120px]">{agentName}</span>
+          <AgentAvatar agentName={agentName} size="sm" imageSrc="/logos/coco-header-icon.png" />
         </button>
 
         <button

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType } from '@shopkeeper/db';
+import { ChannelType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -31,7 +31,10 @@ beforeEach(async () => {
     userId: 'usr_ai_summary',
     orgId: org.clerkOrgId,
   } as ReturnType<typeof auth> extends Promise<infer T> ? T : never);
-  mockGenerateText.mockResolvedValue('Customer needs shipping help.');
+  mockGenerateText.mockResolvedValue(JSON.stringify({
+    title: 'Shipping Help Needed',
+    summary: 'Customer needs shipping help.',
+  }));
 });
 
 afterEach(async () => {
@@ -63,11 +66,16 @@ describe('POST /api/ai/summary', () => {
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
     const res = await POST(jsonRequest({ threadId: thread.id }));
-    const body = await res.json() as { summary: string };
+    const body = await res.json() as { title: string; summary: string };
 
     expect(res.status).toBe(200);
+    expect(body.title).toBe('Shipping Help Needed');
     expect(body.summary).toBe('Customer needs shipping help.');
     expect(mockGenerateText).toHaveBeenCalledOnce();
+
+    const updated = await db.thread.findUnique({ where: { id: thread.id } });
+    expect(updated?.aiTitle).toBe('Shipping Help Needed');
+    expect(updated?.aiSummary).toBe('Customer needs shipping help.');
   });
 });
 

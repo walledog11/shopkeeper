@@ -37,6 +37,11 @@ export interface InboundJobData {
   traceId?: string;
   rawPayload?: unknown;
   topic?: string;
+  senderId?: string;
+  text?: string;
+  externalMessageId?: string | null;
+  externalSpaceId?: string | null;
+  attachmentUrls?: string[];
   senderEmail?: string;
   senderName?: string | null;
   subject?: string;

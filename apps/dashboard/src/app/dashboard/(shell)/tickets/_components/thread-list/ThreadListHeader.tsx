@@ -32,7 +32,7 @@ interface ThreadListHeaderProps {
 }
 
 const DESKTOP_VIEW_OPTIONS: { id: "for_me" | "all_open" | "closed"; label: string }[] = [
-  { id: "for_me", label: "For me" },
+  { id: "for_me", label: "Needs you" },
   { id: "all_open", label: "All open" },
   { id: "closed", label: "Closed" },
 ]

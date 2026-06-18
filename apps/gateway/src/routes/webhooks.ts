@@ -3,6 +3,7 @@ import { registerMetaWebhookRoutes } from './webhooks-meta.js';
 import { registerEmailWebhookRoutes } from './webhooks-email.js';
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 import { registerShopifyWebhookRoutes } from './webhooks-shopify.js';
+import { registerPhotonWebhookRoutes } from './webhooks-photon.js';
 
 export {
   recordWebhookSignatureFailure,
@@ -20,5 +21,6 @@ registerMetaWebhookRoutes(router);
 registerEmailWebhookRoutes(router);
 registerTelegramWebhookRoutes(router);
 registerShopifyWebhookRoutes(router);
+registerPhotonWebhookRoutes(router);
 
 export default router;

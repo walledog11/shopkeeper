@@ -154,6 +154,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
         : null;
       precomputed = priorGenuine
         ? {
+            title: subject?.trim()?.slice(0, 60) || 'New email',
             summary: subject?.slice(0, 200) || 'New email',
             tag: 'General',
             filterStatus: 'genuine',
@@ -193,6 +194,42 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
     logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Email');
+    throw error;
+  }
+}
+
+export async function handleImessageJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const { organizationId, traceId } = job.data;
+  const senderId = job.data.senderId?.trim();
+  const messageText = job.data.text?.trim();
+
+  if (!senderId) {
+    logger.warn({ organizationId, traceId }, '[Worker] iMessage job missing senderId — dropping');
+    return;
+  }
+
+  if (!messageText && (job.data.attachmentUrls ?? []).length === 0) {
+    logger.info({ organizationId, senderId, traceId }, '[Worker] iMessage job has no content — dropping');
+    return;
+  }
+
+  try {
+    await processInboundMessage(
+      organizationId,
+      senderId,
+      CHANNEL.IMESSAGE,
+      messageText || '[Attachment]',
+      aiSummaryQueue,
+      {
+        externalMessageId: job.data.externalMessageId,
+        externalSpaceId: job.data.externalSpaceId,
+        attachments: job.data.attachmentUrls ?? [],
+        traceId,
+      },
+    );
+    logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved iMessage');
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for iMessage');
     throw error;
   }
 }

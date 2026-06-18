@@ -31,6 +31,7 @@ export interface ProcessMessageOptions {
   initialTag?: string | null;
   subject?: string | null;
   externalMessageId?: string | null;
+  externalSpaceId?: string | null;
   traceId?: string | null;
   attachments?: string[];
   // Email path classifies pre-persistence so we can write filter columns inline
@@ -60,6 +61,7 @@ export async function processInboundMessage(
     initialTag = null,
     subject = null,
     externalMessageId = null,
+    externalSpaceId = null,
     traceId = null,
     attachments = [],
     precomputed = null,
@@ -111,8 +113,10 @@ export async function processInboundMessage(
           channelType,
           status: STATUS.OPEN,
           ...(subject && { subject }),
+          ...(externalSpaceId && { externalSpaceId }),
           ...(initialTag && { tag: initialTag }),
           ...(precomputed && {
+            aiTitle: precomputed.title,
             aiSummary: precomputed.summary,
             tag: precomputed.tag,
             filterStatus: precomputed.filterStatus,
@@ -135,6 +139,13 @@ export async function processInboundMessage(
         throw e;
       }
     }
+  }
+
+  if (thread && externalSpaceId && !thread.externalSpaceId) {
+    thread = await db.thread.update({
+      where: { id: thread.id },
+      data: { externalSpaceId },
+    });
   }
 
   try {

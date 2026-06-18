@@ -10,6 +10,7 @@ import logger from '../logger.js';
 import { MODEL } from '../constants.js';
 
 export interface ClassificationResult {
+  title: string;
   summary: string;
   tag: string;
   filterStatus: DbThreadFilterStatus;
@@ -17,7 +18,8 @@ export interface ClassificationResult {
 }
 
 export const CLASSIFIER_SYSTEM_PROMPT = `You are an AI assistant for a customer support team.
-Read the customer message and produce four fields in strict JSON:
+Read the customer message and produce five fields in strict JSON:
+- "title": a short subject line (3 to 6 words) naming the topic, like an email subject line. Use Title Case, no trailing period, and never begin with "Customer" or "The customer". If the message is vague or unclear, say so plainly (e.g., "Unclear one-word message", "Vague inquiry about an offer"). Examples: "Damaged sweater return", "Where is order #1452", "Question about an exclusive offer".
 - "summary": one-sentence third-person summary of what the customer said. Always describe actual content; never refuse, never ask for more info. If the message is one word or fragmentary, quote/paraphrase it (e.g., 'Customer wrote a single word: "Palettegarments".').
 - "tag": exactly one of Shipping, Returns, Order Status, Product Inquiry, General.
 - "classification": exactly one of "genuine", "questionable", "filtered".
@@ -26,7 +28,7 @@ Read the customer message and produce four fields in strict JSON:
   - "filtered": clearly spam, newsletters, promotions, automated system alerts, or delivery status notifications.
 - "reason": one short sentence (under 20 words) justifying the classification.
 
-Respond ONLY in strict JSON: {"summary":"...","tag":"...","classification":"...","reason":"..."}`;
+Respond ONLY in strict JSON: {"title":"...","summary":"...","tag":"...","classification":"...","reason":"..."}`;
 
 const JSON_FENCE_OPEN = /^```json\s*/i;
 const JSON_FENCE_CLOSE = /```\s*$/;
@@ -37,16 +39,36 @@ function isFilterStatus(value: string): value is DbThreadFilterStatus {
   return VALID_FILTER_STATUSES.has(value);
 }
 
+// Safety net only — the classifier is asked for "title" directly. If a response
+// omits it, derive a clean subject line from the summary rather than throwing
+// away an otherwise-valid summary/tag/classification.
+function fallbackTitleFromSummary(summary: string): string {
+  const stripped = summary
+    .replace(/^\s*(the\s+)?customer\s+(is\s+|was\s+|has\s+|have\s+|had\s+|been\s+)*/i, '')
+    .replace(/[.?!]+$/, '')
+    .trim();
+  const base = stripped || summary.trim();
+  if (!base) return 'New message';
+  const titled = base[0].toUpperCase() + base.slice(1);
+  return titled.length > 70 ? `${titled.slice(0, 69)}…` : titled;
+}
+
 export function parseClassifierJson(raw: string): ClassificationResult {
   const cleaned = raw.replace(JSON_FENCE_OPEN, '').replace(JSON_FENCE_CLOSE, '').trim();
-  const parsed = JSON.parse(cleaned) as { summary?: string; tag?: string; classification?: string; reason?: string };
+  const parsed = JSON.parse(cleaned) as { title?: string; summary?: string; tag?: string; classification?: string; reason?: string };
   if (!parsed.summary || !parsed.tag || !parsed.classification || !parsed.reason) {
     throw new Error('Classifier response missing required fields');
   }
   if (!isFilterStatus(parsed.classification)) {
     throw new Error(`Classifier returned invalid classification: ${parsed.classification}`);
   }
-  return { summary: parsed.summary, tag: parsed.tag, filterStatus: parsed.classification, filterReason: parsed.reason };
+  return {
+    title: parsed.title?.trim() || fallbackTitleFromSummary(parsed.summary),
+    summary: parsed.summary,
+    tag: parsed.tag,
+    filterStatus: parsed.classification,
+    filterReason: parsed.reason,
+  };
 }
 
 function isDeterministicE2EAIEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -60,6 +82,7 @@ function deterministicE2EClassification(subject: string, body: string): Classifi
   if (!input.includes(E2E_FILTERED_SPAM_MARKER)) return null;
 
   return {
+    title: 'Filtered spam',
     summary: 'E2E spam marker was filtered before automation.',
     tag: 'General',
     filterStatus: 'filtered',
@@ -99,6 +122,7 @@ export async function classifyAndSummarizeNewEmail(
       logger.error({ err: error }, '[Worker] Classifier failed — failing open as genuine');
     }
     return {
+      title: subject?.trim()?.slice(0, 60) || 'New email',
       summary: subject?.slice(0, 200) || 'New email',
       tag: 'General',
       filterStatus: 'genuine',

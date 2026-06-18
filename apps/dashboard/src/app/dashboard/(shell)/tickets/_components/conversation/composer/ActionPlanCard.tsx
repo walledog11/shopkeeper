@@ -104,11 +104,10 @@ export default function ActionPlanCard({
 
   const replyStep = steps.find(s => REPLY_TOOLS.has(s.tool)) ?? null
   const actionSteps = steps.filter(s => !REPLY_TOOLS.has(s.tool))
+  const shopifyActionSteps = actionSteps.filter(s => TOOL_CATEGORIES[s.tool] === "action")
   const replyText = planReplyText(plan)
-  const replyEnabled = replyStep?.enabled ?? false
   const showReplyHero = Boolean(replyText && replyStep)
-  const showSkipReply = showReplyHero && actionSteps.length > 0
-  const showEditTakeover = Boolean(onEdit && showReplyHero && replyEnabled)
+  const showEditTakeover = Boolean(onEdit && showReplyHero)
 
   const recipient = planRecipientDisplay(customerName)
   const { blocking: blockingWarnings, informational: informationalWarnings } = planWarningTiers(plan)
@@ -117,9 +116,9 @@ export default function ActionPlanCard({
 
   const enabledCount = steps.filter(s => s.enabled).length
   const consequential = steps.some(s => s.enabled && TOOL_CATEGORIES[s.tool] === "action")
-  const enabledActions = actionSteps.some(s => s.enabled)
+  const enabledActions = shopifyActionSteps.some(s => s.enabled)
 
-  const headerLabel = showReplyHero && replyEnabled
+  const headerLabel = showReplyHero
     ? `${agentName} drafted a reply${recipient.headerTo ? ` to ${recipient.headerTo}` : ""}`
     : `${agentName} proposes`
 
@@ -128,10 +127,10 @@ export default function ActionPlanCard({
   const primaryLabel = isExecuting
     ? null
     : confirming
-      ? (showReplyHero && replyEnabled ? "Confirm & send" : "Confirm")
+      ? (showReplyHero ? "Confirm & send" : "Confirm")
       : needsWarningReview
         ? "Review & send"
-        : showReplyHero && replyEnabled
+        : showReplyHero
           ? (enabledActions ? "Approve & send" : "Send reply")
           : "Approve"
 
@@ -268,33 +267,11 @@ export default function ActionPlanCard({
 
             {showReplyHero ? (
               <div className="mt-3 flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold text-foreground/40">
-                    To {recipient.draftTo}
-                  </span>
-                  {showSkipReply && replyStep && (
-                    <button type="button"
-                      data-testid="action-plan-step-toggle"
-                      data-step-id={replyStep.id}
-                      aria-pressed={replyEnabled}
-                      onClick={() => toggleStep(replyStep.id, replyStep.tool)}
-                      disabled={isExecuting}
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-40 ${
-                        replyEnabled
-                          ? "border-border bg-foreground/[0.04] text-foreground/55 hover:border-foreground/20 hover:text-foreground/75"
-                          : "border-amber-600/30 bg-amber-600/[0.1] text-amber-700 hover:border-amber-600/45"
-                      }`}
-                    >
-                      {replyEnabled ? "Skip reply" : "Include reply"}
-                    </button>
-                  )}
-                </div>
-                <div className={`rounded-2xl border px-4 py-3 ${
-                  replyEnabled ? "bg-foreground/[0.04] border-border" : "border-dashed border-border opacity-50"
-                }`}>
-                  <p className={`${draftTextClass} ${
-                    replyEnabled ? "" : "line-through opacity-50"
-                  }`}>
+                <span className="text-[11px] font-semibold text-foreground/40">
+                  To {recipient.draftTo}
+                </span>
+                <div className="rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3">
+                  <p className={draftTextClass}>
                     {replyText}
                   </p>
                 </div>
@@ -330,11 +307,11 @@ export default function ActionPlanCard({
               </ol>
             )}
 
-            {showReplyHero && actionSteps.length > 0 && (
+            {showReplyHero && shopifyActionSteps.length > 0 && (
               <div className="mt-3 flex flex-col gap-1.5">
                 <span className="text-[11px] font-semibold text-foreground/35">Also in Shopify</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {actionSteps.map((step) => {
+                  {shopifyActionSteps.map((step) => {
                     const isAction = TOOL_CATEGORIES[step.tool] === "action"
                     return (
                       <button type="button"

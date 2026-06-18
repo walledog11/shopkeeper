@@ -11,7 +11,7 @@ import {
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
-const { mockLogger, queueAddSpy } = vi.hoisted(() => ({
+const { mockLogger, queueAddSpy, getSpectrumAppForIntegrationSpy, spectrumWebhookSpy, uploadInboundAttachmentSpy } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -19,6 +19,9 @@ const { mockLogger, queueAddSpy } = vi.hoisted(() => ({
     warn: vi.fn(),
   },
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
+  getSpectrumAppForIntegrationSpy: vi.fn(),
+  spectrumWebhookSpy: vi.fn(),
+  uploadInboundAttachmentSpy: vi.fn(),
 }));
 
 vi.mock('ioredis', () => ({
@@ -45,6 +48,14 @@ vi.mock('bullmq', () => ({
 
 vi.mock('../logger.js', () => ({
   default: mockLogger,
+}));
+
+vi.mock('../clients/spectrum.js', () => ({
+  getSpectrumAppForIntegration: getSpectrumAppForIntegrationSpy,
+}));
+
+vi.mock('../storage/blob.js', () => ({
+  uploadInboundAttachment: uploadInboundAttachmentSpy,
 }));
 
 // Import the router after mocks are hoisted
@@ -82,6 +93,12 @@ const app = createApp();
 beforeEach(async () => {
   org = await createTestOrg();
   queueAddSpy.mockClear();
+  getSpectrumAppForIntegrationSpy.mockReset();
+  spectrumWebhookSpy.mockReset();
+  uploadInboundAttachmentSpy.mockReset();
+  getSpectrumAppForIntegrationSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
+  spectrumWebhookSpy.mockResolvedValue({ status: 200, headers: {}, body: new Uint8Array() });
+  uploadInboundAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
   mockLogger.debug.mockClear();
   mockLogger.error.mockClear();
   mockLogger.info.mockClear();
@@ -221,6 +238,148 @@ describe('POST /webhooks/meta', () => {
     expect(res.status).toBe(200);
     // The webhook handler enqueues the job; the worker is responsible for dropping echoes
     expect(queueAddSpy).toHaveBeenCalledOnce();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /webhooks/photon/:integrationId — iMessage ingestion through Spectrum
+// ---------------------------------------------------------------------------
+describe('POST /webhooks/photon/:integrationId', () => {
+  async function createImessageIntegration() {
+    return db.integration.create({
+      data: {
+        organizationId: org.id,
+        platform: ChannelType.imessage,
+        externalAccountId: 'photon_project_123',
+        accessToken: 'photon_project_secret',
+        refreshToken: 'photon_webhook_secret',
+      },
+    });
+  }
+
+  it('passes the raw request to Spectrum and enqueues an iMessage job', async () => {
+    const integration = await createImessageIntegration();
+    spectrumWebhookSpy.mockImplementationOnce(async (requestInput, handler) => {
+      await handler(
+        { id: 'any;-;+15551234567', __platform: 'iMessage' },
+        {
+          id: 'imsg_text_001',
+          direction: 'inbound',
+          platform: 'iMessage',
+          sender: { id: '+15551234567', __platform: 'iMessage' },
+          space: { id: 'any;-;+15551234567', __platform: 'iMessage' },
+          timestamp: new Date('2026-06-17T12:00:00.000Z'),
+          content: { type: 'text', text: 'Hello from iMessage' },
+        },
+      );
+      return { status: 200, headers: { 'content-type': 'text/plain' }, body: Buffer.from('OK') };
+    });
+
+    const body = JSON.stringify({ event: 'message' });
+    const res = await request(app)
+      .post(`/webhooks/photon/${integration.id}`)
+      .set('Content-Type', 'application/json')
+      .set('x-spectrum-signature', 'v0=test')
+      .set('x-spectrum-timestamp', '1781716800')
+      .send(body);
+
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('OK');
+    expect(getSpectrumAppForIntegrationSpy).toHaveBeenCalledWith(expect.objectContaining({
+      id: integration.id,
+      organizationId: org.id,
+      platform: ChannelType.imessage,
+    }));
+    expect(spectrumWebhookSpy).toHaveBeenCalledOnce();
+    const [webhookRequest] = spectrumWebhookSpy.mock.calls[0];
+    expect(Buffer.isBuffer(webhookRequest.body)).toBe(true);
+    expect(Buffer.from(webhookRequest.body).toString('utf8')).toBe(body);
+    expect(webhookRequest.headers['x-spectrum-signature']).toBe('v0=test');
+
+    expect(queueAddSpy).toHaveBeenCalledOnce();
+    const [jobName, jobData] = queueAddSpy.mock.calls[0];
+    expect(jobName).toBe('process-imessage');
+    expect(jobData).toMatchObject({
+      platform: 'imessage',
+      organizationId: org.id,
+      senderId: '+15551234567',
+      text: 'Hello from iMessage',
+      externalMessageId: 'imsg_text_001',
+      externalSpaceId: 'any;-;+15551234567',
+    });
+    expect(jobData.traceId).toEqual(expect.any(String));
+  });
+
+  it('uploads Spectrum attachment content before enqueueing the job', async () => {
+    const integration = await createImessageIntegration();
+    uploadInboundAttachmentSpy.mockResolvedValueOnce('blob:attachments/org/receipt.png');
+    spectrumWebhookSpy.mockImplementationOnce(async (_requestInput, handler) => {
+      await handler(
+        { id: 'any;-;+15557654321', __platform: 'iMessage' },
+        {
+          id: 'imsg_attachment_001',
+          direction: 'inbound',
+          platform: 'iMessage',
+          sender: { id: '+15557654321', __platform: 'iMessage' },
+          space: { id: 'any;-;+15557654321', __platform: 'iMessage' },
+          timestamp: new Date('2026-06-17T12:00:00.000Z'),
+          content: {
+            type: 'attachment',
+            id: 'attachment_001',
+            name: 'receipt.png',
+            mimeType: 'image/png',
+            read: vi.fn().mockResolvedValue(Buffer.from('fake-image')),
+            stream: vi.fn(),
+          },
+        },
+      );
+      return { status: 200, headers: {}, body: Buffer.from('OK') };
+    });
+
+    const res = await request(app)
+      .post(`/webhooks/photon/${integration.id}`)
+      .set('Content-Type', 'application/json')
+      .set('x-spectrum-signature', 'v0=test')
+      .send(JSON.stringify({ event: 'message' }));
+
+    expect(res.status).toBe(200);
+    expect(uploadInboundAttachmentSpy).toHaveBeenCalledWith(
+      org.id,
+      'receipt.png',
+      'image/png',
+      Buffer.from('fake-image').toString('base64'),
+    );
+    const [, jobData] = queueAddSpy.mock.calls[0];
+    expect(jobData).toMatchObject({
+      text: 'Attachment: receipt.png',
+      attachmentUrls: ['blob:attachments/org/receipt.png'],
+    });
+  });
+
+  it('returns 404 when the integration id is unknown', async () => {
+    const res = await request(app)
+      .post('/webhooks/photon/00000000-0000-0000-0000-000000000000')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ event: 'message' }));
+
+    expect(res.status).toBe(404);
+    expect(getSpectrumAppForIntegrationSpy).not.toHaveBeenCalled();
+    expect(spectrumWebhookSpy).not.toHaveBeenCalled();
+    expect(queueAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when the global JSON parser did not capture a raw body', async () => {
+    const integration = await createImessageIntegration();
+
+    const res = await request(app)
+      .post(`/webhooks/photon/${integration.id}`)
+      .set('Content-Type', 'text/plain')
+      .send('not-json');
+
+    expect(res.status).toBe(401);
+    expect(getSpectrumAppForIntegrationSpy).not.toHaveBeenCalled();
+    expect(spectrumWebhookSpy).not.toHaveBeenCalled();
+    expect(queueAddSpy).not.toHaveBeenCalled();
   });
 });
 

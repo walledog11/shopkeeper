@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, CheckCircle2, Info, Loader2, RotateCcw } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Info, Loader2, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
@@ -15,6 +15,7 @@ interface Props {
   onResolve: () => void
   onReopen: () => void
   onOpenContext?: () => void
+  embedded?: boolean
 }
 
 const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
@@ -35,17 +36,21 @@ export default function ConversationHeader({
   onResolve,
   onReopen,
   onOpenContext,
+  embedded = false,
 }: Props) {
+  const BackIcon = embedded ? X : ArrowLeft
+
   return (
-    <div className="h-14 border-b border-border flex items-center justify-between px-3 md:px-6 shrink-0">
+    <div className={`${embedded ? "h-12 px-3" : "h-14 px-3 md:px-6"} border-b border-border flex items-center justify-between shrink-0`}>
       <div className="flex items-center gap-3 min-w-0">
         <Button
           variant="ghost"
           size="icon"
-          className="md:hidden shrink-0 -ml-2 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8"
+          aria-label={embedded ? "Close conversation" : "Back"}
+          className={`${embedded ? "" : "md:hidden"} shrink-0 -ml-2 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8`}
           onClick={onBack}
         >
-          <ArrowLeft className="size-4" />
+          <BackIcon className="size-4" />
         </Button>
         {onOpenContext ? (
           <button

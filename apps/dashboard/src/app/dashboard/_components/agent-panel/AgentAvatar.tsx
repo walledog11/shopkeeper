@@ -1,3 +1,4 @@
+import Image from "next/image"
 import { cn } from "@/lib/ui/cn"
 
 const SIZE_CLASSES = {
@@ -11,21 +12,33 @@ interface Props {
   agentName: string
   size?: keyof typeof SIZE_CLASSES
   className?: string
+  imageSrc?: string
 }
 
-export default function AgentAvatar({ agentName, size = "md", className }: Props) {
+export default function AgentAvatar({ agentName, size = "md", className, imageSrc }: Props) {
   const initial = agentName.charAt(0).toUpperCase()
 
   return (
     <div
       aria-hidden
       className={cn(
-        "rounded-full bg-primary text-primary-foreground flex items-center justify-center font-display-serif leading-none shrink-0 select-none",
+        "rounded-full flex items-center justify-center font-display-serif leading-none shrink-0 select-none",
+        imageSrc ? "overflow-hidden bg-white text-transparent" : "bg-primary text-primary-foreground",
         SIZE_CLASSES[size],
         className,
       )}
     >
-      {initial}
+      {imageSrc ? (
+        <Image
+          src={imageSrc}
+          alt=""
+          width={40}
+          height={40}
+          className="size-full rounded-full object-cover"
+        />
+      ) : (
+        initial
+      )}
     </div>
   )
 }

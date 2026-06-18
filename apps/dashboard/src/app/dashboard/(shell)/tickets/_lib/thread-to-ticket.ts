@@ -21,11 +21,12 @@ export function threadToTicket(thread: Thread, agentName?: string): Ticket {
     customerRecord: thread.customer,
     time: formatTicketAge(thread.lastMessageAt),
     lastMessageAt: thread.lastMessageAt,
-    subject: thread.subject || thread.aiSummary || "New Inquiry",
+    subject: thread.subject || thread.aiTitle || thread.aiSummary || "New Inquiry",
     preview: lastMsg?.contentText || "No messages yet.",
     tag: thread.tag || "Support",
     tagColor: "text-slate-500 bg-slate-100 border-slate-200",
     aiSummary: thread.aiSummary || `${agentName ?? "Shopkeeper"} is reading this ticket…`,
+    aiTitle: thread.aiTitle ?? null,
     status: thread.status,
     lastCustomerMessageAt:
       thread.messages.filter((message) => message.senderType === SENDER_TYPE.CUSTOMER).at(-1)?.sentAt ?? null,

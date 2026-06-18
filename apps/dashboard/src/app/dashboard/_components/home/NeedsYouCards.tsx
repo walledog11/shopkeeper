@@ -32,7 +32,7 @@ export function NeedsYouCardPeek({
   agentName: string
   minHeight?: number
 }) {
-  const title = item.tag?.trim() || item.headline
+  const title = item.headline
   const previewTone: BubbleTone = item.replyText?.trim() ? "reply" : item.actionText?.trim() ? "action" : "flag"
   const previewLabel = item.replyText?.trim()
     ? `${agentName} responds via ${item.channelName}`
@@ -49,7 +49,12 @@ export function NeedsYouCardPeek({
       className="h-full w-full bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5 pointer-events-none box-border overflow-hidden"
       style={minHeight ? { minHeight, maxHeight: minHeight } : undefined}
     >
-      <h3 className="font-sans font-semibold text-2xl sm:text-3xl text-foreground leading-tight tracking-tight line-clamp-2">
+      {item.tag?.trim() && (
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/40">
+          {item.tag.trim()}
+        </span>
+      )}
+      <h3 className="mt-1 font-sans font-semibold text-xl sm:text-2xl text-foreground leading-tight tracking-tight line-clamp-3">
         {title}
       </h3>
 
@@ -83,7 +88,7 @@ export function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAtten
   const [confirming, setConfirming] = useState(false)
 
   const isConsequential = item.kind === "needs_review"
-  const title = item.tag?.trim() || item.headline
+  const title = item.headline
 
   const bubbles: { key: string; label: string; text: string; tone: BubbleTone }[] = []
   if (item.actionText) bubbles.push({ key: "action", label: `${agentName} updates Shopify`, text: item.actionText, tone: "action" })
@@ -127,7 +132,12 @@ export function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAtten
 
   return (
     <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5">
-      <h3 className="font-sans font-semibold text-2xl sm:text-3xl text-foreground leading-tight tracking-tight">
+      {item.tag?.trim() && (
+        <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/40">
+          {item.tag.trim()}
+        </span>
+      )}
+      <h3 className="mt-1 font-sans font-semibold text-xl sm:text-2xl text-foreground leading-tight tracking-tight line-clamp-3">
         {title}
       </h3>
 

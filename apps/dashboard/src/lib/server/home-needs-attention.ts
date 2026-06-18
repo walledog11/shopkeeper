@@ -85,7 +85,7 @@ export async function loadNeedsAttention(
       customerMessage: clampCustomerMessage(latestMessage.contentText),
       channelName: getChannelInfo(thread.channelType as ChannelType).name,
       timeAgo: timeAgoShort(latestMessage.sentAt, now),
-      headline: copy.headline,
+      headline: thread.aiTitle?.trim() || copy.headline,
       contextLine: copy.context,
       proposalSummary: copy.proposal,
       actionText: copy.actionText,

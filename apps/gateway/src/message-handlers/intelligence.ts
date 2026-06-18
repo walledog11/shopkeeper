@@ -57,6 +57,7 @@ export async function generateThreadIntelligence(
     const updated = await db.thread.update({
       where: { id: threadId },
       data: {
+        aiTitle: aiData.title,
         aiSummary: aiData.summary,
         tag: aiData.tag,
         ...(shouldSetFilter && {

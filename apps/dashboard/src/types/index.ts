@@ -141,6 +141,7 @@ export interface Thread {
   updatedAt: string;
   lastMessageAt: string;
   aiSummary: string | null;
+  aiTitle?: string | null;
   subject: string | null;
   tag: string | null;
   shopifyCustomerId: string | null;
@@ -168,6 +169,7 @@ export interface Ticket {
   tag: string;
   tagColor: string;
   aiSummary: string;
+  aiTitle?: string | null;
   status: ThreadStatus;
   lastCustomerMessageAt: string | null;
   hasPlan: boolean;
