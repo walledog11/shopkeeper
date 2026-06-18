@@ -70,8 +70,7 @@ export function getSpectrumAppForIntegration(integration: SpectrumIntegration): 
   const cached = spectrumAppsByIntegration.get(key);
   if (cached) return cached;
 
-  let appPromise: Promise<ImessageSpectrumApp>;
-  appPromise = Spectrum({
+  const appPromise = Spectrum({
     projectId: credentials.projectId,
     projectSecret: credentials.projectSecret,
     webhookSecret: credentials.webhookSecret,
