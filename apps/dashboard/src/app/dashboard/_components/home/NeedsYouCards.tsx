@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react"
 import Link from "next/link"
 import { AlertCircle, Loader2 } from "lucide-react"
 import { Card } from "@/components/ui/card"
+import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 
 type BubbleTone = "action" | "reply" | "flag"
@@ -33,16 +34,20 @@ export function NeedsYouCardPeek({
   minHeight?: number
 }) {
   const title = item.headline
-  const previewTone: BubbleTone = item.replyText?.trim() ? "reply" : item.actionText?.trim() ? "action" : "flag"
-  const previewLabel = item.replyText?.trim()
-    ? `${agentName} responds via ${item.channelName}`
-    : item.actionText?.trim()
-      ? `${agentName} updates Shopify`
-      : `${agentName} flagged this`
-  const preview =
-    item.replyText?.trim() ||
-    item.actionText?.trim() ||
-    item.proposalSummary
+  const isMerchantInput = item.kind === "needs_merchant_input"
+  const previewTone: BubbleTone = isMerchantInput ? "flag" : item.replyText?.trim() ? "reply" : item.actionText?.trim() ? "action" : "flag"
+  const previewLabel = isMerchantInput
+    ? `${agentName} needs your input`
+    : item.replyText?.trim()
+      ? `${agentName} responds via ${item.channelName}`
+      : item.actionText?.trim()
+        ? `${agentName} updates Shopify`
+        : `${agentName} flagged this`
+  const preview = isMerchantInput
+    ? (item.question?.trim() || item.proposalSummary)
+    : (item.replyText?.trim() ||
+      item.actionText?.trim() ||
+      item.proposalSummary)
 
   return (
     <Card
@@ -82,10 +87,49 @@ export function NeedsYouCardPeek({
   )
 }
 
-export function NeedsYouCard({ item, agentName, onSent }: { item: HomeNeedsAttentionItem; agentName: string; onSent: () => void }) {
+export function NeedsYouCard({ item, agentName, onSent, onAnswered }: { item: HomeNeedsAttentionItem; agentName: string; onSent: () => void; onAnswered: () => void }) {
   const [isApproving, setIsApproving] = useState(false)
   const [approvalError, setApprovalError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
+
+  if (item.kind === "needs_merchant_input") {
+    return (
+      <Card className="bg-card border-border rounded-3xl shadow-sm px-5 sm:px-6 py-5">
+        {item.tag?.trim() && (
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/40">
+            {item.tag.trim()}
+          </span>
+        )}
+        <h3 className="mt-1 font-sans font-semibold text-xl sm:text-2xl text-foreground leading-tight tracking-tight line-clamp-3">
+          {item.headline}
+        </h3>
+
+        <NeedsYouCardMeta item={item} />
+
+        {item.customerMessage && (
+          <NeedsYouBubble label="Customer" labelClassName="text-foreground/35" bubbleClassName="bg-foreground/[0.04] border-border">
+            <p className="text-sm text-foreground/70 leading-relaxed line-clamp-3">{item.customerMessage}</p>
+          </NeedsYouBubble>
+        )}
+
+        <div className="mt-4">
+          <MerchantAnswerForm
+            threadId={item.threadId}
+            question={item.question}
+            agentName={agentName}
+            onAnswered={onAnswered}
+          />
+        </div>
+
+        <Link
+          href={`/dashboard/tickets?thread=${item.threadId}`}
+          className="mt-2 inline-flex items-center justify-center w-full py-3 rounded-2xl text-sm font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-foreground/60 transition-colors"
+        >
+          View Ticket
+        </Link>
+      </Card>
+    )
+  }
 
   const isConsequential = item.kind === "needs_review"
   const title = item.headline

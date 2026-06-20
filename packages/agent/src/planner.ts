@@ -473,15 +473,18 @@ export async function planAgent(
   }
 
   // Terminal reply guarantee: on a customer channel every plan must end with a
-  // send_reply (or an escalation). Phase 1 and replan can finish with a mutative
-  // action and no reply, or with nothing at all — force one final send_reply.
+  // send_reply (or an escalation / merchant question). Phase 1 and replan can finish
+  // with a mutative action and no reply, or with nothing at all — force one final
+  // send_reply.
   rawToolCalls = applyMutativeIntentNoActionGuard(ctx, rawToolCalls, warnings);
   hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
   hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
+  const hasAskOperator = rawToolCalls.some((tc) => tc.name === "ask_operator");
   if (
     !operatorMode
     && !hasSendReply
     && !hasEscalate
+    && !hasAskOperator
     && sendReplyTool
     && !shouldSkipReplyDraftForWatchTier(resolvedSettings, ctx)
     && !shouldSkipReplyDraftForMutativeIntent(ctx, rawToolCalls)
@@ -561,6 +564,7 @@ export async function planAgent(
     planPath,
     replanRetried: ranReplanRetry,
     escalationDrafted: ranEscalationDraft,
+    askOperatorElected: hasAskOperator,
     replyDrafted: ranReplyDraft,
     modelCalls: usageTotals.modelCalls,
     usageTotals,

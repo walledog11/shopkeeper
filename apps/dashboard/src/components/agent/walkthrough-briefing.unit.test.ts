@@ -6,7 +6,7 @@ import {
   buildWalkthroughOpening,
   isWalkthroughComplete,
   resolveWalkthroughDecision,
-} from "./WalkthroughBriefing"
+} from "./walkthrough-briefing-logic"
 
 function item(overrides: Partial<WalkthroughItem> = {}): WalkthroughItem {
   return {
@@ -20,6 +20,7 @@ function item(overrides: Partial<WalkthroughItem> = {}): WalkthroughItem {
     proposalSummary: "Approve the return and send the label.",
     actionText: null,
     replyText: "I can help with that return.",
+    question: null,
     orderRef: "#1042",
     tag: "Returns",
     isVip: true,

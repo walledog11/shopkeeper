@@ -76,7 +76,9 @@ export async function loadNeedsAttention(
       filterStatus: thread.filterStatus,
     })
     const kind: HomeNeedsAttentionItem["kind"] =
-      classification.kind === "quick_reply" ? "quick_reply" : "needs_review"
+      classification.kind === "quick_reply" ? "quick_reply"
+        : classification.kind === "needs_merchant_input" ? "needs_merchant_input"
+          : "needs_review"
 
     return [{
       threadId: thread.id,
@@ -90,6 +92,7 @@ export async function loadNeedsAttention(
       proposalSummary: copy.proposal,
       actionText: copy.actionText,
       replyText: planReplyText(plan),
+      question: classification.question,
       orderRef: copy.orderRef,
       tag: thread.tag,
       isVip: vipCustomerIds.has(thread.customerId),

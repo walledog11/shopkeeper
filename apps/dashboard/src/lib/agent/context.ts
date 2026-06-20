@@ -5,6 +5,7 @@
 import { buildContext as coreBuildContext } from "@shopkeeper/agent/build-context";
 import {
   escalateToHuman,
+  askOperator,
   addInternalNote,
   sendReply,
   sendEmail,
@@ -16,6 +17,7 @@ import type { AgentContext } from "@shopkeeper/agent/context";
 export function buildContext(threadId: string, orgId: string): Promise<AgentContext> {
   return coreBuildContext(threadId, orgId, {
     escalateToHuman,
+    askOperator,
     addInternalNote,
     sendReply,
     sendEmail,

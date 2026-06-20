@@ -1,14 +1,18 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef, type Ref } from "react"
 import Image from "next/image"
 import { Ban, CheckSquare, RotateCcw, Square } from "lucide-react"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
-import { buildTicketListPresentationFromTicket } from "../../_lib/ticket-list-presentation"
+import {
+  buildTicketListPresentationFromTicket,
+  type TicketListPresentation,
+} from "../../_lib/ticket-list-presentation"
 import { getSlaInfo } from "./sla"
 import { getAvatarGradient, getInitials, isOpenListView, type TicketListView } from "./constants"
-import { hasTicketRowListAction, TicketRowActions } from "./TicketRowActions"
+import { TicketRowActions } from "./TicketRowActions"
+import { hasTicketRowListAction } from "./ticket-row-action-visibility"
 import { TicketRowDesktopMeta } from "./TicketRowDesktopMeta"
 import { TicketRowMobile } from "./TicketRowMobile"
 import type { OrgSettings, Ticket } from "@/types"
@@ -17,10 +21,14 @@ interface TicketRowProps {
   activeView: TicketListView
   activeTicketId: string | null
   approvingTicketId: string | null
-  hasSelection: boolean
-  hasShopify: boolean
-  isSearchMode?: boolean
-  isSelected: boolean
+  context: {
+    hasShopify: boolean
+    isSearchMode?: boolean
+  }
+  selection: {
+    hasSelection: boolean
+    isSelected: boolean
+  }
   orgSettings?: Partial<OrgSettings> | null
   ticket: Ticket
   onQuickApproveFromList: (threadId: string) => void
@@ -35,14 +43,14 @@ const SWIPE_DETECT_PX = 8
 const SWIPE_COMMIT_PX = 120
 const CLICK_SUPPRESS_PX = 6
 
+type TicketRowAction = { kind: "recover" | "spam"; run: () => void }
+
 export function TicketRow({
   activeView,
   activeTicketId,
   approvingTicketId,
-  hasSelection,
-  hasShopify,
-  isSearchMode,
-  isSelected,
+  context,
+  selection,
   orgSettings = null,
   ticket,
   onQuickApproveFromList,
@@ -52,6 +60,8 @@ export function TicketRow({
   onMarkAsSpam,
   onRecover,
 }: TicketRowProps) {
+  const { hasShopify, isSearchMode } = context
+  const { hasSelection, isSelected } = selection
   const isMobile = useIsMobile()
   const lastRealMsg = [...ticket.messages].reverse().find(message => message.sender !== "note")
   const awaitingReply = ticket.status === "open" && lastRealMsg?.sender === "customer"
@@ -86,7 +96,7 @@ export function TicketRow({
 
   const recoverable = activeView === "spam" && !!onRecover
   const spammable = !closed && ticket.filterStatus !== "filtered" && !!onMarkAsSpam
-  const rowAction = !hasSelection && !isSearchMode
+  const rowAction: TicketRowAction | null = !hasSelection && !isSearchMode
     ? recoverable
       ? { kind: "recover" as const, run: () => onRecover!(ticket.id) }
       : spammable
@@ -226,21 +236,7 @@ export function TicketRow({
       data-ticket-channel={ticket.channelType}
       className="relative overflow-hidden"
     >
-      {canSwipe && rowAction && (
-        <div
-          ref={bannerRef}
-          aria-hidden="true"
-          style={{ visibility: "hidden" }}
-          className={`absolute inset-0 flex items-center justify-end gap-2 pr-5 text-white text-sm font-semibold pointer-events-none ${
-            rowAction.kind === "spam" ? "bg-red-500/90" : "bg-emerald-500/90"
-          }`}
-        >
-          {rowAction.kind === "spam"
-            ? <><Ban className="size-4" /> Spam</>
-            : <><RotateCcw className="size-4" /> Recover</>
-          }
-        </div>
-      )}
+      {canSwipe && rowAction && <TicketRowSwipeBanner ref={bannerRef} kind={rowAction.kind} />}
 
       <div
         ref={surfaceRef}
@@ -292,54 +288,22 @@ export function TicketRow({
                   browseMode={activeView === "all_open"}
                 />
               ) : (
-                <>
-                  <div className="relative size-9 shrink-0">
-                    <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
-                      {initials}
-                    </div>
-                    <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-                      <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
-                    </div>
-                  </div>
-
-                  <div className={`flex-1 min-w-0 ${showListActions ? "pr-16" : ""}`}>
-                    <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                      <span className="text-sm font-semibold text-foreground/90 truncate">
-                        {presentation.customerLabel}
-                      </span>
-                      <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
-                        <span
-                          className={`text-xs transition-opacity ${longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
-                            !useSwipe && rowAction && !showListActions ? "group-hover:opacity-0" : ""
-                          }`}
-                        >
-                          {desktopTime}
-                        </span>
-                      </div>
-                    </div>
-
-                    {presentation.showSubject && (
-                      <p className="text-[13px] font-medium text-foreground/80 truncate mb-0.5">{ticket.subject}</p>
-                    )}
-
-                    {isSpam && ticket.filterReason ? (
-                      <p className="text-xs text-foreground/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
-                    ) : presentation.subline ? (
-                      <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{presentation.subline}</p>
-                    ) : (
-                      <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{ticket.preview}</p>
-                    )}
-
-                    <TicketRowDesktopMeta
-                      presentation={presentation}
-                      ticket={ticket}
-                      isSpam={isSpam}
-                      closed={closed}
-                      isSearchMode={isSearchMode}
-                      showSlaStatus={!sla}
-                    />
-                  </div>
-                </>
+                <TicketRowDesktopContent
+                  ticket={ticket}
+                  presentation={presentation}
+                  avatar={{ gradient, initials }}
+                  desktopTime={desktopTime}
+                  flags={{
+                    closed,
+                    isSearchMode,
+                    isSpam,
+                    longWait,
+                    showListActions,
+                    showSlaStatus: !sla,
+                    useSwipe,
+                    hasHoverAction: rowAction !== null,
+                  }}
+                />
               )}
             </button>
 
@@ -351,22 +315,134 @@ export function TicketRow({
           </div>
 
           {!useSwipe && rowAction && !showListActions && (
-            <button type="button"
-              onClick={event => { event.stopPropagation(); rowAction.run() }}
-              title={rowAction.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
-              className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
-                rowAction.kind === "spam" ? "text-foreground/50 hover:text-red-400" : "text-foreground/50 hover:text-emerald-400"
-              }`}
-            >
-              {rowAction.kind === "spam"
-                ? <Ban className="size-3.5" />
-                : <RotateCcw className="size-3.5" />
-              }
-            </button>
+            <TicketRowHoverAction action={rowAction} />
           )}
 
         </div>
       </div>
     </div>
+  )
+}
+
+function TicketRowSwipeBanner({
+  ref,
+  kind,
+}: {
+  ref: Ref<HTMLDivElement>
+  kind: TicketRowAction["kind"]
+}) {
+  return (
+    <div
+      ref={ref}
+      aria-hidden="true"
+      style={{ visibility: "hidden" }}
+      className={`absolute inset-0 flex items-center justify-end gap-2 pr-5 text-white text-sm font-semibold pointer-events-none ${
+        kind === "spam" ? "bg-red-500/90" : "bg-emerald-500/90"
+      }`}
+    >
+      {kind === "spam"
+        ? <><Ban className="size-4" /> Spam</>
+        : <><RotateCcw className="size-4" /> Recover</>
+      }
+    </div>
+  )
+}
+
+interface TicketRowDesktopContentProps {
+  ticket: Ticket
+  presentation: TicketListPresentation
+  avatar: {
+    gradient: string
+    initials: string
+  }
+  desktopTime: string
+  flags: {
+    closed: boolean
+    hasHoverAction: boolean
+    isSearchMode?: boolean
+    isSpam: boolean
+    longWait: boolean
+    showListActions: boolean
+    showSlaStatus: boolean
+    useSwipe: boolean
+  }
+}
+
+function TicketRowDesktopContent({
+  ticket,
+  presentation,
+  avatar,
+  desktopTime,
+  flags,
+}: TicketRowDesktopContentProps) {
+  const showHoverTime = !flags.useSwipe && flags.hasHoverAction && !flags.showListActions
+
+  return (
+    <>
+      <div className="relative size-9 shrink-0">
+        <div className={`size-9 rounded-xl bg-gradient-to-br ${avatar.gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+          {avatar.initials}
+        </div>
+        <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+          <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
+        </div>
+      </div>
+
+      <div className={`flex-1 min-w-0 ${flags.showListActions ? "pr-16" : ""}`}>
+        <div className="flex items-baseline justify-between gap-2 mb-0.5">
+          <span className="text-sm font-semibold text-foreground/90 truncate">
+            {presentation.customerLabel}
+          </span>
+          <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
+            <span
+              className={`text-xs transition-opacity ${flags.longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
+                showHoverTime ? "group-hover:opacity-0" : ""
+              }`}
+            >
+              {desktopTime}
+            </span>
+          </div>
+        </div>
+
+        {presentation.showSubject && (
+          <p className="text-[13px] font-medium text-foreground/80 truncate mb-0.5">{ticket.subject}</p>
+        )}
+
+        {flags.isSpam && ticket.filterReason ? (
+          <p className="text-xs text-foreground/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
+        ) : presentation.subline ? (
+          <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{presentation.subline}</p>
+        ) : (
+          <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{ticket.preview}</p>
+        )}
+
+        <TicketRowDesktopMeta
+          presentation={presentation}
+          ticket={ticket}
+          isSpam={flags.isSpam}
+          closed={flags.closed}
+          isSearchMode={flags.isSearchMode}
+          showSlaStatus={flags.showSlaStatus}
+        />
+      </div>
+    </>
+  )
+}
+
+function TicketRowHoverAction({ action }: { action: TicketRowAction }) {
+  return (
+    <button
+      type="button"
+      onClick={event => { event.stopPropagation(); action.run() }}
+      title={action.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
+      className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
+        action.kind === "spam" ? "text-foreground/50 hover:text-red-400" : "text-foreground/50 hover:text-emerald-400"
+      }`}
+    >
+      {action.kind === "spam"
+        ? <Ban className="size-3.5" />
+        : <RotateCcw className="size-3.5" />
+      }
+    </button>
   )
 }

@@ -16,6 +16,7 @@ import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
 import { toolError, toolEscalated, toolOk, type ToolResult } from "@shopkeeper/agent/tools";
 import type {
   AddInternalNoteInput,
+  AskOperatorInput,
   SendReplyInput,
   SendEmailInput,
   UpdateThreadStatusInput,
@@ -335,4 +336,23 @@ export async function escalateToHuman(
     reason,
   });
   return toolEscalated(reason);
+}
+
+// ── ask_operator ──────────────────────────────────────────────────────────────
+
+// Soft sibling of escalateToHuman: the agent needs one fact/decision from the
+// merchant to finish the ticket. Unlike escalation it does not park the thread —
+// the question rides in the cached plan and surfaces as `needs_merchant_input`.
+// We record a note for the audit trail; the Telegram round-trip is Phase 2.
+export async function askOperator(
+  input: AskOperatorInput,
+  ctx: ThreadContext
+): Promise<ToolResult> {
+  const question = input.question.trim() || "No question provided";
+  await createMessage({
+    threadId: ctx.threadId,
+    senderType: SenderType.note,
+    contentText: `${AGENT_NOTE_PREFIX}Asked the merchant: ${question}`,
+  });
+  return toolOk(question);
 }

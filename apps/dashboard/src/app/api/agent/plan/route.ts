@@ -35,8 +35,10 @@ export const POST = withOrgRoute(
       instructionHash,
     }, "[agent:plan] POST");
 
-    const thread = await requireOrgThread(threadId, org.id);
-    const latestConversation = await getLatestConversationMessage(threadId);
+    const [thread, latestConversation] = await Promise.all([
+      requireOrgThread(threadId, org.id),
+      getLatestConversationMessage(threadId),
+    ]);
     const pendingCustomerMessageId = latestConversation
       ? getPendingCustomerMessageId([latestConversation])
       : null;

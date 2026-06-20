@@ -3,6 +3,7 @@ import { noThread, threadStatuses } from "./helpers.js";
 import { defineTool, stringArg } from "./schema.js";
 import type {
   AddInternalNoteInput,
+  AskOperatorInput,
   EscalateToHumanInput,
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
@@ -67,6 +68,23 @@ export const THREAD_TOOL_DEFINITIONS = [
       const reason = input.reason.trim() || "No reason provided";
       await ctx.escalate(reason);
       return toolEscalated(reason);
+    },
+  }),
+  defineTool({
+    name: "ask_operator",
+    description:
+      "Ask the merchant one clarifying question when a single missing fact or decision is all that stands between you and finishing the ticket — e.g. an unstated policy (\"do we ship internationally?\") or a one-off judgment call (\"should I comp this customer?\"). Use this instead of guessing or telling the customer to contact the store another way. The merchant answers, then you draft the customer reply. Do NOT use it for out-of-scope, fraud, safety, contradictory requests, or money/identity uncertainty — those stay escalate_to_human. The test: would the merchant's one-line answer let you complete the ticket? If yes, ask; if no, escalate. Stop after calling this — do not send a reply.",
+    fields: {
+      question: stringArg("The specific question for the merchant, phrased so a one-line answer unblocks the ticket (e.g. 'Do we ship to Canada, and at what rate?').", { required: true }),
+    },
+    category: "internal",
+    group: "thread",
+    label: "Asked the merchant",
+    planStepLabel: "Ask the merchant",
+    execute: async (input: AskOperatorInput, ctx) => {
+      const question = input.question.trim() || "No question provided";
+      if (ctx.askOperator) await ctx.askOperator(question);
+      return toolEscalated(question);
     },
   }),
 ] as const;

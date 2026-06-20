@@ -4,22 +4,32 @@ import {
   type TicketTriageTier,
 } from "./ticket-list-presentation"
 
-export const FOR_ME_TIER_SECTIONS: readonly TicketTriageTier[] = [
-  "approve",
+export const NEEDS_YOU_TIER_SECTIONS: readonly TicketTriageTier[] = [
+  "answer",
   "review",
-  "waiting",
+  "ready",
+  "working",
   "noise",
 ]
 
+export const ALL_OPEN_TIER_SECTIONS: readonly TicketTriageTier[] = [
+  ...NEEDS_YOU_TIER_SECTIONS,
+  "waiting_customer",
+]
+
+const CLOSED_TIER_SECTIONS: readonly TicketTriageTier[] = ["closed"]
+
 export const TRIAGE_TIER_SECTION_LABELS: Record<TicketTriageTier, string> = {
-  approve: "Needs your OK",
+  answer: "Needs your answer",
   review: "Needs review",
-  waiting: "Waiting on agent",
-  noise: "Likely spam",
+  ready: "Ready to send",
+  working: "Agent working",
+  noise: "Possible spam",
+  waiting_customer: "Waiting on customer",
   closed: "Closed",
 }
 
-const COLLAPSIBLE_TIERS = new Set<TicketTriageTier>(["waiting", "noise"])
+const COLLAPSIBLE_TIERS = new Set<TicketTriageTier>(["working", "noise", "waiting_customer"])
 
 export interface TicketTriageTierGroup {
   tier: TicketTriageTier
@@ -33,6 +43,8 @@ export interface GroupTicketsByTriageTierOptions {
   orgSettings?: Partial<OrgSettings> | null
   hasShopify?: boolean
   isMobile?: boolean
+  listView?: "for_me" | "all_open" | "closed" | "spam"
+  activeTab?: "open" | "closed"
 }
 
 export function groupTicketsByTriageTier(
@@ -40,35 +52,44 @@ export function groupTicketsByTriageTier(
   options: GroupTicketsByTriageTierOptions,
 ): TicketTriageTierGroup[] {
   const buckets = new Map<TicketTriageTier, Ticket[]>()
+  const activeTab = options.activeTab ?? (options.listView === "closed" ? "closed" : "open")
+  const sectionOrder = activeTab === "closed"
+    ? CLOSED_TIER_SECTIONS
+    : options.listView === "all_open"
+      ? ALL_OPEN_TIER_SECTIONS
+      : NEEDS_YOU_TIER_SECTIONS
+  const sectionSet = new Set(sectionOrder)
 
   for (const ticket of tickets) {
     const { tier } = buildTicketListPresentationFromTicket(ticket, {
       orgSettings: options.orgSettings,
       hasShopify: options.hasShopify ?? true,
-      listView: "for_me",
+      listView: options.listView ?? "for_me",
       isMobile: options.isMobile ?? true,
-      activeTab: "open",
+      activeTab,
     })
-    if (!FOR_ME_TIER_SECTIONS.includes(tier)) continue
+    if (!sectionSet.has(tier)) continue
     const list = buckets.get(tier) ?? []
     list.push(ticket)
     buckets.set(tier, list)
   }
 
-  return FOR_ME_TIER_SECTIONS
-    .filter(tier => (buckets.get(tier)?.length ?? 0) > 0)
-    .map(tier => {
-      const tierTickets = [...(buckets.get(tier) ?? [])]
-      tierTickets.sort(
-        (left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
-      )
-      const collapsible = COLLAPSIBLE_TIERS.has(tier)
-      return {
-        tier,
-        label: TRIAGE_TIER_SECTION_LABELS[tier],
-        tickets: tierTickets,
-        collapsible,
-        defaultExpanded: !collapsible,
-      }
+  return sectionOrder.reduce<TicketTriageTierGroup[]>((groups, tier) => {
+    const ticketsInTier = buckets.get(tier)
+    if (!ticketsInTier || ticketsInTier.length === 0) return groups
+
+    const tierTickets = [...ticketsInTier]
+    tierTickets.sort(
+      (left, right) => new Date(right.lastMessageAt).getTime() - new Date(left.lastMessageAt).getTime(),
+    )
+    const collapsible = COLLAPSIBLE_TIERS.has(tier)
+    groups.push({
+      tier,
+      label: TRIAGE_TIER_SECTION_LABELS[tier],
+      tickets: tierTickets,
+      collapsible,
+      defaultExpanded: !collapsible,
     })
+    return groups
+  }, [])
 }

@@ -1,0 +1,31 @@
+{
+  "id": "ask-operator-returns-policy-gap",
+  "description": "Customer asks an informational return-policy question that mentions a refund ('can I send it back for a refund, who pays return shipping?'). There is no returns/refund KB article and no order context, so the agent has no policy to answer with - a one-line merchant answer would finish the ticket. The bare word 'refund' must NOT be read as a refund request: the plan must not be stripped to an empty/terminal-less plan, must not deflect, and must not hard-escalate. It must ask_operator. classifyHomePlan should surface this as needs_merchant_input.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Marcus Hale",
+    "customerPlatformId": "marcus@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi! What's your return policy? If I'm not happy with the wool throw blanket, can I send it back for a refund, and who pays the return shipping?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their return question.",
+  "expectedPlan": {
+    "mustCallTools": ["ask_operator"],
+    "mustClassifyAs": "needs_merchant_input",
+    "mustNotCallTools": [
+      "send_reply",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order",
+      "create_shopify_order",
+      "edit_shopify_order",
+      "update_shopify_order_address",
+      "update_shopify_customer_info"
+    ]
+  }
+}

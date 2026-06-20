@@ -8,6 +8,8 @@ import { AuthLoadingCard } from "../../_components/AuthLoadingCard";
 import { getAuthClerkAppearance } from "../../_components/clerk-appearance";
 import { SignupIncentives } from "./SignupIncentives";
 
+const SIGNUP_INCENTIVES = <SignupIncentives />;
+
 export function SignupPageClient() {
   const { isLoaded, isSignedIn } = useUser();
 
@@ -36,7 +38,7 @@ export function SignupPageClient() {
       eyebrow="14-day free trial"
       title="Sign up free"
       description="Every DM, SMS, and Shopify order in one inbox — Shopkeeper drafts, you approve."
-      incentives={<SignupIncentives />}
+      incentives={SIGNUP_INCENTIVES}
     >
       <SignUp
         routing="hash"

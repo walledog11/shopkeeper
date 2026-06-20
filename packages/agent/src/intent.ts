@@ -80,6 +80,35 @@ export function hasActionableMutativeIntent(...texts: string[]): boolean {
   return texts.some((text) => hasCustomerMutativeIntent(text));
 }
 
+// A customer text that *asks about* returns/refunds/cancellations (policy, eligibility, process)
+// rather than *requesting* one on their order. These trip the bare "refund"/"cancel" substrings in
+// CUSTOMER_MUTATIVE_PHRASES but are informational, so the mutative no-action guards must not strip
+// the reply or force a mutative replan on them.
+const RETURN_POLICY_QUESTION_RE: readonly RegExp[] = [
+  /\b(return|refund|cancellation|exchange)s?\s+polic/,
+  /\bdo you (offer|accept|do|allow|take|give|have|provide)\b[^.?!]*\b(refund|return|exchange)/,
+  /\bhow (do|does|long|can|would)\b[^.?!]*\b(refund|return|exchange)/,
+  /\bcan i (return|exchange|get a refund|send (?:it|this|that|them) back)\b/,
+  /\bwho pays\b[^.?!]*\b(return|restocking|shipping)/,
+];
+
+// An explicit directive to cancel/refund/return — overrides the question framing above.
+const MUTATIVE_REQUEST_RE: readonly RegExp[] = [
+  /\b(?:please\s+)?(?:cancel|refund)\s+(?:my|the|this|that|it|order)\b/,
+  /\bi(?:'d| would)?\s*(?:like|want|need|wanna)\s+(?:to\s+(?:cancel|refund|return)|an?\s+(?:refund|cancellation|return))\b/,
+];
+
+export function isInformationalReturnQuestion(text: string): boolean {
+  const lower = text.toLowerCase();
+  if (ORDER_REFERENCE_RE.test(text)) return false;
+  if (MUTATIVE_REQUEST_RE.some((re) => re.test(lower))) return false;
+  return RETURN_POLICY_QUESTION_RE.some((re) => re.test(lower));
+}
+
+export function hasMutativeRequestIntent(...texts: string[]): boolean {
+  return texts.some((text) => hasCustomerMutativeIntent(text) && !isInformationalReturnQuestion(text));
+}
+
 export function planningIntentTexts(ctx: AgentContext, instruction: string): string[] {
   const texts = [instruction];
   for (let index = ctx.recentMessages.length - 1; index >= 0; index -= 1) {

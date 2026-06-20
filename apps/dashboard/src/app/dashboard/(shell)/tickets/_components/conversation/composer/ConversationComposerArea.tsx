@@ -1,9 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useState, type Ref } from "react"
+import { useCallback, useMemo, useState, type Ref } from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
-import { planReplyText } from "@shopkeeper/agent/plan-preview"
+import { classifyHomePlan, planReplyText } from "@shopkeeper/agent/plan-preview"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
+import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import Composer from "./Composer"
 import ActionPlanCard from "./ActionPlanCard"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
@@ -27,7 +28,9 @@ interface Props {
   onPlanRegenerate: () => void
   onSend: (isNote: boolean) => void
   onViewTabChange: (tab: "chat" | "notes") => void
+  onAnswered: () => void
   pendingPlan: AgentPlan | null
+  threadId: string
   composer: {
     customerName: string
     channelType: Ticket["channelType"]
@@ -39,6 +42,12 @@ interface Props {
     lastCustomerMessageAt: string | null
   }
   viewTab: "chat" | "notes"
+}
+
+interface MobileManualEditState {
+  pendingPlan: AgentPlan | null
+  viewTab: Props["viewTab"]
+  enabled: boolean
 }
 
 export default function ConversationComposerArea({
@@ -59,37 +68,50 @@ export default function ConversationComposerArea({
   onPlanRegenerate,
   onSend,
   onViewTabChange,
+  onAnswered,
   pendingPlan,
+  threadId,
   composer,
   viewTab,
 }: Props) {
   const isMobile = useMediaQuery("(max-width: 767px)") === true
-  const [mobileManualEdit, setMobileManualEdit] = useState(false)
+  const merchantQuestion = useMemo(() => {
+    if (!pendingPlan) return null
+    const classification = classifyHomePlan(pendingPlan, null)
+    return classification.kind === "needs_merchant_input" ? classification.question : null
+  }, [pendingPlan])
+  const showMerchantAnswer = merchantQuestion !== null
+  const [mobileManualEditState, setMobileManualEditState] = useState<MobileManualEditState>(() => ({
+    pendingPlan,
+    viewTab,
+    enabled: false,
+  }))
+  let mobileManualEdit = mobileManualEditState.enabled
+  if (mobileManualEditState.pendingPlan !== pendingPlan || mobileManualEditState.viewTab !== viewTab) {
+    mobileManualEdit = false
+    setMobileManualEditState({ pendingPlan, viewTab, enabled: false })
+  }
   const showMobileFloatingSurface =
     isMobile && viewTab === "chat" && (Boolean(pendingPlan) || mobileManualEdit)
   const showDesktopPlan = !isMobile && Boolean(pendingPlan) && viewTab === "chat"
   const showFullComposer = !showMobileFloatingSurface && !showDesktopPlan
 
-  useEffect(() => {
-    setMobileManualEdit(false)
-  }, [pendingPlan])
-
-  useEffect(() => {
-    if (viewTab !== "chat") setMobileManualEdit(false)
-  }, [viewTab])
+  const setMobileManualEdit = useCallback((enabled: boolean) => {
+    setMobileManualEditState({ pendingPlan, viewTab, enabled })
+  }, [pendingPlan, viewTab])
 
   const handleMobilePlanEdit = useCallback(() => {
     if (!pendingPlan) return
     const text = planReplyText(pendingPlan)
     if (text) onChange(text)
     setMobileManualEdit(true)
-  }, [pendingPlan, onChange])
+  }, [pendingPlan, onChange, setMobileManualEdit])
 
   const handleMobileSend = useCallback((isNote: boolean) => {
     onPlanDismiss?.()
     setMobileManualEdit(false)
     onSend(isNote)
-  }, [onPlanDismiss, onSend])
+  }, [onPlanDismiss, onSend, setMobileManualEdit])
 
   const sharedComposerProps = {
     customerName: composer.customerName,
@@ -133,6 +155,13 @@ export default function ConversationComposerArea({
                 onSend={handleMobileSend}
                 onBackToPlan={() => setMobileManualEdit(false)}
               />
+            ) : showMerchantAnswer ? (
+              <MerchantAnswerCard
+                threadId={threadId}
+                question={merchantQuestion}
+                agentName={agentName}
+                onAnswered={onAnswered}
+              />
             ) : pendingPlan ? (
               <ActionPlanCard
                 plan={pendingPlan}
@@ -160,17 +189,26 @@ export default function ConversationComposerArea({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="pointer-events-auto px-5 pb-2 pt-1"
           >
-            <ActionPlanCard
-              plan={pendingPlan}
-              agentName={agentName}
-              customerName={composer.customerName}
-              isExecuting={isPlanExecuting}
-              isRegenerating={isRegenerating}
-              onApprove={onPlanApprove}
-              onEdit={onPlanEdit}
-              onFocusShopifyLink={onFocusShopifyLink}
-              onRegenerate={onPlanRegenerate}
-            />
+            {showMerchantAnswer ? (
+              <MerchantAnswerCard
+                threadId={threadId}
+                question={merchantQuestion}
+                agentName={agentName}
+                onAnswered={onAnswered}
+              />
+            ) : (
+              <ActionPlanCard
+                plan={pendingPlan}
+                agentName={agentName}
+                customerName={composer.customerName}
+                isExecuting={isPlanExecuting}
+                isRegenerating={isRegenerating}
+                onApprove={onPlanApprove}
+                onEdit={onPlanEdit}
+                onFocusShopifyLink={onFocusShopifyLink}
+                onRegenerate={onPlanRegenerate}
+              />
+            )}
           </m.div>
         )}
       </AnimatePresence>
@@ -187,5 +225,28 @@ export default function ConversationComposerArea({
       )}
     </div>
     </LazyMotion>
+  )
+}
+
+function MerchantAnswerCard({
+  threadId,
+  question,
+  agentName,
+  onAnswered,
+}: {
+  threadId: string
+  question: string | null
+  agentName: string
+  onAnswered: () => void
+}) {
+  return (
+    <div className="w-full rounded-2xl bg-card border border-border shadow-sm px-4 sm:px-5 py-4">
+      <MerchantAnswerForm
+        threadId={threadId}
+        question={question}
+        agentName={agentName}
+        onAnswered={onAnswered}
+      />
+    </div>
   )
 }

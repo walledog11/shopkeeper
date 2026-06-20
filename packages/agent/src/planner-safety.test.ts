@@ -319,6 +319,21 @@ describe("shouldForceMutativeReplan", () => {
       ranReplan: true,
     })).toBe(false);
   });
+
+  it("returns false for an informational return-policy question that mentions a refund", () => {
+    expect(shouldForceMutativeReplan({
+      ctx: makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "What's your return policy? Can I send it back for a refund, and who pays return shipping?",
+        }],
+      }),
+      rawToolCalls: [],
+      tools: [{ name: "create_refund" }, { name: "send_reply" }],
+      operatorMode: false,
+      ranReplan: false,
+    })).toBe(false);
+  });
 });
 
 describe("applyMutativeIntentNoActionGuard", () => {
@@ -349,6 +364,23 @@ describe("applyMutativeIntentNoActionGuard", () => {
     ];
     expect(applyMutativeIntentNoActionGuard(makeCtx(), calls, warnings)).toEqual(calls);
     expect(shouldSkipReplyDraftForMutativeIntent(makeCtx(), calls)).toBe(false);
+  });
+
+  it("allows a reply-only plan for an informational return-policy question", () => {
+    const ctx = makeCtx({
+      recentMessages: [{
+        senderType: "customer",
+        contentText: "What's your return policy? Can I send it back for a refund, and who pays return shipping?",
+      }],
+    });
+    const warnings: string[] = [];
+    const calls: RawToolCall[] = [
+      { id: "tu_reply", name: "send_reply", input: { text: "Returns are accepted within 30 days." } },
+    ];
+
+    expect(shouldSkipReplyDraftForMutativeIntent(ctx, calls)).toBe(false);
+    expect(applyMutativeIntentNoActionGuard(ctx, calls, warnings)).toEqual(calls);
+    expect(warnings).toEqual([]);
   });
 
   it("allows reply-only plans when the refund target is already fully refunded", () => {

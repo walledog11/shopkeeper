@@ -4,6 +4,7 @@ import { isOperatorChannel } from "./thread-constants.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
+  AskOperatorInput,
   SendReplyInput,
   SendEmailInput,
   UpdateThreadStatusInput,
@@ -24,6 +25,7 @@ interface ThreadSinkContext {
 
 export interface ThreadSink {
   escalateToHuman(input: EscalateToHumanInput, ctx: ThreadSinkContext): Promise<ToolResult>;
+  askOperator(input: AskOperatorInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   addInternalNote(input: AddInternalNoteInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   sendReply(input: SendReplyInput, ctx: ThreadSinkContext): Promise<ToolResult>;
   sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult>;
@@ -208,6 +210,8 @@ export async function buildContext(threadId: string, orgId: string, sink: Thread
         : null,
     escalate: (reason) =>
       sink.escalateToHuman({ reason }, threadIo).then(() => {}),
+    askOperator: (question) =>
+      sink.askOperator({ question }, threadIo).then(() => {}),
     io: {
       addInternalNote: (input) => sink.addInternalNote(input, threadIo),
       sendReply: (input) => sink.sendReply(input, threadIo),

@@ -97,6 +97,22 @@ export function extractCachedDraftReply(cachedPlan: unknown): string | null {
   return null
 }
 
+// The clarifying question the agent parked for the merchant, pulled from the
+// cached plan's ask_operator call. Drives the `needs_merchant_input` surface.
+// Returns null when no question is cached.
+export function extractCachedQuestion(cachedPlan: unknown): string | null {
+  const plan = readAgentPlanCachePlan(cachedPlan)
+  if (!plan) return null
+  for (const call of plan.rawToolCalls) {
+    if (call.name !== "ask_operator") continue
+    const input = call.input
+    if (isRecord(input) && typeof input.question === "string" && input.question.trim()) {
+      return input.question
+    }
+  }
+  return null
+}
+
 export function getLastConversationMessage(messages: PlanThreadMessage[]): PlanThreadMessage | null {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]

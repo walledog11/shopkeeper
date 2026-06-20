@@ -58,6 +58,11 @@ export interface BaseAgentContext {
   // Module-supplied escalation/flag sink. Support routes a thread to a human;
   // a thread-less module records a finding. Every module must declare its path.
   escalate: (reason: string) => Promise<void>;
+  // Module-supplied "ask the merchant a clarifying question" sink — the soft
+  // sibling of escalate. Thread-coupled (it needs a surface to show the question
+  // and collect the answer), so optional: thread-less modules omit it and the
+  // ask_operator tool is filtered out of their tool set.
+  askOperator?: (question: string) => Promise<void>;
   // Module-supplied I/O sink for the thread-coupled tools. Absent for thread-less
   // modules, whose tool sets exclude these tools.
   io?: AgentIO;

@@ -50,7 +50,7 @@ export interface ExpectedPlan {
   mustCallToolsWithInput?: ToolInputExpectation[];
   mustNotCallTools?: string[];
   mustEscalate?: boolean;
-  mustClassifyAs?: "quick_reply" | "needs_review" | "auto_execute";
+  mustClassifyAs?: "quick_reply" | "needs_review" | "auto_execute" | "needs_merchant_input";
   /** When true, fail if customer has actionable mutative intent and plan includes send_reply without an action tool or escalate_to_human. */
   mustIncludeActionWhenMutativeIntent?: boolean;
   replyMustInclude?: string[];

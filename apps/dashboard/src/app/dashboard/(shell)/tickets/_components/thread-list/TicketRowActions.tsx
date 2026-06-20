@@ -1,5 +1,9 @@
 import { Loader2 } from "lucide-react"
 import type { TicketListPresentation } from "../../_lib/ticket-list-presentation"
+import {
+  canShowTicketRowReviewAction,
+  canShowTicketRowSendAction,
+} from "./ticket-row-action-visibility"
 
 interface TicketRowActionsProps {
   presentation: TicketListPresentation
@@ -8,18 +12,6 @@ interface TicketRowActionsProps {
   onSend: () => void
   onReview: () => void
   className?: string
-}
-
-export function canShowTicketRowSendAction(presentation: TicketListPresentation): boolean {
-  return presentation.tier === "approve" && presentation.action?.handler === "quick-approve"
-}
-
-export function canShowTicketRowReviewAction(presentation: TicketListPresentation): boolean {
-  return presentation.tier === "review" && presentation.action?.handler === "focus-plan"
-}
-
-export function hasTicketRowListAction(presentation: TicketListPresentation): boolean {
-  return canShowTicketRowSendAction(presentation) || canShowTicketRowReviewAction(presentation)
 }
 
 export function TicketRowActions({

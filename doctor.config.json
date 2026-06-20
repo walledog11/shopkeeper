@@ -1,0 +1,20 @@
+{
+  "$schema": "https://react.doctor/schema/config.json",
+  "projects": ["shopkeeper-dashboard"],
+  "ignore": {
+    "files": [
+      ".next/**",
+      ".next-dev/**",
+      ".next-e2e/**",
+      ".next-preview/**"
+    ]
+  },
+  "surfaces": {
+    "score": {
+      "excludeRules": [
+        "react-doctor/no-giant-component",
+        "react-doctor/no-render-in-render"
+      ]
+    }
+  }
+}

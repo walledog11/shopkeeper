@@ -28,7 +28,11 @@ export function selectInitialPlanningTools(tools: Anthropic.Tool[]): Anthropic.T
 }
 
 function keepPhase1ToolCall(toolCall: RawToolCall): boolean {
-  return TOOL_CATEGORIES[toolCall.name] === "read" || toolCall.name === "escalate_to_human";
+  return (
+    TOOL_CATEGORIES[toolCall.name] === "read" ||
+    toolCall.name === "escalate_to_human" ||
+    toolCall.name === "ask_operator"
+  );
 }
 
 /** Keep phase-1 reads/escalation; replan output replaces any mutative phase-1 calls. */

@@ -5,7 +5,7 @@ export const HOME_REPEAT_CUSTOMER_LIMIT = 4
 
 export interface HomeNeedsAttentionItem {
   threadId: string
-  kind: "quick_reply" | "needs_review"
+  kind: "quick_reply" | "needs_review" | "needs_merchant_input"
   customerName: string | null
   customerMessage: string
   channelName: string
@@ -15,6 +15,7 @@ export interface HomeNeedsAttentionItem {
   proposalSummary: string
   actionText: string | null
   replyText: string | null
+  question: string | null
   orderRef: string | null
   tag: string | null
   isVip: boolean

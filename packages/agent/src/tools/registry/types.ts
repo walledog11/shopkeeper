@@ -109,6 +109,10 @@ export interface EscalateToHumanInput {
   reason: string;
 }
 
+export interface AskOperatorInput {
+  question: string;
+}
+
 export interface EditShopifyOrderInput {
   order_id: string;
   variant_id?: string;

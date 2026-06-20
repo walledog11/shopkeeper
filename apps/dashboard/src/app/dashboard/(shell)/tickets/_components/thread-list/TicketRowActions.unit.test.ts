@@ -3,12 +3,12 @@ import {
   canShowTicketRowReviewAction,
   canShowTicketRowSendAction,
   hasTicketRowListAction,
-} from "./TicketRowActions"
+} from "./ticket-row-action-visibility"
 import type { TicketListPresentation } from "../../_lib/ticket-list-presentation"
 
 function presentation(overrides: Partial<TicketListPresentation> = {}): TicketListPresentation {
   return {
-    tier: "approve",
+    tier: "ready",
     headline: "Shipping question",
     subline: "How long does shipping take?",
     customerLabel: "Alex Rivera",
@@ -28,7 +28,7 @@ function presentation(overrides: Partial<TicketListPresentation> = {}): TicketLi
 }
 
 describe("TicketRowActions helpers", () => {
-  it("shows send only for approve tier with quick-approve handler", () => {
+  it("shows send only for ready tier with quick-approve handler", () => {
     expect(canShowTicketRowSendAction(presentation())).toBe(true)
     expect(canShowTicketRowSendAction(presentation({
       tier: "review",

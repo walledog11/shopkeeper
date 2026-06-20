@@ -3,8 +3,10 @@ import {
   hasContradictoryInstructionSignals,
   hasForwardedInjectionRefundSignal,
   hasMutativePlanningSignals,
+  hasMutativeRequestIntent,
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
+  isInformationalReturnQuestion,
 } from "./intent.js";
 
 describe("hasContradictoryInstructionSignals", () => {
@@ -69,5 +71,49 @@ describe("hasForwardedInjectionRefundSignal", () => {
 
   it("ignores a normal customer refund request", () => {
     expect(hasForwardedInjectionRefundSignal("Can I get a refund for order #1020?")).toBe(false);
+  });
+});
+
+describe("isInformationalReturnQuestion", () => {
+  it("treats a return-policy question that mentions a refund as informational", () => {
+    expect(isInformationalReturnQuestion(
+      "Hi! What's your return policy? If I don't love the wool throw blanket, can I send it back for a refund, and who pays the return shipping?",
+    )).toBe(true);
+  });
+
+  it("treats refund/return eligibility questions as informational", () => {
+    expect(isInformationalReturnQuestion("Do you offer refunds?")).toBe(true);
+    expect(isInformationalReturnQuestion("How do returns work?")).toBe(true);
+    expect(isInformationalReturnQuestion("I would like to know your refund policy.")).toBe(true);
+  });
+
+  it("does not treat an explicit cancel/refund request as informational", () => {
+    expect(isInformationalReturnQuestion("Please cancel my order.")).toBe(false);
+    expect(isInformationalReturnQuestion("I'd like to cancel my order, can I do that?")).toBe(false);
+    expect(isInformationalReturnQuestion("I want a refund.")).toBe(false);
+  });
+
+  it("does not treat a refund question about a specific order as informational", () => {
+    expect(isInformationalReturnQuestion("Can I get a refund for order #1020?")).toBe(false);
+  });
+});
+
+describe("hasMutativeRequestIntent", () => {
+  it("is false for an informational return-policy question that mentions a refund", () => {
+    expect(hasMutativeRequestIntent(
+      "What's your return policy? Can I send it back for a refund, and who pays return shipping?",
+    )).toBe(false);
+  });
+
+  it("is true for an explicit refund/cancel request", () => {
+    expect(hasMutativeRequestIntent("Please refund order #4003.")).toBe(true);
+    expect(hasMutativeRequestIntent("Cancel my order before it ships.")).toBe(true);
+  });
+
+  it("is true when any message is a real request alongside a policy question", () => {
+    expect(hasMutativeRequestIntent(
+      "Do you offer refunds?",
+      "Actually, please cancel my order.",
+    )).toBe(true);
   });
 });

@@ -4,6 +4,7 @@ import type { ThreadSink } from '@shopkeeper/agent/build-context';
 import { toolError, toolOk, toolEscalated, type ToolResult } from '@shopkeeper/agent/tools';
 import type {
   AddInternalNoteInput,
+  AskOperatorInput,
   EscalateToHumanInput,
   SendEmailInput,
   SendReplyInput,
@@ -134,5 +135,18 @@ export const gatewayThreadSink: ThreadSink = {
       );
     });
     return toolEscalated(reason);
+  },
+
+  // Soft sibling of escalateToHuman — the agent needs one fact from the merchant
+  // to finish the ticket. No thread-parking (the question rides in the cached
+  // plan as `needs_merchant_input`); the Telegram round-trip is Phase 2.
+  async askOperator(input: AskOperatorInput, ctx: ThreadSinkContext): Promise<ToolResult> {
+    const question = input.question.trim() || 'No question provided';
+    await createMessage({
+      threadId: ctx.threadId,
+      senderType: SenderType.note,
+      contentText: `${AGENT_NOTE_PREFIX}Asked the merchant: ${question}`,
+    });
+    return toolOk(question);
   },
 };

@@ -18,10 +18,12 @@ import {
 } from "./resolve-ticket-coco-action"
 
 export type TicketTriageTier =
-  | "approve"
+  | "answer"
   | "review"
-  | "waiting"
+  | "ready"
+  | "working"
   | "noise"
+  | "waiting_customer"
   | "closed"
 
 export type TicketListPresentationStatusTone = "send" | "caution" | "neutral" | "danger"
@@ -39,10 +41,12 @@ export interface TicketListPresentation {
 }
 
 export const TRIAGE_TIER_SORT_ORDER: readonly TicketTriageTier[] = [
-  "approve",
+  "answer",
   "review",
-  "waiting",
+  "ready",
+  "working",
   "noise",
+  "waiting_customer",
   "closed",
 ]
 
@@ -119,26 +123,29 @@ function primaryStatusForTier(
   action: TicketCocoAction | null,
   questionable: boolean,
 ): TicketListPresentation["primaryStatus"] {
-  if (questionable) {
-    return { label: "Review sender", tone: "caution" }
-  }
-
   switch (tier) {
-    case "approve":
-      return { label: "Ready to send", tone: "send" }
+    case "answer":
+      return { label: "Answer needed", tone: "caution" }
     case "review":
+      if (questionable) {
+        return { label: "Review sender", tone: "caution" }
+      }
       if (action?.variant === "caution") {
         return { label: action.shortLabel === "Refund" ? "Review refund" : "Needs review", tone: "caution" }
       }
       return { label: action?.label ?? "Needs review", tone: "caution" }
-    case "waiting":
-      if (action?.variant === "loading") return { label: "Working…", tone: "neutral" }
+    case "ready":
+      return { label: "Ready to send", tone: "send" }
+    case "working":
+      if (action?.variant === "loading") return { label: action.label, tone: "neutral" }
       if (action?.handler === "draft-reply" || action?.handler === "refresh-draft") {
         return { label: action.label, tone: "neutral" }
       }
-      return { label: "Waiting on agent", tone: "neutral" }
+      return { label: "Drafting…", tone: "neutral" }
     case "noise":
-      return { label: "Unverified sender", tone: "caution" }
+      return { label: "Review sender", tone: "caution" }
+    case "waiting_customer":
+      return { label: "Waiting on customer", tone: "neutral" }
     case "closed":
       return { label: "Closed", tone: "neutral" }
   }
@@ -149,6 +156,10 @@ function applyQuestionableTrustRule(
   action: TicketCocoAction | null,
   hasPlan: boolean,
 ): { tier: TicketTriageTier; action: TicketCocoAction | null } {
+  if (tier === "answer") {
+    return { tier, action }
+  }
+
   if (hasPlan) {
     const blockedAction = action?.handler === "quick-approve"
       ? { ...action, handler: "focus-plan" as const, variant: "caution" as const, label: "Review draft", shortLabel: "Review" }
@@ -168,10 +179,11 @@ function resolveTier(
   awaitingReply: boolean,
 ): TicketTriageTier {
   if (status === "closed" || activeTab === "closed") return "closed"
+  if (classificationKind === "needs_merchant_input") return "answer"
   if (questionable) return hasPlan ? "review" : "noise"
-  if (hasPlan) return classificationKind === "quick_reply" ? "approve" : "review"
-  if (awaitingReply) return "waiting"
-  return "waiting"
+  if (hasPlan) return classificationKind === "quick_reply" ? "ready" : "review"
+  if (awaitingReply) return "working"
+  return "waiting_customer"
 }
 
 export function compareTicketTriageTier(a: TicketTriageTier, b: TicketTriageTier): number {
@@ -224,6 +236,7 @@ export function buildTicketListPresentation(
     lastCustomerMessageAt,
     messages,
     orgSettings,
+    filterStatus: thread.filterStatus,
     shopifyCustomerId: thread.shopifyCustomerId,
     thread,
   })

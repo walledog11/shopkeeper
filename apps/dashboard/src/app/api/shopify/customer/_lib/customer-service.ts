@@ -35,14 +35,24 @@ export interface ShopifyCustomerUpdates {
   };
 }
 
+interface ResolvedShopifyContext {
+  shop: string;
+  ctx: ShopifyContext;
+  integrationId: string;
+}
+
 export async function lookupShopifyCustomer({
   organizationId,
   email,
   customerId,
   orderLimit,
 }: ShopifyCustomerLookupInput): Promise<ShopifyCustomerLookupResult> {
-  const { shop } = await getShopifyContext(organizationId);
-  const customer = await runShopifyCall(organizationId, (ctx) => findShopifyCustomer(ctx, { email, customerId }));
+  const shopifyContext = await getShopifyContext(organizationId);
+  const customer = await runShopifyCallWithContext(
+    organizationId,
+    shopifyContext,
+    (ctx) => findShopifyCustomer(ctx, { email, customerId }),
+  );
 
   if (!customer) {
     return { customer: null, orders: [] };
@@ -51,10 +61,14 @@ export async function lookupShopifyCustomer({
   await persistCustomerName(organizationId, customer);
 
   const orders = orderLimit > 0
-    ? await runShopifyCall(organizationId, (ctx) => getCustomerOrdersWithImages(ctx, customer.id, orderLimit))
+    ? await runShopifyCallWithContext(
+      organizationId,
+      shopifyContext,
+      (ctx) => getCustomerOrdersWithImages(ctx, customer.id, orderLimit),
+    )
     : [];
 
-  return { customer, orders, shop };
+  return { customer, orders, shop: shopifyContext.shop };
 }
 
 export async function updateShopifyCustomer(
@@ -75,7 +89,7 @@ export async function updateShopifyCustomer(
   return data.customer ?? null;
 }
 
-async function getShopifyContext(organizationId: string): Promise<{ shop: string; ctx: ShopifyContext; integrationId: string }> {
+async function getShopifyContext(organizationId: string): Promise<ResolvedShopifyContext> {
   const integration = await db.integration.findFirst({
     where: { organizationId, platform: 'shopify' },
   });
@@ -92,7 +106,15 @@ async function runShopifyCall<T>(
   organizationId: string,
   fn: (ctx: ShopifyContext) => Promise<T>,
 ): Promise<T> {
-  const { ctx, integrationId } = await getShopifyContext(organizationId);
+  const shopifyContext = await getShopifyContext(organizationId);
+  return runShopifyCallWithContext(organizationId, shopifyContext, fn);
+}
+
+async function runShopifyCallWithContext<T>(
+  organizationId: string,
+  { ctx, integrationId }: ResolvedShopifyContext,
+  fn: (ctx: ShopifyContext) => Promise<T>,
+): Promise<T> {
   try {
     return await fn(ctx);
   } catch (err) {

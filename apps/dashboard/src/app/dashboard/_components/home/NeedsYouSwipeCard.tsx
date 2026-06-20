@@ -1,6 +1,6 @@
 "use client"
 
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, type ReactNode } from "react"
+import { useCallback, useEffect, useImperativeHandle, useRef, type ReactNode, type Ref } from "react"
 import { animate, m, useMotionValue, useTransform } from "motion/react"
 import {
   arcRotate,
@@ -15,19 +15,23 @@ export type SwipeCardHandle = {
   flyOff: (sign: -1 | 1) => Promise<boolean>
 }
 
-export const SwipeCard = forwardRef<SwipeCardHandle, {
+interface SwipeCardProps {
   stackDragX: ReturnType<typeof useMotionValue<number>>
   draggable: boolean
   onCommitLeft: () => void
   onCommitRight: () => void
   children: ReactNode
-}>(function SwipeCard({
+  ref?: Ref<SwipeCardHandle>
+}
+
+export function SwipeCard({
   stackDragX,
   draggable,
   onCommitLeft,
   onCommitRight,
   children,
-}, ref) {
+  ref,
+}: SwipeCardProps) {
   const dragX = useMotionValue(0)
   const dragY = useTransform(dragX, arcY)
   const dragRotate = useTransform(dragX, arcRotate)
@@ -35,9 +39,10 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
   const isFlying = useRef(false)
 
   useEffect(() => {
-    return dragX.on("change", value => {
+    const unsubscribe = dragX.on("change", value => {
       stackDragX.set(value)
     })
+    return () => unsubscribe()
   }, [dragX, stackDragX])
 
   const flyOff = useCallback(async (sign: -1 | 1) => {
@@ -90,4 +95,4 @@ export const SwipeCard = forwardRef<SwipeCardHandle, {
       {children}
     </m.div>
   )
-})
+}

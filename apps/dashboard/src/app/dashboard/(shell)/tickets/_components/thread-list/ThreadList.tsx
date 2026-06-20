@@ -93,10 +93,8 @@ function renderTicketRow(ticket: Ticket, props: TicketRowRenderProps) {
       activeView={activeView}
       activeTicketId={activeTicketId}
       approvingTicketId={approvingTicketId}
-      hasSelection={hasSelection}
-      hasShopify={hasShopify}
-      isSearchMode={isSearchMode}
-      isSelected={selectedIds.includes(ticket.id)}
+      context={{ hasShopify, isSearchMode }}
+      selection={{ hasSelection, isSelected: selectedIds.includes(ticket.id) }}
       orgSettings={orgSettings}
       onQuickApproveFromList={onQuickApproveFromList}
       onReviewFromList={onReviewFromList}

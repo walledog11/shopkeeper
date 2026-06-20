@@ -1,0 +1,35 @@
+{
+  "id": "quick-reply-shipping-coverage-kb",
+  "description": "Counter-fixture to ask-operator-shipping-coverage-gap: same shipping-coverage question ('do you ship to Canada?'), but a KB article answers it. The agent has the fact, so it must reply to the customer directly and must NOT ask the merchant. Guards against ask_operator over-firing when the answer is available.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Nair",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi there! Do you ship to Canada? I'd love to buy the wool throw blanket but want to make sure it can reach me first." }
+    ],
+    "kbArticles": [
+      {
+        "title": "International shipping",
+        "body": "Yes, we ship to Canada and the United Kingdom. International shipping is a $15 flat rate and takes 5-8 business days. All other countries are not supported at this time."
+      }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their shipping question.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": [
+      "ask_operator",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order",
+      "create_shopify_order",
+      "edit_shopify_order"
+    ],
+    "replyMustInclude": ["Canada"]
+  }
+}

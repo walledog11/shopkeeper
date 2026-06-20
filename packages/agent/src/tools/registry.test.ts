@@ -54,6 +54,7 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   update_thread_status: { status: "closed" },
   update_thread_tag: { tag: "Shipping" },
   escalate_to_human: { reason: "Needs manual review." },
+  ask_operator: { question: "Do we ship to Canada?" },
   get_support_stats: { days: 7 },
 };
 
@@ -98,6 +99,7 @@ function makeCtx(): BaseAgentContext {
     recentMessages: [],
     shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
     escalate: vi.fn().mockResolvedValue(undefined),
+    askOperator: vi.fn().mockResolvedValue(undefined),
     io: {
       addInternalNote: vi.fn().mockResolvedValue(toolOk("addInternalNote")),
       sendReply: vi.fn().mockResolvedValue(toolOk("sendReply")),
@@ -224,6 +226,7 @@ describe("agent tool execution routing", () => {
       ...SHOPIFY_TOOL_ROUTES.map(([name]) => name),
       ...THREAD_TOOL_ROUTES.map(([name]) => name),
       "escalate_to_human",
+      "ask_operator",
     ];
 
     expect([...new Set(routedNames)].sort()).toEqual(
@@ -293,5 +296,17 @@ describe("agent tool execution routing", () => {
 
     expect(result.status).toBe("escalated");
     expect(ctx.escalate).toHaveBeenCalledWith("Needs manual review.");
+  });
+
+  it("routes ask_operator through the injected askOperator sink", async () => {
+    const ctx = makeCtx();
+    const deps = makeDeps();
+    const definition = definitionFor("ask_operator");
+    const input = definition.parse(VALID_TOOL_INPUTS.ask_operator);
+
+    const result = await definition.execute(input, ctx, AGENT_SETTINGS_DEFAULTS, deps);
+
+    expect(result.status).toBe("escalated");
+    expect(ctx.askOperator).toHaveBeenCalledWith("Do we ship to Canada?");
   });
 });

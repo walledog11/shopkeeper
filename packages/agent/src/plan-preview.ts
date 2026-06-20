@@ -4,12 +4,14 @@ import { isQuestionableSender } from "./sender-trust.js"
 import { TOOL_CATEGORIES } from "./tools/registry/index.js"
 import { checkStaticToolPolicy } from "./tools/static-policy.js"
 
-export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute"
+export type HomePlanKind = "quick_reply" | "needs_review" | "auto_execute" | "needs_merchant_input"
 
 export interface HomePlanClassification {
   kind: HomePlanKind
   replyText: string | null
   sendReplyToolCall: RawToolCall | null
+  // Set only for `needs_merchant_input` — the clarifying question for the merchant.
+  question: string | null
 }
 
 const QUICK_REPLY_READ_TOOLS = new Set([
@@ -65,6 +67,13 @@ function replyTextFromToolCall(toolCall: RawToolCall | null): string | null {
   return typeof text === "string" && text.trim() ? text.trim() : null
 }
 
+function questionFromToolCall(toolCall: RawToolCall | null): string | null {
+  const input = toolCall?.input
+  if (!input || typeof input !== "object" || Array.isArray(input)) return null
+  const question = (input as { question?: unknown }).question
+  return typeof question === "string" && question.trim() ? question.trim() : null
+}
+
 export function planReplyText(plan: AgentPlan | null): string | null {
   if (!plan) return null
   for (const name of REPLY_TOOL_NAMES) {
@@ -111,6 +120,7 @@ const NEEDS_REVIEW: HomePlanClassification = {
   kind: "needs_review",
   replyText: null,
   sendReplyToolCall: null,
+  question: null,
 }
 
 function detectQuickReply(plan: AgentPlan): HomePlanClassification {
@@ -120,6 +130,7 @@ function detectQuickReply(plan: AgentPlan): HomePlanClassification {
       kind: "needs_review",
       replyText: replyTextFromToolCall(sendReplyToolCall),
       sendReplyToolCall,
+      question: null,
     };
   }
 
@@ -144,7 +155,7 @@ function detectQuickReply(plan: AgentPlan): HomePlanClassification {
     return NEEDS_REVIEW
   }
 
-  return { kind: "quick_reply", replyText, sendReplyToolCall }
+  return { kind: "quick_reply", replyText, sendReplyToolCall, question: null }
 }
 
 export interface ClassifyHomePlanOptions {
@@ -169,7 +180,25 @@ export function classifyHomePlan(
   settings?: Partial<OrgSettings> | OrgSettings | null,
   options?: ClassifyHomePlanOptions,
 ): HomePlanClassification {
-  if (!plan || (plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
+  if (!plan) {
+    return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
+  }
+
+  // An ask_operator plan parks the ticket for the merchant — a state distinct
+  // from a customer-facing reply. The agent chose to ask, so surface it before
+  // the warning / quick-reply / questionable-sender checks (which are about
+  // customer-facing sends). Mirrors how escalate short-circuits in the planner.
+  const askOperatorCall = plan.rawToolCalls.find((toolCall) => toolCall.name === "ask_operator") ?? null
+  if (askOperatorCall) {
+    return {
+      kind: "needs_merchant_input",
+      replyText: null,
+      sendReplyToolCall: null,
+      question: questionFromToolCall(askOperatorCall),
+    }
+  }
+
+  if ((plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
     return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }
 
@@ -192,7 +221,7 @@ export function classifyHomePlan(
       return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
     }
     return applyQuestionableSenderPolicy(
-      { kind: "auto_execute", replyText, sendReplyToolCall },
+      { kind: "auto_execute", replyText, sendReplyToolCall, question: null },
       options?.filterStatus,
     )
   }

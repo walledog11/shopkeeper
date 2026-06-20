@@ -6,6 +6,7 @@ import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import {
   hasContradictoryInstructionSignals,
   hasActionableMutativeIntent,
+  hasMutativeRequestIntent,
   hasForwardedInjectionRefundSignal,
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
@@ -249,7 +250,7 @@ export function shouldForceMutativeReplan(input: {
   ranReplan: boolean;
 }): boolean {
   if (input.operatorMode || input.ranReplan) return false;
-  if (!hasActionableMutativeIntent(...customerMessageTexts(input.ctx))) return false;
+  if (!hasMutativeRequestIntent(...customerMessageTexts(input.ctx))) return false;
   if (refundTargetsAlreadyFullyRefunded(input.ctx, "")) return false;
   if (planHasActionTool(input.rawToolCalls)) return false;
   if (planHasEscalation(input.rawToolCalls)) return false;
@@ -260,7 +261,7 @@ export function shouldSkipReplyDraftForMutativeIntent(
   ctx: AgentContext,
   rawToolCalls: readonly RawToolCall[],
 ): boolean {
-  if (!hasActionableMutativeIntent(...customerMessageTexts(ctx))) return false;
+  if (!hasMutativeRequestIntent(...customerMessageTexts(ctx))) return false;
   if (refundTargetsAlreadyFullyRefunded(ctx, "")) return false;
   if (planHasActionTool(rawToolCalls)) return false;
   if (planHasEscalation(rawToolCalls)) return false;

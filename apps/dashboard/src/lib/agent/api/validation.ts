@@ -117,6 +117,19 @@ export function parseAgentQuickApproveBody(body: unknown) {
   };
 }
 
+export function parseAgentAnswerBody(body: unknown) {
+  const candidate = requireObject(body);
+  const answer = requireNonEmptyString(candidate.answer, "answer").trim();
+  if (answer.length === 0) {
+    invalidField("answer", "answer is required", "required");
+  }
+  return {
+    threadId: requireNonEmptyString(candidate.threadId, "threadId"),
+    answer,
+    saveToKb: parseOptionalBoolean(candidate.saveToKb, "saveToKb") ?? true,
+  };
+}
+
 export function parseAgentChatBody(body: unknown) {
   const candidate = requireObject(body);
   return {

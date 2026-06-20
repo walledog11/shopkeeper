@@ -1,0 +1,35 @@
+{
+  "id": "quick-reply-returns-policy-kb",
+  "description": "Counter-fixture to ask-operator-returns-policy-gap: same return-policy question (which mentions a refund), but a KB article answers it. The agent has the policy, so it must reply to the customer directly and must NOT ask the merchant. Regression guard for the mutative-intent corollary: the bare word 'refund' previously stripped the reply and stood the terminal-reply guarantee down, leaving an empty plan even with a KB answer. This proves the reply survives (KB self-decay works for return/refund questions).",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Marcus Hale",
+    "customerPlatformId": "marcus@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi! What's your return policy? If I'm not happy with the wool throw blanket, can I send it back for a refund, and who pays the return shipping?" }
+    ],
+    "kbArticles": [
+      {
+        "title": "Returns and refunds",
+        "body": "You can return unworn items within 30 days for a full refund. Customers cover return shipping unless the item arrived damaged or defective."
+      }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their return question.",
+  "expectedPlan": {
+    "mustCallTools": ["send_reply"],
+    "mustNotCallTools": [
+      "ask_operator",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order",
+      "create_shopify_order",
+      "edit_shopify_order"
+    ],
+    "replyMustInclude": ["30"]
+  }
+}

@@ -12,6 +12,7 @@ const ARTIFACT_DIRECTORY_NAMES = [
   '.next',
   '.next-dev',
   '.next-e2e',
+  '.next-preview',
   'coverage',
   'dist',
   'playwright-report',

@@ -69,6 +69,30 @@ function hollowRefundReplyPlan(overrides: Partial<AgentPlan> = {}): AgentPlan {
   })
 }
 
+const askOperatorCall: RawToolCall = {
+  id: "ask_1",
+  name: "ask_operator",
+  input: { question: "Do we ship to Canada, and at what rate?" },
+}
+
+const askOperatorStep: PlanStep = {
+  id: "ask_1",
+  tool: "ask_operator",
+  label: "Ask the merchant",
+  description: "Do we ship to Canada, and at what rate?",
+  category: "internal",
+  enabled: true,
+}
+
+function askOperatorPlan(overrides: Partial<AgentPlan> = {}): AgentPlan {
+  return {
+    instruction: "Answer shipping question",
+    steps: [askOperatorStep],
+    rawToolCalls: [askOperatorCall],
+    ...overrides,
+  }
+}
+
 describe("classifyHomePlan — info-only plans (existing behavior, default tier)", () => {
   it("classifies a send_reply-only plan as quick reply", () => {
     const result = classifyHomePlan(plan())
@@ -161,6 +185,34 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     expect(classifyHomePlan(plan({
       rawToolCalls: [{ id: "send_1", name: "send_reply", input: {} }],
     })).kind).toBe("needs_review")
+  })
+})
+
+describe("classifyHomePlan — ask_operator plans", () => {
+  it("classifies an ask_operator plan as needs_merchant_input and surfaces the question", () => {
+    const result = classifyHomePlan(askOperatorPlan())
+
+    expect(result.kind).toBe("needs_merchant_input")
+    expect(result.question).toBe("Do we ship to Canada, and at what rate?")
+    expect(result.replyText).toBeNull()
+    expect(result.sendReplyToolCall).toBeNull()
+  })
+
+  it("classifies ask_operator preceded by read tools as needs_merchant_input", () => {
+    const result = classifyHomePlan(askOperatorPlan({
+      rawToolCalls: [
+        { id: "read_1", name: "search_kb", input: { query: "international shipping" } },
+        askOperatorCall,
+      ],
+    }))
+
+    expect(result.kind).toBe("needs_merchant_input")
+  })
+
+  it("keeps needs_merchant_input for a questionable sender — the ask is not a customer-facing send", () => {
+    const result = classifyHomePlan(askOperatorPlan(), null, { filterStatus: "questionable" })
+
+    expect(result.kind).toBe("needs_merchant_input")
   })
 })
 

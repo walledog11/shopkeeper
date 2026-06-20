@@ -277,12 +277,14 @@ function baseProps(overrides: Partial<LayoutProps> = {}): LayoutProps {
 
 function LayoutHarness({
   tickets,
+  activeView = "for_me",
   initialActiveId = null,
   loading = false,
   error = null,
   onQuickApprove = vi.fn(),
 }: {
   tickets: Ticket[]
+  activeView?: LayoutProps["activeView"]
   initialActiveId?: string | null
   loading?: boolean
   error?: unknown
@@ -293,6 +295,8 @@ function LayoutHarness({
   const activeThread = activeTicket && !loading && !error ? threadFromTicket(activeTicket) : undefined
 
   return React.createElement(TicketsPageLayout, baseProps({
+    activeView,
+    effectiveActiveView: activeView,
     activeTicketId: activeId,
     activeThread,
     activeThreadError: error,
@@ -386,6 +390,19 @@ function ticketDialog() {
 }
 
 describe("TicketsPageLayout board ticket dialog", () => {
+  it("uses the board layout for the closed view", () => {
+    const item = ticket({ id: "closed-1", status: "closed" })
+    const view = render(React.createElement(LayoutHarness, {
+      tickets: [item],
+      activeView: "closed",
+    }))
+
+    expect(view.querySelector('[data-testid="tickets-list"]')).toBeNull()
+    expect(view.querySelector('[data-testid="thread-list-header"]')).not.toBeNull()
+    expect(view.textContent).toContain("Closed")
+    expect(firstCardSummaryButton(view)).not.toBeNull()
+  })
+
   it("opens a conversation dialog when a board card is clicked", () => {
     const item = ticket()
     const view = render(React.createElement(LayoutHarness, { tickets: [item] }))

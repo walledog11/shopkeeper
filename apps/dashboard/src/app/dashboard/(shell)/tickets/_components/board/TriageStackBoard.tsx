@@ -43,8 +43,14 @@ export function TriageStackBoard({
   onReview,
 }: TriageStackBoardProps) {
   const groups = useMemo(
-    () => groupTicketsByTriageTier(tickets, { orgSettings, hasShopify, isMobile: false }),
-    [tickets, orgSettings, hasShopify],
+    () => groupTicketsByTriageTier(tickets, {
+      orgSettings,
+      hasShopify,
+      isMobile: false,
+      listView: activeView,
+      activeTab: activeView === "closed" ? "closed" : "open",
+    }),
+    [activeView, tickets, orgSettings, hasShopify],
   )
   const [overrides, setOverrides] = useState<Record<string, boolean>>({})
 
@@ -63,9 +69,13 @@ export function TriageStackBoard({
           <CheckCircle2 className="size-5 text-foreground/40" />
         </span>
         <div className="flex flex-col gap-1">
-          <h2 className="font-display-serif text-lg text-foreground">You&apos;re all caught up</h2>
+          <h2 className="font-display-serif text-lg text-foreground">
+            {activeView === "closed" ? "No closed tickets" : "You're all caught up"}
+          </h2>
           <p className="max-w-[230px] text-sm text-foreground/50">
-            {agentName} will flag anything that needs your eye.
+            {activeView === "closed"
+              ? "Resolved conversations will show up here."
+              : `${agentName} will flag anything that needs your eye.`}
           </p>
         </div>
       </div>

@@ -9,7 +9,7 @@ import {
   isWalkthroughComplete,
   resolveWalkthroughDecision,
   type WalkthroughDecision,
-} from "./WalkthroughBriefing"
+} from "./walkthrough-briefing-logic"
 
 type WalkthroughContext = NonNullable<AgentPanelOpenContext["walkthrough"]>
 

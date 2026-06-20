@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { Brain, ChevronDown, ChevronUp, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,12 +25,20 @@ export default function ConversationSummaryBar({
   startCollapsed = false,
 }: Props) {
   const isMobile = useIsMobile()
-  const [expanded, setExpanded] = useState(() => !isMobile && !startCollapsed)
+  const [expandedState, setExpandedState] = useState(() => ({
+    expanded: !isMobile && !startCollapsed,
+    startCollapsed,
+  }))
+  let expanded = expandedState.expanded
+  if (expandedState.startCollapsed !== startCollapsed) {
+    expanded = startCollapsed ? false : expandedState.expanded
+    setExpandedState({ expanded, startCollapsed })
+  }
   const displaySummary = summary?.trim()
 
-  useEffect(() => {
-    if (startCollapsed) setExpanded(false)
-  }, [startCollapsed])
+  const setExpanded = useCallback((nextExpanded: boolean) => {
+    setExpandedState(previous => ({ ...previous, expanded: nextExpanded }))
+  }, [])
 
   if (isMobile && !expanded) {
     return (

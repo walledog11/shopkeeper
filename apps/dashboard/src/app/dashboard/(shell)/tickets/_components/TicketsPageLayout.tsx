@@ -171,7 +171,7 @@ export function TicketsPageLayout({
     : toConversationTab(effectiveActiveView)
 
   const isBoardView = !flags.isSearchMode
-    && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open")
+    && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open" || effectiveActiveView === "closed")
 
   const correctReplyBanner = flags.correctReplyVisible ? (
     <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-800 shrink-0">

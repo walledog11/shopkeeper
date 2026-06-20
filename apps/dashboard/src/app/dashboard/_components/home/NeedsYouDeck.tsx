@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { LazyMotion, animate, domMax, m, useMotionValue, useTransform } from "motion/react"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
@@ -56,7 +56,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
     return () => controls.stop()
   }, [current?.threadId, stackDragX])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const node = frontCardRef.current
     if (!node) return
 
@@ -145,11 +145,16 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
                   key={current.threadId}
                   ref={swipeRef}
                   stackDragX={stackDragX}
-                  draggable={n > 1}
+                  draggable={n > 1 && current.kind !== "needs_merchant_input"}
                   onCommitLeft={() => commitNeighbor(1)}
                   onCommitRight={() => commitNeighbor(-1)}
                 >
-                  <NeedsYouCard item={current} agentName={agentName} onSent={() => dismiss(current.threadId)} />
+                  <NeedsYouCard
+                    item={current}
+                    agentName={agentName}
+                    onSent={() => dismiss(current.threadId)}
+                    onAnswered={onApproved}
+                  />
                 </SwipeCard>
               </div>
             </div>

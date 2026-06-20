@@ -23,6 +23,17 @@ export function escapeOAuthPopupHtml(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
+function serializeOAuthPopupScriptString(value: string): string {
+  return `"${value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("&", "\\x26")
+    .replaceAll("<", "\\x3C")
+    .replaceAll(">", "\\x3E")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029")}"`;
+}
+
 const OAUTH_POPUP_CSS = `
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -110,6 +121,8 @@ export function renderOAuthPopupHtml(options: {
   const footer = escapeOAuthPopupHtml(options.footer ?? "Securely redirecting you to authorize this connection.");
   const brand = escapeOAuthPopupHtml(PRODUCT_NAME);
   const state = options.state ?? "loading";
+  const popupName = serializeOAuthPopupScriptString(OAUTH_POPUP_NAME);
+  const sessionKey = serializeOAuthPopupScriptString(OAUTH_POPUP_SESSION_KEY);
   const iconMarkup =
     state === "loading"
       ? `<div class="shopkeeper-oauth-popup__icon" aria-hidden="true"><div class="shopkeeper-oauth-popup__spinner"></div></div>`
@@ -122,8 +135,8 @@ export function renderOAuthPopupHtml(options: {
   </form>
   <script>
     try {
-      if (window.name === ${JSON.stringify(OAUTH_POPUP_NAME)}) {
-        sessionStorage.setItem(${JSON.stringify(OAUTH_POPUP_SESSION_KEY)}, "1");
+      if (window.name === ${popupName}) {
+        sessionStorage.setItem(${sessionKey}, "1");
       }
     } catch (e) {}
     document.getElementById("post-redirect-form").requestSubmit();

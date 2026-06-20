@@ -63,10 +63,36 @@ function baseTicket(overrides: Partial<Ticket> & Pick<Ticket, "id">): Ticket {
   }
 }
 
+function askOperatorPlan(): AgentPlan {
+  return {
+    instruction: "Ask merchant whether this is allowed",
+    rawToolCalls: [{
+      id: "ask-1",
+      name: "ask_operator",
+      input: { question: "Do we ship framed prints internationally?" },
+    }],
+    steps: [{
+      id: "ask-1",
+      tool: "ask_operator",
+      label: "Ask merchant",
+      description: "Ask whether framed prints ship internationally",
+      category: "internal",
+      enabled: true,
+    }],
+  }
+}
+
 describe("groupTicketsByTriageTier", () => {
   it("groups tickets into ordered non-empty sections", () => {
-    const approve = baseTicket({
-      id: "approve-1",
+    const answer = baseTicket({
+      id: "answer-1",
+      cachedPlan: cacheRecord(askOperatorPlan()),
+      cachedPlanMessageId: "msg-customer-1",
+      hasPlan: true,
+      lastMessageAt: "2026-06-14T12:15:00.000Z",
+    })
+    const ready = baseTicket({
+      id: "ready-1",
       cachedPlan: cacheRecord(quickReplyPlan()),
       cachedPlanMessageId: "msg-customer-1",
       hasPlan: true,
@@ -80,8 +106,8 @@ describe("groupTicketsByTriageTier", () => {
       hasPlan: true,
       lastMessageAt: "2026-06-14T12:05:00.000Z",
     })
-    const waiting = baseTicket({
-      id: "waiting-1",
+    const working = baseTicket({
+      id: "working-1",
       lastMessageAt: "2026-06-14T12:00:00.000Z",
     })
     const noise = baseTicket({
@@ -90,28 +116,85 @@ describe("groupTicketsByTriageTier", () => {
       lastMessageAt: "2026-06-14T11:00:00.000Z",
     })
 
-    const groups = groupTicketsByTriageTier([noise, waiting, review, approve], {})
+    const groups = groupTicketsByTriageTier([noise, working, review, ready, answer], {})
 
-    expect(groups.map(group => group.tier)).toEqual(["approve", "review", "waiting", "noise"])
-    expect(groups[0].tickets.map(ticket => ticket.id)).toEqual(["approve-1"])
+    expect(groups.map(group => group.tier)).toEqual(["answer", "review", "ready", "working", "noise"])
+    expect(groups[0].label).toBe("Needs your answer")
+    expect(groups[0].tickets.map(ticket => ticket.id)).toEqual(["answer-1"])
     expect(groups[1].label).toBe("Needs review")
-    expect(groups[2].defaultExpanded).toBe(false)
-    expect(groups[2].collapsible).toBe(true)
-    expect(groups[3].label).toBe("Likely spam")
+    expect(groups[2].label).toBe("Ready to send")
+    expect(groups[3].label).toBe("Agent working")
     expect(groups[3].defaultExpanded).toBe(false)
+    expect(groups[3].collapsible).toBe(true)
+    expect(groups[4].label).toBe("Possible spam")
+    expect(groups[4].defaultExpanded).toBe(false)
   })
 
   it("hides empty tiers", () => {
-    const approve = baseTicket({
-      id: "approve-1",
+    const ready = baseTicket({
+      id: "ready-1",
       cachedPlan: cacheRecord(quickReplyPlan()),
       cachedPlanMessageId: "msg-customer-1",
       hasPlan: true,
     })
 
-    const groups = groupTicketsByTriageTier([approve], {})
+    const groups = groupTicketsByTriageTier([ready], {})
 
     expect(groups).toHaveLength(1)
-    expect(groups[0].tier).toBe("approve")
+    expect(groups[0].tier).toBe("ready")
+  })
+
+  it("includes waiting-on-customer tickets only for all open", () => {
+    const waitingCustomer = baseTicket({
+      id: "waiting-customer-1",
+      messages: [
+        {
+          id: "msg-customer-1",
+          sender: "customer",
+          text: "Hi, where is my order?",
+          time: "2026-06-14T11:30:00.000Z",
+          attachments: [],
+        },
+        {
+          id: "msg-agent-1",
+          sender: "agent",
+          text: "Your order shipped yesterday.",
+          time: "2026-06-14T11:40:00.000Z",
+          attachments: [],
+        },
+      ],
+    })
+
+    expect(groupTicketsByTriageTier([waitingCustomer], {
+      listView: "for_me",
+    })).toEqual([])
+
+    const groups = groupTicketsByTriageTier([waitingCustomer], {
+      listView: "all_open",
+    })
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].tier).toBe("waiting_customer")
+    expect(groups[0].label).toBe("Waiting on customer")
+    expect(groups[0].collapsible).toBe(true)
+    expect(groups[0].defaultExpanded).toBe(false)
+  })
+
+  it("groups closed tickets into a closed section for the closed view", () => {
+    const closed = baseTicket({
+      id: "closed-1",
+      status: "closed",
+      lastMessageAt: "2026-06-14T12:20:00.000Z",
+    })
+
+    const groups = groupTicketsByTriageTier([closed], {
+      listView: "closed",
+      activeTab: "closed",
+    })
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0].tier).toBe("closed")
+    expect(groups[0].label).toBe("Closed")
+    expect(groups[0].tickets.map(ticket => ticket.id)).toEqual(["closed-1"])
   })
 })

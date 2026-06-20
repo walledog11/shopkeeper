@@ -9,10 +9,12 @@ import { TicketStackDeck } from "./TicketStackDeck"
 import type { OrgSettings } from "@/types"
 
 const TIER_ACCENT: Record<TicketTriageTier, { dot: string; label: string }> = {
-  approve: { dot: "bg-emerald-500", label: "text-foreground/70" },
+  answer: { dot: "bg-rose-500", label: "text-foreground/75" },
   review: { dot: "bg-amber-500", label: "text-foreground/70" },
-  waiting: { dot: "bg-foreground/25", label: "text-foreground/45" },
+  ready: { dot: "bg-emerald-500", label: "text-foreground/70" },
+  working: { dot: "bg-foreground/25", label: "text-foreground/45" },
   noise: { dot: "bg-foreground/15", label: "text-foreground/40" },
+  waiting_customer: { dot: "bg-foreground/20", label: "text-foreground/45" },
   closed: { dot: "bg-foreground/15", label: "text-foreground/40" },
 }
 
@@ -74,9 +76,8 @@ export function TriageStackColumn({
               activeView={activeView}
               activeTicketId={activeTicketId}
               approvingTicketId={approvingTicketId}
-              hasSelection={false}
-              hasShopify={hasShopify}
-              isSelected={false}
+              context={{ hasShopify }}
+              selection={{ hasSelection: false, isSelected: false }}
               orgSettings={orgSettings}
               ticket={ticket}
               onQuickApproveFromList={onQuickApprove}
@@ -89,6 +90,7 @@ export function TriageStackColumn({
       ) : (
         <TicketStackDeck
           tickets={group.tickets}
+          activeView={activeView}
           hasShopify={hasShopify}
           orgSettings={orgSettings}
           activeTicketId={activeTicketId}

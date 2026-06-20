@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react"
+import { useCallback, useMemo, useRef, useState, type ComponentProps, type CSSProperties, type RefObject } from "react"
 import { useFillerPhrase } from "@/hooks/useFillerPhrase"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useThreadPresence } from "@/hooks/useThreadPresence"
@@ -66,6 +66,8 @@ interface Props {
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
+type ConversationDisplayMessages = ReturnType<typeof partitionConversationMessages>["displayMessages"]
+type ConversationComposerAreaProps = ComponentProps<typeof ConversationComposerArea>
 
 export default function ConversationView({
   ticket,
@@ -132,6 +134,10 @@ export default function ConversationView({
         ?.focus()
     })
   }, [])
+
+  const handleMerchantAnswered = useCallback(() => {
+    void onTicketRefresh?.()
+  }, [onTicketRefresh])
 
   const { displayMessages, noteCount } = partitionConversationMessages(ticket.messages, viewTab)
   const {
@@ -337,79 +343,247 @@ export default function ConversationView({
       )}
       <PresenceBanner presenceCount={presenceCount} />
 
-      {/* Messages */}
-      <div
-        ref={timelineRef}
-        data-testid={viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
-        data-thread-id={ticket.id}
-        className={`mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
-          viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
-        }`}
-      >
-        {isThreadLoading ? (
-          <TimelineSkeleton />
-        ) : viewTab === 'notes' ? (
-          <NotesTimeline
-            agentName={agentName}
-            agentTurns={agentTurns}
-            isAgentRunning={isAgentRunning}
-            isPlanLoading={isPlanLoading}
-            messages={displayMessages}
-            pendingInstruction={pendingInstruction}
-            planPhrase={planPhrase}
-            runPhrase={runPhrase}
-          />
-        ) : (
-          <ChatTimeline
-            failedMessages={failedMessages}
-            isAgentRunning={isAgentRunning}
-            messages={displayMessages}
-            messagesEndRef={messagesEndRef}
-            onRetry={onRetry}
-            onRetrySend={onRetrySend}
-          />
-        )}
-      </div>
+      <ConversationTimelinePanel
+        agentName={agentName}
+        agentTurns={agentTurns}
+        failedMessages={failedMessages}
+        messages={displayMessages}
+        messagesEndRef={messagesEndRef}
+        onRetry={onRetry}
+        onRetrySend={onRetrySend}
+        pendingInstruction={pendingInstruction}
+        planPhrase={planPhrase}
+        runPhrase={runPhrase}
+        status={{
+          isAgentRunning,
+          isPlanLoading,
+          isThreadLoading,
+          viewTab,
+        }}
+        ticketId={ticket.id}
+        timelineRef={timelineRef}
+      />
 
-      {activeTab === 'open' && (
-        isThreadLoading ? (
-          <ComposerSkeleton />
-        ) : (
-          <ConversationComposerArea
-            containerRef={composerRef}
-            planCardRef={planCardRef}
-            agentName={agentName}
-            agentInstruction={agentInstruction}
-            isAgentMode={isAgentMode}
-            isPlanExecuting={isPlanExecuting}
-            isRegenerating={isRegenerating}
-            noteCount={noteCount}
-            onChange={text => onReplyChange(isAgentMode ? `@${agentName.toLowerCase()} ` + text : text)}
-            onClearAgentMode={() => onReplyChange('')}
-            onPlanApprove={handlePlanApprove}
-            onPlanEdit={() => {
-              handlePlanEdit()
-              if (!isMobile) focusComposer()
-            }}
-            onPlanDismiss={handlePlanDismiss}
-            onFocusShopifyLink={handleFocusShopifyLink}
-            onPlanRegenerate={handlePlanRegenerate}
-            onSend={handleSend}
-            onViewTabChange={setViewTab}
-            pendingPlan={pendingPlan}
-            composer={{
-              customerName: ticket.customer,
-              channelType: ticket.channelType,
-              customerPlatformId,
-              isSending: isSending || isAgentRunning || isPlanLoading,
-              replyText,
-              sendError,
-              shopifyCustomerId,
-              lastCustomerMessageAt: ticket.lastCustomerMessageAt,
-            }}
-            viewTab={viewTab}
-          />
-        )
+      <ConversationOpenComposer
+        activeTab={activeTab}
+        threadId={ticket.id}
+        onAnswered={handleMerchantAnswered}
+        agent={{
+          agentInstruction,
+          agentName,
+          isAgentMode,
+          isPlanExecuting,
+          isPlanLoading,
+          isRegenerating,
+          pendingPlan,
+        }}
+        composerRef={composerRef}
+        customer={{
+          channelType: ticket.channelType,
+          customerName: ticket.customer,
+          customerPlatformId,
+          lastCustomerMessageAt: ticket.lastCustomerMessageAt,
+          shopifyCustomerId,
+        }}
+        handlers={{
+          focusComposer,
+          handleFocusShopifyLink,
+          handlePlanApprove,
+          handlePlanDismiss,
+          handlePlanEdit,
+          handlePlanRegenerate,
+          handleSend,
+          onReplyChange,
+          setViewTab,
+        }}
+        isMobile={isMobile}
+        isThreadLoading={isThreadLoading}
+        noteCount={noteCount}
+        planCardRef={planCardRef}
+        reply={{
+          isSending,
+          replyText,
+          sendError,
+          isAgentRunning,
+        }}
+        viewTab={viewTab}
+      />
+    </div>
+  )
+}
+
+interface ConversationOpenComposerProps {
+  activeTab: Props["activeTab"]
+  threadId: string
+  onAnswered: () => void
+  agent: {
+    agentInstruction: string
+    agentName: string
+    isAgentMode: boolean
+    isPlanExecuting: boolean
+    isPlanLoading: boolean
+    isRegenerating: boolean
+    pendingPlan: AgentPlan | null
+  }
+  composerRef: RefObject<HTMLDivElement | null>
+  customer: {
+    channelType: Ticket["channelType"]
+    customerName: string
+    customerPlatformId?: string
+    lastCustomerMessageAt: string | null
+    shopifyCustomerId?: string | null
+  }
+  handlers: {
+    focusComposer: () => void
+    handleFocusShopifyLink: () => void
+    handlePlanApprove: ConversationComposerAreaProps["onPlanApprove"]
+    handlePlanDismiss: NonNullable<ConversationComposerAreaProps["onPlanDismiss"]>
+    handlePlanEdit: () => void
+    handlePlanRegenerate: ConversationComposerAreaProps["onPlanRegenerate"]
+    handleSend: ConversationComposerAreaProps["onSend"]
+    onReplyChange: Props["onReplyChange"]
+    setViewTab: ConversationComposerAreaProps["onViewTabChange"]
+  }
+  isMobile: boolean
+  isThreadLoading: boolean
+  noteCount: number
+  planCardRef: RefObject<HTMLDivElement | null>
+  reply: {
+    isAgentRunning: boolean
+    isSending: boolean
+    replyText: string
+    sendError: string | null
+  }
+  viewTab: "chat" | "notes"
+}
+
+function ConversationOpenComposer({
+  activeTab,
+  threadId,
+  onAnswered,
+  agent,
+  composerRef,
+  customer,
+  handlers,
+  isMobile,
+  isThreadLoading,
+  noteCount,
+  planCardRef,
+  reply,
+  viewTab,
+}: ConversationOpenComposerProps) {
+  if (activeTab !== "open") return null
+  if (isThreadLoading) return <ComposerSkeleton />
+
+  return (
+    <ConversationComposerArea
+      containerRef={composerRef}
+      planCardRef={planCardRef}
+      threadId={threadId}
+      onAnswered={onAnswered}
+      agentName={agent.agentName}
+      agentInstruction={agent.agentInstruction}
+      isAgentMode={agent.isAgentMode}
+      isPlanExecuting={agent.isPlanExecuting}
+      isRegenerating={agent.isRegenerating}
+      noteCount={noteCount}
+      onChange={text => handlers.onReplyChange(
+        agent.isAgentMode ? `@${agent.agentName.toLowerCase()} ` + text : text,
+      )}
+      onClearAgentMode={() => handlers.onReplyChange('')}
+      onPlanApprove={handlers.handlePlanApprove}
+      onPlanEdit={() => {
+        handlers.handlePlanEdit()
+        if (!isMobile) handlers.focusComposer()
+      }}
+      onPlanDismiss={handlers.handlePlanDismiss}
+      onFocusShopifyLink={handlers.handleFocusShopifyLink}
+      onPlanRegenerate={handlers.handlePlanRegenerate}
+      onSend={handlers.handleSend}
+      onViewTabChange={handlers.setViewTab}
+      pendingPlan={agent.pendingPlan}
+      composer={{
+        customerName: customer.customerName,
+        channelType: customer.channelType,
+        customerPlatformId: customer.customerPlatformId,
+        isSending: reply.isSending || reply.isAgentRunning || agent.isPlanLoading,
+        replyText: reply.replyText,
+        sendError: reply.sendError,
+        shopifyCustomerId: customer.shopifyCustomerId,
+        lastCustomerMessageAt: customer.lastCustomerMessageAt,
+      }}
+      viewTab={viewTab}
+    />
+  )
+}
+
+interface ConversationTimelinePanelProps {
+  agentName: string
+  agentTurns: AgentTurn[]
+  failedMessages: FailedMessage[]
+  messages: ConversationDisplayMessages
+  messagesEndRef: RefObject<HTMLDivElement | null>
+  onRetry?: (id: string) => void
+  onRetrySend?: (id: string) => void
+  pendingInstruction: string | null
+  planPhrase: string
+  runPhrase: string
+  status: {
+    isAgentRunning: boolean
+    isPlanLoading: boolean
+    isThreadLoading: boolean
+    viewTab: "chat" | "notes"
+  }
+  ticketId: string
+  timelineRef: RefObject<HTMLDivElement | null>
+}
+
+function ConversationTimelinePanel({
+  agentName,
+  agentTurns,
+  failedMessages,
+  messages,
+  messagesEndRef,
+  onRetry,
+  onRetrySend,
+  pendingInstruction,
+  planPhrase,
+  runPhrase,
+  status,
+  ticketId,
+  timelineRef,
+}: ConversationTimelinePanelProps) {
+  return (
+    <div
+      ref={timelineRef}
+      data-testid={status.viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
+      data-thread-id={ticketId}
+      className={`mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
+        status.viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
+      }`}
+    >
+      {status.isThreadLoading ? (
+        <TimelineSkeleton />
+      ) : status.viewTab === 'notes' ? (
+        <NotesTimeline
+          agentName={agentName}
+          agentTurns={agentTurns}
+          isAgentRunning={status.isAgentRunning}
+          isPlanLoading={status.isPlanLoading}
+          messages={messages}
+          pendingInstruction={pendingInstruction}
+          planPhrase={planPhrase}
+          runPhrase={runPhrase}
+        />
+      ) : (
+        <ChatTimeline
+          failedMessages={failedMessages}
+          isAgentRunning={status.isAgentRunning}
+          messages={messages}
+          messagesEndRef={messagesEndRef}
+          onRetry={onRetry}
+          onRetrySend={onRetrySend}
+        />
       )}
     </div>
   )

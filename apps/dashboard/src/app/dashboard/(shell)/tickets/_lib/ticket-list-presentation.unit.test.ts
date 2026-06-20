@@ -63,6 +63,32 @@ function refundPlan(): AgentPlan {
   }
 }
 
+function warningPlan(): AgentPlan {
+  return {
+    ...quickReplyPlan(),
+    warnings: ["Manual policy review required"],
+  }
+}
+
+function askOperatorPlan(): AgentPlan {
+  return {
+    instruction: "Ask merchant whether this is allowed",
+    rawToolCalls: [{
+      id: "ask-1",
+      name: "ask_operator",
+      input: { question: "Do we ship framed prints internationally?" },
+    }],
+    steps: [{
+      id: "ask-1",
+      tool: "ask_operator",
+      label: "Ask merchant",
+      description: "Ask whether framed prints ship internationally",
+      category: "internal",
+      enabled: true,
+    }],
+  }
+}
+
 function baseThread(overrides: Partial<Thread> = {}): BuildTicketListPresentationThread {
   return {
     channelType: "email",
@@ -114,14 +140,14 @@ describe("buildTicketListPresentation", () => {
     expect(presentation.subline).toBe("We ship in 2-3 days.")
   })
 
-  it("assigns approve tier for quick_reply with a clean sender", () => {
+  it("assigns ready tier for quick_reply with a clean sender", () => {
     const presentation = buildTicketListPresentation({
       thread: baseThread(),
       orgSettings: { autonomyTier: "guarded" },
       now,
     })
 
-    expect(presentation.tier).toBe("approve")
+    expect(presentation.tier).toBe("ready")
     expect(presentation.primaryStatus).toEqual({ label: "Ready to send", tone: "send" })
     expect(presentation.action).toMatchObject({
       handler: "quick-approve",
@@ -142,8 +168,37 @@ describe("buildTicketListPresentation", () => {
     expect(presentation.action?.handler).not.toBe("quick-approve")
     expect(presentation.action).toMatchObject({
       handler: "focus-plan",
-      variant: "caution",
+      variant: "draft",
     })
+  })
+
+  it("assigns answer tier for plans that need merchant input", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        cachedPlan: cacheRecord(askOperatorPlan()),
+        aiSummary: "Customer asks whether framed prints ship internationally",
+      }),
+      orgSettings: { autonomyTier: "guarded" },
+      now,
+    })
+
+    expect(presentation.tier).toBe("answer")
+    expect(presentation.primaryStatus).toEqual({ label: "Answer needed", tone: "caution" })
+  })
+
+  it("keeps questionable merchant-input plans in the answer tier", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        filterStatus: "questionable",
+        cachedPlan: cacheRecord(askOperatorPlan()),
+        aiSummary: "Customer asks whether framed prints ship internationally",
+      }),
+      orgSettings: { autonomyTier: "guarded" },
+      now,
+    })
+
+    expect(presentation.tier).toBe("answer")
+    expect(presentation.primaryStatus).toEqual({ label: "Answer needed", tone: "caution" })
   })
 
   it("assigns review tier with caution status for consequential refund plans", () => {
@@ -164,7 +219,24 @@ describe("buildTicketListPresentation", () => {
     })
   })
 
-  it("assigns waiting tier when the customer is awaiting a reply and no plan exists", () => {
+  it("assigns review tier for warning-blocked reply plans", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        cachedPlan: cacheRecord(warningPlan()),
+        aiSummary: "Customer asks about a policy exception",
+      }),
+      orgSettings: { autonomyTier: "guarded" },
+      now,
+    })
+
+    expect(presentation.tier).toBe("review")
+    expect(presentation.primaryStatus.tone).toBe("caution")
+    expect(presentation.action).toMatchObject({
+      handler: "focus-plan",
+    })
+  })
+
+  it("assigns working tier when the customer is awaiting a reply and no plan exists", () => {
     const presentation = buildTicketListPresentation({
       thread: baseThread({
         cachedPlan: null,
@@ -174,10 +246,46 @@ describe("buildTicketListPresentation", () => {
       now,
     })
 
-    expect(presentation.tier).toBe("waiting")
+    expect(presentation.tier).toBe("working")
+    expect(presentation.primaryStatus).toEqual({ label: "Draft reply", tone: "neutral" })
     expect(presentation.action).toMatchObject({
       handler: "draft-reply",
     })
+  })
+
+  it("assigns waiting_customer tier when no customer reply is needed", () => {
+    const presentation = buildTicketListPresentation({
+      thread: baseThread({
+        cachedPlan: null,
+        cachedPlanMessageId: null,
+        aiSummary: null,
+        messages: [
+          {
+            id: customerMessageId,
+            threadId: "thread-1",
+            senderType: "customer",
+            contentText: "How long does shipping take?",
+            mediaUrl: null,
+            attachments: [],
+            sentAt: "2026-06-14T11:30:00.000Z",
+          },
+          {
+            id: "msg-agent-1",
+            threadId: "thread-1",
+            senderType: "agent",
+            contentText: "We ship in 2-3 days.",
+            mediaUrl: null,
+            attachments: [],
+            sentAt: "2026-06-14T11:40:00.000Z",
+          },
+        ],
+      }),
+      now,
+    })
+
+    expect(presentation.tier).toBe("waiting_customer")
+    expect(presentation.primaryStatus).toEqual({ label: "Waiting on customer", tone: "neutral" })
+    expect(presentation.action).toBeNull()
   })
 
   it("assigns noise tier for questionable senders without a plan", () => {
@@ -244,10 +352,12 @@ describe("buildTicketListPresentation", () => {
 
 describe("compareTicketTriageTier", () => {
   it("orders tiers for for_me sorting", () => {
-    expect(compareTicketTriageTier("approve", "review")).toBeLessThan(0)
-    expect(compareTicketTriageTier("review", "waiting")).toBeLessThan(0)
-    expect(compareTicketTriageTier("waiting", "noise")).toBeLessThan(0)
-    expect(compareTicketTriageTier("noise", "closed")).toBeLessThan(0)
+    expect(compareTicketTriageTier("answer", "review")).toBeLessThan(0)
+    expect(compareTicketTriageTier("review", "ready")).toBeLessThan(0)
+    expect(compareTicketTriageTier("ready", "working")).toBeLessThan(0)
+    expect(compareTicketTriageTier("working", "noise")).toBeLessThan(0)
+    expect(compareTicketTriageTier("noise", "waiting_customer")).toBeLessThan(0)
+    expect(compareTicketTriageTier("waiting_customer", "closed")).toBeLessThan(0)
   })
 })
 

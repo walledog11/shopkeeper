@@ -5,12 +5,15 @@ import Image from "next/image"
 import { buildTicketListPresentationFromTicket } from "../../_lib/ticket-list-presentation"
 import { getAvatarGradient, getInitials } from "../thread-list/constants"
 import { TicketTagPill } from "../thread-list/ticket-tag-pill"
-import { hasTicketRowListAction, TicketRowActions } from "../thread-list/TicketRowActions"
+import { TicketRowActions } from "../thread-list/TicketRowActions"
+import { hasTicketRowListAction } from "../thread-list/ticket-row-action-visibility"
 import { TicketRowStatusPill } from "../thread-list/ticket-row-status-pill"
+import type { TicketListView } from "../thread-list/constants"
 import type { OrgSettings, Ticket } from "@/types"
 
 interface TicketStackCardProps {
   ticket: Ticket
+  activeView: TicketListView
   hasShopify: boolean
   orgSettings?: Partial<OrgSettings> | null
   isActive: boolean
@@ -23,6 +26,7 @@ interface TicketStackCardProps {
 
 export function TicketStackCard({
   ticket,
+  activeView,
   hasShopify,
   orgSettings = null,
   isActive,
@@ -36,10 +40,10 @@ export function TicketStackCard({
     () => buildTicketListPresentationFromTicket(ticket, {
       orgSettings,
       hasShopify,
-      listView: "all_open",
-      activeTab: "open",
+      listView: activeView,
+      activeTab: activeView === "closed" ? "closed" : "open",
     }),
-    [hasShopify, orgSettings, ticket],
+    [activeView, hasShopify, orgSettings, ticket],
   )
 
   const gradient = getAvatarGradient(presentation.customerLabel)

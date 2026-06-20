@@ -15,6 +15,7 @@ export type {
   AddInternalNoteInput,
   AddShopifyCustomerNoteInput,
   AgentToolDefinition,
+  AskOperatorInput,
   CancelOrderInput,
   CreateRefundInput,
   CreateShopifyOrderInput,
