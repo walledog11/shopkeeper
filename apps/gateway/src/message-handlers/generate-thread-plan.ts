@@ -2,6 +2,7 @@ import { db } from '@shopkeeper/db';
 import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agent/thread-auth';
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent } from '@shopkeeper/agent/planner';
+import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   buildAgentPlanCacheRecord,
@@ -31,9 +32,19 @@ function toGatewayPlan(plan: PackageAgentPlan | null): AgentPlan | null {
   return plan as unknown as AgentPlan | null;
 }
 
+// A plan whose terminal tool is `ask_operator` classifies as needs_merchant_input;
+// surface its question so the operator-notification path can push it instead of a
+// plan-approval prompt. Null for every other plan shape.
+function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSettings): string | null {
+  if (!plan) return null;
+  const classification = classifyHomePlan(plan, settings);
+  return classification.kind === 'needs_merchant_input' ? classification.question : null;
+}
+
 export interface GeneratedThreadPlan {
   plan: AgentPlan | null;
   instruction: string;
+  merchantQuestion?: string | null;
   autoExecuted?: boolean;
   autoExecutionStatus?: 'success' | 'error';
   autoExecutionSummary?: string;
@@ -94,7 +105,12 @@ export async function generateThreadPlan(
     const autoExecution = allowAutoExecute
       ? await buildAutoExecutionResult(organizationId, threadId, settings)
       : {};
-    return { plan: toGatewayPlan(cached?.plan ?? null), instruction, ...autoExecution };
+    return {
+      plan: toGatewayPlan(cached?.plan ?? null),
+      instruction,
+      merchantQuestion: merchantQuestionFor(cached?.plan ?? null, settings),
+      ...autoExecution,
+    };
   }
 
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
@@ -117,7 +133,12 @@ export async function generateThreadPlan(
     ? await buildAutoExecutionResult(organizationId, threadId, settings)
     : {};
 
-  return { plan: toGatewayPlan(plan), instruction, ...autoExecution };
+  return {
+    plan: toGatewayPlan(plan),
+    instruction,
+    merchantQuestion: merchantQuestionFor(plan, settings),
+    ...autoExecution,
+  };
 }
 
 async function buildAutoExecutionResult(

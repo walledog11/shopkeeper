@@ -109,6 +109,69 @@ export async function sendOperatorAutoExecutionNotification(
   }
 }
 
+function formatQuestionMessage(
+  customerName: string | null,
+  channelType: DbChannelType,
+  summary: string,
+  question: string,
+): string {
+  const channel = formatChannelLabel(channelType);
+
+  const lines: (string | null)[] = [
+    `Needs your input — ${channel}`,
+    customerName ? `From: ${customerName}` : null,
+    `"${summary}"`,
+    '',
+    question,
+    '',
+    'Reply here to answer and I’ll draft the response.',
+  ];
+
+  return lines.filter((line): line is string => line !== null).join('\n');
+}
+
+// Soft sibling of sendOperatorPlanNotification: the agent needs one fact from the
+// merchant to finish the ticket. Pushes the question and parks `pendingQuestion`
+// on each operator context so the next free-text reply is ingested as the answer.
+export async function sendOperatorQuestionNotification(
+  organizationId: string,
+  threadId: string,
+  customerName: string | null,
+  channelType: DbChannelType,
+  aiSummary: string | null,
+  question: string,
+  instruction: string,
+): Promise<void> {
+  const chats = await db.orgMemberTelegramChat.findMany({
+    where: { orgMember: { organizationId } },
+    select: { chatId: true },
+  });
+
+  if (chats.length === 0) {
+    logger.info({ organizationId }, '[Worker] No bound operator members — skipping question notification');
+    return;
+  }
+
+  const summary = aiSummary || instruction;
+  const message = formatQuestionMessage(customerName, channelType, summary, question);
+
+  for (const member of chats) {
+    const result = await notifyOperator(organizationId, member, message, {
+      pendingPlan: null,
+      pendingQuestion: { threadId, question },
+    }, {
+      policy: 'critical',
+      threadId,
+    });
+    if (result) {
+      logger.info(
+        { organizationId, threadId, chatId: result.chatId },
+        '[Worker] Question notification sent',
+      );
+    }
+  }
+}
+
 export async function sendOperatorPlanNotification(
   organizationId: string,
   threadId: string,

@@ -43,6 +43,7 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
 import {
   sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
+  sendOperatorQuestionNotification,
 } from './planning-notifications.js';
 import { OperatorNotifyError } from '../operator-notify.js';
 import type { AgentPlan } from '../types.js';
@@ -102,6 +103,65 @@ describe('sendOperatorPlanNotification', () => {
         null,
         plan,
         'Handle refund request',
+      ),
+    ).rejects.toThrow(OperatorNotifyError);
+  });
+});
+
+describe('sendOperatorQuestionNotification', () => {
+  it('parks pendingQuestion and clears pendingPlan on each operator, critical policy', async () => {
+    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }, { chatId: 'chat_2' }]);
+    notifyOperatorSpy.mockResolvedValue({ chatId: 'chat_1' });
+
+    await sendOperatorQuestionNotification(
+      'org_1',
+      'thread_1',
+      'Jane Doe',
+      ChannelType.email,
+      'Wants to know shipping coverage',
+      'Do we ship to Canada?',
+      'Handle shipping question',
+    );
+
+    expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
+    const [, , body, contextPatch, options] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('Do we ship to Canada?');
+    expect(contextPatch).toEqual({
+      pendingPlan: null,
+      pendingQuestion: { threadId: 'thread_1', question: 'Do we ship to Canada?' },
+    });
+    expect(options).toEqual({ policy: 'critical', threadId: 'thread_1' });
+  });
+
+  it('no-ops when no operators are bound', async () => {
+    findManySpy.mockResolvedValue([]);
+
+    await sendOperatorQuestionNotification(
+      'org_1',
+      'thread_1',
+      null,
+      ChannelType.email,
+      null,
+      'Do we ship to Canada?',
+      'Handle shipping question',
+    );
+
+    expect(notifyOperatorSpy).not.toHaveBeenCalled();
+  });
+
+  it('propagates critical notification failures so the worker job can retry', async () => {
+    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }]);
+    notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
+
+    await expect(
+      sendOperatorQuestionNotification(
+        'org_1',
+        'thread_1',
+        null,
+        ChannelType.email,
+        null,
+        'Do we ship to Canada?',
+        'Handle shipping question',
       ),
     ).rejects.toThrow(OperatorNotifyError);
   });

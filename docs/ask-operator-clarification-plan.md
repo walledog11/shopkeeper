@@ -77,6 +77,55 @@ consume built dist, not src). Option (a) (a narrow forced backstop) was **not** 
 avoided. Remaining: Phase 2 (Telegram) + Evals follow-ups (1) the 400 flake and (2) retiring
 `kb-policy-no-article`.
 
+**Progress (2026-06-20, Phase 2 — Telegram round-trip, complete).** Shipped end-to-end; gateway suite
+348 pass, gateway+dashboard+db typecheck/lint clean, migration applied to the test DB. **The doc's Phase 2
+architecture was stale and is corrected below** — the gateway no longer hops to `/api/agent/plan-internal`
+(that route is gone); it **plans in-process** via `@shopkeeper/agent` (extraction Track 2). Two consequences
+reshaped the design: (1) the **push is gateway-internal**, fired from the operator-notification path
+(`processAiSummaryJob`), *not* from the dashboard sink — the doc's "the dashboard sink hops to
+`/internal/operator/question`" model doesn't hold, because the `askOperator` **sink never fires** for an
+ask_operator plan (auto-execute runs only `auto_execute`; classification surfaces the question instead). So
+**no `/internal/operator/question` route was created** — it would be dead code. (2) the **answer ingestion is
+also in-process** in the gateway (re-plan via `planAgent` + KB write), mirroring the dashboard answer route
+rather than calling it. What shipped:
+- **`OperatorContext.pendingQuestion`** JSONB column (migration `20260620000000_add_operator_pending_question`)
+  + `PendingQuestion` type/read/round-trip in `operator-context.ts` (+ tests).
+- **Push:** `sendOperatorQuestionNotification` in `planning-notifications.ts` (the real sibling of
+  `sendOperatorPlanNotification`, not `pushOperatorEscalation`) — sets `pendingQuestion`, clears any
+  `pendingPlan`, critical policy. `generate-thread-plan.ts` classifies the plan (`classifyHomePlan`) and
+  surfaces `merchantQuestion` through `PrecomputedPlanResult`; `ai-summary-flow.ts` branches on it before the
+  plan-approval push (+ tests).
+- **Answer:** `pending-question-commands.ts` `handlePendingQuestionAnswer` — a free-text reply while
+  `pendingQuestion` is set is the answer: records the Q/A note, **always saves to KB** (no toggle on Telegram —
+  a Telegram answer is treated as a reusable fact, Locked Decision #2 default), re-plans + re-caches so the
+  draft rides the normal approval surfaces, clears `pendingQuestion`, confirms. Wired into `message-handler.ts`
+  gated on `command.type === 'free-form'` (explicit commands + order-lookup still work as escapes), placed
+  after order-lookup. Clears `pendingQuestion` up front so a re-plan failure can't trap the operator (+ tests
+  for the no-pending and already-handled paths; the full re-plan path needs real Anthropic — **live-verified
+  end-to-end on a real phone 2026-06-20**, see the live-verification note up top).
+- **Known limitation (accepted, same class as `pendingPlan`):** cross-surface staleness — answering on the
+  dashboard leaves the gateway's `pendingQuestion` set; the "already handled" guard
+  (`getPendingCustomerMessageId === null`) catches the common case (records the answer, skips re-plan), but a
+  still-open thread could misread a later unrelated Telegram free-text as the answer. No dismiss command (out of
+  scope). **Exercised live end-to-end** (real Telegram round-trip, 2026-06-20 — see the live-verification note
+below); unit/integration + typecheck/lint also green.
+Remaining: Evals follow-ups (1) the 400 flake and (2) retiring `kb-policy-no-article`.
+
+**Progress (2026-06-20, Phase 2 live-verified end-to-end).** The Telegram round-trip was exercised **live on a
+real phone** — real Anthropic, the gateway's real HTTP/handler paths, against the **local test DB** (never prod).
+Setup: a throwaway BotFather bot whose webhook pointed at a cloudflared tunnel → a local gateway `server` booted
+under `with-test-env` (test DB/Redis, real `ANTHROPIC_API_KEY`, the test bot token); the production bot, its
+webhook, and prod data were untouched, and the already-running `npm run dev` (its own ngrok on 8080) was left
+alone. **Push:** on the seeded shipping-coverage gap the live planner emitted `search_kb → ask_operator`;
+`sendOperatorQuestionNotification` delivered the "Needs your input" question to the phone and set
+`OperatorContext.pendingQuestion` (`pendingPlan` null). **Answer:** a free-text reply on the phone hit
+`handlePendingQuestionAnswer` → `[Telegram] Answer ingested and re-planned`, which (a) recorded the Q/A note,
+(b) wrote the `KbArticle` (title=question, body=answer, tags=`[thread.tag]`), (c) re-planned
+`ask_operator → send_reply` with a draft that uses the answer ("…Yes, we do ship to Canada!…") and re-cached it,
+(d) cleared `pendingQuestion`, and (e) sent the "I've drafted a reply… review on your dashboard" confirmation
+back to the phone — Locked Decision #1 (no auto-send; re-route through the approval card) confirmed live. Driven
+through a throwaway `live-verify-ask-operator.ts` harness (seed/plan/push/status/clean), since removed.
+
 > **Swipe-deck design call (2026-06-19).** A card carrying a textarea can't live cleanly inside a
 > swipe-to-navigate deck. Resolution: the `needs_merchant_input` card **opts out of the drag gesture**
 > (`draggable={n > 1 && kind !== "needs_merchant_input"}`, still reachable via the chevrons/dots), and
@@ -158,7 +207,7 @@ exist (`schema.prisma:307-338`). Resolve-or-create the org's user KB, write
 
 ---
 
-## Phase 1 — core + dashboard + KB capture
+## Phase 1 — core + dashboard + KB capture — DONE (2026-06-19; live-verified end-to-end)
 
 ### Agent core (`packages/agent/`)
 - ✅ **`tools/registry/thread.ts` (done, step 1)** — `ask_operator` tool added (category `internal`),
@@ -242,11 +291,12 @@ exist (`schema.prisma:307-338`). Resolve-or-create the org's user KB, write
   must `send_reply`, must NOT ask), both under `apps/dashboard/src/lib/agent/__evals__/fixtures/`.
   Running `test:evals` caught the forced backstop over-firing (83.9% vs 95.8%); removing it restored
   the gate to **94.7% aggregate (within threshold)** with every over-ask regression recovered, and
-  the ask fixture passing model-electively. **Three open items the run surfaced:** (1) an intermittent
+  the ask fixture passing model-electively. **Three items the run surfaced** — (1) and (2) still open, (3) ✅ resolved: (1) an intermittent
   `400 tool_use without tool_result` planner-transcript bug — pre-existing (predates this work),
   lands on ~1 random fixture per repeats=1 run, passes on re-run; worth a separate fix. (2) advisory
   `kb-policy-no-article` now legitimately flips to `ask_operator` (a real policy gap) — consider
-  retiring or converting it. (3) **Terminal-less plan on a refund-mention policy gap (⚠️ live
+  retiring or converting it. (3) **✅ RESOLVED (2026-06-19, option (b) — see the item-3 fix progress
+  note up top). Terminal-less plan on a refund-mention policy gap (⚠️ live
   2026-06-19).** A returns question ("what's your return policy… can I send it back for a refund, who
   pays return shipping?") planned `[search_kb, search_kb]` with **no terminal tool** — empty `steps` +
   warning "Customer requested a refund/cancel but no action was planned — review before sending".
@@ -271,16 +321,23 @@ exist (`schema.prisma:307-338`). Resolve-or-create the org's user KB, write
 
 ---
 
-## Phase 2 — Telegram round-trip
+## Phase 2 — Telegram round-trip — DONE + LIVE-VERIFIED (2026-06-20; see the Phase 2 progress notes up top for the corrected architecture)
 
-- **`OperatorContext.pendingQuestion`** migration (one nullable JSONB column).
-- **`pushOperatorQuestion(orgId, threadId, question)`** mirroring `pushOperatorEscalation`
-  (`operator-escalation.ts:34`); sets `pendingQuestion`.
-- **`/internal/operator/question`** internal route — the dashboard sink hops here, exactly like
-  `/operator/escalate` (`internal-operator.ts:7`).
-- **Inbound ingest** — when `pendingQuestion` is set, a free-text Telegram reply is the answer →
-  call the same answer-ingestion logic (re-plan + KB) → confirm "Got it — drafted a reply for
-  {customer}." Mirrors `handlePendingPlanCommand` (`telegram/pending-plan-commands.ts:26`).
+- ✅ **`OperatorContext.pendingQuestion`** migration (one nullable JSONB column) — shipped, applied to test DB.
+- ✅ **Push** (was framed as `pushOperatorQuestion` mirroring `pushOperatorEscalation`) — shipped as
+  **`sendOperatorQuestionNotification`** in `planning-notifications.ts`, the real sibling of
+  `sendOperatorPlanNotification` (the gateway in-process auto-plan path), not the sink-triggered
+  `pushOperatorEscalation`. Sets `pendingQuestion`, clears `pendingPlan`. The branch lives in
+  `ai-summary-flow.ts` on a `merchantQuestion` surfaced by `generate-thread-plan.ts` via `classifyHomePlan`.
+- ❌ **`/internal/operator/question` internal route — NOT BUILT (deliberate).** The premise ("the dashboard
+  sink hops here") is stale: the gateway plans in-process and the `askOperator` sink never fires for an
+  ask_operator plan (classification surfaces the question; auto-execute runs only `auto_execute`). The push is
+  gateway-internal, so this route would be dead code.
+- ✅ **Inbound ingest** — `handlePendingQuestionAnswer` (`telegram/pending-question-commands.ts`), mirrors
+  `handlePendingPlanCommand`. Free-text reply while `pendingQuestion` set → records Q/A note, **always saves to
+  KB** (no toggle on Telegram), re-plans + re-caches **in-process** (mirrors the dashboard answer route rather
+  than calling it), clears `pendingQuestion`, confirms. Wired in `message-handler.ts` (gated on `free-form`,
+  after order-lookup). **Re-plan + KB write + confirmation live-verified on a real phone 2026-06-20.**
 
 ---
 

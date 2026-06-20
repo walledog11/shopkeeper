@@ -138,8 +138,11 @@ export const gatewayThreadSink: ThreadSink = {
   },
 
   // Soft sibling of escalateToHuman — the agent needs one fact from the merchant
-  // to finish the ticket. No thread-parking (the question rides in the cached
-  // plan as `needs_merchant_input`); the Telegram round-trip is Phase 2.
+  // to finish the ticket. No thread-parking (the question rides in the cached plan
+  // as `needs_merchant_input`). This sink only runs if an ask_operator plan is ever
+  // executed; it never is (auto-execute runs only `auto_execute` plans), so the
+  // Telegram push lives in the operator-notification path (sendOperatorQuestionNotification),
+  // not here. We still record the note for the audit trail.
   async askOperator(input: AskOperatorInput, ctx: ThreadSinkContext): Promise<ToolResult> {
     const question = input.question.trim() || 'No question provided';
     await createMessage({

@@ -262,6 +262,7 @@ model OperatorContext {
   history         Json     @default("[]") @db.JsonB
   pendingPlan     Json?    @map("pending_plan") @db.JsonB
   pendingDigest   Json?    @map("pending_digest") @db.JsonB
+  pendingQuestion Json?    @map("pending_question") @db.JsonB
   updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

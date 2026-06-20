@@ -11,6 +11,7 @@ import {
 import { handleDigestCommand } from './digest-commands.js';
 import { HELP_TEXT } from './format.js';
 import { handlePendingPlanCommand } from './pending-plan-commands.js';
+import { handlePendingQuestionAnswer } from './pending-question-commands.js';
 import { handleStartBinding } from './start-binding.js';
 import type { TelegramMessageContext } from './types.js';
 
@@ -90,6 +91,13 @@ export async function handleTelegramMessage(
   if (
     command.type === 'order-lookup'
     && await handleOrderLookup(organizationId, chatId, command.orderNumber, reply)
+  ) {
+    return;
+  }
+
+  if (
+    command.type === 'free-form'
+    && await handlePendingQuestionAnswer(organizationId, message, context)
   ) {
     return;
   }

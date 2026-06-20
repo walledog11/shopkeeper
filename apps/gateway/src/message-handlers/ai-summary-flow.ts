@@ -11,6 +11,7 @@ import {
 import {
   sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
+  sendOperatorQuestionNotification,
 } from './planning-notifications.js';
 import type { AiSummaryJobData } from '../types.js';
 
@@ -127,6 +128,19 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       channelType,
       updatedThread?.aiSummary ?? null,
       planResult,
+    );
+    return;
+  }
+
+  if (planResult.merchantQuestion) {
+    await sendOperatorQuestionNotification(
+      organizationId,
+      threadId,
+      customerName,
+      channelType,
+      updatedThread?.aiSummary ?? null,
+      planResult.merchantQuestion,
+      planResult.instruction,
     );
     return;
   }

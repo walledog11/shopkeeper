@@ -343,7 +343,9 @@ export async function escalateToHuman(
 // Soft sibling of escalateToHuman: the agent needs one fact/decision from the
 // merchant to finish the ticket. Unlike escalation it does not park the thread —
 // the question rides in the cached plan and surfaces as `needs_merchant_input`.
-// We record a note for the audit trail; the Telegram round-trip is Phase 2.
+// This sink only runs if an ask_operator plan is executed, which it never is
+// (classification surfaces the question instead), so the Telegram push lives in
+// the gateway operator-notification path, not here. We record a note for the audit trail.
 export async function askOperator(
   input: AskOperatorInput,
   ctx: ThreadContext

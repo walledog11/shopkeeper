@@ -7,6 +7,7 @@ import {
   extractOrderNumber,
   type PendingPlan,
   type PendingDigest,
+  type PendingQuestion,
 } from './operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
@@ -29,6 +30,7 @@ describe('getContext', () => {
       history: [],
       pendingPlan: null,
       pendingDigest: null,
+      pendingQuestion: null,
     });
   });
 });
@@ -65,6 +67,29 @@ describe('updateContext + getContext round-trip', () => {
     await updateContext(org.id, '999', { pendingDigest: digest });
     const ctx = await getContext(org.id, '999');
     expect(ctx.pendingDigest).toEqual(digest);
+  });
+
+  it('persists and clears pendingQuestion', async () => {
+    const question: PendingQuestion = {
+      threadId: '00000000-0000-4000-8000-000000000030',
+      question: 'Do we ship to Canada?',
+    };
+    await updateContext(org.id, '8000001', { pendingQuestion: question });
+    expect((await getContext(org.id, '8000001')).pendingQuestion).toEqual(question);
+
+    await updateContext(org.id, '8000001', { pendingQuestion: null });
+    expect((await getContext(org.id, '8000001')).pendingQuestion).toBeNull();
+  });
+
+  it('drops a malformed pendingQuestion when reading stored context', async () => {
+    await db.operatorContext.create({
+      data: {
+        organizationId: org.id,
+        chatId: 'malformed-question',
+        pendingQuestion: { threadId: 'thread_1' },
+      },
+    });
+    expect((await getContext(org.id, 'malformed-question')).pendingQuestion).toBeNull();
   });
 
   it('filters malformed JSON fields when reading stored context', async () => {

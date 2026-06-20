@@ -28,12 +28,18 @@ export interface PendingDigest {
   sentAt: string;
 }
 
+export interface PendingQuestion {
+  threadId: string;
+  question: string;
+}
+
 export interface OperatorContext {
   lastOrderNumber: string | null;
   lastThreadId: string | null;
   history: { role: string; content: string }[];
   pendingPlan: PendingPlan | null;
   pendingDigest: PendingDigest | null;
+  pendingQuestion: PendingQuestion | null;
 }
 
 const EMPTY: OperatorContext = {
@@ -42,6 +48,7 @@ const EMPTY: OperatorContext = {
   history: [],
   pendingPlan: null,
   pendingDigest: null,
+  pendingQuestion: null,
 };
 
 function readHistory(value: unknown): OperatorContext['history'] {
@@ -97,7 +104,22 @@ function readPendingDigest(value: unknown): PendingDigest | null {
   };
 }
 
-function toJsonObject(value: PendingPlan | PendingDigest): PrismaTypes.InputJsonObject {
+function readPendingQuestion(value: unknown): PendingQuestion | null {
+  if (
+    !isRecord(value) ||
+    typeof value.threadId !== 'string' ||
+    typeof value.question !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    threadId: value.threadId,
+    question: value.question,
+  };
+}
+
+function toJsonObject(value: PendingPlan | PendingDigest | PendingQuestion): PrismaTypes.InputJsonObject {
   return JSON.parse(JSON.stringify(value)) as PrismaTypes.InputJsonObject;
 }
 
@@ -112,6 +134,7 @@ export async function getContext(organizationId: string, chatId: string): Promis
     history: readHistory(row.history),
     pendingPlan: readPendingPlan(row.pendingPlan),
     pendingDigest: readPendingDigest(row.pendingDigest),
+    pendingQuestion: readPendingQuestion(row.pendingQuestion),
   };
 }
 
@@ -133,6 +156,7 @@ export async function updateContext(
     history: next.history,
     pendingPlan: next.pendingPlan ? toJsonObject(next.pendingPlan) : Prisma.DbNull,
     pendingDigest: next.pendingDigest ? toJsonObject(next.pendingDigest) : Prisma.DbNull,
+    pendingQuestion: next.pendingQuestion ? toJsonObject(next.pendingQuestion) : Prisma.DbNull,
   };
 
   await db.operatorContext.upsert({

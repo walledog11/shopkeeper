@@ -29,6 +29,7 @@ export async function precomputeThreadPlan(
     const {
       plan,
       instruction,
+      merchantQuestion,
       autoExecuted,
       autoExecutionStatus,
       autoExecutionSummary,
@@ -46,6 +47,7 @@ export async function precomputeThreadPlan(
     return {
       plan,
       instruction,
+      merchantQuestion,
       ...(autoExecuted ? {
         autoExecuted: true,
         autoExecutionStatus,
