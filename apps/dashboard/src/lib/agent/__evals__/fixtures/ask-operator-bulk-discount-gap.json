@@ -1,0 +1,31 @@
+{
+  "id": "ask-operator-bulk-discount-gap",
+  "description": "Customer asks whether the store offers student discounts on bulk orders. There is no discount-policy KB article and no order context, so the agent has no fact to answer with and no reason to escalate - a one-line merchant answer ('yes, 10% over $500' or 'no, we don't') would finish the ticket. It must ask_operator (ask the merchant), not fabricate a policy, deflect the customer to another channel, or hard-escalate. classifyHomePlan should surface this as needs_merchant_input. (Converted from the retired advisory kb-policy-no-article fixture, whose send_reply assertion no longer matches the post-ask_operator behavior.)",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Eve Tran",
+    "customerPlatformId": "eve@example.com",
+    "shopifyCustomerId": "10000000007",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Do you offer student discounts for bulk orders over $500?" }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about the student bulk discount.",
+  "expectedPlan": {
+    "mustCallTools": ["ask_operator"],
+    "mustClassifyAs": "needs_merchant_input",
+    "mustNotCallTools": [
+      "send_reply",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order",
+      "create_shopify_order",
+      "edit_shopify_order",
+      "update_shopify_order_address",
+      "update_shopify_customer_info"
+    ]
+  }
+}

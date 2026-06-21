@@ -157,11 +157,6 @@
       "passes": 3,
       "passRate": 1
     },
-    "kb-policy-no-article": {
-      "repeats": 3,
-      "passes": 3,
-      "passRate": 1
-    },
     "multi-step-address-change-and-reply": {
       "repeats": 3,
       "passes": 3,

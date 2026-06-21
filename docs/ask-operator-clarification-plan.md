@@ -126,6 +126,19 @@ alone. **Push:** on the seeded shipping-coverage gap the live planner emitted `s
 back to the phone — Locked Decision #1 (no auto-send; re-route through the approval card) confirmed live. Driven
 through a throwaway `live-verify-ask-operator.ts` harness (seed/plan/push/status/clean), since removed.
 
+**Progress (2026-06-20, Evals item-2 — `kb-policy-no-article` converted).** Evals follow-up (2) is **done.**
+The advisory `kb-policy-no-article` fixture asserted `send_reply` for a bulk-discount policy question ("Do you
+offer student discounts for bulk orders over $500?") — a knowledge gap that now correctly routes to
+`ask_operator`, so the `send_reply` assertion was stale and red on every run. **Converted, not retired:** it
+became the hard-gated `ask-operator-bulk-discount-gap` fixture (`mustCallTools` `ask_operator`,
+`mustClassifyAs` `needs_merchant_input`, mutative tools + `send_reply` + `escalate_to_human` blocked),
+mirroring `ask-operator-shipping-coverage-gap`; the stale `kb-policy-no-article` entry was dropped from
+`baseline.json` (its two sibling ask-operator fixtures also aren't in the baseline yet). **Verified inert
+without a paid eval run:** the question carries **no** `CUSTOMER_MUTATIVE_PHRASES` keyword (`intent.ts`) so it
+can't hit the item-3 terminal-less path, it's structurally identical to the known-passing shipping-coverage
+gap, the JSON parses, `needs_merchant_input` is a valid `mustClassifyAs`, and fixtures load by `readdirSync`
+so the rename is picked up. Remaining: Evals follow-up (1) the `400 tool_use without tool_result` flake.
+
 > **Swipe-deck design call (2026-06-19).** A card carrying a textarea can't live cleanly inside a
 > swipe-to-navigate deck. Resolution: the `needs_merchant_input` card **opts out of the drag gesture**
 > (`draggable={n > 1 && kind !== "needs_merchant_input"}`, still reachable via the chevrons/dots), and
@@ -291,11 +304,12 @@ exist (`schema.prisma:307-338`). Resolve-or-create the org's user KB, write
   must `send_reply`, must NOT ask), both under `apps/dashboard/src/lib/agent/__evals__/fixtures/`.
   Running `test:evals` caught the forced backstop over-firing (83.9% vs 95.8%); removing it restored
   the gate to **94.7% aggregate (within threshold)** with every over-ask regression recovered, and
-  the ask fixture passing model-electively. **Three items the run surfaced** — (1) and (2) still open, (3) ✅ resolved: (1) an intermittent
+  the ask fixture passing model-electively. **Three items the run surfaced** — (1) still open; (2) and (3) ✅ resolved: (1) an intermittent
   `400 tool_use without tool_result` planner-transcript bug — pre-existing (predates this work),
-  lands on ~1 random fixture per repeats=1 run, passes on re-run; worth a separate fix. (2) advisory
-  `kb-policy-no-article` now legitimately flips to `ask_operator` (a real policy gap) — consider
-  retiring or converting it. (3) **✅ RESOLVED (2026-06-19, option (b) — see the item-3 fix progress
+  lands on ~1 random fixture per repeats=1 run, passes on re-run; worth a separate fix. (2) **✅ RESOLVED
+  (2026-06-20 — see the item-2 note up top).** advisory `kb-policy-no-article` legitimately flipped to
+  `ask_operator` (a real policy gap), so it was **converted** (not retired) into the hard-gated
+  `ask-operator-bulk-discount-gap` fixture mirroring `ask-operator-shipping-coverage-gap`. (3) **✅ RESOLVED (2026-06-19, option (b) — see the item-3 fix progress
   note up top). Terminal-less plan on a refund-mention policy gap (⚠️ live
   2026-06-19).** A returns question ("what's your return policy… can I send it back for a refund, who
   pays return shipping?") planned `[search_kb, search_kb]` with **no terminal tool** — empty `steps` +
