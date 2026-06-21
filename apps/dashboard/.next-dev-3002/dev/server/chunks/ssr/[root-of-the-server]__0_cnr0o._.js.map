@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 46, "column": 0}, "map": {"version":3,"sources":["file:///Users/rajbirsambi/dev/shopkeeper/apps/dashboard/src/app/providers.tsx"],"sourcesContent":["\"use client\";\n\nimport { ClerkProvider } from \"@clerk/nextjs\";\nimport type { ReactNode } from \"react\";\n\ninterface Props {\n  children: ReactNode;\n  publishableKey: string;\n}\n\nexport function Providers({ children, publishableKey }: Props) {\n  return (\n    <ClerkProvider\n      publishableKey={publishableKey}\n      signInUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}\n      signUpUrl={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}\n    >\n      {children}\n    </ClerkProvider>\n  );\n}\n"],"names":["Providers","children","publishableKey","signInUrl","signUpUrl"],"mappings":";;;;;AAEA;AAFA;;;AAUO,SAASA,UAAU,EAAEC,QAAQ,EAAEC,cAAc,EAAS;IAC3D,qBACE,8OAAC,0LAAa;QACZA,gBAAgBA;QAChBC,SAAS;QACTC,SAAS;kBAERH;;;;;;AAGP"}}]
-}
