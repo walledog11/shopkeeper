@@ -1,0 +1,37 @@
+@media (max-width: 767px) {
+  .dashboard-shell input:not([type="checkbox"]):not([type="radio"]),
+  .dashboard-shell textarea,
+  .dashboard-shell select {
+    font-size: max(16px, 1rem);
+  }
+
+  html[data-mobile-ticket-editing="true"] [data-dashboard-mobile-header],
+  html[data-mobile-ticket-editing="true"] [data-dashboard-mobile-bottom-bar],
+  html[data-mobile-ticket-editing="true"] [data-dashboard-nav-progress],
+  html[data-mobile-ticket-editing="true"] [data-dashboard-notification-bar],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-mobile-header],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-mobile-bottom-bar],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-nav-progress],
+  html[data-mobile-ticket-detail="true"] [data-dashboard-notification-bar] {
+    display: none !important;
+  }
+
+  html[data-mobile-ticket-editing="true"] .dashboard-content,
+  html[data-mobile-ticket-detail="true"] .dashboard-content {
+    padding-bottom: 0 !important;
+  }
+
+  .mobile-ticket-conversation[data-keyboard-open="true"] {
+    height: var(--ticket-visual-viewport-height, 100dvh);
+    max-height: var(--ticket-visual-viewport-height, 100dvh);
+    overflow: hidden;
+  }
+
+  .mobile-ticket-timeline {
+    overscroll-behavior: contain;
+  }
+
+  .mobile-ticket-conversation[data-keyboard-open="true"] .mobile-ticket-timeline {
+    scroll-padding-bottom: calc(var(--ticket-composer-height, 0px) + 1rem);
+  }
+}

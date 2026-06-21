@@ -14,6 +14,26 @@ export interface StartOrderThreadInput {
   orderName: string
 }
 
+export interface OrderAttentionFinding {
+  id: string
+  orderId: string | null
+  orderName: string
+  reason: string
+  at: string
+}
+
+export interface OrderAttentionReturn {
+  threadId: string
+  customerName: string
+  summary: string | null
+  at: string
+}
+
+export interface OrderAttentionResponse {
+  findings: OrderAttentionFinding[]
+  returns: OrderAttentionReturn[]
+}
+
 function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string"
 }

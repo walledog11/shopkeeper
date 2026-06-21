@@ -24,11 +24,6 @@ interface MemoryStackGroup {
   articles: ArticleWithBase[]
 }
 
-const SOURCE_ACCENT: Record<KnowledgeBase["source"], { dot: string; label: string }> = {
-  shopify: { dot: "bg-emerald-500", label: "text-foreground/70" },
-  user: { dot: "bg-sky-500", label: "text-foreground/70" },
-}
-
 function buildMemoryStackGroups(
   knowledgeBases: KnowledgeBase[],
   articles: ArticleWithBase[],
@@ -67,16 +62,14 @@ function MemoryStackColumn({
   onDeleteKb: (id: string) => void
   onSelectArticle: (id: string) => void
 }) {
-  const accent = SOURCE_ACCENT[group.source]
   const Icon = group.source === "shopify" ? ShoppingBag : BookOpen
 
   return (
     <section className="flex min-w-0 flex-col">
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`size-1.5 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
           <Icon className="size-3.5 shrink-0 text-foreground/40" aria-hidden />
-          <span className={`truncate text-xs font-semibold uppercase tracking-wide ${accent.label}`}>
+          <span className="truncate font-sans text-xs font-semibold uppercase tracking-wide text-foreground/70">
             {group.label}
           </span>
           <span className="text-xs font-medium tabular-nums text-foreground/35">{group.articles.length}</span>
@@ -133,11 +126,12 @@ function NewFolderStackCard({ onCreateKb }: { onCreateKb: () => void }) {
   return (
     <section className="flex min-w-0 flex-col">
       <div className="mb-3 h-7 px-1" aria-hidden />
+      <div className="pt-2.5">
       <button
         type="button"
         onClick={onCreateKb}
         aria-label="New folder"
-        className="group flex h-72 flex-col rounded-3xl border border-dashed border-foreground/[0.12] bg-card/35 px-5 py-5 text-left shadow-sm transition-colors hover:border-foreground/[0.22] hover:bg-card/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70"
+        className="group flex h-72 w-full flex-col rounded-3xl border border-dashed border-foreground/[0.12] bg-card/35 px-5 py-5 text-left shadow-sm transition-colors hover:border-foreground/[0.22] hover:bg-card/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70"
       >
         <div className="flex items-center gap-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35 transition-colors group-hover:text-foreground/60">
@@ -164,6 +158,7 @@ function NewFolderStackCard({ onCreateKb }: { onCreateKb: () => void }) {
           <span className="h-5 w-10 rounded-full border border-foreground/[0.06] bg-foreground/[0.03]" />
         </div>
       </button>
+      </div>
     </section>
   )
 }

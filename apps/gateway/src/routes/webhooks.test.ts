@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
-import express from 'express';
-import { createHmac } from 'crypto';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
   createTestIntegration,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
+import {
+  clearMockLogger,
+  createWebhookRouterApp,
+  hmacSha256,
+  hmacSha256Base64,
+} from '../test-fixtures/webhook-route-test-helpers.js';
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
@@ -61,34 +65,12 @@ vi.mock('../storage/blob.js', () => ({
 // Import the router after mocks are hoisted
 import webhookRoutes from './webhooks.js';
 
-function createApp() {
-  const app = express();
-  app.use(
-    express.json({
-      verify: (req, _res, buf) => {
-        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
-      },
-    }),
-  );
-  app.use(express.urlencoded({ extended: false }));
-  app.use('/webhooks', webhookRoutes);
-  return app;
-}
-
-function hmacSha256(secret: string, body: string) {
-  return `sha256=${createHmac('sha256', secret).update(body).digest('hex')}`;
-}
-
-function hmacSha256Base64(secret: string, body: Buffer | string) {
-  return createHmac('sha256', secret).update(body).digest('base64');
-}
-
 const META_SECRET = process.env.META_APP_SECRET!;
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN!;
 const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-const app = createApp();
+const app = createWebhookRouterApp(webhookRoutes, { urlencoded: true });
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -99,10 +81,7 @@ beforeEach(async () => {
   getSpectrumAppForIntegrationSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
   spectrumWebhookSpy.mockResolvedValue({ status: 200, headers: {}, body: new Uint8Array() });
   uploadInboundAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
-  mockLogger.debug.mockClear();
-  mockLogger.error.mockClear();
-  mockLogger.info.mockClear();
-  mockLogger.warn.mockClear();
+  clearMockLogger(mockLogger);
 });
 
 afterEach(async () => {

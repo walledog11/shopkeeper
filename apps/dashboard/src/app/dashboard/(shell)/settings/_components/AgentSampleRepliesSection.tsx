@@ -13,7 +13,7 @@ export function AgentSampleRepliesSection({ controller }: { controller: AgentTab
   const sampleReplies = settingsState.sampleReplies ?? []
 
   return (
-    <SectionCard title="Sample replies" description="Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages.">
+    <SectionCard title="Sample replies" description="Show the agent up to 10 example replies. It will match their style and tone in customer-facing messages." variant="board">
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-foreground/35">Add a tag to apply a reply only to matching tickets. Leave blank to make it always eligible.</p>

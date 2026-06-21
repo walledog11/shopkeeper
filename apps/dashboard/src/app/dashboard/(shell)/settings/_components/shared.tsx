@@ -83,17 +83,31 @@ export function ToggleRow({
   )
 }
 
-export function SectionCard({ title, description, children }: {
+export function SectionCard({ title, description, children, variant = "settings" }: {
   title: string
   description: string
   children: ReactNode
+  variant?: "settings" | "board"
 }) {
+  const shellClassName = variant === "board"
+    ? "rounded-3xl border border-border bg-card px-5 py-5 shadow-sm sm:px-5 sm:py-5 space-y-5"
+    : "bg-card rounded-xl border border-border overflow-hidden p-5 sm:p-6 space-y-5"
+  const titleClassName = variant === "board"
+    ? "text-sm font-semibold text-foreground/90"
+    : "text-sm font-semibold text-foreground/75"
+  const descriptionClassName = variant === "board"
+    ? "text-xs text-foreground/40 mt-1 leading-relaxed max-w-prose"
+    : "text-xs text-foreground/35 mt-1 leading-relaxed max-w-prose"
+  const showHeader = variant !== "board"
+
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden p-5 sm:p-6 space-y-5">
-      <div>
-        <h2 className="text-sm font-semibold text-foreground/75">{title}</h2>
-        <p className="text-xs text-foreground/35 mt-1 leading-relaxed max-w-prose">{description}</p>
-      </div>
+    <div className={shellClassName}>
+      {showHeader && (
+        <div>
+          <h2 className={titleClassName}>{title}</h2>
+          <p className={descriptionClassName}>{description}</p>
+        </div>
+      )}
       <div>{children}</div>
     </div>
   )

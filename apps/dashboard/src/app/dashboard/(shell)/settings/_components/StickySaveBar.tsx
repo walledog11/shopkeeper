@@ -10,8 +10,8 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
   if (!isDirty && !saved && !error && !staleVersion) return null
 
   return (
-    <div className="sticky bottom-0 -mx-4 sm:-mx-8 px-4 sm:px-8 pt-3 pb-4 z-10">
-      <div className="rounded-md border border-foreground/[0.10] bg-[#0c0c0c]/95 backdrop-blur-md shadow-[0_-4px_24px_rgba(0,0,0,0.5)] px-4 py-3 flex items-center justify-between gap-3">
+    <div className="sticky bottom-0 z-10 pt-3 pb-4">
+      <div className="flex items-center justify-between gap-3 rounded-[22px] border border-foreground/[0.10] bg-card/85 px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.34),0_-18px_50px_rgba(0,0,0,0.35)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/72">
         <div className="flex items-center gap-2 min-w-0">
           {staleVersion ? (
             <p className="text-xs text-amber-300 truncate">Settings were updated in another tab. Reset to load the latest, then reapply your changes.</p>

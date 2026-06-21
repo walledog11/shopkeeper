@@ -16,22 +16,17 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
   const refundCap = formatRefundCapSummary(settings)
 
   return (
-    <div className="relative [&>p]:relative">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-12 -right-10 size-52 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.18)_0%,transparent_65%)]"
-      />
-
-      <div className="relative flex items-center gap-2">
-        <span className="inline-flex size-5 items-center justify-center rounded bg-amber-400 text-black">
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300">
           <Sparkles className="size-3" />
         </span>
-        <span className="text-[10.5px] font-bold tracking-[0.07em] text-amber-400 font-mono">
+        <span className="truncate text-[10.5px] font-bold uppercase tracking-[0.07em] text-amber-300">
           {settings.agentName.toUpperCase()}&apos;S SETUP FOR {orgName.toUpperCase()}
         </span>
       </div>
 
-      <p className="mt-2.5 text-[14px] leading-relaxed text-foreground/80">
+      <p className="mt-2.5 max-w-5xl text-sm leading-relaxed text-foreground/75">
         I&apos;m set to{" "}
         <Pill href={agentConfigureHref("autonomy")}>
           {settings.autoPlanOnOpen ? "draft a plan the moment a ticket opens" : "wait for you to ask before planning"}
@@ -51,7 +46,7 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
 }
 
 const PILL_CLASS =
-  "inline-flex items-baseline rounded border border-foreground/[0.12] bg-foreground/[0.06] px-1.5 py-px align-baseline text-[13.5px] font-medium text-white transition-colors hover:bg-foreground/[0.10]"
+  "inline-flex items-baseline rounded-md border border-foreground/[0.10] bg-foreground/[0.05] px-1.5 py-px align-baseline text-[13px] font-medium text-foreground/90 transition-colors hover:bg-foreground/[0.10] hover:text-white"
 
 function Pill({ href, children }: { href: string; children: React.ReactNode }) {
   return (

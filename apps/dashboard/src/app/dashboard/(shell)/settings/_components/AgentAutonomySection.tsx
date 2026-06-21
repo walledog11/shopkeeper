@@ -123,6 +123,7 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
       <SectionCard
         title="Trust level"
         description={`How much ${settingsState.agentName} can do before asking you. Most stores stay on Ask first.`}
+        variant="board"
       >
         <div className="space-y-6">
           <div role="radiogroup" aria-label="Trust level" className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">

@@ -44,6 +44,97 @@ export const PLAN_INITIAL_MAX_TOKENS = 1024;
 /** Replan may include send_reply body text alongside mutative tools. */
 export const PLAN_REPLAN_MAX_TOKENS = 2048;
 
+type PlannerUsageTotals = ReturnType<typeof createModelUsageMetrics>;
+
+async function runPlannerModelCall(input: {
+  ctx: AgentContext;
+  usageTotals: PlannerUsageTotals;
+  model: string;
+  maxTokens: number;
+  systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
+  messages: Anthropic.MessageParam[];
+  tools: Anthropic.Tool[];
+  phase: string;
+  attempt?: number;
+  toolChoice?: Anthropic.Messages.MessageCreateParams["tool_choice"];
+  selectLoggedToolBlocks?: (toolBlocks: Anthropic.ToolUseBlock[]) => Anthropic.ToolUseBlock[];
+}): Promise<{
+  response: Anthropic.Message;
+  toolBlocks: Anthropic.ToolUseBlock[];
+  usage: ReturnType<typeof recordModelUsage>;
+}> {
+  const {
+    ctx,
+    usageTotals,
+    model,
+    maxTokens,
+    systemPromptBlocks,
+    messages,
+    tools,
+    phase,
+    attempt,
+    toolChoice,
+    selectLoggedToolBlocks,
+  } = input;
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: maxTokens,
+    system: systemPromptBlocks,
+    messages,
+    tools,
+    ...(toolChoice ? { tool_choice: toolChoice } : {}),
+  });
+  const toolBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+  const loggedToolBlocks = selectLoggedToolBlocks ? selectLoggedToolBlocks(toolBlocks) : toolBlocks;
+  const usage = recordModelUsage(usageTotals, response);
+  await recordSpend(ctx.orgId, usage, model);
+  logger.info({
+    orgId: ctx.orgId,
+    threadId: ctx.thread.id,
+    phase,
+    ...(attempt === undefined ? {} : { attempt }),
+    model,
+    stopReason: response.stop_reason,
+    tools: loggedToolBlocks.map((block) => block.name),
+    usage,
+    usageTotals,
+  }, "[agent:plan] model call");
+  return { response, toolBlocks, usage };
+}
+
+function pendingToolResultsForLastAssistantMessage(
+  planMessages: Anthropic.MessageParam[],
+  content = "Not executed during planning.",
+): Anthropic.ToolResultBlockParam[] {
+  const lastMessage = planMessages[planMessages.length - 1];
+  const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
+    ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
+        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+      )
+    : [];
+
+  return pendingToolUse.map((block) => ({
+    type: "tool_result" as const,
+    tool_use_id: block.id,
+    content,
+  }));
+}
+
+function appendPendingToolResults(
+  planMessages: Anthropic.MessageParam[],
+  content = "Not executed during planning.",
+): Anthropic.MessageParam[] {
+  const pendingToolResults = pendingToolResultsForLastAssistantMessage(planMessages, content);
+  if (pendingToolResults.length === 0) return [...planMessages];
+  return [
+    ...planMessages,
+    {
+      role: "user",
+      content: pendingToolResults,
+    },
+  ];
+}
+
 async function runMutativeReplan(input: {
   ctx: AgentContext;
   resolvedSettings: ReturnType<typeof resolveAgentSettings>;
@@ -80,26 +171,16 @@ async function runMutativeReplan(input: {
     replanTools: Anthropic.Tool[],
     phase: "after_read_results" | "replan_retry" | "mutative_context",
   ) => {
-    const response = await anthropic.messages.create({
+    const { response, toolBlocks } = await runPlannerModelCall({
+      ctx,
+      usageTotals,
       model: replanModel,
-      max_tokens: PLAN_REPLAN_MAX_TOKENS,
-      system: systemPromptBlocks,
+      maxTokens: PLAN_REPLAN_MAX_TOKENS,
+      systemPromptBlocks,
       messages,
       tools: replanTools,
-    });
-    const toolBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
-    const usage = recordModelUsage(usageTotals, response);
-    await recordSpend(ctx.orgId, usage, replanModel);
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
       phase,
-      model: replanModel,
-      stopReason: response.stop_reason,
-      tools: toolBlocks.map((block) => block.name),
-      usage,
-      usageTotals,
-    }, "[agent:plan] model call");
+    });
     return { response, toolBlocks };
   };
 
@@ -120,11 +201,7 @@ async function runMutativeReplan(input: {
       {
         role: "user",
         content: [
-          ...replanBlocks.map((block) => ({
-            type: "tool_result" as const,
-            tool_use_id: block.id,
-            content: "Not executed during planning.",
-          })),
+          ...pendingToolResultsForLastAssistantMessage(planMessages),
           { type: "text" as const, text: REPLAN_RETRY_PROMPT },
         ],
       },
@@ -204,27 +281,16 @@ export async function planAgent(
   }, "[agent:plan] start");
 
   const initialModel = pickModel("plan_initial");
-  const response1 = await anthropic.messages.create({
+  const { response: response1, toolBlocks: blocks1 } = await runPlannerModelCall({
+    ctx,
+    usageTotals,
     model: initialModel,
-    max_tokens: PLAN_INITIAL_MAX_TOKENS,
-    system: systemPromptBlocks,
+    maxTokens: PLAN_INITIAL_MAX_TOKENS,
+    systemPromptBlocks,
     messages: baseMessages,
     tools: initialTools,
-  });
-
-  const blocks1 = response1.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-  const usage1 = recordModelUsage(usageTotals, response1);
-  await recordSpend(ctx.orgId, usage1, initialModel);
-  logger.info({
-    orgId: ctx.orgId,
-    threadId: ctx.thread.id,
     phase: "initial",
-    model: initialModel,
-    stopReason: response1.stop_reason,
-    tools: blocks1.map(b => b.name),
-    usage: usage1,
-    usageTotals,
-  }, "[agent:plan] model call");
+  });
   let rawToolCalls: RawToolCall[] = blocks1.map((b) => ({ id: b.id, name: b.name, input: b.input }));
 
   let planMessages: Anthropic.MessageParam[] = [
@@ -264,26 +330,16 @@ export async function planAgent(
       // Reads were context-redundant — re-ask with the mutative tools so the model
       // can pick the action it skipped the read for. Still no send_reply (the
       // terminal reply-draft owns that), so it can't bail to a bare reply here.
-      const retryResponse = await anthropic.messages.create({
+      const { response: retryResponse, toolBlocks: retryBlocks } = await runPlannerModelCall({
+        ctx,
+        usageTotals,
         model: initialModel,
-        max_tokens: PLAN_INITIAL_MAX_TOKENS,
-        system: systemPromptBlocks,
+        maxTokens: PLAN_INITIAL_MAX_TOKENS,
+        systemPromptBlocks,
         messages: baseMessages,
         tools: tools.filter((tool) => tool.name !== "send_reply"),
-      });
-      const retryBlocks = retryResponse.content.filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use");
-      const retryUsage = recordModelUsage(usageTotals, retryResponse);
-      await recordSpend(ctx.orgId, retryUsage, initialModel);
-      logger.info({
-        orgId: ctx.orgId,
-        threadId: ctx.thread.id,
         phase: "initial_full_tools_retry",
-        model: initialModel,
-        stopReason: retryResponse.stop_reason,
-        tools: retryBlocks.map((block) => block.name),
-        usage: retryUsage,
-        usageTotals,
-      }, "[agent:plan] model call");
+      });
 
       activeReadBlocks = retryBlocks.filter((block) => TOOL_CATEGORIES[block.name] === "read");
       activeRawToolCalls = retryBlocks.map((block) => ({ id: block.id, name: block.name, input: block.input }));
@@ -379,27 +435,9 @@ export async function planAgent(
       threadId: ctx.thread.id,
     }, "[agent:plan] mutative intent without action tools — running context replan");
 
-    const lastPlanMessage = planMessages[planMessages.length - 1];
-    const pendingToolUse = lastPlanMessage?.role === "assistant" && Array.isArray(lastPlanMessage.content)
-      ? (lastPlanMessage.content as Anthropic.ContentBlock[]).filter(
-          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-        )
-      : [];
-    if (pendingToolUse.length > 0) {
-      // Resolve the initial turn's tool_use before appending replan context, else
-      // the next model call ships an unpaired tool_use (400 tool_use without tool_result).
-      planMessages = [
-        ...planMessages,
-        {
-          role: "user",
-          content: pendingToolUse.map((b) => ({
-            type: "tool_result" as const,
-            tool_use_id: b.id,
-            content: "Not executed during planning.",
-          })),
-        },
-      ];
-    }
+    // Resolve the initial turn's tool_use before appending replan context, else
+    // the next model call ships an unpaired tool_use (400 tool_use without tool_result).
+    planMessages = appendPendingToolResults(planMessages);
     planMessages = [
       ...planMessages,
       { role: "user", content: synthesizeMutativeReplanContext(ctx) },
@@ -456,50 +494,26 @@ export async function planAgent(
     hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
 
     if (!hasEscalate) {
-      const lastMessage = planMessages[planMessages.length - 1];
-      const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
-        ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
-            (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-          )
-        : [];
-      const draftMessages: Anthropic.MessageParam[] = [...planMessages];
-      if (pendingToolUse.length > 0) {
-        draftMessages.push({
-          role: "user",
-          content: pendingToolUse.map((b) => ({
-            type: "tool_result" as const,
-            tool_use_id: b.id,
-            content: "Not executed during planning.",
-          })),
-        });
-      }
+      const draftMessages: Anthropic.MessageParam[] = appendPendingToolResults(planMessages);
       draftMessages.push({ role: "user", content: ESCALATION_DRAFT_PROMPT });
 
       await enforceSpendCap(ctx.orgId, resolvedSettings);
       const draftModel = pickModel("reply_draft");
-      const draftResponse = await anthropic.messages.create({
+      const { toolBlocks } = await runPlannerModelCall({
+        ctx,
+        usageTotals,
         model: draftModel,
-        max_tokens: PLAN_REPLAN_MAX_TOKENS,
-        system: systemPromptBlocks,
+        maxTokens: PLAN_REPLAN_MAX_TOKENS,
+        systemPromptBlocks,
         messages: draftMessages,
         tools: [escalateTool],
-        tool_choice: { type: "tool", name: "escalate_to_human" },
+        toolChoice: { type: "tool", name: "escalate_to_human" },
+        phase: "escalation_draft",
+        selectLoggedToolBlocks: (blocks) => blocks.filter((b) => b.name === "escalate_to_human"),
       });
-      const draftBlocks = draftResponse.content.filter(
+      const draftBlocks = toolBlocks.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "escalate_to_human",
       );
-      const draftUsage = recordModelUsage(usageTotals, draftResponse);
-      await recordSpend(ctx.orgId, draftUsage, draftModel);
-      logger.info({
-        orgId: ctx.orgId,
-        threadId: ctx.thread.id,
-        phase: "escalation_draft",
-        model: draftModel,
-        stopReason: draftResponse.stop_reason,
-        tools: draftBlocks.map((b) => b.name),
-        usage: draftUsage,
-        usageTotals,
-      }, "[agent:plan] model call");
       rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));
       ranEscalationDraft = true;
       hasEscalate = true;
@@ -523,21 +537,12 @@ export async function planAgent(
     && !shouldSkipReplyDraftForWatchTier(resolvedSettings, ctx)
     && !shouldSkipReplyDraftForMutativeIntent(ctx, rawToolCalls)
   ) {
-    const lastMessage = planMessages[planMessages.length - 1];
-    const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
-      ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
-          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-        )
-      : [];
     const draftMessages: Anthropic.MessageParam[] = [...planMessages];
-    if (pendingToolUse.length > 0) {
+    const pendingToolResults = pendingToolResultsForLastAssistantMessage(planMessages);
+    if (pendingToolResults.length > 0) {
       draftMessages.push({
         role: "user",
-        content: pendingToolUse.map((b) => ({
-          type: "tool_result" as const,
-          tool_use_id: b.id,
-          content: "Not executed during planning.",
-        })),
+        content: pendingToolResults,
       });
       draftMessages.push({ role: "user", content: replyDraftPrompt(resolvedSettings) });
     } else if (shouldPreferBrandVoiceOrderStatusReply(ctx, instruction, resolvedSettings)) {
@@ -553,30 +558,24 @@ export async function planAgent(
     const draftModel = pickModel("reply_draft");
     let draftBlocks: Anthropic.ToolUseBlock[] = [];
     for (let attempt = 0; attempt < 2 && draftBlocks.length === 0; attempt += 1) {
-      const draftResponse = await anthropic.messages.create({
+      const { toolBlocks } = await runPlannerModelCall({
+        ctx,
+        usageTotals,
         model: draftModel,
-        max_tokens: PLAN_REPLAN_MAX_TOKENS,
-        system: systemPromptBlocks,
+        maxTokens: PLAN_REPLAN_MAX_TOKENS,
+        systemPromptBlocks,
         messages: draftMessages,
         tools: [sendReplyTool],
-        tool_choice: { type: "tool", name: "send_reply" },
-      });
-      draftBlocks = draftResponse.content.filter(
-        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
-      ).filter((block) => sendReplyHasText({ id: block.id, name: block.name, input: block.input }));
-      const draftUsage = recordModelUsage(usageTotals, draftResponse);
-      await recordSpend(ctx.orgId, draftUsage, draftModel);
-      logger.info({
-        orgId: ctx.orgId,
-        threadId: ctx.thread.id,
+        toolChoice: { type: "tool", name: "send_reply" },
         phase: "reply_draft",
         attempt: attempt + 1,
-        model: draftModel,
-        stopReason: draftResponse.stop_reason,
-        tools: draftBlocks.map((b) => b.name),
-        usage: draftUsage,
-        usageTotals,
-      }, "[agent:plan] model call");
+        selectLoggedToolBlocks: (blocks) => blocks.filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
+        ).filter((block) => sendReplyHasText({ id: block.id, name: block.name, input: block.input })),
+      });
+      draftBlocks = toolBlocks.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "send_reply",
+      ).filter((block) => sendReplyHasText({ id: block.id, name: block.name, input: block.input }));
     }
     if (draftBlocks.length > 0) {
       rawToolCalls.push(...draftBlocks.map((b) => ({ id: b.id, name: b.name, input: b.input })));

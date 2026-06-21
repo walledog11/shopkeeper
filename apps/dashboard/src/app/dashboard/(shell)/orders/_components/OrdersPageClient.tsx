@@ -9,11 +9,12 @@ import { isShopifyIntegrationActive, isShopifyOrdersUnavailable } from "@/lib/in
 import { INTEGRATIONS_SWR_KEY, useIntegrations } from "@/hooks/useIntegrations"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
 import CustomersPanel from "./customers/CustomersPanel"
+import NeedsYouSection from "./NeedsYouSection"
 import { OrdersBoard, OrdersSearchResults, type OrderColumnState, type OrdersBoardState } from "./OrdersBoard"
 import {
   ORDER_BOARD_COLUMNS,
   classifyOrder,
-  type OrderColumnId,
+  type BoardColumnId,
   type OrderRow,
 } from "./orders-board-model"
 import { fetchOrdersPage, type OrdersResponse } from "./order-requests"
@@ -36,7 +37,7 @@ async function fetchColumnPage(pageInfo: string) {
 }
 
 function useOrderColumn(
-  columnId: OrderColumnId,
+  columnId: BoardColumnId,
   enabled: boolean,
   onLoaded: (response: OrdersResponse) => void,
 ): OrderColumnState {
@@ -58,6 +59,7 @@ function useOrderColumn(
     error: list.error,
     hasMore: Boolean(list.nextPageInfo),
     isLoading: list.isLoading,
+    isValidating: list.isValidating,
     isLoadingMore: list.isLoadingMore,
     onLoadMore: list.loadMore,
     onRetry: () => { void list.mutate() },
@@ -91,11 +93,10 @@ export default function OrdersPageClient() {
   const needsFulfillment = useOrderColumn("needs_fulfillment", boardEnabled, onLoaded)
   const unpaid = useOrderColumn("unpaid", boardEnabled, onLoaded)
   const fulfilled = useOrderColumn("fulfilled", boardEnabled, onLoaded)
-  const refunded = useOrderColumn("refunded", boardEnabled, onLoaded)
 
   const columns: OrdersBoardState = useMemo(
-    () => ({ needs_fulfillment: needsFulfillment, unpaid, fulfilled, refunded }),
-    [needsFulfillment, unpaid, fulfilled, refunded],
+    () => ({ needs_fulfillment: needsFulfillment, unpaid, fulfilled }),
+    [needsFulfillment, unpaid, fulfilled],
   )
 
   const search = useCursorListState<OrderRow, OrdersResponse>({
@@ -155,11 +156,11 @@ export default function OrdersPageClient() {
       <div className="relative z-20 shrink-0 px-3 pb-3 pt-3">
         <div className={GLASS_SHELL_CLASS}>
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <div className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 ${GLASS_CONTROL_CLASS}`}>
+            <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
               <Search className="size-3.5 shrink-0 text-foreground/25" />
               <input
                 aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
-                placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search orders, customers, #numbers…"}
+                placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search orders…"}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground/70 outline-none placeholder:text-foreground/30"
@@ -171,7 +172,7 @@ export default function OrdersPageClient() {
               )}
             </div>
 
-            <div role="tablist" aria-label="Shop sections" className={`flex shrink-0 items-center gap-1 rounded-full px-1 py-1 ${GLASS_CONTROL_CLASS}`}>
+            <div role="tablist" aria-label="Shop sections" className={`flex h-9 items-center gap-1 rounded-full px-1 md:shrink-0 ${GLASS_CONTROL_CLASS}`}>
               {([
                 { id: "orders", label: "Orders" },
                 { id: "customers", label: "Customers" },
@@ -184,7 +185,7 @@ export default function OrdersPageClient() {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setShopTab(tab.id)}
-                    className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
+                    className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
                       active ? "bg-foreground/[0.12] text-white" : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
                     }`}
                   >
@@ -218,7 +219,10 @@ export default function OrdersPageClient() {
               />
             </>
           ) : (
-            <OrdersBoard columns={columns} shop={shop} />
+            <>
+              <NeedsYouSection enabled={boardEnabled} shop={shop} />
+              <OrdersBoard columns={columns} shop={shop} />
+            </>
           )}
         </div>
       </div>

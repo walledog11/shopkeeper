@@ -1,5 +1,6 @@
 "use client"
 
+import type { ReactNode } from "react"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import {
   AgentAutonomySection,
@@ -10,7 +11,6 @@ import {
   AgentSampleRepliesSection,
   StickySaveBar,
 } from "./agent-tab-sections"
-import { SettingsDisclosure } from "./shared"
 import { useAgentTabState } from "./useAgentTabState"
 import { TelegramApproveSection } from "./TelegramApproveSection"
 import { WhenOnDutySection } from "./WhenOnDutySection"
@@ -22,39 +22,54 @@ interface Props {
   voiceProposal: VoiceProposal | null
 }
 
+interface ConfigureColumnProps {
+  id: string
+  children: ReactNode
+}
+
+function ConfigureColumn({ id, children }: ConfigureColumnProps) {
+  return (
+    <section id={id} className="scroll-mt-24 min-w-0">
+      <div className="space-y-3">
+        {children}
+      </div>
+    </section>
+  )
+}
+
 export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
-  const agentName = controller.settingsState.agentName
+  const { settingsState } = controller
+  const agentName = settingsState.agentName
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-foreground/80">Configure</h1>
-        <p className="text-sm text-foreground/35 mt-0.5 max-w-prose">
-          How much {agentName} can do alone, and when {agentName} is on duty. Everything else is optional.
-        </p>
+    <div className="min-w-0 space-y-6">
+      <div className="sr-only">
+        <h1>Configure {agentName}</h1>
+        <p>Trust level, duty hours, voice, and operating limits.</p>
       </div>
 
-      <AgentAutonomySection controller={controller} />
-      <TelegramApproveSection />
-      <WhenOnDutySection controller={controller} />
+      <div className="grid grid-cols-1 gap-x-6 gap-y-9 lg:grid-cols-2 2xl:grid-cols-3">
+        <ConfigureColumn id="trust">
+          <AgentAutonomySection controller={controller} />
+          <TelegramApproveSection />
+        </ConfigureColumn>
 
-      <SettingsDisclosure
-        title="Voice & style"
-        description="Name, brand voice, sample replies, and reply language."
-      >
-        <AgentIdentitySection controller={controller} />
-        <AgentSampleRepliesSection controller={controller} />
-        <AgentResponseSection controller={controller} />
-      </SettingsDisclosure>
+        <ConfigureColumn id="duty">
+          <WhenOnDutySection controller={controller} />
+        </ConfigureColumn>
 
-      <SettingsDisclosure
-        title="Behavior & limits"
-        description="Auto-planning, default instructions, and hard spending caps."
-      >
-        <AgentDefaultBehaviorSection controller={controller} />
-        <AgentGuardrailsSection controller={controller} />
-      </SettingsDisclosure>
+        <ConfigureColumn id="voice">
+          <AgentIdentitySection controller={controller} />
+          <AgentSampleRepliesSection controller={controller} />
+          <AgentResponseSection controller={controller} />
+        </ConfigureColumn>
+
+        <ConfigureColumn id="limits">
+          <AgentDefaultBehaviorSection controller={controller} />
+          <AgentGuardrailsSection controller={controller} />
+        </ConfigureColumn>
+      </div>
 
       <StickySaveBar controller={controller} />
     </div>

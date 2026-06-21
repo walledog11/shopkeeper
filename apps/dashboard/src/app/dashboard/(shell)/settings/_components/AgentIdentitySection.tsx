@@ -9,7 +9,7 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
   const { settingsState, dispatch, proposal, resolveVoiceProposal, voiceBusy } = controller
 
   return (
-    <SectionCard title="Identity" description="How the agent presents itself and writes replies.">
+    <SectionCard title="Identity" description="How the agent presents itself and writes replies." variant="board">
       <div className="space-y-5">
         <LabeledTextInput
           label="Agent name"

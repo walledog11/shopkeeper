@@ -53,6 +53,7 @@ export default function DashboardHomeClient({ userName, initialSummary }: Props)
             <NeedsYou
               items={data.needsYouItems}
               agentName={data.agentName}
+              isLoading={data.isNeedsYouLoading}
               onApproved={data.refreshHomeSummary}
             />
 

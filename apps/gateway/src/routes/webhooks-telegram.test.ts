@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
-import express from 'express';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
   createTestOrg,
@@ -10,6 +9,10 @@ import {
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
 import { updateContext, getContext } from '../operator-context.js';
+import {
+  clearMockLogger,
+  createRegisteredWebhookRouterApp,
+} from '../test-fixtures/webhook-route-test-helpers.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 // In-memory backing store for the ioredis mock so the /start bind flow can
@@ -98,24 +101,9 @@ vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
 
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 
-function createApp() {
-  const app = express();
-  app.use(
-    express.json({
-      verify: (req, _res, buf) => {
-        (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
-      },
-    }),
-  );
-  const router = express.Router();
-  registerTelegramWebhookRoutes(router);
-  app.use('/webhooks', router);
-  return app;
-}
-
 const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!;
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-const app = createApp();
+const app = createRegisteredWebhookRouterApp(registerTelegramWebhookRoutes);
 
 // Wait until the fire-and-forget reply lands. The route does res.send before
 // doing async work, so supertest resolves before sendMessage is called.
@@ -148,10 +136,7 @@ beforeEach(async () => {
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
   });
-  mockLogger.debug.mockClear();
-  mockLogger.error.mockClear();
-  mockLogger.info.mockClear();
-  mockLogger.warn.mockClear();
+  clearMockLogger(mockLogger);
 });
 
 afterEach(async () => {

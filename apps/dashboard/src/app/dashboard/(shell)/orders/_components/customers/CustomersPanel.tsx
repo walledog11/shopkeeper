@@ -61,12 +61,12 @@ export default function CustomersPanel({ query }: { query: string }) {
     data,
     handleCustomerUpdated,
     isLoading,
+    isValidating,
     isLoadingMore,
     loadMore,
     loadMoreError,
     nextPageInfo,
     openDrawer,
-    pages,
     selectedCustomer,
     shop,
   } = useCustomersPanelState(query)
@@ -80,7 +80,7 @@ export default function CustomersPanel({ query }: { query: string }) {
           </p>
         )}
 
-        {isLoading && pages.length === 0 ? (
+        {(isLoading || isValidating) && allCustomers.length === 0 ? (
           <CustomerListSkeleton />
         ) : allCustomers.length === 0 ? (
           <CustomersEmptyState isSearch={isSearchMode} query={query} />

@@ -11,10 +11,17 @@ export interface OrderRow {
 
 export type OrderColumnId = "needs_fulfillment" | "unpaid" | "fulfilled" | "refunded"
 
+/**
+ * Columns actually rendered on the board. `refunded` stays in OrderColumnId as a
+ * classify-only bucket (it keeps refunded/voided orders out of the other
+ * columns) but is no longer a rendered column — return requests are surfaced
+ * from support threads, not the refunds query.
+ */
+export type BoardColumnId = Exclude<OrderColumnId, "refunded">
+
 export interface OrderColumnConfig {
-  id: OrderColumnId
+  id: BoardColumnId
   label: string
-  description: string
   emptyTitle: string
   emptyBody: string
   /** Query string appended to /api/orders for this column's initial fetch. */
@@ -24,8 +31,7 @@ export interface OrderColumnConfig {
 export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
   {
     id: "needs_fulfillment",
-    label: "Needs fulfillment",
-    description: "Paid orders waiting to ship.",
+    label: "Unfulfilled",
     emptyTitle: "All shipped",
     emptyBody: "Paid orders that still need fulfillment will land here.",
     query: "fulfillment_status=unfulfilled",
@@ -33,7 +39,6 @@ export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
   {
     id: "unpaid",
     label: "Unpaid",
-    description: "Payment pending or authorized.",
     emptyTitle: "Nothing unpaid",
     emptyBody: "Orders awaiting payment capture will appear here.",
     query: "financial_status=unpaid",
@@ -41,18 +46,9 @@ export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
   {
     id: "fulfilled",
     label: "Fulfilled",
-    description: "Shipped and on the way.",
     emptyTitle: "Nothing shipped yet",
     emptyBody: "Fulfilled orders will appear here for reference.",
     query: "fulfillment_status=shipped",
-  },
-  {
-    id: "refunded",
-    label: "Refunded",
-    description: "Refunded or voided orders.",
-    emptyTitle: "No refunds",
-    emptyBody: "Refunded and voided orders will appear here.",
-    query: "financial_status=refunded",
   },
 ]
 

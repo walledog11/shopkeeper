@@ -27,7 +27,12 @@ interface Options {
 }
 
 export function useHomeData({ initialSummary }: Options) {
-  const { data: summaryData, mutate: mutateSummary } = useSWR<HomeSummary>(
+  const {
+    data: summaryData,
+    isLoading: isSummaryLoading,
+    isValidating: isSummaryValidating,
+    mutate: mutateSummary,
+  } = useSWR<HomeSummary>(
     "/api/home-summary",
     fetcher,
     {
@@ -47,6 +52,7 @@ export function useHomeData({ initialSummary }: Options) {
   const hasTelegramBound = telegramData?.connected ?? false
 
   const summary = summaryData ?? createEmptyHomeSummary()
+  const isInitialSummaryLoading = isSummaryLoading || (summaryData === initialSummary && isSummaryValidating)
   const home = useMemo(() => buildHomeSummaryView(summary), [summary])
   const walkthroughItems = useMemo(
     () => selectWalkthroughItems(summary.needsAttention),
@@ -100,6 +106,7 @@ export function useHomeData({ initialSummary }: Options) {
     hasTelegramBound,
     workflowSteps,
     agentName,
+    isNeedsYouLoading: home.needsYouItems.length === 0 && isInitialSummaryLoading,
     refreshHomeSummary,
   }
 }

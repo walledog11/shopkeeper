@@ -1,16 +1,12 @@
 "use client"
 
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentType } from "react"
+import { useState, type ComponentType } from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowUpRight,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   CreditCard,
   ExternalLink,
-  Layers,
-  List,
   Loader2,
   MessageSquarePlus,
   Package,
@@ -18,10 +14,10 @@ import {
   Truck,
   User,
 } from "lucide-react"
-import { LazyMotion, domMax, m, useMotionValue, useTransform } from "motion/react"
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
-import { FLY_OFF, STACK_DEPTH, STACK_MARGIN_TOP } from "@/app/dashboard/_components/home/needs-you-motion"
-import { SwipeCard, type SwipeCardHandle } from "@/app/dashboard/_components/home/NeedsYouSwipeCard"
+import { BoardColumnShell } from "@/app/dashboard/_components/board/BoardColumnShell"
+import { BoardLoadMoreButton } from "@/app/dashboard/_components/board/BoardLoadMoreButton"
+import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
+import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import { formatRelativeTime, formatShortDate } from "@/lib/format/date"
 import {
@@ -33,36 +29,32 @@ import {
   fulfillmentPill,
   lineItemsSummary,
   orderItemCount,
+  type BoardColumnId,
   type OrderColumnId,
   type OrderRow,
   type PillTone,
 } from "./orders-board-model"
 import { startOrderSupportThread } from "./order-requests"
+import { ReturnRequestsSection } from "./NeedsYouSection"
 
 export interface OrderColumnState {
   entries: OrderRow[]
   error: unknown
   hasMore: boolean
   isLoading: boolean
+  isValidating: boolean
   isLoadingMore: boolean
   onLoadMore: () => void
   onRetry: () => void
 }
 
-export type OrdersBoardState = Record<OrderColumnId, OrderColumnState>
+export type OrdersBoardState = Record<BoardColumnId, OrderColumnState>
 
 const COLUMN_ICON: Record<OrderColumnId, ComponentType<{ className?: string }>> = {
   needs_fulfillment: Package,
   unpaid: CreditCard,
   fulfilled: Truck,
   refunded: RotateCcw,
-}
-
-const COLUMN_DOT: Record<OrderColumnId, string> = {
-  needs_fulfillment: "bg-amber-500",
-  unpaid: "bg-rose-500",
-  fulfilled: "bg-emerald-500",
-  refunded: "bg-foreground/30",
 }
 
 const ORDER_TONE: Record<OrderColumnId, { icon: string; border: string }> = {
@@ -333,15 +325,14 @@ function OrderDetailDialog({
   onClose: () => void
 }) {
   return (
-    <Dialog open={Boolean(order)} onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent
-        showCloseButton
-        className="flex h-[86vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-background p-0 shadow-xl sm:max-w-2xl lg:max-w-3xl"
-      >
-        <DialogTitle className="sr-only">Order detail</DialogTitle>
-        {order ? <OrderDetail order={order} shop={shop} onClose={onClose} /> : null}
-      </DialogContent>
-    </Dialog>
+    <DashboardDetailDialog
+      open={Boolean(order)}
+      title="Order detail"
+      maxWidthClassName="sm:max-w-2xl lg:max-w-3xl"
+      onClose={onClose}
+    >
+      {order ? <OrderDetail order={order} shop={shop} onClose={onClose} /> : null}
+    </DashboardDetailDialog>
   )
 }
 
@@ -401,20 +392,6 @@ function OrderColumnError({ onRetry }: { onRetry: () => void }) {
   )
 }
 
-function LoadMoreButton({ isLoadingMore, onLoadMore }: { isLoadingMore: boolean; onLoadMore: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onLoadMore}
-      disabled={isLoadingMore}
-      className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-foreground/40 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/65 disabled:opacity-40"
-    >
-      {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
-      {isLoadingMore ? "Loading…" : "Load more"}
-    </button>
-  )
-}
-
 // ── Swipe deck ────────────────────────────────────────────────────────────────
 
 function OrderStackDeck({
@@ -426,150 +403,27 @@ function OrderStackDeck({
   onExpand: () => void
   onOpenOrder: (order: OrderRow) => void
 }) {
-  const idsKey = orders.map((order) => order.id).join("|")
-  const [currentState, setCurrentState] = useState<{ currentId: number | null; idsKey: string }>(() => ({
-    currentId: orders[0]?.id ?? null,
-    idsKey,
-  }))
-  const [peekDirection, setPeekDirection] = useState<1 | -1>(1)
-  const [frontHeight, setFrontHeight] = useState(0)
-  const frontCardRef = useRef<HTMLDivElement>(null)
-  const swipeRef = useRef<SwipeCardHandle>(null)
-  const stackDragX = useMotionValue(0)
-  const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / FLY_OFF, 1))
-  const peekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * (1 - progress))
-  const peekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * (1 - progress))
-  const peekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * (1 - progress))
-  const peekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * (1 - progress))
-  const peekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity) + STACK_DEPTH.opacity * progress)
-  const secondPeekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * 2 * (1 - progress * 0.55))
-  const secondPeekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * 2 * (1 - progress * 0.55))
-  const secondPeekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * 2 * (1 - progress * 0.55))
-  const secondPeekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * 2 * (1 - progress * 0.55))
-  const secondPeekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity * 2) + STACK_DEPTH.opacity * progress)
-
-  useEffect(() => {
-    setCurrentState((previous) => {
-      if (previous.idsKey === idsKey) return previous
-      const stillPresent = Boolean(previous.currentId && orders.some((order) => order.id === previous.currentId))
-      return { currentId: stillPresent ? previous.currentId : orders[0]?.id ?? null, idsKey }
-    })
-  }, [orders, idsKey])
-
-  useEffect(() => {
-    const unsubscribe = stackDragX.on("change", value => {
-      if (Math.abs(value) < 1) return
-      const nextDirection = value < 0 ? 1 : -1
-      setPeekDirection(previous => previous === nextDirection ? previous : nextDirection)
-    })
-    return () => unsubscribe()
-  }, [stackDragX])
-
-  const n = orders.length
-  const mod = (value: number) => ((value % n) + n) % n
-  const activeIndex = n > 0 ? Math.max(0, orders.findIndex((order) => order.id === currentState.currentId)) : 0
-  const current = n > 0 ? orders[activeIndex] : null
-  const peekItem = n > 1 ? orders[mod(activeIndex + peekDirection)] : null
-
-  useLayoutEffect(() => {
-    stackDragX.set(0)
-  }, [current?.id, stackDragX])
-
-  useLayoutEffect(() => {
-    const node = frontCardRef.current
-    if (!node) return
-    const updateHeight = () => setFrontHeight(node.offsetHeight)
-    updateHeight()
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [current?.id])
-
-  if (n === 0 || !current) return null
-
-  if (n === 1) {
-    return <OrderCompactCard order={current} onOpen={() => onOpenOrder(current)} />
-  }
-
-  const commitNeighbor = (delta: 1 | -1) => {
-    setPeekDirection(delta)
-    setCurrentState(previous => ({ ...previous, currentId: orders[mod(activeIndex + delta)].id }))
-  }
-
-  const goToNeighbor = (delta: 1 | -1, flySign: 1 | -1) => {
-    setPeekDirection(delta)
-    void swipeRef.current?.flyOff(flySign).then(animated => {
-      if (animated) commitNeighbor(delta)
-    })
-  }
-
   const cardFor = (order: OrderRow, isPeekCard: boolean) => (
     <OrderCompactCard order={order} isPeek={isPeekCard} onOpen={onExpand} />
   )
-  const peekStyle = frontHeight > 0 ? { minHeight: frontHeight, maxHeight: frontHeight } : undefined
 
   return (
-    <div className="flex flex-col gap-2.5 pt-2.5" data-testid="orders-stack-deck">
-      <LazyMotion features={domMax}>
-        <div className="relative select-none">
-          <div className="relative" style={{ marginTop: STACK_MARGIN_TOP }}>
-            <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
-              {n > 2 && (
-                <m.div
-                  className="absolute inset-0"
-                  style={{ x: secondPeekX, y: secondPeekY, rotate: secondPeekRotate, scale: secondPeekScale, opacity: secondPeekOpacity, transformOrigin: "top center" }}
-                >
-                  <div className="h-full w-full rounded-2xl border border-border bg-card shadow-sm box-border" style={peekStyle} />
-                </m.div>
-              )}
-              {peekItem && (
-                <m.div
-                  className="absolute inset-0 z-[1]"
-                  style={{ x: peekX, y: peekY, rotate: peekRotate, scale: peekScale, opacity: peekOpacity, transformOrigin: "top center" }}
-                >
-                  <div className="pointer-events-none box-border overflow-hidden" style={peekStyle}>
-                    {cardFor(peekItem, true)}
-                  </div>
-                </m.div>
-              )}
-            </div>
-
-            <div ref={frontCardRef} className="relative z-10">
-              <SwipeCard
-                key={current.id}
-                ref={swipeRef}
-                stackDragX={stackDragX}
-                draggable
-                onCommitLeft={() => commitNeighbor(1)}
-                onCommitRight={() => commitNeighbor(-1)}
-              >
-                {cardFor(current, false)}
-              </SwipeCard>
-            </div>
-          </div>
-        </div>
-      </LazyMotion>
-
-      <div className="flex items-center justify-center gap-3 pt-0.5">
-        <button
-          type="button"
-          onClick={() => goToNeighbor(-1, 1)}
-          aria-label="Previous order"
-          className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-        >
-          <ChevronLeft aria-hidden className="size-4" />
-        </button>
-        <span className="text-xs tabular-nums text-foreground/45">{activeIndex + 1} of {n}</span>
-        <button
-          type="button"
-          onClick={() => goToNeighbor(1, -1)}
-          aria-label="Next order"
-          className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-        >
-          <ChevronRight aria-hidden className="size-4" />
-        </button>
-      </div>
-    </div>
+    <StackDeck
+      items={orders}
+      className="flex flex-col gap-2.5 pt-2.5"
+      getId={(order) => String(order.id)}
+      labels={{ previous: "Previous order", next: "Next order" }}
+      controls="count"
+      testId="orders-stack-deck"
+      peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-sm box-border"
+      renderCard={(order, context) => {
+        if (context.total === 1) {
+          return <OrderCompactCard order={order} onOpen={() => onOpenOrder(order)} />
+        }
+        return cardFor(order, context.isPeek)
+      }}
+      renderPeekCard={(order) => cardFor(order, true)}
+    />
   )
 }
 
@@ -581,62 +435,76 @@ function OrderStackColumn({
   expanded,
   onExpandedChange,
   onOpenOrder,
+  variant = "deck",
 }: {
   columnId: OrderColumnId
   state: OrderColumnState
   expanded: boolean
   onExpandedChange: (expanded: boolean) => void
   onOpenOrder: (order: OrderRow) => void
+  variant?: "deck" | "grid"
 }) {
   const config = ORDER_BOARD_COLUMNS.find((column) => column.id === columnId) ?? ORDER_BOARD_COLUMNS[0]
   const Icon = COLUMN_ICON[columnId]
-  const canExpand = state.entries.length > 1
+  const canExpand = variant === "deck" && state.entries.length > 1
 
   return (
-    <section className="flex min-w-0 flex-col">
-      <div className="mb-3 flex min-h-10 items-start justify-between gap-3 px-1">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={`size-1.5 shrink-0 rounded-full ${COLUMN_DOT[columnId]}`} aria-hidden />
-            <Icon className="size-3.5 shrink-0 text-foreground/35" />
-            <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-foreground/70">{config.label}</h2>
-            <span className="text-xs font-medium tabular-nums text-foreground/35">{state.entries.length}</span>
+    <BoardColumnShell
+      label={config.label}
+      count={state.entries.length}
+      icon={Icon}
+      expanded={expanded}
+      canExpand={canExpand}
+      onExpandedChange={onExpandedChange}
+      isLoading={state.isLoading || state.isValidating}
+      error={state.error}
+      loading={<OrderColumnLoading />}
+      errorContent={<OrderColumnError onRetry={state.onRetry} />}
+      empty={<OrderColumnEmpty columnId={columnId} />}
+      headerClassName="mb-3 flex items-center justify-between gap-3 px-1"
+      titleClassName="truncate text-xs font-semibold uppercase tracking-normal text-foreground/70"
+    >
+      {variant === "grid" ? (
+        <div className="space-y-2.5" data-testid="orders-grid">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            {state.entries.map((order) => (
+              <OrderCompactCard key={order.id} order={order} onOpen={() => onOpenOrder(order)} />
+            ))}
           </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-foreground/35">{config.description}</p>
+          {state.hasMore ? (
+            <BoardLoadMoreButton
+              isLoadingMore={state.isLoadingMore}
+              loadingLabel="Loading…"
+              onLoadMore={state.onLoadMore}
+            />
+          ) : null}
         </div>
-        {canExpand && (
-          <button
-            type="button"
-            onClick={() => onExpandedChange(!expanded)}
-            aria-label={expanded ? `Collapse ${config.label} stack` : `Expand ${config.label} stack`}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-semibold text-foreground/45 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/75"
-          >
-            {expanded ? <Layers className="size-3" aria-hidden /> : <List className="size-3" aria-hidden />}
-            {expanded ? "Stack" : "Expand"}
-          </button>
-        )}
-      </div>
-
-      {state.isLoading && state.entries.length === 0 ? (
-        <OrderColumnLoading />
-      ) : state.error ? (
-        <OrderColumnError onRetry={state.onRetry} />
-      ) : state.entries.length === 0 ? (
-        <OrderColumnEmpty columnId={columnId} />
       ) : expanded ? (
         <div className="space-y-2.5" data-testid="orders-stack-expanded">
           {state.entries.map((order) => (
             <OrderCompactCard key={order.id} order={order} onOpen={() => onOpenOrder(order)} />
           ))}
-          {state.hasMore ? <LoadMoreButton isLoadingMore={state.isLoadingMore} onLoadMore={state.onLoadMore} /> : null}
+          {state.hasMore ? (
+            <BoardLoadMoreButton
+              isLoadingMore={state.isLoadingMore}
+              loadingLabel="Loading…"
+              onLoadMore={state.onLoadMore}
+            />
+          ) : null}
         </div>
       ) : (
         <div className="space-y-2.5">
           <OrderStackDeck orders={state.entries} onExpand={() => onExpandedChange(true)} onOpenOrder={onOpenOrder} />
-          {state.hasMore ? <LoadMoreButton isLoadingMore={state.isLoadingMore} onLoadMore={state.onLoadMore} /> : null}
+          {state.hasMore ? (
+            <BoardLoadMoreButton
+              isLoadingMore={state.isLoadingMore}
+              loadingLabel="Loading…"
+              onLoadMore={state.onLoadMore}
+            />
+          ) : null}
         </div>
       )}
-    </section>
+    </BoardColumnShell>
   )
 }
 
@@ -644,24 +512,39 @@ function OrderStackColumn({
 
 export function OrdersBoard({ columns, shop }: { columns: OrdersBoardState; shop: string | null }) {
   const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [expandedColumns, setExpandedColumns] = useState<Partial<Record<OrderColumnId, boolean>>>({})
+  const [expandedColumns, setExpandedColumns] = useState<Partial<Record<BoardColumnId, boolean>>>({})
 
   const allOrders = Object.values(columns).flatMap((column) => column.entries)
   const selectedOrder = selectedId !== null ? allOrders.find((order) => order.id === selectedId) ?? null : null
 
+  const [featured, ...secondary] = ORDER_BOARD_COLUMNS
+  const columnProps = (columnId: BoardColumnId) => ({
+    columnId,
+    state: columns[columnId],
+    expanded: expandedColumns[columnId] ?? false,
+    onExpandedChange: (expanded: boolean) =>
+      setExpandedColumns((current) => ({ ...current, [columnId]: expanded })),
+    onOpenOrder: (order: OrderRow) => setSelectedId(order.id),
+  })
+
   return (
     <>
-      <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2 xl:grid-cols-4">
-        {ORDER_BOARD_COLUMNS.map((column) => (
-          <OrderStackColumn
-            key={column.id}
-            columnId={column.id}
-            state={columns[column.id]}
-            expanded={expandedColumns[column.id] ?? false}
-            onExpandedChange={(expanded) => setExpandedColumns((current) => ({ ...current, [column.id]: expanded }))}
-            onOpenOrder={(order) => setSelectedId(order.id)}
-          />
-        ))}
+      <div className="space-y-10">
+        <OrderStackColumn {...columnProps(featured.id)} variant="grid" />
+
+        <ReturnRequestsSection />
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 px-1">
+            <h2 className="text-[11px] font-semibold uppercase tracking-normal text-foreground/40">Browse all</h2>
+            <span className="h-px flex-1 bg-border/70" aria-hidden />
+          </div>
+          <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2">
+            {secondary.map((column) => (
+              <OrderStackColumn key={column.id} {...columnProps(column.id)} />
+            ))}
+          </div>
+        </div>
       </div>
 
       <OrderDetailDialog order={selectedOrder} shop={shop} onClose={() => setSelectedId(null)} />
@@ -713,7 +596,11 @@ export function OrdersSearchResults({
       {hasMore && (
         <div className="mt-5">
           {loadMoreError && <p className="mb-2 text-center text-xs text-red-500" aria-live="polite">{loadMoreError}</p>}
-          <LoadMoreButton isLoadingMore={isLoadingMore} onLoadMore={onLoadMore} />
+          <BoardLoadMoreButton
+            isLoadingMore={isLoadingMore}
+            loadingLabel="Loading…"
+            onLoadMore={onLoadMore}
+          />
         </div>
       )}
 

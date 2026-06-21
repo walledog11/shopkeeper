@@ -1,4 +1,4 @@
-import { Check, Loader2, Search, X } from "lucide-react"
+import { Check, ChevronDown, Loader2, Search, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { ArticleEditDetail } from "./ArticleEditDetail"
 import { ArticleReadDetail } from "./ArticleReadDetail"
@@ -77,7 +77,7 @@ export function KbPageView({ state }: KbPageViewProps) {
       <div className="relative z-20 shrink-0 px-3 pt-3 pb-3">
         <div className={GLASS_SHELL_CLASS}>
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
-            <div className={`flex h-9 min-w-0 flex-1 items-center gap-2 rounded-full px-3.5 ${GLASS_CONTROL_CLASS}`}>
+            <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
               <Search className="size-3.5 shrink-0 text-foreground/25" />
               <input aria-label="Search memory"
                 placeholder="Search memory..."
@@ -97,12 +97,12 @@ export function KbPageView({ state }: KbPageViewProps) {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="relative flex items-center">
               <select
                 aria-label="Sort notes"
                 value={sort}
                 onChange={e => setSort(e.target.value as SortKey)}
-                className={`h-9 min-w-0 flex-1 rounded-full px-3 text-xs font-semibold text-foreground/55 outline-none transition-colors hover:text-foreground/70 md:w-44 md:flex-none ${GLASS_CONTROL_CLASS}`}
+                className={`h-9 min-w-0 flex-1 appearance-none rounded-full pl-3.5 pr-9 text-xs font-semibold text-foreground/55 outline-none transition-colors hover:text-foreground/70 md:w-44 md:flex-none ${GLASS_CONTROL_CLASS}`}
               >
                 {SORT_OPTIONS.map((option) => (
                   <option
@@ -114,6 +114,7 @@ export function KbPageView({ state }: KbPageViewProps) {
                   </option>
                 ))}
               </select>
+              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-foreground/40" />
             </div>
           </div>
         </div>

@@ -197,6 +197,58 @@ export function useTicketsPageView({
     isLoadingMore: isLoadingMoreSpam,
   } = usePaginatedThreads(spamQuery, undefined, true, spamEnabled)
 
+  const threadSources = {
+    for_me: {
+      threads: forMeThreads,
+      isLoading: forMeLoading,
+      hasMore: hasMoreForMe,
+      isLoadingMore: isLoadingMoreForMe,
+      loadMore: loadMoreForMe,
+      mutate: mutateForMe,
+      removeThreadById: removeFromForMe,
+      prependThread: prependToForMe,
+    },
+    all_open: {
+      threads: allOpenThreads,
+      isLoading: allOpenLoading,
+      hasMore: hasMoreAllOpen,
+      isLoadingMore: isLoadingMoreAllOpen,
+      loadMore: loadMoreAllOpen,
+      mutate: mutateAllOpen,
+      removeThreadById: removeFromAllOpen,
+      prependThread: prependToAllOpen,
+    },
+    closed: {
+      threads: closedThreads,
+      isLoading: closedLoading,
+      hasMore: hasMoreClosed,
+      isLoadingMore: isLoadingMoreClosed,
+      loadMore: loadMoreClosed,
+      mutate: mutateClosed,
+      removeThreadById: removeFromClosed,
+      prependThread: prependToClosed,
+    },
+    spam: {
+      threads: spamThreads,
+      isLoading: spamLoading,
+      hasMore: hasMoreSpam,
+      isLoadingMore: isLoadingMoreSpam,
+      loadMore: loadMoreSpam,
+      mutate: mutateSpam,
+      removeThreadById: removeFromSpam,
+      prependThread: prependToSpam,
+    },
+  } satisfies Record<TicketListView, {
+    threads: Thread[]
+    isLoading: boolean
+    hasMore: boolean
+    isLoadingMore: boolean
+    loadMore: typeof loadMoreForMe
+    mutate: typeof mutateForMe
+    removeThreadById: typeof removeFromForMe
+    prependThread: typeof prependToForMe
+  }>
+
   const forMeCountFromList = forMeEnabled && forMeListTotalCount !== undefined
     ? forMeListTotalCount
     : null
@@ -240,32 +292,17 @@ export function useTicketsPageView({
   } = useActiveThreadSelection({
     queryThreadId,
     activeView,
-    forMeThreads,
-    allOpenThreads,
-    closedThreads,
-    spamThreads,
+    forMeThreads: threadSources.for_me.threads,
+    allOpenThreads: threadSources.all_open.threads,
+    closedThreads: threadSources.closed.threads,
+    spamThreads: threadSources.spam.threads,
     searchThreads,
     agentName,
   })
 
-  const dbThreads = useMemo(
-    () => {
-      if (isSearchMode) return []
-      if (effectiveActiveView === "for_me") return forMeThreads
-      if (effectiveActiveView === "all_open") return allOpenThreads
-      if (effectiveActiveView === "closed") return closedThreads
-      return spamThreads
-    },
-    [allOpenThreads, closedThreads, effectiveActiveView, forMeThreads, isSearchMode, spamThreads],
-  )
-
-  const isLoading = effectiveActiveView === "for_me"
-    ? forMeLoading
-    : effectiveActiveView === "all_open"
-      ? allOpenLoading
-      : effectiveActiveView === "closed"
-        ? closedLoading
-        : spamLoading
+  const currentThreadSource = threadSources[effectiveActiveView]
+  const dbThreads = isSearchMode ? [] : currentThreadSource.threads
+  const isLoading = currentThreadSource.isLoading
 
   const listThreads = isSearchMode ? searchThreads : dbThreads
 
@@ -318,25 +355,25 @@ export function useTicketsPageView({
     moveThreadFilterStatus,
     revalidateThreadCaches,
   } = useThreadCacheCoordinator({
-    openThreads: forMeThreads,
-    allOpenThreads,
-    closedThreads,
-    filteredThreads: spamThreads,
+    openThreads: threadSources.for_me.threads,
+    allOpenThreads: threadSources.all_open.threads,
+    closedThreads: threadSources.closed.threads,
+    filteredThreads: threadSources.spam.threads,
     activeThread: activeThreadData?.thread,
-    mutateOpen: mutateForMe,
-    mutateClosed,
-    mutateFiltered: mutateSpam,
-    removeFromOpen: removeFromForMe,
-    removeFromClosed,
-    removeFromFiltered: removeFromSpam,
-    prependToOpen: prependToForMe,
-    prependToClosed,
-    prependToFiltered: prependToSpam,
+    mutateOpen: threadSources.for_me.mutate,
+    mutateClosed: threadSources.closed.mutate,
+    mutateFiltered: threadSources.spam.mutate,
+    removeFromOpen: threadSources.for_me.removeThreadById,
+    removeFromClosed: threadSources.closed.removeThreadById,
+    removeFromFiltered: threadSources.spam.removeThreadById,
+    prependToOpen: threadSources.for_me.prependThread,
+    prependToClosed: threadSources.closed.prependThread,
+    prependToFiltered: threadSources.spam.prependThread,
     mutateSearch,
     mutateActiveThread,
-    mutateAllOpen,
-    removeFromAllOpen,
-    prependToAllOpen,
+    mutateAllOpen: threadSources.all_open.mutate,
+    removeFromAllOpen: threadSources.all_open.removeThreadById,
+    prependToAllOpen: threadSources.all_open.prependThread,
   })
 
   const revalidateTicketData = useCallback(async () => {
@@ -437,28 +474,6 @@ export function useTicketsPageView({
     return { kind: "error" as const }
   }
 
-  const currentHasMore = effectiveActiveView === "for_me"
-    ? hasMoreForMe
-    : effectiveActiveView === "all_open"
-      ? hasMoreAllOpen
-      : effectiveActiveView === "closed"
-        ? hasMoreClosed
-        : hasMoreSpam
-  const currentIsLoadingMore = effectiveActiveView === "for_me"
-    ? isLoadingMoreForMe
-    : effectiveActiveView === "all_open"
-      ? isLoadingMoreAllOpen
-      : effectiveActiveView === "closed"
-        ? isLoadingMoreClosed
-        : isLoadingMoreSpam
-  const currentLoadMore = effectiveActiveView === "for_me"
-    ? loadMoreForMe
-    : effectiveActiveView === "all_open"
-      ? loadMoreAllOpen
-      : effectiveActiveView === "closed"
-        ? loadMoreClosed
-        : loadMoreSpam
-
   return {
     kind: "ready" as const,
     layoutProps: {
@@ -479,12 +494,12 @@ export function useTicketsPageView({
       orgSettings,
       flags: {
         correctReplyVisible: correctReply && !dismissCorrectHint,
-        hasMore: currentHasMore,
+        hasMore: currentThreadSource.hasMore,
         hasShopify,
         isAgentRunning,
         isConversationLoading,
         isDesktopContext: Boolean(isDesktopContext),
-        isLoadingMore: currentIsLoadingMore,
+        isLoadingMore: currentThreadSource.isLoadingMore,
         isSearchLoading,
         isSearchMode,
         isSending,
@@ -519,7 +534,7 @@ export function useTicketsPageView({
       onChannelFilterChange: (next: ChannelType | null) => dispatchPageState({ type: "channelFilterChanged", channelFilter: next }),
       onTagFilterChange: (next: TicketTagFilter | null) => dispatchPageState({ type: "tagFilterChanged", tagFilter: next }),
       onLinkShopifyCustomer: handleLinkShopifyCustomer,
-      onLoadMore: currentLoadMore,
+      onLoadMore: currentThreadSource.loadMore,
       onMarkAsSpam: handleMarkAsSpam,
       onRecover: handleRecover,
       onOpenContext: () => dispatchPageState({ type: "contextDrawerChanged", open: true }),

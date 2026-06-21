@@ -22,7 +22,7 @@ export function AgentResponseSection({ controller }: { controller: AgentTabContr
   const { settingsState, dispatch } = controller
 
   return (
-    <SectionCard title="Response" description="How the agent formats its customer-facing messages.">
+    <SectionCard title="Response" description="How the agent formats its customer-facing messages." variant="board">
       <SelectField
         label="Reply language"
         ariaLabel="Reply language"

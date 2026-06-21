@@ -8,7 +8,7 @@ export function AgentDefaultBehaviorSection({ controller }: { controller: AgentT
   const { settingsState, dispatch } = controller
 
   return (
-    <SectionCard title="Default Behavior" description="What the agent does automatically when a ticket is opened.">
+    <SectionCard title="Default Behavior" description="What the agent does automatically when a ticket is opened." variant="board">
       <div className="space-y-5">
         <ToggleRow
           label="Auto-plan on ticket open"

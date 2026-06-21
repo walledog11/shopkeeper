@@ -16,6 +16,19 @@ describe("home summary sections", () => {
     expect(needsYou).toContain("Shopkeeper will surface anything that needs your eye here.")
   })
 
+  it("shows a skeleton while needs-you cards are loading", () => {
+    const needsYou = renderToStaticMarkup(createElement(NeedsYou, {
+      items: [],
+      agentName: "Shopkeeper",
+      isLoading: true,
+      onApproved: vi.fn(),
+    }))
+
+    expect(needsYou).toContain("aria-busy=\"true\"")
+    expect(needsYou).toContain("Loading action plan cards")
+    expect(needsYou).not.toContain("You&#x27;re all caught up")
+  })
+
   it("does not render cleared overnight when there is nothing to show", () => {
     expect(renderToStaticMarkup(createElement(ClearedOvernight, {
       agentName: "Shopkeeper",

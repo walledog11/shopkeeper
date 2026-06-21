@@ -15,7 +15,7 @@ export function AgentGuardrailsSection({ controller }: { controller: AgentTabCon
   } = controller
 
   return (
-    <SectionCard title="Guardrails" description="Hard limits that the agent will never exceed.">
+    <SectionCard title="Guardrails" description="Hard limits that the agent will never exceed." variant="board">
       <div className="space-y-5">
         <MoneyInput
           label="Daily refund cap"

@@ -1,0 +1,81 @@
+body:has(.dashboard-shell),
+body:has(.dashboard-shell) * {
+  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+}
+body:has(.dashboard-shell) ::-webkit-scrollbar-thumb {
+  background: rgba(43, 33, 24, 0.22);
+}
+body:has(.dashboard-shell) ::-webkit-scrollbar-thumb:hover {
+  background: rgba(43, 33, 24, 0.34);
+}
+body:has(.dashboard-shell) .custom-scrollbar.is-scrolling {
+  scrollbar-color: rgba(43, 33, 24, 0.22) transparent;
+}
+
+html,
+body,
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+@keyframes dot-drift {
+  from { background-position: 0px 0px; }
+  to   { background-position: 20px 20px; }
+}
+
+@keyframes ob-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes ob-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@keyframes ob-pulse-bg {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+/* Custom Scrollbar */
+@layer utilities {
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 1.5s ease;
+}
+
+.custom-scrollbar.is-scrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+  transition: scrollbar-color 0.5s;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

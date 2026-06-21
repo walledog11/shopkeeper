@@ -17,23 +17,27 @@ export function TelegramApproveSection() {
 
   return (
     <div
-      className={`rounded-xl border px-5 py-4 ${
-        connected
-          ? "border-emerald-400/20 bg-emerald-400/[0.06]"
-          : "border-amber-400/20 bg-amber-400/[0.06]"
-      }`}
+      className="rounded-3xl border border-border bg-card px-5 py-5 shadow-sm"
     >
       <div className="flex items-start gap-3">
-        {connected ? (
-          <CheckCircle2 className="size-5 shrink-0 text-emerald-400 mt-0.5" />
-        ) : (
-          <Smartphone className="size-5 shrink-0 text-amber-400 mt-0.5" />
-        )}
+        <span
+          className={`flex size-9 shrink-0 items-center justify-center rounded-xl border ${
+            connected
+              ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+              : "border-amber-500/20 bg-amber-500/10 text-amber-300"
+          }`}
+        >
+          {connected ? (
+            <CheckCircle2 className="size-4" />
+          ) : (
+            <Smartphone className="size-4" />
+          )}
+        </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground/80">
+          <h3 className="text-sm font-semibold text-foreground/90">
             {connected ? "Approve from your phone" : "Link Telegram to approve from your phone"}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-foreground/45">
+          <p className="mt-1 text-xs leading-relaxed text-foreground/40">
             {connected ? (
               <>
                 Telegram is linked
@@ -50,7 +54,7 @@ export function TelegramApproveSection() {
           {!connected && (
             <Link
               href="/dashboard/integrations#telegram"
-              className="mt-2.5 inline-flex text-xs font-semibold text-amber-300 hover:text-amber-200 transition-colors"
+              className="mt-3 inline-flex text-xs font-semibold text-amber-300 transition-colors hover:text-amber-200"
             >
               Connect Telegram →
             </Link>

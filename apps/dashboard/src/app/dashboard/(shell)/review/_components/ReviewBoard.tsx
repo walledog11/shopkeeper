@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react"
+import { useCallback, useMemo, useState, type ComponentType, type ReactNode } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
@@ -8,13 +8,8 @@ import {
   ArrowUpRight,
   Bot,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   Clock3,
   ExternalLink,
-  Layers,
-  List,
-  Loader2,
   MessageSquare,
   NotebookText,
   PackageCheck,
@@ -22,14 +17,10 @@ import {
   ThumbsUp,
   Wrench,
 } from "lucide-react"
-import { LazyMotion, domMax, m, useMotionValue, useTransform } from "motion/react"
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { FLY_OFF, STACK_DEPTH, STACK_MARGIN_TOP } from "@/app/dashboard/_components/home/needs-you-motion"
-import { SwipeCard, type SwipeCardHandle } from "@/app/dashboard/_components/home/NeedsYouSwipeCard"
+import { BoardColumnShell } from "@/app/dashboard/_components/board/BoardColumnShell"
+import { BoardLoadMoreButton } from "@/app/dashboard/_components/board/BoardLoadMoreButton"
+import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
+import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
 import {
   actionLogEntryHref,
   correctReplyHref,
@@ -548,31 +539,6 @@ function ReviewDetail({
   )
 }
 
-function ReviewLoadMoreButton({
-  isLoadingMore,
-  onLoadMore,
-}: {
-  isLoadingMore: boolean
-  onLoadMore: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onLoadMore}
-      disabled={isLoadingMore}
-      className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-xs font-semibold text-foreground/40 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/65 disabled:opacity-40"
-    >
-      {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
-      {isLoadingMore ? "Loading..." : "Load more"}
-    </button>
-  )
-}
-
-interface ReviewStackDeckState {
-  currentId: string | null
-  entryIdsKey: string
-}
-
 function ReviewStackDeck({
   entries,
   feedbackFor,
@@ -588,100 +554,6 @@ function ReviewStackDeck({
   onFeedbackChange: (entry: ActionLogEntry, next: Feedback) => void
   onOpenEntry: (entry: ActionLogEntry) => void
 }) {
-  const entryIdsKey = entries.map((entry) => entry.id).join("|")
-  const [currentState, setCurrentState] = useState<ReviewStackDeckState>(() => ({
-    currentId: entries[0]?.id ?? null,
-    entryIdsKey,
-  }))
-  const [peekDirection, setPeekDirection] = useState<1 | -1>(1)
-  const [frontHeight, setFrontHeight] = useState(0)
-  const frontCardRef = useRef<HTMLDivElement>(null)
-  const swipeRef = useRef<SwipeCardHandle>(null)
-  const stackDragX = useMotionValue(0)
-  const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / FLY_OFF, 1))
-  const peekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * (1 - progress))
-  const peekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * (1 - progress))
-  const peekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * (1 - progress))
-  const peekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * (1 - progress))
-  const peekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity) + STACK_DEPTH.opacity * progress)
-  const secondPeekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * 2 * (1 - progress * 0.55))
-  const secondPeekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * 2 * (1 - progress * 0.55))
-  const secondPeekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * 2 * (1 - progress * 0.55))
-  const secondPeekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * 2 * (1 - progress * 0.55))
-  const secondPeekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity * 2) + STACK_DEPTH.opacity * progress)
-
-  useEffect(() => {
-    setCurrentState((previous) => {
-      if (previous.entryIdsKey === entryIdsKey) return previous
-
-      const previousCurrentIsInDeck = Boolean(
-        previous.currentId && entries.some((entry) => entry.id === previous.currentId),
-      )
-
-      return {
-        currentId: previousCurrentIsInDeck ? previous.currentId : entries[0]?.id ?? null,
-        entryIdsKey,
-      }
-    })
-  }, [entries, entryIdsKey])
-
-  useEffect(() => {
-    const unsubscribe = stackDragX.on("change", value => {
-      if (Math.abs(value) < 1) return
-
-      const nextDirection = value < 0 ? 1 : -1
-      setPeekDirection(previous => previous === nextDirection ? previous : nextDirection)
-    })
-    return () => unsubscribe()
-  }, [stackDragX])
-
-  const n = entries.length
-  const mod = (value: number) => ((value % n) + n) % n
-  const activeIndex = n > 0 ? Math.max(0, entries.findIndex((entry) => entry.id === currentState.currentId)) : 0
-  const current = n > 0 ? entries[activeIndex] : null
-  const peekItem = n > 1 ? entries[mod(activeIndex + peekDirection)] : null
-
-  useLayoutEffect(() => {
-    stackDragX.set(0)
-  }, [current?.id, stackDragX])
-
-  useLayoutEffect(() => {
-    const node = frontCardRef.current
-    if (!node) return
-    const updateHeight = () => setFrontHeight(node.offsetHeight)
-    updateHeight()
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [current?.id])
-
-  if (n === 0 || !current) return null
-
-  if (n === 1) {
-    return (
-      <ReviewCompactCard
-        entry={current}
-        feedback={feedbackFor(current)}
-        isNew={isNew(current)}
-        onFeedbackChange={(next) => onFeedbackChange(current, next)}
-        onOpen={() => onOpenEntry(current)}
-      />
-    )
-  }
-
-  const commitNeighbor = (delta: 1 | -1) => {
-    setPeekDirection(delta)
-    const nextCurrentId = entries[mod(activeIndex + delta)].id
-    setCurrentState(previous => ({ ...previous, currentId: nextCurrentId }))
-  }
-
-  const goToNeighbor = (delta: 1 | -1, flySign: 1 | -1) => {
-    setPeekDirection(delta)
-    void swipeRef.current?.flyOff(flySign).then(animated => {
-      if (animated) commitNeighbor(delta)
-    })
-  }
-
   const cardFor = (entry: ActionLogEntry, isPeekCard: boolean) => (
     <ReviewCompactCard
       entry={entry}
@@ -692,70 +564,32 @@ function ReviewStackDeck({
       onOpen={onExpand}
     />
   )
-  const peekStyle = frontHeight > 0 ? { minHeight: frontHeight, maxHeight: frontHeight } : undefined
 
   return (
-    <div className="flex flex-col gap-2.5 pt-2.5" data-testid="review-stack-deck">
-      <LazyMotion features={domMax}>
-        <div className="relative select-none">
-          <div className="relative" style={{ marginTop: STACK_MARGIN_TOP }}>
-            <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
-              {n > 2 && (
-                <m.div
-                  className="absolute inset-0"
-                  style={{ x: secondPeekX, y: secondPeekY, rotate: secondPeekRotate, scale: secondPeekScale, opacity: secondPeekOpacity, transformOrigin: "top center" }}
-                >
-                  <div className="h-full w-full rounded-lg border border-border bg-card shadow-sm box-border" style={peekStyle} />
-                </m.div>
-              )}
-              {peekItem && (
-                <m.div
-                  className="absolute inset-0 z-[1]"
-                  style={{ x: peekX, y: peekY, rotate: peekRotate, scale: peekScale, opacity: peekOpacity, transformOrigin: "top center" }}
-                >
-                  <div className="pointer-events-none box-border overflow-hidden" style={peekStyle}>
-                    {cardFor(peekItem, true)}
-                  </div>
-                </m.div>
-              )}
-            </div>
-
-            <div ref={frontCardRef} className="relative z-10">
-              <SwipeCard
-                key={current.id}
-                ref={swipeRef}
-                stackDragX={stackDragX}
-                draggable
-                onCommitLeft={() => commitNeighbor(1)}
-                onCommitRight={() => commitNeighbor(-1)}
-              >
-                {cardFor(current, false)}
-              </SwipeCard>
-            </div>
-          </div>
-        </div>
-      </LazyMotion>
-
-      <div className="flex items-center justify-center gap-3 pt-0.5">
-        <button
-          type="button"
-          onClick={() => goToNeighbor(-1, 1)}
-          aria-label="Previous review item"
-          className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-        >
-          <ChevronLeft aria-hidden className="size-4" />
-        </button>
-        <span className="text-xs tabular-nums text-foreground/45">{activeIndex + 1} of {n}</span>
-        <button
-          type="button"
-          onClick={() => goToNeighbor(1, -1)}
-          aria-label="Next review item"
-          className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-        >
-          <ChevronRight aria-hidden className="size-4" />
-        </button>
-      </div>
-    </div>
+    <StackDeck
+      items={entries}
+      className="flex flex-col gap-2.5 pt-2.5"
+      getId={(entry) => entry.id}
+      labels={{ previous: "Previous review item", next: "Next review item" }}
+      controls="count"
+      testId="review-stack-deck"
+      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-sm box-border"
+      renderCard={(entry, context) => {
+        if (context.total === 1) {
+          return (
+            <ReviewCompactCard
+              entry={entry}
+              feedback={feedbackFor(entry)}
+              isNew={isNew(entry)}
+              onFeedbackChange={(next) => onFeedbackChange(entry, next)}
+              onOpen={() => onOpenEntry(entry)}
+            />
+          )
+        }
+        return cardFor(entry, context.isPeek)
+      }}
+      renderPeekCard={(entry) => cardFor(entry, true)}
+    />
   )
 }
 
@@ -784,39 +618,22 @@ function ReviewStackColumn({
   const canExpand = state.entries.length > 1
 
   return (
-    <section className="flex min-w-0 flex-col">
-      <div className="mb-3 flex min-h-10 items-start justify-between gap-3 px-1">
-        <div className="min-w-0">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className={`size-1.5 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
-            <Icon className="size-3.5 shrink-0 text-foreground/35" />
-            <h2 className="truncate text-xs font-semibold uppercase tracking-wide text-foreground/70">
-              {config.label}
-            </h2>
-            <span className="text-xs font-medium tabular-nums text-foreground/35">{state.entries.length}</span>
-          </div>
-          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-foreground/35">{config.description}</p>
-        </div>
-        {canExpand && (
-          <button
-            type="button"
-            onClick={() => onExpandedChange(!expanded)}
-            aria-label={expanded ? `Collapse ${config.label} stack` : `Expand ${config.label} stack`}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-full border border-border px-2 text-[11px] font-semibold text-foreground/45 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/75"
-          >
-            {expanded ? <Layers className="size-3" aria-hidden /> : <List className="size-3" aria-hidden />}
-            {expanded ? "Stack" : "Expand"}
-          </button>
-        )}
-      </div>
-
-      {state.isLoading && state.entries.length === 0 ? (
-        <ReviewColumnLoading />
-      ) : state.error ? (
-        <ReviewColumnError onRetry={state.onRetry} />
-      ) : state.entries.length === 0 ? (
-        <ReviewColumnEmpty columnId={columnId} />
-      ) : expanded ? (
+    <BoardColumnShell
+      label={config.label}
+      description={config.description}
+      count={state.entries.length}
+      icon={Icon}
+      accentDotClassName={accent.dot}
+      expanded={expanded}
+      canExpand={canExpand}
+      onExpandedChange={onExpandedChange}
+      isLoading={state.isLoading}
+      error={state.error}
+      loading={<ReviewColumnLoading />}
+      errorContent={<ReviewColumnError onRetry={state.onRetry} />}
+      empty={<ReviewColumnEmpty columnId={columnId} />}
+    >
+      {expanded ? (
         <div className="space-y-2.5" data-testid="review-stack-expanded">
           {state.entries.map((entry) => (
             <ReviewCompactCard
@@ -829,7 +646,7 @@ function ReviewStackColumn({
             />
           ))}
           {state.hasMore ? (
-            <ReviewLoadMoreButton
+            <BoardLoadMoreButton
               isLoadingMore={state.isLoadingMore}
               onLoadMore={state.onLoadMore}
             />
@@ -846,14 +663,14 @@ function ReviewStackColumn({
             onOpenEntry={onOpenEntry}
           />
           {state.hasMore ? (
-            <ReviewLoadMoreButton
+            <BoardLoadMoreButton
               isLoadingMore={state.isLoadingMore}
               onLoadMore={state.onLoadMore}
             />
           ) : null}
         </div>
       )}
-    </section>
+    </BoardColumnShell>
   )
 }
 
@@ -914,22 +731,21 @@ export function ReviewBoard({
         </div>
       </div>
 
-      <Dialog open={Boolean(selectedEntry)} onOpenChange={(open) => { if (!open) setSelectedId(null) }}>
-        <DialogContent
-          showCloseButton
-          className="flex h-[86vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-background p-0 shadow-xl sm:max-w-3xl lg:max-w-5xl"
-        >
-          <DialogTitle className="sr-only">Review detail</DialogTitle>
-          {selectedEntry ? (
-            <ReviewDetail
-              entry={selectedEntry}
-              feedback={feedbackFor(selectedEntry)}
-              onClose={() => setSelectedId(null)}
-              onFeedbackChange={(next) => handleFeedbackChange(selectedEntry, next)}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <DashboardDetailDialog
+        open={Boolean(selectedEntry)}
+        title="Review detail"
+        maxWidthClassName="sm:max-w-3xl lg:max-w-5xl"
+        onClose={() => setSelectedId(null)}
+      >
+        {selectedEntry ? (
+          <ReviewDetail
+            entry={selectedEntry}
+            feedback={feedbackFor(selectedEntry)}
+            onClose={() => setSelectedId(null)}
+            onFeedbackChange={(next) => handleFeedbackChange(selectedEntry, next)}
+          />
+        ) : null}
+      </DashboardDetailDialog>
     </>
   )
 }
