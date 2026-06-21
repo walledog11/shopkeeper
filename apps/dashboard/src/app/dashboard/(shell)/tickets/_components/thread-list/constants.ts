@@ -13,7 +13,7 @@ export const TICKET_TAG_FILTERS = [
 
 export type TicketTagFilter = typeof TICKET_TAG_FILTERS[number]
 
-const FILTER_IDS: ChannelType[] = ["email", "ig_dm"]
+const FILTER_IDS: ChannelType[] = ["email", "ig_dm", "imessage"]
 
 export function buildChannelFilters(connectedChannels: ChannelType[]) {
   const ids = FILTER_IDS.filter(id => connectedChannels.includes(id))

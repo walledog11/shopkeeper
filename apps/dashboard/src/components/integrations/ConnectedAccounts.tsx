@@ -13,6 +13,7 @@ const DISCONNECT_NOTES: Record<ConnectType, string> = {
   email: "Your past tickets stay. New customer emails will stop arriving.",
   ig: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
+  imessage: "Your past tickets stay. New iMessages will stop arriving.",
 }
 
 export function ConnectedAccounts({

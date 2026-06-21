@@ -153,6 +153,23 @@ for these phases.
 - **Phase 5 — Provisioning UI + deliverability guards (B, after 3+4).** §5 plus the inbound-first
   rule, send-pacing/coalescing, and caps surfaced. Verify: connect flow stores an encrypted
   `Integration` and shows the webhook URL; the agent refuses to open a cold outbound conversation.
+  - **Status (2026-06-21): COMPLETE (code + unit tests; live connect remains the Phase 0 residual).**
+    *Provisioning:* added the `imessage` catalog entry + `connectType`, a self-contained
+    `ImessageConnectBody` credential form, and `POST /api/integrations/imessage` storing the Spectrum
+    creds on an encrypted `Integration` (projectId→`externalAccountId`, projectSecret→`accessToken`,
+    webhookSecret→`refreshToken`). The per-org webhook URL (`/webhooks/photon/:integrationId`, built
+    server-side from the gateway base URL — there is no `NEXT_PUBLIC_` gateway URL) is returned by the
+    route and surfaced persistently on the connected card via `ImessageWebhookPanel` (added to the GET
+    serialization). *Channel sweep:* `imessage` added to `FILTER_IDS`, `INBOX_CHANNEL_TYPES`, and
+    `DASHBOARD_CHANNEL_TYPES` (`channels.ts` already carried the label/icon from Phase 3).
+    *Inbound-first guard:* `dispatchImessageAsync` refuses any send on a thread with no stored Space,
+    the outbound worker dropped its `im.space.create` cold-start fallback (fails the row instead), and
+    the agent receives an honest refusal message. *Deliverability copy* (inbound-first, ~50 new
+    conversations/line/day cap, Business-line recommendation) surfaced in the connect + webhook UI.
+    Verified with dashboard + gateway typecheck, lint, and tests (new iMessage route test, updated
+    outbound-worker + dispatch-message guard tests, channels unit). **Deferred:** send-pacing/
+    coalescing (plan-optional, not a verify criterion) and the stranded-`pending` sweep
+    (hard-constraint #6, carried over from Phase 4).
 
 Phases 3 and 4 are independent once 2 lands and can go in either order. A failed Phase 0 is a signal
 to renegotiate scope, not to push forward.
@@ -279,7 +296,7 @@ not a single worker. Mirror each part:
 | Long-lived gRPC client | Hosted in gateway, not Vercel |
 | Content-type narrowing + attachment rehydrate | `switch(content.type)` + `content.read()` → blob |
 | Channel-agnostic core untouched | planner/run/executor/tools unchanged |
-| Deliverability discipline | Inbound-first rule + pacing guard + caps surfaced |
+| Deliverability discipline | Inbound-first guards (dispatch + worker) + caps/Business-line surfaced in UI; send-pacing deferred |
 
 ---
 

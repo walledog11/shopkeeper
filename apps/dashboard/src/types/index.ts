@@ -63,6 +63,9 @@ export interface Integration {
   createdAt: string;
   lastActivity?: string | null;
   threadsThisWeek?: number;
+  // iMessage only: the per-org Photon webhook URL the merchant pastes into
+  // Spectrum. Built server-side from the gateway base URL + integration id.
+  webhookUrl?: string | null;
 }
 
 export interface Customer {

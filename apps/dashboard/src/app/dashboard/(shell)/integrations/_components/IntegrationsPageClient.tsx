@@ -129,6 +129,23 @@ function IntegrationsPageContent() {
     }
   }
 
+  async function handleImessageConnect(creds: { projectId: string; projectSecret: string; webhookSecret: string }): Promise<boolean> {
+    try {
+      const res = await fetch('/api/integrations/imessage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(creds),
+      })
+      if (!res.ok) throw new Error()
+      await mutate()
+      showToast('success', 'iMessage connected.')
+      return true
+    } catch {
+      showToast('error', 'Failed to connect. Please try again.')
+      return false
+    }
+  }
+
   async function handleDisconnect(integrationId: string) {
     try {
       const res = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' })
@@ -181,7 +198,6 @@ function IntegrationsPageContent() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-6 pt-6 pb-5 border-b border-border shrink-0">
         <h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Connect your channels and tools to Shopkeeper.</p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -252,6 +268,7 @@ function IntegrationsPageContent() {
                   connected={getConnected(def)}
                   lastActivity={getLastActivity(def)}
                   onConnect={handleConnect}
+                  onImessageConnect={handleImessageConnect}
                   onDisconnect={handleDisconnect}
                   onLaunchOAuth={launchOAuth}
                   open={openId === def.id}

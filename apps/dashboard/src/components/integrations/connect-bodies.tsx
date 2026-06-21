@@ -1,6 +1,7 @@
 "use client"
 
-import { BookOpen, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { BookOpen, Check, Copy, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/ui/cn"
@@ -97,6 +98,145 @@ export function ShopifyConnectBody({
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+function ImessageDeliverabilityNote() {
+  return (
+    <div className="rounded-md border border-foreground/[0.06] bg-foreground/[0.015] px-3.5 py-3 space-y-1.5">
+      <p className="text-xs text-foreground/45 leading-relaxed">
+        iMessage is inbound-first — Shopkeeper only replies inside conversations a
+        customer starts. It never sends cold or proactive messages.
+      </p>
+      <p className="text-xs text-foreground/30 leading-relaxed">
+        A dedicated Business line is recommended so your number stays consistent.
+        Apple caps new conversations at ~50 per line per day.
+      </p>
+    </div>
+  )
+}
+
+export function ImessageConnectBody({
+  onConnect,
+}: {
+  onConnect: (creds: { projectId: string; projectSecret: string; webhookSecret: string }) => Promise<boolean>
+}) {
+  const [projectId, setProjectId] = useState("")
+  const [projectSecret, setProjectSecret] = useState("")
+  const [webhookSecret, setWebhookSecret] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+
+  const canSubmit =
+    !!projectId.trim() && !!projectSecret.trim() && !!webhookSecret.trim() && !submitting
+
+  async function handleSubmit() {
+    if (!canSubmit) return
+    setSubmitting(true)
+    try {
+      await onConnect({
+        projectId: projectId.trim(),
+        projectSecret: projectSecret.trim(),
+        webhookSecret: webhookSecret.trim(),
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <p className="text-xs text-foreground/40 leading-relaxed">
+          Connect a Photon Spectrum project to handle iMessage. Find these under your
+          Spectrum project settings.
+        </p>
+        <ol className="text-xs text-foreground/30 space-y-1 list-decimal list-inside leading-relaxed">
+          <li>Create a Spectrum project with a provisioned iMessage line</li>
+          <li>Paste the project ID and secrets below</li>
+          <li>After connecting, copy the webhook URL into Spectrum&apos;s settings</li>
+        </ol>
+      </div>
+      <div className="space-y-2">
+        <Input
+          aria-label="Project ID"
+          type="text"
+          placeholder="Project ID"
+          value={projectId}
+          onChange={(e) => setProjectId(e.target.value)}
+          className="h-9 text-sm"
+        />
+        <Input
+          aria-label="Project secret"
+          type="password"
+          placeholder="Project secret"
+          value={projectSecret}
+          onChange={(e) => setProjectSecret(e.target.value)}
+          className="h-9 text-sm"
+        />
+        <Input
+          aria-label="Webhook secret"
+          type="password"
+          placeholder="Webhook secret"
+          value={webhookSecret}
+          onChange={(e) => setWebhookSecret(e.target.value)}
+          className="h-9 text-sm"
+        />
+      </div>
+      <Button
+        size="sm"
+        disabled={!canSubmit}
+        onClick={handleSubmit}
+        className="h-9 px-4 font-medium"
+      >
+        {submitting ? <Loader2 className="size-3.5 animate-spin" /> : "Connect"}
+      </Button>
+      <ImessageDeliverabilityNote />
+    </div>
+  )
+}
+
+export function ImessageWebhookPanel({ webhookUrl }: { webhookUrl: string | null }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    if (!webhookUrl) return
+    try {
+      await navigator.clipboard.writeText(webhookUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard can be unavailable (insecure context) — the URL is still shown.
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-foreground/60">Webhook URL</p>
+      <p className="text-xs text-foreground/35 leading-relaxed">
+        Paste this into your Spectrum project&apos;s webhook settings so inbound
+        iMessages reach Shopkeeper.
+      </p>
+      {webhookUrl ? (
+        <div className="flex items-center gap-2">
+          <code className="flex-1 truncate rounded-md border border-foreground/[0.08] bg-foreground/[0.02] px-3 py-2 text-xs font-mono text-foreground/70">
+            {webhookUrl}
+          </code>
+          <button
+            type="button"
+            onClick={handleCopy}
+            aria-label="Copy webhook URL"
+            className="shrink-0 inline-flex items-center justify-center h-9 px-3 rounded-md border border-foreground/[0.08] text-foreground/60 hover:text-foreground/90 hover:bg-foreground/[0.04] transition-colors"
+          >
+            {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
+          </button>
+        </div>
+      ) : (
+        <p className="text-xs text-amber-400/80 leading-relaxed">
+          Webhook URL unavailable — the gateway URL isn&apos;t configured.
+        </p>
+      )}
+      <ImessageDeliverabilityNote />
     </div>
   )
 }

@@ -81,6 +81,7 @@ const EXTRA_CHANNEL_INFO: Record<string, ChannelInfo> = {
 export const DASHBOARD_CHANNEL_TYPES = [
   'email',
   'ig_dm',
+  'imessage',
   'sms',
   'shopify',
   'tiktok',

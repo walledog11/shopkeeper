@@ -27,7 +27,6 @@ export async function handleOutboundImessageJob(job: Job<OutboundImessageJobData
       thread: {
         select: {
           externalSpaceId: true,
-          customer: { select: { platformId: true } },
         },
       },
     },
@@ -61,13 +60,24 @@ export async function handleOutboundImessageJob(job: Job<OutboundImessageJobData
     return;
   }
 
+  // Inbound-first: never open a cold iMessage conversation. The dashboard
+  // dispatch guard already refuses sends without a Space, so a missing
+  // externalSpaceId here means a stale job — fail it rather than cold-start a
+  // conversation (Apple bans lines for proactive outbound).
+  const externalSpaceId = message.thread.externalSpaceId?.trim();
+  if (!externalSpaceId) {
+    await markFailed(messageId, 'No inbound iMessage conversation to reply into');
+    logger.error(
+      { messageId, integrationId, traceId },
+      '[OutboundImessage] Refusing cold outbound — no externalSpaceId',
+    );
+    return;
+  }
+
   try {
     const app = await getSpectrumAppForIntegration(integration);
     const im = imessage(app);
-    const externalSpaceId = message.thread.externalSpaceId?.trim();
-    const space = externalSpaceId
-      ? await im.space.get(externalSpaceId)
-      : await im.space.create(await im.user(message.thread.customer.platformId));
+    const space = await im.space.get(externalSpaceId);
     await space.send(message.contentText ?? '');
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

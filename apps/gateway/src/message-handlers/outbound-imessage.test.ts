@@ -108,19 +108,20 @@ describe('handleOutboundImessageJob', () => {
     expect(after?.sendError).toBeNull();
   });
 
-  it('creates a space from the customer when no externalSpaceId is stored', async () => {
-    userMock.mockResolvedValueOnce({ id: '+15551234567' });
-    spaceCreateMock.mockResolvedValueOnce({ send: sendMock });
-    sendMock.mockResolvedValueOnce(undefined);
+  it('refuses cold outbound and marks failed when no externalSpaceId is stored', async () => {
     const { message, data } = await seed('pending', null);
 
     await handleOutboundImessageJob(makeJob(data));
 
+    // Inbound-first: no Space means the customer never messaged us — never
+    // cold-start a conversation.
     expect(spaceGetMock).not.toHaveBeenCalled();
-    expect(userMock).toHaveBeenCalledWith('+15551234567');
-    expect(spaceCreateMock).toHaveBeenCalled();
+    expect(spaceCreateMock).not.toHaveBeenCalled();
+    expect(userMock).not.toHaveBeenCalled();
+    expect(sendMock).not.toHaveBeenCalled();
     const after = await db.message.findUnique({ where: { id: message.id } });
-    expect(after?.sendStatus).toBe('sent');
+    expect(after?.sendStatus).toBe('failed');
+    expect(after?.sendError).toContain('No inbound iMessage conversation');
   });
 
   it('skips a message that is already sent (idempotency)', async () => {

@@ -11,6 +11,7 @@ import {
 } from '@/lib/server/shopify-integration';
 import { saveForwardingEmailIntegration } from './_lib/email-integration';
 import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
+import { buildPhotonWebhookUrl } from './_lib/photon-webhook';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,11 +79,19 @@ export const GET = withOrgRoute(
       return { ...integration, tokenExpiresAt };
     }));
 
-    const result = refreshedIntegrations.map(i => serializeIntegration(
-      i,
-      lastActivityByChannel[i.platform] ?? null,
-      weeklyByChannel[i.platform] ?? 0,
-    ));
+    const result = refreshedIntegrations.map(i => {
+      const serialized = serializeIntegration(
+        i,
+        lastActivityByChannel[i.platform] ?? null,
+        weeklyByChannel[i.platform] ?? 0,
+      );
+      // iMessage surfaces the per-org Photon webhook URL so the merchant can
+      // paste it into Spectrum from the connected card.
+      if (i.platform === 'imessage') {
+        return { ...serialized, webhookUrl: buildPhotonWebhookUrl(i.id) };
+      }
+      return serialized;
+    });
 
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'no-store' },

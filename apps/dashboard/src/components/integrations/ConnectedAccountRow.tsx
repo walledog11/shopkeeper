@@ -8,6 +8,7 @@ const CONNECTION_ICONS = {
   email: AtSign,
   ig: MessageSquare,
   shopify: ShoppingBag,
+  imessage: MessageSquare,
 } as const
 
 export function ConnectedAccountRow({

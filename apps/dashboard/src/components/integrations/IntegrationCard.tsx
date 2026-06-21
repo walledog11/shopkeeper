@@ -9,11 +9,11 @@ import type { Integration } from "@/types"
 import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
-import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
+import { ImessageConnectBody, ImessageWebhookPanel, InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
-import { CardLogo, ShopkeeperBadge } from "./IntegrationCardParts"
+import { CardLogo } from "./IntegrationCardParts"
 import {
   CARD_BUTTON_AMBER,
   CARD_BUTTON_DISABLED,
@@ -69,6 +69,7 @@ interface Props {
   config: PlatformConfig
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
+  onImessageConnect?: (creds: { projectId: string; projectSecret: string; webhookSecret: string }) => Promise<boolean>
   onDisconnect: (integrationId: string) => void
   onLaunchOAuth?: (url: string, onClosed?: () => void) => void
   lastActivity?: string | null
@@ -76,7 +77,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange }: Props) {
+export default function IntegrationCard({ config, connected, onConnect, onImessageConnect, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange }: Props) {
   const [cardState, dispatchCardState] = useReducer(integrationCardReducer, INITIAL_INTEGRATION_CARD_STATE)
   const { email, kbSyncing, kbSyncResult, loading, shop } = cardState
   const setEmail = (nextEmail: string) => dispatchCardState({ type: "emailChanged", email: nextEmail })
@@ -190,10 +191,6 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
         <p className={cn("mt-4", CARD_TITLE)}>{config.name}</p>
         <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
 
-        <div className="mt-3">
-          <ShopkeeperBadge />
-        </div>
-
         <div className="mt-4 flex gap-2">
           {config.comingSoon ? (
             <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
@@ -230,6 +227,9 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               connectType={config.connectType}
               integration={connected[0]}
             />
+            {config.connectType === "imessage" && (
+              <ImessageWebhookPanel webhookUrl={connected[0]?.webhookUrl ?? null} />
+            )}
             <IntegrationPermissionsSection
               config={config}
               connected={connected}
@@ -285,6 +285,10 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
 
         {config.connectType === "ig" && !isConnected && (
           <InstagramConnectBody isConnected={isConnected} />
+        )}
+
+        {config.connectType === "imessage" && !isConnected && (
+          <ImessageConnectBody onConnect={onImessageConnect ?? (async () => false)} />
         )}
 
       </IntegrationConfigureDialog>

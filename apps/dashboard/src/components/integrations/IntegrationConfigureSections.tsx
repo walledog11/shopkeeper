@@ -23,6 +23,7 @@ const DISCONNECT_NOTES: Record<ConnectType, string> = {
   email: "Your past tickets stay. New customer emails will stop arriving.",
   ig: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
+  imessage: "Your past tickets stay. New iMessages will stop arriving.",
 }
 
 export function IntegrationPermissionsSection({
@@ -117,7 +118,9 @@ export function IntegrationActionsSection({
   const integration = connected[0]
   const isEmail = connectType === "email"
   const isPostmark = config.emailProvider === "postmark"
-  const showReconnect = !(isEmail && isPostmark)
+  // iMessage has no OAuth reconnect — changing creds means re-entering them via
+  // the connect form, so don't show a dead "Reconnect account" action.
+  const showReconnect = !(isEmail && isPostmark) && connectType !== "imessage"
   const showForwardingSetup = isEmail && email !== undefined && setEmail && onEmailSave
 
   return (

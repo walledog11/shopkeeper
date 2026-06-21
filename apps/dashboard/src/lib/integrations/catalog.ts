@@ -1,4 +1,4 @@
-export type ConnectType = 'email' | 'ig' | 'shopify'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'imessage'
 export type EmailProviderFilter = 'gmail' | 'outlook' | 'postmark'
 
 export interface PlatformConfig {
@@ -62,6 +62,19 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
       "Read Direct Messages sent to your business account",
       "Send replies from your business account",
       "View your business account profile",
+    ],
+  },
+  {
+    id: "imessage",
+    platform: "imessage",
+    name: "iMessage",
+    logo: "/logos/sms.svg",
+    logoSize: 30,
+    description: "Reply to customers who text your business on iMessage, with full customer memory and ticketing.",
+    connectType: 'imessage',
+    permissions: [
+      "Receive iMessages sent to your business line",
+      "Reply within existing customer conversations",
     ],
   },
   {

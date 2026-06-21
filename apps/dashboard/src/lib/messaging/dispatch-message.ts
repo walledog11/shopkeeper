@@ -216,10 +216,21 @@ async function dispatchImessageAsync(
   text: string,
   source: DispatchSource,
 ): Promise<DispatchMessageResult> {
-  const integration = await db.integration.findFirst({
-    where: { organizationId: org.id, platform: CHANNEL_TYPE.IMESSAGE },
-  });
+  const [integration, threadRow] = await Promise.all([
+    db.integration.findFirst({
+      where: { organizationId: org.id, platform: CHANNEL_TYPE.IMESSAGE },
+    }),
+    db.thread.findUnique({ where: { id: thread.id }, select: { externalSpaceId: true } }),
+  ]);
   if (!integration) return { ok: false, error: 'No iMessage integration configured' };
+
+  // Inbound-first: never open a cold iMessage conversation. Without a stored
+  // Space id the customer never messaged us on iMessage, so there is nothing to
+  // reply into — refuse rather than cold-start (Apple bans lines for cold or
+  // proactive outbound).
+  if (!threadRow?.externalSpaceId?.trim()) {
+    return { ok: false, error: 'No inbound iMessage conversation to reply into' };
+  }
 
   const message = await createMessage(
     {

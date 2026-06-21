@@ -46,6 +46,9 @@ function agentReplyDispatchError(
 
   const agentMessage = {
     "No Instagram integration configured": "no Instagram integration configured",
+    "No iMessage integration configured": "no iMessage integration configured",
+    "No inbound iMessage conversation to reply into":
+      "can't reply on iMessage — the customer must message first (no open iMessage conversation to reply into)",
     "No email integration configured": "no email integration configured",
     "Email not configured": "email not configured",
     "Email dispatch failed": "email dispatch failed",

@@ -283,3 +283,53 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
     expect(saved?.sendError).toBe('Could not queue email send');
   });
 });
+
+describe('dispatchMessage — iMessage (always async, inbound-first)', () => {
+  it('pre-creates a pending message and enqueues the Spectrum send when a Space exists', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ enqueued: true, jobId: 'j1' }), { status: 202 }));
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.imessage,
+      externalAccountId: 'proj_123',
+      accessToken: 'secret',
+    });
+    const customer = await createTestCustomer(org.id, '+15551234567');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.imessage);
+    await db.thread.update({ where: { id: thread.id }, data: { externalSpaceId: 'any;-;+15551234567' } });
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Queued iMessage.');
+
+    expect(result).toMatchObject({ ok: true });
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(String(url)).toContain('/internal/queue/outbound-imessage');
+    expect(init?.method).toBe('POST');
+    const saved = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved?.sendStatus).toBe('pending');
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      organizationId: org.id,
+      messageId: saved?.id,
+      threadId: thread.id,
+      integrationId: integration.id,
+      source: 'dispatch_message',
+    });
+  });
+
+  it('refuses to open a cold conversation when the thread has no Space', async () => {
+    await createTestIntegration(org.id, {
+      platform: ChannelType.imessage,
+      externalAccountId: 'proj_456',
+      accessToken: 'secret',
+    });
+    const customer = await createTestCustomer(org.id, '+15559990000');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.imessage);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Cold outreach.');
+
+    expect(result).toEqual({ ok: false, error: 'No inbound iMessage conversation to reply into' });
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    })).resolves.toBe(0);
+  });
+});
