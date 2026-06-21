@@ -79,7 +79,11 @@ export async function sendReply(
   }).catch(() => null);
 
   if (!thread) return toolError("Error: thread not found.");
-  if (thread.channelType !== CHANNEL_TYPE.IG_DM && thread.channelType !== CHANNEL_TYPE.EMAIL) {
+  if (
+    thread.channelType !== CHANNEL_TYPE.IG_DM &&
+    thread.channelType !== CHANNEL_TYPE.EMAIL &&
+    thread.channelType !== CHANNEL_TYPE.IMESSAGE
+  ) {
     return toolError(`Error: channel dispatch not implemented for ${thread.channelType}.`);
   }
 
@@ -94,9 +98,15 @@ export async function sendReply(
   );
   if (!result.ok) return agentReplyDispatchError(thread.channelType, result);
 
-  return thread.channelType === CHANNEL_TYPE.IG_DM
-    ? toolOk(`Reply sent to customer via Instagram DM.`)
-    : toolOk(`Reply sent to customer via email.`);
+  if (thread.channelType === CHANNEL_TYPE.IG_DM) {
+    return toolOk(`Reply sent to customer via Instagram DM.`);
+  }
+  // iMessage has no delivery confirmation — the send is queued, not confirmed
+  // delivered. Say "queued" so the agent never implies delivery certainty.
+  if (thread.channelType === CHANNEL_TYPE.IMESSAGE) {
+    return toolOk(`Reply queued to customer via iMessage.`);
+  }
+  return toolOk(`Reply sent to customer via email.`);
 }
 
 // ── send_email ────────────────────────────────────────────────────────────────

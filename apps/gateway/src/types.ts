@@ -82,3 +82,17 @@ export interface OutboundEmailJobData {
   source: OutboundEmailSource;
   traceId?: string;
 }
+
+export type OutboundImessageSource =
+  | 'dispatch_message'
+  | 'agent_send_reply'
+  | 'auto_ack';
+
+export interface OutboundImessageJobData {
+  organizationId: string;
+  messageId: string;
+  threadId: string;
+  integrationId: string;
+  source: OutboundImessageSource;
+  traceId?: string;
+}

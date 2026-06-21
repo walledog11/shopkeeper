@@ -4,13 +4,24 @@ import { clearQueueDiagnosticsCache } from '../health.js';
 import { removeFailedQueueJob } from '../queue-maintenance.js';
 import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
 import { JOB, QUEUE } from '../constants.js';
-import type { OutboundEmailJobData, OutboundEmailSource } from '../types.js';
+import type {
+  OutboundEmailJobData,
+  OutboundEmailSource,
+  OutboundImessageJobData,
+  OutboundImessageSource,
+} from '../types.js';
 import { authorizeInternalRequest } from './internal-auth.js';
 
 const OUTBOUND_EMAIL_SOURCES: ReadonlySet<OutboundEmailSource> = new Set([
   'dispatch_message',
   'agent_send_reply',
   'agent_send_email',
+  'auto_ack',
+]);
+
+const OUTBOUND_IMESSAGE_SOURCES: ReadonlySet<OutboundImessageSource> = new Set([
+  'dispatch_message',
+  'agent_send_reply',
   'auto_ack',
 ]);
 
@@ -56,6 +67,51 @@ export function registerInternalQueueRoutes(router: Router): void {
       logger.error(
         { err: (err as Error).message, messageId, source },
         '[InternalQueue] outbound-email enqueue error',
+      );
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  });
+
+  // iMessage outbound mirror of /queue/outbound-email: the dashboard pre-creates
+  // the pending message row, then enqueues the Spectrum send here so it inherits
+  // the gateway's BullMQ retries (and the gateway-hosted per-org Spectrum app).
+  router.post('/queue/outbound-imessage', async (req: Request, res: Response) => {
+    if (!authorizeInternalRequest(req, res, 'InternalQueue')) return;
+
+    const body = req.body as Record<string, unknown>;
+    const organizationId = typeof body.organizationId === 'string' ? body.organizationId.trim() : '';
+    const messageId = typeof body.messageId === 'string' ? body.messageId.trim() : '';
+    const threadId = typeof body.threadId === 'string' ? body.threadId.trim() : '';
+    const integrationId = typeof body.integrationId === 'string' ? body.integrationId.trim() : '';
+    const source = body.source as OutboundImessageSource;
+    const traceId = typeof body.traceId === 'string' ? body.traceId.trim() : undefined;
+
+    if (!organizationId || !messageId || !threadId || !integrationId) {
+      return res.status(400).json({
+        error: 'organizationId, messageId, threadId, and integrationId are required',
+      });
+    }
+    if (!OUTBOUND_IMESSAGE_SOURCES.has(source)) {
+      return res.status(400).json({ error: 'invalid source' });
+    }
+
+    const jobData: OutboundImessageJobData = {
+      organizationId,
+      messageId,
+      threadId,
+      integrationId,
+      source,
+      ...(traceId && { traceId }),
+    };
+
+    try {
+      const job = await getGatewayBullMqQueue(QUEUE.OUTBOUND_IMESSAGE).add(JOB.SEND_IMESSAGE, jobData);
+      logger.info({ messageId, source, jobId: job.id }, '[InternalQueue] Enqueued outbound iMessage');
+      return res.status(202).json({ enqueued: true, jobId: job.id });
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, messageId, source },
+        '[InternalQueue] outbound-imessage enqueue error',
       );
       return res.status(500).json({ error: 'Internal Server Error' });
     }

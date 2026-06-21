@@ -14,6 +14,7 @@ import {
   enqueueOutboundEmail,
   isOutboundEmailAsyncEnabled,
 } from '@/lib/messaging/enqueue-outbound-email';
+import { enqueueOutboundImessage } from '@/lib/messaging/enqueue-outbound-imessage';
 import type { OutboundSource } from '@/lib/server/outbound-recorder';
 
 interface DispatchThread {
@@ -64,6 +65,13 @@ export async function dispatchMessage(
     thread.channelType === CHANNEL_TYPE.EMAIL || thread.channelType === CHANNEL_TYPE.SHOPIFY;
   if (isEmailChannel && isOutboundEmailAsyncEnabled()) {
     return dispatchEmailAsync(thread, org, text, source);
+  }
+
+  // iMessage always goes async — the gateway owns the per-org Spectrum app, and
+  // there is no synchronous fallback (unlike IG). Returns optimistically; the
+  // message row's sendStatus is the source of truth.
+  if (thread.channelType === CHANNEL_TYPE.IMESSAGE) {
+    return dispatchImessageAsync(thread, org, text, source);
   }
 
   if (thread.channelType === CHANNEL_TYPE.IG_DM) {
@@ -193,6 +201,50 @@ async function dispatchEmailAsync(
       data: { sendStatus: 'failed', sendError: 'Could not queue email send' },
     });
     return { ok: false, error: 'Could not queue email send' };
+  }
+
+  return { ok: true, message };
+}
+
+// Outbound iMessage path: pre-create the agent message as `pending` and hand the
+// Spectrum send to the gateway queue. iMessage has no delivery webhook, so a
+// send-ack is best-effort — the worker flips the row to `sent` on ack or `failed`
+// on a thrown send.
+async function dispatchImessageAsync(
+  thread: DispatchThread,
+  org: DispatchOrg,
+  text: string,
+  source: DispatchSource,
+): Promise<DispatchMessageResult> {
+  const integration = await db.integration.findFirst({
+    where: { organizationId: org.id, platform: CHANNEL_TYPE.IMESSAGE },
+  });
+  if (!integration) return { ok: false, error: 'No iMessage integration configured' };
+
+  const message = await createMessage(
+    {
+      threadId: thread.id,
+      senderType: SenderType.agent,
+      contentText: text,
+      sendStatus: 'pending',
+    },
+    { status: THREAD_STATUS.OPEN },
+  );
+
+  const enqueued = await enqueueOutboundImessage({
+    organizationId: org.id,
+    messageId: message.id,
+    threadId: thread.id,
+    integrationId: integration.id,
+    source,
+  });
+
+  if (!enqueued) {
+    await db.message.update({
+      where: { id: message.id },
+      data: { sendStatus: 'failed', sendError: 'Could not queue iMessage send' },
+    });
+    return { ok: false, error: 'Could not queue iMessage send' };
   }
 
   return { ok: true, message };

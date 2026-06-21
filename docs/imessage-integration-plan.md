@@ -136,6 +136,20 @@ for these phases.
 - **Phase 4 — Outbound (B, after 2; heaviest but fully templated).** §4, the 3-part clone. Verify: an
   approved reply flips a `pending` row to `sent` and the test line receives it; a forced `send()`
   throw lands `failed` with an `opsAlert` log.
+  - **Status (2026-06-20): COMPLETE (code + unit tests; live send remains the Phase 0 residual).**
+    Cloned the `OUTBOUND_EMAIL_ASYNC` path end to end: dashboard `enqueueOutboundImessage` + an
+    always-async `dispatchImessageAsync` branch (no sync fallback), the `sendReply` tool-gate +
+    success branch (honest "Reply queued" wording — never implies delivery), the gateway
+    `/internal/queue/outbound-imessage` route, the `outbound-imessage` worker + handler
+    (`im.space.get(externalSpaceId)` with an `im.user()`→`im.space.create` fallback, `sent`-on-ack /
+    `failed`-on-throw, config errors fail fast, `opsAlert` on permanent failure), and the
+    `core.ts` / `types.ts` / `gateway-queues.ts` wiring. Verified with gateway + dashboard typecheck,
+    lint, and tests (handler, internal-queue route, worker-registration, dispatch-message). **Two
+    deviations from the plan:** (1) `spectrum-ts@4.2.0` `space.send()` exposes **no
+    `clientGuid`/idempotency key** (grep-verified against the shipped `.d.ts` overloads), so
+    cross-retry dedupe rests solely on the `sendStatus` gate — the same risk profile as the email
+    worker, not better. (2) The stranded-`pending` sweep (hard-constraint #6) is **deferred**, not
+    built: a crashed worker can leave a row `pending`, shown honestly rather than reconciled.
 - **Phase 5 — Provisioning UI + deliverability guards (B, after 3+4).** §5 plus the inbound-first
   rule, send-pacing/coalescing, and caps surfaced. Verify: connect flow stores an encrypted
   `Integration` and shows the webhook URL; the agent refuses to open a cold outbound conversation.
@@ -261,7 +275,7 @@ not a single worker. Mirror each part:
 | Webhook over **raw body**, SDK HMAC, fast 200 | Manual overload fed the global-`verify` `req.rawBody` (Meta/Shopify pattern — no bypass) |
 | **Idempotent, at-least-once** (handler runs post-response) | Existing `externalMessageId === message.id` dedupe |
 | **Persist `space.id`** for decoupled outbound | New `Thread.externalSpaceId` |
-| Stateless outbound by stored id + **stable clientGuid** | `space.get(id).send()` in gateway; clientGuid = Message id |
+| Stateless outbound by stored id (~~+ stable clientGuid~~) | `space.get(id).send()` in gateway. **`clientGuid` n/a in `spectrum-ts@4.2.0` `send()`** — dedupe via the `sendStatus` gate, matching the email worker |
 | Long-lived gRPC client | Hosted in gateway, not Vercel |
 | Content-type narrowing + attachment rehydrate | `switch(content.type)` + `content.read()` → blob |
 | Channel-agnostic core untouched | planner/run/executor/tools unchanged |

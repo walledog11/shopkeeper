@@ -142,6 +142,7 @@ describe('createCoreWorkerResources', () => {
       QUEUE.AI_SUMMARY,
       QUEUE.ORDER_REVIEW,
       QUEUE.OUTBOUND_EMAIL,
+      QUEUE.OUTBOUND_IMESSAGE,
     ]);
     expect(workerInstances.every((worker) => {
       const options = readOptions(worker);
