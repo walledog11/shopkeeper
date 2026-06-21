@@ -323,15 +323,28 @@ export async function planAgent(
         recentOrders: ctx.recentOrders,
       });
 
+      // Pair the active turn's non-read tool_use too — a non-read block (mutative /
+      // ask_operator) emitted alongside a read would otherwise reach the replan call
+      // unpaired (400 tool_use without tool_result).
+      const nonReadToolResults = activeRawToolCalls
+        .filter((toolCall) => TOOL_CATEGORIES[toolCall.name] !== "read")
+        .map((toolCall) => ({
+          type: "tool_result" as const,
+          tool_use_id: toolCall.id,
+          content: "Not executed during planning.",
+        }));
       planMessages = [
         ...activePlanMessages,
         {
           role: "user",
-          content: processedReadBlocks.map((block) => ({
-            type: "tool_result" as const,
-            tool_use_id: block.id,
-            content: readResults.readResultsMap.get(block.id) ?? "Not executed during planning.",
-          })),
+          content: [
+            ...processedReadBlocks.map((block) => ({
+              type: "tool_result" as const,
+              tool_use_id: block.id,
+              content: readResults.readResultsMap.get(block.id) ?? "Not executed during planning.",
+            })),
+            ...nonReadToolResults,
+          ],
         },
         {
           role: "user",
@@ -366,6 +379,27 @@ export async function planAgent(
       threadId: ctx.thread.id,
     }, "[agent:plan] mutative intent without action tools — running context replan");
 
+    const lastPlanMessage = planMessages[planMessages.length - 1];
+    const pendingToolUse = lastPlanMessage?.role === "assistant" && Array.isArray(lastPlanMessage.content)
+      ? (lastPlanMessage.content as Anthropic.ContentBlock[]).filter(
+          (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+        )
+      : [];
+    if (pendingToolUse.length > 0) {
+      // Resolve the initial turn's tool_use before appending replan context, else
+      // the next model call ships an unpaired tool_use (400 tool_use without tool_result).
+      planMessages = [
+        ...planMessages,
+        {
+          role: "user",
+          content: pendingToolUse.map((b) => ({
+            type: "tool_result" as const,
+            tool_use_id: b.id,
+            content: "Not executed during planning.",
+          })),
+        },
+      ];
+    }
     planMessages = [
       ...planMessages,
       { role: "user", content: synthesizeMutativeReplanContext(ctx) },

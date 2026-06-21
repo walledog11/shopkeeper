@@ -139,6 +139,24 @@ can't hit the item-3 terminal-less path, it's structurally identical to the know
 gap, the JSON parses, `needs_merchant_input` is a valid `mustClassifyAs`, and fixtures load by `readdirSync`
 so the rename is picked up. Remaining: Evals follow-up (1) the `400 tool_use without tool_result` flake.
 
+**Progress (2026-06-20, Evals item-1 — `400 tool_use without tool_result` flake fixed).** The last open item is
+**done.** Root-caused to the **planner transcript**, not the eval harness: `planAgent` (`planner.ts`) makes
+multi-pass model calls, and **two replan triggers appended user messages after an assistant turn without pairing
+every `tool_use` with a `tool_result`**, which the Anthropic API rejects with `400 tool_use … without
+tool_result`. (1) The after-read replan (`planner.ts` ~326) paired **reads only**, so a non-read tool_use the
+model emitted *alongside* a read (a mutative tool, or now `ask_operator`) reached the next call unpaired. (2) The
+mutative-intent context replan (`shouldForceMutativeReplan`, `planner.ts` ~369) appended its context messages
+without pairing the initial turn's tool_use at all. Both now pair **all** active-turn tool_use (reads keep their
+result; everything else gets the existing `"Not executed during planning."` placeholder) — the same pattern the
+two terminal draft blocks already used. **Why it was intermittent:** it only fired when the model happened to emit
+a non-read tool in the planning turn on a given run — hence ~1 random fixture per `repeats=1`, passing on re-run.
+The ask_operator work widened spot (2)'s reach (an `ask_operator`-in-initial turn with mutative customer intent
+now hits it), so the fix is also forward-looking. **Guarded by two unit tests** (`planner.test.ts` "transcript
+integrity") asserting every model call ships a `tool_result` for each prior `tool_use`; both were **proven to
+fail without the fix** and pass with it — a regression guard the paid eval suite can't reliably give for an
+intermittent 400. Agent unit **301 pass**, typecheck + lint clean, `dist` rebuilt. **All Evals follow-ups are now
+closed; Phase 1 + Phase 2 complete.**
+
 > **Swipe-deck design call (2026-06-19).** A card carrying a textarea can't live cleanly inside a
 > swipe-to-navigate deck. Resolution: the `needs_merchant_input` card **opts out of the drag gesture**
 > (`draggable={n > 1 && kind !== "needs_merchant_input"}`, still reachable via the chevrons/dots), and
@@ -304,9 +322,13 @@ exist (`schema.prisma:307-338`). Resolve-or-create the org's user KB, write
   must `send_reply`, must NOT ask), both under `apps/dashboard/src/lib/agent/__evals__/fixtures/`.
   Running `test:evals` caught the forced backstop over-firing (83.9% vs 95.8%); removing it restored
   the gate to **94.7% aggregate (within threshold)** with every over-ask regression recovered, and
-  the ask fixture passing model-electively. **Three items the run surfaced** — (1) still open; (2) and (3) ✅ resolved: (1) an intermittent
+  the ask fixture passing model-electively. **Three items the run surfaced** — all ✅ resolved: (1) **✅ RESOLVED
+  (2026-06-20 — see the item-1 note up top).** an intermittent
   `400 tool_use without tool_result` planner-transcript bug — pre-existing (predates this work),
-  lands on ~1 random fixture per repeats=1 run, passes on re-run; worth a separate fix. (2) **✅ RESOLVED
+  lands on ~1 random fixture per repeats=1 run, passes on re-run. **Root cause:** two replan triggers
+  (`planner.ts` ~326, ~369) appended user messages after an assistant turn while pairing only a subset of its
+  `tool_use` blocks with `tool_result`s; both now pair all active-turn tool_use, guarded by two `planner.test.ts`
+  "transcript integrity" tests. (2) **✅ RESOLVED
   (2026-06-20 — see the item-2 note up top).** advisory `kb-policy-no-article` legitimately flipped to
   `ask_operator` (a real policy gap), so it was **converted** (not retired) into the hard-gated
   `ask-operator-bulk-discount-gap` fixture mirroring `ask-operator-shipping-coverage-gap`. (3) **✅ RESOLVED (2026-06-19, option (b) — see the item-3 fix progress

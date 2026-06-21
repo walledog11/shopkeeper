@@ -553,3 +553,64 @@ describe("planAgent logging", () => {
   });
 
 });
+
+describe("planAgent transcript integrity", () => {
+  // Every model call must ship a tool_result for each prior tool_use, or the
+  // Anthropic API rejects it with `400 tool_use without tool_result`.
+  function expectValidToolPairing() {
+    for (const [callIndex, call] of mockCreate.mock.calls.entries()) {
+      const messages = (call[0]!.messages ?? []) as Array<{ role: string; content: unknown }>;
+      const toolResultIds = new Set<string>();
+      for (const message of messages) {
+        if (!Array.isArray(message.content)) continue;
+        for (const block of message.content as Array<{ type: string; tool_use_id?: string }>) {
+          if (block.type === "tool_result" && block.tool_use_id) toolResultIds.add(block.tool_use_id);
+        }
+      }
+      for (const message of messages) {
+        if (!Array.isArray(message.content)) continue;
+        for (const block of message.content as Array<{ type: string; id?: string }>) {
+          if (block.type === "tool_use" && block.id) {
+            expect(
+              toolResultIds.has(block.id),
+              `model call ${callIndex} sent tool_use ${block.id} without a matching tool_result`,
+            ).toBe(true);
+          }
+        }
+      }
+    }
+  }
+
+  it("pairs a non-read tool_use emitted alongside a read before replanning", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce({
+        stop_reason: "tool_use",
+        content: [
+          { type: "tool_use", id: "tu_read", name: "search_kb", input: { query: "refund policy" } },
+          { type: "tool_use", id: "tu_refund", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
+        ],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValue(singleToolUse("send_reply", { text: "Done." }, "tu_reply"));
+
+    await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
+
+    expectValidToolPairing();
+  });
+
+  it("pairs the initial tool_use before the mutative-intent context replan", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("ask_operator", { question: "Should I refund this?" }, "tu_ask"))
+      .mockResolvedValue(singleToolUse("send_reply", { text: "Done." }, "tu_reply"));
+
+    await planAgent(
+      makeCtx({ recentMessages: [{ senderType: "customer", contentText: "Please refund my order" }] }),
+      "Please refund my order",
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expectValidToolPairing();
+  });
+});
