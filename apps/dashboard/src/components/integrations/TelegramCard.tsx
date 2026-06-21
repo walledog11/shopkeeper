@@ -17,7 +17,6 @@ import {
 } from "./integration-card-styles"
 import {
   CardLogo,
-  ShopkeeperBadge,
 } from "./IntegrationCardParts"
 import { ConfigureSection } from "./ConfigureSection"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
@@ -112,10 +111,6 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
 
         <p className={cn("mt-4", CARD_TITLE)}>{config.name}</p>
         <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
-
-        <div className="mt-3">
-          <ShopkeeperBadge />
-        </div>
 
         <div className="mt-4 flex gap-2">
           {isConnected ? (

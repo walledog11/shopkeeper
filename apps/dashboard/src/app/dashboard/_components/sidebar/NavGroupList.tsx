@@ -46,7 +46,7 @@ export function NavGroupList({
                     href={item.href}
                     onClick={(e) => onNavigate(e, isActive)}
                     className={cn(
-                      "flex items-start gap-3 px-4 py-3.5 transition-colors",
+                      "flex items-center gap-3 px-4 py-3.5 transition-colors",
                       isActive
                         ? "bg-foreground/[0.04]"
                         : "hover:bg-foreground/[0.03]",
@@ -54,7 +54,7 @@ export function NavGroupList({
                   >
                     <item.icon
                       className={cn(
-                        "size-[18px] shrink-0 mt-0.5 stroke-[1.5]",
+                        "size-[18px] shrink-0 stroke-[1.5]",
                         isActive ? "text-foreground" : "text-foreground/50",
                       )}
                     />
@@ -67,9 +67,6 @@ export function NavGroupList({
                       >
                         {label}
                       </p>
-                      {item.description && (
-                        <p className="mt-0.5 text-xs leading-snug text-foreground/45">{item.description}</p>
-                      )}
                     </div>
                     {badgeCount != null && (
                       <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center bg-amber-500/15 text-amber-800 tabular-nums shrink-0">

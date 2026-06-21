@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { LazyMotion, animate, domMax, m, useMotionValue, useTransform } from "motion/react"
+import { LazyMotion, domMax, m, useMotionValue, useTransform } from "motion/react"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
 import { FLY_OFF, STACK_DEPTH, STACK_MARGIN_TOP } from "./needs-you-motion"
@@ -18,6 +18,7 @@ interface Props {
 export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
+  const [peekDirection, setPeekDirection] = useState<1 | -1>(1)
   const [frontHeight, setFrontHeight] = useState(0)
   const frontCardRef = useRef<HTMLDivElement>(null)
   const swipeRef = useRef<SwipeCardHandle>(null)
@@ -45,15 +46,20 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const mod = (value: number) => ((value % n) + n) % n
   const activeIndex = n > 0 ? Math.max(0, deck.findIndex(item => item.threadId === currentId)) : 0
   const current = n > 0 ? deck[activeIndex] : null
-  const nextItem = n > 1 ? deck[mod(activeIndex + 1)] : null
+  const peekItem = n > 1 ? deck[mod(activeIndex + peekDirection)] : null
 
   useEffect(() => {
-    const controls = animate(stackDragX, 0, {
-      type: "spring",
-      stiffness: 420,
-      damping: 34,
+    const unsubscribe = stackDragX.on("change", value => {
+      if (Math.abs(value) < 1) return
+
+      const nextDirection = value < 0 ? 1 : -1
+      setPeekDirection(previous => previous === nextDirection ? previous : nextDirection)
     })
-    return () => controls.stop()
+    return () => unsubscribe()
+  }, [stackDragX])
+
+  useLayoutEffect(() => {
+    stackDragX.set(0)
   }, [current?.threadId, stackDragX])
 
   useLayoutEffect(() => {
@@ -71,11 +77,13 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   if (n === 0 || !current) return <NeedsYouAllClear agentName={agentName} />
 
   const commitNeighbor = (indexDelta: 1 | -1) => {
+    setPeekDirection(indexDelta)
     setCurrentId(deck[mod(activeIndex + indexDelta)].threadId)
   }
 
   const goToNeighbor = (indexDelta: 1 | -1, flySign: 1 | -1) => {
     if (n <= 1) return
+    setPeekDirection(indexDelta)
     void swipeRef.current?.flyOff(flySign).then(animated => {
       if (animated) commitNeighbor(indexDelta)
     })
@@ -83,6 +91,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
 
   const dismiss = (threadId: string) => {
     const next = deck[mod(activeIndex + 1)]
+    setPeekDirection(1)
     void swipeRef.current?.flyOff(-1).then(animated => {
       if (!animated) return
       setDismissed(prev => new Set(prev).add(threadId))
@@ -100,7 +109,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
               className="relative"
               style={{ marginTop: STACK_MARGIN_TOP }}
             >
-              {(nextItem || n > 2) && (
+              {(peekItem || n > 2) && (
                 <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
                   {n > 2 && (
                     <m.div
@@ -118,7 +127,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
                     </m.div>
                   )}
 
-                  {nextItem && (
+                  {peekItem && (
                     <m.div
                       className="absolute inset-0 z-[1]"
                       style={{
@@ -131,7 +140,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
                       }}
                     >
                       <NeedsYouCardPeek
-                        item={nextItem}
+                        item={peekItem}
                         agentName={agentName}
                         minHeight={frontHeight > 0 ? frontHeight : undefined}
                       />

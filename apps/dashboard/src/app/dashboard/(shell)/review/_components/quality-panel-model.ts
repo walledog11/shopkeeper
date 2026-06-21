@@ -4,6 +4,9 @@ import type { ActionLogEntry } from "@/types"
 
 export type Focus = "attention" | "auto" | "all"
 export type Tone = "reply" | "escalate" | "money" | "error" | "note"
+export type ReviewColumnId = "attention" | "auto" | "store" | "approved"
+export type ReviewItemTone = "attention" | "auto" | "store" | "approved" | "error" | "note"
+export type ReviewIconKey = "alert" | "check" | "message" | "note" | "store" | "tool"
 
 export interface OutputBlock {
   key: string
@@ -13,10 +16,19 @@ export interface OutputBlock {
   tone: Tone
 }
 
-export interface DayGroup {
-  key: string
+export interface ReviewColumnConfig {
+  id: ReviewColumnId
   label: string
-  entries: ActionLogEntry[]
+  shortLabel: string
+  description: string
+  emptyTitle: string
+  emptyBody: string
+}
+
+export interface ReviewItemChrome {
+  tone: ReviewItemTone
+  icon: ReviewIconKey
+  label: string
 }
 
 export const FOCUS_OPTIONS: {
@@ -27,6 +39,41 @@ export const FOCUS_OPTIONS: {
   { id: "attention", label: "Needs your eyes", filters: { attention: true, excludeOperator: true } },
   { id: "auto", label: "Auto-sent", filters: { modes: ["auto_executed"], excludeOperator: true } },
   { id: "all", label: "Everything", filters: {} },
+]
+
+export const REVIEW_BOARD_COLUMNS: ReviewColumnConfig[] = [
+  {
+    id: "attention",
+    label: "Needs your eyes",
+    shortLabel: "Needs eyes",
+    description: "Escalations, flags, errors, and policy blocks.",
+    emptyTitle: "Nothing needs review",
+    emptyBody: "Escalations, failed tools, and fraud flags will land here.",
+  },
+  {
+    id: "auto",
+    label: "Auto-sent",
+    shortLabel: "Auto-sent",
+    description: "Replies and routine actions sent without approval.",
+    emptyTitle: "Nothing auto-sent",
+    emptyBody: "Autonomous replies and actions will appear here for spot checks.",
+  },
+  {
+    id: "store",
+    label: "Store actions",
+    shortLabel: "Store",
+    description: "Refunds, cancellations, order edits, and order creation.",
+    emptyTitle: "No store actions",
+    emptyBody: "Refunds, order edits, cancellations, and created orders will appear here.",
+  },
+  {
+    id: "approved",
+    label: "Approved / read-only",
+    shortLabel: "Approved",
+    description: "Human-approved work and read-only agent lookups.",
+    emptyTitle: "Nothing approved yet",
+    emptyBody: "Approved turns and read-only checks will appear here.",
+  },
 ]
 
 export const TONE_STYLES: Record<Tone, { container: string; label: string }> = {
@@ -43,15 +90,20 @@ export const MODE_LABELS: Record<NonNullable<ActionLogEntry["mode"]>, string> = 
   read_only: "Read only",
 }
 
-const MONEY_TOOLS = new Set([
+export const STORE_ACTION_TOOLS = [
   "create_refund",
   "cancel_order",
   "create_shopify_order",
   "edit_shopify_order",
-])
+  "update_shopify_order_address",
+  "flag_order",
+] as const
+
+const MONEY_TOOLS = new Set<string>(STORE_ACTION_TOOLS)
 
 const EXTRA_TOOL_LABELS: Record<string, string> = {
   flag_order: "Flagged order",
+  update_shopify_order_address: "Updated shipping address",
 }
 
 export function toolLabel(tool: string): string {
@@ -61,7 +113,7 @@ export function toolLabel(tool: string): string {
 export function resolveFocus(value: string | null): Focus {
   if (value === "attention" || value === "auto" || value === "all") return value
   if (value === "escalations") return "attention"
-  return "attention"
+  return "all"
 }
 
 export function parseFromParam(value: string | null): string | null {
@@ -135,65 +187,71 @@ export function outcomeTone(action: ActionLogEntry["actions"][number]): Tone {
   return "note"
 }
 
-function isRiskEntry(entry: ActionLogEntry): boolean {
+export function isAttentionEntry(entry: ActionLogEntry): boolean {
   return entry.actions.some(
     (action) =>
-      MONEY_TOOLS.has(action.tool)
+      action.tool === "escalate_to_human"
       || action.tool === "flag_order"
       || isErrorStatus(action.status),
   )
 }
 
-function localDayKey(iso: string): string {
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+export function isStoreActionEntry(entry: ActionLogEntry): boolean {
+  return entry.actions.some((action) => MONEY_TOOLS.has(action.tool))
 }
 
-function dayLabel(iso: string): string {
-  const now = new Date()
-  const key = localDayKey(iso)
-  if (key === localDayKey(now.toISOString())) return "Today"
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  if (key === localDayKey(yesterday.toISOString())) return "Yesterday"
-  const d = new Date(iso)
-  return d.toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-    ...(d.getFullYear() !== now.getFullYear() ? { year: "numeric" } : {}),
-  })
+export function classifyReviewItem(entry: ActionLogEntry): ReviewColumnId {
+  if (isAttentionEntry(entry)) return "attention"
+  if (isStoreActionEntry(entry)) return "store"
+  if (entry.mode === "auto_executed") return "auto"
+  return "approved"
 }
 
-export function groupByDay(entries: ActionLogEntry[]): DayGroup[] {
-  const groups: DayGroup[] = []
-  for (const entry of entries) {
-    const key = localDayKey(entry.sentAt)
-    const last = groups[groups.length - 1]
-    if (last && last.key === key) last.entries.push(entry)
-    else groups.push({ key, label: dayLabel(entry.sentAt), entries: [entry] })
-  }
-  for (const group of groups) {
-    group.entries = [
-      ...group.entries.filter(isRiskEntry),
-      ...group.entries.filter((entry) => !isRiskEntry(entry)),
-    ]
-  }
-  return groups
+export function columnsForFocus(focus: Focus): ReviewColumnId[] {
+  if (focus === "attention") return ["attention"]
+  if (focus === "auto") return ["auto"]
+  return REVIEW_BOARD_COLUMNS.map((column) => column.id)
 }
 
-export function emptyStates(agentName: string): Record<Focus, { title: string; body: string }> {
-  return {
-    attention: {
-      title: "Nothing needs your attention",
-      body: "Escalations, failed actions, and flagged orders will land here.",
-    },
-    auto: {
-      title: "Nothing auto-sent yet",
-      body: `When ${agentName} replies or acts on its own, it shows up here for a quick spot-check.`,
-    },
-    all: {
-      title: "Nothing to review yet",
-      body: `Once ${agentName} starts handling tickets, every output appears here for you to spot-check.`,
-    },
+export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
+  const errored = entry.actions.find((action) => isErrorStatus(action.status))
+  if (errored) {
+    return {
+      tone: "error",
+      icon: "alert",
+      label: errored.status === "policy_block" ? "Policy block" : "Tool error",
+    }
   }
+
+  const escalation = entry.actions.find((action) => action.tool === "escalate_to_human" || action.status === "escalated")
+  if (escalation) return { tone: "attention", icon: "alert", label: "Escalated" }
+
+  const flag = entry.actions.find((action) => action.tool === "flag_order")
+  if (flag) return { tone: "attention", icon: "alert", label: "Flagged order" }
+
+  const storeAction = entry.actions.find((action) => MONEY_TOOLS.has(action.tool))
+  if (storeAction) return { tone: "store", icon: "store", label: toolLabel(storeAction.tool) }
+
+  const reply = entry.actions.find((action) => action.tool === "send_reply" || action.tool === "send_email")
+  if (entry.mode === "auto_executed") {
+    return {
+      tone: "auto",
+      icon: reply ? "message" : "tool",
+      label: reply ? "Auto reply" : "Auto action",
+    }
+  }
+
+  if (entry.mode === "read_only") return { tone: "note", icon: "note", label: "Read only" }
+  return { tone: "approved", icon: "check", label: "Approved" }
+}
+
+export function primaryPreviewText(entry: ActionLogEntry): string {
+  const output = entry.actions.map(toOutputBlock).find((block): block is OutputBlock => block !== null)
+  if (output?.text.trim()) return output.text.trim()
+
+  const outcome = outcomeActions(entry).find((action) => action.result.trim())
+  if (outcome?.result.trim()) return outcome.result.trim()
+
+  if (entry.summary.trim()) return entry.summary.trim()
+  return entry.instruction?.trim() || "No output recorded."
 }

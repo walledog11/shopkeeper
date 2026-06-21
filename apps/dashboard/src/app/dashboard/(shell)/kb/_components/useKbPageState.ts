@@ -55,9 +55,6 @@ export function useKbPageState() {
 
   const visibleArticles = useMemo(() => {
     let list = allArticles
-    if (selectedBaseId !== "all") {
-      list = list.filter(a => a.knowledgeBaseId === selectedBaseId)
-    }
     const q = search.trim().toLowerCase()
     if (q) {
       list = list.filter(a => a.title.toLowerCase().includes(q) || a.body.toLowerCase().includes(q))
@@ -69,7 +66,7 @@ export function useKbPageState() {
       sorted.sort((a, b) => a.title.localeCompare(b.title))
     }
     return sorted
-  }, [allArticles, selectedBaseId, search, sort])
+  }, [allArticles, search, sort])
 
   const selectedArticle = useMemo(() => {
     if (!selectedArticleId) return null

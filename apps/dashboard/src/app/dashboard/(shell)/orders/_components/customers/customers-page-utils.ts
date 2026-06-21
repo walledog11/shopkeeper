@@ -54,6 +54,26 @@ export function formatLTV(val: string) {
   return `$${n.toFixed(2)}`
 }
 
+export type CustomerSegment = "vip" | "repeat" | "new" | "prospect"
+
+export const SEGMENT_LABEL: Record<CustomerSegment, string> = {
+  vip: "VIP",
+  repeat: "Repeat",
+  new: "New",
+  prospect: "No orders",
+}
+
+/** Lifetime spend at or above this marks a customer VIP regardless of order count. */
+export const VIP_LTV_THRESHOLD = 500
+
+export function customerSegment(c: CustomerRow): CustomerSegment {
+  const spent = parseFloat(c.total_spent)
+  if (!isNaN(spent) && spent >= VIP_LTV_THRESHOLD) return "vip"
+  if (c.orders_count >= 2) return "repeat"
+  if (c.orders_count === 1) return "new"
+  return "prospect"
+}
+
 export function fulfillmentStyle(status: string | null) {
   switch (status) {
     case "fulfilled":  return { label: "Fulfilled",   cls: "text-green-400 bg-green-400/10 border-green-400/20" }

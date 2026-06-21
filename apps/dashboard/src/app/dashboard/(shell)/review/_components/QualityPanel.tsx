@@ -2,36 +2,27 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Eye, Loader2, MessageSquare } from "lucide-react"
 import { useActionLogEntries } from "@/hooks/useActionLogEntries"
 import { HOME_SUMMARY_REFRESH_INTERVAL_MS } from "@/lib/home/summary-contract"
 import AutonomyReadinessCard from "./AutonomyReadinessCard"
-import { ReviewCard } from "./ReviewCard"
+import { ReviewBoard, type ReviewBoardState } from "./ReviewBoard"
 import {
-  emptyStates,
+  STORE_ACTION_TOOLS,
   FOCUS_OPTIONS,
-  groupByDay,
+  classifyReviewItem,
+  columnsForFocus,
   parseFromParam,
   resolveFocus,
   type Focus,
+  type ReviewColumnId,
 } from "./quality-panel-model"
 
-function SkeletonCard() {
-  return (
-    <div className="px-5 py-4 border-b border-foreground/[0.05] animate-pulse">
-      <div className="flex items-center gap-2">
-        <div className="size-6 rounded-lg bg-foreground/[0.07]" />
-        <div className="h-3 w-28 rounded bg-foreground/[0.07]" />
-        <div className="h-3 w-16 rounded bg-foreground/[0.05]" />
-      </div>
-      <div className="mt-3 pl-8">
-        <div className="h-16 rounded-lg bg-foreground/[0.04]" />
-      </div>
-    </div>
-  )
-}
-
 const LAST_VISIT_KEY = "shopkeeper:review:lastVisit"
+const GLASS_SHELL_CLASS =
+  "space-y-2 rounded-[22px] border border-foreground/[0.08] bg-card/60 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_18px_50px_rgba(43,33,24,0.13)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45"
+
+const GLASS_CONTROL_CLASS =
+  "border border-foreground/[0.08] bg-background/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-background/28"
 
 function useLastVisit(): string | null {
   const [lastVisit] = useState<string | null>(() => (
@@ -43,138 +34,178 @@ function useLastVisit(): string | null {
   return lastVisit
 }
 
+function replaceReviewUrl(replace: ReturnType<typeof useRouter>["replace"], params: URLSearchParams) {
+  const qs = params.toString()
+  replace(qs ? `/dashboard/review?${qs}` : "/dashboard/review")
+}
+
+function entriesForColumn(entries: ReturnType<typeof useActionLogEntries>["entries"], columnId: ReviewColumnId) {
+  return entries.filter((entry) => classifyReviewItem(entry) === columnId)
+}
+
 export default function QualityPanel({ agentName }: { agentName: string }) {
   const searchParams = useSearchParams()
   const { replace } = useRouter()
   const focus = resolveFocus(searchParams.get("focus"))
   const fromParam = searchParams.get("from")
+  const from = useMemo(() => parseFromParam(fromParam), [fromParam])
   const lastVisit = useLastVisit()
 
   const setFocusAndUrl = useCallback((next: Focus) => {
     const params = new URLSearchParams(searchParams.toString())
-    params.set("focus", next)
-    replace(`/dashboard/review?${params.toString()}`)
+    if (next === "all") params.delete("focus")
+    else params.set("focus", next)
+    replaceReviewUrl(replace, params)
   }, [replace, searchParams])
 
-  const focusConfig = FOCUS_OPTIONS.find((option) => option.id === focus) ?? FOCUS_OPTIONS[0]
-  const filters = useMemo(() => ({
-    ...focusConfig.filters,
-    from: parseFromParam(fromParam),
-  }), [focusConfig, fromParam])
+  const setTimeWindow = useCallback((next: "24h" | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next) params.set("from", next)
+    else params.delete("from")
+    replaceReviewUrl(replace, params)
+  }, [replace, searchParams])
 
-  const {
-    entries: allEntries,
-    isLoading,
-    error,
-    hasMore,
-    isLoadingMore,
-    loadMore,
-  } = useActionLogEntries(filters, {
+  const queryOptions = {
     refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
     revalidateOnFocus: true,
-  })
+  }
 
-  const dayGroups = useMemo(() => groupByDay(allEntries), [allEntries])
-  const fromLabel = fromParam === "24h" ? " in the last 24 hours" : ""
-  const emptyState = emptyStates(agentName)[focus]
+  const attentionFilters = useMemo(() => ({
+    attention: true,
+    excludeOperator: true,
+    from,
+  }), [from])
+
+  const autoFilters = useMemo(() => ({
+    modes: ["auto_executed" as const],
+    excludeOperator: true,
+    from,
+  }), [from])
+
+  const storeFilters = useMemo(() => ({
+    tools: [...STORE_ACTION_TOOLS],
+    from,
+  }), [from])
+
+  const approvedFilters = useMemo(() => ({
+    modes: ["human_approved" as const, "read_only" as const],
+    from,
+  }), [from])
+
+  const attentionQuery = useActionLogEntries(attentionFilters, queryOptions)
+  const autoQuery = useActionLogEntries(autoFilters, queryOptions)
+  const storeQuery = useActionLogEntries(storeFilters, queryOptions)
+  const approvedQuery = useActionLogEntries(approvedFilters, queryOptions)
+
+  const columns: ReviewBoardState = useMemo(() => ({
+    attention: {
+      entries: entriesForColumn(attentionQuery.entries, "attention"),
+      error: attentionQuery.error,
+      hasMore: attentionQuery.hasMore,
+      isLoading: attentionQuery.isLoading,
+      isLoadingMore: attentionQuery.isLoadingMore,
+      onLoadMore: attentionQuery.loadMore,
+      onRetry: attentionQuery.refresh,
+    },
+    auto: {
+      entries: entriesForColumn(autoQuery.entries, "auto"),
+      error: autoQuery.error,
+      hasMore: autoQuery.hasMore,
+      isLoading: autoQuery.isLoading,
+      isLoadingMore: autoQuery.isLoadingMore,
+      onLoadMore: autoQuery.loadMore,
+      onRetry: autoQuery.refresh,
+    },
+    store: {
+      entries: entriesForColumn(storeQuery.entries, "store"),
+      error: storeQuery.error,
+      hasMore: storeQuery.hasMore,
+      isLoading: storeQuery.isLoading,
+      isLoadingMore: storeQuery.isLoadingMore,
+      onLoadMore: storeQuery.loadMore,
+      onRetry: storeQuery.refresh,
+    },
+    approved: {
+      entries: entriesForColumn(approvedQuery.entries, "approved"),
+      error: approvedQuery.error,
+      hasMore: approvedQuery.hasMore,
+      isLoading: approvedQuery.isLoading,
+      isLoadingMore: approvedQuery.isLoadingMore,
+      onLoadMore: approvedQuery.loadMore,
+      onRetry: approvedQuery.refresh,
+    },
+  }), [attentionQuery, autoQuery, storeQuery, approvedQuery])
+
+  const visibleColumnIds = useMemo(() => columnsForFocus(focus), [focus])
+  const hasCustomFrom = Boolean(fromParam && fromParam !== "24h")
+  const isNew = useCallback(
+    (entry: { sentAt: string }) => lastVisit !== null && entry.sentAt > lastVisit,
+    [lastVisit],
+  )
 
   return (
-    <>
-      <div className="px-5 py-4 border-b border-foreground/[0.06]">
-        <AutonomyReadinessCard />
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative z-20 shrink-0 px-3 pt-3 pb-3">
+        <div className={GLASS_SHELL_CLASS}>
+          <AutonomyReadinessCard />
 
-        <div className="flex flex-wrap items-center gap-1.5 mt-3">
-          {FOCUS_OPTIONS.map((opt) => {
-            const active = opt.id === focus
-            return (
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className={`flex min-w-0 flex-wrap items-center gap-1.5 rounded-full px-2 py-1 ${GLASS_CONTROL_CLASS}`}>
+              {FOCUS_OPTIONS.map((opt) => {
+                const active = opt.id === focus
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setFocusAndUrl(opt.id)}
+                    className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
+                      active
+                        ? "bg-foreground/[0.12] text-white"
+                        : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                    }`}
+                  >
+                    {opt.id === "all" ? "Full board" : opt.label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className={`flex shrink-0 items-center gap-1 rounded-full px-1 py-1 ${GLASS_CONTROL_CLASS}`}>
               <button
-                key={opt.id}
                 type="button"
-                onClick={() => setFocusAndUrl(opt.id)}
-                className={`text-xs font-semibold px-2.5 h-6 rounded border transition-colors ${
-                  active
-                    ? "bg-foreground/[0.12] text-white border-foreground/[0.18]"
-                    : "bg-foreground/[0.04] text-foreground/55 border-foreground/[0.08] hover:bg-foreground/[0.08] hover:text-foreground/80"
+                onClick={() => setTimeWindow(null)}
+                className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
+                  !fromParam
+                    ? "bg-foreground/[0.12] text-white"
+                    : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
                 }`}
               >
-                {opt.label}
+                All time
               </button>
-            )
-          })}
-          {fromParam === "24h" && (
-            <span className="text-xs text-foreground/35 ml-1">{"\u00b7"} Last 24 hours</span>
-          )}
+              <button
+                type="button"
+                onClick={() => setTimeWindow("24h")}
+                className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
+                  fromParam === "24h"
+                    ? "bg-foreground/[0.12] text-white"
+                    : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                }`}
+              >
+                24h
+              </button>
+              {hasCustomFrom && (
+                <span className="px-2 text-xs font-medium text-foreground/35">Custom</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {isLoading && allEntries.length === 0 ? (
-        <div>
-          {Array.from({ length: 6 }, (_, i) => `review-skeleton-${i}`).map((key) => (
-            <SkeletonCard key={key} />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-          <p className="text-sm text-foreground/50">Failed to load agent outputs.</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="mt-3 text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
-          >
-            Try again
-          </button>
-        </div>
-      ) : allEntries.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center px-6">
-          <div className="size-10 rounded-xl bg-foreground/[0.06] flex items-center justify-center mb-4">
-            {focus === "attention" ? (
-              <Eye className="size-5 text-foreground/30" />
-            ) : (
-              <MessageSquare className="size-5 text-foreground/30" />
-            )}
-          </div>
-          <p className="text-sm font-medium text-foreground/60 mb-1">{emptyState.title}</p>
-          <p className="text-xs text-foreground/30 max-w-xs">
-            {fromLabel ? `No outputs match this lens${fromLabel}.` : emptyState.body}
-          </p>
-        </div>
-      ) : (
-        <>
-          {dayGroups.map((group) => (
-            <div key={group.key}>
-              <div className="px-5 pt-4 pb-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-foreground/35">
-                  {group.label}
-                </p>
-              </div>
-              {group.entries.map((entry) => (
-                <ReviewCard
-                  key={entry.id}
-                  entry={entry}
-                  focus={focus}
-                  isNew={lastVisit !== null && entry.sentAt > lastVisit}
-                />
-              ))}
-            </div>
-          ))}
-
-          <div className="flex justify-center py-6">
-            {hasMore ? (
-              <button
-                type="button"
-                onClick={loadMore}
-                disabled={isLoadingMore}
-                className="text-xs font-medium text-foreground/35 hover:text-foreground/60 disabled:opacity-40 transition-colors inline-flex items-center gap-1.5"
-              >
-                {isLoadingMore ? <Loader2 className="size-3 animate-spin" /> : null}
-                {isLoadingMore ? "Loading…" : "Load more"}
-              </button>
-            ) : (
-              <p className="text-xs text-foreground/40">You&apos;re all caught up</p>
-            )}
-          </div>
-        </>
-      )}
-    </>
+      <ReviewBoard
+        columns={columns}
+        isNew={isNew}
+        visibleColumnIds={visibleColumnIds}
+      />
+    </div>
   )
 }

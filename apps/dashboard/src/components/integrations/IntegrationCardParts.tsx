@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { BadgeCheck, Mail } from "lucide-react"
+import { Mail } from "lucide-react"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import { cn } from "@/lib/ui/cn"
 import { LOGO_IMAGE, LOGO_SOFTEN, LOGO_TILE } from "./integration-card-styles"
@@ -52,15 +52,5 @@ export function CardLogo({ config }: { config: PlatformConfig }) {
         className={LOGO_IMAGE}
       />
     </div>
-  )
-}
-
-export function ShopkeeperBadge() {
-  return (
-    <span className="inline-flex items-center gap-1.5 self-start">
-      <Image src="/logos/shopkeeper-shop-logo.png" alt="" width={20} height={20} className="rounded-[6px]" />
-      <span className="text-[13px] font-semibold leading-none text-card-foreground">shopkeeper</span>
-      <BadgeCheck aria-label="Verified" className="size-3.5 fill-[#1D9BF0] text-card-foreground" />
-    </span>
   )
 }

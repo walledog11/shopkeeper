@@ -21,11 +21,6 @@ interface WorkspaceTabViewProps extends WorkspaceTabProps {
 export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-lg font-bold text-foreground/80">Workspace</h1>
-        <p className="text-sm text-foreground/35 mt-0.5">Manage your workspace settings.</p>
-      </div>
-
       <GeneralSection orgName={orgName} state={state} />
       <BrandingSection orgName={orgName} state={state} />
       <DataExportSection state={state} />

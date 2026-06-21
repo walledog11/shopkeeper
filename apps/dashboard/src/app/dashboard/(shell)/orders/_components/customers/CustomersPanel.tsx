@@ -1,29 +1,25 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
-import { Search, X } from "lucide-react"
+import { useCallback, useState } from "react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { useCursorListState } from "@/lib/api/use-cursor-list-state"
-import { CustomerDrawer } from "./CustomerDrawer"
+import { CustomerCard } from "./CustomerCard"
 import { CustomerDrawerContent } from "./CustomerDrawerContent"
 import { fetchCustomersPage } from "./customer-requests"
-import { CustomerListRow } from "./CustomerListRow"
 import { CustomerListSkeleton } from "./CustomerListSkeleton"
 import { CustomersEmptyState } from "./CustomersEmptyState"
 import type { CustomerRow, CustomersResponse } from "./customers-page-utils"
 
-function useCustomersPanelState() {
+function useCustomersPanelState(query: string) {
   const [shop, setShop] = useState("")
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRow | null>(null)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const drawerCustomerRef = useRef<CustomerRow | null>(null)
 
   const { mapItems, ...list } = useCursorListState<CustomerRow, CustomersResponse>({
-    buildUrl: (debouncedQuery) => (
-      debouncedQuery.length >= 1
-        ? `/api/shopify/customers?q=${encodeURIComponent(debouncedQuery)}`
+    buildUrl: () => (
+      query.length >= 1
+        ? `/api/shopify/customers?q=${encodeURIComponent(query)}`
         : "/api/shopify/customers"
     ),
-    debounceMs: 150,
     fetchPage: async (pageInfo) => {
       const page = await fetchCustomersPage(pageInfo)
       return { items: page.customers, nextPageInfo: page.nextPageInfo }
@@ -32,29 +28,13 @@ function useCustomersPanelState() {
     onInitialLoad: (response) => {
       setShop(response.shop ?? "")
     },
-    searchMinLength: 1,
     selectInitialPage: (response) => ({
       items: response.customers,
       nextPageInfo: response.nextPageInfo,
     }),
   })
 
-  const openDrawer = (customer: CustomerRow) => {
-    drawerCustomerRef.current = customer
-    setSelectedCustomer(customer)
-    setIsDrawerOpen(false)
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setIsDrawerOpen(true))
-    })
-  }
-
-  const closeDrawer = useCallback(() => {
-    setIsDrawerOpen(false)
-    setTimeout(() => {
-      setSelectedCustomer(null)
-      drawerCustomerRef.current = null
-    }, 300)
-  }, [])
+  const closeDrawer = useCallback(() => setSelectedCustomer(null), [])
 
   const handleCustomerUpdated = useCallback((updated: Partial<CustomerRow>) => {
     mapItems(customer =>
@@ -66,119 +46,91 @@ function useCustomersPanelState() {
   return {
     ...list,
     closeDrawer,
-    drawerCustomer: selectedCustomer ?? drawerCustomerRef.current,
     handleCustomerUpdated,
-    isDrawerOpen,
-    openDrawer,
+    openDrawer: setSelectedCustomer,
     selectedCustomer,
     shop,
   }
 }
 
-export default function CustomersPanel() {
+export default function CustomersPanel({ query }: { query: string }) {
+  const isSearchMode = query.length >= 1
   const {
     allItems: allCustomers,
     closeDrawer,
     data,
-    debouncedQuery,
-    drawerCustomer,
     handleCustomerUpdated,
-    handleSearchChange,
-    isDrawerOpen,
     isLoading,
     isLoadingMore,
-    isSearchMode,
     loadMore,
     loadMoreError,
     nextPageInfo,
     openDrawer,
     pages,
-    searchQuery,
     selectedCustomer,
     shop,
-  } = useCustomersPanelState()
+  } = useCustomersPanelState(query)
 
   return (
     <>
       <div className="space-y-5">
-        <div className="flex items-center gap-3 flex-wrap">
-          {isSearchMode && (
-            <span className="text-xs font-medium text-foreground/40">
-              {isLoading ? "Searching…" : `${allCustomers.length} result${allCustomers.length !== 1 ? "s" : ""}`}
-            </span>
-          )}
+        {isSearchMode && (
+          <p className="text-xs font-medium text-foreground/40">
+            {isLoading ? "Searching…" : `${allCustomers.length} result${allCustomers.length !== 1 ? "s" : ""}`}
+          </p>
+        )}
 
-          <div className="flex items-center gap-2 bg-foreground/[0.04] border border-border rounded-md px-3 h-9 w-full sm:ml-auto sm:w-[320px]">
-            <Search className="size-3.5 text-foreground/25 shrink-0" />
-            <input
-              aria-label="Search customers"
-              value={searchQuery}
-              onChange={e => handleSearchChange(e.target.value)}
-              placeholder="Search by name or email…"
-              className="flex-1 bg-transparent text-sm text-foreground/70 placeholder:text-foreground/30 outline-none min-w-0"
-            />
-            {searchQuery && (
-              <button type="button" onClick={() => handleSearchChange("")} aria-label="Clear search" className="text-foreground/25 hover:text-foreground/50 transition-colors">
-                <X className="size-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="hidden sm:grid grid-cols-[1fr_120px_36px] gap-3 px-1 pb-1 border-b border-border">
-          {["Customer", "Value", ""].map(header => (
-            <span key={header} className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{header}</span>
-          ))}
-        </div>
-
-        <div className="divide-y divide-border rounded-xl border border-border overflow-hidden bg-card">
-          {isLoading && pages.length === 0 ? (
-            <CustomerListSkeleton />
-          ) : allCustomers.length === 0 ? (
-            <CustomersEmptyState isSearch={isSearchMode} query={debouncedQuery} />
-          ) : (
-            <>
+        {isLoading && pages.length === 0 ? (
+          <CustomerListSkeleton />
+        ) : allCustomers.length === 0 ? (
+          <CustomersEmptyState isSearch={isSearchMode} query={query} />
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {allCustomers.map(customer => (
-                <CustomerListRow
+                <CustomerCard
                   key={customer.id}
                   customer={customer}
                   isSelected={selectedCustomer?.id === customer.id}
                   onClick={() => openDrawer(customer)}
                 />
               ))}
+            </div>
 
-              {nextPageInfo && !isSearchMode && (
-                <div className="px-5 py-4 border-t border-border">
-                  {loadMoreError && (
-                    <p className="mb-2 text-center text-xs text-red-500" aria-live="polite">{loadMoreError}</p>
-                  )}
-                  <button type="button"
-                    onClick={loadMore}
-                    disabled={isLoadingMore}
-                    className="w-full text-xs font-semibold text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors py-1"
-                  >
-                    {isLoadingMore ? "Loading…" : "Load more"}
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            {nextPageInfo && !isSearchMode && (
+              <div>
+                {loadMoreError && (
+                  <p className="mb-2 text-center text-xs text-red-500" aria-live="polite">{loadMoreError}</p>
+                )}
+                <button type="button"
+                  onClick={loadMore}
+                  disabled={isLoadingMore}
+                  className="w-full py-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
+                >
+                  {isLoadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {(selectedCustomer || drawerCustomer) && (
-        <CustomerDrawer
-          isOpen={isDrawerOpen}
-          onClose={closeDrawer}
+      <Dialog open={Boolean(selectedCustomer)} onOpenChange={(open) => { if (!open) closeDrawer() }}>
+        <DialogContent
+          showCloseButton={false}
+          className="flex h-[86vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-background p-0 shadow-xl sm:max-w-md"
         >
-          <CustomerDrawerContent
-            customer={drawerCustomer!}
-            shop={shop || data?.shop || ""}
-            onClose={closeDrawer}
-            onCustomerUpdated={handleCustomerUpdated}
-          />
-        </CustomerDrawer>
-      )}
+          <DialogTitle className="sr-only">Customer detail</DialogTitle>
+          {selectedCustomer ? (
+            <CustomerDrawerContent
+              customer={selectedCustomer}
+              shop={shop || data?.shop || ""}
+              onClose={closeDrawer}
+              onCustomerUpdated={handleCustomerUpdated}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

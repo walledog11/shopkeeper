@@ -34,8 +34,8 @@ export default function AutonomyReadinessCard() {
   if (!data || (data.resolved === 0 && data.pending === 0)) return null
 
   return (
-    <div className="mt-4 rounded-xl border border-foreground/[0.08] bg-foreground/[0.03] p-4">
-      <div className="flex items-center gap-2">
+    <div className="rounded-[18px] border border-foreground/[0.08] bg-foreground/[0.03] p-3">
+      <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck className="size-4 text-emerald-300" />
         <h2 className="text-sm font-semibold text-foreground/80">Trust readiness</h2>
         <span className="ml-auto text-xs text-foreground/30">last {data.resolved} of {data.windowSize}</span>
@@ -44,28 +44,28 @@ export default function AutonomyReadinessCard() {
         How often the agent&apos;s would-be auto-action matched what you approved. Watched before going live.
       </p>
 
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5">
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2">
           <p className="text-xs text-foreground/40">Agreement</p>
-          <p className="text-lg font-semibold text-white">{pct(data.agreementRate)}</p>
+          <p className="text-base font-semibold text-white">{pct(data.agreementRate)}</p>
         </div>
-        <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2.5">
+        <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2">
           <p className="text-xs text-foreground/40">Pending</p>
-          <p className="text-lg font-semibold text-foreground/80">{data.pending}</p>
+          <p className="text-base font-semibold text-foreground/80">{data.pending}</p>
         </div>
-        <div className={`rounded-lg border p-2.5 ${data.dangerousRejections > 0 ? "border-amber-800/40 bg-amber-900/[0.12]" : "border-foreground/[0.06] bg-foreground/[0.02]"}`}>
+        <div className={`rounded-lg border p-2 ${data.dangerousRejections > 0 ? "border-amber-800/40 bg-amber-900/[0.12]" : "border-foreground/[0.06] bg-foreground/[0.02]"}`}>
           <div className="flex items-center gap-1">
             {data.dangerousRejections > 0 && <AlertTriangle className="size-3 text-amber-300" />}
             <p className={`text-xs ${data.dangerousRejections > 0 ? "text-amber-300" : "text-foreground/40"}`}>Rejected</p>
           </div>
-          <p className={`text-lg font-semibold ${data.dangerousRejections > 0 ? "text-amber-200" : "text-foreground/80"}`}>
+          <p className={`text-base font-semibold ${data.dangerousRejections > 0 ? "text-amber-200" : "text-foreground/80"}`}>
             {data.dangerousRejections}
           </p>
         </div>
       </div>
 
       {data.byTier.length > 0 && (
-        <div className="mt-3">
+        <div className="mt-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/35 mb-1.5">By tier</p>
           <div className="space-y-1">
             {data.byTier.map((row) => (
@@ -83,7 +83,7 @@ export default function AutonomyReadinessCard() {
       )}
 
       {data.byTool.length > 0 && (
-        <div className="mt-3">
+        <div className="mt-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-foreground/35 mb-1.5">By tool</p>
           <div className="space-y-1">
             {data.byTool.map((row) => (
@@ -100,12 +100,12 @@ export default function AutonomyReadinessCard() {
         </div>
       )}
 
-      <div className="mt-3 flex justify-end">
+      <div className="mt-2 flex justify-end">
         <Link
           href={agentConfigureHref()}
           className="text-xs font-semibold text-foreground/45 hover:text-white transition-colors"
         >
-          Adjust trust level in Configure →
+          Adjust trust level in Configure -&gt;
         </Link>
       </div>
     </div>

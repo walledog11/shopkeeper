@@ -74,12 +74,6 @@ export default function BillingTab() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-
-      <div>
-        <h1 className="text-lg font-bold text-foreground/80">Billing</h1>
-        <p className="text-sm text-foreground/35 mt-0.5">Manage your subscription and payment details.</p>
-      </div>
-
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
           <div>

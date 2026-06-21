@@ -1,5 +1,5 @@
 import { requestJson } from "@/lib/api/fetcher"
-import type { OrderRow } from "./OrdersTable"
+import type { OrderRow } from "./orders-board-model"
 
 export interface OrdersResponse {
   orders: OrderRow[]

@@ -307,19 +307,6 @@ export function ThreadListHeader({
 
           {!isSearchMode && activeView !== "spam" && desktopViewSelector}
 
-          {isSearchMode && (
-            <div className="flex items-center justify-between px-0.5">
-              <div className="flex items-center gap-1.5">
-                {isSearchLoading && <Loader2 className="size-3 text-foreground/30 animate-spin" />}
-                <span className="text-xs font-semibold text-foreground/40">
-                  {isSearchLoading ? "Searching…" : "Search results"}
-                </span>
-              </div>
-              <button type="button" onClick={() => onSearchChange("")} className="text-xs text-foreground/30 hover:text-foreground/60 font-medium">
-                Clear
-              </button>
-            </div>
-          )}
         </div>
 
         {hasSelection && (
