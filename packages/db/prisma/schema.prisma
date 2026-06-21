@@ -293,10 +293,13 @@ model OrgMember {
 // up to MAX_TELEGRAM_DEVICES (3) rows; a given chatId can only be bound to one
 // member at a time (enforced by the unique constraint on chat_id).
 model OrgMemberTelegramChat {
-  id          String   @id @default(uuid()) @db.Uuid
-  orgMemberId String   @map("org_member_id") @db.Uuid
-  chatId      String   @map("chat_id") @db.VarChar(64)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id             String   @id @default(uuid()) @db.Uuid
+  orgMemberId    String   @map("org_member_id") @db.Uuid
+  chatId         String   @map("chat_id") @db.VarChar(64)
+  telegramUserId String?  @map("telegram_user_id") @db.VarChar(64)
+  displayName    String?  @map("display_name") @db.VarChar(255)
+  username       String?  @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   orgMember OrgMember @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
 

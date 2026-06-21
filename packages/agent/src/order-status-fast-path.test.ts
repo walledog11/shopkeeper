@@ -82,6 +82,30 @@ describe("tryPlanOrderStatusFastPath", () => {
     expect(plan).toBeNull();
   });
 
+  it("skips when brand voice is configured", () => {
+    const plan = tryPlanOrderStatusFastPath(
+      makeCtx(),
+      "Reply to the customer about their order.",
+      {
+        brandVoice: "Sound warm and concise.",
+      },
+    );
+
+    expect(plan).toBeNull();
+  });
+
+  it("skips when sample replies are configured", () => {
+    const plan = tryPlanOrderStatusFastPath(
+      makeCtx(),
+      "Reply to the customer about their order.",
+      {
+        sampleReplies: ["Hang tight - we are checking the latest tracking now."],
+      },
+    );
+
+    expect(plan).toBeNull();
+  });
+
   it("skips mutative customer messages", () => {
     const plan = tryPlanOrderStatusFastPath(
       makeCtx({

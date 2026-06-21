@@ -1,7 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import useSWR from "swr"
+import { ExternalLink } from "lucide-react"
+import { QRCodeSVG } from "qrcode.react"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
@@ -17,6 +19,7 @@ import {
   CardLogo,
   ShopkeeperBadge,
 } from "./IntegrationCardParts"
+import { ConfigureSection } from "./ConfigureSection"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import {
   TelegramActionsSection,
@@ -29,6 +32,7 @@ const MAX_TELEGRAM_DEVICES = 3
 interface TelegramChat {
   chatId: string
   connectedAt: string
+  displayLabel: string | null
 }
 
 interface TelegramStatus {
@@ -44,19 +48,32 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState<string | "all" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [connectUrl, setConnectUrl] = useState<string | null>(null)
+  const [connectIssuedChatCount, setConnectIssuedChatCount] = useState<number | null>(null)
 
   const chats = status?.chats ?? []
   const isConnected = chats.length > 0
   const isAvailable = !!status?.botUsername
   const atDeviceLimit = chats.length >= MAX_TELEGRAM_DEVICES
 
+  useEffect(() => {
+    if (connectUrl && connectIssuedChatCount !== null && chats.length > connectIssuedChatCount) {
+      setConnectUrl(null)
+      setConnectIssuedChatCount(null)
+    }
+  }, [chats.length, connectIssuedChatCount, connectUrl])
+
   async function connect() {
     setConnecting(true)
     setError(null)
     try {
       const res = await fetch('/api/integrations/telegram', { method: 'POST' })
-      const data = await res.json()
+      const data = await res.json() as { url?: string; error?: string }
       if (!res.ok) throw new Error(data.error || 'Failed to start Telegram connect')
+      if (!data.url) throw new Error('Failed to start Telegram connect')
+      setConnectUrl(data.url)
+      setConnectIssuedChatCount(chats.length)
+      setOpen(true)
       window.open(data.url, '_blank', 'noopener,noreferrer')
       setTimeout(() => mutate(), 5000)
     } catch (e) {
@@ -76,6 +93,8 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
         : '/api/integrations/telegram'
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
+      setConnectUrl(null)
+      setConnectIssuedChatCount(null)
       await mutate()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to disconnect Telegram')
@@ -123,6 +142,30 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
         statusLine={dialogStatusLine}
       >
         {error && <p className="text-xs text-red-400">{error}</p>}
+        {connectUrl && (
+          <ConfigureSection title="Connect">
+            <div className="px-4 py-4 flex flex-col items-center gap-3">
+              <div className="rounded-lg bg-white p-2 shadow-sm">
+                <QRCodeSVG
+                  value={connectUrl}
+                  size={176}
+                  level="M"
+                  marginSize={2}
+                  title="Telegram connect QR code"
+                />
+              </div>
+              <a
+                href={connectUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-foreground/[0.14] bg-foreground/[0.06] px-3 text-sm font-medium text-foreground/85 transition-colors hover:bg-foreground/[0.10]"
+              >
+                <ExternalLink className="size-4" />
+                Open Telegram
+              </a>
+            </div>
+          </ConfigureSection>
+        )}
 
         {isConnected ? (
           <>

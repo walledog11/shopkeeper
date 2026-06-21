@@ -11,6 +11,7 @@ export function registerTelegramWebhookRoutes(router: Router): void {
     try {
       await handleTelegramMessage({
         chatId: webhook.chatId,
+        metadata: webhook.metadata,
         messageId: webhook.messageId,
         body: webhook.body,
         reply: webhook.reply,

@@ -8,6 +8,7 @@ import { PermissionActionLink } from "./PermissionRow"
 interface TelegramChat {
   chatId: string
   connectedAt: string
+  displayLabel: string | null
 }
 
 export function TelegramDevicesSection({
@@ -27,7 +28,7 @@ export function TelegramDevicesSection({
         <ConfigureAccountRow
           key={chat.chatId}
           icon={Smartphone}
-          title={`Device ${index + 1}`}
+          title={chat.displayLabel ?? `Device ${index + 1}`}
           description={`Connected ${formatDate(chat.connectedAt)}`}
           action={
             <PermissionActionLink

@@ -15,6 +15,7 @@ import {
   watchOAuthPopup,
   type OAuthDoneMessage,
 } from "@/lib/integrations/oauth-flow"
+import { filterTelegramPlatformConfigs, shouldShowTelegramIntegration } from "@/lib/integrations/telegram-visibility"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
@@ -40,7 +41,7 @@ export default function IntegrationsPageClient() {
 function IntegrationsPageContent() {
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
-  const { data: telegramStatus } = useSWR<{ connected: boolean }>('/api/integrations/telegram', fetcher)
+  const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(null)
@@ -153,11 +154,16 @@ function IntegrationsPageContent() {
 
   const hasShopify = integrations.some(i => i.platform === 'shopify' && isShopifyIntegrationActive(i))
   const hasEmail = integrations.some(i => i.platform === 'email')
+  const showTelegram = shouldShowTelegramIntegration(telegramStatus)
+  const visiblePlatformConfig = useMemo(
+    () => filterTelegramPlatformConfigs(PLATFORM_CONFIG, telegramStatus),
+    [telegramStatus],
+  )
   const setupSteps = [
     { id: 'shopify', label: 'Connect your Shopify store', detail: 'So Shopkeeper can look up orders and customers for you.', done: hasShopify },
     { id: 'email', label: 'Connect your support email', detail: 'Customer emails become tickets you can answer in one place.', done: hasEmail },
-    { id: 'telegram', label: 'Link Telegram on your phone', detail: 'Approve replies and get updates wherever you are.', done: telegramStatus?.connected ?? false },
-  ]
+    showTelegram ? { id: 'telegram', label: 'Link Telegram on your phone', detail: 'Approve replies and get updates wherever you are.', done: telegramStatus?.connected ?? false } : null,
+  ].filter((step): step is { id: string; label: string; detail: string; done: boolean } => step !== null)
   const showSetup = loaded && (!hasShopify || !hasEmail)
   const nextStepIndex = setupSteps.findIndex(s => !s.done)
   const setupDoneCount = setupSteps.filter(s => s.done).length
@@ -236,7 +242,7 @@ function IntegrationsPageContent() {
         {/* Integrations */}
         {loaded ? (
           <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-            {PLATFORM_CONFIG.map(def => (
+            {visiblePlatformConfig.map(def => (
               def.id === 'telegram' ? (
                 <TelegramCard key={def.id} config={def} />
               ) : (

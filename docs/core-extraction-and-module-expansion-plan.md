@@ -17,14 +17,11 @@ migrate the working support path last and incrementally (Track 4). WhatsApp (Tra
 
 ## Status at a glance (2026-06-08)
 
-> **Update (2026-06-15) — the support eval gate is currently RED.** A re-run (`EVAL_REPEATS=1`) scored
-> **35/54 (64.8%)** and **failed the regression gate** (committed baseline **93.1%**, > 5 pt drop). The cause is the
-> *planner-optimization* work (`docs/planner-optimization-plan.md`), **not** the Track 1–4 orchestration — the
-> regression is concentrated in mutative/refund/tier/voice fixtures (phase-1 planning now includes `send_reply`, so
-> mutative tickets can skip the Sonnet replan; and the plan-time order-status fast path over-triggers). The "support
-> eval suite green" invariant cited throughout this doc (94.6% / 156–168, 2026-06-05/08) **no longer holds against
-> current `master`** until the planner regression is fixed or reverted. See the planner doc's 2026-06-15 status for
-> root causes and the fix.
+> **Update (2026-06-21) — planner optimization follow-up verified.** The stale planner-red status from
+> 2026-06-15 has been resolved: phase 1 excludes terminal `send_reply`, replan replaces phase-1 mutative candidates
+> after reads, and the order-status fast path skips brand voice/sample replies while always classifying as
+> review-only. Focused unit coverage is green, and the real Anthropic-backed eval gate
+> (`RUN_JUDGE_EVALS=0 EVAL_REPEATS=3 npm run test:evals -w apps/dashboard`) passed.
 
 | Track | What | State | Next action |
 |---|---|---|---|

@@ -20,6 +20,12 @@ function getBotUsername(): string | null {
   return v && v.length > 0 ? v : null;
 }
 
+function formatChatLabel(chat: { displayName: string | null; username: string | null }): string | null {
+  if (chat.displayName) return chat.displayName;
+  if (chat.username) return `@${chat.username.replace(/^@+/, "")}`;
+  return null;
+}
+
 export const GET = withOrgRoute(
   { context: "Telegram GET", errorMessage: "Failed to fetch Telegram integration" },
   async ({ org }) => {
@@ -28,13 +34,27 @@ export const GET = withOrgRoute(
 
     const member = await db.orgMember.findUnique({
       where: { organizationId_clerkUserId: { organizationId: org.id, clerkUserId: userId } },
-      select: { telegramChats: { select: { chatId: true, createdAt: true }, orderBy: { createdAt: "asc" } } },
+      select: {
+        telegramChats: {
+          select: {
+            chatId: true,
+            createdAt: true,
+            displayName: true,
+            username: true,
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
     });
 
     const chats = member?.telegramChats ?? [];
     return NextResponse.json({
       connected: chats.length > 0,
-      chats: chats.map((c) => ({ chatId: c.chatId, connectedAt: c.createdAt.toISOString() })),
+      chats: chats.map((c) => ({
+        chatId: c.chatId,
+        connectedAt: c.createdAt.toISOString(),
+        displayLabel: formatChatLabel(c),
+      })),
       botUsername: getBotUsername(),
     });
   },

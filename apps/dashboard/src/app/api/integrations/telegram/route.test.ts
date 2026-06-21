@@ -56,19 +56,43 @@ describe('/api/integrations/telegram', () => {
     });
     await db.orgMemberTelegramChat.createMany({
       data: [
-        { orgMemberId: me.id, chatId: 'chat_current' },
+        { orgMemberId: me.id, chatId: 'chat_current', displayName: 'Raj Sambi', username: 'raj_shop' },
         { orgMemberId: other.id, chatId: 'chat_other' },
       ],
     });
 
     const res = await GET();
-    const body = await res.json() as { connected: boolean; chats: { chatId: string; connectedAt: string }[]; botUsername: string | null };
+    const body = await res.json() as {
+      connected: boolean;
+      chats: { chatId: string; connectedAt: string; displayLabel: string | null }[];
+      botUsername: string | null;
+    };
 
     expect(res.status).toBe(200);
     expect(body.connected).toBe(true);
     expect(body.chats).toHaveLength(1);
     expect(body.chats[0].chatId).toBe('chat_current');
+    expect(body.chats[0].displayLabel).toBe('Raj Sambi');
     expect(body.botUsername).toBe('support_test_bot');
+  });
+
+  it('falls back to username when a Telegram display name is unavailable', async () => {
+    const me = await db.orgMember.create({
+      data: { organizationId: org!.id, clerkUserId: 'usr_telegram' },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: me.id, chatId: 'chat_username', username: 'support_owner' },
+    });
+
+    const res = await GET();
+    const body = await res.json() as {
+      chats: { chatId: string; displayLabel: string | null }[];
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.chats).toEqual([
+      expect.objectContaining({ chatId: 'chat_username', displayLabel: '@support_owner' }),
+    ]);
   });
 
   it('returns 503 without creating a token when Telegram is not configured', async () => {

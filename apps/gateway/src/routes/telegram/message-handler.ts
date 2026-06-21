@@ -41,7 +41,7 @@ export async function handleTelegramMessage(
   const { chatId, body, reply } = message;
   const command = parseTelegramCommand(body);
   if (command.type === 'start') {
-    await handleStartBinding(chatId, command.token, reply);
+    await handleStartBinding(chatId, command.token, message.metadata, reply);
     return;
   }
 

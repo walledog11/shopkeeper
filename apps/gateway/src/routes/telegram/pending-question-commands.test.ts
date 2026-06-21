@@ -14,6 +14,7 @@ import { getContext, updateContext } from '../../operator-context.js';
 import type { TelegramReply } from './types.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+const emptyMetadata = { telegramUserId: null, displayName: null, username: null };
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -31,7 +32,7 @@ describe('handlePendingQuestionAnswer', () => {
 
     const handled = await handlePendingQuestionAnswer(
       org.id,
-      { chatId: 'chat_none', messageId: 1, body: 'random text', reply },
+      { chatId: 'chat_none', metadata: emptyMetadata, messageId: 1, body: 'random text', reply },
       ctx,
     );
 
@@ -78,7 +79,7 @@ describe('handlePendingQuestionAnswer', () => {
     const reply = vi.fn<TelegramReply>();
     const handled = await handlePendingQuestionAnswer(
       org.id,
-      { chatId: 'chat_1', messageId: 1, body: 'Yes, $15 flat to Canada.', reply },
+      { chatId: 'chat_1', metadata: emptyMetadata, messageId: 1, body: 'Yes, $15 flat to Canada.', reply },
       ctx,
     );
 

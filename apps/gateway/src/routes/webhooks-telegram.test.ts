@@ -228,7 +228,14 @@ describe('POST /webhooks/telegram — /start bind', () => {
     const res = await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)
-      .send({ message: { message_id: 1, chat: { id: 9001, type: 'private' }, text: `/start ${token}` } });
+      .send({
+        message: {
+          message_id: 1,
+          from: { id: 12345, first_name: 'Raj', last_name: 'Sambi', username: 'raj_shop' },
+          chat: { id: 9001, type: 'private', first_name: 'Raj', last_name: 'Sambi', username: 'raj_shop' },
+          text: `/start ${token}`,
+        },
+      });
 
     expect(res.status).toBe(200);
     await waitForReplies(1);
@@ -236,6 +243,9 @@ describe('POST /webhooks/telegram — /start bind', () => {
 
     const chat = await db.orgMemberTelegramChat.findUnique({ where: { chatId: '9001' } });
     expect(chat?.orgMemberId).toBe(member.id);
+    expect(chat?.telegramUserId).toBe('12345');
+    expect(chat?.displayName).toBe('Raj Sambi');
+    expect(chat?.username).toBe('raj_shop');
     expect(redisStore.has(`telegram:bind:${token}`)).toBe(false);
   });
 

@@ -9,7 +9,7 @@ import {
   recordWebhookSignatureFailure,
 } from '../webhooks-signature-alerts.js';
 import { getRateLimitRedis } from '../webhooks-shared.js';
-import type { TelegramReply, TelegramUpdate } from './types.js';
+import type { TelegramChatMetadata, TelegramReply, TelegramUpdate } from './types.js';
 
 const TELEGRAM_PER_CHAT_LIMIT = 30;
 const TELEGRAM_PER_CHAT_WINDOW_SECS = 60;
@@ -17,6 +17,7 @@ const TELEGRAM_PER_CHAT_WINDOW_SECS = 60;
 export interface ValidatedTelegramWebhook {
   body: string;
   chatId: string;
+  metadata: TelegramChatMetadata;
   messageId: number;
   reply: TelegramReply;
 }
@@ -35,6 +36,37 @@ function secretsMatch(expectedSecret: string, incomingSecret: string): boolean {
   const expected = Buffer.from(expectedSecret, 'utf8');
   const incoming = Buffer.from(incomingSecret, 'utf8');
   return expected.length === incoming.length && timingSafeEqual(expected, incoming);
+}
+
+function cleanText(value: unknown, maxLength: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+}
+
+function buildDisplayName(parts: Array<string | null>): string | null {
+  const name = parts.filter((part): part is string => part !== null).join(' ').trim();
+  return name || null;
+}
+
+function readChatMetadata(message: NonNullable<TelegramUpdate['message']>): TelegramChatMetadata {
+  const from = message.from;
+  const chat = message.chat;
+  const username = cleanText(from?.username, 255) ?? cleanText(chat?.username, 255);
+  const displayName =
+    cleanText(chat?.title, 255)
+    ?? buildDisplayName([
+      cleanText(from?.first_name, 120) ?? cleanText(chat?.first_name, 120),
+      cleanText(from?.last_name, 120) ?? cleanText(chat?.last_name, 120),
+    ])
+    ?? (username ? `@${username}` : null);
+
+  return {
+    telegramUserId: from?.id != null ? String(from.id) : null,
+    displayName,
+    username,
+  };
 }
 
 export async function validateTelegramWebhook(
@@ -109,6 +141,7 @@ export async function validateTelegramWebhook(
     return null;
   }
 
+  const metadata = readChatMetadata(message);
   res.status(200).send('OK');
-  return { body, chatId, messageId: message.message_id, reply };
+  return { body, chatId, metadata, messageId: message.message_id, reply };
 }

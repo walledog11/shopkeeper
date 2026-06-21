@@ -2,13 +2,14 @@ import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { sendMessage } from '../../clients/telegram-client.js';
 import { getRateLimitRedis } from '../webhooks-shared.js';
-import type { TelegramReply } from './types.js';
+import type { TelegramChatMetadata, TelegramReply } from './types.js';
 
 const MAX_TELEGRAM_DEVICES = 3;
 
 export async function handleStartBinding(
   chatId: string,
   token: string | null,
+  metadata: TelegramChatMetadata,
   reply: TelegramReply,
 ): Promise<void> {
   if (!token) {
@@ -65,8 +66,18 @@ export async function handleStartBinding(
   // Upsert the binding for this member
   await db.orgMemberTelegramChat.upsert({
     where: { chatId },
-    create: { orgMemberId: member.id, chatId },
-    update: {},
+    create: {
+      orgMemberId: member.id,
+      chatId,
+      telegramUserId: metadata.telegramUserId,
+      displayName: metadata.displayName,
+      username: metadata.username,
+    },
+    update: {
+      telegramUserId: metadata.telegramUserId,
+      displayName: metadata.displayName,
+      username: metadata.username,
+    },
   });
 
   await redis.del(key);
