@@ -25,44 +25,56 @@ interface TicketsPageLayoutFlags {
   hasShopify: boolean
   isAgentRunning: boolean
   isConversationLoading: boolean
-  isDesktopContext: boolean
   isLoadingMore: boolean
   isSearchLoading: boolean
   isSearchMode: boolean
   isSending: boolean
   listLoading: boolean
-  showContextDrawer: boolean
 }
 
-interface TicketsPageLayoutProps {
+interface TicketsPageLayoutConversationState {
   activeAgentTurns: ConversationViewProps["agentTurns"]
-  activeView: TicketListView
-  effectiveActiveView: TicketListView
-  channelFilter: ChannelType | null
-  tagFilter: TicketTagFilter | null
-  connectedChannels: ChannelType[]
   activeThread: Thread | undefined
   activeThreadError: unknown
   activeThreadPreview: Thread | undefined
-  activeTicketId: string | null
   agentName: string
   cachedPlan: ConversationViewProps["initialPlan"]
   conversationTicket: Ticket | undefined
   failedMessages: ConversationViewProps["failedMessages"]
+  messagesEndRef: ConversationViewProps["messagesEndRef"]
   orgSettings?: ConversationViewProps["orgSettings"]
-  flags: TicketsPageLayoutFlags
+  refreshingSummaryId: string | null
+  replyText: string
+  sendError: ConversationViewProps["sendError"]
+  toast: TicketToast | null
+}
+
+interface TicketsPageLayoutDrawerState {
+  isDesktopContext: boolean
+  showContextDrawer: boolean
+}
+
+interface TicketsPageLayoutFilters {
+  channelFilter: ChannelType | null
+  connectedChannels: ChannelType[]
+  searchQuery: string
+  tagFilter: TicketTagFilter | null
+}
+
+interface TicketsPageLayoutListState {
+  activeTicketId: string | null
+  activeView: TicketListView
+  approvingTicketId: string | null
+  effectiveActiveView: TicketListView
   filteredTickets: Ticket[]
   forMeCount: number
   liveTicketCount: number
-  messagesEndRef: ConversationViewProps["messagesEndRef"]
   openThreadCount: number
-  refreshingSummaryId: string | null
-  replyText: string
-  searchQuery: string
   selectedIds: string[]
-  sendError: ConversationViewProps["sendError"]
   spamCount: number
-  toast: TicketToast | null
+}
+
+interface TicketsPageLayoutActions {
   onAgentComplete: ConversationViewProps["onAgentComplete"]
   onAgentRunningChange: ConversationViewProps["onAgentRunningChange"]
   onAgentTurnAdd: ConversationViewProps["onAgentTurnAdd"]
@@ -79,7 +91,6 @@ interface TicketsPageLayoutProps {
   onMarkAsSpam: ThreadListProps["onMarkAsSpam"]
   onOpenContext: () => void
   onRecover: ThreadListProps["onRecover"]
-  approvingTicketId: string | null
   onQuickApproveFromList: (threadId: string) => void
   onReviewFromList: (threadId: string) => void
   onRefreshSummary: () => void
@@ -99,70 +110,93 @@ interface TicketsPageLayoutProps {
   onToggleSelect: ThreadListProps["onToggleSelect"]
 }
 
+interface TicketsPageLayoutProps {
+  actions: TicketsPageLayoutActions
+  conversation: TicketsPageLayoutConversationState
+  drawer: TicketsPageLayoutDrawerState
+  filters: TicketsPageLayoutFilters
+  flags: TicketsPageLayoutFlags
+  list: TicketsPageLayoutListState
+}
+
 export function TicketsPageLayout({
-  activeAgentTurns,
-  activeView,
-  effectiveActiveView,
-  channelFilter,
-  tagFilter,
-  connectedChannels,
-  activeThread,
-  activeThreadError,
-  activeThreadPreview,
-  activeTicketId,
-  agentName,
-  cachedPlan,
-  conversationTicket,
-  failedMessages,
-  orgSettings,
+  actions,
+  conversation,
+  drawer,
+  filters,
   flags,
-  filteredTickets,
-  forMeCount,
-  liveTicketCount,
-  messagesEndRef,
-  openThreadCount,
-  refreshingSummaryId,
-  replyText,
-  searchQuery,
-  selectedIds,
-  sendError,
-  spamCount,
-  toast,
-  onAgentComplete,
-  onAgentRunningChange,
-  onAgentTurnAdd,
-  onBack,
-  onBulkArchive,
-  onBulkClose,
-  onBulkTag,
-  onClearSelection,
-  onCorrectReplyDismiss,
-  onChannelFilterChange,
-  onTagFilterChange,
-  onLinkShopifyCustomer,
-  onLoadMore,
-  onMarkAsSpam,
-  onOpenContext,
-  onRecover,
-  approvingTicketId,
-  onQuickApproveFromList,
-  onReviewFromList,
-  onRefreshSummary,
-  onReopen,
-  onReplyChange,
-  onResolve,
-  onRetry,
-  onRetrySend,
-  onTicketRefresh,
-  onActionError,
-  onSearchChange,
-  onSelectTicket,
-  onSend,
-  onShowContextDrawerChange,
-  onViewChange,
-  onViewSpam,
-  onToggleSelect,
+  list,
 }: TicketsPageLayoutProps) {
+  const {
+    activeAgentTurns,
+    activeThread,
+    activeThreadError,
+    activeThreadPreview,
+    agentName,
+    cachedPlan,
+    conversationTicket,
+    failedMessages,
+    messagesEndRef,
+    orgSettings,
+    refreshingSummaryId,
+    replyText,
+    sendError,
+    toast,
+  } = conversation
+  const {
+    activeTicketId,
+    activeView,
+    approvingTicketId,
+    effectiveActiveView,
+    filteredTickets,
+    forMeCount,
+    liveTicketCount,
+    openThreadCount,
+    selectedIds,
+    spamCount,
+  } = list
+  const {
+    channelFilter,
+    connectedChannels,
+    searchQuery,
+    tagFilter,
+  } = filters
+  const { isDesktopContext, showContextDrawer } = drawer
+  const {
+    onAgentComplete,
+    onAgentRunningChange,
+    onAgentTurnAdd,
+    onBack,
+    onBulkArchive,
+    onBulkClose,
+    onBulkTag,
+    onClearSelection,
+    onCorrectReplyDismiss,
+    onChannelFilterChange,
+    onTagFilterChange,
+    onLinkShopifyCustomer,
+    onLoadMore,
+    onMarkAsSpam,
+    onOpenContext,
+    onRecover,
+    onQuickApproveFromList,
+    onReviewFromList,
+    onRefreshSummary,
+    onReopen,
+    onReplyChange,
+    onResolve,
+    onRetry,
+    onRetrySend,
+    onTicketRefresh,
+    onActionError,
+    onSearchChange,
+    onSelectTicket,
+    onSend,
+    onShowContextDrawerChange,
+    onViewChange,
+    onViewSpam,
+    onToggleSelect,
+  } = actions
   const lastDialogBodyRef = useRef<ReactNode>(null)
   const allCaughtUp = effectiveActiveView === "for_me" && openThreadCount === 0 && !flags.isSearchMode
 
@@ -254,13 +288,13 @@ export function TicketsPageLayout({
       {correctReplyBanner}
       <div className="flex flex-1 min-w-0 overflow-hidden">
         {renderConversationView(false)}
-        {flags.isDesktopContext && (
+        {isDesktopContext && (
           <div className="hidden xl:flex">
             {activeContextPanel}
           </div>
         )}
         {activeThread && !flags.isConversationLoading && (
-          <Sheet open={flags.showContextDrawer} onOpenChange={onShowContextDrawerChange}>
+          <Sheet open={showContextDrawer} onOpenChange={onShowContextDrawerChange}>
             <SheetContent
               side="bottom"
               className="xl:hidden max-h-[82vh] flex flex-col p-0 rounded-t-xl border-border gap-0"
@@ -329,20 +363,20 @@ export function TicketsPageLayout({
           <div className="border-t border-border xl:hidden">
             <button
               type="button"
-              aria-expanded={flags.showContextDrawer}
-              onClick={() => onShowContextDrawerChange(!flags.showContextDrawer)}
+              aria-expanded={showContextDrawer}
+              onClick={() => onShowContextDrawerChange(!showContextDrawer)}
               className="flex h-11 w-full items-center justify-between gap-3 px-4 text-left text-xs font-semibold text-foreground/65 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/85"
             >
               <span className="inline-flex items-center gap-2">
                 <Info className="size-3.5" />
                 Customer details
               </span>
-              {flags.showContextDrawer ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
+              {showContextDrawer ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
             </button>
           </div>
           <div
             data-testid="inline-ticket-context"
-            className={`${flags.showContextDrawer ? "flex" : "hidden"} max-h-[45vh] min-h-0 shrink-0 flex-col overflow-y-auto border-t border-border xl:flex xl:max-h-none xl:w-[320px] xl:border-l xl:border-t-0`}
+            className={`${showContextDrawer ? "flex" : "hidden"} max-h-[45vh] min-h-0 shrink-0 flex-col overflow-y-auto border-t border-border xl:flex xl:max-h-none xl:w-[320px] xl:border-l xl:border-t-0`}
           >
             {activeContextPanel}
           </div>
@@ -486,7 +520,7 @@ export function TicketsPageLayout({
               }
             </span>
             <div className="flex flex-col gap-1">
-              <h2 className="font-display-serif text-lg text-foreground">
+              <h2 className="text-lg font-semibold text-foreground">
                 {allCaughtUp ? "You're all caught up" : "Pick a conversation"}
               </h2>
               <p className="text-sm text-foreground/50 max-w-[230px]">

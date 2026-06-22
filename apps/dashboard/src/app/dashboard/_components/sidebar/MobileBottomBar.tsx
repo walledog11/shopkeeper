@@ -12,7 +12,7 @@ export function MobileBottomBar({ openCount }: { openCount: number }) {
   return (
     <div
       data-dashboard-mobile-bottom-bar
-      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-neutral-950 border-t border-foreground/[0.08] flex items-stretch"
+      className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-sidebar border-t border-border flex items-stretch"
     >
       {mobileTabs.map((tab) => {
         const isActive = isRouteActive(pathname, tab.href);

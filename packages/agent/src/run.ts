@@ -3,16 +3,24 @@ import { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from
 import { pickModel } from "./ai/index.js";
 import logger from "./logger.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
-import { resolveAgentSettings } from "./settings.js";
-import { TOOL_CATEGORIES, selectAgentTools } from "./tools/registry/index.js";
+import { selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path.js";
-import type { ActionEntry, AgentActionMode, BaseAgentContext, AgentResult } from "./agent-context.js";
+import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
 import { enforceSpendCap, recordSpend } from "./spend.js";
-import type { AgentActionApproval } from "./agent-actions.js";
+import {
+  READ_TOOL_NAMES,
+  TOKEN_BUDGET,
+  resolveRunPolicy,
+  type RunAgentPolicyOptions,
+} from "./run-policy.js";
+import {
+  approvedActionsCompleteOutcome,
+  selectExecutableApprovedToolCalls,
+} from "./run-approved-actions.js";
 import {
   createAgentFailureRecorder,
   executeAgentToolCalls,
@@ -21,22 +29,11 @@ import {
   type RecordToolFailure,
 } from "./run-execution.js";
 
-const DEFAULT_MAX_ITERATIONS = 10;
-const READ_ONLY_MAX_ITERATIONS = 4;
-const TOKEN_BUDGET = 20_000;
-
-const READ_TOOL_NAMES = Object.entries(TOOL_CATEGORIES).flatMap(([name, category]) => (
-  category === "read" ? [name] : []
-));
-
-export interface RunAgentOptions {
-  readOnly?: boolean;
+export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Injected tool-failure recorder. The dashboard wires this to its ops-alert
   // counter; a thread-less / gateway host may omit it. Keeping it injected is
   // what keeps alerting infra (env, ops-alerts) out of the shared core.
   recordToolFailure?: RecordToolFailure;
-  mode?: AgentActionMode;
-  approval?: AgentActionApproval;
   // Pre-generated turn id so the caller can embed it in the agent-turn note
   // and join AgentAction rows back to the note when rendering inline.
   turnId?: string;
@@ -53,14 +50,14 @@ export async function runAgent(
   const usageTotals = createModelUsageMetrics();
   const executedToolCalls: string[] = [];
   const instructionHash = hashInstructionForLog(instruction);
-  const s = resolveAgentSettings(settings);
-  const readOnly = options?.readOnly ?? false;
+  const {
+    approval,
+    effectiveMode,
+    maxIterations,
+    readOnly,
+    settings: s,
+  } = resolveRunPolicy(settings, options);
   const recordToolFailure = options?.recordToolFailure;
-  const effectiveMode: AgentActionMode = options?.mode ?? (readOnly ? "read_only" : "human_approved");
-  const approval = effectiveMode === "human_approved" ? options?.approval : undefined;
-  const maxIterations = readOnly
-    ? READ_ONLY_MAX_ITERATIONS
-    : (s.maxIterations > 0 ? s.maxIterations : DEFAULT_MAX_ITERATIONS);
   const actionsPerformed: ActionEntry[] = [];
   // Thread/customer are present only on a SupportContext; capture them once so the
   // thread-less path (Track 3) logs/audits with nulls instead of dereferencing.
@@ -123,9 +120,7 @@ export async function runAgent(
   }
 
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
-    const executableToolCalls = supportThread?.channelType === "dashboard_agent"
-      ? approvedToolCalls.filter((tc) => TOOL_CATEGORIES[tc.name] === "action")
-      : approvedToolCalls;
+    const executableToolCalls = selectExecutableApprovedToolCalls(supportThread, approvedToolCalls);
 
     if (supportThread?.channelType === "dashboard_agent" && executableToolCalls.length === 0) {
       return finish({
@@ -146,7 +141,7 @@ export async function runAgent(
     return finish({
       summary: summarizeApprovedDashboardActions(actionsPerformed),
       actionsPerformed,
-    }, supportThread?.channelType === "dashboard_agent" ? "approved_dashboard_actions" : "approved_plan_actions");
+    }, approvedActionsCompleteOutcome(supportThread));
   }
 
   const history = operatorMode || readOnly ? ctx.recentMessages.slice(-4) : ctx.recentMessages;

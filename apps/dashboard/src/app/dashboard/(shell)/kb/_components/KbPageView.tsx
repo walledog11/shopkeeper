@@ -108,7 +108,7 @@ export function KbPageView({ state }: KbPageViewProps) {
                   <option
                     key={option.value}
                     value={option.value}
-                    className="bg-zinc-900 text-white"
+                    className="bg-card text-foreground"
                   >
                     {option.label}
                   </option>

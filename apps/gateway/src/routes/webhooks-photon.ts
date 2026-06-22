@@ -248,6 +248,11 @@ export function registerPhotonWebhookRoutes(router: Router): void {
         },
       );
 
+      logger.info(
+        { integrationId, status: result.status, hasSignature: Boolean(req.headers['x-spectrum-signature']) },
+        '[Webhook] Photon delivery processed',
+      );
+
       if (result.status === 401) {
         const reason = req.headers['x-spectrum-signature'] ? 'signature_mismatch' : 'missing_signature';
         recordWebhookSignatureFailure(

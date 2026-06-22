@@ -18,19 +18,13 @@ import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape'
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import type { AgentPlan } from '../types.js';
+import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import type { AgentActionResult } from './planning-types.js';
 import logger from '../logger.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
-
-// The core returns @shopkeeper/agent's AgentPlan; the gateway's local AgentPlan is the
-// looser JSON-shaped view its operator-notification path consumes (index-signature
-// rawToolCalls). The data is identical at runtime — only the TypeScript view differs.
-function toGatewayPlan(plan: PackageAgentPlan | null): AgentPlan | null {
-  return plan as unknown as AgentPlan | null;
-}
 
 // A plan whose terminal tool is `ask_operator` classifies as needs_merchant_input;
 // surface its question so the operator-notification path can push it instead of a
@@ -106,7 +100,7 @@ export async function generateThreadPlan(
       ? await buildAutoExecutionResult(organizationId, threadId, settings)
       : {};
     return {
-      plan: toGatewayPlan(cached?.plan ?? null),
+      plan: toGatewayAgentPlan(cached?.plan ?? null),
       instruction,
       merchantQuestion: merchantQuestionFor(cached?.plan ?? null, settings),
       ...autoExecution,
@@ -134,7 +128,7 @@ export async function generateThreadPlan(
     : {};
 
   return {
-    plan: toGatewayPlan(plan),
+    plan: toGatewayAgentPlan(plan),
     instruction,
     merchantQuestion: merchantQuestionFor(plan, settings),
     ...autoExecution,

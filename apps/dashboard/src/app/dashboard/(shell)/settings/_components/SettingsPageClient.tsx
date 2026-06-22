@@ -5,8 +5,13 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Building2, CreditCard } from "lucide-react"
 import WorkspaceTab from "./workspace/WorkspaceTab"
 import BillingTab from "./BillingTab"
-import { cn } from "@/lib/ui/cn"
 import { AGENT_CONFIGURE_PATH } from "@/lib/agent/configure"
+
+const GLASS_SHELL_CLASS =
+  "rounded-[22px] border border-foreground/[0.08] bg-card/60 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_18px_50px_rgba(43,33,24,0.13)] backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-card/45"
+
+const GLASS_CONTROL_CLASS =
+  "border border-foreground/[0.08] bg-background/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-background/28"
 
 interface Props {
   orgName: string
@@ -65,15 +70,13 @@ function SettingsPageContent({ orgName, version }: Props) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto min-w-0">
-      <div className="sticky top-0 z-20 border-b border-foreground/[0.06] bg-neutral-950/95 px-4 py-4 backdrop-blur-md supports-[backdrop-filter]:bg-neutral-950/88 sm:px-6 lg:px-8">
-        <nav
-          aria-label="Workspace settings sections"
-          className="overflow-hidden rounded-xl border border-foreground/[0.08] bg-card"
-        >
+    <div className="flex size-full min-w-0 flex-col overflow-hidden bg-background">
+      <div className="relative z-20 shrink-0 px-3 pb-3 pt-3">
+        <div className={GLASS_SHELL_CLASS}>
           <div
             role="tablist"
-            className="grid grid-cols-2 divide-x divide-foreground/[0.06] sm:flex sm:w-full"
+            aria-label="Workspace settings sections"
+            className={`flex h-9 w-full items-center gap-1 rounded-full px-1 ${GLASS_CONTROL_CLASS}`}
           >
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
               const active = activeTab === id
@@ -84,38 +87,26 @@ function SettingsPageContent({ orgName, version }: Props) {
                   role="tab"
                   aria-selected={active}
                   onClick={() => setTab(id)}
-                  className={cn(
-                    "relative inline-flex items-center justify-center gap-1.5 px-3 py-3.5 text-[13px] font-medium transition-colors",
-                    "sm:min-w-0 sm:flex-1",
+                  className={`inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors ${
                     active
-                      ? "text-white"
-                      : "text-foreground/40 hover:bg-foreground/[0.03] hover:text-foreground/65",
-                  )}
+                      ? "bg-foreground/[0.12] text-white"
+                      : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                  }`}
                 >
-                  <Icon
-                    className={cn(
-                      "size-3.5 shrink-0",
-                      active ? "text-foreground/70" : "text-foreground/35",
-                    )}
-                  />
+                  <Icon className="size-3.5 shrink-0" />
                   <span>{label}</span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "absolute inset-x-3 bottom-0 h-0.5 rounded-full transition-colors",
-                      active ? "bg-foreground/70" : "bg-transparent",
-                    )}
-                  />
                 </button>
               )
             })}
           </div>
-        </nav>
+        </div>
       </div>
 
-      <div className="w-full px-4 py-6 pb-20 sm:px-6 lg:px-8">
-        {activeTab === "workspace" && <WorkspaceTab orgName={orgName} version={version} />}
-        {activeTab === "billing" && <BillingTab />}
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full px-4 py-6 pb-20 sm:px-6 lg:px-8">
+          {activeTab === "workspace" && <WorkspaceTab orgName={orgName} version={version} />}
+          {activeTab === "billing" && <BillingTab />}
+        </div>
       </div>
     </div>
   )

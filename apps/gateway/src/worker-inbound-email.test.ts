@@ -195,6 +195,41 @@ describe('Message worker — email branch', () => {
     expect(messageCount).toBe(1);
   });
 
+  it('rejects duplicate externalMessageId rows within one organization at the database boundary', async () => {
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: 'db-duplicate@example.com' },
+    });
+    const thread = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: ChannelType.email,
+        status: 'open',
+      },
+    });
+    const externalMessageId = 'db-duplicate-mid-001';
+
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'customer',
+        contentText: 'First copy',
+        externalMessageId,
+      },
+    });
+
+    await expect(db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: 'customer',
+        contentText: 'Second copy',
+        externalMessageId,
+      },
+    })).rejects.toMatchObject({ code: 'P2002' });
+  });
+
   it('allows the same externalMessageId across different organizations', async () => {
     getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
 

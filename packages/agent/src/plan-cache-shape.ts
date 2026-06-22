@@ -7,6 +7,7 @@ export type PlanThreadMessage = {
 }
 
 export const AGENT_PLAN_CACHE_VERSION = 2
+const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, AGENT_PLAN_CACHE_VERSION]
 
 export interface AgentPlanCacheRecordShape {
   version: number
@@ -60,7 +61,8 @@ function isAgentPlan(value: unknown): value is AgentPlan {
 export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRecordShape | null {
   if (!isRecord(value)) return null
   if (
-    value.version !== AGENT_PLAN_CACHE_VERSION ||
+    typeof value.version !== "number" ||
+    !SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.includes(value.version) ||
     typeof value.instruction !== "string" ||
     typeof value.settingsFingerprint !== "string" ||
     !isAgentPlan(value.plan)

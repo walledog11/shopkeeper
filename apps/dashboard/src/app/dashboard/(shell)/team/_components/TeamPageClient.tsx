@@ -6,6 +6,14 @@ import { timeAgo } from "@/lib/format/date";
 import { errorMessageFromUnknown } from "@/lib/api/fetcher";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   deleteTeamMember,
   inviteTeamMember,
@@ -31,7 +39,7 @@ function RolePill({ role }: { role: string }) {
   const isAdmin = role === "org:admin";
   return (
     <Badge variant="ghost" className={`text-xs font-semibold gap-1 ${
-      isAdmin ? "bg-violet-400/10 text-violet-400" : "bg-foreground/[0.08] text-foreground/40"
+      isAdmin ? "bg-foreground/[0.08] text-foreground/70" : "bg-foreground/[0.05] text-foreground/40"
     }`}>
       {isAdmin ? <Shield className="size-2.5" /> : <User className="size-2.5" />}
       {roleLabel(role)}
@@ -155,32 +163,27 @@ function TeamPageContent(props: Props) {
     <div className="h-full overflow-y-auto bg-background">
       <div className="max-w-3xl mx-auto px-4 md:px-8 py-5 md:py-7 space-y-6 pb-10">
 
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground/80">Team</h1>
-            <p className="text-sm text-foreground/30 mt-0.5">{members.length} member{members.length !== 1 ? "s" : ""}</p>
-          </div>
-          {isAdmin && (
+        {isAdmin && (
+          <div className="flex items-center justify-end">
             <button type="button"
               onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1.5 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md px-3.5 py-2 transition-all"
+              className="flex items-center gap-1.5 text-sm font-semibold text-background bg-foreground hover:bg-foreground/90 rounded-md px-3.5 py-2 transition-colors"
             >
               <UserPlus className="size-4" /> Invite member
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {removalError && (
-          <p className="text-xs text-red-400" aria-live="polite">{removalError}</p>
+          <p className="text-xs text-red-500" aria-live="polite">{removalError}</p>
         )}
 
         {/* Members list */}
-        <div className="bg-card rounded-md border border-foreground/[0.08] overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-foreground/[0.07]">
-            <h2 className="text-sm font-semibold text-foreground/70">Members</h2>
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-border">
+            <h2 className="text-sm font-semibold text-foreground/75">Members</h2>
           </div>
-          <div className="divide-y divide-foreground/[0.05]">
+          <div className="divide-y divide-border">
             {members.map(member => {
               const fullName = [member.firstName, member.lastName].filter(Boolean).join(" ") || member.identifier;
               const isSelf = member.userId === currentUserId;
@@ -216,12 +219,12 @@ function TeamPageContent(props: Props) {
 
         {/* Pending invitations */}
         {invitations.length > 0 && (
-          <div className="bg-card rounded-md border border-foreground/[0.08] overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-foreground/[0.07]">
-              <h2 className="text-sm font-semibold text-foreground/70">Pending invitations</h2>
-              <Badge variant="ghost" className="text-xs font-semibold text-foreground/30 bg-foreground/[0.08]">{invitations.length}</Badge>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+              <h2 className="text-sm font-semibold text-foreground/75">Pending invitations</h2>
+              <Badge variant="ghost" className="text-xs font-semibold text-foreground/40 bg-foreground/[0.08]">{invitations.length}</Badge>
             </div>
-            <div className="divide-y divide-foreground/[0.05]">
+            <div className="divide-y divide-border">
               {invitations.map(invite => (
                 <div key={invite.id} className="flex items-center gap-3 px-5 py-3.5">
                   <div className="size-9 rounded-full bg-foreground/[0.08] flex items-center justify-center shrink-0">
@@ -250,64 +253,59 @@ function TeamPageContent(props: Props) {
       </div>
 
       {/* Invite modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button type="button" aria-label="Close invite dialog" className="absolute inset-0 border-0 bg-neutral-950/60 p-0" onClick={() => setShowInviteModal(false)} />
-          <div className="relative bg-card border border-foreground/[0.10] rounded-md shadow-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-bold text-foreground/80">Invite team member</h2>
-              <button type="button" onClick={() => setShowInviteModal(false)} className="p-1.5 rounded-md text-foreground/30 hover:text-foreground/70 hover:bg-foreground/[0.08] transition-colors">
-                <X className="size-4" />
-              </button>
+      <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
+        <DialogContent className="border-border sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-foreground/85">Invite team member</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleInvite} className="space-y-4">
+            <div>
+              <span className="block text-xs font-semibold text-foreground/60 mb-1.5">Email address</span>
+              <input
+                aria-label="Email address"
+                type="email"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                placeholder="colleague@company.com"
+                required
+                className="w-full px-3 py-2 text-sm text-foreground/80 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/25 transition"
+              />
             </div>
-            <form onSubmit={handleInvite} className="space-y-4">
-              <div>
-                <span className="block text-xs font-semibold text-foreground/50 mb-1.5">Email address</span>
-                <input
-                  aria-label="Email address"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={e => setInviteEmail(e.target.value)}
-                  placeholder="colleague@company.com"
-                  required
-                  className="w-full px-3 py-2 text-sm text-foreground/70 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/20 transition"
-                />
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-foreground/50 mb-1.5">Role</span>
-                <select
-                  aria-label="Role"
-                  value={inviteRole}
-                  onChange={e => setInviteRole(e.target.value)}
-                  className="w-full px-3 py-2 text-sm text-foreground/70 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] transition"
-                >
-                  <option value="org:member">Member — can view and respond to tickets</option>
-                  <option value="org:admin">Admin — full access including settings</option>
-                </select>
-              </div>
-              {inviteError && (
-                <p className="text-xs text-red-400 bg-red-400/[0.08] border border-red-400/20 rounded-md px-3 py-2">{inviteError}</p>
-              )}
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="flex-1 py-2 text-sm font-medium text-foreground/50 border border-foreground/[0.10] rounded-md hover:bg-foreground/[0.05] transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={inviting || !inviteEmail.trim()}
-                  className="flex-1 py-2 text-sm font-semibold text-black bg-green-400 hover:bg-green-300 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {inviting ? "Sending…" : "Send invite"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <div>
+              <span className="block text-xs font-semibold text-foreground/60 mb-1.5">Role</span>
+              <select
+                aria-label="Role"
+                value={inviteRole}
+                onChange={e => setInviteRole(e.target.value)}
+                className="w-full px-3 py-2 text-sm text-foreground/80 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] transition"
+              >
+                <option value="org:member">Member — can view and respond to tickets</option>
+                <option value="org:admin">Admin — full access including settings</option>
+              </select>
+            </div>
+            {inviteError && (
+              <p className="text-xs text-red-500 bg-red-500/[0.08] border border-red-500/20 rounded-md px-3 py-2">{inviteError}</p>
+            )}
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowInviteModal(false)}
+                className="border-foreground/[0.12] text-foreground/70 hover:bg-foreground/[0.06]"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={inviting || !inviteEmail.trim()}
+                className="bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50"
+              >
+                {inviting ? "Sending…" : "Send invite"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

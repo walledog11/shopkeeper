@@ -5,7 +5,6 @@ import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 import {
   AgentAutonomySection,
   AgentDefaultBehaviorSection,
-  AgentGuardrailsSection,
   AgentIdentitySection,
   AgentResponseSection,
   AgentSampleRepliesSection,
@@ -29,7 +28,7 @@ interface ConfigureColumnProps {
 
 function ConfigureColumn({ id, children }: ConfigureColumnProps) {
   return (
-    <section id={id} className="scroll-mt-24 min-w-0">
+    <section id={id} className="scroll-mt-24 mb-9 break-inside-avoid">
       <div className="space-y-3">
         {children}
       </div>
@@ -49,7 +48,7 @@ export default function AgentTab(props: Props) {
         <p>Trust level, duty hours, voice, and operating limits.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-x-6 gap-y-9 lg:grid-cols-2 2xl:grid-cols-3">
+      <div className="columns-1 gap-x-6 lg:columns-2 2xl:columns-3">
         <ConfigureColumn id="trust">
           <AgentAutonomySection controller={controller} />
           <TelegramApproveSection />
@@ -65,9 +64,8 @@ export default function AgentTab(props: Props) {
           <AgentResponseSection controller={controller} />
         </ConfigureColumn>
 
-        <ConfigureColumn id="limits">
+        <ConfigureColumn id="behavior">
           <AgentDefaultBehaviorSection controller={controller} />
-          <AgentGuardrailsSection controller={controller} />
         </ConfigureColumn>
       </div>
 

@@ -78,6 +78,14 @@ vi.mock("./context-panel/ContextPanelSkeleton", async () => {
 })
 
 type LayoutProps = ComponentProps<typeof TicketsPageLayout>
+type LayoutPropsOverrides = {
+  actions?: Partial<LayoutProps["actions"]>
+  conversation?: Partial<LayoutProps["conversation"]>
+  drawer?: Partial<LayoutProps["drawer"]>
+  filters?: Partial<LayoutProps["filters"]>
+  flags?: Partial<LayoutProps["flags"]>
+  list?: Partial<LayoutProps["list"]>
+}
 
 const now = "2026-06-17T18:00:00.000Z"
 
@@ -187,91 +195,103 @@ function threadFromTicket(source: Ticket): Thread {
   }
 }
 
-function baseProps(overrides: Partial<LayoutProps> = {}): LayoutProps {
+function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
   const selectedTicket = ticket()
   const selectedThread = threadFromTicket(selectedTicket)
+  const list: LayoutProps["list"] = {
+    activeTicketId: null,
+    activeView: "for_me",
+    approvingTicketId: null,
+    effectiveActiveView: "for_me",
+    filteredTickets: [selectedTicket],
+    forMeCount: 1,
+    liveTicketCount: 1,
+    openThreadCount: 1,
+    selectedIds: [],
+    spamCount: 0,
+    ...overrides.list,
+  }
 
   return {
-    activeAgentTurns: [],
-    activeView: "for_me",
-    effectiveActiveView: "for_me",
-    channelFilter: null,
-    tagFilter: null,
-    connectedChannels: ["email"],
-    activeThreadError: null,
-    activeThreadPreview: undefined,
-    activeTicketId: null,
-    agentName: "Coco",
-    cachedPlan: null,
-    failedMessages: [],
-    orgSettings: null,
+    conversation: {
+      activeAgentTurns: [],
+      activeThread: list.activeTicketId ? selectedThread : undefined,
+      activeThreadError: null,
+      activeThreadPreview: undefined,
+      agentName: "Coco",
+      cachedPlan: null,
+      conversationTicket: list.activeTicketId ? selectedTicket : undefined,
+      failedMessages: [],
+      messagesEndRef: React.createRef<HTMLDivElement>(),
+      orgSettings: null,
+      refreshingSummaryId: null,
+      replyText: "",
+      sendError: null,
+      toast: null,
+      ...overrides.conversation,
+    },
+    drawer: {
+      isDesktopContext: true,
+      showContextDrawer: false,
+      ...overrides.drawer,
+    },
+    filters: {
+      channelFilter: null,
+      connectedChannels: ["email"],
+      searchQuery: "",
+      tagFilter: null,
+      ...overrides.filters,
+    },
     flags: {
       correctReplyVisible: false,
       hasMore: false,
       hasShopify: true,
       isAgentRunning: false,
       isConversationLoading: false,
-      isDesktopContext: true,
       isLoadingMore: false,
       isSearchLoading: false,
       isSearchMode: false,
       isSending: false,
       listLoading: false,
-      showContextDrawer: false,
+      ...overrides.flags,
     },
-    filteredTickets: [selectedTicket],
-    forMeCount: 1,
-    liveTicketCount: 1,
-    messagesEndRef: React.createRef<HTMLDivElement>(),
-    openThreadCount: 1,
-    refreshingSummaryId: null,
-    replyText: "",
-    searchQuery: "",
-    selectedIds: [],
-    sendError: null,
-    spamCount: 0,
-    toast: null,
-    onAgentComplete: vi.fn(),
-    onAgentRunningChange: vi.fn(),
-    onAgentTurnAdd: vi.fn(),
-    onBack: vi.fn(),
-    onBulkArchive: vi.fn(),
-    onBulkClose: vi.fn(),
-    onBulkTag: vi.fn(),
-    onClearSelection: vi.fn(),
-    onCorrectReplyDismiss: vi.fn(),
-    onChannelFilterChange: vi.fn(),
-    onTagFilterChange: vi.fn(),
-    onLinkShopifyCustomer: vi.fn(),
-    onLoadMore: vi.fn(),
-    onMarkAsSpam: vi.fn(),
-    onOpenContext: vi.fn(),
-    onRecover: vi.fn(),
-    approvingTicketId: null,
-    onQuickApproveFromList: vi.fn(),
-    onReviewFromList: vi.fn(),
-    onRefreshSummary: vi.fn(),
-    onReopen: vi.fn(),
-    onReplyChange: vi.fn(),
-    onResolve: vi.fn(),
-    onRetry: vi.fn(),
-    onRetrySend: vi.fn(),
-    onTicketRefresh: vi.fn(),
-    onActionError: vi.fn(),
-    onSearchChange: vi.fn(),
-    onSelectTicket: vi.fn(),
-    onSend: vi.fn(),
-    onShowContextDrawerChange: vi.fn(),
-    onViewChange: vi.fn(),
-    onViewSpam: vi.fn(),
-    onToggleSelect: vi.fn(),
-    ...overrides,
-    activeThread: "activeThread" in overrides
-      ? overrides.activeThread
-      : overrides.activeTicketId ? selectedThread : undefined,
-    conversationTicket: "conversationTicket" in overrides
-      ? overrides.conversationTicket
-      : overrides.activeTicketId ? selectedTicket : undefined,
+    list,
+    actions: {
+      onAgentComplete: vi.fn(),
+      onAgentRunningChange: vi.fn(),
+      onAgentTurnAdd: vi.fn(),
+      onBack: vi.fn(),
+      onBulkArchive: vi.fn(),
+      onBulkClose: vi.fn(),
+      onBulkTag: vi.fn(),
+      onClearSelection: vi.fn(),
+      onCorrectReplyDismiss: vi.fn(),
+      onChannelFilterChange: vi.fn(),
+      onTagFilterChange: vi.fn(),
+      onLinkShopifyCustomer: vi.fn(),
+      onLoadMore: vi.fn(),
+      onMarkAsSpam: vi.fn(),
+      onOpenContext: vi.fn(),
+      onRecover: vi.fn(),
+      onQuickApproveFromList: vi.fn(),
+      onReviewFromList: vi.fn(),
+      onRefreshSummary: vi.fn(),
+      onReopen: vi.fn(),
+      onReplyChange: vi.fn(),
+      onResolve: vi.fn(),
+      onRetry: vi.fn(),
+      onRetrySend: vi.fn(),
+      onTicketRefresh: vi.fn(),
+      onActionError: vi.fn(),
+      onSearchChange: vi.fn(),
+      onSelectTicket: vi.fn(),
+      onSend: vi.fn(),
+      onShowContextDrawerChange: vi.fn(),
+      onViewChange: vi.fn(),
+      onViewSpam: vi.fn(),
+      onToggleSelect: vi.fn(),
+      ...overrides.actions,
+    },
   }
 }
 
@@ -284,7 +304,7 @@ function LayoutHarness({
   onQuickApprove = vi.fn(),
 }: {
   tickets: Ticket[]
-  activeView?: LayoutProps["activeView"]
+  activeView?: LayoutProps["list"]["activeView"]
   initialActiveId?: string | null
   loading?: boolean
   error?: unknown
@@ -295,21 +315,26 @@ function LayoutHarness({
   const activeThread = activeTicket && !loading && !error ? threadFromTicket(activeTicket) : undefined
 
   return React.createElement(TicketsPageLayout, baseProps({
-    activeView,
-    effectiveActiveView: activeView,
-    activeTicketId: activeId,
-    activeThread,
-    activeThreadError: error,
-    conversationTicket: activeTicket && !error ? activeTicket : undefined,
-    filteredTickets: tickets,
+    list: {
+      activeTicketId: activeId,
+      activeView,
+      effectiveActiveView: activeView,
+      filteredTickets: tickets,
+    },
+    conversation: {
+      activeThread,
+      activeThreadError: error,
+      conversationTicket: activeTicket && !error ? activeTicket : undefined,
+    },
     flags: {
-      ...baseProps().flags,
       isConversationLoading: loading,
       hasShopify: true,
     },
-    onBack: () => setActiveId(null),
-    onSelectTicket: id => setActiveId(id),
-    onQuickApproveFromList: onQuickApprove,
+    actions: {
+      onBack: () => setActiveId(null),
+      onSelectTicket: id => setActiveId(id),
+      onQuickApproveFromList: onQuickApprove,
+    },
   }))
 }
 

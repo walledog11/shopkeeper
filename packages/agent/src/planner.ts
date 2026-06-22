@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
+import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import logger from "./logger.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
@@ -8,8 +8,8 @@ import { buildSystemPromptParts } from "./prompt.js";
 import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import type { AgentContext } from "./agent-context.js";
-import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
-import { enforceSpendCap, recordSpend } from "./spend.js";
+import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
+import { enforceSpendCap } from "./spend.js";
 import { resolveAgentSettings } from "./settings.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import {
@@ -20,8 +20,18 @@ import {
 } from "./planner-read-tools.js";
 import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
 import { derivePlanPath } from "./plan-path.js";
-import { mergeReplanToolCalls, selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, REPLAN_RETRY_PROMPT, replanNeedsSendReplyRetry, selectReplanRetryTools } from "./planner-tools.js";
+import { selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT } from "./planner-tools.js";
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
+import {
+  PLAN_INITIAL_MAX_TOKENS,
+  PLAN_REPLAN_MAX_TOKENS,
+  runPlannerModelCall,
+} from "./planner-model.js";
+import {
+  appendPendingToolResults,
+  pendingToolResultsForLastAssistantMessage,
+  runMutativeReplan,
+} from "./planner-replan.js";
 import {
   applyMutativeIntentNoActionGuard,
   applyBrandVoiceOrderStatusGuard,
@@ -39,192 +49,7 @@ import {
 } from "./planner-safety.js";
 import type { ToolStatus } from "./tools/result.js";
 
-/** Phase-1 Haiku calls emit tool calls only (reads, send_reply, escalate). */
-export const PLAN_INITIAL_MAX_TOKENS = 1024;
-/** Replan may include send_reply body text alongside mutative tools. */
-export const PLAN_REPLAN_MAX_TOKENS = 2048;
-
-type PlannerUsageTotals = ReturnType<typeof createModelUsageMetrics>;
-
-async function runPlannerModelCall(input: {
-  ctx: AgentContext;
-  usageTotals: PlannerUsageTotals;
-  model: string;
-  maxTokens: number;
-  systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
-  messages: Anthropic.MessageParam[];
-  tools: Anthropic.Tool[];
-  phase: string;
-  attempt?: number;
-  toolChoice?: Anthropic.Messages.MessageCreateParams["tool_choice"];
-  selectLoggedToolBlocks?: (toolBlocks: Anthropic.ToolUseBlock[]) => Anthropic.ToolUseBlock[];
-}): Promise<{
-  response: Anthropic.Message;
-  toolBlocks: Anthropic.ToolUseBlock[];
-  usage: ReturnType<typeof recordModelUsage>;
-}> {
-  const {
-    ctx,
-    usageTotals,
-    model,
-    maxTokens,
-    systemPromptBlocks,
-    messages,
-    tools,
-    phase,
-    attempt,
-    toolChoice,
-    selectLoggedToolBlocks,
-  } = input;
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: maxTokens,
-    system: systemPromptBlocks,
-    messages,
-    tools,
-    ...(toolChoice ? { tool_choice: toolChoice } : {}),
-  });
-  const toolBlocks = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
-  const loggedToolBlocks = selectLoggedToolBlocks ? selectLoggedToolBlocks(toolBlocks) : toolBlocks;
-  const usage = recordModelUsage(usageTotals, response);
-  await recordSpend(ctx.orgId, usage, model);
-  logger.info({
-    orgId: ctx.orgId,
-    threadId: ctx.thread.id,
-    phase,
-    ...(attempt === undefined ? {} : { attempt }),
-    model,
-    stopReason: response.stop_reason,
-    tools: loggedToolBlocks.map((block) => block.name),
-    usage,
-    usageTotals,
-  }, "[agent:plan] model call");
-  return { response, toolBlocks, usage };
-}
-
-function pendingToolResultsForLastAssistantMessage(
-  planMessages: Anthropic.MessageParam[],
-  content = "Not executed during planning.",
-): Anthropic.ToolResultBlockParam[] {
-  const lastMessage = planMessages[planMessages.length - 1];
-  const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
-    ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
-        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
-      )
-    : [];
-
-  return pendingToolUse.map((block) => ({
-    type: "tool_result" as const,
-    tool_use_id: block.id,
-    content,
-  }));
-}
-
-function appendPendingToolResults(
-  planMessages: Anthropic.MessageParam[],
-  content = "Not executed during planning.",
-): Anthropic.MessageParam[] {
-  const pendingToolResults = pendingToolResultsForLastAssistantMessage(planMessages, content);
-  if (pendingToolResults.length === 0) return [...planMessages];
-  return [
-    ...planMessages,
-    {
-      role: "user",
-      content: pendingToolResults,
-    },
-  ];
-}
-
-async function runMutativeReplan(input: {
-  ctx: AgentContext;
-  resolvedSettings: ReturnType<typeof resolveAgentSettings>;
-  systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
-  planMessages: Anthropic.MessageParam[];
-  phase1RawToolCalls: RawToolCall[];
-  tools: Anthropic.Tool[];
-  operatorMode: boolean;
-  usageTotals: ReturnType<typeof createModelUsageMetrics>;
-  contextSkippedReadIds: Set<string>;
-  initialPhase: "after_read_results" | "mutative_context";
-}): Promise<{
-  rawToolCalls: RawToolCall[];
-  planMessages: Anthropic.MessageParam[];
-  ranReplanRetry: boolean;
-}> {
-  const {
-    ctx,
-    resolvedSettings,
-    systemPromptBlocks,
-    tools,
-    operatorMode,
-    usageTotals,
-    contextSkippedReadIds,
-  } = input;
-  let planMessages = input.planMessages;
-  const activeRawToolCalls = input.phase1RawToolCalls;
-
-  await enforceSpendCap(ctx.orgId, resolvedSettings);
-  const replanModel = pickModel("plan_replan");
-  const sendReplyTool = tools.find((tool) => tool.name === "send_reply");
-  const runReplan = async (
-    messages: Anthropic.MessageParam[],
-    replanTools: Anthropic.Tool[],
-    phase: "after_read_results" | "replan_retry" | "mutative_context",
-  ) => {
-    const { response, toolBlocks } = await runPlannerModelCall({
-      ctx,
-      usageTotals,
-      model: replanModel,
-      maxTokens: PLAN_REPLAN_MAX_TOKENS,
-      systemPromptBlocks,
-      messages,
-      tools: replanTools,
-      phase,
-    });
-    return { response, toolBlocks };
-  };
-
-  let ranReplanRetry = false;
-  let { response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
-    planMessages,
-    tools,
-    input.initialPhase,
-  );
-  planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
-
-  if (replanNeedsSendReplyRetry(replanBlocks, {
-    operatorMode,
-    sendReplyAvailable: Boolean(sendReplyTool),
-  })) {
-    planMessages = [
-      ...planMessages,
-      {
-        role: "user",
-        content: [
-          ...pendingToolResultsForLastAssistantMessage(planMessages),
-          { type: "text" as const, text: REPLAN_RETRY_PROMPT },
-        ],
-      },
-    ];
-    await enforceSpendCap(ctx.orgId, resolvedSettings);
-    const retryTools = selectReplanRetryTools(tools, replanBlocks);
-    ({ response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
-      planMessages,
-      retryTools,
-      "replan_retry",
-    ));
-    planMessages = [...planMessages, { role: "assistant", content: replanResponse.content }];
-    ranReplanRetry = true;
-  }
-
-  const filteredPhase1Calls = activeRawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
-  const rawToolCalls = mergeReplanToolCalls(
-    filteredPhase1Calls,
-    replanBlocks.map((block) => ({ id: block.id, name: block.name, input: block.input })),
-  );
-
-  return { rawToolCalls, planMessages, ranReplanRetry };
-}
+export { PLAN_INITIAL_MAX_TOKENS, PLAN_REPLAN_MAX_TOKENS } from "./planner-model.js";
 
 export async function planAgent(
   ctx: AgentContext,

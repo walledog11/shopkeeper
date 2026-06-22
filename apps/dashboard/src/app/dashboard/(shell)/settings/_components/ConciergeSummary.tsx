@@ -26,7 +26,7 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
         </span>
       </div>
 
-      <p className="mt-2.5 max-w-5xl text-sm leading-relaxed text-foreground/75">
+      <p className="mt-2.5 text-sm leading-relaxed text-foreground/75">
         I&apos;m set to{" "}
         <Pill href={agentConfigureHref("autonomy")}>
           {settings.autoPlanOnOpen ? "draft a plan the moment a ticket opens" : "wait for you to ask before planning"}

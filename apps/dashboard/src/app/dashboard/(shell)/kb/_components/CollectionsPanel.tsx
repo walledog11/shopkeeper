@@ -208,7 +208,7 @@ export function CollectionsDropdown({
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-zinc-950 border border-foreground/[0.12] rounded-md shadow-lg p-2">
+        <div className="absolute left-0 right-0 top-full mt-1 z-20 bg-popover border border-foreground/[0.12] rounded-md shadow-lg p-2">
           <CollectionList
             knowledgeBases={knowledgeBases}
             allArticlesCount={allArticlesCount}

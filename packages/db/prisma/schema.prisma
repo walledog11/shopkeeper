@@ -234,6 +234,11 @@ model Message {
   contentText       String?    @map("content_text") @db.Text
   mediaUrl          String?    @map("media_url") @db.Text
   attachments       String[]   @default([])
+  // Org-scoped idempotency for non-null provider message ids is enforced by
+  // raw SQL migration 20260607000000_scope_message_idempotency_by_org.
+  // Prisma cannot express the partial unique index:
+  // messages_org_external_id_unique on (organization_id, external_message_id)
+  // where external_message_id is not null.
   externalMessageId String?    @map("external_message_id") @db.Text
   sendStatus        String?    @map("send_status") @db.Text
   providerMessageId String?    @map("provider_message_id") @db.Text

@@ -114,6 +114,8 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     selectTier,
     setAutonomyOverride,
     setMaxRefundInput,
+    dailyRefundCapInput,
+    setDailyRefundCapInput,
   } = controller
 
   const tierOptions = visibleAutonomyTiers(settingsState.autonomyTier)
@@ -185,22 +187,6 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
 
             {advancedOpen && (
               <div className="space-y-5 mt-5 border-t border-foreground/[0.06] pt-5">
-                <div className="space-y-1">
-                  <ToggleRow
-                    label="Require approval before executing actions"
-                    description="Show a plan card and wait for your confirmation before the agent runs Shopify or communication actions."
-                    checked={settingsState.requireApprovalForActions}
-                    onChange={v => setAutonomyOverride("requireApprovalForActions", v)}
-                  />
-                  <OverrideHint
-                    path="requireApprovalForActions"
-                    tier={autonomyTier}
-                    payload={payload}
-                    explicitOverrideSet={explicitOverrideSet}
-                    onReset={resetAutonomyOverride}
-                  />
-                </div>
-
                 <div className="space-y-1.5">
                   <MoneyInput
                     label="Max refund amount"
@@ -221,6 +207,16 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                     onReset={resetAutonomyOverride}
                   />
                 </div>
+
+                <MoneyInput
+                  label="Daily refund cap"
+                  hint="leave blank for no limit"
+                  aria-label="Daily refund cap"
+                  value={dailyRefundCapInput}
+                  onValueChange={setDailyRefundCapInput}
+                  placeholder="e.g. 200"
+                  description="Total refunds the agent can issue per day across all orders. Resets at UTC midnight."
+                />
 
                 <div className="space-y-3">
                   <div>
@@ -259,22 +255,6 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                   />
                   <OverrideHint
                     path="blockCancellations"
-                    tier={autonomyTier}
-                    payload={payload}
-                    explicitOverrideSet={explicitOverrideSet}
-                    onReset={resetAutonomyOverride}
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <ToggleRow
-                    label="Block custom line items"
-                    description="Require a Shopify variant ID on all new orders. Prevents the agent from creating orders with ad-hoc line items."
-                    checked={settingsState.blockCustomLineItems}
-                    onChange={v => setAutonomyOverride("blockCustomLineItems", v)}
-                  />
-                  <OverrideHint
-                    path="blockCustomLineItems"
                     tier={autonomyTier}
                     payload={payload}
                     explicitOverrideSet={explicitOverrideSet}

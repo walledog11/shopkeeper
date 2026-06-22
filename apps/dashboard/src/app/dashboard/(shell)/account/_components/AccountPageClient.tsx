@@ -22,8 +22,8 @@ export default function AccountPageClient() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 lg:px-8">
         <div>
-          <h1 className="text-lg font-bold text-foreground/80">Account</h1>
-          <p className="mt-0.5 text-sm text-foreground/35">
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">Account</h1>
+          <p className="mt-0.5 text-sm text-foreground/40">
             Your personal profile and sign-in. Workspace settings live separately.
           </p>
         </div>
@@ -37,7 +37,7 @@ export default function AccountPageClient() {
               </p>
             </div>
             <div className="flex items-center gap-4 rounded-md border border-foreground/[0.07] bg-foreground/[0.04] p-4">
-              <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground/[0.10] text-sm font-bold text-white">
+              <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-foreground/[0.10] text-sm font-bold text-foreground/70">
                 {userImageUrl ? (
                   <Image
                     src={userImageUrl}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import {
+  readAgentPlanCacheRecordShape,
   getCurrentPlanForThread,
   getPendingCustomerMessageId,
   isThreadAwaitingReply,
@@ -88,5 +89,59 @@ describe("getCurrentPlanForThread", () => {
       { id: "agent_1", senderType: "agent" },
       { id: "cust_2", senderType: "customer" },
     ])).toBeNull()
+  })
+})
+
+describe("readAgentPlanCacheRecordShape", () => {
+  it("reads current and previous stored agent plan cache versions", () => {
+    const current = buildAgentPlanCacheRecord({
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings: resolveAgentSettings(null),
+      plan: PLAN,
+    })
+    const previous = { ...current, version: 1 }
+
+    expect(readAgentPlanCacheRecordShape(current)?.plan).toEqual(PLAN)
+    expect(readAgentPlanCacheRecordShape(previous)?.version).toBe(1)
+    expect(readAgentPlanCacheRecordShape(previous)?.plan).toEqual(PLAN)
+  })
+
+  it("keeps dashboard approval records separate from agent plan cache records", () => {
+    expect(readAgentPlanCacheRecordShape({
+      kind: "dashboard_pending_approval",
+      version: 1,
+      instruction: "Create order",
+      instructionHash: "hash",
+      summary: "Approval summary",
+      plan: PLAN,
+      createdAt: "2026-06-01T12:00:00.000Z",
+    })).toBeNull()
+  })
+
+  it("rejects invalid JSON shapes", () => {
+    const current = buildAgentPlanCacheRecord({
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings: resolveAgentSettings(null),
+      plan: PLAN,
+    })
+
+    expect(readAgentPlanCacheRecordShape(null)).toBeNull()
+    expect(readAgentPlanCacheRecordShape({ ...current, settingsFingerprint: 123 })).toBeNull()
+    expect(readAgentPlanCacheRecordShape({
+      ...current,
+      plan: {
+        ...PLAN,
+        rawToolCalls: [{ id: "send_1", name: "send_reply" }],
+      },
+    })).toBeNull()
+    expect(readAgentPlanCacheRecordShape({
+      ...current,
+      plan: {
+        ...PLAN,
+        steps: [{ ...PLAN.steps[0], category: "unknown" }],
+      },
+    })).toBeNull()
   })
 })

@@ -2,7 +2,6 @@
 
 export { AgentAutonomySection } from "./AgentAutonomySection"
 export { AgentDefaultBehaviorSection } from "./AgentDefaultBehaviorSection"
-export { AgentGuardrailsSection } from "./AgentGuardrailsSection"
 export { AgentIdentitySection } from "./AgentIdentitySection"
 export { AgentResponseSection } from "./AgentResponseSection"
 export { AgentSampleRepliesSection } from "./AgentSampleRepliesSection"

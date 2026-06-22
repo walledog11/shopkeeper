@@ -3,12 +3,23 @@
 import { DAY_OPTIONS } from "./agent-tab-helpers"
 import {
   CharacterCountTextarea,
-  NumberInput,
+  SelectField,
 } from "./settings-form-fields"
 import { settingsSelectClassName } from "./settings-form-styles"
 import { SectionCard, ToggleRow } from "./shared"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
+
+function formatHour(hour: number): string {
+  const period = hour < 12 ? "AM" : "PM"
+  const display = hour % 12 === 0 ? 12 : hour % 12
+  return `${display}:00 ${period}`
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: String(hour),
+  label: formatHour(hour),
+}))
 
 export function BusinessHoursSection({
   controller,
@@ -30,8 +41,8 @@ export function BusinessHoursSection({
   const content = (
     <div className="space-y-5">
       <ToggleRow
-          label="Enable business hours"
-          description={`When a message arrives outside these hours, ${settingsState.agentName} sends a quick auto-acknowledgment instead of running a plan.`}
+          label="Enable after-hours away message"
+          description={`When a message arrives outside these hours, ${settingsState.agentName} holds the reply for your approval and sends the customer a quick acknowledgment.`}
           checked={settingsState.businessHoursEnabled}
           onChange={value => dispatch({ type: "set", patch: { businessHoursEnabled: value } })}
       />
@@ -66,28 +77,22 @@ export function BusinessHoursSection({
             </div>
 
             <div className="flex items-end gap-4">
-              <NumberInput
+              <SelectField
                 label="Opens at"
-                hint="hour (0–23)"
-                aria-label="Business hours start"
-                min={0}
-                max={23}
+                ariaLabel="Business hours start"
                 value={businessHoursStartInput}
-                onValueChange={setBusinessHoursStartInput}
-                placeholder="9"
-                inputWidthClassName="w-24"
+                onChange={setBusinessHoursStartInput}
+                options={HOUR_OPTIONS}
+                widthClassName="w-40"
               />
-              <NumberInput
+              <SelectField
                 label="Closes at"
-                hint="hour (0–23)"
-                aria-label="Business hours end"
-                min={0}
-                max={23}
+                ariaLabel="Business hours end"
                 value={businessHoursEndInput}
-                onValueChange={setBusinessHoursEndInput}
-                placeholder="17"
-                inputWidthClassName="w-24"
-                inputClassName={businessHoursInvalid ? "border-red-400/60" : undefined}
+                onChange={setBusinessHoursEndInput}
+                options={HOUR_OPTIONS}
+                widthClassName="w-40"
+                selectClassName={businessHoursInvalid ? "border-red-400/60" : undefined}
               />
             </div>
             {businessHoursInvalid && (
@@ -124,9 +129,9 @@ export function BusinessHoursSection({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-foreground/70">Business hours</h3>
+          <h3 className="text-sm font-semibold text-foreground/70">After-hours away message</h3>
           <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">
-            When customers message outside these hours, I&apos;ll send a quick auto-acknowledgment instead of planning a reply.
+            Outside these hours, I&apos;ll hold replies for your approval and send customers a quick acknowledgment so they&apos;re not left waiting.
           </p>
         </div>
         {content}
@@ -135,7 +140,7 @@ export function BusinessHoursSection({
   }
 
   return (
-    <SectionCard title="Business Hours" description="Automatically send an acknowledgment to customers who message outside your working hours. Overnight windows are supported.">
+    <SectionCard title="After-hours away message" description="Outside your working hours, the agent holds replies for your approval and sends customers a quick acknowledgment. Overnight windows are supported.">
       {content}
     </SectionCard>
   )

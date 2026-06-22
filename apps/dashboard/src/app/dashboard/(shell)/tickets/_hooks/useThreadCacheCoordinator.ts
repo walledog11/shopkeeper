@@ -5,6 +5,7 @@ import type { Thread, ThreadFilterFeedback, ThreadFilterStatus } from '@/types'
 
 type ThreadListMutate = (updater?: Thread[], revalidate?: boolean) => Promise<Thread[] | undefined>
 type ThreadListUpdater = (thread: Thread) => Thread
+type ThreadListCacheKey = 'open' | 'allOpen' | 'closed' | 'filtered'
 
 export interface ThreadSearchData {
   threads: Thread[]
@@ -52,11 +53,102 @@ function patchThreads(threads: Thread[], threadId: string, updateThread: ThreadL
   return threads.map(thread => thread.id === threadId ? updateThread(thread) : thread)
 }
 
+interface ThreadListCacheEntry {
+  key: ThreadListCacheKey
+  threads: Thread[]
+  mutate: ThreadListMutate
+  removeThreadById: (id: string) => Promise<void>
+  prependThread: (thread: Thread) => Promise<void>
+}
+
+interface CacheMovePolicy {
+  patch: ThreadListCacheKey[]
+  prepend: ThreadListCacheKey[]
+  remove: ThreadListCacheKey[]
+}
+
+const STATUS_MOVE_POLICIES: Record<'open' | 'closed' | 'filtered', CacheMovePolicy> = {
+  filtered: {
+    patch: ['filtered'],
+    prepend: [],
+    remove: ['open', 'allOpen', 'closed'],
+  },
+  closed: {
+    patch: [],
+    prepend: ['closed'],
+    remove: ['open', 'allOpen', 'filtered'],
+  },
+  open: {
+    patch: [],
+    prepend: ['open', 'allOpen'],
+    remove: ['closed', 'filtered'],
+  },
+}
+
+const FILTER_MOVE_POLICIES: Record<'open' | 'closed' | 'filtered', CacheMovePolicy> = {
+  filtered: {
+    patch: [],
+    prepend: ['filtered'],
+    remove: ['open', 'allOpen', 'closed'],
+  },
+  closed: {
+    patch: [],
+    prepend: ['closed'],
+    remove: ['open', 'allOpen', 'filtered'],
+  },
+  open: {
+    patch: [],
+    prepend: ['open', 'allOpen'],
+    remove: ['closed', 'filtered'],
+  },
+}
+
+function createListCacheRegistry(deps: ThreadCacheCoordinatorDeps): ThreadListCacheEntry[] {
+  const entries: ThreadListCacheEntry[] = [
+    {
+      key: 'open',
+      threads: deps.openThreads,
+      mutate: deps.mutateOpen,
+      removeThreadById: deps.removeFromOpen,
+      prependThread: deps.prependToOpen,
+    },
+    {
+      key: 'closed',
+      threads: deps.closedThreads,
+      mutate: deps.mutateClosed,
+      removeThreadById: deps.removeFromClosed,
+      prependThread: deps.prependToClosed,
+    },
+    {
+      key: 'filtered',
+      threads: deps.filteredThreads,
+      mutate: deps.mutateFiltered,
+      removeThreadById: deps.removeFromFiltered,
+      prependThread: deps.prependToFiltered,
+    },
+  ]
+
+  if (deps.allOpenThreads && deps.mutateAllOpen && deps.removeFromAllOpen && deps.prependToAllOpen) {
+    entries.splice(1, 0, {
+      key: 'allOpen',
+      threads: deps.allOpenThreads,
+      mutate: deps.mutateAllOpen,
+      removeThreadById: deps.removeFromAllOpen,
+      prependThread: deps.prependToAllOpen,
+    })
+  }
+
+  return entries
+}
+
+function listCacheMap(entries: ThreadListCacheEntry[]) {
+  return new Map(entries.map(entry => [entry.key, entry]))
+}
+
 function findThread(deps: ThreadCacheCoordinatorDeps, threadId: string) {
-  return deps.openThreads.find(thread => thread.id === threadId)
-    ?? deps.allOpenThreads?.find(thread => thread.id === threadId)
-    ?? deps.closedThreads.find(thread => thread.id === threadId)
-    ?? deps.filteredThreads.find(thread => thread.id === threadId)
+  return createListCacheRegistry(deps)
+    .flatMap(entry => entry.threads)
+    .find(thread => thread.id === threadId)
     ?? (deps.activeThread?.id === threadId ? deps.activeThread : undefined)
 }
 
@@ -86,13 +178,42 @@ async function patchActiveThreadCache(
   )
 }
 
+async function applyListCacheMove(input: {
+  entriesByKey: Map<ThreadListCacheKey, ThreadListCacheEntry>
+  policy: CacheMovePolicy
+  threadId: string
+  updated: Thread
+  updateThread: ThreadListUpdater
+}) {
+  const { entriesByKey, policy, threadId, updated, updateThread } = input
+  const operations: Promise<unknown>[] = []
+
+  for (const key of policy.remove) {
+    operations.push(entriesByKey.get(key)?.removeThreadById(threadId) ?? Promise.resolve())
+  }
+  for (const key of policy.prepend) {
+    operations.push(entriesByKey.get(key)?.prependThread(updated) ?? Promise.resolve())
+  }
+  for (const key of policy.patch) {
+    const entry = entriesByKey.get(key)
+    if (entry) operations.push(entry.mutate(patchThreads(entry.threads, threadId, updateThread), false))
+  }
+
+  await Promise.all(operations)
+}
+
+function listDestinationFor(thread: Thread): 'open' | 'closed' | 'filtered' {
+  if (thread.filterStatus === 'filtered') return 'filtered'
+  return thread.status === 'closed' ? 'closed' : 'open'
+}
+
 export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): ThreadCacheCoordinator {
+  const listCaches = createListCacheRegistry(deps)
+  const listCachesByKey = listCacheMap(listCaches)
+
   const patchThreadCaches = async (threadId: string, updateThread: ThreadListUpdater) => {
     await Promise.all([
-      deps.mutateOpen(patchThreads(deps.openThreads, threadId, updateThread), false),
-      deps.mutateAllOpen?.(patchThreads(deps.allOpenThreads ?? [], threadId, updateThread), false),
-      deps.mutateClosed(patchThreads(deps.closedThreads, threadId, updateThread), false),
-      deps.mutateFiltered(patchThreads(deps.filteredThreads, threadId, updateThread), false),
+      ...listCaches.map(entry => entry.mutate(patchThreads(entry.threads, threadId, updateThread), false)),
       patchSearchCache(deps.mutateSearch, threadId, updateThread),
       patchActiveThreadCache(deps.mutateActiveThread, threadId, updateThread),
     ])
@@ -104,29 +225,14 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
 
     const updated: Thread = { ...existing, status: nextStatus }
     const updateThread = (thread: Thread) => ({ ...thread, status: nextStatus })
-
-    if (updated.filterStatus === 'filtered') {
-      await Promise.all([
-        deps.removeFromOpen(threadId),
-        deps.removeFromAllOpen?.(threadId),
-        deps.removeFromClosed(threadId),
-        deps.mutateFiltered(patchThreads(deps.filteredThreads, threadId, updateThread), false),
-      ])
-    } else if (nextStatus === 'closed') {
-      await Promise.all([
-        deps.removeFromOpen(threadId),
-        deps.removeFromAllOpen?.(threadId),
-        deps.removeFromFiltered(threadId),
-        deps.prependToClosed(updated),
-      ])
-    } else {
-      await Promise.all([
-        deps.removeFromClosed(threadId),
-        deps.removeFromFiltered(threadId),
-        deps.prependToOpen(updated),
-        deps.prependToAllOpen?.(updated),
-      ])
-    }
+    const destination = listDestinationFor(updated)
+    await applyListCacheMove({
+      entriesByKey: listCachesByKey,
+      policy: STATUS_MOVE_POLICIES[destination],
+      threadId,
+      updated,
+      updateThread,
+    })
 
     await Promise.all([
       patchSearchCache(deps.mutateSearch, threadId, updateThread),
@@ -152,29 +258,14 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
       filterStatus: nextFilterStatus,
       filterFeedback: nextFilterFeedback ?? thread.filterFeedback,
     })
-
-    if (nextFilterStatus === 'filtered') {
-      await Promise.all([
-        deps.removeFromOpen(threadId),
-        deps.removeFromAllOpen?.(threadId),
-        deps.removeFromClosed(threadId),
-        deps.prependToFiltered(updated),
-      ])
-    } else if (updated.status === 'closed') {
-      await Promise.all([
-        deps.removeFromFiltered(threadId),
-        deps.removeFromOpen(threadId),
-        deps.removeFromAllOpen?.(threadId),
-        deps.prependToClosed(updated),
-      ])
-    } else {
-      await Promise.all([
-        deps.removeFromFiltered(threadId),
-        deps.removeFromClosed(threadId),
-        deps.prependToOpen(updated),
-        deps.prependToAllOpen?.(updated),
-      ])
-    }
+    const destination = listDestinationFor(updated)
+    await applyListCacheMove({
+      entriesByKey: listCachesByKey,
+      policy: FILTER_MOVE_POLICIES[destination],
+      threadId,
+      updated,
+      updateThread,
+    })
 
     await Promise.all([
       patchSearchCache(deps.mutateSearch, threadId, updateThread),
@@ -184,10 +275,7 @@ export function createThreadCacheCoordinator(deps: ThreadCacheCoordinatorDeps): 
 
   const revalidateThreadCaches = async () => {
     await Promise.all([
-      deps.mutateOpen(),
-      deps.mutateAllOpen?.(),
-      deps.mutateClosed(),
-      deps.mutateFiltered(),
+      ...listCaches.map(entry => entry.mutate()),
       deps.mutateSearch(),
       deps.mutateActiveThread(),
     ])

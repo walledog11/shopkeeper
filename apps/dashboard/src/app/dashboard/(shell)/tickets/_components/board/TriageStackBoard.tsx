@@ -69,7 +69,7 @@ export function TriageStackBoard({
           <CheckCircle2 className="size-5 text-foreground/40" />
         </span>
         <div className="flex flex-col gap-1">
-          <h2 className="font-display-serif text-lg text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             {activeView === "closed" ? "No closed tickets" : "You're all caught up"}
           </h2>
           <p className="max-w-[230px] text-sm text-foreground/50">

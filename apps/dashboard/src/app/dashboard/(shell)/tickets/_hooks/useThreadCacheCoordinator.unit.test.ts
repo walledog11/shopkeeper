@@ -41,18 +41,21 @@ function makeThread(overrides: Partial<Thread> & { id: string }): Thread {
 
 function createHarness({
   open = [],
+  allOpen = [],
   closed = [],
   filtered = [],
   search,
   active,
 }: {
   open?: Thread[]
+  allOpen?: Thread[]
   closed?: Thread[]
   filtered?: Thread[]
   search?: ThreadSearchData
   active?: ActiveThreadData
 }) {
   let openThreads = [...open]
+  let allOpenThreads = [...allOpen]
   let closedThreads = [...closed]
   let filteredThreads = [...filtered]
   let searchData = search
@@ -61,6 +64,10 @@ function createHarness({
   const mutateOpen: CoordinatorDeps['mutateOpen'] = vi.fn(async (next?: Thread[]) => {
     if (next) openThreads = next
     return openThreads
+  })
+  const mutateAllOpen: CoordinatorDeps['mutateAllOpen'] = vi.fn(async (next?: Thread[]) => {
+    if (next) allOpenThreads = next
+    return allOpenThreads
   })
   const mutateClosed: CoordinatorDeps['mutateClosed'] = vi.fn(async (next?: Thread[]) => {
     if (next) closedThreads = next
@@ -94,6 +101,9 @@ function createHarness({
   const removeFromOpen = vi.fn(async (id: string) => {
     openThreads = openThreads.filter(thread => thread.id !== id)
   })
+  const removeFromAllOpen = vi.fn(async (id: string) => {
+    allOpenThreads = allOpenThreads.filter(thread => thread.id !== id)
+  })
   const removeFromClosed = vi.fn(async (id: string) => {
     closedThreads = closedThreads.filter(thread => thread.id !== id)
   })
@@ -102,6 +112,9 @@ function createHarness({
   })
   const prependToOpen = vi.fn(async (thread: Thread) => {
     openThreads = [thread, ...openThreads.filter(existing => existing.id !== thread.id)]
+  })
+  const prependToAllOpen = vi.fn(async (thread: Thread) => {
+    allOpenThreads = [thread, ...allOpenThreads.filter(existing => existing.id !== thread.id)]
   })
   const prependToClosed = vi.fn(async (thread: Thread) => {
     closedThreads = [thread, ...closedThreads.filter(existing => existing.id !== thread.id)]
@@ -112,16 +125,20 @@ function createHarness({
 
   const coordinator = createThreadCacheCoordinator({
     openThreads,
+    allOpenThreads,
     closedThreads,
     filteredThreads,
     activeThread: activeThreadData?.thread,
     mutateOpen,
+    mutateAllOpen,
     mutateClosed,
     mutateFiltered,
     removeFromOpen,
+    removeFromAllOpen,
     removeFromClosed,
     removeFromFiltered,
     prependToOpen,
+    prependToAllOpen,
     prependToClosed,
     prependToFiltered,
     mutateSearch,
@@ -131,6 +148,7 @@ function createHarness({
   return {
     coordinator,
     get openThreads() { return openThreads },
+    get allOpenThreads() { return allOpenThreads },
     get closedThreads() { return closedThreads },
     get filteredThreads() { return filteredThreads },
     get searchData() { return searchData },
@@ -143,6 +161,7 @@ describe('createThreadCacheCoordinator', () => {
     const thread = makeThread({ id: 'thread-1' })
     const harness = createHarness({
       open: [thread],
+      allOpen: [thread],
       closed: [thread],
       filtered: [thread],
       search: { threads: [thread] },
@@ -155,6 +174,7 @@ describe('createThreadCacheCoordinator', () => {
     }))
 
     expect(harness.openThreads[0].aiSummary).toBe('Updated summary')
+    expect(harness.allOpenThreads[0].aiSummary).toBe('Updated summary')
     expect(harness.closedThreads[0].aiSummary).toBe('Updated summary')
     expect(harness.filteredThreads[0].aiSummary).toBe('Updated summary')
     expect(harness.searchData?.threads[0].aiSummary).toBe('Updated summary')
@@ -165,6 +185,7 @@ describe('createThreadCacheCoordinator', () => {
     const thread = makeThread({ id: 'thread-1', status: 'open' })
     const harness = createHarness({
       open: [thread],
+      allOpen: [thread],
       search: { threads: [thread] },
       active: { thread },
     })
@@ -172,6 +193,7 @@ describe('createThreadCacheCoordinator', () => {
     await harness.coordinator.moveThreadStatus('thread-1', 'closed')
 
     expect(harness.openThreads).toEqual([])
+    expect(harness.allOpenThreads).toEqual([])
     expect(harness.closedThreads).toMatchObject([{ id: 'thread-1', status: 'closed' }])
     expect(harness.filteredThreads).toEqual([])
     expect(harness.searchData?.threads).toMatchObject([{ id: 'thread-1', status: 'closed' }])
@@ -190,6 +212,7 @@ describe('createThreadCacheCoordinator', () => {
 
     expect(harness.closedThreads).toEqual([])
     expect(harness.openThreads).toMatchObject([{ id: 'thread-1', status: 'open' }])
+    expect(harness.allOpenThreads).toMatchObject([{ id: 'thread-1', status: 'open' }])
     expect(harness.filteredThreads).toEqual([])
     expect(harness.searchData?.threads).toMatchObject([{ id: 'thread-1', status: 'open' }])
     expect(harness.activeThreadData?.thread).toMatchObject({ id: 'thread-1', status: 'open' })
