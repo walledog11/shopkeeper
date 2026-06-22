@@ -97,7 +97,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
       QUEUE.ORDER_REVIEW,
-      QUEUE.OUTBOUND_EMAIL_SWEEP,
+      QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.QUEUE_HEALTH,
       QUEUE.INBOUND,
       QUEUE.AI_SUMMARY,
@@ -110,7 +110,7 @@ describe('createMaintenanceWorkers', () => {
       QUEUE.DIGEST,
       QUEUE.VOICE_SYNTHESIS,
       QUEUE.ORDER_RISK,
-      QUEUE.OUTBOUND_EMAIL_SWEEP,
+      QUEUE.OUTBOUND_SEND_SWEEP,
       QUEUE.QUEUE_HEALTH,
     ]);
 
@@ -164,9 +164,9 @@ describe('createMaintenanceWorkers', () => {
       jobId: JOB.ORDER_RISK_ID,
       every: ONE_HOUR_MS,
     });
-    expect(readRepeatJob(QUEUE.OUTBOUND_EMAIL_SWEEP)).toEqual({
-      name: JOB.OUTBOUND_EMAIL_SWEEP,
-      jobId: JOB.OUTBOUND_EMAIL_SWEEP_ID,
+    expect(readRepeatJob(QUEUE.OUTBOUND_SEND_SWEEP)).toEqual({
+      name: JOB.OUTBOUND_SEND_SWEEP,
+      jobId: JOB.OUTBOUND_SEND_SWEEP_ID,
       every: FIVE_MINUTES_MS,
     });
     expect(readRepeatJob(QUEUE.QUEUE_HEALTH)).toEqual({

@@ -8,6 +8,13 @@ deliverability plumbing that iMessage specifically requires.
 
 Written 2026-06-17.
 
+> **Status (2026-06-21): code-complete and live-verified.** All phases (0–5) shipped; the full
+> round-trip was proven on a real iPhone (inbound→webhook→worker→DB and outbound→`space.send()`→iPhone
+> with `sendStatus` flipped `sent`) on a free shared-pool line. Hard-constraint #6 (stranded `pending`)
+> is resolved via the channel-agnostic `OUTBOUND_SEND_SWEEP`. Remaining work is **not code**: the
+> per-org Photon connect, the commercial line-tier decision (item 4), and the optional send-pacing
+> guard. See **"Deploying to prod"** below for the Vercel/Railway runbook.
+
 > **Vendor framing.** Apple has no official iMessage API. The only paths are (a) run a Mac with
 > your Apple ID (BlueBubbles/AirMessage, and Photon's open-source `imessage-kit` — a non-starter
 > for multi-tenant SaaS), or (b) a provider that operates **managed iMessage lines**. Photon's
@@ -112,6 +119,11 @@ for these phases.
     awaited app/promise. **Residual (needs the user):** a Photon account + project creds + a
     provisioned line to run the live send/receive round-trip and measure `space.get()` latency, plus
     the commercial answers in item 4 below.
+  - **Update (2026-06-21): live round-trip VERIFIED, residual closed.** Real iPhone
+    inbound→webhook→worker→DB and outbound→`space.send()`→iPhone with `sendStatus` flipped `sent`, on
+    a free shared-pool line; the Shopkeeper code needed zero changes (every failure was Photon-side
+    config). What remains is **only** the item-4 commercial answers (Business-tier pricing/
+    dedicated-line provisioning, SMS/RCS fallback) and an unmeasured `space.get()` latency.
 - **Phase 1 — Schema + constants (B).** §1. Verify: `prisma generate`, migration applies, both apps
   typecheck, zero behavior change. Safe to merge alone.
   - **Status (2026-06-17): COMPLETE.** Added `ChannelType.imessage`,
@@ -148,8 +160,8 @@ for these phases.
     deviations from the plan:** (1) `spectrum-ts@4.2.0` `space.send()` exposes **no
     `clientGuid`/idempotency key** (grep-verified against the shipped `.d.ts` overloads), so
     cross-retry dedupe rests solely on the `sendStatus` gate — the same risk profile as the email
-    worker, not better. (2) The stranded-`pending` sweep (hard-constraint #6) is **deferred**, not
-    built: a crashed worker can leave a row `pending`, shown honestly rather than reconciled.
+    worker, not better. (2) The stranded-`pending` sweep (hard-constraint #6) was **deferred** here and
+    **resolved 2026-06-21** by generalizing the existing email sweep to `OUTBOUND_SEND_SWEEP`.
 - **Phase 5 — Provisioning UI + deliverability guards (B, after 3+4).** §5 plus the inbound-first
   rule, send-pacing/coalescing, and caps surfaced. Verify: connect flow stores an encrypted
   `Integration` and shows the webhook URL; the agent refuses to open a cold outbound conversation.
@@ -168,8 +180,8 @@ for these phases.
     conversations/line/day cap, Business-line recommendation) surfaced in the connect + webhook UI.
     Verified with dashboard + gateway typecheck, lint, and tests (new iMessage route test, updated
     outbound-worker + dispatch-message guard tests, channels unit). **Deferred:** send-pacing/
-    coalescing (plan-optional, not a verify criterion) and the stranded-`pending` sweep
-    (hard-constraint #6, carried over from Phase 4).
+    coalescing (plan-optional, not a verify criterion). The stranded-`pending` sweep
+    (hard-constraint #6, carried over from Phase 4) was **resolved 2026-06-21** — see #6 below.
 
 Phases 3 and 4 are independent once 2 lands and can go in either order. A failed Phase 0 is a signal
 to renegotiate scope, not to push forward.
@@ -277,10 +289,15 @@ not a single worker. Mirror each part:
 5. **Caps: 50 new conversations/line/day, 5,000/day.** A busy merchant exceeds 50 → needs Business
    auto-scale. Surface in onboarding/limits.
 6. **Stranded `pending` rows.** Outbound pre-creates a `pending` message and flips it on `send()`
-   ack — but with no delivery webhook, a crashed worker leaves it `pending` forever (email has the
-   `OUTBOUND_EMAIL_SWEEP` reconciler; iMessage has nothing to reconcile *against*). Decide: flip
-   `sent` on ack, and either add a short timeout sweep that marks long-`pending` rows `failed`, or
-   accept `pending` as a terminal "unknown" shown honestly to the merchant.
+   ack — but with no delivery webhook, a crashed worker would leave it `pending` forever.
+   **Resolved (2026-06-21):** the former `OUTBOUND_EMAIL_SWEEP` reconciler was already
+   channel-agnostic — its `updateMany` has no channel filter and every `Message` defaults `sentAt`
+   at create time — so it was generalized to `OUTBOUND_SEND_SWEEP`
+   (`apps/gateway/src/maintenance/outbound-send-sweep.ts`): one 5-min job that marks any send still
+   `pending` after 10 min `failed` with a retry-able error, covering email and iMessage alike.
+   iMessage has nothing to reconcile *toward* (no delivery webhook), so this is the recovery path —
+   the flipped-`failed` row surfaces the composer's retry affordance. (BullMQ queue/job string
+   values stay email-legacy so the live repeatable job isn't orphaned.)
 
 ---
 
@@ -320,6 +337,61 @@ for Photon sales.*
    mechanics/timeline, and SMS/RCS fallback behavior (all undocumented publicly). Tiers + caps are
    confirmed: Free/Pro shared pool vs. Business dedicated number; 50 new conversations/line/day,
    5,000 messages/server/day, raisable on request.
+
+---
+
+## Deploying to prod (Vercel + Railway)
+
+No code changes ship with deployment — iMessage rides the same Railway gateway + Vercel dashboard
+split as IG/email. Going live is config plus a per-org Photon connect.
+
+**The one subtlety — `GATEWAY_INTERNAL_URL` does double duty.** `getGatewayBaseUrl()` (reads
+`GATEWAY_INTERNAL_URL`; legacy alias `GATEWAY_PUBLIC_URL` — must match if both set) backs *both* the
+dashboard→gateway outbound enqueue hop *and* the webhook URL the merchant pastes into Photon
+(`buildPhotonWebhookUrl` → `https://<base>/webhooks/photon/<integrationId>`). Because the dashboard
+(Vercel) can't reach the gateway (Railway) over private networking, this var is already the gateway's
+**public** Railway domain — exactly what Photon's cloud must reach. **Never point it at a
+`*.railway.internal` host:** inbound breaks silently because the displayed webhook URL is unreachable.
+Verify the connected card's URL curls to `400` on an unsigned POST.
+
+**Deploy order.**
+1. **Migrate the prod DB first.** Neither `vercel.json` nor `railway.json` runs migrations (build only
+   `prisma generate`s). Apply `20260617000000_add_imessage_channel` (`ChannelType.imessage` +
+   `Thread.externalSpaceId`) manually with prod `DATABASE_URL` + `DIRECT_DATABASE_URL` set (`directUrl`
+   is what migrate uses): `npm run db:migrate:deploy`. Run before the app deploys — both apps reference
+   the new enum/column.
+2. **Deploy the gateway (Railway):** Photon webhook route (registered unconditionally), outbound
+   worker, generalized `OUTBOUND_SEND_SWEEP`.
+3. **Deploy the dashboard (Vercel):** provisioning UI + dispatch enqueue.
+
+**Gateway roles — needs both halves.** `npm run start -w apps/gateway` → `start.js` spawns by
+`GATEWAY_RUNTIME_ROLE` (default `all`). iMessage needs **server** (Photon webhook + internal enqueue
+route; holds the public domain) *and* **worker** (inbound queue + `OUTBOUND_IMESSAGE` queue + the
+sweep). A single service with role `all` covers both; if split, the worker service needs
+`GATEWAY_ENABLE_MAINTENANCE_WORKERS=true` (default) for the sweep and only the server service needs the
+public domain.
+
+**Env that must match across Vercel ↔ Railway.**
+- `TOKEN_ENCRYPTION_KEY` — dashboard encrypts the Spectrum creds onto `Integration`; the **gateway
+  decrypts** them to verify webhooks + send. Mismatch = silent failure.
+- `INTERNAL_API_SECRET` — auth on the dashboard→gateway enqueue hop.
+- `GATEWAY_INTERNAL_URL` — public gateway URL; **mandatory** (without it `enqueueOutboundImessage`
+  returns false and replies fail).
+- `REDIS_URL` (gateway BullMQ), `BLOB_READ_WRITE_TOKEN` (gateway uploads inbound iMessage attachments),
+  `DATABASE_URL` / `DIRECT_DATABASE_URL`.
+
+No new Spectrum env vars — `projectId` / `projectSecret` / `webhookSecret` are per-org runtime data
+entered in the dashboard and stored on `Integration`, not deploy config.
+
+**Per-org Photon connect (runtime, once per merchant).**
+1. Paste Spectrum `projectId` / `projectSecret` / `webhookSecret` into the dashboard connect form.
+2. Register the displayed `/webhooks/photon/<integrationId>` URL in app.photon.codes → Webhooks.
+3. The `webhookSecret` is **per-endpoint and rotates when the endpoint is recreated** — the dashboard
+   value must match the secret Photon shows for that exact endpoint.
+4. **Order: re-seed creds → restart the gateway → then text.** The gateway caches the per-org Spectrum
+   app in memory (`clients/spectrum.ts`); any cred change needs a Railway restart/redeploy.
+5. Smoke-test inbound-first: customer texts the line → thread appears; approve a reply → `sendStatus`
+   flips `sent`.
 
 ---
 

@@ -24,7 +24,9 @@ export const QUEUE = {
   ORDER_RISK: 'order-risk-monitor',
   ORDER_REVIEW: 'order-review',
   OUTBOUND_EMAIL: 'outbound-email',
-  OUTBOUND_EMAIL_SWEEP: 'outbound-email-sweep',
+  // Channel-agnostic sweep for stale `pending` async outbound (email + iMessage).
+  // String value stays email-legacy so the live BullMQ repeatable job isn't orphaned.
+  OUTBOUND_SEND_SWEEP: 'outbound-email-sweep',
   OUTBOUND_IMESSAGE: 'outbound-imessage',
 } as const;
 export const JOB = {
@@ -52,8 +54,8 @@ export const JOB = {
   ORDER_REVIEW: 'process-order-review',
   SEND_EMAIL: 'send-email',
   SEND_IMESSAGE: 'send-imessage',
-  OUTBOUND_EMAIL_SWEEP: 'sweep-outbound-email',
-  OUTBOUND_EMAIL_SWEEP_ID: 'outbound-email-sweep-5min',
+  OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
+  OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
 } as const;
 export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
 
