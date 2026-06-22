@@ -41,6 +41,17 @@ async function up() {
         throw error;
       }
 
+      // A failed `up` can leave half-created containers still holding their
+      // host-port reservation, so every retry then fails with the same
+      // "address already in use". Tear down before retrying to release ports.
+      try {
+        await runCommand(command, [...composeArgs, 'down', '--remove-orphans'], {
+          env: process.env,
+        });
+      } catch {
+        // best-effort cleanup; ignore and let the retry surface real failures
+      }
+
       const delayMs = attempt * 5_000;
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
