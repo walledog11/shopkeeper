@@ -20,7 +20,7 @@ import {
 } from "./planner-read-tools.js";
 import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
 import { derivePlanPath } from "./plan-path.js";
-import { selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT } from "./planner-tools.js";
+import { selectInitialPlanningTools, REPLAN_INCLUDE_REPLY_PROMPT, POLICY_GAP_REPLAN_PROMPT, selectPolicyGapReplanTools } from "./planner-tools.js";
 import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
 import {
   PLAN_INITIAL_MAX_TOKENS,
@@ -36,6 +36,7 @@ import {
   applyMutativeIntentNoActionGuard,
   applyBrandVoiceOrderStatusGuard,
   shouldPreferBrandVoiceOrderStatusReply,
+  applyPolicyGapAskOperatorGuard,
   ESCALATION_DRAFT_PROMPT,
   replyDraftPrompt,
   sendReplyHasText,
@@ -43,6 +44,7 @@ import {
   shouldForcePlanningEscalation,
   shouldSkipReplyDraftForMutativeIntent,
   shouldSkipReplyDraftForWatchTier,
+  shouldUsePolicyGapReplanPrompt,
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
   stripNonEscalationTerminalTools,
@@ -129,6 +131,7 @@ export async function planAgent(
   let ranReplan = false;
   let ranReplanRetry = false;
   let contextSkippedReadIds = new Set<string>();
+  let usePolicyGapReplan = false;
   appendInitialPlanningWarnings({ ctx, operatorMode, warnings });
 
   if (readBlocks.length > 0) {
@@ -204,6 +207,13 @@ export async function planAgent(
         recentOrders: ctx.recentOrders,
       });
 
+      usePolicyGapReplan = !operatorMode && shouldUsePolicyGapReplanPrompt({
+        ctx,
+        readBlocks: processedReadBlocks,
+        readResultsMap,
+        rawToolCalls: activeRawToolCalls,
+      });
+
       // Pair the active turn's non-read tool_use too — a non-read block (mutative /
       // ask_operator) emitted alongside a read would otherwise reach the replan call
       // unpaired (400 tool_use without tool_result).
@@ -229,7 +239,7 @@ export async function planAgent(
         },
         {
           role: "user",
-          content: REPLAN_INCLUDE_REPLY_PROMPT,
+          content: usePolicyGapReplan ? POLICY_GAP_REPLAN_PROMPT : REPLAN_INCLUDE_REPLY_PROMPT,
         },
       ];
 
@@ -239,7 +249,7 @@ export async function planAgent(
         systemPromptBlocks,
         planMessages,
         phase1RawToolCalls: activeRawToolCalls,
-        tools,
+        tools: usePolicyGapReplan ? selectPolicyGapReplanTools(tools) : tools,
         operatorMode,
         usageTotals,
         contextSkippedReadIds,
@@ -350,9 +360,16 @@ export async function planAgent(
   // with a mutative action and no reply, or with nothing at all — force one final
   // send_reply.
   rawToolCalls = applyMutativeIntentNoActionGuard(ctx, rawToolCalls, warnings);
+  rawToolCalls = applyPolicyGapAskOperatorGuard({
+    ctx,
+    rawToolCalls,
+    readBlocks: processedReadBlocks,
+    readResultsMap,
+    warnings,
+  });
   hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
   hasEscalate = rawToolCalls.some((tc) => tc.name === "escalate_to_human");
-  const hasAskOperator = rawToolCalls.some((tc) => tc.name === "ask_operator");
+  let hasAskOperator = rawToolCalls.some((tc) => tc.name === "ask_operator");
   if (
     !operatorMode
     && !hasSendReply
@@ -408,6 +425,17 @@ export async function planAgent(
     }
   }
 
+  rawToolCalls = applyPolicyGapAskOperatorGuard({
+    ctx,
+    rawToolCalls,
+    readBlocks: processedReadBlocks,
+    readResultsMap,
+    warnings,
+  });
+  hasSendReply = rawToolCalls.some((tc) => tc.name === "send_reply");
+  hasAskOperator = rawToolCalls.some((tc) => tc.name === "ask_operator");
+  const policyGapGuardApplied = rawToolCalls.some((tc) => tc.id === "tu_policy_gap_ask");
+
   if (contextSkippedReadIds.size > 0) {
     rawToolCalls = rawToolCalls.filter((toolCall) => !contextSkippedReadIds.has(toolCall.id));
   }
@@ -423,6 +451,8 @@ export async function planAgent(
     replanRetried: ranReplanRetry,
     escalationDrafted: ranEscalationDraft,
     askOperatorElected: hasAskOperator,
+    policyGapGuardApplied,
+    policyGapReplanPrompt: usePolicyGapReplan,
     replyDrafted: ranReplyDraft,
     modelCalls: usageTotals.modelCalls,
     usageTotals,

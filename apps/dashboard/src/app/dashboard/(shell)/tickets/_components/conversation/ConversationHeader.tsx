@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowLeft, CheckCircle2, Info, Loader2, RotateCcw, X } from "lucide-react"
+import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import type { TicketCocoAction } from "../../_lib/resolve-ticket-coco-action"
@@ -19,11 +19,21 @@ interface Props {
 }
 
 const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
-  send: "border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/10 hover:text-emerald-100",
-  draft: "border-violet-500/40 text-violet-200 hover:bg-violet-500/10 hover:text-violet-100",
-  caution: "border-amber-500/40 text-amber-200 hover:bg-amber-500/10 hover:text-amber-100",
-  neutral: "border-border text-foreground/75 hover:text-white hover:bg-foreground/[0.06]",
+  send: "border-emerald-600/30 text-emerald-700 hover:bg-emerald-600/10 hover:text-emerald-800",
+  draft: "border-border text-foreground/75 hover:bg-foreground/[0.06] hover:text-foreground/90",
+  caution: "border-amber-600/30 text-amber-700 hover:bg-amber-600/10 hover:text-amber-800",
+  neutral: "border-border text-foreground/75 hover:bg-foreground/[0.06] hover:text-foreground/90",
   loading: "border-border text-foreground/50 hover:bg-transparent hover:text-foreground/50",
+}
+
+function initialsOf(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed) return "?"
+  const at = trimmed.indexOf("@")
+  const base = at > 0 ? trimmed.slice(0, at) : trimmed
+  const parts = base.split(/\s+/).filter(Boolean)
+  const letters = parts.length > 1 ? `${parts[0][0]}${parts[1][0]}` : base.slice(0, 2)
+  return letters.toUpperCase()
 }
 
 export default function ConversationHeader({
@@ -39,15 +49,30 @@ export default function ConversationHeader({
   embedded = false,
 }: Props) {
   const BackIcon = embedded ? X : ArrowLeft
+  const initials = initialsOf(customer)
+
+  const identity = (
+    <>
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-xs font-semibold text-foreground/60">
+        {initials}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[15px] font-semibold leading-tight text-foreground/85">
+          {customer}
+        </span>
+        <span className="block text-xs font-medium capitalize text-foreground/40">via {platform}</span>
+      </span>
+    </>
+  )
 
   return (
-    <div className={`${embedded ? "h-12 px-3" : "h-14 px-3 md:px-6"} border-b border-border flex items-center justify-between shrink-0`}>
-      <div className="flex items-center gap-3 min-w-0">
+    <div className={`${embedded ? "h-14 px-3" : "h-16 px-3 md:px-5"} border-b border-border flex items-center justify-between gap-2 shrink-0`}>
+      <div className="flex min-w-0 items-center gap-2.5">
         <Button
           variant="ghost"
           size="icon"
           aria-label={embedded ? "Close conversation" : "Back"}
-          className={`${embedded ? "" : "md:hidden"} shrink-0 -ml-2 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8`}
+          className={`${embedded ? "" : "md:hidden"} shrink-0 -ml-1 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8`}
           onClick={onBack}
         >
           <BackIcon className="size-4" />
@@ -55,25 +80,13 @@ export default function ConversationHeader({
         {onOpenContext ? (
           <button
             type="button"
-            className="min-w-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit] xl:pointer-events-none xl:cursor-auto"
+            className="flex min-w-0 cursor-pointer items-center gap-2.5 border-0 bg-transparent p-0 text-left [font-family:inherit]"
             onClick={onOpenContext}
           >
-            <h3 className="text-[15px] font-semibold text-foreground/80 truncate leading-tight">
-              {customer}
-            </h3>
-            <p className="text-xs text-foreground/35 font-medium capitalize">
-              via {platform}
-            </p>
+            {identity}
           </button>
         ) : (
-          <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-foreground/80 truncate leading-tight">
-              {customer}
-            </h3>
-            <p className="text-xs text-foreground/35 font-medium capitalize">
-              via {platform}
-            </p>
-          </div>
+          <div className="flex min-w-0 items-center gap-2.5">{identity}</div>
         )}
       </div>
 
@@ -95,21 +108,11 @@ export default function ConversationHeader({
             <span className="truncate hidden sm:inline">{cocoAction.label}</span>
           </Button>
         )}
-        {onOpenContext && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="xl:hidden shrink-0 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8"
-            onClick={onOpenContext}
-          >
-            <Info className="size-4" />
-          </Button>
-        )}
         {activeTab === "open" && (
           <Button
             size="sm"
             onClick={onResolve}
-            className="bg-white hover:bg-foreground/90 text-black text-xs font-semibold flex items-center gap-1.5 h-8"
+            className="bg-foreground hover:bg-foreground/90 text-background text-xs font-semibold flex items-center gap-1.5 h-8"
           >
             <CheckCircle2 className="size-3.5" />
             <span className="hidden sm:inline">Close Ticket</span>
@@ -117,7 +120,7 @@ export default function ConversationHeader({
         )}
         {activeTab === "closed" && (
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="font-semibold bg-green-400/10 text-green-400 border-green-400/20 px-2.5 py-1 text-xs">
+            <Badge variant="outline" className="font-semibold bg-green-600/10 text-green-700 border-green-600/20 px-2.5 py-1 text-xs">
               <CheckCircle2 className="size-3 mr-1" /> Closed
             </Badge>
             <Button
@@ -131,7 +134,6 @@ export default function ConversationHeader({
           </div>
         )}
       </div>
-      
     </div>
   )
 }

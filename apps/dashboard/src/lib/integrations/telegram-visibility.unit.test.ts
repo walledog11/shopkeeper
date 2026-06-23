@@ -22,6 +22,7 @@ describe("Telegram integration visibility", () => {
 
   it("shows Telegram when a bot username is present", () => {
     expect(shouldShowTelegramIntegration({ botUsername: "ShopkeeperBot" })).toBe(true);
+    expect(shouldShowTelegramIntegration({ botUsername: "@ShopkeeperBot" })).toBe(true);
     expect(filterTelegramPlatformConfigs(configs, { botUsername: "ShopkeeperBot" }).map((c) => c.id)).toEqual([
       "shopify",
       "telegram",

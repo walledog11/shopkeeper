@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
+import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useIsMobile } from "@/hooks/useMobile"
 import { useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext"
 import { useActiveThreadSelection } from "../_hooks/useActiveThreadSelection"
 import { useAgentTurns } from "../_hooks/useAgentTurns"
 import { useTicketSearchSource } from "../_hooks/useTicketSearchSource"
 import { useTicketThreadSources } from "../_hooks/useTicketThreadSources"
-import { useSummaryRefresh } from "../_hooks/useSummaryRefresh"
 import { useThreadCacheCoordinator } from "../_hooks/useThreadCacheCoordinator"
 import { useTicketActions } from "../_hooks/useTicketActions"
 import { useTicketSelection } from "../_hooks/useTicketSelection"
@@ -44,6 +45,7 @@ export function useTicketsPageView({
   const [pageState, dispatchPageState] = useTicketsPageState(initialView)
   const { activeView, channelFilter, dismissCorrectHint, searchQuery, showContextDrawer, tagFilter } = pageState
   const isDesktopContext = useMediaQuery("(min-width: 1280px)")
+  const isMobile = useIsMobile()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -54,8 +56,10 @@ export function useTicketsPageView({
     spamCount,
     threadSources,
   } = useTicketThreadSources({
+    activeView,
     channelFilter,
     initialForMeThreads,
+    loadAllSources: queryThreadId !== null,
     tagFilter,
   })
 
@@ -90,6 +94,10 @@ export function useTicketsPageView({
     searchThreads,
     agentName,
   })
+
+  useMobileChromeOverride(
+    isMobile ? (activeTicketId ? "detail" : "local") : null,
+  )
 
   const currentThreadSource = threadSources[effectiveActiveView]
   const dbThreads = isSearchMode ? [] : currentThreadSource.threads
@@ -190,11 +198,6 @@ export function useTicketsPageView({
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [activeTicket?.messages?.length, activeTicketId])
 
-  const { refreshingSummaryId, handleRefreshSummary } = useSummaryRefresh({
-    patchThreadCaches,
-    showToast,
-  })
-
   const handleViewChange = (view: TicketListView) => {
     dispatchPageState({ type: "viewChanged", view })
     setActiveTicketId(null)
@@ -251,7 +254,6 @@ export function useTicketsPageView({
         failedMessages: failedMessages.filter(m => m.threadId === activeTicketId),
         messagesEndRef,
         orgSettings,
-        refreshingSummaryId,
         replyText,
         sendError,
         toast,
@@ -313,11 +315,6 @@ export function useTicketsPageView({
         onOpenContext: () => dispatchPageState({ type: "contextDrawerChanged", open: true }),
         onQuickApproveFromList: handleQuickApproveFromList,
         onReviewFromList: handleReviewFromList,
-        onRefreshSummary: () => {
-          if (activeThread) {
-            handleRefreshSummary(activeThread.id)
-          }
-        },
         onReopen: handleReopen,
         onReplyChange: (text: string) => { setReplyText(text); if (sendError) setSendError(null) },
         onResolve: handleResolve,

@@ -61,7 +61,41 @@ type RawShopifyOrder = {
   } | null;
 };
 
-export async function buildContext(threadId: string, orgId: string, sink: ThreadSink): Promise<AgentContext> {
+export interface BuildContextOptions {
+  pinKbArticles?: readonly { title: string; body: string }[];
+}
+
+function mergePinnedKbArticles(
+  pinned: readonly { title: string; body: string }[],
+  loaded: readonly { title: string; body: string; tags: string[] }[],
+): { title: string; body: string; tags: string[] }[] {
+  const seenTitles = new Set<string>();
+  const merged: { title: string; body: string; tags: string[] }[] = [];
+
+  for (const article of pinned) {
+    const key = article.title.trim().toLowerCase();
+    if (seenTitles.has(key)) continue;
+    seenTitles.add(key);
+    merged.push({ title: article.title, body: article.body, tags: [] });
+  }
+
+  for (const article of loaded) {
+    const key = article.title.trim().toLowerCase();
+    if (seenTitles.has(key)) continue;
+    seenTitles.add(key);
+    merged.push(article);
+  }
+
+  const limit = Math.max(3, pinned.length);
+  return merged.slice(0, limit);
+}
+
+export async function buildContext(
+  threadId: string,
+  orgId: string,
+  sink: ThreadSink,
+  options?: BuildContextOptions,
+): Promise<AgentContext> {
   const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
@@ -193,7 +227,10 @@ export async function buildContext(threadId: string, orgId: string, sink: Thread
   const matchingKbArticles = threadTag
     ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
     : allKbArticles;
-  const kbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
+  const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
+  const kbArticles = options?.pinKbArticles?.length
+    ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
+    : loadedKbArticles;
 
   const threadIo = { threadId: thread.id, orgId, orgName: org?.name ?? "Support" };
 

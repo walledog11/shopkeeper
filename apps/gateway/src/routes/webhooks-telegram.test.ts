@@ -15,8 +15,7 @@ import {
 } from '../test-fixtures/webhook-route-test-helpers.js';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-// In-memory backing store for the ioredis mock so the /start bind flow can
-// round-trip telegram:bind:<token> values.
+// In-memory backing store for the ioredis mock used by rate limiting.
 const {
   mockLogger,
   redisStore,
@@ -123,6 +122,21 @@ function lastReplyText(): string {
   return calls[calls.length - 1][1] as string;
 }
 
+async function seedBindToken(params: {
+  token: string;
+  organizationId: string;
+  clerkUserId: string;
+}) {
+  await db.orgMemberBindToken.create({
+    data: {
+      token: params.token,
+      organizationId: params.organizationId,
+      clerkUserId: params.clerkUserId,
+      expiresAt: new Date(Date.now() + 86_400_000),
+    },
+  });
+}
+
 beforeEach(async () => {
   org = await createTestOrg();
   redisStore.clear();
@@ -205,10 +219,11 @@ describe('POST /webhooks/telegram — /start bind', () => {
       data: { organizationId: org.id, clerkUserId: 'usr_bind_1' },
     });
     const token = 'bind-token-abc';
-    redisStore.set(
-      `telegram:bind:${token}`,
-      JSON.stringify({ orgId: org.id, clerkUserId: 'usr_bind_1' }),
-    );
+    await seedBindToken({
+      token,
+      organizationId: org.id,
+      clerkUserId: 'usr_bind_1',
+    });
 
     const res = await request(app)
       .post('/webhooks/telegram')
@@ -231,7 +246,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     expect(chat?.telegramUserId).toBe('12345');
     expect(chat?.displayName).toBe('Raj Sambi');
     expect(chat?.username).toBe('raj_shop');
-    expect(redisStore.has(`telegram:bind:${token}`)).toBe(false);
+    await expect(db.orgMemberBindToken.findUnique({ where: { token } })).resolves.toBeNull();
   });
 
   it('enforces the device cap and replies with a limit message', async () => {
@@ -246,10 +261,11 @@ describe('POST /webhooks/telegram — /start bind', () => {
       ],
     });
     const token = 'cap-token-xyz';
-    redisStore.set(
-      `telegram:bind:${token}`,
-      JSON.stringify({ orgId: org.id, clerkUserId: 'usr_cap' }),
-    );
+    await seedBindToken({
+      token,
+      organizationId: org.id,
+      clerkUserId: 'usr_cap',
+    });
 
     const res = await request(app)
       .post('/webhooks/telegram')
@@ -259,8 +275,8 @@ describe('POST /webhooks/telegram — /start bind', () => {
     expect(res.status).toBe(200);
     await waitForReplies(1);
     expect(lastReplyText()).toMatch(/3 devices/i);
-    // Token should still be in Redis — it was not consumed
-    expect(redisStore.has(`telegram:bind:${token}`)).toBe(true);
+    // Token should still exist — it was not consumed
+    await expect(db.orgMemberBindToken.findUnique({ where: { token } })).resolves.not.toBeNull();
   });
 
   it('sends a security alert to existing devices when a new one is added', async () => {
@@ -271,10 +287,11 @@ describe('POST /webhooks/telegram — /start bind', () => {
       data: { orgMemberId: member.id, chatId: 'existing_chat' },
     });
     const token = 'alert-token-xyz';
-    redisStore.set(
-      `telegram:bind:${token}`,
-      JSON.stringify({ orgId: org.id, clerkUserId: 'usr_alert' }),
-    );
+    await seedBindToken({
+      token,
+      organizationId: org.id,
+      clerkUserId: 'usr_alert',
+    });
 
     await request(app)
       .post('/webhooks/telegram')
@@ -287,7 +304,7 @@ describe('POST /webhooks/telegram — /start bind', () => {
     expect(alertCall?.[1]).toMatch(/new device/i);
   });
 
-  it('replies "expired" when token is not in Redis', async () => {
+  it('replies "expired" when token is not in Postgres', async () => {
     await request(app)
       .post('/webhooks/telegram')
       .set('x-telegram-bot-api-secret-token', SECRET)

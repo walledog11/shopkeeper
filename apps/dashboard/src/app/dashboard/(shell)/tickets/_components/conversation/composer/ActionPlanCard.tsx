@@ -414,15 +414,10 @@ export default function ActionPlanCard({
             )}
 
             {showReplyHero ? (
-              <div className="mt-3 flex flex-col gap-2">
-                <span className="text-[11px] font-semibold text-foreground/40">
-                  To {recipient.draftTo}
-                </span>
-                <div className="rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3">
-                  <p className={draftTextClass}>
-                    {replyText}
-                  </p>
-                </div>
+              <div className="mt-3 rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3">
+                <p className={draftTextClass}>
+                  {replyText}
+                </p>
               </div>
             ) : (
               <ol className="mt-3 flex flex-col gap-1.5">

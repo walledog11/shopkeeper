@@ -1,5 +1,6 @@
 export type ConnectType = 'email' | 'ig' | 'shopify' | 'imessage'
 export type EmailProviderFilter = 'gmail' | 'outlook' | 'postmark'
+export type IntegrationChannelKind = 'operator' | 'support'
 
 export interface PlatformConfig {
   id: string
@@ -12,8 +13,39 @@ export interface PlatformConfig {
   tileClass?: string
   description: string
   connectType: ConnectType | null
+  channelKind: IntegrationChannelKind
   comingSoon?: boolean
   permissions?: string[]
+}
+
+export const INTEGRATION_CHANNEL_SECTIONS: {
+  kind: IntegrationChannelKind
+  title: string
+  description: string
+}[] = [
+  {
+    kind: 'support',
+    title: 'Support channels',
+    description: 'Where customer messages arrive as tickets.',
+  },
+  {
+    kind: 'operator',
+    title: 'Operator channels',
+    description: 'Connect your store and manage the agent from your phone.',
+  },
+]
+
+const OPERATOR_CHANNEL_ORDER = ['imessage', 'telegram', 'shopify'] as const
+
+export function sortPlatformConfigsByChannelKind(
+  configs: PlatformConfig[],
+  kind: IntegrationChannelKind,
+): PlatformConfig[] {
+  const filtered = configs.filter(def => def.channelKind === kind)
+  if (kind !== 'operator') return filtered
+
+  const order = new Map<string, number>(OPERATOR_CHANNEL_ORDER.map((id, index) => [id, index]))
+  return [...filtered].sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99))
 }
 
 export const PLATFORM_CONFIG: PlatformConfig[] = [
@@ -25,6 +57,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logoSize: 44,
     description: "Manage orders, customers, and refunds with live store data.",
     connectType: 'shopify',
+    channelKind: 'operator',
   },
   {
     id: "gmail",
@@ -35,6 +68,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     fullBleedLogo: true,
     description: "Route support mail, draft replies, and send responses from your Gmail inbox.",
     connectType: 'email',
+    channelKind: 'support',
     permissions: [
       "Send replies from your Gmail address",
       "View your email address",
@@ -48,6 +82,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     fullBleedLogo: true,
     description: "Get customer reply approvals and daily ticket summaries in WhatsApp chats.",
     connectType: null,
+    channelKind: 'support',
     comingSoon: true,
   },
   {
@@ -58,6 +93,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     fullBleedLogo: true,
     description: "Manage direct messages with customer memory, cross-channel ticket linking, and business account replies.",
     connectType: 'ig',
+    channelKind: 'support',
     permissions: [
       "Read Direct Messages sent to your business account",
       "Send replies from your business account",
@@ -72,6 +108,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     logoSize: 30,
     description: "Reply to customers who text your business on iMessage, with full customer memory and ticketing.",
     connectType: 'imessage',
+    channelKind: 'operator',
     permissions: [
       "Receive iMessages sent to your business line",
       "Reply within existing customer conversations",
@@ -86,6 +123,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     tileClass: "bg-[#229ED9]",
     description: "Approve agent replies and receive ticket digests via the Shopkeeper Telegram bot.",
     connectType: null,
+    channelKind: 'operator',
   },
   {
     id: "email",
@@ -96,6 +134,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     tileClass: "bg-gradient-to-b from-[#5AB1F5] to-[#1D77EF]",
     description: "Route custom-domain support mail, forward incoming threads, and send replies from your verified address.",
     connectType: 'email',
+    channelKind: 'support',
     permissions: [
       "Send replies from your verified address",
     ],
@@ -109,6 +148,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     fullBleedLogo: true,
     description: "Route support mail, draft replies, and send responses from your Outlook inbox.",
     connectType: 'email',
+    channelKind: 'support',
     permissions: [
       "Send replies from your Outlook address",
       "View your name and email address",

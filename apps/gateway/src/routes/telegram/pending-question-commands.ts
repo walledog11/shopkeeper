@@ -3,6 +3,8 @@ import { requireOrgThread, getLatestConversationMessage } from '@shopkeeper/agen
 import { buildContext } from '@shopkeeper/agent/build-context';
 import { planAgent } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import { buildMerchantAnswerPlanningInstruction } from '@shopkeeper/agent/kb-learned';
+import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
@@ -12,21 +14,6 @@ import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
 import { updateContext, type OperatorContext } from '../../operator-context.js';
 import { withOperatorPresence } from './presence.js';
 import type { TelegramMessageContext } from './types.js';
-
-async function resolveUserKnowledgeBaseId(organizationId: string): Promise<string> {
-  const existing = await db.knowledgeBase.findFirst({
-    where: { organizationId, source: 'user' },
-    orderBy: { createdAt: 'asc' },
-    select: { id: true },
-  });
-  if (existing) return existing.id;
-
-  const created = await db.knowledgeBase.create({
-    data: { organizationId, name: 'Support', source: 'user' },
-    select: { id: true },
-  });
-  return created.id;
-}
 
 // The operator answered an `ask_operator` question over Telegram. The reply is the
 // answer: record it, persist it to the knowledge base (always — a Telegram answer is
@@ -52,7 +39,12 @@ export async function handlePendingQuestionAnswer(
     getLatestConversationMessage(threadId),
     db.thread.findUnique({
       where: { id: threadId },
-      select: { tag: true, customer: { select: { name: true } } },
+      select: {
+        tag: true,
+        channelType: true,
+        aiSummary: true,
+        customer: { select: { name: true } },
+      },
     }),
   ]);
   const question = extractCachedQuestion(thread.cachedPlan);
@@ -66,15 +58,14 @@ export async function handlePendingQuestionAnswer(
       : `Merchant note for the agent: ${answer}`,
   });
 
-  const knowledgeBaseId = await resolveUserKnowledgeBaseId(organizationId);
-  await db.kbArticle.create({
-    data: {
-      organizationId,
-      knowledgeBaseId,
-      title: (question ?? answer).slice(0, 255),
-      body: answer,
-      tags: meta?.tag ? [meta.tag] : [],
-    },
+  const saved = await saveMerchantAnswerToKb({
+    organizationId,
+    threadId,
+    question,
+    answer,
+    threadTag: meta?.tag,
+    channelType: meta?.channelType ?? thread.channelType,
+    threadSummary: meta?.aiSummary,
   });
 
   const pendingCustomerMessageId = latestConversation
@@ -97,13 +88,21 @@ export async function handlePendingQuestionAnswer(
   });
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
   const baseInstruction = thread.aiSummary || "Handle this customer's latest request";
+  const planningInstruction = buildMerchantAnswerPlanningInstruction({
+    baseInstruction,
+    question,
+    answer,
+    saveToKb: true,
+  });
 
   try {
     await withOperatorPresence(
       { chatId, messageId, reply, progress: { kind: 'free-form' } },
       async () => {
-        const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
-        const plan = await planAgent(ctx, baseInstruction, settings);
+        const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
+          pinKbArticles: [{ title: saved.title, body: saved.body }],
+        });
+        const plan = await planAgent(ctx, planningInstruction, settings);
         await db.thread.update({
           where: { id: threadId },
           data: {

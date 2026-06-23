@@ -20,10 +20,12 @@ function buildThreadCountKey(kind: "for_me" | "spam") {
 
 interface Options {
   forMeCountFromList: number | null
+  spamCountFromList?: number | null
 }
 
-export function useTicketTabCounts({ forMeCountFromList }: Options) {
+export function useTicketTabCounts({ forMeCountFromList, spamCountFromList = null }: Options) {
   const skipForMePoll = forMeCountFromList !== null
+  const skipSpamPoll = spamCountFromList !== null
 
   const { data: forMeData, mutate: mutateForMeCount } = useSWR<ThreadCount>(
     skipForMePoll ? null : buildThreadCountKey("for_me"),
@@ -32,7 +34,7 @@ export function useTicketTabCounts({ forMeCountFromList }: Options) {
   )
 
   const { data: spamData, mutate: mutateSpamCount } = useSWR<ThreadCount>(
-    buildThreadCountKey("spam"),
+    skipSpamPoll ? null : buildThreadCountKey("spam"),
     fetcher,
     { refreshInterval: TAB_COUNT_REFRESH_MS, revalidateOnFocus: false },
   )
@@ -40,13 +42,13 @@ export function useTicketTabCounts({ forMeCountFromList }: Options) {
   const mutateTabCounts = useCallback(async () => {
     await Promise.all([
       skipForMePoll ? Promise.resolve() : mutateForMeCount(),
-      mutateSpamCount(),
+      skipSpamPoll ? Promise.resolve() : mutateSpamCount(),
     ])
-  }, [mutateForMeCount, mutateSpamCount, skipForMePoll])
+  }, [mutateForMeCount, mutateSpamCount, skipForMePoll, skipSpamPoll])
 
   return {
     forMeCount: forMeCountFromList ?? forMeData?.count ?? 0,
-    spamCount: spamData?.count ?? 0,
+    spamCount: spamCountFromList ?? spamData?.count ?? 0,
     mutateTabCounts,
   }
 }

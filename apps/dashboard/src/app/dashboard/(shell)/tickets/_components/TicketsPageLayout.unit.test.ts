@@ -224,7 +224,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       failedMessages: [],
       messagesEndRef: React.createRef<HTMLDivElement>(),
       orgSettings: null,
-      refreshingSummaryId: null,
       replyText: "",
       sendError: null,
       toast: null,
@@ -275,7 +274,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       onRecover: vi.fn(),
       onQuickApproveFromList: vi.fn(),
       onReviewFromList: vi.fn(),
-      onRefreshSummary: vi.fn(),
       onReopen: vi.fn(),
       onReplyChange: vi.fn(),
       onResolve: vi.fn(),
@@ -442,15 +440,6 @@ describe("TicketsPageLayout board ticket dialog", () => {
     expect(dialog?.querySelector('[data-testid="reply-composer-textarea"]')).not.toBeNull()
   })
 
-  it("renders customer and order context inside the dialog for the active ticket", () => {
-    const item = ticket()
-    render(React.createElement(LayoutHarness, { tickets: [item], initialActiveId: item.id }))
-
-    const dialog = ticketDialog()
-    expect(dialog).not.toBeNull()
-    expect(dialog?.querySelector('[data-testid="inline-ticket-context"]')?.textContent).toContain("Shopify orders")
-  })
-
   it("keeps loading and error states inside the dialog", () => {
     const item = ticket()
     render(React.createElement(LayoutHarness, {
@@ -461,7 +450,6 @@ describe("TicketsPageLayout board ticket dialog", () => {
 
     const loadingDialog = ticketDialog()
     expect(loadingDialog?.textContent).toContain("Thread loading")
-    expect(loadingDialog?.querySelector('[data-testid="inline-ticket-context"]')?.textContent).toContain("Context loading")
 
     act(() => root?.unmount())
     root = null

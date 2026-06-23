@@ -1,5 +1,7 @@
 import { ChevronLeft, Loader2, Pencil, Trash2 } from "lucide-react"
+import { isAgentLearnedKbArticle, kbTagsForDisplay } from "@shopkeeper/agent/kb-learned"
 import { formatDate } from "@/lib/format/date"
+import { AgentLearnedBadge } from "./AgentLearnedBadge"
 import type { ArticleWithBase } from "./kb-page-utils"
 
 interface ArticleReadDetailProps {
@@ -20,6 +22,8 @@ export function ArticleReadDetail({
   onStartEdit,
 }: ArticleReadDetailProps) {
   const tags = article.tags ?? []
+  const isAgentLearned = isAgentLearnedKbArticle(tags)
+  const displayTags = kbTagsForDisplay(tags)
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-3xl">
@@ -31,7 +35,10 @@ export function ArticleReadDetail({
         Back
       </button>
       <p className="text-xs text-foreground/35 uppercase tracking-wide mb-2">{article.baseName}</p>
-      <h1 className="text-xl font-semibold text-foreground/90 mb-4">{article.title}</h1>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold text-foreground/90">{article.title}</h1>
+        {isAgentLearned && <AgentLearnedBadge />}
+      </div>
 
       <div className="flex items-center gap-6 pt-2 pb-2 border-t border-b border-border text-xs text-foreground/40">
         <div>
@@ -68,9 +75,9 @@ export function ArticleReadDetail({
       <div className="text-sm text-foreground/65 leading-relaxed pt-6 whitespace-pre-wrap mb-6">
         {article.body}
       </div>
-      {tags.length > 0 && (
+      {displayTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-6">
-          {tags.map(tag => (
+          {displayTags.map(tag => (
             <span key={tag} className="text-xs font-medium text-foreground/55 bg-foreground/[0.05] border border-foreground/[0.08] px-2 py-0.5 rounded-full">
               #{tag}
             </span>

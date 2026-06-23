@@ -222,6 +222,14 @@ export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
 export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
 export { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from './refund-spend.js';
 export {
+  ORG_MEMBER_BIND_TOKEN_TTL_SECONDS,
+  consumeOrgMemberBindToken,
+  createOrgMemberBindToken,
+  deleteOrgMemberBindToken,
+  findOrgMemberBindToken,
+} from './operator-bind.js';
+export type { OrgMemberBindTokenPayload } from './operator-bind.js';
+export {
   BRAND_VOICE_MAX_CHARS,
   VOICE_RATIONALE_MAX_CHARS,
   VOICE_SYNTHESIS_MIN_EDITS,

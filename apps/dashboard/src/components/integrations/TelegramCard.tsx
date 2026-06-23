@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react"
 import useSWR from "swr"
-import { ExternalLink } from "lucide-react"
-import { QRCodeSVG } from "qrcode.react"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
@@ -15,11 +13,9 @@ import {
   CARD_SHELL,
   CARD_TITLE,
 } from "./integration-card-styles"
-import {
-  CardLogo,
-} from "./IntegrationCardParts"
-import { ConfigureSection } from "./ConfigureSection"
+import { CardLogo } from "./IntegrationCardParts"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
+import { TelegramConnectBody } from "./connect-bodies"
 import {
   TelegramActionsSection,
   TelegramDevicesSection,
@@ -40,7 +36,13 @@ interface TelegramStatus {
   botUsername: string | null
 }
 
-export default function TelegramCard({ config }: { config: PlatformConfig }) {
+export default function TelegramCard({
+  config,
+  botUsername: configuredBotUsername,
+}: {
+  config: PlatformConfig
+  botUsername: string | null
+}) {
   const { data: status, mutate } = useSWR<TelegramStatus>('/api/integrations/telegram', fetcher)
 
   const [open, setOpen] = useState(false)
@@ -52,7 +54,8 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
 
   const chats = status?.chats ?? []
   const isConnected = chats.length > 0
-  const isAvailable = !!status?.botUsername
+  const botUsername = configuredBotUsername ?? status?.botUsername ?? null
+  const isAvailable = Boolean(botUsername)
   const atDeviceLimit = chats.length >= MAX_TELEGRAM_DEVICES
 
   useEffect(() => {
@@ -61,6 +64,11 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
       setConnectIssuedChatCount(null)
     }
   }, [chats.length, connectIssuedChatCount, connectUrl])
+
+  useEffect(() => {
+    if (!open) return
+    setError(null)
+  }, [open])
 
   async function connect() {
     setConnecting(true)
@@ -72,7 +80,6 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
       if (!data.url) throw new Error('Failed to start Telegram connect')
       setConnectUrl(data.url)
       setConnectIssuedChatCount(chats.length)
-      setOpen(true)
       window.open(data.url, '_blank', 'noopener,noreferrer')
       setTimeout(() => mutate(), 5000)
     } catch (e) {
@@ -102,7 +109,11 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
     }
   }
 
-  const dialogStatusLine = isConnected ? null : config.description
+  const dialogStatusLine = isConnected
+    ? chats.length === 1
+      ? (chats[0].displayLabel ?? "1 device linked")
+      : `${chats.length} devices linked`
+    : config.description
 
   return (
     <>
@@ -113,21 +124,23 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
         <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
 
         <div className="mt-4 flex gap-2">
-          {isConnected ? (
-            <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_SECONDARY}>Configure</button>
+          {!isConnected ? (
+            isAvailable ? (
+              <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_PRIMARY}>Connect</button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                title="Telegram isn't configured on this deployment yet."
+                className={CARD_BUTTON_DISABLED}
+              >
+                Connect
+              </button>
+            )
           ) : (
-            <button
-              type="button"
-              disabled={connecting || !isAvailable}
-              onClick={connect}
-              title={!isAvailable ? "Telegram isn't configured on this deployment yet." : undefined}
-              className={isAvailable ? CARD_BUTTON_PRIMARY : CARD_BUTTON_DISABLED}
-            >
-              {connecting ? 'Opening…' : 'Connect'}
-            </button>
+            <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_SECONDARY}>Configure</button>
           )}
         </div>
-        {error && !open && <p className="mt-2 text-xs text-red-400">{error}</p>}
       </div>
 
       <IntegrationConfigureDialog
@@ -137,30 +150,6 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
         statusLine={dialogStatusLine}
       >
         {error && <p className="text-xs text-red-400">{error}</p>}
-        {connectUrl && (
-          <ConfigureSection title="Connect">
-            <div className="px-4 py-4 flex flex-col items-center gap-3">
-              <div className="rounded-lg bg-white p-2 shadow-sm">
-                <QRCodeSVG
-                  value={connectUrl}
-                  size={176}
-                  level="M"
-                  marginSize={2}
-                  title="Telegram connect QR code"
-                />
-              </div>
-              <a
-                href={connectUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-foreground/[0.14] bg-foreground/[0.06] px-3 text-sm font-medium text-foreground/85 transition-colors hover:bg-foreground/[0.10]"
-              >
-                <ExternalLink className="size-4" />
-                Open Telegram
-              </a>
-            </div>
-          </ConfigureSection>
-        )}
 
         {isConnected ? (
           <>
@@ -180,21 +169,13 @@ export default function TelegramCard({ config }: { config: PlatformConfig }) {
             />
           </>
         ) : (
-          <>
-            <ol className="text-xs text-foreground/40 space-y-1 list-decimal list-inside leading-relaxed">
-              <li>Click Connect Telegram — opens a chat with the Shopkeeper bot</li>
-              <li>Tap Start in Telegram to link this device</li>
-              <li>Reply to digests or send free-form instructions from there</li>
-            </ol>
-            <TelegramActionsSection
-              isConnected={isConnected}
-              connecting={connecting}
-              disconnecting={disconnecting}
-              atDeviceLimit={atDeviceLimit}
-              onConnect={connect}
-              onDisconnectAll={() => disconnect()}
-            />
-          </>
+          <TelegramConnectBody
+            botUsername={botUsername}
+            connecting={connecting}
+            connectUrl={connectUrl}
+            disabled={!isAvailable}
+            onConnect={connect}
+          />
         )}
       </IntegrationConfigureDialog>
     </>

@@ -2,18 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockAuth, mockRedisSet } = vi.hoisted(() => ({
+const { mockAuth } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
-  mockRedisSet: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: mockAuth,
   clerkClient: vi.fn(),
-}));
-
-vi.mock('@/lib/redis', () => ({
-  getRedis: () => ({ set: mockRedisSet }),
 }));
 
 import { DELETE, GET, POST } from './route';
@@ -26,7 +21,6 @@ beforeEach(async () => {
   org = await createTestOrg();
   process.env.TELEGRAM_BOT_USERNAME = 'support_test_bot';
   mockAuth.mockResolvedValue({ userId: 'usr_telegram', orgId: org.clerkOrgId });
-  mockRedisSet.mockResolvedValue('OK');
 });
 
 afterEach(async () => {
@@ -44,7 +38,6 @@ describe('/api/integrations/telegram', () => {
     const res = await GET();
 
     expect(res.status).toBe(401);
-    expect(mockRedisSet).not.toHaveBeenCalled();
   });
 
   it('reports the current user binding without exposing other members', async () => {
@@ -101,8 +94,8 @@ describe('/api/integrations/telegram', () => {
     const res = await POST();
 
     expect(res.status).toBe(503);
-    expect(mockRedisSet).not.toHaveBeenCalled();
     await expect(db.orgMember.count({ where: { organizationId: org!.id } })).resolves.toBe(0);
+    await expect(db.orgMemberBindToken.count()).resolves.toBe(0);
   });
 
   it('creates a scoped single-use bind token for the current user', async () => {
@@ -115,11 +108,12 @@ describe('/api/integrations/telegram', () => {
 
     const token = new URL(body.url).searchParams.get('start');
     expect(token).toBeTruthy();
-    expect(mockRedisSet).toHaveBeenCalledWith(
-      `telegram:bind:${token}`,
-      JSON.stringify({ orgId: org!.id, clerkUserId: 'usr_telegram' }),
-      { ex: 86_400 },
-    );
+
+    const stored = await db.orgMemberBindToken.findUnique({ where: { token: token! } });
+    expect(stored).toMatchObject({
+      organizationId: org!.id,
+      clerkUserId: 'usr_telegram',
+    });
 
     // Member should exist but have no telegram chats yet (binding happens via the bot)
     const member = await db.orgMember.findUnique({
@@ -170,6 +164,6 @@ describe('/api/integrations/telegram', () => {
     const res = await POST();
 
     expect(res.status).toBe(409);
-    expect(mockRedisSet).not.toHaveBeenCalled();
+    await expect(db.orgMemberBindToken.count()).resolves.toBe(0);
   });
 });

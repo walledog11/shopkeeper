@@ -28,11 +28,13 @@ function buildListQuery(
 }
 
 export function useTicketThreadSources(input: {
+  activeView: TicketListView
   channelFilter: ChannelType | null
   initialForMeThreads: Thread[]
+  loadAllSources?: boolean
   tagFilter: TicketTagFilter | null
 }) {
-  const { channelFilter, initialForMeThreads, tagFilter } = input
+  const { activeView, channelFilter, initialForMeThreads, loadAllSources = false, tagFilter } = input
   const forMeQuery = useMemo(
     () => buildListQuery("for_me", tagFilter, channelFilter),
     [channelFilter, tagFilter],
@@ -43,14 +45,24 @@ export function useTicketThreadSources(input: {
   )
   const closedQuery = useMemo(() => buildListQuery("closed", null, null), [])
   const spamQuery = useMemo(() => buildListQuery("spam", null, null), [])
+  const sourceEnabled = (view: TicketListView) => loadAllSources || activeView === view
 
-  const forMeSource = usePaginatedThreads(forMeQuery, initialForMeThreads, true, true)
-  const allOpenSource = usePaginatedThreads(allOpenQuery, undefined, true, true)
-  const closedSource = usePaginatedThreads(closedQuery, undefined, true, true)
-  const spamSource = usePaginatedThreads(spamQuery, undefined, true, true)
+  const forMeSource = usePaginatedThreads(forMeQuery, initialForMeThreads, true, sourceEnabled("for_me"))
+  const allOpenSource = usePaginatedThreads(allOpenQuery, undefined, true, sourceEnabled("all_open"))
+  const closedSource = usePaginatedThreads(closedQuery, undefined, true, sourceEnabled("closed"))
+  const spamSource = usePaginatedThreads(spamQuery, undefined, true, sourceEnabled("spam"))
+  const threadSources = {
+    for_me: forMeSource,
+    all_open: allOpenSource,
+    closed: closedSource,
+    spam: spamSource,
+  } satisfies Record<TicketListView, typeof forMeSource>
 
   const forMeCountFromList = forMeSource.totalCount !== undefined
     ? forMeSource.totalCount
+    : null
+  const spamCountFromList = spamSource.totalCount !== undefined
+    ? spamSource.totalCount
     : null
 
   const {
@@ -59,18 +71,14 @@ export function useTicketThreadSources(input: {
     mutateTabCounts,
   } = useTicketTabCounts({
     forMeCountFromList,
+    spamCountFromList,
   })
 
   return {
-    error: forMeSource.error,
+    error: threadSources[activeView].error,
     forMeCount,
     mutateTabCounts,
     spamCount,
-    threadSources: {
-      for_me: forMeSource,
-      all_open: allOpenSource,
-      closed: closedSource,
-      spam: spamSource,
-    } satisfies Record<TicketListView, typeof forMeSource>,
+    threadSources,
   }
 }

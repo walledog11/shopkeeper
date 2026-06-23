@@ -5,19 +5,16 @@
  * DELETE /api/integrations/telegram?chatId=xxx — disconnect a single chat
  */
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
-import { db } from "@shopkeeper/db";
+import { createOrgMemberBindToken, db } from "@shopkeeper/db";
 import { auth } from "@clerk/nextjs/server";
-import { getRedis } from "@/lib/redis";
 import { ApiError, UnauthorizedError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
+import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibility";
 
-const BIND_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 const MAX_TELEGRAM_DEVICES = 3;
 
 function getBotUsername(): string | null {
-  const v = process.env.TELEGRAM_BOT_USERNAME?.trim();
-  return v && v.length > 0 ? v : null;
+  return normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME);
 }
 
 function formatChatLabel(chat: { displayName: string | null; username: string | null }): string | null {
@@ -85,16 +82,14 @@ export const POST = withOrgRoute(
       );
     }
 
-    const token = randomBytes(24).toString("base64url");
-    await getRedis().set(
-      `telegram:bind:${token}`,
-      JSON.stringify({ orgId: org.id, clerkUserId: userId }),
-      { ex: BIND_TOKEN_TTL_SECONDS },
-    );
+    const { token, expiresInSeconds } = await createOrgMemberBindToken({
+      organizationId: org.id,
+      clerkUserId: userId,
+    });
 
     return NextResponse.json({
       url: `https://t.me/${botUsername}?start=${token}`,
-      expiresInSeconds: BIND_TOKEN_TTL_SECONDS,
+      expiresInSeconds,
     });
   },
 );

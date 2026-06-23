@@ -73,6 +73,15 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('get_order_tracking');
     expect(prompt).toMatch(/fulfilled or partially fulfilled/i);
   });
+
+  it('defaults to ask_operator when KB cannot answer a store-policy question', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).toMatch(/cannot answer confidently after checking pre-loaded knowledge base articles and search_kb/i);
+    expect(prompt).toContain('ask_operator');
+    expect(prompt).toMatch(/do we ship globally/i);
+    expect(prompt).toMatch(/Never tell a customer to email support/i);
+  });
 });
 
 describe('buildComposerAskPrompt', () => {

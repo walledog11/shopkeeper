@@ -2,8 +2,13 @@ export interface TelegramAvailability {
   botUsername?: string | null;
 }
 
+export function normalizeTelegramBotUsername(raw: string | undefined | null): string | null {
+  const v = raw?.trim().replace(/^@+/, "");
+  return v && v.length > 0 ? v : null;
+}
+
 export function shouldShowTelegramIntegration(status: TelegramAvailability | undefined): boolean {
-  return Boolean(status?.botUsername);
+  return Boolean(normalizeTelegramBotUsername(status?.botUsername ?? undefined));
 }
 
 export function filterTelegramPlatformConfigs<T extends { id: string }>(

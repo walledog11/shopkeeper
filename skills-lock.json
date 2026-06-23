@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "buildspace-ci-cd": {
+      "source": "photon-hq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/buildspace-ci-cd/SKILL.md",
+      "computedHash": "4059ec0c7f6a00e04423860a88c927a9b919d3855875db26e37bff303e4a95fc"
+    },
+    "chat-adapter-imessage": {
+      "source": "photon-hq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/chat-adapter-imessage/SKILL.md",
+      "computedHash": "0cde63e7c51def9dbfd6a5c1a9fc7b0d5ddb1f835f04b3641e4df7957b838caa"
+    },
+    "imessage": {
+      "source": "photon-hq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/imessage/SKILL.md",
+      "computedHash": "e5d2e8c7b4a19dd252889d434175cddf6cd6244c213fba2258141ee6a78f547c"
+    },
+    "photon-cli": {
+      "source": "photon-hq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/photon-cli/SKILL.md",
+      "computedHash": "c2b788ad19fa069224dd0c17856e3a8701a861de0276e1c156143ab44213a209"
+    },
+    "spectrum": {
+      "source": "photon-hq/skills",
+      "sourceType": "github",
+      "skillPath": "skills/spectrum/SKILL.md",
+      "computedHash": "1aea89f15a5bdf127691c679303a6edd7ec147ba7b366ca8ebdcc1705a3dd01d"
+    }
+  }
+}

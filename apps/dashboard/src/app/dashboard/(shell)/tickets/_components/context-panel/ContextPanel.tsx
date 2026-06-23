@@ -51,10 +51,10 @@ export default function ContextPanel({
   const actionPill = `${basePill} transition-colors hover:border-foreground/20 hover:bg-foreground/[0.07]`
 
   return (
-    <aside className="w-full xl:w-[300px] shrink-0 xl:border-l xl:border-border flex flex-col xl:overflow-y-auto bg-background">
+    <aside className="flex w-full flex-col bg-background">
       <section className="px-3.5 pt-3 pb-3 border-b border-foreground/[0.08]">
         <div className="flex flex-row items-center gap-4">
-          <div className="size-8 rounded-full overflow-hidden bg-[#ff7a1a] flex items-center justify-center text-white text-xs font-semibold shrink-0">
+          <div className="size-8 rounded-full overflow-hidden bg-foreground/[0.08] flex items-center justify-center text-foreground/60 text-xs font-semibold shrink-0">
             {thread.customer?.profilePicUrl ? (
               <Image src={thread.customer.profilePicUrl} alt={displayName} width={40} height={40} className="size-full object-cover" />
             ) : initials}
@@ -124,7 +124,7 @@ export default function ContextPanel({
                   className="flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0 group"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-xs leading-4 text-foreground/80 group-hover:text-white transition-colors">
+                    <span className="block truncate text-xs leading-4 text-foreground/80 group-hover:text-foreground transition-colors">
                       {title}
                     </span>
                     {preview && preview !== title && (

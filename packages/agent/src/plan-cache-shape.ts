@@ -6,8 +6,8 @@ export type PlanThreadMessage = {
   senderType: string
 }
 
-export const AGENT_PLAN_CACHE_VERSION = 2
-const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, AGENT_PLAN_CACHE_VERSION]
+export const AGENT_PLAN_CACHE_VERSION = 3
+export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, AGENT_PLAN_CACHE_VERSION]
 
 export interface AgentPlanCacheRecordShape {
   version: number

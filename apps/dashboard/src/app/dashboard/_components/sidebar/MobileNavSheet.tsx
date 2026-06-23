@@ -16,12 +16,14 @@ export function MobileNavSheet({
   open,
   onClose,
   agentName,
+  openCount,
   onSwitching,
   navAuth,
 }: {
   open: boolean;
   onClose: () => void;
   agentName: string;
+  openCount: number;
   onSwitching: (v: boolean) => void;
   navAuth: NavAuth;
 }) {
@@ -68,6 +70,7 @@ export function MobileNavSheet({
             agentName={agentName}
             pathname={pathname}
             needsYouCount={needsYouCount}
+            openCount={openCount}
             onNavigate={handleNavClick}
           />
         </div>

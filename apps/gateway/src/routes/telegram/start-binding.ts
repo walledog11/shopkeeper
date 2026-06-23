@@ -1,7 +1,6 @@
-import { db } from '@shopkeeper/db';
+import { deleteOrgMemberBindToken, findOrgMemberBindToken, db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { sendMessage } from '../../clients/telegram-client.js';
-import { getRateLimitRedis } from '../webhooks-shared.js';
 import type { TelegramChatMetadata, TelegramReply } from './types.js';
 
 const MAX_TELEGRAM_DEVICES = 3;
@@ -19,31 +18,28 @@ export async function handleStartBinding(
     return;
   }
 
-  const redis = getRateLimitRedis();
-  const key = `telegram:bind:${token}`;
-  const raw = await redis.get(key);
-  if (!raw) {
+  const payload = await findOrgMemberBindToken(token);
+  if (!payload) {
     await reply('This link has expired. Generate a new one from your Shopkeeper dashboard under Integrations → Telegram.');
-    return;
-  }
-
-  let payload: { orgId: string; clerkUserId: string };
-  try {
-    payload = JSON.parse(raw) as { orgId: string; clerkUserId: string };
-  } catch {
-    await redis.del(key);
-    await reply('This link is invalid. Generate a new one from your Shopkeeper dashboard under Integrations → Telegram.');
     return;
   }
 
   // Resolve the target OrgMember
   const member = await db.orgMember.findUnique({
-    where: { organizationId_clerkUserId: { organizationId: payload.orgId, clerkUserId: payload.clerkUserId } },
+    where: {
+      organizationId_clerkUserId: {
+        organizationId: payload.organizationId,
+        clerkUserId: payload.clerkUserId,
+      },
+    },
     include: { telegramChats: { select: { chatId: true } } },
   });
 
   if (!member) {
-    logger.warn({ orgId: payload.orgId, clerkUserId: payload.clerkUserId }, '[Telegram] Bind target OrgMember not found');
+    logger.warn(
+      { orgId: payload.organizationId, clerkUserId: payload.clerkUserId },
+      '[Telegram] Bind target OrgMember not found',
+    );
     await reply('Could not link this chat — your workspace membership is missing. Open the Shopkeeper dashboard and try again.');
     return;
   }
@@ -80,7 +76,7 @@ export async function handleStartBinding(
     },
   });
 
-  await redis.del(key);
+  await deleteOrgMemberBindToken(token);
 
   // Security alert: notify all other already-bound devices
   const otherChatIds = existingChatIds.filter((id) => id !== chatId);

@@ -113,6 +113,8 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   await expect(page.getByTestId('chat-message').filter({ hasText: replyText })).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/dashboard/tickets");
+  await expect(page.locator("[data-dashboard-mobile-bottom-bar]")).toHaveCount(0);
   await page.goto(`/dashboard/tickets?thread=${thread.id}`);
 
   const mobileConversation = page.getByTestId('ticket-conversation');
@@ -120,9 +122,8 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
 
   await expect(mobileConversation).toBeVisible();
   await expect(page.getByTestId('chat-timeline')).toHaveAttribute('data-thread-id', thread.id);
-  await expect(page.locator('html')).toHaveAttribute('data-mobile-ticket-detail', 'true');
-  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeHidden();
-  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
+  await expect(page.locator('html')).toHaveAttribute('data-mobile-chrome', 'detail');
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeVisible();
 
   await mobileComposer.focus();
 
@@ -138,9 +139,8 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
   });
 
   await expect(mobileConversation).toHaveAttribute('data-keyboard-open', 'true');
-  await expect(page.locator('html')).toHaveAttribute('data-mobile-ticket-editing', 'true');
-  await expect(page.locator('[data-dashboard-mobile-bottom-bar]')).toBeHidden();
-  await expect(page.locator('[data-dashboard-mobile-header]')).toBeHidden();
+  await expect(page.locator('html')).toHaveAttribute('data-mobile-chrome', 'immersive');
+  await expect(page.locator('[data-dashboard-mobile-header]')).toBeVisible();
 });
 
 test('approve a seeded AI plan and record the outbound email reply', async ({ page }) => {

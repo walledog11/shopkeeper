@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasContradictoryInstructionSignals,
   hasForwardedInjectionRefundSignal,
+  hasMerchantPolicyGapIntent,
   hasMutativePlanningSignals,
   hasMutativeRequestIntent,
   hasOutOfScopeCommercialRequestSignals,
@@ -115,5 +116,16 @@ describe("hasMutativeRequestIntent", () => {
       "Do you offer refunds?",
       "Actually, please cancel my order.",
     )).toBe(true);
+  });
+});
+
+describe("hasMerchantPolicyGapIntent", () => {
+  it("detects global shipping policy questions", () => {
+    expect(hasMerchantPolicyGapIntent("Are you shopping globally?")).toBe(true);
+    expect(hasMerchantPolicyGapIntent("Do you ship to Canada?")).toBe(true);
+  });
+
+  it("does not treat wholesale requests as policy gaps", () => {
+    expect(hasMerchantPolicyGapIntent("What's your wholesale pricing for 500 units?")).toBe(false);
   });
 });

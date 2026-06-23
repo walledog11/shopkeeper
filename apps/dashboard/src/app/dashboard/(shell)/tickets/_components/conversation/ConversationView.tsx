@@ -7,13 +7,12 @@ import { useThreadPresence } from "@/hooks/useThreadPresence"
 import { requestShopifyLinkFocus } from "@/lib/messaging/shopify-link-focus"
 import { quickApproveCachedPlan } from "../../_hooks/conversation-agent-requests"
 import { useConversationAgentFlow } from "../../_hooks/useConversationAgentFlow"
-import { buildTicketBriefSummary } from "../../_lib/ticket-brief-summary"
 import {
   planMessagesFromTicketMessages,
   resolveTicketCocoAction,
 } from "../../_lib/resolve-ticket-coco-action"
 import ConversationHeader from "./ConversationHeader"
-import ConversationSummaryBar from "./ConversationSummaryBar"
+import ConversationContextBar from "./ConversationContextBar"
 import PresenceBanner from "./PresenceBanner"
 import ChatTimeline from "./timeline/ChatTimeline"
 import NotesTimeline from "./timeline/NotesTimeline"
@@ -42,7 +41,6 @@ interface Props {
     threadLoading?: boolean
     sending: boolean
     agentRunning: boolean
-    summaryRefreshing: boolean
   }
   onAgentTurnAdd: (turn: AgentTurn) => void
   onAgentRunningChange: (running: boolean) => void
@@ -53,16 +51,14 @@ interface Props {
   onSend: (isNote: boolean) => void
   onAgentComplete: (turn: AgentTurn) => void
   initialPlan?: AgentPlan | null
-  onOpenContext?: () => void
-  aiSummary: string | null
-  onRefreshSummary: () => void
+  thread?: Thread | null
+  onLinkShopifyCustomer?: (customerId: string | null) => Promise<void>
   failedMessages?: FailedMessage[]
   onRetry?: (id: string) => void
   onRetrySend?: (id: string) => void
   onTicketRefresh?: () => void | Promise<void>
   onActionError?: (message: string) => void
   embedded?: boolean
-  aiTitle?: string | null
 }
 
 const EMPTY_FAILED_MESSAGES: FailedMessage[] = []
@@ -92,24 +88,22 @@ export default function ConversationView({
   onSend,
   onAgentComplete,
   initialPlan,
-  onOpenContext,
-  aiSummary,
-  onRefreshSummary,
+  thread,
+  onLinkShopifyCustomer,
   failedMessages = EMPTY_FAILED_MESSAGES,
   onRetry,
   onRetrySend,
   onTicketRefresh,
   onActionError,
   embedded = false,
-  aiTitle,
 }: Props) {
   const {
     threadLoading: isThreadLoading = false,
     sending: isSending,
     agentRunning: isAgentRunning,
-    summaryRefreshing: isSummaryRefreshing,
   } = status
   const [viewTab, setViewTab] = useState<'chat' | 'notes'>('chat')
+  const [contextExpanded, setContextExpanded] = useState(false)
   const isMobile = useIsMobile()
   const conversationRef = useRef<HTMLDivElement>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -123,9 +117,9 @@ export default function ConversationView({
   )
 
   const handleFocusShopifyLink = useCallback(() => {
-    onOpenContext?.()
+    setContextExpanded(true)
     requestAnimationFrame(() => requestShopifyLinkFocus())
-  }, [onOpenContext])
+  }, [])
 
   const focusComposer = useCallback(() => {
     requestAnimationFrame(() => {
@@ -235,16 +229,6 @@ export default function ConversationView({
     return cocoAction
   }, [cocoAction, pendingPlan])
 
-  const summaryText = useMemo(
-    () => buildTicketBriefSummary({
-      ticket,
-      aiSummary,
-      aiTitle,
-      plan: pendingPlan,
-    }),
-    [aiSummary, aiTitle, pendingPlan, ticket],
-  )
-
   const focusPlanCard = useCallback(() => {
     setViewTab("chat")
     requestAnimationFrame(() => {
@@ -328,15 +312,20 @@ export default function ConversationView({
         onBack={onBack}
         onResolve={onResolve}
         onReopen={onReopen}
-        onOpenContext={onOpenContext}
+        onOpenContext={thread ? () => setContextExpanded(true) : undefined}
         embedded={embedded}
       />
-      <ConversationSummaryBar
-        summary={summaryText}
-        isRefreshing={isSummaryRefreshing}
-        onRefresh={onRefreshSummary}
-        startCollapsed={isMobile && Boolean(pendingPlan)}
-      />
+      {thread && onLinkShopifyCustomer && (
+        <div className="shrink-0 px-3 pt-3 md:px-5 md:pt-4">
+          <ConversationContextBar
+            thread={thread}
+            hasShopify={hasShopify}
+            onLinkShopifyCustomer={onLinkShopifyCustomer}
+            expanded={contextExpanded}
+            onExpandedChange={setContextExpanded}
+          />
+        </div>
+      )}
 
       {activeTab === 'closed' && (
         <ConversationTabs noteCount={noteCount} value={viewTab} onValueChange={setViewTab} />
@@ -415,7 +404,7 @@ export default function ConversationView({
 interface ConversationOpenComposerProps {
   activeTab: Props["activeTab"]
   threadId: string
-  onAnswered: () => void
+  onAnswered: (result?: { saveToKb: boolean }) => void
   agent: {
     agentInstruction: string
     agentName: string
@@ -559,7 +548,7 @@ function ConversationTimelinePanel({
       data-testid={status.viewTab === 'notes' ? 'notes-timeline' : 'chat-timeline'}
       data-thread-id={ticketId}
       className={`mobile-ticket-timeline flex-1 overflow-y-auto custom-scrollbar p-5 space-y-4 transition-colors ${
-        status.viewTab === 'notes' ? 'bg-violet-500/[0.02]' : 'bg-background'
+        status.viewTab === 'notes' ? 'bg-amber-500/[0.03]' : 'bg-background'
       }`}
     >
       {status.isThreadLoading ? (

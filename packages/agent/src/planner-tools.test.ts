@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mergeReplanToolCalls, replanNeedsSendReplyRetry, selectInitialPlanningTools, selectReplanRetryTools } from "./planner-tools.js";
+import { mergeReplanToolCalls, replanNeedsSendReplyRetry, selectInitialPlanningTools, selectPolicyGapReplanTools, selectReplanRetryTools } from "./planner-tools.js";
 import { AGENT_TOOLS } from "./tools/registry/index.js";
 import type { RawToolCall } from "./types.js";
 
@@ -114,5 +114,18 @@ describe("selectReplanRetryTools", () => {
     ]));
     expect(selected).not.toContain("cancel_order");
     expect(selected).not.toContain("search_kb");
+  });
+});
+
+describe("selectPolicyGapReplanTools", () => {
+  it("offers ask_operator and reads but not send_reply or mutative actions", () => {
+    const selected = selectPolicyGapReplanTools(AGENT_TOOLS).map((tool) => tool.name);
+
+    expect(selected).toContain("ask_operator");
+    expect(selected).toContain("escalate_to_human");
+    expect(selected).toContain("search_kb");
+    expect(selected).not.toContain("send_reply");
+    expect(selected).not.toContain("create_refund");
+    expect(selected).not.toContain("cancel_order");
   });
 });

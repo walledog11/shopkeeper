@@ -90,9 +90,10 @@ export const topBarDropdowns = [
   { label: "Settings", items: topBarSettingsItems },
 ] as const;
 
-/** Mobile overflow nav — excludes routes in the bottom tab bar (Inbox, Shop, Settings). */
+/** Mobile sidebar nav sections. */
 export const mobileNavSections: NavSection[] = [
-  { heading: "Today", items: [homeNavItem] },
+  { heading: "Today", items: [homeNavItem, inboxNavItem] },
+  { heading: "Shop", items: [shopNavItem] },
   {
     heading: "Agent",
     useAgentName: true,
@@ -104,7 +105,7 @@ export const mobileNavSections: NavSection[] = [
   },
   {
     heading: "Workspace",
-    items: [topBarSettingsItems[2], topBarSettingsItems[1]],
+    items: [topBarSettingsItems[0], topBarSettingsItems[2], topBarSettingsItems[1]],
   },
 ];
 

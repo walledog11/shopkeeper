@@ -8,6 +8,7 @@ import {
   hasActionableMutativeIntent,
   hasMutativeRequestIntent,
   hasForwardedInjectionRefundSignal,
+  hasMerchantPolicyGapIntent,
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
   looksLikeOrderStatusIntent,
@@ -16,6 +17,7 @@ import {
 } from "./intent.js";
 import type { OrgSettings } from "./types.js";
 import { resolveAgentSettings } from "./settings.js";
+import { kbArticlesCoverQuery } from "./planner-read-skip.js";
 
 const ORDER_LOOKUP_TOOLS = new Set([
   "get_order_by_name",
@@ -307,6 +309,182 @@ export function stripNonEscalationTerminalTools(rawToolCalls: RawToolCall[]): Ra
 
 export const ESCALATION_DRAFT_PROMPT =
   "Planning cannot proceed safely. Call escalate_to_human now — do not send_reply or take mutative action.";
+
+export const CIRCULAR_CHANNEL_DEFLECTION_WARNING =
+  "Draft reply deflected the customer to a channel the agent already manages — replaced with ask_operator.";
+
+const MANAGED_CHANNEL_DEFLECTION_RES: readonly RegExp[] = [
+  /\breach out to\b/i,
+  /\bcontact us\b/i,
+  /\bget in touch with\b/i,
+  /\b(?:email|message|dm)\s+us\b/i,
+  /\b(?:dm|message)\s+@[a-z0-9._]+\b/i,
+  /\b(?:on|via|through)\s+instagram\b/i,
+  /\bsupport@[a-z0-9.-]+\.[a-z]{2,}\b/i,
+  /\bcontact\s+(?:support|the store)\b/i,
+];
+
+const SHIPPING_KB_SIGNAL_RES = /\b(international|worldwide|global|countries|regions|ship(?:ping)?|deliver)\b/i;
+const RETURN_KB_SIGNAL_RES = /\b(return|refund|exchange|restock)\b/i;
+
+function sendReplyText(toolCall: RawToolCall): string | null {
+  const input = toolCall.input;
+  if (!input || typeof input !== "object") return null;
+  const text = (input as Record<string, unknown>).text;
+  return typeof text === "string" ? text : null;
+}
+
+export function sendReplyDeflectsToManagedChannels(toolCall: RawToolCall): boolean {
+  if (toolCall.name !== "send_reply") return false;
+  const text = sendReplyText(toolCall)?.trim();
+  if (!text) return false;
+  return MANAGED_CHANNEL_DEFLECTION_RES.some((re) => re.test(text));
+}
+
+function parseKbArticlesFromSearchResult(raw: string): { title: string; body: string }[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      if (!entry || typeof entry !== "object") return [];
+      const title = (entry as { title?: unknown }).title;
+      const body = (entry as { body?: unknown }).body;
+      if (typeof title !== "string" || typeof body !== "string") return [];
+      return [{ title, body }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function kbArticlesAnswerPolicyQuestion(
+  articles: readonly { title: string; body: string }[],
+  ...texts: string[]
+): boolean {
+  if (articles.length === 0) return false;
+
+  const combined = texts.join(" ").toLowerCase();
+  const queryText = texts.join(" ");
+  if (kbArticlesCoverQuery([...articles], queryText, null)) return true;
+
+  const wantsShipping = /\b(ship|deliver|international|worldwide|global|shopping globally)\b/i.test(combined);
+  const wantsReturns = /\b(return|refund|exchange)\b/i.test(combined);
+  if (!wantsShipping && !wantsReturns) return false;
+
+  return articles.some((article) => {
+    const blob = `${article.title} ${article.body}`;
+    if (wantsShipping && SHIPPING_KB_SIGNAL_RES.test(blob)) return true;
+    if (wantsReturns && RETURN_KB_SIGNAL_RES.test(blob)) return true;
+    return false;
+  });
+}
+
+export function kbCoversMerchantPolicyQuestion(input: {
+  ctx: AgentContext;
+  readBlocks: readonly Anthropic.ToolUseBlock[];
+  readResultsMap: ReadonlyMap<string, string>;
+  customerTexts: readonly string[];
+}): boolean {
+  if (kbArticlesAnswerPolicyQuestion(input.ctx.kbArticles, ...input.customerTexts)) return true;
+
+  for (const block of input.readBlocks) {
+    if (block.name !== "search_kb") continue;
+    const raw = input.readResultsMap.get(block.id);
+    if (!raw) continue;
+    const articles = parseKbArticlesFromSearchResult(raw);
+    if (kbArticlesAnswerPolicyQuestion(articles, ...input.customerTexts)) return true;
+  }
+
+  return false;
+}
+
+export function shouldPreferAskOperatorForPolicyGap(input: {
+  ctx: AgentContext;
+  readBlocks: readonly Anthropic.ToolUseBlock[];
+  readResultsMap: ReadonlyMap<string, string>;
+}): boolean {
+  const customerTexts = customerMessageTexts(input.ctx);
+  if (!hasMerchantPolicyGapIntent(...customerTexts)) return false;
+  return !kbCoversMerchantPolicyQuestion({
+    ctx: input.ctx,
+    readBlocks: input.readBlocks,
+    readResultsMap: input.readResultsMap,
+    customerTexts,
+  });
+}
+
+export function shouldUsePolicyGapReplanPrompt(input: {
+  ctx: AgentContext;
+  readBlocks: readonly Anthropic.ToolUseBlock[];
+  readResultsMap: ReadonlyMap<string, string>;
+  rawToolCalls: readonly RawToolCall[];
+}): boolean {
+  if (input.rawToolCalls.some((toolCall) => (
+    toolCall.name === "ask_operator" || toolCall.name === "escalate_to_human"
+  ))) {
+    return false;
+  }
+  if (!input.readBlocks.some((block) => block.name === "search_kb")) return false;
+  return shouldPreferAskOperatorForPolicyGap({
+    ctx: input.ctx,
+    readBlocks: input.readBlocks,
+    readResultsMap: input.readResultsMap,
+  });
+}
+
+export function buildPolicyGapAskOperatorCall(ctx: AgentContext): RawToolCall {
+  const customerTexts = customerMessageTexts(ctx);
+  const latest = customerTexts[customerTexts.length - 1]?.trim() ?? "this question";
+  return {
+    id: "tu_policy_gap_ask",
+    name: "ask_operator",
+    input: { question: `What should I tell the customer about: "${latest}"?` },
+  };
+}
+
+export function stripCircularChannelDeflectionReplies(
+  rawToolCalls: RawToolCall[],
+  warnings: string[],
+): RawToolCall[] {
+  const deflects = rawToolCalls.some((toolCall) => sendReplyDeflectsToManagedChannels(toolCall));
+  if (!deflects) return rawToolCalls;
+  if (!warnings.includes(CIRCULAR_CHANNEL_DEFLECTION_WARNING)) {
+    warnings.push(CIRCULAR_CHANNEL_DEFLECTION_WARNING);
+  }
+  return rawToolCalls.filter((toolCall) => !sendReplyDeflectsToManagedChannels(toolCall));
+}
+
+export function applyPolicyGapAskOperatorGuard(input: {
+  ctx: AgentContext;
+  rawToolCalls: RawToolCall[];
+  readBlocks: readonly Anthropic.ToolUseBlock[];
+  readResultsMap: ReadonlyMap<string, string>;
+  warnings: string[];
+}): RawToolCall[] {
+  let rawToolCalls = stripCircularChannelDeflectionReplies(input.rawToolCalls, input.warnings);
+  const hasAskOperator = rawToolCalls.some((toolCall) => toolCall.name === "ask_operator");
+  const hasEscalate = rawToolCalls.some((toolCall) => toolCall.name === "escalate_to_human");
+  const hasSendReply = rawToolCalls.some((toolCall) => toolCall.name === "send_reply");
+  if (hasAskOperator || hasEscalate) return rawToolCalls;
+  if (hasSendReply && !shouldPreferAskOperatorForPolicyGap({
+    ctx: input.ctx,
+    readBlocks: input.readBlocks,
+    readResultsMap: input.readResultsMap,
+  })) {
+    return rawToolCalls;
+  }
+  if (!shouldPreferAskOperatorForPolicyGap({
+    ctx: input.ctx,
+    readBlocks: input.readBlocks,
+    readResultsMap: input.readResultsMap,
+  })) {
+    return rawToolCalls;
+  }
+  return [
+    ...rawToolCalls.filter((toolCall) => toolCall.name !== "send_reply"),
+    buildPolicyGapAskOperatorCall(input.ctx),
+  ];
+}
 
 export function replyDraftPrompt(settings?: { brandVoice?: string | null }): string {
   const brandVoice = settings?.brandVoice?.trim();

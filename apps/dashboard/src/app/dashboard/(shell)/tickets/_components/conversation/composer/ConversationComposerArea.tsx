@@ -28,7 +28,7 @@ interface Props {
   onPlanRegenerate: () => void
   onSend: (isNote: boolean) => void
   onViewTabChange: (tab: "chat" | "notes") => void
-  onAnswered: () => void
+  onAnswered: (result?: { saveToKb: boolean }) => void
   pendingPlan: AgentPlan | null
   threadId: string
   composer: {
@@ -237,7 +237,7 @@ function MerchantAnswerCard({
   threadId: string
   question: string | null
   agentName: string
-  onAnswered: () => void
+  onAnswered: (result?: { saveToKb: boolean }) => void
 }) {
   return (
     <div className="w-full rounded-2xl bg-card border border-border shadow-sm px-4 sm:px-5 py-4">

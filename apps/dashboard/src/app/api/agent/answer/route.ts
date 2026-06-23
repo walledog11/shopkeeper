@@ -6,6 +6,8 @@ import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agen
 import { buildAgentPlanCacheRecord } from "@shopkeeper/agent/plan-cache";
 import { extractCachedQuestion, getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
+import { buildMerchantAnswerPlanningInstruction } from "@shopkeeper/agent/kb-learned";
+import { saveMerchantAnswerToKb } from "@shopkeeper/agent/merchant-answer-kb";
 import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
 import { parseAgentAnswerBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
@@ -32,9 +34,10 @@ export const POST = withOrgRoute(
     const { threadId, answer, saveToKb } = parseAgentAnswerBody(await readRequiredJsonObject(request));
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
 
-    const [thread, latestConversation] = await Promise.all([
+    const [thread, latestConversation, threadMeta] = await Promise.all([
       requireOrgThread(threadId, org.id),
       getLatestConversationMessage(threadId),
+      db.thread.findUnique({ where: { id: threadId }, select: { tag: true } }),
     ]);
     const pendingCustomerMessageId = latestConversation
       ? getPendingCustomerMessageId([latestConversation])
@@ -49,18 +52,18 @@ export const POST = withOrgRoute(
         : `Merchant note for the agent: ${answer}`,
     });
 
+    let savedArticle: { title: string; body: string } | null = null;
     if (saveToKb) {
-      const knowledgeBaseId = await resolveUserKnowledgeBaseId(org.id);
-      const tagged = await db.thread.findUnique({ where: { id: threadId }, select: { tag: true } });
-      await db.kbArticle.create({
-        data: {
-          organizationId: org.id,
-          knowledgeBaseId,
-          title: (question ?? answer).slice(0, 255),
-          body: answer,
-          tags: tagged?.tag ? [tagged.tag] : [],
-        },
+      const saved = await saveMerchantAnswerToKb({
+        organizationId: org.id,
+        threadId,
+        question,
+        answer,
+        threadTag: threadMeta?.tag,
+        channelType: thread.channelType,
+        threadSummary: thread.aiSummary,
       });
+      savedArticle = { title: saved.title, body: saved.body };
     }
 
     // The customer message is gone (already handled elsewhere) — nothing to re-plan against.
@@ -73,11 +76,16 @@ export const POST = withOrgRoute(
     }
 
     const baseInstruction = thread.aiSummary || "Handle this customer's latest request";
-    const planningInstruction = saveToKb || !question
-      ? baseInstruction
-      : `${baseInstruction}\n\nThe store owner answered your question "${question}" with: "${answer}". Use this to draft the customer reply — do not ask again.`;
+    const planningInstruction = buildMerchantAnswerPlanningInstruction({
+      baseInstruction,
+      question,
+      answer,
+      saveToKb,
+    });
 
-    const ctx = await buildContext(threadId, org.id);
+    const ctx = await buildContext(threadId, org.id, savedArticle
+      ? { pinKbArticles: [savedArticle] }
+      : undefined);
     const plan = await planAgent(ctx, planningInstruction, settings);
 
     // Cache under the base instruction so the normal /plan path serves this
@@ -113,18 +121,3 @@ export const POST = withOrgRoute(
     });
   },
 );
-
-async function resolveUserKnowledgeBaseId(organizationId: string): Promise<string> {
-  const existing = await db.knowledgeBase.findFirst({
-    where: { organizationId, source: "user" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  if (existing) return existing.id;
-
-  const created = await db.knowledgeBase.create({
-    data: { organizationId, name: "Support", source: "user" },
-    select: { id: true },
-  });
-  return created.id;
-}

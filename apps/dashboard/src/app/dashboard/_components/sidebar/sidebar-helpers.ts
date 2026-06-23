@@ -1,11 +1,4 @@
-import { Box, Inbox, Settings } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
-
-export const mobileTabs = [
-  { name: "Inbox", href: "/dashboard/tickets", icon: Inbox, badge: true },
-  { name: "Shop", href: "/dashboard/orders", icon: Box, badge: false },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings, badge: false },
-];
 
 export function isRouteActive(pathname: string, href: string) {
   return pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));

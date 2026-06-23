@@ -41,7 +41,7 @@ export default function ChatTimeline({
   if (messages.length === 0 && !isAgentRunning) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center gap-3">
-        <div className="size-10 rounded-md bg-foreground/[0.05] border border-border flex items-center justify-center">
+        <div className="size-10 rounded-2xl bg-foreground/[0.05] border border-border flex items-center justify-center">
           <MessageSquare className="size-4 text-foreground/20" />
         </div>
         <p className="text-sm text-foreground/30">No messages yet</p>
@@ -69,12 +69,12 @@ export default function ChatTimeline({
               data-testid="chat-message-bubble"
               data-message-id={msg.id}
               data-sender={msg.sender}
-              className={`px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed ${
+              className={`px-4 py-3 text-[14px] max-w-[80%] leading-relaxed shadow-sm ${
                 isFailed
-                  ? "bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-md rounded-tr-sm"
+                  ? "bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-2xl rounded-tr-md"
                   : isOutbound
-                    ? "bg-foreground/[0.14] text-white rounded-md rounded-tr-sm"
-                    : "bg-foreground/[0.07] border border-foreground/[0.10] text-foreground/75 rounded-md rounded-tl-sm"
+                    ? "bg-foreground/[0.14] text-foreground/90 rounded-2xl rounded-tr-md"
+                    : "bg-card border border-border text-foreground/80 rounded-2xl rounded-tl-md"
               }`}
             >
               {msg.text}
@@ -114,7 +114,7 @@ export default function ChatTimeline({
           <div
             data-testid="failed-chat-message-bubble"
             data-message-id={failedMessage.id}
-            className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-md rounded-tr-sm"
+            className="px-4 py-3 text-[14px] max-w-[80%] leading-relaxed shadow-sm bg-red-500/10 border border-red-500/30 text-foreground/70 rounded-2xl rounded-tr-md"
           >
             {failedMessage.text}
           </div>

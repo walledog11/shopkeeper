@@ -249,3 +249,27 @@ export function selectToolNamesForInstruction(
 
   return [...allowed];
 }
+
+const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [
+  /\b(do you|can you|will you|are you)\b[^.?!]{0,48}\b(ship|deliver|send)\b/,
+  /\bship(?:ping|s)?\s+(?:to|internationally|worldwide|globally|outside|overseas)\b/,
+  /\b(international|worldwide|global|overseas)\b[^.?!]{0,40}\b(ship|deliver|order|shopping|sales)\b/,
+  /\bshopping\s+globally\b/,
+  /\bship\s+to\s+[a-z]{3,}/i,
+];
+
+const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
+  /\b(student|military|first.?time|loyalty|bulk|volume)\s+discount\b/i,
+  /\boffer\s+(any|a)\s+(student|bulk|volume)\s+discount\b/i,
+];
+
+/** Informational store-policy questions the merchant must answer when KB has no coverage. */
+export function hasMerchantPolicyGapIntent(...texts: string[]): boolean {
+  return texts.some((text) => {
+    const lower = text.toLowerCase();
+    if (hasOutOfScopeCommercialRequestSignals(text)) return false;
+    if (isInformationalReturnQuestion(text)) return true;
+    if (SHIPPING_COVERAGE_QUESTION_RES.some((re) => re.test(lower))) return true;
+    return DISCOUNT_POLICY_QUESTION_RES.some((re) => re.test(lower));
+  });
+}

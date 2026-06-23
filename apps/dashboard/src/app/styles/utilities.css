@@ -52,6 +52,11 @@ body,
   50%      { opacity: 1; }
 }
 
+@keyframes needs-you-shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
 /* Custom Scrollbar */
 @layer utilities {
 .custom-scrollbar {
@@ -67,6 +72,17 @@ body,
 
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+.needs-you-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(43, 33, 24, 0.04) 0%,
+    rgba(43, 33, 24, 0.1) 50%,
+    rgba(43, 33, 24, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: needs-you-shimmer 1.8s ease-in-out infinite;
+}
 }
 
 @media (prefers-reduced-motion: reduce) {

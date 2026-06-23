@@ -43,7 +43,8 @@ export function isAgentPlanCacheHit(params: {
     return false;
   }
 
-  return params.cache.instruction === params.instruction
+  return params.cache.version === AGENT_PLAN_CACHE_VERSION
+    && params.cache.instruction === params.instruction
     && params.cache.lastCustomerMessageId === params.lastCustomerMessageId
     && params.cache.settingsFingerprint === fingerprintSettings(params.settings)
     && params.cache.plan.steps.length > 0;

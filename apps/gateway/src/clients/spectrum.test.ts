@@ -7,6 +7,7 @@ import {
   getSpectrumAppForOrganization,
   readSpectrumCredentials,
   SpectrumIntegrationConfigError,
+  stopAllSpectrumApps,
 } from './spectrum.js';
 
 const mocks = vi.hoisted(() => ({
@@ -84,6 +85,33 @@ describe('Spectrum app factory', () => {
 
     await expect(Promise.all([first, second])).resolves.toEqual([app, app]);
     expect(mocks.spectrum).toHaveBeenCalledTimes(1);
+  });
+
+  it('rebuilds against new credentials when a secret rotates and stops the stale app', async () => {
+    const oldApp = { id: 'old', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
+    const newApp = { id: 'new', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
+    mocks.spectrum.mockResolvedValueOnce(oldApp).mockResolvedValueOnce(newApp);
+
+    await expect(getSpectrumAppForIntegration(makeIntegration())).resolves.toBe(oldApp);
+
+    const rotated = makeIntegration({ refreshToken: ' rotated_webhook_secret ' });
+    await expect(getSpectrumAppForIntegration(rotated)).resolves.toBe(newApp);
+
+    expect(mocks.spectrum).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect((oldApp as unknown as { stop: ReturnType<typeof vi.fn> }).stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('stops every cached app on shutdown and clears the cache', async () => {
+    const app = { id: 'a', stop: vi.fn().mockResolvedValue(undefined) } as unknown as ImessageSpectrumApp;
+    mocks.spectrum.mockResolvedValue(app);
+
+    await getSpectrumAppForIntegration(makeIntegration());
+    await stopAllSpectrumApps();
+
+    expect((app as unknown as { stop: ReturnType<typeof vi.fn> }).stop).toHaveBeenCalledTimes(1);
+
+    await getSpectrumAppForIntegration(makeIntegration());
+    expect(mocks.spectrum).toHaveBeenCalledTimes(2);
   });
 
   it('evicts rejected app initialization so the next call can retry', async () => {

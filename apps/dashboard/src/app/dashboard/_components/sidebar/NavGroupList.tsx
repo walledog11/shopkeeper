@@ -3,11 +3,12 @@
 import Link from "next/link";
 import type { MouseEvent } from "react";
 import { cn } from "@/lib/ui/cn";
-import type { NavSection } from "../nav-items";
+import type { NavItem, NavSection } from "../nav-items";
 import { formatOpenCount, isRouteActive } from "./sidebar-helpers";
 
-function itemBadgeCount(href: string, needsYouCount: number): number | null {
-  if (href === "/dashboard/review" && needsYouCount > 0) return needsYouCount;
+function itemBadgeCount(item: NavItem, needsYouCount: number, openCount: number): number | null {
+  if (item.href === "/dashboard/review" && needsYouCount > 0) return needsYouCount;
+  if (item.badge && openCount > 0) return openCount;
   return null;
 }
 
@@ -16,12 +17,14 @@ export function NavGroupList({
   agentName,
   pathname,
   needsYouCount,
+  openCount = 0,
   onNavigate,
 }: {
   sections: NavSection[];
   agentName: string;
   pathname: string;
   needsYouCount: number;
+  openCount?: number;
   onNavigate: (e: MouseEvent<HTMLAnchorElement>, isActive: boolean) => void;
 }) {
   return (
@@ -37,7 +40,7 @@ export function NavGroupList({
             <div className="overflow-hidden rounded-2xl border border-border bg-card divide-y divide-border">
               {section.items.map((item) => {
                 const isActive = isRouteActive(pathname, item.href);
-                const badgeCount = itemBadgeCount(item.href, needsYouCount);
+                const badgeCount = itemBadgeCount(item, needsYouCount, openCount);
                 const label = item.mobileName ?? item.name;
 
                 return (
@@ -69,7 +72,14 @@ export function NavGroupList({
                       </p>
                     </div>
                     {badgeCount != null && (
-                      <span className="ml-1 min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center bg-amber-500/15 text-amber-800 tabular-nums shrink-0">
+                      <span
+                        className={cn(
+                          "ml-1 min-w-[20px] h-5 px-1.5 rounded-lg text-xs font-bold flex items-center justify-center tabular-nums shrink-0",
+                          item.badge
+                            ? "bg-green-400/15 text-green-800"
+                            : "bg-amber-500/15 text-amber-800",
+                        )}
+                      >
                         {formatOpenCount(badgeCount)}
                       </span>
                     )}

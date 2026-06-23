@@ -8,6 +8,7 @@ import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
 import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
+import { stopAllSpectrumApps } from './clients/spectrum.js';
 import { runGatewayEntry } from './bootstrap.js';
 
 export function createGatewayApp() {
@@ -148,6 +149,7 @@ export async function startGatewayServer() {
       logger.info('[Shopkeeper Gateway] HTTP server closed');
       await db.$disconnect().catch(() => {});
       Promise.all([
+        stopAllSpectrumApps(),
         closeGatewayBullMqQueues(),
         closeGatewayRedisConnections(),
       ]).finally(() => {

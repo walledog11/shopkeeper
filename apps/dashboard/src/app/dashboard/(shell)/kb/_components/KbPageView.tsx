@@ -1,5 +1,9 @@
+"use client"
+
 import { Check, ChevronDown, Loader2, Search, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
+import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
+import { useIsMobile } from "@/hooks/useMobile"
 import { ArticleEditDetail } from "./ArticleEditDetail"
 import { ArticleReadDetail } from "./ArticleReadDetail"
 import { NewKbForm } from "./CollectionsPanel"
@@ -61,6 +65,9 @@ export function KbPageView({ state }: KbPageViewProps) {
     startEdit,
     visibleArticles,
   } = state
+  const isMobile = useIsMobile()
+  useMobileChromeOverride(isMobile && selectedArticle ? "detail" : null)
+
   const closeCreateKb = () => {
     setIsCreatingKb(false)
     setNewKbName("")

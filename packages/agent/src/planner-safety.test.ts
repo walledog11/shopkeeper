@@ -3,6 +3,11 @@ import type Anthropic from "@anthropic-ai/sdk";
 import {
   applyMutativeIntentNoActionGuard,
   applyBrandVoiceOrderStatusGuard,
+  applyPolicyGapAskOperatorGuard,
+  buildPolicyGapAskOperatorCall,
+  sendReplyDeflectsToManagedChannels,
+  shouldPreferAskOperatorForPolicyGap,
+  shouldUsePolicyGapReplanPrompt,
   shouldPreferBrandVoiceOrderStatusReply,
   hasCriticalPlanningReadErrorsForBlocks,
   sendReplyHasText,
@@ -471,5 +476,118 @@ describe("applyBrandVoiceOrderStatusGuard", () => {
       "Reply to the customer and process their refund request.",
       { brandVoice: "Warm tone." },
     )).toBe(false);
+  });
+});
+
+describe("policy gap ask_operator guards", () => {
+  it("detects managed-channel deflection in send_reply drafts", () => {
+    const deflecting: RawToolCall = {
+      id: "tu_reply",
+      name: "send_reply",
+      input: {
+        text: "Reach out to support@palettegarments.com or DM @palette.garments on Instagram.",
+      },
+    };
+    expect(sendReplyDeflectsToManagedChannels(deflecting)).toBe(true);
+    expect(sendReplyDeflectsToManagedChannels({
+      id: "tu_ok",
+      name: "send_reply",
+      input: { text: "Yes, we ship to Canada for a $15 flat rate." },
+    })).toBe(false);
+  });
+
+  it("prefers ask_operator for global shipping questions without KB coverage", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Are you shopping globally?" }],
+      kbArticles: [],
+    });
+    expect(shouldPreferAskOperatorForPolicyGap({
+      ctx,
+      readBlocks: [],
+      readResultsMap: new Map(),
+    })).toBe(true);
+  });
+
+  it("does not prefer ask_operator when KB answers the shipping question", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Do you ship to Canada?" }],
+      kbArticles: [{
+        title: "International shipping",
+        body: "Yes, we ship to Canada and the UK for a $15 flat rate.",
+      }],
+    });
+    expect(shouldPreferAskOperatorForPolicyGap({
+      ctx,
+      readBlocks: [],
+      readResultsMap: new Map(),
+    })).toBe(false);
+  });
+
+  it("replaces deflecting send_reply with ask_operator for policy-gap tickets", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Are you shopping globally?" }],
+      kbArticles: [],
+    });
+    const warnings: string[] = [];
+    const guarded = applyPolicyGapAskOperatorGuard({
+      ctx,
+      rawToolCalls: [{
+        id: "tu_reply",
+        name: "send_reply",
+        input: {
+          text: "Reach out to support@palettegarments.com or DM @palette.garments on Instagram.",
+        },
+      }],
+      readBlocks: [],
+      readResultsMap: new Map(),
+      warnings,
+    });
+
+    expect(guarded.map((call) => call.name)).toEqual(["ask_operator"]);
+    expect(guarded[0]?.input).toMatchObject({
+      question: expect.stringContaining("shopping globally"),
+    });
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it("injects ask_operator before reply draft when phase 1 produced no terminal tool", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Are you shopping globally?" }],
+      kbArticles: [],
+    });
+    const warnings: string[] = [];
+    const guarded = applyPolicyGapAskOperatorGuard({
+      ctx,
+      rawToolCalls: [],
+      readBlocks: [],
+      readResultsMap: new Map(),
+      warnings,
+    });
+
+    expect(guarded).toEqual([buildPolicyGapAskOperatorCall(ctx)]);
+  });
+
+  it("uses policy-gap replan prompt only after search_kb on an unanswered policy question", () => {
+    const ctx = makeCtx({
+      recentMessages: [{ senderType: "customer", contentText: "Do you ship to Canada?" }],
+      kbArticles: [],
+    });
+    const readBlocks = [
+      { type: "tool_use", id: "tu_kb", name: "search_kb", input: { query: "Canada shipping" } },
+    ] as unknown as Anthropic.ToolUseBlock[];
+
+    expect(shouldUsePolicyGapReplanPrompt({
+      ctx,
+      readBlocks,
+      readResultsMap: new Map([["tu_kb", "[]"]]),
+      rawToolCalls: [{ id: "tu_kb", name: "search_kb", input: { query: "Canada shipping" } }],
+    })).toBe(true);
+
+    expect(shouldUsePolicyGapReplanPrompt({
+      ctx,
+      readBlocks,
+      readResultsMap: new Map([["tu_kb", "[]"]]),
+      rawToolCalls: [{ id: "tu_ask", name: "ask_operator", input: { question: "Do we ship to Canada?" } }],
+    })).toBe(false);
   });
 });

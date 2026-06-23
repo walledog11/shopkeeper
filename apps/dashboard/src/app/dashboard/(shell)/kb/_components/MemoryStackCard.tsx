@@ -1,7 +1,9 @@
 "use client"
 
 import { BookOpen, ShoppingBag } from "lucide-react"
+import { isAgentLearnedKbArticle, kbTagsForDisplay } from "@shopkeeper/agent/kb-learned"
 import { formatDate } from "@/lib/format/date"
+import { AgentLearnedBadge } from "./AgentLearnedBadge"
 import type { ArticleWithBase } from "./kb-page-utils"
 
 interface MemoryStackCardProps {
@@ -16,8 +18,9 @@ export function MemoryStackCard({
   onOpen,
 }: MemoryStackCardProps) {
   const tags = article.tags ?? []
-  const visibleTags = tags.slice(0, 3)
-  const hiddenTagCount = Math.max(0, tags.length - visibleTags.length)
+  const isAgentLearned = isAgentLearnedKbArticle(tags)
+  const visibleTags = kbTagsForDisplay(tags).slice(0, 3)
+  const hiddenTagCount = Math.max(0, kbTagsForDisplay(tags).length - visibleTags.length)
   const isShopify = article.baseSource === "shopify"
   const SourceIcon = isShopify ? ShoppingBag : BookOpen
 
@@ -62,6 +65,7 @@ export function MemoryStackCard({
 
       <div className="mt-1 flex min-h-6 items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          {isAgentLearned && <AgentLearnedBadge />}
           {visibleTags.map(tag => (
             <span
               key={tag}

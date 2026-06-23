@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { LazyMotion, domMax, m, useMotionValue, useTransform } from "motion/react"
-import { FLY_OFF, STACK_DEPTH, STACK_MARGIN_TOP } from "../home/needs-you-motion"
+import { DEFAULT_STACK_PEEK, FLY_OFF, type StackPeekConfig } from "../home/needs-you-motion"
 import { SwipeCard, type SwipeCardHandle } from "../home/NeedsYouSwipeCard"
 
 type StackDeckControls = "count" | "dots" | "none"
@@ -36,9 +36,11 @@ interface StackDeckProps<T> {
   labels: StackDeckLabels
   testId?: string
   peekShellClassName?: string
+  renderBackShell?: (context: StackDeckRenderContext) => ReactNode
   singleItemClassName?: string
   stackSingleItem?: boolean
   controls?: StackDeckControls
+  peek?: StackPeekConfig
 }
 
 interface StackDeckState {
@@ -71,9 +73,11 @@ export function StackDeck<T>({
   labels,
   testId,
   peekShellClassName = DEFAULT_PEEK_SHELL_CLASS_NAME,
+  renderBackShell,
   singleItemClassName,
   stackSingleItem = false,
   controls = "count",
+  peek = DEFAULT_STACK_PEEK,
 }: StackDeckProps<T>) {
   const itemIds = useMemo(() => items.map(getId), [getId, items])
   const idsKey = itemIds.join("|")
@@ -92,16 +96,16 @@ export function StackDeck<T>({
   const swipeRef = useRef<SwipeCardHandle>(null)
   const stackDragX = useMotionValue(0)
   const peekProgress = useTransform(stackDragX, value => Math.min(Math.abs(value) / FLY_OFF, 1))
-  const peekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * (1 - progress))
-  const peekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * (1 - progress))
-  const peekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * (1 - progress))
-  const peekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * (1 - progress))
-  const peekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity) + STACK_DEPTH.opacity * progress)
-  const secondPeekX = useTransform(peekProgress, progress => -STACK_DEPTH.x * 2 * (1 - progress * 0.55))
-  const secondPeekY = useTransform(peekProgress, progress => -STACK_DEPTH.y * 2 * (1 - progress * 0.55))
-  const secondPeekRotate = useTransform(peekProgress, progress => -STACK_DEPTH.rotate * 2 * (1 - progress * 0.55))
-  const secondPeekScale = useTransform(peekProgress, progress => 1 - STACK_DEPTH.scale * 2 * (1 - progress * 0.55))
-  const secondPeekOpacity = useTransform(peekProgress, progress => (1 - STACK_DEPTH.opacity * 2) + STACK_DEPTH.opacity * progress)
+  const peekX = useTransform(peekProgress, progress => peek.depth.x * (1 - progress))
+  const peekY = useTransform(peekProgress, progress => peek.depth.y * (1 - progress))
+  const peekRotate = useTransform(peekProgress, progress => peek.depth.rotate * (1 - progress))
+  const peekScale = useTransform(peekProgress, progress => 1 - peek.depth.scale * (1 - progress))
+  const peekOpacity = useTransform(peekProgress, progress => (1 - peek.depth.opacity) + peek.depth.opacity * progress)
+  const secondPeekX = useTransform(peekProgress, progress => peek.depth.x * 2 * (1 - progress * 0.55))
+  const secondPeekY = useTransform(peekProgress, progress => peek.depth.y * 2 * (1 - progress * 0.55))
+  const secondPeekRotate = useTransform(peekProgress, progress => peek.depth.rotate * 2 * (1 - progress * 0.55))
+  const secondPeekScale = useTransform(peekProgress, progress => 1 - peek.depth.scale * 2 * (1 - progress * 0.55))
+  const secondPeekOpacity = useTransform(peekProgress, progress => (1 - peek.depth.opacity * 2) + peek.depth.opacity * progress)
 
   const n = items.length
   const mod = (value: number) => ((value % n) + n) % n
@@ -113,7 +117,7 @@ export function StackDeck<T>({
   const controlsDisabled = disableControlsWhenNotDraggable && !currentDraggable
   const renderPeek = renderPeekCard ?? renderCard
   const measuredHeightStyle: CSSProperties | undefined = frontHeight > 0
-    ? { minHeight: frontHeight, maxHeight: frontHeight }
+    ? { height: frontHeight, minHeight: frontHeight, maxHeight: frontHeight }
     : undefined
 
   useEffect(() => {
@@ -182,7 +186,8 @@ export function StackDeck<T>({
         <div className={className} data-testid={testId}>
           <LazyMotion features={domMax}>
             <div className="relative select-none">
-              <div className="relative" style={{ marginTop: STACK_MARGIN_TOP }}>
+              <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-black/5 blur-md pointer-events-none" aria-hidden />
+              <div className="relative" style={{ marginTop: peek.marginTop, marginBottom: peek.marginBottom }}>
                 <div ref={frontCardRef} className="relative z-10">
                   <SwipeCard
                     key={currentId}
@@ -234,7 +239,8 @@ export function StackDeck<T>({
     <div className={className} data-testid={testId}>
       <LazyMotion features={domMax}>
         <div className="relative select-none">
-          <div className="relative" style={{ marginTop: STACK_MARGIN_TOP }}>
+          <div className="absolute inset-x-6 -bottom-2 h-4 rounded-full bg-black/5 blur-md pointer-events-none" aria-hidden />
+          <div className="relative" style={{ marginTop: peek.marginTop, marginBottom: peek.marginBottom }}>
             {(peekItem || n > 2) && (
               <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden>
                 {n > 2 && (
@@ -246,10 +252,16 @@ export function StackDeck<T>({
                       rotate: secondPeekRotate,
                       scale: secondPeekScale,
                       opacity: secondPeekOpacity,
-                      transformOrigin: "top center",
+                      transformOrigin: peek.origin,
                     }}
                   >
-                    <div className={peekShellClassName} style={measuredHeightStyle} />
+                    {renderBackShell ? (
+                      <div className="box-border overflow-hidden" style={measuredHeightStyle}>
+                        {renderBackShell(renderContext(true))}
+                      </div>
+                    ) : (
+                      <div className={peekShellClassName} style={measuredHeightStyle} />
+                    )}
                   </m.div>
                 )}
 
@@ -262,7 +274,7 @@ export function StackDeck<T>({
                       rotate: peekRotate,
                       scale: peekScale,
                       opacity: peekOpacity,
-                      transformOrigin: "top center",
+                      transformOrigin: peek.origin,
                     }}
                   >
                     <div className="pointer-events-none box-border overflow-hidden" style={measuredHeightStyle}>

@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from "react"
+import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
 
 interface UseConversationViewportEffectsOptions {
   activeTab: "open" | "closed"
@@ -29,6 +30,10 @@ export function useConversationViewportEffects({
   viewTab,
   visualViewportHeight,
 }: UseConversationViewportEffectsOptions) {
+  useMobileChromeOverride(
+    isMobile ? (keyboardLayoutOpen ? "immersive" : "detail") : null,
+  )
+
   useEffect(() => {
     const root = conversationRef.current
     if (activeTab !== "open") {
@@ -77,31 +82,4 @@ export function useConversationViewportEffects({
     viewTab,
     visualViewportHeight,
   ])
-
-  useEffect(() => {
-    const root = document.documentElement
-
-    if (keyboardLayoutOpen) {
-      root.dataset.mobileTicketEditing = "true"
-    } else if (root.dataset.mobileTicketEditing === "true") {
-      delete root.dataset.mobileTicketEditing
-    }
-
-    return () => {
-      if (root.dataset.mobileTicketEditing === "true") {
-        delete root.dataset.mobileTicketEditing
-      }
-    }
-  }, [keyboardLayoutOpen])
-
-  useEffect(() => {
-    if (!isMobile) return
-
-    const root = document.documentElement
-    root.dataset.mobileTicketDetail = "true"
-
-    return () => {
-      delete root.dataset.mobileTicketDetail
-    }
-  }, [isMobile])
 }

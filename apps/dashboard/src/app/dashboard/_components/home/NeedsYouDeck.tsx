@@ -4,7 +4,8 @@ import { useState } from "react"
 import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
-import { NeedsYouCard, NeedsYouCardPeek } from "./NeedsYouCards"
+import { NeedsYouCard } from "./NeedsYouCards"
+import { STACKED_BELOW_PEEK } from "./needs-you-motion"
 
 interface Props {
   items: HomeNeedsAttentionItem[]
@@ -40,6 +41,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         activeId={currentId}
         empty={<NeedsYouAllClear agentName={agentName} />}
         stackSingleItem
+        peek={STACKED_BELOW_PEEK}
         isDraggable={(item) => item.kind !== "needs_merchant_input"}
         labels={{ previous: "Previous card", next: "Next card" }}
         controls="dots"
@@ -53,11 +55,12 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
             onAnswered={onApproved}
           />
         )}
-        renderPeekCard={(item, context) => (
-          <NeedsYouCardPeek
+        renderPeekCard={(item) => (
+          <NeedsYouCard
             item={item}
             agentName={agentName}
-            minHeight={context.frontHeight > 0 ? context.frontHeight : undefined}
+            onSent={() => undefined}
+            onAnswered={() => undefined}
           />
         )}
       />

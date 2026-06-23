@@ -14,6 +14,7 @@
     "test-helpers.ts",
     "crypto.ts",
     "llm-spend.ts",
+    "operator-bind.ts",
     "spend-store.ts",
     "refund-spend.ts",
     "voice.ts",

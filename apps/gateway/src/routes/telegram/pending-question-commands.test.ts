@@ -104,8 +104,9 @@ describe('handlePendingQuestionAnswer', () => {
     expect(note?.contentText).toContain('A: Yes, $15 flat to Canada.');
 
     const article = await db.kbArticle.findFirst({ where: { organizationId: org.id } });
-    expect(article?.title).toBe('Do we ship to Canada?');
-    expect(article?.body).toBe('Yes, $15 flat to Canada.');
-    expect(article?.tags).toEqual(['Support']);
+    expect(article?.title).toBe('International shipping');
+    expect(article?.body).toContain('Q: Do we ship to Canada?');
+    expect(article?.body).toContain('A: Yes, $15 flat to Canada.');
+    expect(article?.tags).toEqual(['agent-learned', 'shipping', 'Support']);
   });
 });

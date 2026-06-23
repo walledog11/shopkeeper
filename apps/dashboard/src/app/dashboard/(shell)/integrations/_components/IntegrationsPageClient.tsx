@@ -8,7 +8,7 @@ import { fetcher } from "@/lib/api/fetcher"
 import { cn } from "@/lib/ui/cn"
 import { useIntegrations } from "@/hooks/useIntegrations"
 import { getEmailProvider } from "@shopkeeper/email/providers"
-import { OAUTH_ERROR_MESSAGES, PLATFORM_CONFIG, type PlatformConfig } from "@/lib/integrations/catalog"
+import { OAUTH_ERROR_MESSAGES, INTEGRATION_CHANNEL_SECTIONS, PLATFORM_CONFIG, sortPlatformConfigsByChannelKind, type IntegrationChannelKind, type PlatformConfig } from "@/lib/integrations/catalog"
 import {
   openOAuthPopup,
   subscribeOAuthDone,
@@ -30,15 +30,25 @@ import type { Integration } from "@/types"
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-export default function IntegrationsPageClient() {
+const INTEGRATION_CARD_GRID = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
+
+export default function IntegrationsPageClient({
+  telegramBotUsername,
+}: {
+  telegramBotUsername: string | null
+}) {
   return (
     <Suspense fallback={null}>
-      <IntegrationsPageContent />
+      <IntegrationsPageContent telegramBotUsername={telegramBotUsername} />
     </Suspense>
   )
 }
 
-function IntegrationsPageContent() {
+function IntegrationsPageContent({
+  telegramBotUsername,
+}: {
+  telegramBotUsername: string | null
+}) {
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
   const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
@@ -171,11 +181,19 @@ function IntegrationsPageContent() {
 
   const hasShopify = integrations.some(i => i.platform === 'shopify' && isShopifyIntegrationActive(i))
   const hasEmail = integrations.some(i => i.platform === 'email')
-  const showTelegram = shouldShowTelegramIntegration(telegramStatus)
-  const visiblePlatformConfig = useMemo(
-    () => filterTelegramPlatformConfigs(PLATFORM_CONFIG, telegramStatus),
-    [telegramStatus],
+  const telegramAvailability = useMemo(
+    () => ({ botUsername: telegramBotUsername ?? telegramStatus?.botUsername ?? null }),
+    [telegramBotUsername, telegramStatus?.botUsername],
   )
+  const showTelegram = shouldShowTelegramIntegration(telegramAvailability)
+  const visiblePlatformConfig = useMemo(
+    () => filterTelegramPlatformConfigs(PLATFORM_CONFIG, telegramAvailability),
+    [telegramAvailability],
+  )
+  const platformConfigsByChannelKind = useMemo(() => ({
+    support: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'support'),
+    operator: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'operator'),
+  }), [visiblePlatformConfig])
   const setupSteps = [
     { id: 'shopify', label: 'Connect your Shopify store', detail: 'So Shopkeeper can look up orders and customers for you.', done: hasShopify },
     { id: 'email', label: 'Connect your support email', detail: 'Customer emails become tickets you can answer in one place.', done: hasEmail },
@@ -194,12 +212,76 @@ function IntegrationsPageContent() {
     document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
+  function renderIntegrationCard(def: PlatformConfig) {
+    if (def.id === 'telegram') {
+      return <TelegramCard key={def.id} config={def} botUsername={telegramBotUsername} />
+    }
+
+    return (
+      <IntegrationCard
+        key={def.id}
+        config={def}
+        connected={getConnected(def)}
+        lastActivity={getLastActivity(def)}
+        onConnect={handleConnect}
+        onImessageConnect={handleImessageConnect}
+        onDisconnect={handleDisconnect}
+        onLaunchOAuth={launchOAuth}
+        open={openId === def.id}
+        onOpenChange={(o) => setOpenId(o ? def.id : null)}
+      />
+    )
+  }
+
+  function renderIntegrationSection(
+    sectionKind: IntegrationChannelKind,
+    title: string,
+    description: string,
+    configs: PlatformConfig[],
+  ) {
+    if (configs.length === 0) return null
+
+    return (
+      <section key={sectionKind} className="space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
+          <p className="text-xs text-foreground/35 mt-1">{description}</p>
+        </div>
+        <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
+          {configs.map(renderIntegrationCard)}
+        </div>
+      </section>
+    )
+  }
+
+  function renderIntegrationSkeletonSection(
+    sectionKind: IntegrationChannelKind,
+    title: string,
+    description: string,
+    count: number,
+  ) {
+    return (
+      <section key={sectionKind} className="space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
+          <p className="text-xs text-foreground/35 mt-1">{description}</p>
+        </div>
+        <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
+          {Array.from({ length: count }).map((_, i) => (
+            <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
+              <Skeleton className="size-14 rounded-2xl" />
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-10 w-full rounded-[10px]" />
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="px-6 pt-6 pb-5 border-b border-border shrink-0">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">Integrations</h1>
-      </div>
-
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-6 py-6 space-y-6">
 
@@ -257,35 +339,21 @@ function IntegrationsPageContent() {
 
         {/* Integrations */}
         {loaded ? (
-          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-            {visiblePlatformConfig.map(def => (
-              def.id === 'telegram' ? (
-                <TelegramCard key={def.id} config={def} />
-              ) : (
-                <IntegrationCard
-                  key={def.id}
-                  config={def}
-                  connected={getConnected(def)}
-                  lastActivity={getLastActivity(def)}
-                  onConnect={handleConnect}
-                  onImessageConnect={handleImessageConnect}
-                  onDisconnect={handleDisconnect}
-                  onLaunchOAuth={launchOAuth}
-                  open={openId === def.id}
-                  onOpenChange={(o) => setOpenId(o ? def.id : null)}
-                />
-              )
+          <div className="grid gap-8 lg:grid-cols-2 items-start">
+            {INTEGRATION_CHANNEL_SECTIONS.map(section => renderIntegrationSection(
+              section.kind,
+              section.title,
+              section.description,
+              platformConfigsByChannelKind[section.kind],
             ))}
           </div>
         ) : (
-          <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
-                <Skeleton className="size-14 rounded-2xl" />
-                <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-3 w-full" />
-                <Skeleton className="h-10 w-full rounded-[10px]" />
-              </div>
+          <div className="grid gap-8 lg:grid-cols-2 items-start">
+            {INTEGRATION_CHANNEL_SECTIONS.map(section => renderIntegrationSkeletonSection(
+              section.kind,
+              section.title,
+              section.description,
+              section.kind === 'support' ? 5 : 3,
             ))}
           </div>
         )}

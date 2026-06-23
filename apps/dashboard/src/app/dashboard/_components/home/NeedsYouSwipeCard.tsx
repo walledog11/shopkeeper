@@ -38,6 +38,17 @@ export function SwipeCard({
   const opacity = useMotionValue(1)
   const isFlying = useRef(false)
 
+  const highlightPosition = useTransform(
+    dragX,
+    [-200, 0, 200],
+    ["100% 50%", "50% 50%", "0% 50%"],
+  )
+  const highlightOpacity = useTransform(
+    dragX,
+    [-SWIPE_DISTANCE, 0, SWIPE_DISTANCE],
+    [0.35, 0, 0.35],
+  )
+
   useEffect(() => {
     const unsubscribe = dragX.on("change", value => {
       stackDragX.set(value)
@@ -90,9 +101,27 @@ export function SwipeCard({
           else onCommitRight()
         })
       }}
-      className="touch-pan-y cursor-grab active:cursor-grabbing"
+      className="relative touch-pan-y cursor-grab active:cursor-grabbing"
     >
-      {children}
+      {draggable && (
+        <m.div
+          aria-hidden
+          style={{ opacity: highlightOpacity }}
+          className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-3xl"
+        >
+          <m.div
+            style={{
+              backgroundPosition: highlightPosition,
+              backgroundImage:
+                "radial-gradient(circle at center, rgba(255,255,255,0.14) 0%, transparent 55%)",
+              backgroundSize: "140% 140%",
+            }}
+            className="absolute inset-0"
+          />
+        </m.div>
+      )}
+
+      <div className="relative z-0">{children}</div>
     </m.div>
   )
 }

@@ -9,6 +9,7 @@ import {
   getGatewayBullMqWorkerConnection,
 } from './clients/redis-client.js';
 import { runGatewayEntry } from './bootstrap.js';
+import { stopAllSpectrumApps } from './clients/spectrum.js';
 import { createCoreWorkerResources } from './workers/core.js';
 import { createWorkerHeartbeatResource } from './workers/heartbeat.js';
 import {
@@ -46,6 +47,12 @@ export async function startWorkerRuntime() {
     queues: maintenanceQueues,
     heartbeats: [heartbeat],
     shutdownResources: [
+      {
+        label: 'spectrum-apps',
+        close: async () => {
+          await stopAllSpectrumApps();
+        },
+      },
       {
         label: 'redis-connections',
         close: async () => {

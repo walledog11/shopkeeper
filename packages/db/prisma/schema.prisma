@@ -74,6 +74,7 @@ model Organization {
   integrations     Integration[]
   members          OrgMember[]
   operatorContexts OperatorContext[]
+  bindTokens       OrgMemberBindToken[]
   knowledgeBases   KnowledgeBase[]
   kbArticles       KbArticle[]
   kbCitations      KbCitation[]
@@ -311,6 +312,22 @@ model OrgMemberTelegramChat {
   @@unique([chatId])
   @@index([orgMemberId])
   @@map("org_member_telegram_chats")
+}
+
+// Single-use deep-link tokens for binding operator channels (Telegram, iMessage).
+// Stored in Postgres so dashboard (Upstash REST) and gateway (dedicated REDIS_URL)
+// can both mint and consume tokens without sharing a Redis instance.
+model OrgMemberBindToken {
+  token          String   @id @db.VarChar(64)
+  organizationId String   @map("organization_id") @db.Uuid
+  clerkUserId    String   @map("clerk_user_id") @db.VarChar(255)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@map("org_member_bind_tokens")
 }
 
 model KnowledgeBase {

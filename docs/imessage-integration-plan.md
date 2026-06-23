@@ -1,5 +1,11 @@
 # iMessage Integration Plan
 
+> **⚠️ Superseded (2026-06-22) by [`imessage-operator-plan.md`](./imessage-operator-plan.md).**
+> iMessage is being repointed from a customer-support channel to the **operator channel** (agent↔merchant,
+> Telegram's twin). The Spectrum transport plumbing below is reused; the customer-facing support wiring
+> (`Customer`/`Thread` creation, support replies) is removed. Read this doc only for the Spectrum SDK
+> facts and the deliverability constraints — the product framing here is historical.
+
 **Goal:** add **iMessage** as a customer-facing support channel via **Photon's Spectrum**
 (`spectrum-ts`), modeled on the existing Instagram DM path but using Spectrum's SDK for inbound
 (webhook) and outbound (conversation reconstruction) rather than a raw REST + HMAC integration.

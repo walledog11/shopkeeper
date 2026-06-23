@@ -145,6 +145,14 @@
     "./sender-trust": {
       "types": "./dist/sender-trust.d.ts",
       "default": "./dist/sender-trust.js"
+    },
+    "./kb-learned": {
+      "types": "./dist/kb-learned.d.ts",
+      "default": "./dist/kb-learned.js"
+    },
+    "./merchant-answer-kb": {
+      "types": "./dist/merchant-answer-kb.d.ts",
+      "default": "./dist/merchant-answer-kb.js"
     }
   },
   "scripts": {

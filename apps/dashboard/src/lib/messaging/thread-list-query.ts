@@ -1,4 +1,5 @@
 import { Prisma, db as defaultDb } from "@shopkeeper/db"
+import { SUPPORTED_AGENT_PLAN_CACHE_VERSIONS } from "@shopkeeper/agent/plan-cache-shape"
 import { canonicalInboxThreadSql } from "@/lib/messaging/inbox-filter"
 
 export function draftReadyPlanSql(organizationId: string) {
@@ -6,7 +7,7 @@ export function draftReadyPlanSql(organizationId: string) {
     t.status = 'open'
     AND t.cached_plan IS NOT NULL
     AND t.cached_plan_message_id IS NOT NULL
-    AND t.cached_plan->>'version' = '2'
+    AND t.cached_plan->>'version' IN (${Prisma.join(SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.map(String))})
     AND CASE
       WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
       THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0
@@ -42,7 +43,7 @@ export function forMeThreadSql(organizationId: string) {
       OR (
         t.cached_plan IS NOT NULL
         AND t.cached_plan_message_id IS NOT NULL
-        AND t.cached_plan->>'version' = '2'
+        AND t.cached_plan->>'version' IN (${Prisma.join(SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.map(String))})
         AND CASE
           WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
           THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0

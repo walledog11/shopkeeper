@@ -6,6 +6,7 @@ import {
   isThreadAwaitingReply,
 } from "./plan-cache-shape.js"
 import { buildAgentPlanCacheRecord } from "./plan-cache.js"
+import { isAgentPlanCacheHit } from "./plan-cache.js"
 import { resolveAgentSettings } from "./settings.js"
 import type { AgentPlan } from "./types.js"
 
@@ -143,5 +144,27 @@ describe("readAgentPlanCacheRecordShape", () => {
         steps: [{ ...PLAN.steps[0], category: "unknown" }],
       },
     })).toBeNull()
+  })
+})
+
+describe("isAgentPlanCacheHit", () => {
+  it("misses when the stored cache version is older than the current version", () => {
+    const settings = resolveAgentSettings(null)
+    const stale = {
+      ...buildAgentPlanCacheRecord({
+        instruction: "Handle address change",
+        lastCustomerMessageId: "cust_1",
+        settings,
+        plan: PLAN,
+      }),
+      version: 2,
+    }
+
+    expect(isAgentPlanCacheHit({
+      cache: stale,
+      instruction: "Handle address change",
+      lastCustomerMessageId: "cust_1",
+      settings,
+    })).toBe(false)
   })
 })

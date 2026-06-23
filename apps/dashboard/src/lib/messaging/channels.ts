@@ -98,6 +98,16 @@ export function getChannelInfo(channelType: ChannelType | string | null | undefi
   }
 }
 
+export function getChannelInfoByName(channelName: string): ChannelInfo {
+  for (const info of Object.values(CHANNEL_INFO)) {
+    if (info.name === channelName) return info
+  }
+  for (const info of Object.values(EXTRA_CHANNEL_INFO)) {
+    if (info.name === channelName) return info
+  }
+  return { ...DEFAULT_CHANNEL_INFO, name: channelName, label: channelName }
+}
+
 export function getActionLogChannelInfo(entry: {
   channelType: ChannelType | string | null | undefined
   instruction?: string | null

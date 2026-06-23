@@ -1,4 +1,5 @@
 import { db, Prisma } from "@shopkeeper/db"
+import { SUPPORTED_AGENT_PLAN_CACHE_VERSIONS } from "@shopkeeper/agent/plan-cache-shape"
 import type { ChannelType } from "@/types"
 import {
   HOME_OVERNIGHT_TOPIC_LIMIT,
@@ -87,7 +88,7 @@ export function currentPlanPredicate(organizationId: string) {
     t.status = 'open'
     AND t.cached_plan IS NOT NULL
     AND t.cached_plan_message_id IS NOT NULL
-    AND t.cached_plan->>'version' = '2'
+    AND t.cached_plan->>'version' IN (${Prisma.join(SUPPORTED_AGENT_PLAN_CACHE_VERSIONS.map(String))})
     AND CASE
       WHEN jsonb_typeof(t.cached_plan #> '{plan,steps}') = 'array'
       THEN jsonb_array_length(t.cached_plan #> '{plan,steps}') > 0

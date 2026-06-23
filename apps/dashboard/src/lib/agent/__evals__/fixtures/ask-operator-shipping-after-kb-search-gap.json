@@ -1,0 +1,27 @@
+{
+  "id": "ask-operator-shipping-after-kb-search-gap",
+  "description": "Customer asks whether the store ships to Canada. Phase 1 should search_kb; when no article answers, the replan nudge must steer to ask_operator instead of drafting a customer reply. classifyHomePlan should surface this as needs_merchant_input.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Priya Nair",
+    "customerPlatformId": "priya@example.com",
+    "shopifyCustomerId": null,
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi there! Do you ship to Canada? I'd love to buy the wool throw blanket but want to make sure it can reach me first." }
+    ],
+    "recentOrders": []
+  },
+  "instruction": "Reply to the customer about their shipping question.",
+  "expectedPlan": {
+    "mustCallTools": ["ask_operator"],
+    "mustClassifyAs": "needs_merchant_input",
+    "mustNotCallTools": [
+      "send_reply",
+      "escalate_to_human",
+      "create_refund",
+      "cancel_order"
+    ]
+  }
+}
