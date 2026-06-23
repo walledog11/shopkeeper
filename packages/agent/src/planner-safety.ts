@@ -461,7 +461,7 @@ export function applyPolicyGapAskOperatorGuard(input: {
   readResultsMap: ReadonlyMap<string, string>;
   warnings: string[];
 }): RawToolCall[] {
-  let rawToolCalls = stripCircularChannelDeflectionReplies(input.rawToolCalls, input.warnings);
+  const rawToolCalls = stripCircularChannelDeflectionReplies(input.rawToolCalls, input.warnings);
   const hasAskOperator = rawToolCalls.some((toolCall) => toolCall.name === "ask_operator");
   const hasEscalate = rawToolCalls.some((toolCall) => toolCall.name === "escalate_to_human");
   const hasSendReply = rawToolCalls.some((toolCall) => toolCall.name === "send_reply");
