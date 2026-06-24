@@ -119,6 +119,8 @@ what ships.
       (tier defaults 0/15/20/30/50; Trust level → Advanced overrides). Prompt
       steers it ahead of refunds. LLM eval gate run 2026-06-23: steer does NOT
       steal refunds; `issue-discount-goodwill-over-refund` advisory fixture 2/3.
+      That gate run also surfaced and fixed an unrelated `ask_operator` over-fire
+      regression — see Loose Ends.
     - [ ] Store credit + gift card — deferred; need a shared goodwill spend cap
       (likely folded into `dailyRefundCap`) before they're safe to add.
   - [ ] Fulfillment — no "mark fulfilled" / create shipment / reship-replacement
@@ -162,5 +164,13 @@ near-term pointers only here.
   `customer-memory-stale-refresh-daily` and obliterates the `customer-memory` /
   `customer-memory-refresh` queues. Local dev Redis drained 2026-06-10;
   production still pending.
-- [ ] **Confirm `core-agent-flow.spec.ts` E2E passes** after the customer-memory
-  removal (last unverified item from that work).
+- [ ] **Watch the policy-gap `ask_operator` guard for residual over-fire.**
+  `applyPolicyGapAskOperatorGuard` (added `adc503a`) deterministically strips
+  `send_reply` and forces `ask_operator` when `hasMerchantPolicyGapIntent`
+  (`intent.ts`) matches. The 2026-06-23 order-reference bail fixed the
+  `address-change-missing-fields` misfire (verified 3/3 + regression test), but a
+  no-order-ref action request (e.g. "ship my order to <new address>") can still
+  over-fire — the broad shipping-coverage regex
+  `/(do you|can you|will you|are you)…(ship|deliver|send)/` is the underlying
+  weakness. Same forced-ask class as the 2026-06-18 over-fire that was removed
+  then partially reintroduced here.

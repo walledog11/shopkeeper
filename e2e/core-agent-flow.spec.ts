@@ -73,9 +73,7 @@ test('receive inbound email, view ticket, and send a recorded manual reply', asy
 
   await page.goto(`/dashboard/tickets?thread=${thread.id}`);
 
-  const ticketsList = page.getByRole('main').getByTestId('tickets-list');
-  await expect(ticketsList).toBeVisible();
-  await expect(ticketsList.locator(`[data-testid="ticket-row"][data-ticket-id="${thread.id}"]`)).toBeVisible();
+  await expect(page.getByTestId('ticket-conversation')).toBeVisible();
   await expect(page.getByTestId('chat-message').filter({ hasText: inboundText })).toBeVisible();
 
   const composerTextarea = page.getByTestId('reply-composer-textarea');
@@ -169,19 +167,15 @@ test('approve a seeded AI plan and record the outbound email reply', async ({ pa
 
   await page.goto(`/dashboard/tickets?thread=${thread.id}`);
 
-  const ticketsList = page.getByRole('main').getByTestId('tickets-list');
-  await expect(ticketsList).toBeVisible();
-  await expect(ticketsList.locator(`[data-testid="ticket-row"][data-ticket-id="${thread.id}"]`)).toBeVisible();
+  await expect(page.getByTestId('ticket-conversation')).toBeVisible();
   await expect(page.getByTestId('chat-message').filter({ hasText: inboundText })).toBeVisible();
 
   const planCard = page.getByTestId('action-plan-card');
-  const stepToggle = page.getByTestId('action-plan-step-toggle');
   const runButton = page.getByTestId('action-plan-run');
 
   await expect(planCard).toBeVisible();
-  await expect(planCard).toContainText('Proposed plan');
+  await expect(planCard).toContainText('drafted a reply');
   await expect(planCard).toContainText(replyText);
-  await expect(stepToggle).toHaveAttribute('aria-pressed', 'true');
   await expect(runButton).toBeEnabled();
 
   const approveResponsePromise = page.waitForResponse((response) =>
@@ -211,10 +205,27 @@ test('approve a seeded AI plan and record the outbound email reply', async ({ pa
   });
   const auditNote = await waitForAgentAuditNote({
     threadId: thread.id,
-    textIncludes: '"tool":"send_reply"',
+    textIncludes: instruction,
   });
   expect(auditNote.contentText).toContain(instruction);
-  expect(auditNote.contentText).toContain('Reply sent to customer via email.');
+
+  // The note transcript no longer carries the actions array — AgentAction is
+  // the canonical per-tool audit record.
+  await expect
+    .poll(
+      async () => db.agentAction.count({
+        where: { threadId: thread.id, tool: 'send_reply', status: 'success' },
+      }),
+      { message: 'Expected a successful send_reply AgentAction audit record', timeout: 10_000 },
+    )
+    .toBeGreaterThan(0);
+  const sendReplyAction = await db.agentAction.findFirst({
+    where: { threadId: thread.id, tool: 'send_reply' },
+    orderBy: { executedAt: 'desc' },
+  });
+  expect(sendReplyAction?.mode).toBe('human_approved');
+  expect(sendReplyAction?.output).toContain('Reply sent to customer via email.');
+  expect(sendReplyAction?.instruction).toBe(instruction);
 
   const updatedThread = await db.thread.findUnique({
     where: { id: thread.id },

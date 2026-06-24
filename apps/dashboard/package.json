@@ -6,7 +6,7 @@
     "dev": "NEXT_DIST_DIR=.next-dev node ../../scripts/with-dev-env.mjs next dev -p 3000",
     "dev:e2e": "NEXT_DIST_DIR=.next-e2e next dev -p 3100",
     "build:e2e": "node ../../scripts/dashboard-e2e-build.mjs",
-    "start:e2e": "NEXT_DIST_DIR=.next-e2e next start -p 3100",
+    "start:e2e": "E2E_SERVER=true NEXT_DIST_DIR=.next-e2e next start -p 3100",
     "serve:e2e": "node ../../scripts/test-bootstrap.mjs && npm run build:e2e && npm run start:e2e",
     "build": "next build",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
