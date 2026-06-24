@@ -573,7 +573,8 @@ function ReviewStackDeck({
       labels={{ previous: "Previous review item", next: "Next review item" }}
       controls="count"
       testId="review-stack-deck"
-      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-sm box-border"
+      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
+      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
       renderCard={(entry, context) => {
         if (context.total === 1) {
           return (

@@ -36,6 +36,7 @@ interface StackDeckProps<T> {
   labels: StackDeckLabels
   testId?: string
   peekShellClassName?: string
+  peekCardClassName?: string
   renderBackShell?: (context: StackDeckRenderContext) => ReactNode
   singleItemClassName?: string
   stackSingleItem?: boolean
@@ -50,6 +51,7 @@ interface StackDeckState {
 }
 
 const DEFAULT_PEEK_SHELL_CLASS_NAME = "h-full w-full rounded-2xl border border-border bg-card shadow-sm box-border"
+const DEFAULT_PEEK_CARD_CLASS_NAME = "pointer-events-none box-border overflow-hidden"
 
 function resolveDraggable<T>(
   isDraggable: StackDeckProps<T>["isDraggable"],
@@ -73,6 +75,7 @@ export function StackDeck<T>({
   labels,
   testId,
   peekShellClassName = DEFAULT_PEEK_SHELL_CLASS_NAME,
+  peekCardClassName = DEFAULT_PEEK_CARD_CLASS_NAME,
   renderBackShell,
   singleItemClassName,
   stackSingleItem = false,
@@ -277,7 +280,7 @@ export function StackDeck<T>({
                       transformOrigin: peek.origin,
                     }}
                   >
-                    <div className="pointer-events-none box-border overflow-hidden" style={measuredHeightStyle}>
+                    <div className={peekCardClassName} style={measuredHeightStyle}>
                       {renderPeek(peekItem, renderContext(true))}
                     </div>
                   </m.div>

@@ -415,7 +415,8 @@ function OrderStackDeck({
       labels={{ previous: "Previous order", next: "Next order" }}
       controls="count"
       testId="orders-stack-deck"
-      peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-sm box-border"
+      peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
+      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
       renderCard={(order, context) => {
         if (context.total === 1) {
           return <OrderCompactCard order={order} onOpen={() => onOpenOrder(order)} />

@@ -45,7 +45,8 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         isDraggable={(item) => item.kind !== "needs_merchant_input"}
         labels={{ previous: "Previous card", next: "Next card" }}
         controls="dots"
-        peekShellClassName="h-full w-full rounded-3xl border border-border bg-card shadow-sm pointer-events-none box-border"
+        peekShellClassName="h-full w-full rounded-3xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] pointer-events-none box-border"
+        peekCardClassName="pointer-events-none box-border overflow-hidden rounded-3xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
         onCurrentChange={(_, id) => setCurrentId(id)}
         renderCard={(item, context) => (
           <NeedsYouCard
