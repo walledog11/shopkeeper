@@ -38,7 +38,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
 
 ## Channels
-Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), Shopify (OAuth + webhooks). TikTok: stubs only.
+Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, via Photon Spectrum line + per-member handle binding), Shopify (OAuth + webhooks). TikTok: stubs only.
 
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 

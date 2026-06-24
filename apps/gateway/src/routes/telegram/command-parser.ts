@@ -18,6 +18,17 @@ export type TelegramCommand =
   | { type: 'order-lookup'; orderNumber: string }
   | { type: 'free-form'; instruction: string };
 
+const DIGEST_COMMAND_TYPES = new Set(['digest-review', 'digest-open', 'digest-spam', 'digest-reply']);
+const PENDING_PLAN_COMMAND_TYPES = new Set(['plan-run', 'plan-dismiss', 'plan-skip']);
+
+export function isDigestCommand(command: { type: string }): command is DigestCommand {
+  return DIGEST_COMMAND_TYPES.has(command.type);
+}
+
+export function isPendingPlanCommand(command: { type: string }): command is PendingPlanCommand {
+  return PENDING_PLAN_COMMAND_TYPES.has(command.type);
+}
+
 function parseIndex(value: string): number | null {
   const index = Number(value);
   return Number.isSafeInteger(index) ? index : null;

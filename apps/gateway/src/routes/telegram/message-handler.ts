@@ -4,36 +4,18 @@ import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
 import { executeFreeFormInstruction, handleOrderLookup } from './agent-execution.js';
 import {
+  isDigestCommand,
+  isPendingPlanCommand,
   parseTelegramCommand,
-  type DigestCommand,
-  type PendingPlanCommand,
 } from './command-parser.js';
 import { handleDigestCommand } from './digest-commands.js';
 import { HELP_TEXT } from './format.js';
 import { handlePendingPlanCommand } from './pending-plan-commands.js';
 import { handlePendingQuestionAnswer } from './pending-question-commands.js';
 import { handleStartBinding } from './start-binding.js';
+import { withOperatorPresence } from './presence.js';
 import type { TelegramMessageContext } from './types.js';
-
-const DIGEST_COMMAND_TYPES = new Set([
-  'digest-review',
-  'digest-open',
-  'digest-spam',
-  'digest-reply',
-]);
-const PENDING_PLAN_COMMAND_TYPES = new Set([
-  'plan-run',
-  'plan-dismiss',
-  'plan-skip',
-]);
-
-function isDigestCommand(command: { type: string }): command is DigestCommand {
-  return DIGEST_COMMAND_TYPES.has(command.type);
-}
-
-function isPendingPlanCommand(command: { type: string }): command is PendingPlanCommand {
-  return PENDING_PLAN_COMMAND_TYPES.has(command.type);
-}
+import type { OperatorMessageContext } from '../operator-message.js';
 
 export async function handleTelegramMessage(
   message: TelegramMessageContext & { body: string },
@@ -61,6 +43,15 @@ export async function handleTelegramMessage(
   const { organizationId, clerkUserId } = member;
   const context = await getContext(organizationId, chatId);
 
+  const operatorMessage: OperatorMessageContext = {
+    chatId,
+    body,
+    reply,
+    senderRef: `telegram:${chatId}`,
+    presence: (progress, work) =>
+      withOperatorPresence({ chatId, messageId: message.messageId, reply, progress }, work),
+  };
+
   if (command.type === 'help') {
     await reply(HELP_TEXT);
     return;
@@ -77,13 +68,13 @@ export async function handleTelegramMessage(
     return;
   }
 
-  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, message)) {
+  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, operatorMessage)) {
     return;
   }
 
   if (
     isPendingPlanCommand(command)
-    && await handlePendingPlanCommand(organizationId, clerkUserId, message, command, context)
+    && await handlePendingPlanCommand(organizationId, clerkUserId, operatorMessage, command, context)
   ) {
     return;
   }
@@ -97,10 +88,10 @@ export async function handleTelegramMessage(
 
   if (
     command.type === 'free-form'
-    && await handlePendingQuestionAnswer(organizationId, message, context)
+    && await handlePendingQuestionAnswer(organizationId, operatorMessage, context)
   ) {
     return;
   }
 
-  await executeFreeFormInstruction(organizationId, clerkUserId, message, context);
+  await executeFreeFormInstruction(organizationId, clerkUserId, operatorMessage, context);
 }

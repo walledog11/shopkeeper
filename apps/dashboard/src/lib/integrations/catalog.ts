@@ -106,12 +106,12 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     name: "iMessage",
     logo: "/logos/sms.svg",
     logoSize: 30,
-    description: "Reply to customers who text your business on iMessage, with full customer memory and ticketing.",
+    description: "Text your store's agent from iMessage — order lookups, daily digests, and one-tap approvals.",
     connectType: 'imessage',
     channelKind: 'operator',
     permissions: [
-      "Receive iMessages sent to your business line",
-      "Reply within existing customer conversations",
+      "Send instructions and approvals from your iPhone",
+      "Receive order updates and ticket digests on iMessage",
     ],
   },
   {

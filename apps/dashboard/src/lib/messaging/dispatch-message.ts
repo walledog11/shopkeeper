@@ -5,7 +5,6 @@ import {
   dispatchEmailViaGatewayQueue,
   sendEmailSynchronously,
 } from "./email-dispatch"
-import { dispatchImessageViaGatewayQueue } from "./imessage-dispatch"
 import { dispatchInstagramDirect } from "./instagram-dispatch"
 import type {
   DispatchMessageOptions,
@@ -21,8 +20,8 @@ export type { DispatchMessageResult } from "./dispatch-message-types"
  * the message to DB and sets the thread status to open.
  * Returns { ok: true, message } on success, { ok: false, error } on failure.
  *
- * Email and iMessage async paths intentionally hand provider delivery to the
- * gateway queue while preserving this dashboard-facing API.
+ * The email async path intentionally hands provider delivery to the gateway
+ * queue while preserving this dashboard-facing API.
  */
 export async function dispatchMessage(
   thread: DispatchThread,
@@ -36,10 +35,6 @@ export async function dispatchMessage(
 
   if (isEmailChannel && isOutboundEmailAsyncEnabled()) {
     return dispatchEmailViaGatewayQueue(thread, org, text, source)
-  }
-
-  if (thread.channelType === CHANNEL_TYPE.IMESSAGE) {
-    return dispatchImessageViaGatewayQueue(thread, org, text, source)
   }
 
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM

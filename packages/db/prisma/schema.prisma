@@ -53,15 +53,15 @@ enum ThreadFilterFeedback {
 // One Organization = one Shopify business using the app.
 // clerkOrgId maps to the organization ID from Clerk.com (e.g. org_xxxx).
 model Organization {
-  id         String   @id @default(uuid()) @db.Uuid
-  clerkOrgId String   @unique @map("clerk_org_id")
-  name       String   @db.VarChar(255)
-  settings   Json?    @default("{}") @map("settings") @db.JsonB
+  id            String   @id @default(uuid()) @db.Uuid
+  clerkOrgId    String   @unique @map("clerk_org_id")
+  name          String   @db.VarChar(255)
+  settings      Json?    @default("{}") @map("settings") @db.JsonB
   // Pending brand-voice update synthesized from operator edits, awaiting approval.
   // Shape: { brief, rationale, basedOnCount, createdAt }. Cleared on approve/dismiss.
-  voiceProposal Json?  @map("voice_proposal") @db.JsonB
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  voiceProposal Json?    @map("voice_proposal") @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   stripeCustomerId     String?   @unique @map("stripe_customer_id") @db.VarChar(255)
   stripeSubscriptionId String?   @unique @map("stripe_subscription_id") @db.VarChar(255)
@@ -158,7 +158,8 @@ model Integration {
   metadata          Json?       @default("{}") @db.JsonB
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  imessageBindings OrgMemberImessageBinding[]
 
   @@unique([organizationId, platform, externalAccountId])
   @@index([organizationId])
@@ -166,13 +167,13 @@ model Integration {
 }
 
 model Customer {
-  id              String    @id @default(uuid()) @db.Uuid
-  organizationId  String    @map("organization_id") @db.Uuid
-  name            String?   @db.VarChar(255)
-  platformId      String    @map("platform_id") @db.VarChar(255)
-  profilePicUrl   String?   @map("profile_pic_url") @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String?   @db.VarChar(255)
+  platformId     String    @map("platform_id") @db.VarChar(255)
+  profilePicUrl  String?   @map("profile_pic_url") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   threads      Thread[]
@@ -209,11 +210,11 @@ model Thread {
   filterDecidedAt       DateTime?            @map("filter_decided_at") @db.Timestamptz
   filterFeedback        ThreadFilterFeedback @default(none) @map("filter_feedback")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  messages     Message[]
-  kbCitations  KbCitation[]
-  agentActions AgentAction[]
+  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer        Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  kbCitations     KbCitation[]
+  agentActions    AgentAction[]
   shadowDecisions AutonomyShadowDecision[]
 
   @@index([organizationId, status])
@@ -287,8 +288,9 @@ model OrgMember {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  telegramChats   OrgMemberTelegramChat[]
+  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  telegramChats    OrgMemberTelegramChat[]
+  imessageBindings OrgMemberImessageBinding[]
 
   @@unique([organizationId, clerkUserId])
   @@index([organizationId])
@@ -312,6 +314,28 @@ model OrgMemberTelegramChat {
   @@unique([chatId])
   @@index([orgMemberId])
   @@map("org_member_telegram_chats")
+}
+
+// One row per iMessage sender handle bound to an org member. iMessage is an
+// operator channel (mirrors Telegram): the merchant texts the org's Spectrum
+// line and the agent replies. A given (integration, sender) is bound to one
+// member at a time; senderId is the merchant's handle, spaceId is the Spectrum
+// space used to reply.
+model OrgMemberImessageBinding {
+  id            String   @id @default(uuid()) @db.Uuid
+  orgMemberId   String   @map("org_member_id") @db.Uuid
+  integrationId String   @map("integration_id") @db.Uuid
+  senderId      String   @map("sender_id") @db.VarChar(255)
+  spaceId       String   @map("space_id") @db.VarChar(255)
+  displayName   String?  @map("display_name") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  orgMember   OrgMember   @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
+  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, senderId])
+  @@index([orgMemberId])
+  @@map("org_member_imessage_bindings")
 }
 
 // Single-use deep-link tokens for binding operator channels (Telegram, iMessage).

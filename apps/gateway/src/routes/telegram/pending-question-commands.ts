@@ -12,8 +12,7 @@ import type { OrgSettings } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
 import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
 import { updateContext, type OperatorContext } from '../../operator-context.js';
-import { withOperatorPresence } from './presence.js';
-import type { TelegramMessageContext } from './types.js';
+import type { OperatorMessageContext } from '../operator-message.js';
 
 // The operator answered an `ask_operator` question over Telegram. The reply is the
 // answer: record it, persist it to the knowledge base (always — a Telegram answer is
@@ -22,11 +21,11 @@ import type { TelegramMessageContext } from './types.js';
 // re-enters planning through the KB door. Returns false when no question is pending.
 export async function handlePendingQuestionAnswer(
   organizationId: string,
-  message: TelegramMessageContext & { body: string },
+  message: OperatorMessageContext,
   context: OperatorContext,
 ): Promise<boolean> {
   if (!context.pendingQuestion) return false;
-  const { chatId, messageId, body, reply } = message;
+  const { chatId, body, reply, presence } = message;
   const { threadId } = context.pendingQuestion;
   const answer = body.trim();
 
@@ -77,7 +76,7 @@ export async function handlePendingQuestionAnswer(
     if (thread.cachedPlan || thread.cachedPlanMessageId) {
       await clearThreadPlanCache({ orgId: organizationId, threadId });
     }
-    logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Telegram] Answer recorded, skipped re-plan');
+    logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Operator] Answer recorded, skipped re-plan');
     await reply('Got it — saved that for next time. This ticket was already handled.');
     return true;
   }
@@ -96,8 +95,8 @@ export async function handlePendingQuestionAnswer(
   });
 
   try {
-    await withOperatorPresence(
-      { chatId, messageId, reply, progress: { kind: 'free-form' } },
+    await presence(
+      { kind: 'free-form' },
       async () => {
         const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
           pinKbArticles: [{ title: saved.title, body: saved.body }],
@@ -118,12 +117,12 @@ export async function handlePendingQuestionAnswer(
       },
     );
   } catch (err) {
-    logger.error({ err: (err as Error).message, organizationId, threadId }, '[Telegram] Answer re-plan failed');
+    logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
     await reply("Saved your answer, but I couldn't draft the reply just now — you can review the ticket on your dashboard.");
     return true;
   }
 
-  logger.info({ organizationId, threadId }, '[Telegram] Answer ingested and re-planned');
+  logger.info({ organizationId, threadId }, '[Operator] Answer ingested and re-planned');
   await reply(
     customerName
       ? `Got it — I've drafted a reply for ${customerName}. Review and approve it from your dashboard.`

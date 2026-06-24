@@ -198,42 +198,6 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
   }
 }
 
-export async function handleImessageJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
-  const { organizationId, traceId } = job.data;
-  const senderId = job.data.senderId?.trim();
-  const messageText = job.data.text?.trim();
-
-  if (!senderId) {
-    logger.warn({ organizationId, traceId }, '[Worker] iMessage job missing senderId — dropping');
-    return;
-  }
-
-  if (!messageText && (job.data.attachmentUrls ?? []).length === 0) {
-    logger.info({ organizationId, senderId, traceId }, '[Worker] iMessage job has no content — dropping');
-    return;
-  }
-
-  try {
-    await processInboundMessage(
-      organizationId,
-      senderId,
-      CHANNEL.IMESSAGE,
-      messageText || '[Attachment]',
-      aiSummaryQueue,
-      {
-        externalMessageId: job.data.externalMessageId,
-        externalSpaceId: job.data.externalSpaceId,
-        attachments: job.data.attachmentUrls ?? [],
-        traceId,
-      },
-    );
-    logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved iMessage');
-  } catch (error) {
-    logger.error({ err: error, traceId }, '[Worker] DB operation failed for iMessage');
-    throw error;
-  }
-}
-
 export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
   const { organizationId, traceId } = job.data;
   const { topic, rawPayload } = job.data as { topic: string; rawPayload: ShopifyOrderPayload };

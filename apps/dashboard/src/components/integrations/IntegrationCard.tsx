@@ -9,7 +9,7 @@ import type { Integration } from "@/types"
 import { ConnectedAccountRow } from "./ConnectedAccountRow"
 import { IntegrationActionsSection, IntegrationPermissionsSection } from "./IntegrationConfigureSections"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
-import { ImessageConnectBody, ImessageWebhookPanel, InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
+import { ImessageBindingSection, ImessageConnectBody, ImessageWebhookPanel, InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
@@ -228,7 +228,10 @@ export default function IntegrationCard({ config, connected, onConnect, onImessa
               integration={connected[0]}
             />
             {config.connectType === "imessage" && (
-              <ImessageWebhookPanel webhookUrl={connected[0]?.webhookUrl ?? null} />
+              <>
+                <ImessageWebhookPanel webhookUrl={connected[0]?.webhookUrl ?? null} />
+                <ImessageBindingSection />
+              </>
             )}
             <IntegrationPermissionsSection
               config={config}

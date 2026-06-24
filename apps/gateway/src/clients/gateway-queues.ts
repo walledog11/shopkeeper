@@ -6,7 +6,6 @@ const DEFAULT_QUEUE_OPTIONS: Partial<Record<string, { defaultJobOptions: typeof 
   [QUEUE.INBOUND]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.ORDER_REVIEW]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.OUTBOUND_EMAIL]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
-  [QUEUE.OUTBOUND_IMESSAGE]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
 };
 
 const QUEUE_ALIASES: Record<string, string> = {

@@ -27,7 +27,7 @@ const tiles: { name: string; left: string; top: string; logo?: string; mark?: Re
   { name: "Instagram", left: "16%", top: "24%", logo: "/logos/instagram-logo.png" },
   { name: "Gmail", left: "28%", top: "12%", logo: "/logos/gmail.png" },
   { name: "Email", left: "40%", top: "22%", logo: "/logos/email.svg" },
-  { name: "SMS", left: "51%", top: "40%", logo: "/logos/sms.svg" },
+  { name: "iMessage", left: "51%", top: "40%", logo: "/logos/sms.svg" },
   { name: "Telegram", left: "63%", top: "58%", mark: <TelegramMark /> },
   { name: "WhatsApp", left: "75%", top: "70%", mark: <WhatsAppMark /> },
   { name: "TikTok", left: "88%", top: "48%", logo: "/logos/tiktok-logo.png" },
@@ -87,7 +87,7 @@ export function Integrations() {
           <div className="mx-auto mt-4 max-w-md text-left">
             <p className="mb-1.5 text-sm text-stone-400 [font-family:var(--m-mono)]">(1)</p>
             <p className="text-[16px] leading-relaxed text-stone-600">
-              Shopify, Instagram, Gmail, email, and SMS today — WhatsApp and TikTok on the way. One
+              Shopify, Instagram, Gmail, email, and iMessage today — WhatsApp and TikTok on the way. One
               employee across all of them, with a personality that keeps things as real as your best hire.
             </p>
           </div>

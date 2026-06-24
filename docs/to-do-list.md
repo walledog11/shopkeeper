@@ -91,13 +91,32 @@ what ships.
   `Integrations.tsx`, `apps/dashboard/src/app/dashboard/_components/help/content/`).
   Either wire an inbound adapter or remove the promise.
 
-- [ ] **Take iMessage to GA.** Partially wired — outbound handler
-  (`apps/gateway/src/message-handlers/outbound-imessage.ts`), dispatch
-  (`apps/dashboard/src/lib/messaging/imessage-dispatch.ts`), integration route
-  (`apps/dashboard/src/app/api/integrations/imessage/route.ts`), and Photon
-  webhook (`apps/dashboard/src/app/api/integrations/_lib/photon-webhook.ts`)
-  exist and a live round-trip was verified, but it's not GA-surfaced. Finish the
-  onboarding/connect surface and promote it.
+- [x] **Re-wire iMessage to an operator channel (it was built as customer-support).**
+  Intent: iMessage is an *operator* channel exactly like Telegram — the merchant
+  texts the agent and back; **no customer ever texts the line.** Verified divergence:
+  it was actually built as a *customer-support* channel — inbound `handleImessageJob`
+  → `processInboundMessage` creates `customer` tickets (same path as IG/email),
+  `isOperatorChannel` excludes `imessage`, and there is no operator identity binding
+  (`OrgMemberTelegramChat` has no iMessage equivalent). The transport/Photon pipeline
+  and Spectrum line provisioning are sound and reusable; the routing was built down the
+  wrong path. (The `OrgMemberBindToken` schema comment already names iMessage as an
+  operator channel, confirming operator was always the intent.) Concrete re-wire plan:
+  [imessage-operator-rewire-plan.md](imessage-operator-rewire-plan.md) — new
+  `OrgMemberImessageBinding`, route inbound to the operator agent (reuse
+  `executeFreeFormInstruction` + the `sms_agent` thread + `OperatorContext`), reframe
+  the dashboard/marketing surfaces, and revert last turn's customer-support promotion.
+  - **Done (2026-06-24):** §1 data model, §2 inbound routing, §3 binding, §4 dashboard
+    surfaces (bind-token route + tests, channel reclassification, catalog/connect-body
+    reframe, handle-binding UI), §5 outbound (async worker **retired** — operator
+    replies send synchronously), §6 docs, §7 cleanups (legacy inbound + outbound
+    customer paths deleted across gateway + dashboard; `stripMarkdown` extracted to its
+    own module). Both apps typecheck/lint clean; affected tests green. Only open item:
+    leave-vs-purge any pre-GA `imessage` customer threads (a data call, deferred).
+  - [x] **Reframe the customer-support wording to operator** (done 2026-06-24):
+    the `connect-imessage` help article and the `Channels.tsx` card + `Pricing.tsx`
+    inbox bullet are now operator-framed; CLAUDE.md Channels lists iMessage under
+    operator. `Features/Integrations/NavLinks` mentions were already operator-consistent.
+  - Binding decided: one-time token texted to the line (reuses `OrgMemberBindToken`).
 
 - [ ] **Build the WhatsApp adapter.** Not built. Track 5 in the roadmap — a small
   adapter on the existing Meta app (same vendor as IG DM). Slots into the same

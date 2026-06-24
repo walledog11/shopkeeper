@@ -75,6 +75,40 @@ export const integrations: Category = {
       ],
     },
     {
+      id: "connect-imessage",
+      title: "Connecting iMessage",
+      body: [
+        {
+          text: "Connect a business iMessage line so you can run your store by texting the agent from your iPhone — order lookups, daily digests, and one-tap approvals. iMessage is an operator channel like Telegram; customers never text this line. It runs through a Photon Spectrum project, which provides the line and the credentials you'll paste in.",
+        },
+        {
+          heading: "What you'll need",
+          steps: [
+            "A Photon Spectrum project with a provisioned iMessage line.",
+            "Your Spectrum project ID, project secret, and webhook secret (found in your Spectrum project settings).",
+          ],
+        },
+        {
+          heading: "How to connect",
+          steps: [
+            "Go to the Integrations page.",
+            "Click Connect on the iMessage card.",
+            "Paste your Spectrum project ID, project secret, and webhook secret.",
+            "Click Connect — a webhook URL will appear.",
+            "Copy that webhook URL into your Spectrum project's webhook settings so inbound iMessages reach Shopkeeper.",
+            "On the iMessage card, click Link your iPhone to get a connect code, then text that code from your iPhone to the line. That links your handle so the agent recognizes you.",
+          ],
+        },
+        {
+          tips: [
+            "Only handles you link can text the line — customers never reach this number. Texting a fresh connect code re-links it to whoever minted it.",
+            "A dedicated Business line is recommended so your number stays consistent.",
+            "To change credentials later, disconnect and reconnect the iMessage card — there is no OAuth reconnect for this channel.",
+          ],
+        },
+      ],
+    },
+    {
       id: "channel-disconnected",
       title: "What to do if a channel disconnects",
       body: [

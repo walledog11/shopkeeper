@@ -31,7 +31,7 @@ const productItems: NavItem[] = [
   {
     href: "#channels",
     title: "Channels",
-    subtitle: "Instagram, email & SMS",
+    subtitle: "Instagram, email & iMessage",
     icon: Heart,
   },
   {

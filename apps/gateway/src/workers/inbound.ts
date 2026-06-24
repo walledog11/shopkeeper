@@ -1,7 +1,7 @@
 import { Worker, type Queue } from 'bullmq';
 import { CHANNEL, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { handleEmailJob, handleIgDmJob, handleImessageJob, handleShopifyJob } from '../message-handlers/channels.js';
+import { handleEmailJob, handleIgDmJob, handleShopifyJob } from '../message-handlers/channels.js';
 import type { AiSummaryJobData, InboundJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
@@ -25,8 +25,6 @@ export function createInboundWorker(options: InboundWorkerRegistrationOptions): 
       await handleIgDmJob(job, options.aiSummaryQueue);
     } else if (job.data.platform === CHANNEL.EMAIL) {
       await handleEmailJob(job, options.aiSummaryQueue);
-    } else if (job.data.platform === CHANNEL.IMESSAGE) {
-      await handleImessageJob(job, options.aiSummaryQueue);
     } else if (job.data.platform === CHANNEL.SHOPIFY) {
       await handleShopifyJob(job, options.aiSummaryQueue);
     } else {

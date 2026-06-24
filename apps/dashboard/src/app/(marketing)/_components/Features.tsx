@@ -26,7 +26,7 @@ const FEATURES: Feature[] = [
     ),
     body: "Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and replies the way you would. When it isn't sure, it doesn't guess — it hands the thread to you.",
     bullets: [
-      "Instagram, email & SMS in one brain",
+      "Instagram, email & iMessage in one brain",
       "Learns your tone from the replies you've already sent",
       "Escalates to you instead of bluffing",
     ],

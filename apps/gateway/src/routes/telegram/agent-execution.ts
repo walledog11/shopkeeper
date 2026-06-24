@@ -4,14 +4,13 @@ import logger from '../../logger.js';
 import { extractOrderNumber, updateContext, type OperatorContext } from '../../operator-context.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import { relativeAge } from './format.js';
-import { withOperatorPresence } from './presence.js';
-import type { TelegramMessageContext, TelegramReply } from './types.js';
+import type { OperatorMessageContext, OperatorReply } from '../operator-message.js';
 
 export async function handleOrderLookup(
   organizationId: string,
   chatId: string,
   orderNumber: string,
-  reply: TelegramReply,
+  reply: OperatorReply,
 ): Promise<boolean> {
   const thread = await db.thread.findFirst({
     where: {
@@ -60,38 +59,33 @@ export async function handleOrderLookup(
 export async function executeFreeFormInstruction(
   organizationId: string,
   clerkUserId: string,
-  message: TelegramMessageContext & { body: string },
+  message: OperatorMessageContext,
   context: OperatorContext,
 ): Promise<void> {
-  const { chatId, messageId, body, reply } = message;
+  const { chatId, body, reply, presence, senderRef } = message;
   const orderNumber = extractOrderNumber(body) || context.lastOrderNumber;
-  logger.info({ chatId, organizationId, orderNumber: orderNumber || null }, '[Telegram] Free-form agent instruction');
+  logger.info({ chatId, organizationId, orderNumber: orderNumber || null }, '[Operator] Free-form agent instruction');
 
   let summary: string;
   let threadId: string;
   try {
-    ({ summary, threadId } = await withOperatorPresence(
+    ({ summary, threadId } = await presence(
       {
-        chatId,
-        messageId,
-        reply,
-        progress: {
-          kind: 'free-form',
-          orderNumber,
-          instruction: body,
-        },
+        kind: 'free-form',
+        orderNumber,
+        instruction: body,
       },
       () => executeOperatorAgentTurn({
         orgId: organizationId,
         instruction: body,
         ...(orderNumber ? { orderNumber } : {}),
         ...(context.lastThreadId ? { threadId: context.lastThreadId } : {}),
-        senderPhone: `telegram:${chatId}`,
+        senderPhone: senderRef,
         clerkUserId,
       }),
     ));
   } catch (err) {
-    logger.error({ err }, '[Telegram] Operator agent turn failed (free-form)');
+    logger.error({ err }, '[Operator] Operator agent turn failed (free-form)');
     await reply('Something went wrong running the agent. Please try again.');
     return;
   }

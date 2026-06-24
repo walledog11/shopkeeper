@@ -36,6 +36,7 @@ vi.mock('ioredis', () => ({
     this.status = 'ready';
     this.incr = vi.fn().mockResolvedValue(1);
     this.expire = vi.fn().mockResolvedValue(1);
+    this.set = vi.fn().mockResolvedValue('OK');
   }),
 }));
 
@@ -236,11 +237,12 @@ describe('POST /webhooks/photon/:integrationId', () => {
     });
   }
 
-  it('passes the raw request to Spectrum and enqueues an iMessage job', async () => {
+  it('passes the raw request to Spectrum and dispatches to the operator agent', async () => {
     const integration = await createImessageIntegration();
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
     spectrumWebhookSpy.mockImplementationOnce(async (requestInput, handler) => {
       await handler(
-        { id: 'any;-;+15551234567', __platform: 'iMessage' },
+        { id: 'any;-;+15551234567', __platform: 'iMessage', send: sendSpy },
         {
           id: 'imsg_text_001',
           direction: 'inbound',
@@ -275,26 +277,21 @@ describe('POST /webhooks/photon/:integrationId', () => {
     expect(Buffer.from(webhookRequest.body).toString('utf8')).toBe(body);
     expect(webhookRequest.headers['x-spectrum-signature']).toBe('v0=test');
 
-    expect(queueAddSpy).toHaveBeenCalledOnce();
-    const [jobName, jobData] = queueAddSpy.mock.calls[0];
-    expect(jobName).toBe('process-imessage');
-    expect(jobData).toMatchObject({
-      platform: 'imessage',
-      organizationId: org.id,
-      senderId: '+15551234567',
-      text: 'Hello from iMessage',
-      externalMessageId: 'imsg_text_001',
-      externalSpaceId: 'any;-;+15551234567',
-    });
-    expect(jobData.traceId).toEqual(expect.any(String));
+    // iMessage is an operator channel: no customer ticket is enqueued. The
+    // sender is unbound, so the operator handler replies with connect
+    // instructions over the same Spectrum space.
+    expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledOnce();
+    expect(sendSpy.mock.calls[0][0]).toContain('Integrations → iMessage');
   });
 
-  it('uploads Spectrum attachment content before enqueueing the job', async () => {
+  it('uploads Spectrum attachment content and dispatches to the operator agent', async () => {
     const integration = await createImessageIntegration();
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
     uploadInboundAttachmentSpy.mockResolvedValueOnce('blob:attachments/org/receipt.png');
     spectrumWebhookSpy.mockImplementationOnce(async (_requestInput, handler) => {
       await handler(
-        { id: 'any;-;+15557654321', __platform: 'iMessage' },
+        { id: 'any;-;+15557654321', __platform: 'iMessage', send: sendSpy },
         {
           id: 'imsg_attachment_001',
           direction: 'inbound',
@@ -328,11 +325,8 @@ describe('POST /webhooks/photon/:integrationId', () => {
       'image/png',
       Buffer.from('fake-image').toString('base64'),
     );
-    const [, jobData] = queueAddSpy.mock.calls[0];
-    expect(jobData).toMatchObject({
-      text: 'Attachment: receipt.png',
-      attachmentUrls: ['blob:attachments/org/receipt.png'],
-    });
+    expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(sendSpy).toHaveBeenCalledOnce();
   });
 
   it('returns 404 when the integration id is unknown', async () => {

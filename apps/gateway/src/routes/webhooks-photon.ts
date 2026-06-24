@@ -2,12 +2,14 @@ import type { Request, Response, Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db, ChannelType } from '@shopkeeper/db';
 import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
-import { CHANNEL, JOB } from '../constants.js';
 import { getSpectrumAppForIntegration } from '../clients/spectrum.js';
 import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { uploadInboundAttachment } from '../storage/blob.js';
-import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
+import { stripMarkdown } from '../message-handlers/strip-markdown.js';
+import { getRateLimitRedis } from './webhooks-shared.js';
+import { handleImessageOperatorMessage } from './imessage/message-handler.js';
+import type { OperatorReply } from './operator-message.js';
 import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
@@ -136,12 +138,41 @@ async function normalizeMessageContent(
   return { text, attachmentUrls };
 }
 
-async function enqueueInboundImessageMessage(
-  organizationId: string,
+const IMESSAGE_DEDUPE_TTL_SECONDS = 300;
+
+// Spectrum webhooks deliver at-least-once, so claim each provider message id
+// before dispatching: an operator turn has real side effects (refunds, replies)
+// and must never run twice on a redelivery or a Photon timeout-retry. Returns
+// true on first delivery, false on a duplicate. Fails open on a Redis error —
+// dropping a merchant instruction is worse than a rare duplicate.
+async function claimImessageMessage(integrationId: string, messageId: string): Promise<boolean> {
+  try {
+    const claimed = await getRateLimitRedis().set(
+      `imsg:op:${integrationId}:${messageId}`,
+      '1',
+      'EX',
+      IMESSAGE_DEDUPE_TTL_SECONDS,
+      'NX',
+    );
+    return claimed === 'OK';
+  } catch (err) {
+    logger.warn({ err, integrationId, messageId }, '[Webhook] iMessage dedupe check failed — processing anyway');
+    return true;
+  }
+}
+
+// iMessage is an operator channel: the merchant texts the org's dedicated Spectrum
+// line and the operator agent replies synchronously. No customer ever reaches this
+// path, so there is no ticket/customer persistence — dispatch straight to the
+// operator handler, mirroring the Telegram webhook.
+async function dispatchInboundImessageMessage(
+  integration: { id: string; organizationId: string },
   space: Space,
   message: Message,
   traceId: string,
 ): Promise<void> {
+  const { id: integrationId, organizationId } = integration;
+
   if (message.direction !== 'inbound') {
     logger.info(
       { organizationId, messageId: message.id, direction: message.direction, traceId },
@@ -162,9 +193,15 @@ async function enqueueInboundImessageMessage(
     return;
   }
 
+  const messageId = safeTrim(message.id);
+  if (messageId && !(await claimImessageMessage(integrationId, messageId))) {
+    logger.info({ organizationId, senderId, messageId, traceId }, '[Webhook] iMessage duplicate delivery skipped');
+    return;
+  }
+
   const { text, attachmentUrls } = await normalizeMessageContent(organizationId, message);
-  const messageText = safeTrim(text) ?? (attachmentUrls.length > 0 ? '[Attachment]' : null);
-  if (!messageText) {
+  const body = safeTrim(text) ?? (attachmentUrls.length > 0 ? '[Attachment]' : null);
+  if (!body) {
     logger.info(
       { organizationId, messageId: message.id, senderId, contentType: message.content.type, traceId },
       '[Webhook] Photon message has no persistable content',
@@ -172,20 +209,24 @@ async function enqueueInboundImessageMessage(
     return;
   }
 
-  await getMessageQueue().add(JOB.IMESSAGE, {
-    platform: CHANNEL.IMESSAGE,
+  const reply: OperatorReply = async (replyText) => {
+    await space.send(stripMarkdown(replyText));
+  };
+
+  // Sender carries no display name inbound (User = { id }); binding label stays null.
+  await handleImessageOperatorMessage({
+    integrationId,
     organizationId,
     senderId,
-    text: messageText,
-    externalMessageId: safeTrim(message.id),
-    externalSpaceId,
-    traceId,
-    ...(attachmentUrls.length > 0 && { attachmentUrls }),
+    spaceId: externalSpaceId,
+    body,
+    displayName: null,
+    reply,
   });
 
   logger.info(
     { organizationId, senderId, messageId: message.id, externalSpaceId, traceId },
-    '[Webhook] iMessage queued',
+    '[Webhook] iMessage operator handled',
   );
 }
 
@@ -241,9 +282,9 @@ export function registerPhotonWebhookRoutes(router: Router): void {
         async (space, message) => {
           const traceId = randomUUID();
           try {
-            await enqueueInboundImessageMessage(integration.organizationId, space, message, traceId);
+            await dispatchInboundImessageMessage(integration, space, message, traceId);
           } catch (error) {
-            logger.error({ err: error, integrationId, traceId }, '[Webhook] Failed to queue iMessage');
+            logger.error({ err: error, integrationId, traceId }, '[Webhook] iMessage operator dispatch failed');
           }
         },
       );

@@ -10,7 +10,7 @@ const tiers = [
     price: "$19",
     per: "/mo",
     desc: "For solo founders just getting their DMs under control.",
-    features: ["Unified inbox — IG, email, SMS", "AI drafts every reply", "Up to 500 conversations/mo"],
+    features: ["Unified inbox — IG & email", "AI drafts every reply", "Up to 500 conversations/mo"],
     cta: "Start free trial",
     href: "/signup",
     featured: false,

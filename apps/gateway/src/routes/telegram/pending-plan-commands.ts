@@ -9,8 +9,7 @@ import {
 } from '../../operator-context.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import type { PendingPlanCommand } from './command-parser.js';
-import { withOperatorPresence } from './presence.js';
-import type { TelegramMessageContext } from './types.js';
+import type { OperatorMessageContext } from '../operator-message.js';
 
 function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
   return toolCalls.map((toolCall) => {
@@ -26,11 +25,11 @@ function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
 export async function handlePendingPlanCommand(
   organizationId: string,
   clerkUserId: string,
-  message: TelegramMessageContext & { body: string },
+  message: OperatorMessageContext,
   command: PendingPlanCommand,
   context: OperatorContext,
 ): Promise<boolean> {
-  const { chatId, messageId, body, reply } = message;
+  const { chatId, body, reply, presence } = message;
   if (!context.pendingPlan) return false;
 
   const { threadId, instruction, rawToolCalls } = context.pendingPlan;
@@ -49,20 +48,15 @@ export async function handlePendingPlanCommand(
       : rawToolCalls;
   }
 
-  logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Telegram] Approving plan');
+  logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Operator] Approving plan');
 
   let summary: string;
   try {
-    ({ summary } = await withOperatorPresence(
+    ({ summary } = await presence(
       {
-        chatId,
-        messageId,
-        reply,
-        progress: {
-          kind: 'plan-run',
-          orderNumber: extractOrderNumber(instruction),
-          instruction,
-        },
+        kind: 'plan-run',
+        orderNumber: extractOrderNumber(instruction),
+        instruction,
       },
       () => executeOperatorAgentTurn({
         orgId: organizationId,
@@ -73,7 +67,7 @@ export async function handlePendingPlanCommand(
       }),
     ));
   } catch (err) {
-    logger.error({ err }, '[Telegram] Operator agent turn failed (plan approval)');
+    logger.error({ err }, '[Operator] Operator agent turn failed (plan approval)');
     await reply('Something went wrong running the plan. Please try again.');
     return true;
   }

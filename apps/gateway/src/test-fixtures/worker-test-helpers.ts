@@ -70,31 +70,6 @@ export function makeIgDmJob(
   };
 }
 
-export function makeImessageJob(
-  organizationId: string,
-  senderId = '+15551234567',
-  options: {
-    externalMessageId?: string | null;
-    externalSpaceId?: string | null;
-    text?: string;
-    attachmentUrls?: string[];
-  } = {},
-) {
-  return {
-    id: 'job-imessage-test',
-    data: {
-      platform: 'imessage',
-      organizationId,
-      senderId,
-      text: options.text ?? 'Hi from iMessage.',
-      externalMessageId: options.externalMessageId ?? `imsg_${Date.now()}`,
-      externalSpaceId: options.externalSpaceId ?? `any;-;${senderId}`,
-      traceId: 'trace-imessage-test',
-      ...(options.attachmentUrls && { attachmentUrls: options.attachmentUrls }),
-    },
-  };
-}
-
 export function makeShopifyJob(
   organizationId: string,
   topic: string,

@@ -5,9 +5,8 @@ import { createAiSummaryWorker } from './ai-summary.js';
 import { createInboundWorker } from './inbound.js';
 import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
-import { createOutboundImessageWorker } from './outbound-imessage.js';
 import type { GatewayWorkerResources, SharedGatewayWorkerOptions } from './resources.js';
-import type { OrderReviewJobData, OutboundEmailJobData, OutboundImessageJobData } from '../types.js';
+import type { OrderReviewJobData, OutboundEmailJobData } from '../types.js';
 
 export interface CoreWorkerResources extends GatewayWorkerResources {
   messageWorker: Worker<InboundJobData>;
@@ -15,7 +14,6 @@ export interface CoreWorkerResources extends GatewayWorkerResources {
   aiSummaryQueue: Queue<AiSummaryJobData>;
   orderReviewWorker: Worker<OrderReviewJobData>;
   outboundEmailWorker: Worker<OutboundEmailJobData>;
-  outboundImessageWorker: Worker<OutboundImessageJobData>;
 }
 
 export function createCoreWorkerResources(
@@ -30,7 +28,6 @@ export function createCoreWorkerResources(
   const aiSummaryWorker = createAiSummaryWorker(workerOptions);
   const orderReviewWorker = createOrderReviewWorker({ workerOptions });
   const outboundEmailWorker = createOutboundEmailWorker({ workerOptions });
-  const outboundImessageWorker = createOutboundImessageWorker({ workerOptions });
 
   return {
     messageWorker,
@@ -38,8 +35,7 @@ export function createCoreWorkerResources(
     aiSummaryQueue,
     orderReviewWorker,
     outboundEmailWorker,
-    outboundImessageWorker,
-    workers: [messageWorker, aiSummaryWorker, orderReviewWorker, outboundEmailWorker, outboundImessageWorker],
+    workers: [messageWorker, aiSummaryWorker, orderReviewWorker, outboundEmailWorker],
     queues: [aiSummaryQueue],
     heartbeats: [],
     shutdownResources: [],

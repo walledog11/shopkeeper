@@ -11,10 +11,10 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { handlePendingQuestionAnswer } from './pending-question-commands.js';
 import { getContext, updateContext } from '../../operator-context.js';
-import type { TelegramReply } from './types.js';
+import type { OperatorPresence, OperatorReply } from '../operator-message.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-const emptyMetadata = { telegramUserId: null, displayName: null, username: null };
+const passthroughPresence: OperatorPresence = (_progress, work) => work();
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -27,12 +27,12 @@ afterEach(async () => {
 
 describe('handlePendingQuestionAnswer', () => {
   it('returns false and does nothing when no question is pending', async () => {
-    const reply = vi.fn<TelegramReply>();
+    const reply = vi.fn<OperatorReply>();
     const ctx = await getContext(org.id, 'chat_none');
 
     const handled = await handlePendingQuestionAnswer(
       org.id,
-      { chatId: 'chat_none', metadata: emptyMetadata, messageId: 1, body: 'random text', reply },
+      { chatId: 'chat_none', body: 'random text', reply, senderRef: 'telegram:chat_none', presence: passthroughPresence },
       ctx,
     );
 
@@ -76,10 +76,10 @@ describe('handlePendingQuestionAnswer', () => {
     });
     const ctx = await getContext(org.id, 'chat_1');
 
-    const reply = vi.fn<TelegramReply>();
+    const reply = vi.fn<OperatorReply>();
     const handled = await handlePendingQuestionAnswer(
       org.id,
-      { chatId: 'chat_1', metadata: emptyMetadata, messageId: 1, body: 'Yes, $15 flat to Canada.', reply },
+      { chatId: 'chat_1', body: 'Yes, $15 flat to Canada.', reply, senderRef: 'telegram:chat_1', presence: passthroughPresence },
       ctx,
     );
 

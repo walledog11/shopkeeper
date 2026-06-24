@@ -27,6 +27,17 @@ const surfaces = [
     ),
   },
   {
+    name: "iMessage",
+    status: "Live now",
+    live: true,
+    body: "Text your store's employee straight from iMessage — order lookups, daily digests, and one-tap approvals, right in the app you already live in.",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
+        <path d="M12 3C6.5 3 2 6.6 2 11c0 2.45 1.38 4.62 3.5 6.02-.18 1.2-.76 2.32-1.6 3.2-.22.23-.06.62.26.58 1.74-.22 3.3-.86 4.54-1.86.42.04.85.06 1.3.06 5.5 0 10-3.6 10-8s-4.5-8-10-8z" />
+      </svg>
+    ),
+  },
+  {
     name: "WhatsApp",
     status: "Next up",
     live: false,
@@ -51,7 +62,7 @@ export function Channels() {
         </p>
       </Reveal>
 
-      <div className="grid gap-5 text-left sm:grid-cols-3">
+      <div className="grid gap-5 text-left sm:grid-cols-2 lg:grid-cols-4">
         {surfaces.map((s, i) => (
           <Reveal key={s.name} delay={i * 100}>
             <div className="h-full rounded-3xl border border-stone-900/10 bg-[#fdfbf7] p-7 transition-transform duration-300 hover:-translate-y-1">
