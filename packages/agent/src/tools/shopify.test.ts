@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   addShopifyCustomerNote,
   createRefund,
+  createReturn,
   createShopifyOrder,
   editShopifyOrder,
+  issueDiscount,
   updateShopifyOrderAddress,
 } from "./shopify.js";
 
@@ -257,6 +259,138 @@ describe("shopify tools", () => {
       message: "Error: edit_shopify_order requires at least variant_id (to add) or remove_variant_id (to remove).",
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("issues a single-use percentage discount and converts the percentage to a fraction", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      data: {
+        discountCodeBasicCreate: {
+          codeDiscountNode: {
+            codeDiscount: { codes: { nodes: [{ code: "THANKS10-ABCDEF" }] }, endsAt: null },
+          },
+          userErrors: [],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueDiscount({ percentage: 10, reason: "Shipping delay" }, ctx);
+
+    const { query, variables } = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(query).toContain("mutation discountCodeBasicCreate");
+    expect(variables.basicCodeDiscount).toMatchObject({
+      customerGets: { items: { all: true }, value: { percentage: 0.1 } },
+      appliesOncePerCustomer: true,
+      usageLimit: 1,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("THANKS10-ABCDEF");
+  });
+
+  it("rejects a discount percentage outside 0–100 without calling Shopify", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueDiscount({ percentage: 150 }, ctx);
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("percentage must be a number greater than 0 and at most 100");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces Shopify userErrors when the discount cannot be created", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      data: {
+        discountCodeBasicCreate: {
+          codeDiscountNode: null,
+          userErrors: [{ field: ["code"], message: "Code already exists." }],
+        },
+      },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueDiscount({ percentage: 10 }, ctx);
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("Code already exists.");
+  });
+
+  it("opens a return for a single requested item and maps the reason to the Shopify enum", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          order: {
+            returnableFulfillments: {
+              edges: [{
+                node: {
+                  returnableFulfillmentLineItems: {
+                    edges: [
+                      {
+                        node: {
+                          quantity: 1,
+                          fulfillmentLineItem: {
+                            id: "gid://shopify/FulfillmentLineItem/11",
+                            lineItem: { name: "Blue shirt", variant: { id: "gid://shopify/ProductVariant/789" } },
+                          },
+                        },
+                      },
+                      {
+                        node: {
+                          quantity: 2,
+                          fulfillmentLineItem: {
+                            id: "gid://shopify/FulfillmentLineItem/22",
+                            lineItem: { name: "Red hat", variant: { id: "gid://shopify/ProductVariant/123" } },
+                          },
+                        },
+                      },
+                    ],
+                  },
+                },
+              }],
+            },
+          },
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          returnCreate: {
+            return: { id: "gid://shopify/Return/1", name: "#1001-R1", status: "OPEN" },
+            userErrors: [],
+          },
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createReturn({ order_id: "456", variant_id: "789", reason: "defective" }, ctx);
+
+    const queryBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    const createBody = JSON.parse(fetchMock.mock.calls[1][1].body as string);
+    expect(queryBody.query).toContain("returnableFulfillments");
+    expect(createBody.query).toContain("mutation returnCreate");
+    expect(createBody.variables.returnInput).toEqual({
+      orderId: "gid://shopify/Order/456",
+      notifyCustomer: false,
+      returnLineItems: [
+        { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/11", quantity: 1, returnReason: "DEFECTIVE" },
+      ],
+    });
+    expect(result.status).toBe("ok");
+    expect(result.message).toContain("#1001-R1");
+    expect(result.message).toContain("No refund was issued");
+  });
+
+  it("returns an error when the order has no returnable items", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      data: { order: { returnableFulfillments: { edges: [] } } },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createReturn({ order_id: "456" }, ctx);
+
+    expect(result.status).toBe("error");
+    expect(result.message).toContain("no returnable items");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("blocks custom line items unless explicitly allowed", async () => {

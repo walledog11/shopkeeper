@@ -17,6 +17,7 @@ export const POST = withOrgRoute(
   {
     context: 'iMessage integration POST',
     errorMessage: 'Failed to connect iMessage',
+    requireBillingWriteAllowed: true,
     rateLimit: { key: 'integrations:imessage', limit: 20, windowSecs: 60 },
   },
   async ({ org, request }) => {

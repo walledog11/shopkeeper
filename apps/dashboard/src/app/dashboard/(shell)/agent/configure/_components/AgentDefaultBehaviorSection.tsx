@@ -1,6 +1,6 @@
 "use client"
 
-import { SectionCard, ToggleRow } from "./shared"
+import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentDefaultBehaviorSection({ controller }: { controller: AgentTabController }) {

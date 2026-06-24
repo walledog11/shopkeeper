@@ -10,8 +10,8 @@ import {
   tierDefaultForPath,
   type AutonomyOverridePath,
 } from "./agent-tab-helpers"
-import { MoneyInput } from "./settings-form-fields"
-import { SectionCard, ToggleRow } from "./shared"
+import { MoneyInput, NumberInput } from "./settings-form-fields"
+import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 function tierLabel(tier: AutonomyTier): string {
@@ -21,6 +21,9 @@ function tierLabel(tier: AutonomyTier): string {
 function formatOverrideValue(path: AutonomyOverridePath, value: unknown): string {
   if (path === "maxRefundAmount") {
     return typeof value === "number" ? `$${value}` : "No limit"
+  }
+  if (path === "maxDiscountPercent") {
+    return typeof value === "number" ? `${value}%` : "No limit"
   }
   if (typeof value === "boolean") return value ? "On" : "Off"
   return value == null ? "Not set" : String(value)
@@ -114,6 +117,8 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
     selectTier,
     setAutonomyOverride,
     setMaxRefundInput,
+    maxDiscountInput,
+    setMaxDiscountInput,
     dailyRefundCapInput,
     setDailyRefundCapInput,
   } = controller
@@ -201,6 +206,28 @@ export function AgentAutonomySection({ controller }: { controller: AgentTabContr
                   />
                   <OverrideHint
                     path="maxRefundAmount"
+                    tier={autonomyTier}
+                    payload={payload}
+                    explicitOverrideSet={explicitOverrideSet}
+                    onReset={resetAutonomyOverride}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <NumberInput
+                    label="Max discount %"
+                    hint="leave blank for no limit"
+                    aria-label="Max discount percent"
+                    value={maxDiscountInput}
+                    onValueChange={value => {
+                      markExplicit("maxDiscountPercent")
+                      setMaxDiscountInput(value)
+                    }}
+                    placeholder="e.g. 15"
+                    description="Largest single-use discount code the agent can issue as a goodwill gesture. Set 0 to disable discounts."
+                  />
+                  <OverrideHint
+                    path="maxDiscountPercent"
                     tier={autonomyTier}
                     payload={payload}
                     explicitOverrideSet={explicitOverrideSet}

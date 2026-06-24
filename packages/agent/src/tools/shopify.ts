@@ -1,6 +1,8 @@
 export {
   cancelOrder,
   createRefund,
+  createReturn,
+  issueDiscount,
   createShopifyOrder,
   editShopifyOrder,
   getOrderByName,

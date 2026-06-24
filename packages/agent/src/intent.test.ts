@@ -128,4 +128,10 @@ describe("hasMerchantPolicyGapIntent", () => {
   it("does not treat wholesale requests as policy gaps", () => {
     expect(hasMerchantPolicyGapIntent("What's your wholesale pricing for 500 units?")).toBe(false);
   });
+
+  it("does not treat an order-specific request as a policy gap", () => {
+    // "can you ship" trips the shipping-coverage regex, but this is an address change on a
+    // specific order, not a general policy question - it must not force ask_operator.
+    expect(hasMerchantPolicyGapIntent("Hey, can you ship order #1032 to 123 Maple Lane instead? Thanks.")).toBe(false);
+  });
 });

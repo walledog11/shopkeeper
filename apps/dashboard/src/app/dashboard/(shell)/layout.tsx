@@ -79,6 +79,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
     });
   }
 
+  // Subscription canceled — writes are blocked by the billing gate
+  if (org.stripeStatus === "canceled") {
+    notifications.push({
+      id: "canceled",
+      type: "warning",
+      title: "Your subscription is canceled.",
+      message: "Reactivate your plan to restore agent actions and sending.",
+      action: { label: "Reactivate", href: "/dashboard/settings?tab=billing" },
+    });
+  }
+
   return (
     <HelpProvider>
       <AgentPanelProvider>

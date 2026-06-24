@@ -2,7 +2,7 @@
 
 import { BusinessHoursSection } from "./BusinessHoursSection"
 import { SpamFilterSection } from "./SpamFilterSection"
-import { SectionCard } from "./shared"
+import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function WhenOnDutySection({ controller }: { controller: AgentTabController }) {

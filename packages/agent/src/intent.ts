@@ -267,6 +267,10 @@ const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
 export function hasMerchantPolicyGapIntent(...texts: string[]): boolean {
   return texts.some((text) => {
     const lower = text.toLowerCase();
+    // A message about a specific order (e.g. "can you ship order #1032 to ...") is an order
+    // operation, not a general policy question the merchant must answer - never force ask_operator
+    // for it. Mirrors the order-reference bail in isInformationalReturnQuestion.
+    if (ORDER_REFERENCE_RE.test(text)) return false;
     if (hasOutOfScopeCommercialRequestSignals(text)) return false;
     if (isInformationalReturnQuestion(text)) return true;
     if (SHIPPING_COVERAGE_QUESTION_RES.some((re) => re.test(lower))) return true;

@@ -14,7 +14,7 @@ import { parseShopifyThreadBody } from '@/app/api/threads/_lib/validation';
  * Response: { threadId: string, isNew: boolean }
  */
 export const POST = withOrgRoute(
-  { context: 'Threads Shopify POST', errorMessage: 'Failed to create thread' },
+  { context: 'Threads Shopify POST', errorMessage: 'Failed to create thread', requireBillingWriteAllowed: true },
   async ({ org, request }) => {
     const { shopifyCustomerId, customerEmail, customerName, orderName } =
       parseShopifyThreadBody(await readRequiredJsonObject(request));

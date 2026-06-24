@@ -12,9 +12,11 @@ import {
   getOrderByName,
   getOrderTracking,
   createRefund,
+  createReturn,
   cancelOrder,
   createShopifyOrder,
   editShopifyOrder,
+  issueDiscount,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
@@ -89,9 +91,11 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   getOrderByName,
   getOrderTracking,
   createRefund,
+  createReturn,
   cancelOrder,
   createShopifyOrder,
   editShopifyOrder,
+  issueDiscount,
   incrementDailyRefundSpendCents,
   async searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]> {
     const wordConditions = words.flatMap((word) => [

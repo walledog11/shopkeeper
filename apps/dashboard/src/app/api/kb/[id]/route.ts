@@ -6,7 +6,7 @@ import { withOrgRoute } from '@/lib/api/route';
 import { parseUpdateKbArticleBody } from '@/app/api/kb/_lib/validation';
 
 export const PATCH = withOrgRoute<{ id: string }>(
-  { context: 'KB PATCH', errorMessage: 'Failed to update article' },
+  { context: 'KB PATCH', errorMessage: 'Failed to update article', requireBillingWriteAllowed: true },
   async ({ org, request, params }) => {
     const { id } = params;
     const { title, body, tags } = parseUpdateKbArticleBody(await readRequiredJsonObject(request));

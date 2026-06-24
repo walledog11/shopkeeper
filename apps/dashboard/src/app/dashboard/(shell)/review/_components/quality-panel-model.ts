@@ -96,6 +96,7 @@ export const STORE_ACTION_TOOLS = [
   "create_shopify_order",
   "edit_shopify_order",
   "update_shopify_order_address",
+  "issue_discount",
   "flag_order",
 ] as const
 

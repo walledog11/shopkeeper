@@ -1,0 +1,50 @@
+{
+  "id": "create-return-fulfilled-order",
+  "description": "Customer wants to send back a delivered item from a fulfilled order. The agent should open a return with create_return (no refund yet - the items must come back first) and notify the customer, not refund, cancel, or escalate. Advisory: simulated tool execution; the gated property is that a fulfilled order is handled with a return rather than a premature refund or a hollow escalation.",
+  "advisory": true,
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Marco Diaz",
+    "customerPlatformId": "marco@example.com",
+    "shopifyCustomerId": "10000002020",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The boots I ordered on order #2020 don't fit me at all. I'd like to send them back for a return." }
+    ],
+    "simulateToolResults": [
+      { "tool": "create_return", "result": "Opened return #2020-R1 (status OPEN) on order 9000002020 for: 1x Leather Boots. No refund was issued - this only authorizes the customer to send the items back." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000002020",
+        "name": "#2020",
+        "created_at": "2026-05-20T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "120.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_2020",
+            "title": "Leather Boots",
+            "quantity": 1,
+            "variant_id": "variant_2020",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and set up their return.",
+  "expectedPlan": {
+    "mustCallTools": ["create_return", "send_reply"],
+    "mustNotCallTools": ["create_refund", "cancel_order", "escalate_to_human"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_return", "inputIncludes": { "order_id": "9000002020" } }
+    ]
+  }
+}

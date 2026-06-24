@@ -1,13 +1,15 @@
-import { noShopify, cancelReasons, requireShopify } from "./helpers.js";
+import { noShopify, cancelReasons, requireShopify, returnReasons } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import type {
   CancelOrderInput,
   CreateRefundInput,
+  CreateReturnInput,
   CreateShopifyOrderInput,
   EditShopifyOrderInput,
   GetOrderByNameInput,
   GetOrderTrackingInput,
   GetShopifyOrdersInput,
+  IssueDiscountInput,
   UpdateShopifyOrderAddressInput,
 } from "./types.js";
 
@@ -191,6 +193,45 @@ export const ORDER_TOOL_DEFINITIONS = [
     execute: async (input: EditShopifyOrderInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.editShopifyOrder(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "issue_discount",
+    description:
+      "Issue a single-use percentage discount code as a goodwill gesture (a shipping delay, a minor complaint, a one-off apology). The code applies to the customer's NEXT order - it does NOT refund or change the current one. Prefer this over create_refund when the customer is staying and a small gesture resolves it; reach for a refund only when money must actually be returned. The percentage must be within the workspace discount cap. After issuing, always tell the customer the code in your reply.",
+    fields: {
+      percentage: numberArg("Whole-number percentage off the customer's next order, e.g. 10 for 10% off. Must be within the workspace discount cap.", { required: true }),
+      reason: stringArg("Short internal reason for the gesture (e.g. 'shipping delay'). Used only to label the discount inside Shopify."),
+      expires_in_days: numberArg("Optional whole number of days until the code expires. Omit for no expiry."),
+    },
+    category: "action",
+    group: "order",
+    label: "Issued discount code",
+    planStepLabel: "Issue discount code",
+    policy: {
+      discountPercentLimit: true,
+    },
+    execute: async (input: IssueDiscountInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.issueDiscount(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "create_return",
+    description:
+      "Open a return (RMA) for items on a fulfilled Shopify order so the customer is authorized to send them back. This does NOT refund the customer or change the order total - it only creates the return; issue a refund separately with create_refund once the items are received, if a refund is owed. Use this when a customer wants to return what they got. By default it returns every returnable item on the order; pass variant_id (from the orders context) to return just that one item. Only works for items that have actually shipped.",
+    fields: {
+      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
+      variant_id: stringArg("Variant ID of the single item to return, from the orders context. Omit to return all returnable items on the order."),
+      reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
+    },
+    category: "action",
+    group: "order",
+    label: "Opened return",
+    planStepLabel: "Open return",
+    execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.createReturn(input, shopify) : noShopify;
     },
   }),
 ] as const;

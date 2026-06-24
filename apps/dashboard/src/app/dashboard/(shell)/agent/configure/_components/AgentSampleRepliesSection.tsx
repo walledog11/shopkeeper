@@ -2,7 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react"
 import { CharacterCountTextarea, LabeledTextInput } from "./settings-form-fields"
-import { SectionCard } from "./shared"
+import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 const SAMPLE_REPLY_CAP = 10

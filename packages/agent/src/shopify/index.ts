@@ -23,4 +23,6 @@ export { cancelOrder } from "./order-cancellation.js";
 export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-creation.js";
 export { editShopifyOrder } from "./order-edit.js";
 export { createRefund } from "./refunds.js";
+export { createReturn } from "./returns.js";
+export { issueDiscount } from "./discounts.js";
 export { getOrderTracking } from "./tracking.js";

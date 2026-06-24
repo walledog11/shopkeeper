@@ -68,6 +68,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     customer: { id: "customer_1", name: "Jane", platformId: "jane@test.com" },
     recentMessages: [{ senderType: "customer", contentText: "Help me" }],
     openThreadCount: 1,
+    pastTickets: [],
     shopify: { shop: "test-store.myshopify.com", accessToken: "shpat_test" },
     recentOrders: [],
     linkedShopifyCustomerName: null,
@@ -285,6 +286,23 @@ describe("runAgent policy enforcement", () => {
     });
     expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.");
     expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
+  });
+
+  it("escalates an over-cap discount instead of issuing it", async () => {
+    const result = await runAgent(
+      makeCtx(),
+      "Give the customer a discount for the trouble",
+      [{ id: "pre_1", name: "issue_discount", input: { percentage: 40 } }],
+      { ...AGENT_SETTINGS_DEFAULTS, maxDiscountPercent: 20 },
+    );
+
+    expect(mockEscalateToHuman).toHaveBeenCalledWith("discount of 40% exceeds the workspace limit of 20%.");
+    expect(result.actionsPerformed).toHaveLength(1);
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "issue_discount",
+      status: "escalated",
+    });
+    expect(result.summary).toBe("Escalated to merchant: discount of 40% exceeds the workspace limit of 20%.");
   });
 
   it("allows a refund under the daily cap", async () => {

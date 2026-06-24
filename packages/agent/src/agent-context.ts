@@ -85,6 +85,10 @@ export interface SupportContext extends BaseAgentContext {
     platformId: string;
   };
   openThreadCount: number;
+  // Read-only cross-ticket memory: the customer's most recent resolved tickets,
+  // summary + tag only, most recent first. Lets the support agent recognize a
+  // returning customer without any stored/maintained memory artifact.
+  pastTickets: { aiSummary: string | null; tag: string | null }[];
   recentOrders: ShopifyOrderSummary[];
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];

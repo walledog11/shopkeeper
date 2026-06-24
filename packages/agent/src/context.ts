@@ -157,6 +157,25 @@ export async function buildContext(
 
   const isOperator = isOperatorChannel(thread.channelType);
 
+  // Cross-ticket memory: the customer's most recent resolved tickets. Skipped in
+  // operator channels, where the thread's "customer" is the operator/concierge
+  // session, not a real customer with support history.
+  const pastTicketsPromise = isOperator
+    ? Promise.resolve<{ aiSummary: string | null; tag: string | null }[]>([])
+    : db.thread.findMany({
+        where: {
+          organizationId: orgId,
+          customerId: thread.customerId,
+          status: "closed",
+          deletedAt: null,
+          id: { not: thread.id },
+          aiSummary: { not: null },
+        },
+        orderBy: { lastMessageAt: "desc" },
+        take: 3,
+        select: { aiSummary: true, tag: true },
+      });
+
   let recentOrders: ShopifyOrderSummary[] = [];
   if (shopifyCustomerId && shopifyIntegration?.accessToken) {
     const ctx: ShopifyContext = { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken };
@@ -221,7 +240,7 @@ export async function buildContext(
     }
   }
 
-  const openThreadCount = await openThreadCountPromise;
+  const [openThreadCount, pastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
 
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
@@ -274,6 +293,7 @@ export async function buildContext(
       platformId: thread.customer.platformId,
     },
     openThreadCount,
+    pastTickets,
     recentOrders,
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),

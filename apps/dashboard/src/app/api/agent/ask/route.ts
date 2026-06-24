@@ -17,6 +17,7 @@ export const POST = withOrgRoute(
   {
     context: "Agent ask POST",
     errorMessage: "Failed to answer composer question",
+    requireBillingWriteAllowed: true,
     rateLimit: { key: "agent:ask", limit: 20, windowSecs: 60 },
     onError: (error) => {
       logger.error({ err: error }, "[agent:ask] error");

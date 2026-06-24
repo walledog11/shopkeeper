@@ -16,7 +16,6 @@ const ROUTE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/dashboard/kb", title: "Memory" },
   { prefix: "/dashboard/agent", title: "Agent" },
   { prefix: "/dashboard/account", title: "Account" },
-  { prefix: "/dashboard/customers", title: "Customers" },
 ];
 
 function resolveRouteTitle(pathname: string): string | null {

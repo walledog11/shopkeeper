@@ -68,6 +68,7 @@ describe("quality panel review board model", () => {
       "create_shopify_order",
       "edit_shopify_order",
       "update_shopify_order_address",
+      "issue_discount",
     ]) {
       expect(classifyReviewItem(entry({
         actions: [action({ tool, result: `${tool} completed.` })],

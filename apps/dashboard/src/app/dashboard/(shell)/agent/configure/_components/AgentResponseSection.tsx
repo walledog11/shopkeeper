@@ -1,7 +1,7 @@
 "use client"
 
 import { SelectField } from "./settings-form-fields"
-import { SectionCard } from "./shared"
+import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 const REPLY_LANGUAGE_OPTIONS = [

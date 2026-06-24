@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { SaveButton, SectionCard } from "../shared"
+import { SaveButton, SectionCard } from "@/components/settings-form/shared"
 import type { WorkspaceTabProps, WorkspaceTabState } from "./useWorkspaceTabState"
 
 interface WorkspaceTabViewProps extends WorkspaceTabProps {

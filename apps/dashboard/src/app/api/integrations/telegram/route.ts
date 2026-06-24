@@ -58,7 +58,7 @@ export const GET = withOrgRoute(
 );
 
 export const POST = withOrgRoute(
-  { context: "Telegram POST", errorMessage: "Failed to start Telegram connect" },
+  { context: "Telegram POST", errorMessage: "Failed to start Telegram connect", requireBillingWriteAllowed: true },
   async ({ org }) => {
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();

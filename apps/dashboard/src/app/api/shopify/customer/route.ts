@@ -47,7 +47,7 @@ export const GET = withOrgRoute(
 );
 
 export const PATCH = withOrgRoute(
-  { context: 'Shopify Customer PATCH', errorMessage: 'server_error' },
+  { context: 'Shopify Customer PATCH', errorMessage: 'server_error', requireBillingWriteAllowed: true },
   async ({ org, request }) => {
     const { customerId, updates } = parseShopifyCustomerUpdateBody(await readRequiredJsonObject(request));
 

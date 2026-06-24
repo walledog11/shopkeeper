@@ -40,6 +40,7 @@ const SETTINGS_KEYS = [
   "toolsEnabled",
   "maxRefundAmount",
   "dailyRefundCap",
+  "maxDiscountPercent",
   "dailyLLMSpendCapUsd",
   "blockCancellations",
   "blockCustomLineItems",
@@ -234,6 +235,24 @@ function readNullableNonNegativeNumber(
   addIssue(context, key, "Expected null or a non-negative finite number");
 }
 
+function readNullablePercent(
+  value: Record<string, unknown>,
+  key: string,
+  output: Record<string, unknown>,
+  context: ParseContext,
+): void {
+  if (!hasOwn(value, key)) return;
+  const candidate = value[key];
+  if (
+    candidate === null
+    || (typeof candidate === "number" && Number.isFinite(candidate) && candidate >= 0 && candidate <= 100)
+  ) {
+    output[key] = candidate;
+    return;
+  }
+  addIssue(context, key, "Expected null or a number from 0 to 100");
+}
+
 function readInteger(
   value: Record<string, unknown>,
   key: string,
@@ -410,6 +429,7 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   for (const key of OFFSET_FIELDS) readInteger(value, key, -12, 14, output, context);
   for (const key of TIMEZONE_FIELDS) readTimezone(value, key, output, context);
 
+  readNullablePercent(value, "maxDiscountPercent", output, context);
   readInteger(value, "maxIterations", 1, 100, output, context);
   readEnum(value, "autoExecuteMode", AUTO_EXECUTE_MODES, output, context);
   readEnum(value, "autonomyTier", AUTONOMY_TIERS, output, context);

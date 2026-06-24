@@ -40,6 +40,7 @@ const ACTION_TOOL_PRIORITY = [
   "update_shopify_order_address",
   "update_shopify_customer_info",
   "add_shopify_customer_note",
+  "issue_discount",
 ]
 
 const TOOL_PHRASE: Record<string, string> = {

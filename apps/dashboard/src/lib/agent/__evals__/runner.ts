@@ -350,6 +350,7 @@ function buildContext(fixture: Fixture, orgId: string, threadId: string, custome
       contentText: m.contentText,
     })),
     openThreadCount: setup.openThreadCount ?? 1,
+    pastTickets: setup.pastTickets ?? [],
     shopify: setup.shopify ?? null,
     recentOrders: setup.recentOrders ?? [],
     linkedShopifyCustomerName: setup.linkedShopifyCustomerName ?? null,

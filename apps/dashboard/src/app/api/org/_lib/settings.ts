@@ -13,6 +13,7 @@ import { BadRequestError } from '@/lib/api/errors';
 const ALLOWED_SETTINGS_UNSET = new Set([
   'requireApprovalForActions',
   'maxRefundAmount',
+  'maxDiscountPercent',
   'blockCancellations',
   'blockCustomLineItems',
   'toolsEnabled.action',

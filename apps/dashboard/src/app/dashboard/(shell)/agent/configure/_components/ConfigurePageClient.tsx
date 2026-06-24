@@ -1,7 +1,7 @@
 "use client"
 
-import AgentTab from "../../../settings/_components/AgentTab"
-import ConciergeSummary from "../../../settings/_components/ConciergeSummary"
+import AgentTab from "./AgentTab"
+import ConciergeSummary from "./ConciergeSummary"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
 
 interface Props {

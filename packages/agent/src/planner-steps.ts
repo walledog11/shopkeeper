@@ -52,6 +52,8 @@ function describeTool(name: string, input: unknown): string {
       if (a.remove_variant_id) return `Remove item (variant ${a.remove_variant_id}) from order`;
       return qty ? `Add ${qty}x item to order` : "Edit order";
     }
+    case "issue_discount":
+      return `Issue ${a.percentage}% discount code${a.reason ? ` (${a.reason})` : ""}`;
     default:
       return name.replace(/_/g, " ");
   }

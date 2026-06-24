@@ -5,6 +5,17 @@ import type { ShopifyToolContext } from "./types.js";
 export const noShopify = toolError("Error: no Shopify integration connected.");
 export const noThread = toolError("Error: this tool requires a conversation thread.");
 export const cancelReasons = ["customer", "fraud", "inventory", "declined", "other"] as const;
+export const returnReasons = [
+  "unwanted",
+  "defective",
+  "wrong_item",
+  "not_as_described",
+  "too_large",
+  "too_small",
+  "style",
+  "color",
+  "other",
+] as const;
 export const threadStatuses = ["open", "pending", "closed"] as const;
 
 export function requireShopify(ctx: BaseAgentContext): ShopifyToolContext | null {

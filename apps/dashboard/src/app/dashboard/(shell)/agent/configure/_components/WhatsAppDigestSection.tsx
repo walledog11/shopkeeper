@@ -6,7 +6,7 @@ import {
   SelectField,
 } from "./settings-form-fields"
 import { settingsSelectClassName } from "./settings-form-styles"
-import { SectionCard, ToggleRow } from "./shared"
+import { SectionCard, ToggleRow } from "@/components/settings-form/shared"
 import { TimezoneSelect } from "./TimezoneSelect"
 import type { AgentTabController } from "./useAgentTabState"
 

@@ -48,6 +48,8 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
     line_items: [{ variant_id: "3001", quantity: 1 }],
   },
   edit_shopify_order: { order_id: "2001", variant_id: "3002", quantity: 1 },
+  issue_discount: { percentage: 10, reason: "Shipping delay" },
+  create_return: { order_id: "2001", variant_id: "3002", reason: "defective" },
   add_internal_note: { text: "Documented action." },
   send_reply: { text: "Thanks, this is handled." },
   send_email: { to: "jane@example.com", subject: "Order update", body: "Your order was updated." },
@@ -72,6 +74,8 @@ const SHOPIFY_TOOL_ROUTES = [
   ["cancel_order", "cancelOrder"],
   ["create_shopify_order", "createShopifyOrder"],
   ["edit_shopify_order", "editShopifyOrder"],
+  ["issue_discount", "issueDiscount"],
+  ["create_return", "createReturn"],
 ] as const satisfies readonly (readonly [ToolName, keyof ToolExecutionDeps])[];
 
 const THREAD_TOOL_ROUTES = [
@@ -139,6 +143,8 @@ function makeDeps(): ToolExecutionDeps {
     cancelOrder: vi.fn().mockResolvedValue(toolOk("cancelOrder")),
     createShopifyOrder: vi.fn().mockResolvedValue(toolOk("createShopifyOrder")),
     editShopifyOrder: vi.fn().mockResolvedValue(toolOk("editShopifyOrder")),
+    issueDiscount: vi.fn().mockResolvedValue(toolOk("issueDiscount")),
+    createReturn: vi.fn().mockResolvedValue(toolOk("createReturn")),
     incrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
     searchKnowledgeBaseArticles: vi.fn().mockResolvedValue([{
       id: "kb_1",

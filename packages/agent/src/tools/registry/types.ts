@@ -120,6 +120,27 @@ export interface EditShopifyOrderInput {
   remove_variant_id?: string;
 }
 
+export interface IssueDiscountInput {
+  percentage: number;
+  reason?: string;
+  expires_in_days?: number;
+}
+
+export interface CreateReturnInput {
+  order_id: string;
+  variant_id?: string;
+  reason?:
+    | "unwanted"
+    | "defective"
+    | "wrong_item"
+    | "not_as_described"
+    | "too_large"
+    | "too_small"
+    | "style"
+    | "color"
+    | "other";
+}
+
 export interface GetOrderTrackingInput {
   order_id: string;
 }
@@ -175,6 +196,8 @@ export interface ToolExecutionDeps {
     options: { allowCustomLineItems: boolean },
   ): Promise<ToolResult>;
   editShopifyOrder(input: EditShopifyOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  issueDiscount(input: IssueDiscountInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  createReturn(input: CreateReturnInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   incrementDailyRefundSpendCents(orgId: string, cents: number): Promise<unknown>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
@@ -187,6 +210,7 @@ export interface ToolPolicyMetadata {
   dailyRefundSpendLimit?: boolean;
   cancellationDisabled?: boolean;
   customLineItemsDisabled?: boolean;
+  discountPercentLimit?: boolean;
 }
 
 export type ToolParser<TInput> = (input: unknown) => TInput;

@@ -2,7 +2,7 @@
 
 import { Check, Loader2, Sparkles, X } from "lucide-react"
 import { CharacterCountTextarea, LabeledTextInput } from "./settings-form-fields"
-import { SectionCard } from "./shared"
+import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentIdentitySection({ controller }: { controller: AgentTabController }) {

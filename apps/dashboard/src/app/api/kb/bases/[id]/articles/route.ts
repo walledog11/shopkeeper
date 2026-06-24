@@ -6,7 +6,7 @@ import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateKbArticleBody } from '@/app/api/kb/_lib/validation';
 
 export const POST = withOrgRoute<{ id: string }>(
-  { context: 'KB article POST', errorMessage: 'Failed to create article' },
+  { context: 'KB article POST', errorMessage: 'Failed to create article', requireBillingWriteAllowed: true },
   async ({ org, request, params }) => {
     const { id: knowledgeBaseId } = params;
 

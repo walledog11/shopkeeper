@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   );
 
   const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
-  const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_products,read_content';
+  const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_returns,write_returns,read_products,read_content';
 
   const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
   authUrl.searchParams.set('client_id', clientId);

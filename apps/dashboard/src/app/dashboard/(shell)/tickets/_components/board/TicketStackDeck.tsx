@@ -1,6 +1,7 @@
 "use client"
 
 import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
+import { STACKED_BELOW_PEEK } from "@/app/dashboard/_components/home/needs-you-motion"
 import { TicketStackCard } from "./TicketStackCard"
 import type { TicketListView } from "../thread-list/constants"
 import type { OrgSettings, Ticket } from "@/types"
@@ -57,6 +58,7 @@ export function TicketStackDeck({
       disableControlsWhenNotDraggable
       labels={{ previous: "Previous ticket", next: "Next ticket" }}
       controls="count"
+      peek={STACKED_BELOW_PEEK}
       peekShellClassName="h-full w-full rounded-3xl border border-border bg-card shadow-sm box-border"
       renderCard={(ticket, context) => cardFor(ticket, context.isPeek)}
       renderPeekCard={(ticket) => cardFor(ticket, true)}

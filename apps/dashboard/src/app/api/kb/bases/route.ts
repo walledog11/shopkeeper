@@ -5,7 +5,7 @@ import { withOrgRoute } from '@/lib/api/route';
 import { parseCreateKnowledgeBaseBody } from '@/app/api/kb/_lib/validation';
 
 export const POST = withOrgRoute(
-  { context: 'KB bases POST', errorMessage: 'Failed to create knowledge base' },
+  { context: 'KB bases POST', errorMessage: 'Failed to create knowledge base', requireBillingWriteAllowed: true },
   async ({ org, request }) => {
     const { name } = parseCreateKnowledgeBaseBody(await readRequiredJsonObject(request));
     const kb = await db.knowledgeBase.create({

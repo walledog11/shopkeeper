@@ -9,7 +9,7 @@ function stripHtml(html: string): string {
 }
 
 export const POST = withOrgRoute(
-  { context: 'Shopify KB sync POST', errorMessage: 'Failed to sync Shopify KB' },
+  { context: 'Shopify KB sync POST', errorMessage: 'Failed to sync Shopify KB', requireBillingWriteAllowed: true },
   async ({ org }) => {
     const integration = await db.integration.findFirst({
       where: { organizationId: org.id, platform: 'shopify' },

@@ -103,6 +103,7 @@ export const POST = withOrgRoute(
   {
     context: 'Integrations POST',
     errorMessage: 'Failed to create integration',
+    requireBillingWriteAllowed: true,
     rateLimit: { key: 'integrations:create', limit: 20, windowSecs: 60 },
   },
   async ({ org, request }) => {

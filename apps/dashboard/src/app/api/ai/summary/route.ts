@@ -51,6 +51,7 @@ export const POST = withOrgRoute(
   {
     context: 'AI Summary',
     errorMessage: 'Failed to generate summary',
+    requireBillingWriteAllowed: true,
     rateLimit: { key: 'ai-summary', limit: 10, windowSecs: 60 },
   },
   async ({ org, request }) => {

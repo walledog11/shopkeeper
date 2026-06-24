@@ -42,6 +42,7 @@ export interface OrgSettings {
   // Guardrails
   maxRefundAmount: number | null;  // per-call cap in USD; null = unlimited
   dailyRefundCap: number | null;   // cumulative org-wide cap in USD per UTC day; null = unlimited
+  maxDiscountPercent: number | null; // per-call cap on issue_discount, 0–100; null = unlimited
   dailyLLMSpendCapUsd: number | null; // org-wide LLM spend cap per UTC day in USD; null = use DEFAULT_DAILY_LLM_SPEND_CAP_USD
   blockCancellations: boolean;
   blockCustomLineItems: boolean;

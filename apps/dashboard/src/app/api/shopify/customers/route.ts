@@ -60,7 +60,7 @@ export const GET = withOrgRoute(
 );
 
 export const POST = withOrgRoute(
-  { context: 'Shopify Customer POST', errorMessage: 'server_error' },
+  { context: 'Shopify Customer POST', errorMessage: 'server_error', requireBillingWriteAllowed: true },
   async ({ org, request }) => {
     const { first_name, last_name, email } = parseCreateShopifyCustomerBody(await readRequiredJsonObject(request));
     const integration = await db.integration.findFirst({

@@ -7,6 +7,7 @@ export type AgentSettingsAction =
 
 export interface RawInputs {
   maxRefund: string
+  maxDiscount: string
   dailyRefundCap: string
   dailyLLMSpendCap: string
   maxIter: string
@@ -19,6 +20,7 @@ export interface RawInputs {
 const AUTONOMY_OVERRIDE_PATHS = [
   "requireApprovalForActions",
   "maxRefundAmount",
+  "maxDiscountPercent",
   "blockCancellations",
   "blockCustomLineItems",
   "toolsEnabled.action",
@@ -290,6 +292,7 @@ function clampHour(value: string, fallback: number): number {
 
 export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSettings {
   const parsedMax = raw.maxRefund.trim() === "" ? null : Number(raw.maxRefund)
+  const parsedDiscount = raw.maxDiscount.trim() === "" ? null : Number(raw.maxDiscount)
   const parsedDaily = raw.dailyRefundCap.trim() === "" ? null : Number(raw.dailyRefundCap)
   const parsedLLM = raw.dailyLLMSpendCap.trim() === "" ? null : Number(raw.dailyLLMSpendCap)
   const parsedIter = Number(raw.maxIter)
@@ -298,6 +301,7 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
     ...state,
     agentName: state.agentName.trim() || "Shopkeeper",
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
+    maxDiscountPercent: parsedDiscount === null || isNaN(parsedDiscount) ? null : parsedDiscount,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,
     maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
@@ -311,6 +315,7 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
 export function rawInputsFor(settings: OrgSettings): RawInputs {
   return {
     maxRefund: settings.maxRefundAmount != null ? String(settings.maxRefundAmount) : "",
+    maxDiscount: settings.maxDiscountPercent != null ? String(settings.maxDiscountPercent) : "",
     dailyRefundCap: settings.dailyRefundCap != null ? String(settings.dailyRefundCap) : "",
     dailyLLMSpendCap: settings.dailyLLMSpendCapUsd != null ? String(settings.dailyLLMSpendCapUsd) : "",
     maxIter: String(settings.maxIterations ?? 10),

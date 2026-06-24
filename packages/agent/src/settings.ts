@@ -44,6 +44,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   },
   maxRefundAmount: null,
   dailyRefundCap: null,
+  maxDiscountPercent: null,
   dailyLLMSpendCapUsd: null,
   blockCancellations: false,
   blockCustomLineItems: false,
@@ -68,6 +69,7 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
 export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   watch: {
     maxRefundAmount: 0,
+    maxDiscountPercent: 0,
     requireApprovalForActions: true,
     toolsEnabled: {
       action: false,
@@ -78,18 +80,22 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   },
   guarded: {
     maxRefundAmount: 50,
+    maxDiscountPercent: 15,
     requireApprovalForActions: true,
   },
   trusted: {
     maxRefundAmount: 100,
+    maxDiscountPercent: 20,
     requireApprovalForActions: false,
   },
   broad: {
     maxRefundAmount: 250,
+    maxDiscountPercent: 30,
     requireApprovalForActions: false,
   },
   full: {
     maxRefundAmount: 1000,
+    maxDiscountPercent: 50,
     requireApprovalForActions: false,
   },
 };
