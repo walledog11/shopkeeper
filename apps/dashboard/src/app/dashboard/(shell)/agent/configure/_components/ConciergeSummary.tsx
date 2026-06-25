@@ -18,11 +18,8 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
   return (
     <div className="min-w-0">
       <div className="flex items-center gap-2">
-        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300">
-          <Sparkles className="size-3" />
-        </span>
         <span className="truncate text-[10.5px] font-bold uppercase tracking-[0.07em] text-amber-300">
-          {settings.agentName.toUpperCase()}&apos;S SETUP FOR {orgName.toUpperCase()}
+          How I&apos;m set up currently
         </span>
       </div>
 
@@ -37,9 +34,7 @@ export default function ConciergeSummary({ orgName, settings }: Props) {
             : "send simple replies on my own (refunds and cancellations still need your OK)"}
         </Pill>. I can handle{" "}
         <Pill href={agentConfigureHref("autonomy")}>{refundCap}</Pill> and reply in{" "}
-        <Pill href={agentConfigureHref("autonomy")}>{lang}</Pill>. Customer channels live in{" "}
-        <Pill href="/dashboard/integrations">Integrations</Pill>; plan and invoices in{" "}
-        <Pill href="/dashboard/settings?tab=billing">billing</Pill>.
+        <Pill href={agentConfigureHref("autonomy")}>{lang}</Pill>. 
       </p>
     </div>
   )

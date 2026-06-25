@@ -84,7 +84,7 @@ export default function ConciergeBriefing({
             ))}
           </p>
 
-          <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <div className="flex items-center justify-between gap-3 mt-4 flex-wrap">
             <button
               type="button"
               onClick={() =>

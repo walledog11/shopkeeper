@@ -51,11 +51,9 @@ export function TriageStackColumn({
     <section className={`flex min-w-0 flex-col ${group.collapsible ? "opacity-90" : ""}`}>
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-2">
-          <span className={`size-1.5 shrink-0 rounded-full ${accent.dot}`} aria-hidden />
-          <span className={`truncate text-xs font-semibold uppercase tracking-wide ${accent.label}`}>
+          <span className={`truncate text-xs font-semibold uppercase ${accent.label}`}>
             {group.label}
           </span>
-          <span className="text-xs font-medium tabular-nums text-foreground/35">{group.tickets.length}</span>
         </div>
         <button
           type="button"

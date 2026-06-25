@@ -42,7 +42,7 @@ export function BoardColumnShell({
   children,
   sectionClassName = "flex min-w-0 flex-col",
   headerClassName = "mb-3 flex min-h-10 items-start justify-between gap-3 px-1",
-  titleClassName = "truncate text-xs font-semibold uppercase tracking-wide text-foreground/70",
+  titleClassName = "truncate text-xs font-semibold uppercase text-foreground/70",
   descriptionClassName = "mt-1 line-clamp-2 text-xs leading-relaxed text-foreground/35",
 }: BoardColumnShellProps) {
   let content = children
@@ -62,7 +62,6 @@ export function BoardColumnShell({
             {accentDotClassName ? <span className={cn("size-1.5 shrink-0 rounded-full", accentDotClassName)} aria-hidden /> : null}
             <Icon className="size-3.5 shrink-0 text-foreground/35" />
             <h2 className={titleClassName}>{label}</h2>
-            <span className="text-xs font-medium tabular-nums text-foreground/35">{count}</span>
           </div>
           {description ? <p className={descriptionClassName}>{description}</p> : null}
         </div>
