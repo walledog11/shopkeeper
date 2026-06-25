@@ -1,7 +1,6 @@
 "use client"
 
 import Link from "next/link"
-import { Sparkles } from "lucide-react"
 import { formatRefundCapSummary } from "@/lib/agent/autonomy-tiers"
 import { agentConfigureHref } from "@/lib/agent/configure"
 import type { OrgSettings } from "@/types"
