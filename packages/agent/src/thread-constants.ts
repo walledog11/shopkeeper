@@ -34,21 +34,15 @@ export const SENDER_TYPE = {
   AI: 'ai',
 } as const;
 
-export const LEGACY_AGENT_NOTE_PREFIX = "__clerk_agent_note__";
 export const AGENT_NOTE_PREFIX = "__shopkeeper_agent_note__";
-
-const AGENT_NOTE_PREFIXES = [AGENT_NOTE_PREFIX, LEGACY_AGENT_NOTE_PREFIX] as const;
 
 export function isAgentNoteContent(contentText: string | null | undefined): boolean {
   if (!contentText) return false;
-  return AGENT_NOTE_PREFIXES.some((prefix) => contentText.startsWith(prefix));
+  return contentText.startsWith(AGENT_NOTE_PREFIX);
 }
 
 export function stripAgentNotePrefix(contentText: string): string {
-  for (const prefix of AGENT_NOTE_PREFIXES) {
-    if (contentText.startsWith(prefix)) {
-      return contentText.slice(prefix.length);
-    }
-  }
-  return contentText;
+  return contentText.startsWith(AGENT_NOTE_PREFIX)
+    ? contentText.slice(AGENT_NOTE_PREFIX.length)
+    : contentText;
 }

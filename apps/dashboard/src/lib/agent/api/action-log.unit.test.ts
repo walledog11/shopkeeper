@@ -11,7 +11,7 @@ import {
   extractAgentTurnsFromMessages,
   serializeAgentTurn,
 } from "@shopkeeper/agent/turns";
-import { isAgentTurnContent } from "@shopkeeper/agent/tools";
+import { AGENT_TURN_PREFIX, isAgentTurnContent } from "@shopkeeper/agent/tools";
 import type { ActionLogEntry } from "@/types";
 
 describe("agent action-log note helpers", () => {
@@ -43,15 +43,17 @@ describe("agent action-log note helpers", () => {
     expect(turns).toEqual([turn]);
   });
 
-  it("still parses legacy note payloads that include the actions array", () => {
-    const legacy = `__clerk_agent__${JSON.stringify({
+  it("parses migrated note payloads that still carry the inline actions array", () => {
+    // Rows migrated from the old prefix keep their inline actions array in the
+    // payload; new notes omit it (AgentAction is canonical). Both must parse.
+    const note = `${AGENT_TURN_PREFIX}${JSON.stringify({
       instruction: "Refund the order",
       actions: [{ tool: "create_refund", result: "Refunded $25.00." }],
       summary: "Issued the refund.",
       error: null,
     })}`;
 
-    const [turn] = extractAgentTurnsFromMessages([{ id: "msg_legacy", contentText: legacy }]);
+    const [turn] = extractAgentTurnsFromMessages([{ id: "msg_note", contentText: note }]);
     expect(turn.actions).toEqual([{ tool: "create_refund", result: "Refunded $25.00." }]);
     expect(turn.summary).toBe("Issued the refund.");
   });
@@ -76,23 +78,8 @@ describe("agent action-log note helpers", () => {
   it("exports a canonical message filter shape for prisma queries", () => {
     expect(agentTurnMessageFilter).toEqual({
       senderType: "note",
-      OR: [
-        { contentText: { startsWith: "__shopkeeper_agent__" } },
-        { contentText: { startsWith: "__clerk_agent__" } },
-      ],
+      contentText: { startsWith: "__shopkeeper_agent__" },
     });
-  });
-
-  it("detects legacy agent turn prefixes during the transition window", () => {
-    const legacy = `__clerk_agent__${JSON.stringify({
-      instruction: "Handle this",
-      actions: [],
-      summary: "Done",
-      error: null,
-    })}`;
-
-    expect(isAgentTurnContent(legacy)).toBe(true);
-    expect(extractAgentTurnsFromMessages([{ id: "msg_legacy", contentText: legacy }])).toHaveLength(1);
   });
 });
 

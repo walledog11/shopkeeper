@@ -5,7 +5,7 @@ consolidated to the items that are still pending — completed work was removed
 (it lives in git history). It now also carries the product/vision gaps surfaced
 in the 2026-06-23 review.
 
-Last reviewed: 2026-06-23.
+Last reviewed: 2026-06-24.
 
 Roadmap for agent-core extraction and module expansion lives separately in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
@@ -34,6 +34,23 @@ Do these before treating production as ready.
   - Procedure: [runbook.md](production/runbook.md) (External Monitors, Ops Alert
     Log Routing, Controlled Alert Validation). Deploy with default thresholds;
     tune only after observing real traffic.
+  - **Prep done (2026-06-24):** verification tooling confirmed functional and
+    consistent with the docs — `scripts/verify-production-alerts.mjs` (dry-run
+    clean against the live URLs) plus both `emit-controlled-ops-alert.ts` helpers;
+    no code changes needed. Production health baseline re-verified live (dashboard
+    `/api/health`, gateway `/health/deep` + `/health/queues` all green) and
+    recorded in [alerting-evidence.md](production/alerting-evidence.md), which now
+    also carries a per-category controlled-trigger cheatsheet — including the drain
+    caveat that the emit helpers log to local stdout, so only deployed-process
+    triggers reach Better Stack (`provider_send` is therefore counter-only). Also
+    closed a latent BullMQ footgun surfaced during the baseline check: `aiSummary`
+    was missing from `DEFAULT_QUEUE_OPTIONS` in
+    `apps/gateway/src/clients/gateway-queues.ts`, so the read-path queue
+    constructor now carries the same `attempts`/`removeOnFail` as the producer.
+    **Still open (all sub-items above):** the Better Stack console config (log
+    drains, alert rules, uptime monitors, escalation policy) and controlled
+    validation in a prod window — none of that is done, so this blocker stays
+    unchecked.
 
 - [x] **Finish the billing write-gate route sweep.** Shared write-gate for
   `past_due` and `canceled` orgs lives in
@@ -177,17 +194,6 @@ near-term pointers only here.
 
 ## Loose Ends
 
-- [x] **Drain legacy customer-memory queues in production Redis.** One-time ops
-  step after deploy: `cd apps/gateway && npm run drain-legacy-customer-memory-queues`
-  (dry-run) then `-- --execute`. Removes repeatable job
-  `customer-memory-stale-refresh-daily` and obliterates the `customer-memory` /
-  `customer-memory-refresh` queues. Local dev Redis drained 2026-06-10; **production
-  drained 2026-06-24** (removed the stale `refresh-stale-customer-memory` daily
-  repeatable + residual jobs from `customer-memory-refresh`; both queues now empty).
-  Gotcha: the gateway's prod `REDIS_URL` is the internal host `redis.railway.internal`,
-  unreachable from a laptop via `railway run`; ran the script against the Redis
-  service's `REDIS_PUBLIC_URL` proxy with `NODE_ENV=production` (so `loadGatewayEnv`'s
-  dev override doesn't clobber the injected `REDIS_URL`).
 - [x] **Watch the policy-gap `ask_operator` guard for residual over-fire.**
   `applyPolicyGapAskOperatorGuard` (added `adc503a`) deterministically strips
   `send_reply` and forces `ask_operator` when `hasMerchantPolicyGapIntent`

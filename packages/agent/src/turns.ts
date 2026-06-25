@@ -1,6 +1,5 @@
 import {
   AGENT_TURN_PREFIX,
-  LEGACY_AGENT_TURN_PREFIX,
   getAgentTurnPrefixLength,
   isAgentTurnContent,
 } from "./tools/turn-content.js";
@@ -88,8 +87,5 @@ export function excludeAgentTurnMessages<T extends MessageWithAgentTurn>(message
 
 export const agentTurnMessageFilter = {
   senderType: "note" as const,
-  OR: [
-    { contentText: { startsWith: AGENT_TURN_PREFIX } },
-    { contentText: { startsWith: LEGACY_AGENT_TURN_PREFIX } },
-  ],
+  contentText: { startsWith: AGENT_TURN_PREFIX },
 };

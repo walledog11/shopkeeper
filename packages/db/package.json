@@ -20,7 +20,7 @@
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "npm run db:generate && tsc --watch --preserveWatchOutput",
-    "lint": "cd ../.. && eslint packages/db/*.ts packages/db/scripts/*.ts --max-warnings 0",
+    "lint": "cd ../.. && eslint packages/db/*.ts --max-warnings 0",
     "db:generate": "prisma generate",
     "db:push": "prisma db push"
   },

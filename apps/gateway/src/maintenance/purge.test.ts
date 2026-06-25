@@ -87,7 +87,7 @@ describe('purgeFilteredThreads', () => {
   it('deletes when only customer + note messages exist (notes do not block purge)', async () => {
     const thread = await setupThread();
     await createTestMessage(thread.id, 'inbound', SenderType.customer);
-    await createTestMessage(thread.id, '__clerk_agent__ classified as spam', SenderType.note);
+    await createTestMessage(thread.id, '__shopkeeper_agent__ classified as spam', SenderType.note);
 
     const count = await purgeFilteredThreads(PURGE_NOW);
     expect(count).toBe(1);

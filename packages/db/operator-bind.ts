@@ -47,13 +47,3 @@ export async function findOrgMemberBindToken(
 export async function deleteOrgMemberBindToken(token: string): Promise<void> {
   await db.orgMemberBindToken.delete({ where: { token } }).catch(() => undefined);
 }
-
-/** @deprecated Prefer findOrgMemberBindToken + deleteOrgMemberBindToken after validation. */
-export async function consumeOrgMemberBindToken(
-  token: string,
-): Promise<OrgMemberBindTokenPayload | null> {
-  const payload = await findOrgMemberBindToken(token);
-  if (!payload) return null;
-  await deleteOrgMemberBindToken(token);
-  return payload;
-}

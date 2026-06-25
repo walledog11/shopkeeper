@@ -164,15 +164,10 @@ If keeping `useclerk.co`: skip DNS; only update display names in provider consol
 
 ### Production DB — agent prefix migration
 
-Run once during the deploy window if production messages still use legacy prefixes:
-
-```bash
-DATABASE_URL=<production-url> node --import tsx \
-  packages/db/scripts/migrate-agent-prefixes.ts --dry-run
-
-DATABASE_URL=<production-url> node --import tsx \
-  packages/db/scripts/migrate-agent-prefixes.ts
-```
+- [x] Completed. Production messages were migrated off the legacy `__clerk_agent__` /
+  `__clerk_agent_note__` prefixes onto `__shopkeeper_agent__` / `__shopkeeper_agent_note__`.
+  The one-shot `migrate-agent-prefixes.ts` script and the legacy-prefix runtime
+  fallbacks were removed afterward.
 
 ---
 
@@ -205,7 +200,6 @@ Manual checks:
 - Keep old domain DNS alive for 48h after cutover
 - Keep old OAuth redirect URIs in provider consoles until smoke tests pass
 - Do not delete `@ClerkBot` until all merchants have re-linked to `@ShopkeeperBot`
-- `migrate-agent-prefixes.ts` is idempotent; re-run safe if interrupted
 
 ---
 

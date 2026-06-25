@@ -223,7 +223,6 @@ export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
 export { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from './refund-spend.js';
 export {
   ORG_MEMBER_BIND_TOKEN_TTL_SECONDS,
-  consumeOrgMemberBindToken,
   createOrgMemberBindToken,
   deleteOrgMemberBindToken,
   findOrgMemberBindToken,
