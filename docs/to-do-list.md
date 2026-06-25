@@ -177,19 +177,27 @@ near-term pointers only here.
 
 ## Loose Ends
 
-- [ ] **Drain legacy customer-memory queues in production Redis.** One-time ops
+- [x] **Drain legacy customer-memory queues in production Redis.** One-time ops
   step after deploy: `cd apps/gateway && npm run drain-legacy-customer-memory-queues`
   (dry-run) then `-- --execute`. Removes repeatable job
   `customer-memory-stale-refresh-daily` and obliterates the `customer-memory` /
-  `customer-memory-refresh` queues. Local dev Redis drained 2026-06-10;
-  production still pending.
-- [ ] **Watch the policy-gap `ask_operator` guard for residual over-fire.**
+  `customer-memory-refresh` queues. Local dev Redis drained 2026-06-10; **production
+  drained 2026-06-24** (removed the stale `refresh-stale-customer-memory` daily
+  repeatable + residual jobs from `customer-memory-refresh`; both queues now empty).
+  Gotcha: the gateway's prod `REDIS_URL` is the internal host `redis.railway.internal`,
+  unreachable from a laptop via `railway run`; ran the script against the Redis
+  service's `REDIS_PUBLIC_URL` proxy with `NODE_ENV=production` (so `loadGatewayEnv`'s
+  dev override doesn't clobber the injected `REDIS_URL`).
+- [x] **Watch the policy-gap `ask_operator` guard for residual over-fire.**
   `applyPolicyGapAskOperatorGuard` (added `adc503a`) deterministically strips
   `send_reply` and forces `ask_operator` when `hasMerchantPolicyGapIntent`
   (`intent.ts`) matches. The 2026-06-23 order-reference bail fixed the
-  `address-change-missing-fields` misfire (verified 3/3 + regression test), but a
-  no-order-ref action request (e.g. "ship my order to <new address>") can still
-  over-fire — the broad shipping-coverage regex
-  `/(do you|can you|will you|are you)…(ship|deliver|send)/` is the underlying
-  weakness. Same forced-ask class as the 2026-06-18 over-fire that was removed
-  then partially reintroduced here.
+  `address-change-missing-fields` misfire (verified 3/3 + regression test). The
+  remaining no-order-ref over-fire (e.g. "can you ship my order to <new address>")
+  is **fixed 2026-06-24**: added a `SHIPPING_ACTION_REQUEST_RES` bail in
+  `hasMerchantPolicyGapIntent` — a request to ship the customer's *own*
+  order/parcel ("ship my order to …", "send it to …") is an order operation and
+  bails before the broad shipping-coverage regex, while object-less coverage
+  questions ("do you ship to Canada", "will you deliver to a PO box") still
+  force-ask. Regression tests in `intent.test.ts` (action bails false; coverage
+  stays true); `intent`/`planner-safety` suites green, package typechecks/lints.

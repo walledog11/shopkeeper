@@ -263,6 +263,15 @@ const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
   /\boffer\s+(any|a)\s+(student|bulk|volume)\s+discount\b/i,
 ];
 
+// A request to ship/send the customer's own order or parcel is an order operation
+// (address change / reship), not a coverage question the merchant must answer. The
+// possessive ("my order", "send it to ...") is what separates it from a general coverage
+// question ("do you ship to Canada"), which has no such object.
+const SHIPPING_ACTION_REQUEST_RES: readonly RegExp[] = [
+  /\b(?:ship|send|deliver|mail|reship|resend)\b[^.?!]{0,20}\b(?:my|our|this|the)\b[^.?!]{0,16}\b(?:order|package|parcel|shipment|delivery|item|items)\b/,
+  /\b(?:ship|send|deliver|mail|reship|resend)\s+(?:it|this|them|that)\s+to\b/,
+];
+
 /** Informational store-policy questions the merchant must answer when KB has no coverage. */
 export function hasMerchantPolicyGapIntent(...texts: string[]): boolean {
   return texts.some((text) => {
@@ -273,6 +282,10 @@ export function hasMerchantPolicyGapIntent(...texts: string[]): boolean {
     if (ORDER_REFERENCE_RE.test(text)) return false;
     if (hasOutOfScopeCommercialRequestSignals(text)) return false;
     if (isInformationalReturnQuestion(text)) return true;
+    // A no-order-ref shipping action ("can you ship my order to <new address>") trips the
+    // broad shipping-coverage regex below; bail so the guard never force-asks the operator
+    // on an order operation. Mirrors the order-reference bail above.
+    if (SHIPPING_ACTION_REQUEST_RES.some((re) => re.test(lower))) return false;
     if (SHIPPING_COVERAGE_QUESTION_RES.some((re) => re.test(lower))) return true;
     return DISCOUNT_POLICY_QUESTION_RES.some((re) => re.test(lower));
   });

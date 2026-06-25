@@ -134,4 +134,19 @@ describe("hasMerchantPolicyGapIntent", () => {
     // specific order, not a general policy question - it must not force ask_operator.
     expect(hasMerchantPolicyGapIntent("Hey, can you ship order #1032 to 123 Maple Lane instead? Thanks.")).toBe(false);
   });
+
+  it("does not treat a no-order-ref shipping action as a policy gap", () => {
+    // The customer's own order/parcel being sent somewhere is an order operation, even
+    // without an order number - it must not force ask_operator the way coverage questions do.
+    expect(hasMerchantPolicyGapIntent("Can you ship my order to a new address?")).toBe(false);
+    expect(hasMerchantPolicyGapIntent("Hey can you send my package to my apartment instead")).toBe(false);
+    expect(hasMerchantPolicyGapIntent("Could you send it to my new address instead?")).toBe(false);
+    expect(hasMerchantPolicyGapIntent("Can you ship my order yet?")).toBe(false);
+  });
+
+  it("still treats general shipping-coverage questions as policy gaps", () => {
+    // No reference to the customer's own parcel - the merchant must answer these.
+    expect(hasMerchantPolicyGapIntent("Will you deliver to a PO box?")).toBe(true);
+    expect(hasMerchantPolicyGapIntent("Do you ship orders to Canada?")).toBe(true);
+  });
 });
