@@ -23,6 +23,9 @@ playwright-report/
 test-results/
 .nyc_output/
 
+# Log files
+*.log
+
 # Turborepo cache
 .turbo/
 
