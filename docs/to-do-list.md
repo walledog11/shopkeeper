@@ -5,52 +5,60 @@ consolidated to the items that are still pending — completed work was removed
 (it lives in git history). It now also carries the product/vision gaps surfaced
 in the 2026-06-23 review.
 
-Last reviewed: 2026-06-24.
+Last reviewed: 2026-06-26.
 
 Roadmap for agent-core extraction and module expansion lives separately in
 [core-extraction-and-module-expansion-plan.md](core-extraction-and-module-expansion-plan.md);
 this file is the near-term task list.
 
+**Guiding principle for pending integrations.** Shopkeeper is still in active
+development — channels and features are being added, not finalized. Pending
+integrations (Instagram DM, TikTok, WhatsApp) are work to *finish and build*,
+not removal candidates. Frame their tasks as "build/finish," and treat
+onboarding sequencing as ordering channels behind the v1 wedge — never as
+dropping or de-advertising a channel.
+
 ## Pre-Release Blockers
 
 Do these before treating production as ready.
 
-- [ ] **Confirm production alerting is live, not just implemented.** Ops-alert
-  instrumentation is complete ([operational-guardrails.md](production/operational-guardrails.md)
-  Phases 0–4); remaining work is Phase 5 / Better Stack Level 1. Without this,
-  `opsAlert` logs are emitted but nothing is listening.
-  - [ ] Better Stack team + escalation policy for the launch owner
-  - [ ] Vercel log drain → Better Stack (dashboard)
-  - [ ] Railway log drain → Better Stack (gateway)
-  - [ ] Log alert rules: `opsAlert` + each of the four `category` values
-    (`queue_health`, `webhook_signature`, `provider_send`, `agent_failure`)
-  - [ ] Uptime monitors: dashboard `/api/health`, gateway `/health/deep`,
-    gateway `/health/queues`
-  - [ ] Controlled alert validation per category
-    (`npm run verify:production:alerts` or runbook steps)
-  - [ ] Kill switch: verify `OPS_ALERTS_ENABLED=false` silences threshold alerts
-    on dashboard and gateway
-  - [ ] Sign-off recorded in [alerting-evidence.md](production/alerting-evidence.md)
-  - Procedure: [runbook.md](production/runbook.md) (External Monitors, Ops Alert
-    Log Routing, Controlled Alert Validation). Deploy with default thresholds;
-    tune only after observing real traffic.
-  - **Prep done (2026-06-24):** verification tooling confirmed functional and
-    consistent with the docs — `scripts/verify-production-alerts.mjs` (dry-run
-    clean against the live URLs) plus both `emit-controlled-ops-alert.ts` helpers;
-    no code changes needed. Production health baseline re-verified live (dashboard
-    `/api/health`, gateway `/health/deep` + `/health/queues` all green) and
-    recorded in [alerting-evidence.md](production/alerting-evidence.md), which now
-    also carries a per-category controlled-trigger cheatsheet — including the drain
-    caveat that the emit helpers log to local stdout, so only deployed-process
-    triggers reach Better Stack (`provider_send` is therefore counter-only). Also
-    closed a latent BullMQ footgun surfaced during the baseline check: `aiSummary`
-    was missing from `DEFAULT_QUEUE_OPTIONS` in
-    `apps/gateway/src/clients/gateway-queues.ts`, so the read-path queue
-    constructor now carries the same `attempts`/`removeOnFail` as the producer.
-    **Still open (all sub-items above):** the Better Stack console config (log
-    drains, alert rules, uptime monitors, escalation policy) and controlled
-    validation in a prod window — none of that is done, so this blocker stays
-    unchecked.
+- [ ] **Production alerting — DEFERRED until first real merchant / paid beta
+  (decided 2026-06-26).** Ops-alert instrumentation is complete
+  ([operational-guardrails.md](production/operational-guardrails.md) Phases 0–4)
+  and free: `opsAlert` logs are emitted today and are readable directly in the
+  Vercel and Railway log views. The only missing piece is an external listener
+  (Phase 5 / Better Stack Level 1). At zero users there is no merchant to protect
+  from a silent failure, and wiring the listener now hits multiple paywalls that
+  aren't worth buying pre-users:
+  - Vercel **custom log drains require a Vercel Pro/Enterprise plan** (blocks
+    forwarding dashboard logs out).
+  - **Railway has no native log drain** — exporting gateway logs needs a forwarder
+    service (e.g. the Locomotive template), not a settings toggle.
+  - Better Stack **free tier excludes escalation policies, sub-3-min check
+    frequency, and phone/SMS paging** (escalation/on-call is the $29 tier); free
+    gives email + Slack alerts and 3-day / 3 GB log retention only.
+  - **Free interim option (no paywall, ~15 min):** create the 3 external uptime
+    monitors (HTTP keyword checks, 3-min frequency, email alerts) against dashboard
+    `/api/health`, gateway `/health/deep`, gateway `/health/queues`. This catches
+    "is prod up?" without any Vercel upgrade or Better Stack paid plan. Everything
+    else (log drains, log-alert rules, controlled validation, kill-switch sign-off)
+    waits.
+  - **Resume trigger:** first real merchant onboards or a closed/paid beta starts —
+    that's when uptime matters and you'll be paying for the tiers anyway.
+  - **When resumed**, the full Better Stack Level 1 checklist (team/escalation,
+    Vercel + Railway log drains, four `category` log-alert rules, uptime monitors,
+    per-category controlled validation, `OPS_ALERTS_ENABLED=false` kill switch,
+    sign-off) lives in [runbook.md](production/runbook.md) and
+    [alerting-evidence.md](production/alerting-evidence.md). Prep already done
+    (2026-06-24): verification tooling (`scripts/verify-production-alerts.mjs` +
+    `emit-controlled-ops-alert.ts` helpers) confirmed working, live health baseline
+    recorded, per-category trigger cheatsheet written.
+  - **Doc debt:** [runbook.md](production/runbook.md) and
+    [error-tracking-plan.md](production/error-tracking-plan.md) still describe a
+    stale Better Stack ("Logs", not the current "Telemetry"), a nonexistent Railway
+    log-drain setting, and "keyword alert rules" (alerts are actually
+    query/threshold-based on a saved chart). Correct these when the work is picked
+    up.
 
 - [x] **Finish the billing write-gate route sweep.** Shared write-gate for
   `past_due` and `canceled` orgs lives in
@@ -102,11 +110,12 @@ what ships.
   `tag` into the prompt (`packages/agent/src/context.ts`, `packages/agent/src/prompt.ts`).
   No new queues, no editable UI, no LLM maintenance jobs.
 
-- [ ] **Decide TikTok's fate — build inbound or stop advertising it.** TikTok is
-  stubs only, yet it's promised on the marketing site and in-app help
+- [ ] **Build the TikTok inbound adapter.** TikTok is stubs only but is already
+  promised on the marketing site and in-app help
   (`apps/dashboard/src/app/(marketing)/_components/Channels.tsx`,
   `Integrations.tsx`, `apps/dashboard/src/app/dashboard/_components/help/content/`).
-  Either wire an inbound adapter or remove the promise.
+  Wire an inbound adapter so the channel matches what's advertised — a pending
+  integration to finish, not a promise to remove.
 
 - [x] **Re-wire iMessage to an operator channel (it was built as customer-support).**
   Intent: iMessage is an *operator* channel exactly like Telegram — the merchant
@@ -161,18 +170,6 @@ what ships.
       (likely folded into `dailyRefundCap`) before they're safe to add.
   - [ ] Fulfillment — no "mark fulfilled" / create shipment / reship-replacement
     helper distinct from `create_shopify_order`. Deferred.
-
-## Onboarding Polish
-
-- [ ] **Refocus the first-run flow around v1:** connect Shopify → configure email
-  forwarding → see first agent reply. Onboarding still presents Gmail/Outlook
-  OAuth as the primary email path instead of forwarding-first setup.
-- [ ] **De-emphasize post-launch channels during onboarding.** Instagram DM is
-  still a first-class channel card in
-  `apps/dashboard/src/app/(onboarding)/onboarding/_components/step-channels.tsx`.
-- [ ] **Add a lightweight completion/progress state.** Local step index is
-  persisted in `concierge-onboarding-v1` localStorage; still need a clearer v1
-  completion signal tied to Shopify + forwarding + first reply.
 
 ## Modules / Roadmap
 
