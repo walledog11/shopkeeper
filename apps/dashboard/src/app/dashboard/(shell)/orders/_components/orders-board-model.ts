@@ -52,8 +52,6 @@ export const ORDER_BOARD_COLUMNS: OrderColumnConfig[] = [
   },
 ]
 
-export const ORDER_COLUMN_IDS = ORDER_BOARD_COLUMNS.map(column => column.id)
-
 const UNPAID_FINANCIAL = new Set(["pending", "authorized", "partially_paid"])
 const CLOSED_FINANCIAL = new Set(["refunded", "voided"])
 const OPEN_FULFILLMENT = new Set([null, "", "unfulfilled", "partial", "partially_fulfilled"])

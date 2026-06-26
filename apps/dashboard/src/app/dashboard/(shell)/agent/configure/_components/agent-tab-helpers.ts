@@ -280,11 +280,6 @@ export const DAY_OPTIONS = [
   ["sun", "Sun"],
 ] as const
 
-export const DIGEST_DAYS_OPTIONS = [
-  ["every_day", "Every day"],
-  ["weekdays", "Weekdays only"],
-] as const
-
 function clampHour(value: string, fallback: number): number {
   const parsed = value.trim() === "" ? fallback : parseInt(value, 10)
   return Math.min(23, Math.max(0, isNaN(parsed) ? fallback : parsed))

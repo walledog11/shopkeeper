@@ -83,8 +83,3 @@ export function decryptToken(stored: string | null | undefined): string | null {
     return null;
   }
 }
-
-export function resetCryptoKeyCacheForTests(): void {
-  cachedKey = null;
-  warnedMissing = false;
-}

@@ -68,15 +68,6 @@ vi.mock("./context-panel/ContextPanel", async () => {
   }
 })
 
-vi.mock("./context-panel/ContextPanelSkeleton", async () => {
-  const React = await import("react")
-  return {
-    default: function MockContextPanelSkeleton() {
-      return React.createElement("aside", { "data-testid": "context-panel-skeleton" }, "Context loading")
-    },
-  }
-})
-
 type LayoutProps = ComponentProps<typeof TicketsPageLayout>
 type LayoutPropsOverrides = {
   actions?: Partial<LayoutProps["actions"]>

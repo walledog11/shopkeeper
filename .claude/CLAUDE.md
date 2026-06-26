@@ -94,7 +94,7 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 - `apps/gateway/src/worker.ts` — BullMQ worker entrypoint
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health + refresh, 90-day archive + purge, queue health monitor
 - `apps/gateway/src/health.ts` — `/health` and `/health/queues` diagnostic endpoints
-- `apps/dashboard/src/lib/redis.ts` — Upstash REST client + rate limiting
+- `apps/dashboard/src/lib/server/redis.ts` — Upstash REST client + rate limiting
 - `apps/dashboard/src/instrumentation.ts` — env validation on server boot
 
 ## Dashboard routes

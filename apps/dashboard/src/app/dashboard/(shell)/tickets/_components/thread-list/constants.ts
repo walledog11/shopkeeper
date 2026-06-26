@@ -23,11 +23,6 @@ export function buildChannelFilters(connectedChannels: ChannelType[]) {
   })
 }
 
-export const CHANNEL_FILTERS = FILTER_IDS.map(id => {
-  const info = getChannelInfo(id)
-  return { id, logo: info.logo, label: info.name }
-})
-
 export function viewToConversationTab(view: TicketListView): "open" | "closed" {
   return view === "closed" ? "closed" : "open"
 }

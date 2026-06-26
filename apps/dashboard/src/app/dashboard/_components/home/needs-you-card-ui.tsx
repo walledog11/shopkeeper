@@ -177,36 +177,6 @@ export function NeedsYouCustomerName({ name }: { name: string | null }) {
   )
 }
 
-export function NeedsYouCardPeekStrip({ item }: { item: HomeNeedsAttentionItem }) {
-  return (
-    <div className="rounded-3xl border border-border/80 bg-card px-5 py-2 shadow-[0_2px_10px_rgba(0,0,0,0.05)] sm:px-6">
-      <NeedsYouCardHeaderRow item={item} tag={item.tag} />
-    </div>
-  )
-}
-
-export function NeedsYouCardCompact({
-  item,
-  edge = "full",
-}: {
-  item: HomeNeedsAttentionItem
-  edge?: "full" | "top" | "bottom"
-}) {
-  return (
-    <div
-      className={cn(
-        "border border-border/80 bg-card px-5 py-2.5 shadow-[0_2px_10px_rgba(0,0,0,0.05)] sm:px-6",
-        edge === "full" && "rounded-3xl py-3 opacity-90 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.05)]",
-        edge === "top" && "rounded-b-3xl border-t-0 bg-card/95",
-        edge === "bottom" && "rounded-t-3xl border-b-0 bg-card/95",
-      )}
-    >
-      <NeedsYouCardHeaderRow item={item} tag={item.tag} />
-      <p className="mt-1 truncate text-sm font-semibold text-foreground/90">{item.headline}</p>
-    </div>
-  )
-}
-
 export function NeedsYouCardTitle({ children }: { children: ReactNode }) {
   return (
     <h3 className="mt-2 text-balance font-sans text-xl font-semibold leading-tight tracking-tight text-foreground line-clamp-3 sm:text-2xl">
