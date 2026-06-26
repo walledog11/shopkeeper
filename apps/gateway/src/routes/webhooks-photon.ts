@@ -1,8 +1,7 @@
 import type { Request, Response, Router } from 'express';
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
 import { getPlatformSpectrumApp, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
-import { getSpectrumConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { stripMarkdown } from '../message-handlers/strip-markdown.js';
@@ -236,15 +235,6 @@ export function registerPhotonWebhookRoutes(router: Router): void {
       );
 
       if (result.status === 401) {
-        const configuredSecret = getSpectrumConfig()?.webhookSecret ?? '';
-        logger.warn(
-          {
-            secretLen: configuredSecret.length,
-            secretFp: createHash('sha256').update(configuredSecret).digest('hex').slice(0, 12),
-            timestamp: req.headers['x-spectrum-timestamp'],
-          },
-          '[Webhook] Photon webhook secret fingerprint (compare against app.photon.codes)',
-        );
         const reason = req.headers['x-spectrum-signature'] ? 'signature_mismatch' : 'missing_signature';
         recordWebhookSignatureFailure(
           'photon',
