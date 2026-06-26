@@ -44,7 +44,7 @@ export default function ImessageCard({
 
   const dialogStatusLine = isConnected
     ? handles.length === 1
-      ? handles[0].displayLabel
+      ? null
       : `${handles.length} iPhones linked`
     : config.description
 
