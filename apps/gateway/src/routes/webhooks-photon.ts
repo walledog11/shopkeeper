@@ -224,7 +224,13 @@ export function registerPhotonWebhookRoutes(router: Router): void {
       );
 
       logger.info(
-        { status: result.status, hasSignature: Boolean(req.headers['x-spectrum-signature']) },
+        {
+          status: result.status,
+          hasSignature: Boolean(req.headers['x-spectrum-signature']),
+          ...(result.status !== 200
+            ? { spectrumReason: new TextDecoder().decode(Buffer.from(result.body)) }
+            : {}),
+        },
         '[Webhook] Photon delivery processed',
       );
 
