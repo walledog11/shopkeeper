@@ -1,9 +1,8 @@
 "use client"
 
-import Link from "next/link"
 import useSWR from "swr"
-import { MessageCircle } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
+import TelegramConnectBanner from "@/app/dashboard/_components/TelegramConnectBanner"
 
 interface Props {
   agentName: string
@@ -28,16 +27,9 @@ export default function AgentPanelTelegramNudge({
 
   if (!connected && showConnectBanner) {
     return (
-      <div className="shrink-0 mx-5 md:mx-6 px-3 py-2 rounded-lg bg-blue-600/10 border border-blue-600/20 text-xs text-blue-800/90">
-        <MessageCircle className="inline size-3 mr-1.5 -mt-px" aria-hidden />
-        Message {agentName} from your phone —{" "}
-        <Link
-          href="/dashboard/integrations#telegram"
-          className="font-semibold underline decoration-blue-700/30 underline-offset-2 hover:decoration-blue-700/60"
-        >
-          Connect Telegram
-        </Link>
-      </div>
+      <TelegramConnectBanner className="shrink-0 mx-5 md:mx-6">
+        Message {agentName} from your phone —
+      </TelegramConnectBanner>
     )
   }
 

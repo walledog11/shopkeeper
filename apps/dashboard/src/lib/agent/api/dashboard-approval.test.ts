@@ -294,7 +294,7 @@ describe("dashboard approval helpers", () => {
       settings: {
         ...settings,
         autonomyTier: "trusted",
-        autoExecuteEnabled: true,
+        autoExecuteMode: "live",
         requireApprovalForActions: false,
         maxRefundAmount: 100,
       },

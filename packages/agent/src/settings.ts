@@ -33,7 +33,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   sampleReplies: [],
   agentName: "Shopkeeper",
   autoPlanOnOpen: true,
-  autoExecuteEnabled: false,
   defaultInstruction: "",
   requireApprovalForActions: true,
   toolsEnabled: {
@@ -119,11 +118,9 @@ export function normalizeStoredOrgSettings(value: unknown): OrgSettingsPatch {
   return normalized;
 }
 
-// Effective auto-execute mode, migrating the legacy boolean `autoExecuteEnabled`
-// (true -> live, false/unset -> off) for orgs that predate `autoExecuteMode`.
 export function resolveAutoExecuteMode(settings: unknown): AutoExecuteMode {
   const normalized = normalizeStoredOrgSettings(settings);
-  return normalized.autoExecuteMode ?? (normalized.autoExecuteEnabled ? "live" : "off");
+  return normalized.autoExecuteMode ?? "off";
 }
 
 export function resolveAgentSettings(settings: unknown): OrgSettings {

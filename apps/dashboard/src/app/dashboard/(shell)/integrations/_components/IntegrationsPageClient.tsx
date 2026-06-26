@@ -19,6 +19,7 @@ import { filterTelegramPlatformConfigs, shouldShowTelegramIntegration } from "@/
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
+import ImessageCard from "@/components/integrations/ImessageCard"
 import {
   getShopifyDisconnectMessage,
   isShopifyIntegrationActive,
@@ -34,20 +35,24 @@ const INTEGRATION_CARD_GRID = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(340
 
 export default function IntegrationsPageClient({
   telegramBotUsername,
+  imessageHandle,
 }: {
   telegramBotUsername: string | null
+  imessageHandle: string | null
 }) {
   return (
     <Suspense fallback={null}>
-      <IntegrationsPageContent telegramBotUsername={telegramBotUsername} />
+      <IntegrationsPageContent telegramBotUsername={telegramBotUsername} imessageHandle={imessageHandle} />
     </Suspense>
   )
 }
 
 function IntegrationsPageContent({
   telegramBotUsername,
+  imessageHandle,
 }: {
   telegramBotUsername: string | null
+  imessageHandle: string | null
 }) {
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
@@ -139,23 +144,6 @@ function IntegrationsPageContent({
     }
   }
 
-  async function handleImessageConnect(creds: { projectId: string; projectSecret: string; webhookSecret: string }): Promise<boolean> {
-    try {
-      const res = await fetch('/api/integrations/imessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(creds),
-      })
-      if (!res.ok) throw new Error()
-      await mutate()
-      showToast('success', 'iMessage connected.')
-      return true
-    } catch {
-      showToast('error', 'Failed to connect. Please try again.')
-      return false
-    }
-  }
-
   async function handleDisconnect(integrationId: string) {
     try {
       const res = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' })
@@ -217,6 +205,10 @@ function IntegrationsPageContent({
       return <TelegramCard key={def.id} config={def} botUsername={telegramBotUsername} />
     }
 
+    if (def.id === 'imessage') {
+      return <ImessageCard key={def.id} config={def} handle={imessageHandle} />
+    }
+
     return (
       <IntegrationCard
         key={def.id}
@@ -224,7 +216,6 @@ function IntegrationsPageContent({
         connected={getConnected(def)}
         lastActivity={getLastActivity(def)}
         onConnect={handleConnect}
-        onImessageConnect={handleImessageConnect}
         onDisconnect={handleDisconnect}
         onLaunchOAuth={launchOAuth}
         open={openId === def.id}

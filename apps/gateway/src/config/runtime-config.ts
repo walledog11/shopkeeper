@@ -164,6 +164,27 @@ export function getTelegramConfig(): TelegramConfig {
   };
 }
 
+export interface SpectrumConfig {
+  projectId: string;
+  projectSecret: string;
+  webhookSecret: string;
+}
+
+// Shopkeeper owns one platform-wide Spectrum project for iMessage (not per-org).
+// Returns null unless all three credentials are present, so callers can treat a
+// partially-configured deployment as "iMessage off".
+export function getSpectrumConfig(): SpectrumConfig | null {
+  const projectId = readOptionalTrimmedEnv('SPECTRUM_PROJECT_ID');
+  const projectSecret = readOptionalTrimmedEnv('SPECTRUM_PROJECT_SECRET');
+  const webhookSecret = readOptionalTrimmedEnv('SPECTRUM_WEBHOOK_SECRET');
+
+  if (!projectId || !projectSecret || !webhookSecret) {
+    return null;
+  }
+
+  return { projectId, projectSecret, webhookSecret };
+}
+
 export interface PostmarkWebhookConfig {
   inboundUsername: string | null;
   inboundPassword: string | null;

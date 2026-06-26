@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
-import AgentAvatar from "../agent-panel/AgentAvatar";
+import AgentAvatar from "@/components/agent/AgentAvatar";
 import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { Logo } from "../sidebar/Logo";
 

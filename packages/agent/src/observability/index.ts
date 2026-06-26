@@ -4,3 +4,4 @@ export {
   REDACTED_EMAIL,
   scrubValue,
 } from './redaction.js';
+export * from './ops-alerts.js';

@@ -69,6 +69,7 @@ import type { MaintenanceResources, ProducerConnection, SharedWorkerOptions } fr
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const ONE_HOUR_MS = 60 * 60 * 1000;
+const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 beforeEach(() => {
@@ -167,7 +168,7 @@ describe('createMaintenanceWorkers', () => {
     expect(readRepeatJob(QUEUE.OUTBOUND_SEND_SWEEP)).toEqual({
       name: JOB.OUTBOUND_SEND_SWEEP,
       jobId: JOB.OUTBOUND_SEND_SWEEP_ID,
-      every: FIVE_MINUTES_MS,
+      every: FIFTEEN_MINUTES_MS,
     });
     expect(readRepeatJob(QUEUE.QUEUE_HEALTH)).toEqual({
       name: JOB.QUEUE_HEALTH_CHECK,

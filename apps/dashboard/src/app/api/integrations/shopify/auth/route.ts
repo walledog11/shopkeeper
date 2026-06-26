@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { getShopifyOAuthAuthorizeConfig } from '@/lib/env';
 import { normalizeShopifyShopDomain } from '@/lib/shopify/oauth';
 import {
   createOAuthSessionCookies,
@@ -16,10 +17,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const clientId = process.env.SHOPIFY_CLIENT_ID;
-  const appUrl = process.env.APP_URL;
+  const oauthConfig = getShopifyOAuthAuthorizeConfig();
 
-  if (!clientId || !appUrl) {
+  if (!oauthConfig) {
     return NextResponse.json(
       { error: 'SHOPIFY_CLIENT_ID or APP_URL is not configured' },
       { status: 500 }
@@ -45,13 +45,12 @@ export async function POST(request: Request) {
     { shop: shopDomain },
   );
 
-  const redirectUri = `${appUrl}/api/integrations/shopify/callback`;
   const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_returns,write_returns,read_products,read_content';
 
   const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
-  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('client_id', oauthConfig.clientId);
   authUrl.searchParams.set('scope', scopes);
-  authUrl.searchParams.set('redirect_uri', redirectUri);
+  authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
   authUrl.searchParams.set('state', state);
   return NextResponse.redirect(authUrl.toString());
 }

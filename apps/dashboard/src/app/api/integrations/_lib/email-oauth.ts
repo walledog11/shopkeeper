@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
+import { readEnv } from '@/lib/env/helpers';
 import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
+import {
+  integrationsResponse,
+  oauthDestinationResponse,
+  resolveOAuthOrganization,
+} from './oauth-callback';
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
@@ -32,8 +37,8 @@ export async function createEmailOAuthAuthorizationResponse(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const clientId = process.env[config.clientIdEnv];
-  const appUrl = process.env.APP_URL;
+  const clientId = readEnv(config.clientIdEnv);
+  const appUrl = readEnv('APP_URL');
   if (!clientId || !appUrl) {
     return NextResponse.json(
       { error: `${config.clientIdEnv} or APP_URL is not configured` },
@@ -61,9 +66,9 @@ export async function completeEmailOAuth(
   request: Request,
   config: EmailOAuthProviderConfig,
 ): Promise<Response> {
-  const appUrl = process.env.APP_URL;
-  const clientId = process.env[config.clientIdEnv];
-  const clientSecret = process.env[config.clientSecretEnv];
+  const appUrl = readEnv('APP_URL');
+  const clientId = readEnv(config.clientIdEnv);
+  const clientSecret = readEnv(config.clientSecretEnv);
   const prefix = logPrefix(config);
 
   if (!appUrl || !clientId || !clientSecret) {
@@ -77,10 +82,10 @@ export async function completeEmailOAuth(
 
   if (oauthError) {
     logger.warn({ error: oauthError }, `[${prefix}] User denied access`);
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=access_denied`);
+    return integrationsResponse(appUrl, { error: 'access_denied' });
   }
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
+    return integrationsResponse(appUrl, { error: 'invalid_callback' });
   }
 
   const callbackSession = await validateOAuthCallbackSession({
@@ -109,7 +114,7 @@ export async function completeEmailOAuth(
 
     if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_in) {
       logger.error({ status: tokenResponse.status }, `[${prefix}] Token exchange failed`);
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
+      return integrationsResponse(appUrl, { error: 'token_exchange_failed' });
     }
 
     const userinfoResponse = await fetch(config.userinfoUrl, {
@@ -120,21 +125,14 @@ export async function completeEmailOAuth(
     const userEmail = config.extractEmail(userinfo);
     if (!userEmail) {
       logger.error(`[${prefix}] userinfo missing email`);
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=no_email`);
+      return integrationsResponse(appUrl, { error: 'no_email' });
     }
 
-    if (!clerkOrgId) {
-      logger.error(`[${prefix}] Missing org cookie — session likely interrupted`);
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
-    }
-    const org = await db.organization.findUnique({ where: { clerkOrgId } });
-    if (!org) {
-      logger.error({ clerkOrgId }, `[${prefix}] Org not found`);
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
-    }
+    const orgResult = await resolveOAuthOrganization(clerkOrgId, prefix);
+    if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
 
     await upsertExclusiveEmailIntegration({
-      organizationId: org.id,
+      organizationId: orgResult.org.id,
       externalAccountId: userEmail,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
@@ -142,13 +140,10 @@ export async function completeEmailOAuth(
       provider: config.provider,
     });
 
-    logger.info({ userEmail, orgId: org.id }, `[${prefix}] Integration saved`);
-    const successUrl = returnTo
-      ? `${appUrl}${returnTo}`
-      : `${appUrl}/dashboard/integrations?connected=${config.provider}`;
-    return NextResponse.redirect(successUrl);
+    logger.info({ userEmail, orgId: orgResult.org.id }, `[${prefix}] Integration saved`);
+    return oauthDestinationResponse(appUrl, returnTo, config.provider);
   } catch (error) {
     logger.error({ err: error }, `[${prefix}] Unexpected error`);
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
+    return integrationsResponse(appUrl, { error: 'server_error' });
   }
 }

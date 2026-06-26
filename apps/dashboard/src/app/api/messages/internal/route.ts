@@ -1,6 +1,6 @@
 /**
  * Internal Send-Message API — called by the gateway when the merchant
- * issues a `REPLY <n> <text>` command from the daily WhatsApp digest.
+ * issues a `REPLY <n> <text>` command from the daily operator digest.
  *
  * Auth: x-internal-secret header (shared secret between gateway and dashboard).
  * No Clerk session required.

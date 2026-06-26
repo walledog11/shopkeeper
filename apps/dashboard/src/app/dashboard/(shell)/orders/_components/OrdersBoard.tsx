@@ -3,7 +3,6 @@
 import { useState, type ComponentType } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ArrowUpRight,
   Clock3,
   CreditCard,
   ExternalLink,
@@ -14,10 +13,14 @@ import {
   Truck,
   User,
 } from "lucide-react"
-import { BoardColumnShell } from "@/app/dashboard/_components/board/BoardColumnShell"
-import { BoardLoadMoreButton } from "@/app/dashboard/_components/board/BoardLoadMoreButton"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
-import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
+import { BoardLoadMoreButton } from "@/app/dashboard/_components/board/BoardLoadMoreButton"
+import {
+  BoardColumnEmpty,
+  BoardColumnError,
+  BoardColumnLoading,
+  DashboardStackColumn,
+} from "@/app/dashboard/_components/board/DashboardStackColumn"
 import { errorMessageFromUnknown } from "@/lib/api/fetcher"
 import { formatRelativeTime, formatShortDate } from "@/lib/format/date"
 import {
@@ -336,98 +339,6 @@ function OrderDetailDialog({
   )
 }
 
-// ── Column chrome ─────────────────────────────────────────────────────────────
-
-function OrderColumnLoading() {
-  return (
-    <div className="space-y-2.5" data-testid="orders-column-loading">
-      {Array.from({ length: 3 }, (_, i) => `orders-board-skeleton-${i}`).map((key) => (
-        <div key={key} className="h-36 animate-pulse rounded-2xl border border-border bg-card px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="size-9 rounded-lg bg-foreground/[0.07]" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-3 w-2/5 rounded bg-foreground/[0.07]" />
-              <div className="h-2.5 w-28 rounded bg-foreground/[0.05]" />
-            </div>
-          </div>
-          <div className="mt-5 flex gap-3">
-            <div className="h-3 w-16 rounded-full bg-foreground/[0.06]" />
-            <div className="h-3 w-20 rounded-full bg-foreground/[0.06]" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function OrderColumnEmpty({ columnId }: { columnId: OrderColumnId }) {
-  const config = ORDER_BOARD_COLUMNS.find((column) => column.id === columnId) ?? ORDER_BOARD_COLUMNS[0]
-  const Icon = COLUMN_ICON[columnId]
-
-  return (
-    <div className="flex h-36 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-foreground/[0.10] bg-card/35 px-4 text-center">
-      <span className="flex size-9 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35">
-        <Icon className="size-4" />
-      </span>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground/60">{config.emptyTitle}</p>
-        <p className="mx-auto max-w-[210px] text-xs leading-relaxed text-foreground/35">{config.emptyBody}</p>
-      </div>
-    </div>
-  )
-}
-
-function OrderColumnError({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="rounded-2xl border border-red-500/15 bg-red-500/[0.06] px-4 py-4">
-      <p className="text-sm font-semibold text-red-300">Failed to load this stack.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-2 text-xs font-semibold text-red-300/70 transition-colors hover:text-red-200"
-      >
-        Try again
-      </button>
-    </div>
-  )
-}
-
-// ── Swipe deck ────────────────────────────────────────────────────────────────
-
-function OrderStackDeck({
-  orders,
-  onExpand,
-  onOpenOrder,
-}: {
-  orders: OrderRow[]
-  onExpand: () => void
-  onOpenOrder: (order: OrderRow) => void
-}) {
-  const cardFor = (order: OrderRow, isPeekCard: boolean) => (
-    <OrderCompactCard order={order} isPeek={isPeekCard} onOpen={onExpand} />
-  )
-
-  return (
-    <StackDeck
-      items={orders}
-      className="flex flex-col gap-2.5 pt-2.5"
-      getId={(order) => String(order.id)}
-      labels={{ previous: "Previous order", next: "Next order" }}
-      controls="count"
-      testId="orders-stack-deck"
-      peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
-      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
-      renderCard={(order, context) => {
-        if (context.total === 1) {
-          return <OrderCompactCard order={order} onOpen={() => onOpenOrder(order)} />
-        }
-        return cardFor(order, context.isPeek)
-      }}
-      renderPeekCard={(order) => cardFor(order, true)}
-    />
-  )
-}
-
 // ── Column ────────────────────────────────────────────────────────────────────
 
 function OrderStackColumn({
@@ -447,65 +358,57 @@ function OrderStackColumn({
 }) {
   const config = ORDER_BOARD_COLUMNS.find((column) => column.id === columnId) ?? ORDER_BOARD_COLUMNS[0]
   const Icon = COLUMN_ICON[columnId]
-  const canExpand = variant === "deck" && state.entries.length > 1
+  const columnState = {
+    ...state,
+    isLoading: state.isLoading || state.isValidating,
+  }
 
   return (
-    <BoardColumnShell
+    <DashboardStackColumn
       label={config.label}
-      count={state.entries.length}
+      state={columnState}
       icon={Icon}
       expanded={expanded}
-      canExpand={canExpand}
       onExpandedChange={onExpandedChange}
-      isLoading={state.isLoading || state.isValidating}
-      error={state.error}
-      loading={<OrderColumnLoading />}
-      errorContent={<OrderColumnError onRetry={state.onRetry} />}
-      empty={<OrderColumnEmpty columnId={columnId} />}
+      getId={(order) => String(order.id)}
+      onOpenItem={onOpenOrder}
+      renderCard={(order, { isPeek, onOpen }) => (
+        <OrderCompactCard order={order} isPeek={isPeek} onOpen={onOpen} />
+      )}
+      deckLabels={{ previous: "Previous order", next: "Next order" }}
+      variant={variant}
+      stackTestId="orders-stack-deck"
+      expandedTestId="orders-stack-expanded"
+      gridTestId="orders-grid"
+      loading={(
+        <BoardColumnLoading
+          testId="orders-column-loading"
+          keyPrefix="orders-board-skeleton"
+          cardClassName="h-36 rounded-2xl"
+          shape="pills"
+        />
+      )}
+      errorContent={(
+        <BoardColumnError
+          className="rounded-2xl"
+          textClassName="text-red-300"
+          onRetry={state.onRetry}
+        />
+      )}
+      empty={(
+        <BoardColumnEmpty
+          title={config.emptyTitle}
+          body={config.emptyBody}
+          icon={Icon}
+          className="h-36 rounded-2xl"
+        />
+      )}
+      loadingLabel="Loading…"
+      peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
+      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
       headerClassName="mb-3 flex items-center justify-between gap-3 px-1"
       titleClassName="truncate text-xs font-semibold uppercase tracking-normal text-foreground/70"
-    >
-      {variant === "grid" ? (
-        <div className="space-y-2.5" data-testid="orders-grid">
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-            {state.entries.map((order) => (
-              <OrderCompactCard key={order.id} order={order} onOpen={() => onOpenOrder(order)} />
-            ))}
-          </div>
-          {state.hasMore ? (
-            <BoardLoadMoreButton
-              isLoadingMore={state.isLoadingMore}
-              loadingLabel="Loading…"
-              onLoadMore={state.onLoadMore}
-            />
-          ) : null}
-        </div>
-      ) : expanded ? (
-        <div className="space-y-2.5" data-testid="orders-stack-expanded">
-          {state.entries.map((order) => (
-            <OrderCompactCard key={order.id} order={order} onOpen={() => onOpenOrder(order)} />
-          ))}
-          {state.hasMore ? (
-            <BoardLoadMoreButton
-              isLoadingMore={state.isLoadingMore}
-              loadingLabel="Loading…"
-              onLoadMore={state.onLoadMore}
-            />
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          <OrderStackDeck orders={state.entries} onExpand={() => onExpandedChange(true)} onOpenOrder={onOpenOrder} />
-          {state.hasMore ? (
-            <BoardLoadMoreButton
-              isLoadingMore={state.isLoadingMore}
-              loadingLabel="Loading…"
-              onLoadMore={state.onLoadMore}
-            />
-          ) : null}
-        </div>
-      )}
-    </BoardColumnShell>
+    />
   )
 }
 

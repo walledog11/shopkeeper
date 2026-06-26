@@ -29,7 +29,6 @@ export interface OrgSettings {
 
   // Default behavior
   autoPlanOnOpen: boolean;
-  autoExecuteEnabled?: boolean; // deprecated: legacy boolean rollout flag, superseded by autoExecuteMode
   autoExecuteMode?: 'off' | 'shadow' | 'live'; // off = approval-only; shadow = record counterfactuals, still approval-only; live = auto-fire
   defaultInstruction: string;
 

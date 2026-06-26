@@ -158,8 +158,7 @@ model Integration {
   metadata          Json?       @default("{}") @db.JsonB
   createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
 
-  organization     Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  imessageBindings OrgMemberImessageBinding[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, platform, externalAccountId])
   @@index([organizationId])
@@ -317,23 +316,21 @@ model OrgMemberTelegramChat {
 }
 
 // One row per iMessage sender handle bound to an org member. iMessage is an
-// operator channel (mirrors Telegram): the merchant texts the org's Spectrum
-// line and the agent replies. A given (integration, sender) is bound to one
-// member at a time; senderId is the merchant's handle, spaceId is the Spectrum
-// space used to reply.
+// operator channel (mirrors Telegram): the merchant texts Shopkeeper's single
+// platform Spectrum line and the agent replies. The binding resolves which org
+// an inbound sender belongs to. senderId (the merchant's handle) is globally
+// unique — one handle binds to one member at a time, matching
+// OrgMemberTelegramChat.chatId. spaceId is the Spectrum space used to reply.
 model OrgMemberImessageBinding {
-  id            String   @id @default(uuid()) @db.Uuid
-  orgMemberId   String   @map("org_member_id") @db.Uuid
-  integrationId String   @map("integration_id") @db.Uuid
-  senderId      String   @map("sender_id") @db.VarChar(255)
-  spaceId       String   @map("space_id") @db.VarChar(255)
-  displayName   String?  @map("display_name") @db.VarChar(255)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  id          String   @id @default(uuid()) @db.Uuid
+  orgMemberId String   @map("org_member_id") @db.Uuid
+  senderId    String   @unique @map("sender_id") @db.VarChar(255)
+  spaceId     String   @map("space_id") @db.VarChar(255)
+  displayName String?  @map("display_name") @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  orgMember   OrgMember   @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
-  integration Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  orgMember OrgMember @relation(fields: [orgMemberId], references: [id], onDelete: Cascade)
 
-  @@unique([integrationId, senderId])
   @@index([orgMemberId])
   @@map("org_member_imessage_bindings")
 }

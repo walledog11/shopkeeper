@@ -168,7 +168,7 @@ describe("POST /api/agent/chat", () => {
   it("auto-executes planned dashboard actions when trusted rollout is enabled", async () => {
     mockResolveAgentSettings.mockReturnValue({
       autonomyTier: "trusted",
-      autoExecuteEnabled: true,
+      autoExecuteMode: "live",
       requireApprovalForActions: false,
       maxRefundAmount: 100,
       dailyRefundCap: null,

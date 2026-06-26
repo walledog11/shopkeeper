@@ -4,10 +4,11 @@ import { normalizeTelegramBotUsername } from "@/lib/integrations/telegram-visibi
 
 export default function IntegrationsPage() {
   const telegramBotUsername = normalizeTelegramBotUsername(process.env.TELEGRAM_BOT_USERNAME)
+  const imessageHandle = process.env.IMESSAGE_LINE_HANDLE?.trim() || null
 
   return (
     <Suspense fallback={null}>
-      <IntegrationsPageClient telegramBotUsername={telegramBotUsername} />
+      <IntegrationsPageClient telegramBotUsername={telegramBotUsername} imessageHandle={imessageHandle} />
     </Suspense>
   )
 }

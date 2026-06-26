@@ -1,21 +1,7 @@
-"use client"
-
-import Link from "next/link"
-import { MessageCircle } from "lucide-react"
+import TelegramConnectBanner from "@/app/dashboard/_components/TelegramConnectBanner"
 
 export default function HomeTelegramNudge({ connected }: { connected: boolean }) {
   if (connected) return null
 
-  return (
-    <div className="rounded-md border border-blue-600/20 bg-blue-600/10 px-4 py-2.5 text-xs text-blue-700">
-      <MessageCircle className="mr-1.5 inline size-3.5 -mt-px" aria-hidden />
-      Get plan approvals on your phone —{" "}
-      <Link
-        href="/dashboard/integrations#telegram"
-        className="font-semibold underline decoration-blue-700/30 underline-offset-2 hover:decoration-blue-700/60"
-      >
-        Connect Telegram
-      </Link>
-    </div>
-  )
+  return <TelegramConnectBanner>Get plan approvals on your phone —</TelegramConnectBanner>
 }

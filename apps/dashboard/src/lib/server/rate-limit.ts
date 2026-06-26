@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server';
 import { Redis as IORedis } from 'ioredis';
+import {
+  fixedWindowRateLimit,
+  getFixedWindowPeriod,
+  type FixedWindowCounterClient,
+  type RateLimitResult,
+} from '@shopkeeper/agent/rate-limit';
 import { getRedis } from '@/lib/server/redis';
 
 interface RateLimitOptions {
   forceForE2E?: boolean;
-}
-
-interface RedisRateLimitClient {
-  incr(key: string): Promise<number>;
-  expire(key: string, seconds: number): Promise<unknown>;
 }
 
 let e2eRedis: IORedis | null = null;
@@ -28,34 +29,28 @@ export async function rateLimit(
   limit = 10,
   windowSecs = 60,
   options: RateLimitOptions = {},
-): Promise<{ success: boolean; remaining: number; reset: number }> {
-  const now = Math.floor(Date.now() / 1000);
-  const windowStart = Math.floor(now / windowSecs);
-  const windowKey = `rl:${key}:${windowStart}`;
-  const reset = (windowStart + 1) * windowSecs;
+): Promise<RateLimitResult> {
+  const { resetAt: reset } = getFixedWindowPeriod(windowSecs);
 
   if (isE2ERateLimitBypassEnabled(process.env, options)) {
     return { success: true, remaining: limit, reset };
   }
 
+  // Fail closed outside development so a missing Redis can't bypass the limit.
+  const failOpen = process.env.NODE_ENV === 'development';
+
   try {
     const client = getRateLimitClient(options);
-    const count = await client.incr(windowKey);
-    if (count === 1) {
-      // Set expiry only on first increment so the key is cleaned up automatically
-      await client.expire(windowKey, windowSecs);
-    }
-    return { success: count <= limit, remaining: Math.max(0, limit - count), reset };
+    return await fixedWindowRateLimit(client, key, { limit, windowSecs, failOpen });
   } catch {
-    // Redis unavailable — fail closed in production to prevent rate-limit bypass
-    if (process.env.NODE_ENV !== 'development') {
-      return { success: false, remaining: 0, reset };
-    }
-    return { success: true, remaining: limit, reset };
+    // Resolving the client threw (e.g. Redis env missing) — apply the same policy.
+    return failOpen
+      ? { success: true, remaining: limit, reset }
+      : { success: false, remaining: 0, reset };
   }
 }
 
-function getRateLimitClient(options: RateLimitOptions): RedisRateLimitClient {
+function getRateLimitClient(options: RateLimitOptions): FixedWindowCounterClient {
   if (isE2ERateLimitForceEnabled(process.env, options)) {
     return getE2ERedis();
   }

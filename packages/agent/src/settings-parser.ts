@@ -33,7 +33,6 @@ const SETTINGS_KEYS = [
   "sampleReplies",
   "agentName",
   "autoPlanOnOpen",
-  "autoExecuteEnabled",
   "autoExecuteMode",
   "defaultInstruction",
   "requireApprovalForActions",
@@ -67,7 +66,6 @@ const SETTINGS_KEYS = [
 
 const BOOLEAN_FIELDS = [
   "autoPlanOnOpen",
-  "autoExecuteEnabled",
   "requireApprovalForActions",
   "blockCancellations",
   "blockCustomLineItems",
@@ -439,8 +437,12 @@ function parseSettingsObject(value: unknown, mode: ParseMode): OrgSettingsPatch 
   readBusinessHoursDays(value, output, context);
   readSampleReplies(value, output, context);
 
-  if (output.autoExecuteMode === undefined && typeof output.autoExecuteEnabled === "boolean") {
-    output.autoExecuteMode = output.autoExecuteEnabled ? "live" : "off";
+  if (
+    context.mode === "stored"
+    && output.autoExecuteMode === undefined
+    && typeof value.autoExecuteEnabled === "boolean"
+  ) {
+    output.autoExecuteMode = value.autoExecuteEnabled ? "live" : "off";
   }
 
   if (context.issues.length > 0) {

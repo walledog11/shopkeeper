@@ -4,7 +4,6 @@ import logger from '../logger.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
-  FIVE_MINUTES_MS,
   scheduleRepeatableJob,
   type MaintenanceJobRegistration,
 } from './registration.js';
@@ -20,6 +19,9 @@ import {
 // double-send against a still-live job. The query intentionally has no channel
 // filter so every async outbound channel is covered by this one job.
 const STALE_PENDING_MS = 10 * 60 * 1000;
+// Kept well above the DB's autosuspend window so the compute can scale to zero
+// between runs; this is a backstop, not the primary send path.
+const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const SWEEP_ERROR = 'Send did not complete — message was queued but never sent. Retry to resend.';
 
 export async function runOutboundSendSweep(): Promise<void> {
@@ -40,7 +42,7 @@ export async function runOutboundSendSweep(): Promise<void> {
 
 export const registerOutboundSendSweepMaintenanceJob: MaintenanceJobRegistration = async (context) => {
   const queue = createMaintenanceQueue(context, QUEUE.OUTBOUND_SEND_SWEEP);
-  await scheduleRepeatableJob(queue, JOB.OUTBOUND_SEND_SWEEP, JOB.OUTBOUND_SEND_SWEEP_ID, FIVE_MINUTES_MS);
+  await scheduleRepeatableJob(queue, JOB.OUTBOUND_SEND_SWEEP, JOB.OUTBOUND_SEND_SWEEP_ID, SWEEP_INTERVAL_MS);
 
   const worker = createMaintenanceWorker(context, QUEUE.OUTBOUND_SEND_SWEEP, runOutboundSendSweep, {
     label: 'OutboundSendSweep',

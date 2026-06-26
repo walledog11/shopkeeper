@@ -106,6 +106,10 @@
       "types": "./dist/lock/redis-lock.d.ts",
       "default": "./dist/lock/redis-lock.js"
     },
+    "./rate-limit": {
+      "types": "./dist/rate-limit/index.d.ts",
+      "default": "./dist/rate-limit/index.js"
+    },
     "./observability": {
       "types": "./dist/observability/index.d.ts",
       "default": "./dist/observability/index.js"

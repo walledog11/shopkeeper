@@ -198,7 +198,7 @@ describe("POST /api/agent/quick-approve", () => {
     };
     const { thread } = await createThreadWithCachedPlan(plan, "Handle this", {
       autonomyTier: "trusted",
-      autoExecuteEnabled: true,
+      autoExecuteMode: "live",
       maxRefundAmount: 100,
     });
 

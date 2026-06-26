@@ -23,6 +23,111 @@ export function getDashboardAppUrl(): string {
   throw new Error('[Dashboard] Missing required environment variable: APP_URL');
 }
 
+function readRequiredConfig(names: readonly string[]): Record<string, string> | null {
+  const values: Record<string, string> = {};
+  for (const name of names) {
+    const value = readEnv(name);
+    if (!value) return null;
+    values[name] = value;
+  }
+  return values;
+}
+
+export interface ShopifyOAuthAuthorizeConfig {
+  appUrl: string;
+  clientId: string;
+  redirectUri: string;
+}
+
+export interface ShopifyOAuthCallbackConfig extends ShopifyOAuthAuthorizeConfig {
+  clientSecret: string;
+}
+
+export function getShopifyOAuthAuthorizeConfig(): ShopifyOAuthAuthorizeConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'SHOPIFY_CLIENT_ID']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    clientId: config.SHOPIFY_CLIENT_ID,
+    redirectUri: `${appUrl}/api/integrations/shopify/callback`,
+  };
+}
+
+export function getShopifyOAuthCallbackConfig(): ShopifyOAuthCallbackConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'SHOPIFY_CLIENT_ID', 'SHOPIFY_CLIENT_SECRET']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    clientId: config.SHOPIFY_CLIENT_ID,
+    clientSecret: config.SHOPIFY_CLIENT_SECRET,
+    redirectUri: `${appUrl}/api/integrations/shopify/callback`,
+  };
+}
+
+export interface MetaOAuthAuthorizeConfig {
+  appUrl: string;
+  appId: string;
+  configId: string;
+  redirectUri: string;
+}
+
+export interface MetaOAuthCallbackConfig {
+  appUrl: string;
+  appId: string;
+  appSecret: string;
+  redirectUri: string;
+}
+
+export function getMetaOAuthAuthorizeConfig(): MetaOAuthAuthorizeConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'META_APP_ID', 'META_CONFIG_ID']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    appId: config.META_APP_ID,
+    configId: config.META_CONFIG_ID,
+    redirectUri: `${appUrl}/api/integrations/instagram/callback`,
+  };
+}
+
+export function getMetaOAuthCallbackConfig(): MetaOAuthCallbackConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'META_APP_ID', 'META_APP_SECRET']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    appId: config.META_APP_ID,
+    appSecret: config.META_APP_SECRET,
+    redirectUri: `${appUrl}/api/integrations/instagram/callback`,
+  };
+}
+
+export function getBillingPriceIds(): Record<'starter' | 'pro', string | undefined> {
+  return {
+    starter: readEnv('PRICE_ID_STARTER') ?? undefined,
+    pro: readEnv('PRICE_ID_PRO') ?? readEnv('PRICE_ID') ?? undefined,
+  };
+}
+
+export function getBillingTierPriceId(tier: string): string | undefined {
+  const priceIds = getBillingPriceIds();
+  return tier === 'starter' || tier === 'pro' ? priceIds[tier] : undefined;
+}
+
+export function resolveBillingPlanName(priceId: string | null): string {
+  if (!priceId) return 'Free';
+  const priceIds = getBillingPriceIds();
+  if (priceId === priceIds.starter) return 'Starter';
+  if (priceId === priceIds.pro) return 'Pro';
+  return 'Paid';
+}
+
+export function getInboundEmailDomain(): string {
+  return readEnv('INBOUND_EMAIL_DOMAIN') ?? 'inbound.shopkeeper.app';
+}
+
 export function validateDashboardEnv(): void {
   const required = [
     'DATABASE_URL',

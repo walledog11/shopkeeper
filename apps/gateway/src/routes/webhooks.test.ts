@@ -15,7 +15,7 @@ import {
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
-const { mockLogger, queueAddSpy, getSpectrumAppForIntegrationSpy, spectrumWebhookSpy, uploadInboundAttachmentSpy } = vi.hoisted(() => ({
+const { mockLogger, queueAddSpy, getPlatformSpectrumAppSpy, spectrumWebhookSpy, uploadInboundAttachmentSpy, SpectrumConfigError } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -23,9 +23,10 @@ const { mockLogger, queueAddSpy, getSpectrumAppForIntegrationSpy, spectrumWebhoo
     warn: vi.fn(),
   },
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
-  getSpectrumAppForIntegrationSpy: vi.fn(),
+  getPlatformSpectrumAppSpy: vi.fn(),
   spectrumWebhookSpy: vi.fn(),
   uploadInboundAttachmentSpy: vi.fn(),
+  SpectrumConfigError: class SpectrumIntegrationConfigError extends Error {},
 }));
 
 vi.mock('ioredis', () => ({
@@ -56,7 +57,8 @@ vi.mock('../logger.js', () => ({
 }));
 
 vi.mock('../clients/spectrum.js', () => ({
-  getSpectrumAppForIntegration: getSpectrumAppForIntegrationSpy,
+  getPlatformSpectrumApp: getPlatformSpectrumAppSpy,
+  SpectrumIntegrationConfigError: SpectrumConfigError,
 }));
 
 vi.mock('../storage/blob.js', () => ({
@@ -76,10 +78,10 @@ const app = createWebhookRouterApp(webhookRoutes, { urlencoded: true });
 beforeEach(async () => {
   org = await createTestOrg();
   queueAddSpy.mockClear();
-  getSpectrumAppForIntegrationSpy.mockReset();
+  getPlatformSpectrumAppSpy.mockReset();
   spectrumWebhookSpy.mockReset();
   uploadInboundAttachmentSpy.mockReset();
-  getSpectrumAppForIntegrationSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
+  getPlatformSpectrumAppSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
   spectrumWebhookSpy.mockResolvedValue({ status: 200, headers: {}, body: new Uint8Array() });
   uploadInboundAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
   clearMockLogger(mockLogger);
@@ -222,23 +224,10 @@ describe('POST /webhooks/meta', () => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /webhooks/photon/:integrationId — iMessage ingestion through Spectrum
+// POST /webhooks/photon — iMessage ingestion through the platform Spectrum line
 // ---------------------------------------------------------------------------
-describe('POST /webhooks/photon/:integrationId', () => {
-  async function createImessageIntegration() {
-    return db.integration.create({
-      data: {
-        organizationId: org.id,
-        platform: ChannelType.imessage,
-        externalAccountId: 'photon_project_123',
-        accessToken: 'photon_project_secret',
-        refreshToken: 'photon_webhook_secret',
-      },
-    });
-  }
-
-  it('passes the raw request to Spectrum and dispatches to the operator agent', async () => {
-    const integration = await createImessageIntegration();
+describe('POST /webhooks/photon', () => {
+  it('passes the raw request to the platform Spectrum app and dispatches to the operator agent', async () => {
     const sendSpy = vi.fn().mockResolvedValue(undefined);
     spectrumWebhookSpy.mockImplementationOnce(async (requestInput, handler) => {
       await handler(
@@ -258,7 +247,7 @@ describe('POST /webhooks/photon/:integrationId', () => {
 
     const body = JSON.stringify({ event: 'message' });
     const res = await request(app)
-      .post(`/webhooks/photon/${integration.id}`)
+      .post('/webhooks/photon')
       .set('Content-Type', 'application/json')
       .set('x-spectrum-signature', 'v0=test')
       .set('x-spectrum-timestamp', '1781716800')
@@ -266,11 +255,7 @@ describe('POST /webhooks/photon/:integrationId', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toBe('OK');
-    expect(getSpectrumAppForIntegrationSpy).toHaveBeenCalledWith(expect.objectContaining({
-      id: integration.id,
-      organizationId: org.id,
-      platform: ChannelType.imessage,
-    }));
+    expect(getPlatformSpectrumAppSpy).toHaveBeenCalledOnce();
     expect(spectrumWebhookSpy).toHaveBeenCalledOnce();
     const [webhookRequest] = spectrumWebhookSpy.mock.calls[0];
     expect(Buffer.isBuffer(webhookRequest.body)).toBe(true);
@@ -285,10 +270,8 @@ describe('POST /webhooks/photon/:integrationId', () => {
     expect(sendSpy.mock.calls[0][0]).toContain('Integrations → iMessage');
   });
 
-  it('uploads Spectrum attachment content and dispatches to the operator agent', async () => {
-    const integration = await createImessageIntegration();
+  it('flattens non-text content to a label and dispatches without uploading an attachment', async () => {
     const sendSpy = vi.fn().mockResolvedValue(undefined);
-    uploadInboundAttachmentSpy.mockResolvedValueOnce('blob:attachments/org/receipt.png');
     spectrumWebhookSpy.mockImplementationOnce(async (_requestInput, handler) => {
       await handler(
         { id: 'any;-;+15557654321', __platform: 'iMessage', send: sendSpy },
@@ -304,7 +287,7 @@ describe('POST /webhooks/photon/:integrationId', () => {
             id: 'attachment_001',
             name: 'receipt.png',
             mimeType: 'image/png',
-            read: vi.fn().mockResolvedValue(Buffer.from('fake-image')),
+            read: vi.fn(),
             stream: vi.fn(),
           },
         },
@@ -313,44 +296,40 @@ describe('POST /webhooks/photon/:integrationId', () => {
     });
 
     const res = await request(app)
-      .post(`/webhooks/photon/${integration.id}`)
+      .post('/webhooks/photon')
       .set('Content-Type', 'application/json')
       .set('x-spectrum-signature', 'v0=test')
       .send(JSON.stringify({ event: 'message' }));
 
     expect(res.status).toBe(200);
-    expect(uploadInboundAttachmentSpy).toHaveBeenCalledWith(
-      org.id,
-      'receipt.png',
-      'image/png',
-      Buffer.from('fake-image').toString('base64'),
-    );
+    // Operator channel: attachment bytes are never persisted to org blob storage.
+    expect(uploadInboundAttachmentSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
     expect(sendSpy).toHaveBeenCalledOnce();
   });
 
-  it('returns 404 when the integration id is unknown', async () => {
+  it('returns 503 when iMessage is not configured on the deployment', async () => {
+    getPlatformSpectrumAppSpy.mockRejectedValueOnce(new SpectrumConfigError('not configured'));
+
     const res = await request(app)
-      .post('/webhooks/photon/00000000-0000-0000-0000-000000000000')
+      .post('/webhooks/photon')
       .set('Content-Type', 'application/json')
+      .set('x-spectrum-signature', 'v0=test')
       .send(JSON.stringify({ event: 'message' }));
 
-    expect(res.status).toBe(404);
-    expect(getSpectrumAppForIntegrationSpy).not.toHaveBeenCalled();
+    expect(res.status).toBe(503);
     expect(spectrumWebhookSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
   it('returns 401 when the global JSON parser did not capture a raw body', async () => {
-    const integration = await createImessageIntegration();
-
     const res = await request(app)
-      .post(`/webhooks/photon/${integration.id}`)
+      .post('/webhooks/photon')
       .set('Content-Type', 'text/plain')
       .send('not-json');
 
     expect(res.status).toBe(401);
-    expect(getSpectrumAppForIntegrationSpy).not.toHaveBeenCalled();
+    expect(getPlatformSpectrumAppSpy).not.toHaveBeenCalled();
     expect(spectrumWebhookSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
   });

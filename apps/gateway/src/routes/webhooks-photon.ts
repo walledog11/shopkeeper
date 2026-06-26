@@ -1,11 +1,9 @@
 import type { Request, Response, Router } from 'express';
 import { randomUUID } from 'crypto';
-import { db, ChannelType } from '@shopkeeper/db';
 import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
-import { getSpectrumAppForIntegration } from '../clients/spectrum.js';
+import { getPlatformSpectrumApp, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
 import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
-import { uploadInboundAttachment } from '../storage/blob.js';
 import { stripMarkdown } from '../message-handlers/strip-markdown.js';
 import { getRateLimitRedis } from './webhooks-shared.js';
 import { handleImessageOperatorMessage } from './imessage/message-handler.js';
@@ -14,13 +12,6 @@ import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
 } from './webhooks-signature-alerts.js';
-
-type ReadableContent = Extract<Content, { type: 'attachment' | 'voice' }>;
-
-interface NormalizedContent {
-  text: string | null;
-  attachmentUrls: string[];
-}
 
 function normalizeHeaders(headers: Request['headers']): Record<string, string> {
   const normalized: Record<string, string> = {};
@@ -55,45 +46,19 @@ function contactText(content: Extract<Content, { type: 'contact' }>): string {
   return details.length > 0 ? `Contact: ${details.join(' ')}` : '[Contact]';
 }
 
-async function uploadReadableContent(
-  organizationId: string,
-  messageId: string,
-  content: ReadableContent,
-): Promise<string | null> {
-  const buffer = await content.read();
-  const fallbackExt = content.type === 'voice' ? 'm4a' : 'bin';
-  const contentName = 'name' in content ? safeTrim(content.name) : null;
-  const filename = contentName ?? `${content.type}-${messageId}.${fallbackExt}`;
-  const contentType = safeTrim(content.mimeType) ?? 'application/octet-stream';
-  return uploadInboundAttachment(
-    organizationId,
-    filename,
-    contentType,
-    Buffer.from(buffer).toString('base64'),
-  );
-}
-
-async function normalizeContent(
-  organizationId: string,
-  messageId: string,
-  content: Content,
-  attachmentUrls: string[],
-): Promise<string | null> {
+// iMessage is operator-only: the merchant texts an instruction and the agent acts
+// on it. Rich content is flattened to a text label for the operator handler — no
+// org-scoped attachment persistence (the agent never consumes the bytes).
+function normalizeContent(content: Content): string | null {
   switch (content.type) {
     case 'text':
       return safeTrim(content.text);
     case 'markdown':
       return safeTrim(content.markdown);
-    case 'attachment': {
-      const url = await uploadReadableContent(organizationId, messageId, content);
-      if (url) attachmentUrls.push(url);
+    case 'attachment':
       return `Attachment: ${content.name}`;
-    }
-    case 'voice': {
-      const url = await uploadReadableContent(organizationId, messageId, content);
-      if (url) attachmentUrls.push(url);
+    case 'voice':
       return '[Voice message]';
-    }
     case 'contact':
       return contactText(content);
     case 'richlink':
@@ -106,16 +71,12 @@ async function normalizeContent(
       return `Poll option ${content.selected ? 'selected' : 'cleared'}: ${content.title}`;
     case 'custom':
       return '[Unsupported iMessage content: custom]';
-    case 'group': {
-      const parts = await Promise.all(
-        content.items.map((item) => normalizeContent(organizationId, item.id, item.content, attachmentUrls)),
-      );
-      return safeTrim(parts.filter(Boolean).join('\n'));
-    }
+    case 'group':
+      return safeTrim(content.items.map((item) => normalizeContent(item.content)).filter(Boolean).join('\n'));
     case 'effect':
-      return normalizeContent(organizationId, messageId, content.content, attachmentUrls);
+      return normalizeContent(content.content);
     case 'reply':
-      return normalizeContent(organizationId, messageId, content.content, attachmentUrls);
+      return normalizeContent(content.content);
     case 'streamText':
     case 'typing':
     case 'rename':
@@ -129,15 +90,6 @@ async function normalizeContent(
   }
 }
 
-async function normalizeMessageContent(
-  organizationId: string,
-  message: Message,
-): Promise<NormalizedContent> {
-  const attachmentUrls: string[] = [];
-  const text = await normalizeContent(organizationId, message.id, message.content, attachmentUrls);
-  return { text, attachmentUrls };
-}
-
 const IMESSAGE_DEDUPE_TTL_SECONDS = 300;
 
 // Spectrum webhooks deliver at-least-once, so claim each provider message id
@@ -145,10 +97,10 @@ const IMESSAGE_DEDUPE_TTL_SECONDS = 300;
 // and must never run twice on a redelivery or a Photon timeout-retry. Returns
 // true on first delivery, false on a duplicate. Fails open on a Redis error —
 // dropping a merchant instruction is worse than a rare duplicate.
-async function claimImessageMessage(integrationId: string, messageId: string): Promise<boolean> {
+async function claimImessageMessage(messageId: string): Promise<boolean> {
   try {
     const claimed = await getRateLimitRedis().set(
-      `imsg:op:${integrationId}:${messageId}`,
+      `imsg:op:${messageId}`,
       '1',
       'EX',
       IMESSAGE_DEDUPE_TTL_SECONDS,
@@ -156,26 +108,24 @@ async function claimImessageMessage(integrationId: string, messageId: string): P
     );
     return claimed === 'OK';
   } catch (err) {
-    logger.warn({ err, integrationId, messageId }, '[Webhook] iMessage dedupe check failed — processing anyway');
+    logger.warn({ err, messageId }, '[Webhook] iMessage dedupe check failed — processing anyway');
     return true;
   }
 }
 
-// iMessage is an operator channel: the merchant texts the org's dedicated Spectrum
-// line and the operator agent replies synchronously. No customer ever reaches this
+// iMessage is an operator channel: the merchant texts Shopkeeper's platform line
+// and the operator agent replies synchronously. No customer ever reaches this
 // path, so there is no ticket/customer persistence — dispatch straight to the
-// operator handler, mirroring the Telegram webhook.
+// operator handler (which resolves the org from the sender binding), mirroring
+// the Telegram webhook.
 async function dispatchInboundImessageMessage(
-  integration: { id: string; organizationId: string },
   space: Space,
   message: Message,
   traceId: string,
 ): Promise<void> {
-  const { id: integrationId, organizationId } = integration;
-
   if (message.direction !== 'inbound') {
     logger.info(
-      { organizationId, messageId: message.id, direction: message.direction, traceId },
+      { messageId: message.id, direction: message.direction, traceId },
       '[Webhook] Photon non-inbound message skipped',
     );
     return;
@@ -183,27 +133,26 @@ async function dispatchInboundImessageMessage(
 
   const senderId = safeTrim(message.sender?.id);
   if (!senderId) {
-    logger.warn({ organizationId, messageId: message.id, traceId }, '[Webhook] Photon message missing sender id');
+    logger.warn({ messageId: message.id, traceId }, '[Webhook] Photon message missing sender id');
     return;
   }
 
   const externalSpaceId = safeTrim(space.id);
   if (!externalSpaceId) {
-    logger.warn({ organizationId, messageId: message.id, senderId, traceId }, '[Webhook] Photon message missing space id');
+    logger.warn({ messageId: message.id, senderId, traceId }, '[Webhook] Photon message missing space id');
     return;
   }
 
   const messageId = safeTrim(message.id);
-  if (messageId && !(await claimImessageMessage(integrationId, messageId))) {
-    logger.info({ organizationId, senderId, messageId, traceId }, '[Webhook] iMessage duplicate delivery skipped');
+  if (messageId && !(await claimImessageMessage(messageId))) {
+    logger.info({ senderId, messageId, traceId }, '[Webhook] iMessage duplicate delivery skipped');
     return;
   }
 
-  const { text, attachmentUrls } = await normalizeMessageContent(organizationId, message);
-  const body = safeTrim(text) ?? (attachmentUrls.length > 0 ? '[Attachment]' : null);
+  const body = safeTrim(normalizeContent(message.content));
   if (!body) {
     logger.info(
-      { organizationId, messageId: message.id, senderId, contentType: message.content.type, traceId },
+      { messageId: message.id, senderId, contentType: message.content.type, traceId },
       '[Webhook] Photon message has no persistable content',
     );
     return;
@@ -215,8 +164,6 @@ async function dispatchInboundImessageMessage(
 
   // Sender carries no display name inbound (User = { id }); binding label stays null.
   await handleImessageOperatorMessage({
-    integrationId,
-    organizationId,
     senderId,
     spaceId: externalSpaceId,
     body,
@@ -225,19 +172,13 @@ async function dispatchInboundImessageMessage(
   });
 
   logger.info(
-    { organizationId, senderId, messageId: message.id, externalSpaceId, traceId },
+    { senderId, messageId: message.id, externalSpaceId, traceId },
     '[Webhook] iMessage operator handled',
   );
 }
 
 export function registerPhotonWebhookRoutes(router: Router): void {
-  router.post('/photon/:integrationId', async (req: Request, res: Response) => {
-    const integrationId = typeof req.params.integrationId === 'string' ? req.params.integrationId.trim() : '';
-
-    if (!integrationId) {
-      return res.sendStatus(404);
-    }
-
+  router.post('/photon', async (req: Request, res: Response) => {
     if (!req.rawBody) {
       logger.warn('[Webhook] Photon missing raw body — rejecting.');
       recordWebhookSignatureFailure(
@@ -245,7 +186,7 @@ export function registerPhotonWebhookRoutes(router: Router): void {
         'missing_raw_body',
         {
           counterClient: getRateLimitRedis(),
-          route: '/webhooks/photon/:integrationId',
+          route: '/webhooks/photon',
           request: buildWebhookSignatureRequestMetadata(req),
         },
       ).catch((err) => logger.error({ err }, '[Webhook] Photon signature alert error'));
@@ -253,44 +194,37 @@ export function registerPhotonWebhookRoutes(router: Router): void {
     }
 
     try {
-      const integration = await db.integration.findUnique({
-        where: { id: integrationId },
-        select: {
-          id: true,
-          organizationId: true,
-          platform: true,
-          externalAccountId: true,
-          accessToken: true,
-          refreshToken: true,
-        },
-      });
-
-      if (!integration || integration.platform !== ChannelType.imessage) {
-        logger.warn({ integrationId }, '[Webhook] Photon integration not found — rejecting.');
-        return res.sendStatus(404);
-      }
-
-      const photonRateLimit = await rateLimit(getRateLimitRedis(), `webhook:photon:${integration.organizationId}`);
+      const photonRateLimit = await rateLimit(getRateLimitRedis(), 'webhook:photon');
       if (!photonRateLimit.success) {
-        logger.warn({ organizationId: integration.organizationId }, '[Webhook] Photon rate limit exceeded');
+        logger.warn('[Webhook] Photon rate limit exceeded');
         return sendTooManyRequests(res, photonRateLimit.reset);
       }
 
-      const app = await getSpectrumAppForIntegration(integration);
+      let app;
+      try {
+        app = await getPlatformSpectrumApp();
+      } catch (error) {
+        if (error instanceof SpectrumIntegrationConfigError) {
+          logger.warn('[Webhook] Photon webhook received but iMessage is not configured');
+          return res.sendStatus(503);
+        }
+        throw error;
+      }
+
       const result = await app.webhook(
         { body: req.rawBody, headers: normalizeHeaders(req.headers) },
         async (space, message) => {
           const traceId = randomUUID();
           try {
-            await dispatchInboundImessageMessage(integration, space, message, traceId);
+            await dispatchInboundImessageMessage(space, message, traceId);
           } catch (error) {
-            logger.error({ err: error, integrationId, traceId }, '[Webhook] iMessage operator dispatch failed');
+            logger.error({ err: error, traceId }, '[Webhook] iMessage operator dispatch failed');
           }
         },
       );
 
       logger.info(
-        { integrationId, status: result.status, hasSignature: Boolean(req.headers['x-spectrum-signature']) },
+        { status: result.status, hasSignature: Boolean(req.headers['x-spectrum-signature']) },
         '[Webhook] Photon delivery processed',
       );
 
@@ -301,7 +235,7 @@ export function registerPhotonWebhookRoutes(router: Router): void {
           reason,
           {
             counterClient: getRateLimitRedis(),
-            route: '/webhooks/photon/:integrationId',
+            route: '/webhooks/photon',
             request: buildWebhookSignatureRequestMetadata(req),
           },
         ).catch((err) => logger.error({ err }, '[Webhook] Photon signature alert error'));
@@ -309,7 +243,7 @@ export function registerPhotonWebhookRoutes(router: Router): void {
 
       return sendSpectrumResult(res, result);
     } catch (error) {
-      logger.error({ err: error, integrationId }, '[Webhook] Photon webhook failed');
+      logger.error({ err: error }, '[Webhook] Photon webhook failed');
       return res.sendStatus(500);
     }
   });

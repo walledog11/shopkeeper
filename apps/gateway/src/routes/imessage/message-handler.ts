@@ -12,8 +12,6 @@ import { progressOnlyPresence, type OperatorMessageContext, type OperatorReply }
 import { handleImessageBinding } from './binding.js';
 
 export interface ImessageOperatorInbound {
-  integrationId: string;
-  organizationId: string;
   senderId: string;
   spaceId: string;
   body: string;
@@ -22,20 +20,21 @@ export interface ImessageOperatorInbound {
 }
 
 // Operator-channel iMessage dispatch — the iMessage equivalent of
-// handleTelegramMessage. The merchant texts the org's dedicated Spectrum line and
-// the operator agent replies; no customer ever reaches this path. Reuses the same
-// command handlers as Telegram via the channel-neutral OperatorMessageContext.
+// handleTelegramMessage. The merchant texts Shopkeeper's platform Spectrum line
+// and the operator agent replies; no customer ever reaches this path. The sender
+// binding resolves which org the handle belongs to. Reuses the same command
+// handlers as Telegram via the channel-neutral OperatorMessageContext.
 export async function handleImessageOperatorMessage(message: ImessageOperatorInbound): Promise<void> {
-  const { integrationId, organizationId, senderId, spaceId, body, displayName, reply } = message;
+  const { senderId, spaceId, body, displayName, reply } = message;
 
   const binding = await db.orgMemberImessageBinding.findUnique({
-    where: { integrationId_senderId: { integrationId, senderId } },
+    where: { senderId },
     include: { orgMember: true },
   });
 
   // Unbound sender: the only valid action is to text a connect token.
   if (!binding) {
-    await handleImessageBinding({ integrationId, senderId, spaceId, body, displayName, reply });
+    await handleImessageBinding({ senderId, spaceId, body, displayName, reply });
     return;
   }
 
@@ -46,6 +45,7 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
       .catch((err) => logger.warn({ err, bindingId: binding.id }, '[iMessage] Failed to refresh binding'));
   }
 
+  const organizationId = binding.orgMember.organizationId;
   const clerkUserId = binding.orgMember.clerkUserId;
   const chatId = senderId;
   const context = await getContext(organizationId, chatId);

@@ -35,7 +35,7 @@ shopkeeper/
 2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
 3. Worker upserts customer/thread/message, sanitizes input (prompt injection protection), deduplicates by `externalMessageId`
 4. Worker enqueues AI summary job → Claude generates 1-sentence summary + tag (Shipping/Returns/Order Status/Product Inquiry/General)
-5. After summarizing, worker calls `/api/agent/plan-internal` to generate an agent plan, then sends Telegram notification to all bound org members
+5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends a Telegram notification to all bound org members
 6. Dashboard polls `/api/threads?status=open` via SWR every 3s and shows the new thread
 7. Agent opens the ticket → auto-plan is shown → agent approves → `POST /api/agent` executes
 
@@ -57,25 +57,19 @@ shopkeeper/
 
 ## Dashboard Navigation Structure
 ```
+Home                     /dashboard               — daily briefing + open work
 Inbox                    /dashboard/tickets       — main support queue
-Conversations
-  Saved Replies          /dashboard/canned-responses
-Automation
-  Concierge              /dashboard/agent         — standalone AI agent chat
-  Memory                 /dashboard/kb            — knowledge base
-Storefront
-  Orders                 /dashboard/orders        — Shopify order browser
-  Customers              /dashboard/customers     — Shopify customer browser
-Insights
-  Analytics              /dashboard/analytics
-  Reports                /dashboard/reports       — exportable reports + GDPR data export
+Agent
+  Configure              /dashboard/agent/configure — autonomy, voice, guardrails
+  Memory                 /dashboard/kb            — knowledge base + brand context
+  Review                 /dashboard/review        — approve and refine agent responses
+Shop                     /dashboard/orders        — Shopify orders + customers
 Workspace
-  Team                   /dashboard/team
-  Integrations           /dashboard/integrations
-Footer
-  Feedback               /dashboard/feedback
-  Settings               /dashboard/settings
+  Settings               /dashboard/settings      — workspace + billing
+  Integrations           /dashboard/integrations  — connect channels and external tools
+  Team                   /dashboard/team          — members, roles, and access
 ```
+The standalone Concierge agent chat lives at `/dashboard/agent` (each session opens a new `dashboard_agent` thread); it is reached from the Agent surface rather than the top-level nav.
 
 ## AI Agent System
 The agent is the core of the product. It operates in two modes:
@@ -93,7 +87,7 @@ Direct interface for the merchant/team. No customer in context — the agent tak
 - **Telegram**: new ticket notification sent to all bound org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
 
 ### Agent Tools
-Tool registry and execution live under `apps/dashboard/src/lib/agent/tools/`.
+Tool registry and execution live in the extracted core under `packages/agent/src/tools/` (`@shopkeeper/agent`).
 
 **Read tools** (no side effects, executed in plan phase 1.5 to inform dependent writes):
 - `search_kb` — full-text search of knowledge base articles
@@ -162,25 +156,13 @@ Configurable per org via Settings → Agent tab:
 - Articles have tags for context-filtered retrieval (agent gets KB articles matching thread tag)
 - Shopify KB sync: imports products/policies from connected Shopify store
 
-### Saved Replies (Canned Responses)
-- Org-scoped, searchable via command palette
-- Tagged for filtering
-
-### Analytics
-- Ticket volume chart, channel breakdown, top topics, overview stats, audit log
+### Review
+- `/dashboard/review` — approve, refine, and audit agent responses before they go out
 
 ### Orders / Customers (Storefront)
 - `/dashboard/orders` — Shopify order browser with fulfillment/payment status filters, stat strip, search, pagination
 - `/dashboard/customers` — Shopify customer browser
 - Orders page has "New thread" action that finds/creates a support thread for a Shopify customer (`POST /api/threads/shopify`)
-
-### Reports
-- `/dashboard/reports` — exportable reports with date range selector (7d / 30d / 90d / all time / custom range)
-- **Support Summary** — total tickets, resolved count, resolution rate, avg first reply time, breakdown by channel; CSV export
-- **Agent Activity** — agent runs, replies sent, refunds issued, cancellations, order edits, orders created, address updates, top tools used; CSV export
-- **Top Topics** — ticket distribution by AI-assigned tag with percentage bars; CSV export
-- **Customer Contact** — unique customers, repeat customers (3+ tickets), most active customers list; CSV export
-- **GDPR / CCPA Data Export** — enter customer email → download all their data as JSON (Art. 15 compliance)
 
 ### Billing
 - Stripe subscriptions (starter/pro tiers)
@@ -207,7 +189,6 @@ Configurable per org via Settings → Agent tab:
 - **Message** — belongs to thread. `senderType`: customer/agent/ai/note. Agent action logs are stored as `note` messages prefixed with `__shopkeeper_agent__` (legacy rows may use `__clerk_agent__`).
 - **OperatorContext** — persists Telegram operator conversation state per (org, chatId) (history, pendingPlan, pendingDigest, lastOrderNumber). DB-backed, not Redis.
 - **OrgMember** — extends Clerk org membership with a bound Telegram chat for operator notifications.
-- **CannedResponse** — org-scoped saved replies with tags.
 - **KnowledgeBase** — named KB container. `source`: "user" | "shopify".
 - **KbArticle** — belongs to org + KB. Has tags for context filtering.
 - **Feedback** — in-app NPS/survey (rating + comment + categories).
@@ -217,16 +198,14 @@ Configurable per org via Settings → Agent tab:
 - `apps/gateway/src/worker.ts` — BullMQ worker: inbound message processing + AI summary + maintenance workers
 - `apps/gateway/src/message-handlers/` — per-channel job handlers (`channels.ts`), AI summary generation (`intelligence.ts`), Telegram plan notification (`planning.ts`)
 - `apps/gateway/src/maintenance/workers.ts` — daily IG token health check, 90-day archive + 90-day purge workers
-- `apps/dashboard/src/lib/agent/runner.ts` — core agent: `buildContext()`, `planAgent()`, `runAgent()`
-- `apps/dashboard/src/lib/agent/tools/index.ts` — tool exports + public tool metadata
-- `apps/dashboard/src/lib/agent/tools/registry.ts` — tool registry, categories, and plan-step labels
-- `apps/dashboard/src/lib/agent/tools/shopify.ts` — Shopify-facing agent tool wrappers
-- `apps/dashboard/src/lib/agent/tools/thread.ts` — thread/message tool implementations
-- `apps/dashboard/src/lib/agent/shopify/` — Shopify API clients, serializers, and validators
-- `apps/dashboard/src/lib/agent/settings.ts` — agent settings defaults + resolver
+- `packages/agent/` (`@shopkeeper/agent`) — extracted agent core (`context.ts`, `planner.ts`, `run.ts`, `prompt.ts`, `tools/registry/`, `shopify/`, `settings.ts`); consumed by both apps via subpath exports
+- `packages/agent/src/tools/registry/` — tool registry, categories, and plan-step labels
+- `packages/agent/src/settings.ts` — agent settings defaults + resolver
+- `apps/dashboard/src/lib/agent/runner.ts` — dashboard host adapter: re-exports core `buildContext()`/`planAgent()`/`runAgent()` with dashboard infrastructure injected
+- `apps/dashboard/src/lib/agent/tools/thread.ts` — dashboard thread/message tool sink (provider delivery)
+- `apps/dashboard/src/lib/agent/shopify/` — dashboard Shopify host wiring
 - `apps/dashboard/src/app/api/agent/route.ts` — POST: execute agent run on a ticket thread
 - `apps/dashboard/src/app/api/agent/plan/route.ts` — POST: generate plan (no side effects)
-- `apps/dashboard/src/app/api/agent/plan-internal/route.ts` — internal-only plan endpoint called by gateway
 - `apps/dashboard/src/app/api/agent/chat/route.ts` — standalone Concierge chat sessions
 - `apps/dashboard/src/app/api/messages/route.ts` — outbound message dispatch
 - `apps/dashboard/src/app/api/threads/route.ts` — GET threads list

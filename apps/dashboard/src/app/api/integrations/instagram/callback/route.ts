@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
+import { getMetaOAuthCallbackConfig } from '@/lib/env';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
+import {
+  integrationsResponse,
+  oauthDestinationResponse,
+  resolveOAuthOrganization,
+} from '@/app/api/integrations/_lib/oauth-callback';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
 
@@ -12,14 +17,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const appUrl = process.env.APP_URL;
-  const appId = process.env.META_APP_ID;
-  const appSecret = process.env.META_APP_SECRET;
+  const oauthConfig = getMetaOAuthCallbackConfig();
 
-  if (!appUrl || !appId || !appSecret) {
+  if (!oauthConfig) {
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
-  const redirectUri = `${appUrl}/api/integrations/instagram/callback`;
+  const { appId, appSecret, appUrl, redirectUri } = oauthConfig;
 
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
@@ -28,11 +31,11 @@ export async function POST(request: Request) {
 
   if (error) {
     logger.warn({ error }, '[IG OAuth] User denied access');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=access_denied`);
+    return integrationsResponse(appUrl, { error: 'access_denied' });
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=invalid_callback`);
+    return integrationsResponse(appUrl, { error: 'invalid_callback' });
   }
 
   const callbackSession = await validateOAuthCallbackSession({
@@ -59,7 +62,7 @@ export async function POST(request: Request) {
         { status: tokenRes.status, errorType: tokenData.error?.type, errorCode: tokenData.error?.code },
         '[IG OAuth] Token exchange failed',
       );
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=token_exchange_failed`);
+      return integrationsResponse(appUrl, { error: 'token_exchange_failed' });
     }
     const shortLivedToken: string = tokenData.access_token;
 
@@ -99,7 +102,7 @@ export async function POST(request: Request) {
 
     if (!igPage?.instagram_business_account) {
       logger.error('[IG OAuth] No Instagram Business account found');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=no_ig_account`);
+      return integrationsResponse(appUrl, { error: 'no_ig_account' });
     }
 
     const pageToken = igPage.access_token;
@@ -138,32 +141,23 @@ export async function POST(request: Request) {
     // accessToken = Page Access Token (used for sending messages)
     // fromEmail   = Instagram @username (displayed in the UI)
     // ---------------------------------------------------------------
-    if (!clerkOrgId) {
-      logger.error('[IG OAuth] Missing org cookie — session likely interrupted');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
-    }
-    const org = await db.organization.findUnique({ where: { clerkOrgId } });
-    if (!org) {
-      logger.error({ clerkOrgId }, '[IG OAuth] Org not found');
-      return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
-    }
+    const orgResult = await resolveOAuthOrganization(clerkOrgId, 'IG OAuth');
+    if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
+
     const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
     const integrationData = { accessToken: pageToken, refreshToken: userToken, fromEmail: igUsername, tokenExpiresAt };
     await upsertRaceSafeIntegration({
-      organizationId: org.id,
+      organizationId: orgResult.org.id,
       platform: 'ig_dm',
       externalAccountId: igAccountId,
       data: integrationData,
     });
 
-    logger.info({ igUsername, igAccountId, orgId: org.id }, '[IG OAuth] Integration saved');
-    const successUrl = returnTo
-      ? `${appUrl}${returnTo}`
-      : `${appUrl}/dashboard/integrations?connected=instagram`;
-    return NextResponse.redirect(successUrl);
+    logger.info({ igUsername, igAccountId, orgId: orgResult.org.id }, '[IG OAuth] Integration saved');
+    return oauthDestinationResponse(appUrl, returnTo, 'instagram');
 
   } catch (err) {
     logger.error({ err }, '[IG OAuth] Unexpected error');
-    return NextResponse.redirect(`${appUrl}/dashboard/integrations?error=server_error`);
+    return integrationsResponse(appUrl, { error: 'server_error' });
   }
 }

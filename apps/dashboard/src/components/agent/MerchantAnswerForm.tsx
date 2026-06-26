@@ -4,6 +4,7 @@ import { useState } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import FloatingToast from "@/components/ui/FloatingToast"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 
 export interface MerchantAnswerResult {
   saveToKb: boolean
@@ -94,23 +95,14 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
               {agentName} remembers this so it won&apos;t ask again.
             </span>
           </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={saveToKb}
-            aria-label={saveToKb ? "Don't save this answer" : "Save this answer"}
-            onClick={() => setSaveToKb(value => !value)}
+          <Switch
+            tone="amber"
+            checked={saveToKb}
+            onChange={setSaveToKb}
             disabled={isSubmitting || succeeded}
-            className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none disabled:opacity-40 ${
-              saveToKb ? "bg-amber-400" : "bg-foreground/[0.15]"
-            }`}
-          >
-            <span
-              className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
-                saveToKb ? "translate-x-4" : "translate-x-0.5"
-              }`}
-            />
-          </button>
+            className="mt-0.5"
+            ariaLabel={saveToKb ? "Don't save this answer" : "Save this answer"}
+          />
         </div>
 
         {error && (

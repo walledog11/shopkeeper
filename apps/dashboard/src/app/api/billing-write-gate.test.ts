@@ -24,7 +24,7 @@ import { POST as kbBasesPost } from './kb/bases/route';
 import { POST as kbArticlePost } from './kb/bases/[id]/articles/route';
 import { PATCH as kbArticlePatch } from './kb/[id]/route';
 import { POST as integrationsPost } from './integrations/route';
-import { POST as imessagePost } from './integrations/imessage/route';
+import { POST as imessageBindPost } from './integrations/imessage/bind/route';
 import { POST as shopifyKbSyncPost } from './integrations/shopify/kb-sync/route';
 import { POST as telegramPost } from './integrations/telegram/route';
 
@@ -43,7 +43,7 @@ const GATED_ROUTES: Array<{ name: string; handler: RouteHandler; params?: Record
   { name: 'POST /api/kb/bases/[id]/articles', handler: kbArticlePost, params: { id: 'kb_1' } },
   { name: 'PATCH /api/kb/[id]', handler: kbArticlePatch, params: { id: 'art_1' } },
   { name: 'POST /api/integrations', handler: integrationsPost },
-  { name: 'POST /api/integrations/imessage', handler: imessagePost },
+  { name: 'POST /api/integrations/imessage/bind', handler: imessageBindPost },
   { name: 'POST /api/integrations/shopify/kb-sync', handler: shopifyKbSyncPost },
   { name: 'POST /api/integrations/telegram', handler: telegramPost },
 ];

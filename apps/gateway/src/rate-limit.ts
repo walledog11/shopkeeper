@@ -1,6 +1,6 @@
 import type { Redis as IORedis } from 'ioredis';
 import type { Response } from 'express';
-import { getFixedWindowPeriod, incrementFixedWindowCounter } from './fixed-window-counter.js';
+import { fixedWindowRateLimit, type RateLimitResult } from '@shopkeeper/agent/rate-limit';
 
 /**
  * Fixed-window rate limiter backed by Redis INCR.
@@ -18,19 +18,12 @@ export async function rateLimit(
   key: string,
   limit = 60,
   windowSecs = 60,
-): Promise<{ success: boolean; remaining: number; reset: number }> {
-  const { windowStart, resetAt } = getFixedWindowPeriod(windowSecs);
-  const windowKey = `rl:${key}:${windowStart}`;
-
-  try {
-    const count = await incrementFixedWindowCounter(redis, windowKey, windowSecs);
-    return { success: count <= limit, remaining: Math.max(0, limit - count), reset: resetAt };
-  } catch {
-    if (process.env.NODE_ENV === 'production') {
-      return { success: false, remaining: 0, reset: resetAt };
-    }
-    return { success: true, remaining: limit, reset: resetAt };
-  }
+): Promise<RateLimitResult> {
+  return fixedWindowRateLimit(redis, key, {
+    limit,
+    windowSecs,
+    failOpen: process.env.NODE_ENV !== 'production',
+  });
 }
 
 /** Sends a 429 response with standard rate-limit headers */

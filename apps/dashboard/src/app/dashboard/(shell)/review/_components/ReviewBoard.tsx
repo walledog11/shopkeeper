@@ -17,10 +17,13 @@ import {
   ThumbsUp,
   Wrench,
 } from "lucide-react"
-import { BoardColumnShell } from "@/app/dashboard/_components/board/BoardColumnShell"
-import { BoardLoadMoreButton } from "@/app/dashboard/_components/board/BoardLoadMoreButton"
 import { DashboardDetailDialog } from "@/app/dashboard/_components/board/DashboardDetailDialog"
-import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
+import {
+  BoardColumnEmpty,
+  BoardColumnError,
+  BoardColumnLoading,
+  DashboardStackColumn,
+} from "@/app/dashboard/_components/board/DashboardStackColumn"
 import {
   actionLogEntryHref,
   correctReplyHref,
@@ -129,63 +132,6 @@ function hasReplyOutput(entry: ActionLogEntry): boolean {
 
 function displayFeedback(entry: ActionLogEntry, override: Feedback | undefined): Feedback {
   return override === undefined ? entry.feedback : override
-}
-
-function ReviewColumnLoading() {
-  return (
-    <div className="space-y-2.5" data-testid="review-column-loading">
-      {Array.from({ length: 3 }, (_, i) => `review-board-skeleton-${i}`).map((key) => (
-        <div key={key} className="h-40 animate-pulse rounded-lg border border-border bg-card px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="size-9 rounded-lg bg-foreground/[0.07]" />
-            <div className="min-w-0 flex-1 space-y-2">
-              <div className="h-3 w-3/5 rounded bg-foreground/[0.07]" />
-              <div className="h-2.5 w-24 rounded bg-foreground/[0.05]" />
-            </div>
-          </div>
-          <div className="mt-5 space-y-2">
-            <div className="h-3 w-4/5 rounded bg-foreground/[0.06]" />
-            <div className="h-3 w-full rounded bg-foreground/[0.05]" />
-            <div className="h-3 w-2/3 rounded bg-foreground/[0.05]" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function ReviewColumnEmpty({ columnId }: { columnId: ReviewColumnId }) {
-  const config = REVIEW_BOARD_COLUMNS.find((column) => column.id === columnId) ?? REVIEW_BOARD_COLUMNS[0]
-  const Icon = COLUMN_ACCENT[columnId].icon
-
-  return (
-    <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-foreground/[0.10] bg-card/35 px-4 text-center">
-      <span className="flex size-9 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35">
-        <Icon className="size-4" />
-      </span>
-      <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground/60">{config.emptyTitle}</p>
-        <p className="mx-auto max-w-[210px] text-xs leading-relaxed text-foreground/35">
-          {config.emptyBody}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function ReviewColumnError({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="rounded-lg border border-red-500/15 bg-red-500/[0.06] px-4 py-4">
-      <p className="text-sm font-semibold text-red-200">Failed to load this stack.</p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="mt-2 text-xs font-semibold text-red-200/70 transition-colors hover:text-red-100"
-      >
-        Try again
-      </button>
-    </div>
-  )
 }
 
 function FeedbackControls({
@@ -539,61 +485,6 @@ function ReviewDetail({
   )
 }
 
-function ReviewStackDeck({
-  entries,
-  feedbackFor,
-  isNew,
-  onExpand,
-  onFeedbackChange,
-  onOpenEntry,
-}: {
-  entries: ActionLogEntry[]
-  feedbackFor: (entry: ActionLogEntry) => Feedback
-  isNew: (entry: ActionLogEntry) => boolean
-  onExpand: () => void
-  onFeedbackChange: (entry: ActionLogEntry, next: Feedback) => void
-  onOpenEntry: (entry: ActionLogEntry) => void
-}) {
-  const cardFor = (entry: ActionLogEntry, isPeekCard: boolean) => (
-    <ReviewCompactCard
-      entry={entry}
-      feedback={feedbackFor(entry)}
-      isPeek={isPeekCard}
-      isNew={!isPeekCard && isNew(entry)}
-      onFeedbackChange={(next) => onFeedbackChange(entry, next)}
-      onOpen={onExpand}
-    />
-  )
-
-  return (
-    <StackDeck
-      items={entries}
-      className="flex flex-col gap-2.5 pt-2.5"
-      getId={(entry) => entry.id}
-      labels={{ previous: "Previous review item", next: "Next review item" }}
-      controls="count"
-      testId="review-stack-deck"
-      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
-      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
-      renderCard={(entry, context) => {
-        if (context.total === 1) {
-          return (
-            <ReviewCompactCard
-              entry={entry}
-              feedback={feedbackFor(entry)}
-              isNew={isNew(entry)}
-              onFeedbackChange={(next) => onFeedbackChange(entry, next)}
-              onOpen={() => onOpenEntry(entry)}
-            />
-          )
-        }
-        return cardFor(entry, context.isPeek)
-      }}
-      renderPeekCard={(entry) => cardFor(entry, true)}
-    />
-  )
-}
-
 function ReviewStackColumn({
   columnId,
   state,
@@ -615,63 +506,50 @@ function ReviewStackColumn({
 }) {
   const config = REVIEW_BOARD_COLUMNS.find((column) => column.id === columnId) ?? REVIEW_BOARD_COLUMNS[0]
   const accent = COLUMN_ACCENT[columnId]
-  const Icon = accent.icon
-  const canExpand = state.entries.length > 1
 
   return (
-    <BoardColumnShell
+    <DashboardStackColumn
       label={config.label}
       description={config.description}
-      count={state.entries.length}
-      icon={Icon}
+      state={state}
+      icon={accent.icon}
       accentDotClassName={accent.dot}
       expanded={expanded}
-      canExpand={canExpand}
       onExpandedChange={onExpandedChange}
-      isLoading={state.isLoading}
-      error={state.error}
-      loading={<ReviewColumnLoading />}
-      errorContent={<ReviewColumnError onRetry={state.onRetry} />}
-      empty={<ReviewColumnEmpty columnId={columnId} />}
-    >
-      {expanded ? (
-        <div className="space-y-2.5" data-testid="review-stack-expanded">
-          {state.entries.map((entry) => (
-            <ReviewCompactCard
-              key={entry.id}
-              entry={entry}
-              feedback={feedbackFor(entry)}
-              isNew={isNew(entry)}
-              onFeedbackChange={(next) => onFeedbackChange(entry, next)}
-              onOpen={() => onOpenEntry(entry)}
-            />
-          ))}
-          {state.hasMore ? (
-            <BoardLoadMoreButton
-              isLoadingMore={state.isLoadingMore}
-              onLoadMore={state.onLoadMore}
-            />
-          ) : null}
-        </div>
-      ) : (
-        <div className="space-y-2.5">
-          <ReviewStackDeck
-            entries={state.entries}
-            feedbackFor={feedbackFor}
-            isNew={isNew}
-            onExpand={() => onExpandedChange(true)}
-            onFeedbackChange={onFeedbackChange}
-            onOpenEntry={onOpenEntry}
-          />
-          {state.hasMore ? (
-            <BoardLoadMoreButton
-              isLoadingMore={state.isLoadingMore}
-              onLoadMore={state.onLoadMore}
-            />
-          ) : null}
-        </div>
+      getId={(entry) => entry.id}
+      onOpenItem={onOpenEntry}
+      renderCard={(entry, { isPeek, onOpen }) => (
+        <ReviewCompactCard
+          entry={entry}
+          feedback={feedbackFor(entry)}
+          isPeek={isPeek}
+          isNew={!isPeek && isNew(entry)}
+          onFeedbackChange={(next) => onFeedbackChange(entry, next)}
+          onOpen={onOpen}
+        />
       )}
-    </BoardColumnShell>
+      deckLabels={{ previous: "Previous review item", next: "Next review item" }}
+      stackTestId="review-stack-deck"
+      expandedTestId="review-stack-expanded"
+      loading={(
+        <BoardColumnLoading
+          testId="review-column-loading"
+          keyPrefix="review-board-skeleton"
+          cardClassName="h-40 rounded-lg"
+        />
+      )}
+      errorContent={<BoardColumnError className="rounded-lg" onRetry={state.onRetry} />}
+      empty={(
+        <BoardColumnEmpty
+          title={config.emptyTitle}
+          body={config.emptyBody}
+          icon={accent.icon}
+          className="h-40 rounded-lg"
+        />
+      )}
+      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
+      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
+    />
   )
 }
 

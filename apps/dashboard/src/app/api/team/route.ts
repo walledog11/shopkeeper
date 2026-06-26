@@ -1,20 +1,22 @@
 import { NextResponse } from 'next/server';
-import { auth, clerkClient } from '@clerk/nextjs/server';
-import { handleApiError } from '@/lib/api/errors';
+import { clerkClient } from '@clerk/nextjs/server';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { getDashboardAppUrl } from '@/lib/env';
-import { requireOrgAdmin } from '@/app/api/team/_lib/auth';
+import { withClerkOrgRoute } from '@/lib/api/clerk-route';
 import { parseTeamInviteBody } from '@/app/api/team/_lib/validation';
 
-export async function GET() {
-  try {
-    const { orgId } = await auth();
-    if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 401 });
-
+export const GET = withClerkOrgRoute(
+  {
+    context: 'Team GET',
+    errorMessage: 'Failed to fetch team',
+    requireUser: false,
+    unauthorizedMessage: 'No org',
+  },
+  async ({ auth }) => {
     const client = await clerkClient();
     const [memberships, invitations] = await Promise.all([
-      client.organizations.getOrganizationMembershipList({ organizationId: orgId, limit: 100 }),
-      client.organizations.getOrganizationInvitationList({ organizationId: orgId, status: ['pending'] }),
+      client.organizations.getOrganizationMembershipList({ organizationId: auth.orgId, limit: 100 }),
+      client.organizations.getOrganizationInvitationList({ organizationId: auth.orgId, status: ['pending'] }),
     ]);
 
     return NextResponse.json({
@@ -35,25 +37,20 @@ export async function GET() {
         createdAt: i.createdAt,
       })),
     });
-  } catch (error) {
-    return handleApiError(error, 'Team GET', 'Failed to fetch team');
-  }
-}
+  },
+);
 
-export async function POST(request: Request) {
-  try {
-    const { orgId, userId, orgRole } = await auth();
-    if (!orgId || !userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    requireOrgAdmin(orgRole);
-
+export const POST = withClerkOrgRoute(
+  { context: 'Team POST', errorMessage: 'Failed to invite member', requireAdmin: true },
+  async ({ auth, request }) => {
     const { emailAddress, role } = parseTeamInviteBody(await readRequiredJsonObject(request));
 
     const client = await clerkClient();
     const invitation = await client.organizations.createOrganizationInvitation({
-      organizationId: orgId,
+      organizationId: auth.orgId,
       emailAddress,
       role,
-      inviterUserId: userId,
+      inviterUserId: auth.userId as string,
       redirectUrl: `${getDashboardAppUrl()}/dashboard`,
     });
 
@@ -63,17 +60,12 @@ export async function POST(request: Request) {
       role: invitation.role,
       createdAt: invitation.createdAt,
     });
-  } catch (error) {
-    return handleApiError(error, 'Team POST', 'Failed to invite member');
-  }
-}
+  },
+);
 
-export async function DELETE(request: Request) {
-  try {
-    const { orgId, userId: requestingUserId, orgRole } = await auth();
-    if (!orgId || !requestingUserId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    requireOrgAdmin(orgRole);
-
+export const DELETE = withClerkOrgRoute(
+  { context: 'Team DELETE', errorMessage: 'Failed to remove member', requireAdmin: true },
+  async ({ auth, request }) => {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const invitationId = searchParams.get('invitationId');
@@ -82,18 +74,16 @@ export async function DELETE(request: Request) {
 
     if (invitationId) {
       await client.organizations.revokeOrganizationInvitation({
-        organizationId: orgId,
+        organizationId: auth.orgId,
         invitationId,
-        requestingUserId,
+        requestingUserId: auth.userId as string,
       });
     } else if (userId) {
-      await client.organizations.deleteOrganizationMembership({ organizationId: orgId, userId });
+      await client.organizations.deleteOrganizationMembership({ organizationId: auth.orgId, userId });
     } else {
       return NextResponse.json({ error: 'userId or invitationId required' }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    return handleApiError(error, 'Team DELETE', 'Failed to remove member');
-  }
-}
+  },
+);

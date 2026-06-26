@@ -4,9 +4,10 @@ import { db } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
-import { handleApiError } from '@/lib/api/errors';
 import { readRequiredJsonObject } from '@/lib/api/body';
-import { assertBillingWriteAllowed } from '@/lib/billing/write-gate';
+import { withClerkOrgRoute } from '@/lib/api/clerk-route';
+import { withOrgRoute } from '@/lib/api/route';
+import { getInboundEmailDomain, resolveBillingPlanName } from '@/lib/env';
 import {
   buildSettingsUpdate,
   hasVersionConflict,
@@ -20,34 +21,28 @@ import {
   readWorkspaceDeleteConfirmation,
 } from './_lib/delete-workspace';
 
-function resolvePlanName(priceId: string | null): string {
-  if (!priceId) return 'Free';
-  if (priceId === process.env.PRICE_ID_STARTER) return 'Starter';
-  if (priceId === process.env.PRICE_ID_PRO || priceId === process.env.PRICE_ID) return 'Pro';
-  return 'Paid';
-}
-
-export async function GET() {
-  try {
-    const org = await getOrCreateOrg();
+export const GET = withOrgRoute(
+  { context: 'Org GET', errorMessage: 'Failed to fetch org' },
+  async ({ org }) => {
     return NextResponse.json({
       id: org.id,
       name: org.name,
       settings: normalizeStoredOrgSettings(org.settings),
       version: org.updatedAt.toISOString(),
-      planName: resolvePlanName(org.stripePriceId),
+      planName: resolveBillingPlanName(org.stripePriceId),
       stripeStatus: org.stripeStatus,
-      inboundEmailDomain: process.env.INBOUND_EMAIL_DOMAIN || 'inbound.shopkeeper.app',
+      inboundEmailDomain: getInboundEmailDomain(),
     });
-  } catch (error) {
-    return handleApiError(error, 'Org GET', 'Failed to fetch org');
-  }
-}
+  },
+);
 
-export async function PATCH(request: Request) {
-  try {
-    const org = await getOrCreateOrg();
-    assertBillingWriteAllowed(org);
+export const PATCH = withOrgRoute(
+  {
+    context: 'Org PATCH',
+    errorMessage: 'Failed to update org',
+    requireBillingWriteAllowed: true,
+  },
+  async ({ org, request }) => {
     const body = await readRequiredJsonObject(request, {
       malformed: { message: 'Invalid JSON body' },
       empty: { message: 'Invalid JSON body' },
@@ -95,21 +90,12 @@ export async function PATCH(request: Request) {
       settings: normalizeStoredOrgSettings(updated.settings),
       version: updated.updatedAt.toISOString(),
     });
-  } catch (error) {
-    return handleApiError(error, 'Org PATCH', 'Failed to update org');
-  }
-}
+  },
+);
 
-export async function DELETE(request: Request) {
-  try {
-    const { orgId, userId, orgRole } = await auth();
-    if (!orgId || !userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    if (orgRole !== 'org:admin') {
-      return NextResponse.json({ error: 'Admin role required' }, { status: 403 });
-    }
-
+export const DELETE = withClerkOrgRoute(
+  { context: 'Org DELETE', errorMessage: 'Failed to delete workspace', requireAdmin: true },
+  async ({ auth: clerkAuth, request }) => {
     const org = await getOrCreateOrg();
 
     const confirmName = await readWorkspaceDeleteConfirmation(request);
@@ -118,7 +104,7 @@ export async function DELETE(request: Request) {
     }
 
     const client = await clerkClient();
-    const memberships = await client.users.getOrganizationMembershipList({ userId });
+    const memberships = await client.users.getOrganizationMembershipList({ userId: clerkAuth.userId as string });
     if (!hasOtherWorkspace(memberships, org.clerkOrgId)) {
       return NextResponse.json(
         {
@@ -136,7 +122,5 @@ export async function DELETE(request: Request) {
     await db.organization.deleteMany({ where: { id: org.id } });
 
     return new NextResponse(null, { status: 204 });
-  } catch (error) {
-    return handleApiError(error, 'Org DELETE', 'Failed to delete workspace');
-  }
-}
+  },
+);

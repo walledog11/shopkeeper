@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react"
 import { Check, ChevronRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
 
 export function SaveButton({ saving, saved, onClick, disabled }: {
   saving: boolean
@@ -26,27 +27,6 @@ export function SaveButton({ saving, saved, onClick, disabled }: {
         "Save changes"
       )}
     </Button>
-  )
-}
-
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={checked ? "Disable setting" : "Enable setting"}
-      onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus:outline-none ${
-        checked ? 'bg-amber-400' : 'bg-foreground/[0.15]'
-      }`}
-    >
-      <span
-        className={`inline-block size-3.5 rounded-full bg-white shadow transition-transform ${
-          checked ? 'translate-x-4' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
   )
 }
 
@@ -78,7 +58,12 @@ export function ToggleRow({
         </div>
         <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">{description}</p>
       </div>
-      <Toggle checked={checked} onChange={onChange} />
+      <Switch
+        tone="amber"
+        checked={checked}
+        onChange={onChange}
+        ariaLabel={checked ? "Disable setting" : "Enable setting"}
+      />
     </div>
   )
 }

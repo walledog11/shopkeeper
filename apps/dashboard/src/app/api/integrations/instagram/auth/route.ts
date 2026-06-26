@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { getMetaOAuthAuthorizeConfig } from '@/lib/env';
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
@@ -15,11 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const appId = process.env.META_APP_ID;
-  const configId = process.env.META_CONFIG_ID;
-  const appUrl = process.env.APP_URL;
+  const oauthConfig = getMetaOAuthAuthorizeConfig();
 
-  if (!appId || !configId || !appUrl) {
+  if (!oauthConfig) {
     return NextResponse.json(
       { error: 'META_APP_ID, META_CONFIG_ID, or APP_URL is not configured' },
       { status: 500 }
@@ -28,14 +27,12 @@ export async function POST(request: Request) {
 
   const { state } = await createOAuthSessionCookies(request, { prefix: 'ig' }, session);
 
-  const redirectUri = `${appUrl}/api/integrations/instagram/callback`;
-
   // Facebook Login for Business uses config_id instead of individual scopes.
   // The configuration defines which permissions are requested.
   const authUrl = new URL('https://www.facebook.com/dialog/oauth');
-  authUrl.searchParams.set('client_id', appId);
-  authUrl.searchParams.set('redirect_uri', redirectUri);
-  authUrl.searchParams.set('config_id', configId);
+  authUrl.searchParams.set('client_id', oauthConfig.appId);
+  authUrl.searchParams.set('redirect_uri', oauthConfig.redirectUri);
+  authUrl.searchParams.set('config_id', oauthConfig.configId);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('state', state);
 

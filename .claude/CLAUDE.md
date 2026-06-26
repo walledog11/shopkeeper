@@ -22,7 +22,7 @@
 - Ops alerts emit structured Pino logs (`opsAlert: true`) when thresholds are crossed; no external error-tracking vendor.
 
 ## Inbound flow
-External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → `POST /api/agent/plan-internal` (gateway → dashboard, requires `INTERNAL_API_SECRET`) → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
+External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → gateway generates the agent plan in-process (`@shopkeeper/agent` planner, `message-handlers/generate-thread-plan.ts`) and caches it on the thread → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.
 
 ## Database (`packages/db/prisma/schema.prisma`)
 - `Organization` — Stripe subscription fields + `settings` JSON (agent config)
@@ -38,7 +38,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
 
 ## Channels
-Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, via Photon Spectrum line + per-member handle binding), Shopify (OAuth + webhooks). TikTok: stubs only.
+Email (Postmark), Instagram DM (Meta OAuth), Telegram (operator-only, single Shopkeeper bot), iMessage (operator-only, single platform-wide Photon Spectrum line for all orgs — no per-org credentials; merchants link a handle by texting a single-use code, routed by the sender→member binding), Shopify (OAuth + webhooks). TikTok: stubs only.
 
 Internal-only `channelType` values (not user-facing): `dashboard_agent` (Concierge sessions), `sms_agent` (operator threads via Telegram — legacy name).
 
@@ -77,8 +77,8 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 ## Key API routes (`apps/dashboard/src/app/api/`)
 - `agent/route.ts` — execute run on a ticket
 - `agent/plan/route.ts` — generate plan, no side effects
-- `agent/plan-internal/route.ts` — gateway-only, requires `INTERNAL_API_SECRET`
-- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from Telegram)
+- `agent/internal/route.ts` — gateway-only agent run (e.g. `sms_agent` from Telegram), requires `INTERNAL_API_SECRET`
+- `agent/io-send-internal/route.ts` — gateway-only provider send hop (send_reply/send_email delivery), requires `INTERNAL_API_SECRET`
 - `agent/chat/route.ts` — Concierge sessions
 - `agent/sessions/route.ts`, `agent/sessions/[id]/route.ts` — Concierge session list/detail
 - `agent/ask/route.ts` — composer read-only Q&A (`runAgent` with `readOnly: true`)
@@ -101,9 +101,9 @@ Read tool list and exact behavior from `packages/agent/src/tools/registry/` — 
 `/dashboard/{tickets, agent, kb, orders, customers, review, team, integrations, settings}`
 
 ## Env (names only — values in Vercel/Railway; see each app's `.env.example` for the full list)
-**Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` + `MICROSOFT_CLIENT_ID`/`SECRET` (email OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)
+**Dashboard:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, `CLERK_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `POSTMARK_API_KEY`, `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID`, `APP_URL`, `NEXT_PUBLIC_APP_URL`, `INBOUND_EMAIL_DOMAIN`, `GATEWAY_INTERNAL_URL`, `SHOPIFY_APP_SECRET`, `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID`, `PRICE_ID_STARTER`, `PRICE_ID_PRO`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`, `TELEGRAM_BOT_USERNAME`, `IMESSAGE_LINE_HANDLE` (fixed iMessage handle merchants text; presence makes iMessage available), `TOKEN_ENCRYPTION_KEY`, `BLOB_READ_WRITE_TOKEN`, `GOOGLE_CLIENT_ID`/`SECRET` + `MICROSOFT_CLIENT_ID`/`SECRET` (email OAuth), `USPS_CLIENT_ID`/`SECRET` (tracking)
 
-**Gateway:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `POSTMARK_INBOUND_USERNAME`/`PASSWORD`, `GATEWAY_RUNTIME_ROLE`, plus tuning vars (`LOG_LEVEL`, `LOG_PRETTY`, `PORT`, `GATEWAY_*`, `ORDER_RISK_MONITOR_ENABLED`)
+**Gateway:** `DATABASE_URL`, `DIRECT_DATABASE_URL`, `REDIS_URL`, `ANTHROPIC_API_KEY`, `INTERNAL_API_SECRET`, `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `SPECTRUM_PROJECT_ID`/`SPECTRUM_PROJECT_SECRET`/`SPECTRUM_WEBHOOK_SECRET` (platform iMessage line), `SHOPIFY_APP_SECRET`, `DASHBOARD_URL`, `DASHBOARD_INTERNAL_URL`, `BLOB_READ_WRITE_TOKEN`, `TOKEN_ENCRYPTION_KEY`, `POSTMARK_INBOUND_USERNAME`/`PASSWORD`, `GATEWAY_RUNTIME_ROLE`, plus tuning vars (`LOG_LEVEL`, `LOG_PRETTY`, `PORT`, `GATEWAY_*`, `ORDER_RISK_MONITOR_ENABLED`)
 
 Both `DATABASE_URL`s append `?pgbouncer=true&connection_limit=1`. `TOKEN_ENCRYPTION_KEY` (AES-256-GCM, 32 raw bytes — hex64, base64, or 32 ASCII chars) encrypts `Integration.accessToken`/`refreshToken` at rest, applied transparently via Prisma `$extends`; same value in both apps; required in production.
 

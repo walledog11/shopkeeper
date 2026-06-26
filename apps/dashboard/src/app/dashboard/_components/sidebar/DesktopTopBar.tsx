@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/ui/cn";
-import AgentAvatar from "../agent-panel/AgentAvatar";
+import AgentAvatar from "@/components/agent/AgentAvatar";
 import { useAgentPanel } from "../agent-panel/AgentPanelContext";
 import { useCommandPalette } from "../CommandPaletteContext";
 import { inboxNavItem, topBarDropdowns, type NavItem } from "../nav-items";

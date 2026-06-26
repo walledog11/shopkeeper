@@ -1,6 +1,6 @@
 import { AlertCircle, Check, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import AgentAvatar from "@/app/dashboard/_components/agent-panel/AgentAvatar"
+import AgentAvatar from "@/components/agent/AgentAvatar"
 import { formatClockTime } from "@/lib/format/date"
 import { AgentMessageMarkdown } from "@/components/agent/AgentMessageMarkdown"
 import {

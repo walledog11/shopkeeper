@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { CheckCircle2, Inbox } from "lucide-react"
+import { EmptyState as EmptyStatePanel } from "@/components/ui/empty-state"
 import { buildChannelFilters, type TicketListView, type TicketTagFilter } from "./constants"
 import type { ChannelType } from "@/types"
 
@@ -35,15 +36,11 @@ export function EmptyState({
   if (totalCount === 0 && !searchQuery && !channelFilter && !tagFilter) {
     if (activeView === "for_me") {
       return (
-        <div className="flex flex-col items-center text-center p-8 gap-3">
-          <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
-            <CheckCircle2 className="size-5 text-foreground/40" />
-          </span>
-          <div>
-            <p className="text-sm font-semibold text-foreground/70 mb-1">You&apos;re all caught up</p>
-            <p className="text-xs text-foreground/45 mb-3">
-              Nothing needs your reply right now.
-            </p>
+        <EmptyStatePanel
+          icon={<CheckCircle2 className="size-5 text-foreground/40" />}
+          title="You're all caught up"
+          description="Nothing needs your reply right now."
+          action={
             <button
               type="button"
               onClick={() => onViewChange("all_open")}
@@ -51,8 +48,8 @@ export function EmptyState({
             >
               Browse all open tickets →
             </button>
-          </div>
-        </div>
+          }
+        />
       )
     }
 
@@ -65,18 +62,16 @@ export function EmptyState({
     }
 
     return (
-      <div className="flex flex-col items-center text-center p-8 gap-3">
-        <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
-          <Inbox className="size-5 text-foreground/30" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-foreground/70 mb-1">No conversations yet</p>
-          <p className="text-xs text-foreground/45 mb-3">Connect a channel and customer messages will land here.</p>
+      <EmptyStatePanel
+        icon={<Inbox className="size-5 text-foreground/30" />}
+        title="No conversations yet"
+        description="Connect a channel and customer messages will land here."
+        action={
           <Link href="/dashboard/integrations" className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors">
             Set up integrations →
           </Link>
-        </div>
-      </div>
+        }
+      />
     )
   }
 

@@ -9,9 +9,9 @@ import {
 } from "./settings.js";
 
 describe("organization settings contract", () => {
-  it("parses valid partial settings and migrates the legacy auto-execute flag", () => {
+  it("parses valid partial settings", () => {
     expect(parseOrgSettingsPatch({
-      autoExecuteEnabled: true,
+      autoExecuteMode: "live",
       businessHoursEnabled: true,
       businessHoursDays: ["mon", "fri"],
       businessHoursStart: 9,
@@ -19,7 +19,6 @@ describe("organization settings contract", () => {
       businessHoursTimezone: "America/Los_Angeles",
       toolsEnabled: { action: false },
     })).toEqual({
-      autoExecuteEnabled: true,
       autoExecuteMode: "live",
       businessHoursEnabled: true,
       businessHoursDays: ["mon", "fri"],
@@ -32,6 +31,7 @@ describe("organization settings contract", () => {
 
   it("rejects unknown keys and invalid field types in API patches", () => {
     expect(() => parseOrgSettingsPatch({
+      autoExecuteEnabled: true,
       businessHoursDays: ["mon", "noday"],
       maxIterations: "ten",
       toolsEnabled: { action: true, deleteOrders: true },
@@ -40,6 +40,7 @@ describe("organization settings contract", () => {
 
     try {
       parseOrgSettingsPatch({
+        autoExecuteEnabled: true,
         businessHoursDays: ["mon", "noday"],
         maxIterations: "ten",
         toolsEnabled: { action: true, deleteOrders: true },
@@ -48,6 +49,7 @@ describe("organization settings contract", () => {
     } catch (error) {
       expect((error as OrgSettingsValidationError).issues.map(issue => issue.path)).toEqual(
         expect.arrayContaining([
+          "autoExecuteEnabled",
           "unexpected",
           "maxIterations",
           "toolsEnabled.deleteOrders",
@@ -71,7 +73,6 @@ describe("organization settings contract", () => {
     });
 
     expect(normalized).toEqual({
-      autoExecuteEnabled: true,
       autoExecuteMode: "live",
       businessHoursEnabled: true,
       toolsEnabled: { action: false },

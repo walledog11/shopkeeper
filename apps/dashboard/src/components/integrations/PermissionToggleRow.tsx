@@ -1,4 +1,4 @@
-import { GreenToggle } from "./GreenToggle"
+import { Switch } from "@/components/ui/switch"
 
 export function PermissionToggleRow({
   label,
@@ -26,7 +26,12 @@ export function PermissionToggleRow({
           <span className="text-xs text-foreground/35 ml-1 shrink-0">{suffix}</span>
         )}
       </div>
-      <GreenToggle checked={checked} onChange={onChange} disabled={required} />
+      <Switch
+        checked={checked}
+        onChange={onChange}
+        disabled={required}
+        ariaLabel={checked ? "Disable permission" : "Enable permission"}
+      />
     </div>
   )
 }

@@ -7,7 +7,6 @@ const CONNECT_INSTRUCTIONS =
   'under Integrations → iMessage to get a connect code, then text it here.';
 
 export interface ImessageBindingParams {
-  integrationId: string;
   senderId: string;
   spaceId: string;
   body: string;
@@ -21,7 +20,7 @@ export interface ImessageBindingParams {
 // the binding, then consume the token. Until a sender is bound this way every
 // inbound message is rejected with connect instructions — no ticket, no agent run.
 export async function handleImessageBinding(params: ImessageBindingParams): Promise<void> {
-  const { integrationId, senderId, spaceId, displayName, reply } = params;
+  const { senderId, spaceId, displayName, reply } = params;
   const token = params.body.trim();
 
   // Only a single opaque token is a binding attempt; anything else is a stranger.
@@ -49,13 +48,12 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
     return;
   }
 
-  // A given (integration, sender) binds to one member; texting a fresh token
-  // moves the binding to whoever minted it.
+  // A sender handle binds to one member globally; texting a fresh token moves
+  // the binding to whoever minted it.
   await db.orgMemberImessageBinding.upsert({
-    where: { integrationId_senderId: { integrationId, senderId } },
+    where: { senderId },
     create: {
       orgMemberId: member.id,
-      integrationId,
       senderId,
       spaceId,
       displayName,

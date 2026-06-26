@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockAuth } = vi.hoisted(() => ({
@@ -15,26 +15,22 @@ import { DELETE, GET, POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null = null;
 
-async function connectLine() {
-  return db.integration.create({
-    data: {
-      organizationId: org!.id,
-      platform: ChannelType.imessage,
-      externalAccountId: `proj_${Math.random().toString(36).slice(2)}`,
-      accessToken: 'sec',
-      refreshToken: 'whk',
-    },
-  });
+// The platform iMessage line is "connected" when its handle env is configured —
+// there is no per-org integration to create.
+function connectLine() {
+  process.env.IMESSAGE_LINE_HANDLE = 'shopkeeper@imsg.test';
 }
 
 beforeEach(async () => {
   org = await createTestOrg();
+  delete process.env.IMESSAGE_LINE_HANDLE;
   mockAuth.mockResolvedValue({ userId: 'usr_imessage', orgId: org.clerkOrgId });
 });
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
   org = null;
+  delete process.env.IMESSAGE_LINE_HANDLE;
   vi.clearAllMocks();
 });
 
@@ -48,7 +44,7 @@ describe('/api/integrations/imessage/bind', () => {
   });
 
   it('reports line status and only the current user handles', async () => {
-    const integration = await connectLine();
+    connectLine();
     const me = await db.orgMember.create({
       data: { organizationId: org!.id, clerkUserId: 'usr_imessage' },
     });
@@ -57,8 +53,8 @@ describe('/api/integrations/imessage/bind', () => {
     });
     await db.orgMemberImessageBinding.createMany({
       data: [
-        { orgMemberId: me.id, integrationId: integration.id, senderId: '+15551112222', spaceId: 'space_a', displayName: 'Raj' },
-        { orgMemberId: other.id, integrationId: integration.id, senderId: '+15553334444', spaceId: 'space_b' },
+        { orgMemberId: me.id, senderId: '+15551112222', spaceId: 'space_a', displayName: 'Raj' },
+        { orgMemberId: other.id, senderId: '+15553334444', spaceId: 'space_b' },
       ],
     });
 
@@ -77,12 +73,12 @@ describe('/api/integrations/imessage/bind', () => {
   });
 
   it('falls back to senderId when no display name is stored', async () => {
-    const integration = await connectLine();
+    connectLine();
     const me = await db.orgMember.create({
       data: { organizationId: org!.id, clerkUserId: 'usr_imessage' },
     });
     await db.orgMemberImessageBinding.create({
-      data: { orgMemberId: me.id, integrationId: integration.id, senderId: '+15550009999', spaceId: 'space_c' },
+      data: { orgMemberId: me.id, senderId: '+15550009999', spaceId: 'space_c' },
     });
 
     const res = await GET();
@@ -110,7 +106,7 @@ describe('/api/integrations/imessage/bind', () => {
   });
 
   it('mints a scoped single-use bind token once a line is connected', async () => {
-    await connectLine();
+    connectLine();
 
     const res = await POST();
     const body = await res.json() as { token: string; expiresInSeconds: number };
@@ -131,7 +127,7 @@ describe('/api/integrations/imessage/bind', () => {
   });
 
   it('unbinds a single handle scoped to the current user', async () => {
-    const integration = await connectLine();
+    connectLine();
     const me = await db.orgMember.create({
       data: { organizationId: org!.id, clerkUserId: 'usr_imessage' },
     });
@@ -140,9 +136,9 @@ describe('/api/integrations/imessage/bind', () => {
     });
     await db.orgMemberImessageBinding.createMany({
       data: [
-        { orgMemberId: me.id, integrationId: integration.id, senderId: '+15551112222', spaceId: 'space_a' },
-        { orgMemberId: me.id, integrationId: integration.id, senderId: '+15559998888', spaceId: 'space_b' },
-        { orgMemberId: other.id, integrationId: integration.id, senderId: '+15553334444', spaceId: 'space_c' },
+        { orgMemberId: me.id, senderId: '+15551112222', spaceId: 'space_a' },
+        { orgMemberId: me.id, senderId: '+15559998888', spaceId: 'space_b' },
+        { orgMemberId: other.id, senderId: '+15553334444', spaceId: 'space_c' },
       ],
     });
 
@@ -158,14 +154,14 @@ describe('/api/integrations/imessage/bind', () => {
   });
 
   it('unbinds all of the current user handles', async () => {
-    const integration = await connectLine();
+    connectLine();
     const me = await db.orgMember.create({
       data: { organizationId: org!.id, clerkUserId: 'usr_imessage' },
     });
     await db.orgMemberImessageBinding.createMany({
       data: [
-        { orgMemberId: me.id, integrationId: integration.id, senderId: '+15551112222', spaceId: 'space_a' },
-        { orgMemberId: me.id, integrationId: integration.id, senderId: '+15559998888', spaceId: 'space_b' },
+        { orgMemberId: me.id, senderId: '+15551112222', spaceId: 'space_a' },
+        { orgMemberId: me.id, senderId: '+15559998888', spaceId: 'space_b' },
       ],
     });
 

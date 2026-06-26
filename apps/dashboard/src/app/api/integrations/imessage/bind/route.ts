@@ -8,12 +8,19 @@
  * texting the minted token to their line; the gateway consumes it (routes/imessage/binding.ts).
  */
 import { NextResponse } from "next/server";
-import { ChannelType, createOrgMemberBindToken, db } from "@shopkeeper/db";
+import { createOrgMemberBindToken, db } from "@shopkeeper/db";
 import { auth } from "@clerk/nextjs/server";
 import { ApiError, UnauthorizedError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
 
 export const dynamic = "force-dynamic";
+
+// iMessage runs on one Shopkeeper-owned platform line, not a per-org integration.
+// The line is available to every workspace when the gateway's Spectrum handle is
+// configured; the dashboard surfaces that handle for the merchant to text.
+function isImessageLineConfigured(): boolean {
+  return Boolean(process.env.IMESSAGE_LINE_HANDLE?.trim());
+}
 
 export const GET = withOrgRoute(
   { context: "iMessage bind GET", errorMessage: "Failed to fetch iMessage bindings" },
@@ -21,19 +28,14 @@ export const GET = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const [lineCount, bindings] = await Promise.all([
-      db.integration.count({
-        where: { organizationId: org.id, platform: ChannelType.imessage },
-      }),
-      db.orgMemberImessageBinding.findMany({
-        where: { orgMember: { organizationId: org.id, clerkUserId: userId } },
-        select: { senderId: true, displayName: true, createdAt: true },
-        orderBy: { createdAt: "asc" },
-      }),
-    ]);
+    const bindings = await db.orgMemberImessageBinding.findMany({
+      where: { orgMember: { organizationId: org.id, clerkUserId: userId } },
+      select: { senderId: true, displayName: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
 
     return NextResponse.json({
-      lineConnected: lineCount > 0,
+      lineConnected: isImessageLineConfigured(),
       connected: bindings.length > 0,
       handles: bindings.map((b) => ({
         senderId: b.senderId,
@@ -50,11 +52,8 @@ export const POST = withOrgRoute(
     const { userId } = await auth();
     if (!userId) throw new UnauthorizedError();
 
-    const lineCount = await db.integration.count({
-      where: { organizationId: org.id, platform: ChannelType.imessage },
-    });
-    if (lineCount === 0) {
-      throw new ApiError("Connect your iMessage line before linking a handle.", 409);
+    if (!isImessageLineConfigured()) {
+      throw new ApiError("iMessage isn't available on this workspace yet.", 409);
     }
 
     await db.orgMember.upsert({
