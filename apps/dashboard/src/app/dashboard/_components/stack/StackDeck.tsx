@@ -112,7 +112,16 @@ export function StackDeck<T>({
 
   const n = items.length
   const mod = (value: number) => ((value % n) + n) % n
-  const activeIndex = n > 0 ? Math.max(0, itemIds.findIndex(id => id === currentState.currentId)) : 0
+  const inputsMatchState = currentState.activeId === normalizedActiveId && currentState.idsKey === idsKey
+  const currentStateIdIsInDeck = Boolean(currentState.currentId && itemIds.includes(currentState.currentId))
+  const resolvedCurrentId = inputsMatchState
+    ? currentState.currentId
+    : normalizedActiveId && itemIds.includes(normalizedActiveId)
+      ? normalizedActiveId
+      : currentStateIdIsInDeck
+        ? currentState.currentId
+        : itemIds[0] ?? null
+  const activeIndex = n > 0 ? Math.max(0, itemIds.findIndex(id => id === resolvedCurrentId)) : 0
   const current = n > 0 ? items[activeIndex] ?? null : null
   const currentId = current ? itemIds[activeIndex] ?? getId(current) : null
   const peekItem = n > 1 ? items[mod(activeIndex + peekDirection)] ?? null : null
@@ -122,28 +131,6 @@ export function StackDeck<T>({
   const measuredHeightStyle: CSSProperties | undefined = frontHeight > 0
     ? { height: frontHeight, minHeight: frontHeight, maxHeight: frontHeight }
     : undefined
-
-  useEffect(() => {
-    setCurrentState(previous => {
-      if (previous.activeId === normalizedActiveId && previous.idsKey === idsKey) {
-        return previous
-      }
-
-      const activeIdIsInDeck = Boolean(normalizedActiveId && itemIds.includes(normalizedActiveId))
-      const previousCurrentIsInDeck = Boolean(previous.currentId && itemIds.includes(previous.currentId))
-      const nextCurrentId = activeIdIsInDeck
-        ? normalizedActiveId
-        : previousCurrentIsInDeck
-          ? previous.currentId
-          : itemIds[0] ?? null
-
-      return { activeId: normalizedActiveId, currentId: nextCurrentId, idsKey }
-    })
-  }, [idsKey, itemIds, normalizedActiveId])
-
-  useEffect(() => {
-    onCurrentChange?.(current, currentId)
-  }, [current, currentId, onCurrentChange])
 
   useEffect(() => {
     const unsubscribe = stackDragX.on("change", value => {
@@ -218,8 +205,16 @@ export function StackDeck<T>({
   }
 
   const commitNeighbor = (delta: 1 | -1) => {
+    const nextIndex = mod(activeIndex + delta)
+    const nextCurrentId = itemIds[nextIndex] ?? null
+    const nextCurrent = items[nextIndex] ?? null
     setPeekDirection(delta)
-    setCurrentState(previous => ({ ...previous, currentId: itemIds[mod(activeIndex + delta)] ?? null }))
+    setCurrentState({
+      activeId: normalizedActiveId,
+      currentId: nextCurrentId,
+      idsKey,
+    })
+    onCurrentChange?.(nextCurrent, nextCurrentId)
   }
 
   const goToNeighbor = (delta: 1 | -1, flySign: 1 | -1) => {
@@ -237,6 +232,10 @@ export function StackDeck<T>({
 
   const buttonClassName = "inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-foreground/50"
   const countText = labels.count?.(activeIndex + 1, n) ?? `${activeIndex + 1} of ${n}`
+  const peekContext = renderContext(true)
+  const renderedBackShell = renderBackShell?.(peekContext)
+  const renderedPeekCard = peekItem ? renderPeek(peekItem, peekContext) : null
+  const renderedFrontCard = renderCard(current, renderContext(false))
 
   return (
     <div className={className} data-testid={testId}>
@@ -258,9 +257,9 @@ export function StackDeck<T>({
                       transformOrigin: peek.origin,
                     }}
                   >
-                    {renderBackShell ? (
+                    {renderedBackShell ? (
                       <div className="box-border overflow-hidden" style={measuredHeightStyle}>
-                        {renderBackShell(renderContext(true))}
+                        {renderedBackShell}
                       </div>
                     ) : (
                       <div className={peekShellClassName} style={measuredHeightStyle} />
@@ -281,7 +280,7 @@ export function StackDeck<T>({
                     }}
                   >
                     <div className={peekCardClassName} style={measuredHeightStyle}>
-                      {renderPeek(peekItem, renderContext(true))}
+                      {renderedPeekCard}
                     </div>
                   </m.div>
                 )}
@@ -297,7 +296,7 @@ export function StackDeck<T>({
                 onCommitLeft={() => commitNeighbor(1)}
                 onCommitRight={() => commitNeighbor(-1)}
               >
-                {renderCard(current, renderContext(false))}
+                {renderedFrontCard}
               </SwipeCard>
             </div>
           </div>

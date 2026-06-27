@@ -1,6 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
 import type { ToolStatus } from "./tools/result.js";
+import {
+  findOrderByName,
+} from "./order-reference.js";
 
 const ORDER_REFRESH_PHRASES = [
   "refresh",
@@ -15,10 +18,6 @@ const ORDER_REFRESH_PHRASES = [
   "right now",
   "look up again",
 ] as const;
-
-export function normalizePlanningOrderName(name: string): string {
-  return name.replace(/^#/, "").trim().toLowerCase();
-}
 
 export function impliesOrderRefresh(...texts: string[]): boolean {
   const combined = texts.join(" ").toLowerCase();
@@ -35,11 +34,6 @@ function planningIntentTexts(ctx: AgentContext, instruction: string): string[] {
     }
   }
   return texts;
-}
-
-function findOrderByName(orders: ShopifyOrderSummary[], orderName: string): ShopifyOrderSummary | null {
-  const target = normalizePlanningOrderName(orderName);
-  return orders.find((order) => normalizePlanningOrderName(order.name) === target) ?? null;
 }
 
 function kbQueryWords(query: string): string[] {

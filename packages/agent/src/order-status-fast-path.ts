@@ -6,12 +6,15 @@ import { executeToolStructured } from "./tools/executor.js";
 import {
   looksLikeOrderStatusIntent,
   hasMutativePlanningSignals,
-  ORDER_REFERENCE_RE,
   isOperatorChannel,
 } from "./intent.js";
 import type { ActionEntry, AgentContext, AgentResult, ShopifyOrderSummary } from "./agent-context.js";
 import type { AgentPlan } from "./types.js";
 import { buildPlanSteps } from "./planner-steps.js";
+import {
+  findReferencedOrder,
+  ORDER_REFERENCE_RE,
+} from "./order-reference.js";
 
 const orderDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -169,29 +172,6 @@ function summarizeLatestOrder(customerName: string | null, orders: ShopifyOrderS
   const itemsPhrase = items ? ` Items: ${items}.` : "";
 
   return `${subject}${orderName}${datePhrase} is ${financial ? `${financial} and ` : ""}${fulfillment}.${total}${itemsPhrase}`;
-}
-
-function normalizeOrderName(name: string): string {
-  const trimmed = name.trim();
-  return (trimmed.startsWith("#") ? trimmed : `#${trimmed}`).toUpperCase();
-}
-
-function referencedOrderName(text: string): string | null {
-  const match = text.match(ORDER_REFERENCE_RE);
-  if (!match) return null;
-  const raw = match[0];
-  const orderNumberMatch = raw.match(/\border\s*#?\s*(\d+)/i);
-  if (orderNumberMatch?.[1]) return normalizeOrderName(orderNumberMatch[1]);
-  return normalizeOrderName(raw.replace(/^#/, ""));
-}
-
-function findReferencedOrder(
-  orders: ShopifyOrderSummary[],
-  text: string,
-): ShopifyOrderSummary | null {
-  const reference = referencedOrderName(text);
-  if (!reference) return null;
-  return orders.find((order) => order.name && normalizeOrderName(order.name) === reference) ?? null;
 }
 
 function latestCustomerMessage(ctx: AgentContext): string | null {

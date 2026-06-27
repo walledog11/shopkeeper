@@ -1,5 +1,13 @@
-import { resolveAgentSettings, type AutonomyTier } from "@shopkeeper/agent/settings"
+import {
+  AGENT_SETTINGS_DEFAULTS,
+  AUTONOMY_OVERRIDE_PATHS,
+  resolveAgentSettings,
+  type AutonomyOverridePath,
+  type AutonomyTier,
+} from "@shopkeeper/agent/settings"
 import type { OrgSettings, OrgSettingsPatch } from "@/types"
+
+export type { AutonomyOverridePath } from "@shopkeeper/agent/settings"
 
 export type AgentSettingsAction =
   | { type: "set"; patch: Partial<OrgSettings> }
@@ -16,20 +24,6 @@ export interface RawInputs {
   bhStart: string
   bhEnd: string
 }
-
-const AUTONOMY_OVERRIDE_PATHS = [
-  "requireApprovalForActions",
-  "maxRefundAmount",
-  "maxDiscountPercent",
-  "blockCancellations",
-  "blockCustomLineItems",
-  "toolsEnabled.action",
-  "toolsEnabled.communication",
-  "toolsEnabled.internal",
-  "toolsEnabled.read",
-] as const
-
-export type AutonomyOverridePath = typeof AUTONOMY_OVERRIDE_PATHS[number]
 
 export interface AgentSettingsPatch {
   settings: OrgSettingsPatch
@@ -294,16 +288,18 @@ export function buildSettingsPayload(state: OrgSettings, raw: RawInputs): OrgSet
 
   return {
     ...state,
-    agentName: state.agentName.trim() || "Shopkeeper",
+    agentName: state.agentName.trim() || AGENT_SETTINGS_DEFAULTS.agentName,
     maxRefundAmount: parsedMax === null || isNaN(parsedMax) ? null : parsedMax,
     maxDiscountPercent: parsedDiscount === null || isNaN(parsedDiscount) ? null : parsedDiscount,
     dailyRefundCap: parsedDaily === null || isNaN(parsedDaily) ? null : parsedDaily,
     dailyLLMSpendCapUsd: parsedLLM === null || isNaN(parsedLLM) ? null : parsedLLM,
-    maxIterations: isNaN(parsedIter) || parsedIter < 1 ? 10 : parsedIter,
-    digestHour: clampHour(raw.digestHour, 8),
-    digestSecondHour: clampHour(raw.digestSecondHour, 17),
-    businessHoursStart: clampHour(raw.bhStart, 9),
-    businessHoursEnd: clampHour(raw.bhEnd, 17),
+    maxIterations: isNaN(parsedIter) || parsedIter < 1
+      ? AGENT_SETTINGS_DEFAULTS.maxIterations
+      : parsedIter,
+    digestHour: clampHour(raw.digestHour, AGENT_SETTINGS_DEFAULTS.digestHour),
+    digestSecondHour: clampHour(raw.digestSecondHour, AGENT_SETTINGS_DEFAULTS.digestSecondHour),
+    businessHoursStart: clampHour(raw.bhStart, AGENT_SETTINGS_DEFAULTS.businessHoursStart),
+    businessHoursEnd: clampHour(raw.bhEnd, AGENT_SETTINGS_DEFAULTS.businessHoursEnd),
   }
 }
 
@@ -313,9 +309,9 @@ export function rawInputsFor(settings: OrgSettings): RawInputs {
     maxDiscount: settings.maxDiscountPercent != null ? String(settings.maxDiscountPercent) : "",
     dailyRefundCap: settings.dailyRefundCap != null ? String(settings.dailyRefundCap) : "",
     dailyLLMSpendCap: settings.dailyLLMSpendCapUsd != null ? String(settings.dailyLLMSpendCapUsd) : "",
-    maxIter: String(settings.maxIterations ?? 10),
-    digestHour: String(settings.digestHour ?? 8),
-    digestSecondHour: String(settings.digestSecondHour ?? 17),
+    maxIter: String(settings.maxIterations ?? AGENT_SETTINGS_DEFAULTS.maxIterations),
+    digestHour: String(settings.digestHour ?? AGENT_SETTINGS_DEFAULTS.digestHour),
+    digestSecondHour: String(settings.digestSecondHour ?? AGENT_SETTINGS_DEFAULTS.digestSecondHour),
     bhStart: String(settings.businessHoursStart),
     bhEnd: String(settings.businessHoursEnd),
   }

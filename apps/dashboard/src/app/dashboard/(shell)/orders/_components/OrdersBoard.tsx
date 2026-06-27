@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, type ComponentType } from "react"
+import { useMemo, useState, type ComponentType } from "react"
 import { useRouter } from "next/navigation"
 import {
   Clock3,
@@ -362,6 +362,29 @@ function OrderStackColumn({
     ...state,
     isLoading: state.isLoading || state.isValidating,
   }
+  const loading = useMemo(() => (
+    <BoardColumnLoading
+      testId="orders-column-loading"
+      keyPrefix="orders-board-skeleton"
+      cardClassName="h-36 rounded-2xl"
+      shape="pills"
+    />
+  ), [])
+  const errorContent = useMemo(() => (
+    <BoardColumnError
+      className="rounded-2xl"
+      textClassName="text-red-300"
+      onRetry={state.onRetry}
+    />
+  ), [state.onRetry])
+  const empty = useMemo(() => (
+    <BoardColumnEmpty
+      title={config.emptyTitle}
+      body={config.emptyBody}
+      icon={Icon}
+      className="h-36 rounded-2xl"
+    />
+  ), [Icon, config.emptyBody, config.emptyTitle])
 
   return (
     <DashboardStackColumn
@@ -380,29 +403,9 @@ function OrderStackColumn({
       stackTestId="orders-stack-deck"
       expandedTestId="orders-stack-expanded"
       gridTestId="orders-grid"
-      loading={(
-        <BoardColumnLoading
-          testId="orders-column-loading"
-          keyPrefix="orders-board-skeleton"
-          cardClassName="h-36 rounded-2xl"
-          shape="pills"
-        />
-      )}
-      errorContent={(
-        <BoardColumnError
-          className="rounded-2xl"
-          textClassName="text-red-300"
-          onRetry={state.onRetry}
-        />
-      )}
-      empty={(
-        <BoardColumnEmpty
-          title={config.emptyTitle}
-          body={config.emptyBody}
-          icon={Icon}
-          className="h-36 rounded-2xl"
-        />
-      )}
+      loading={loading}
+      errorContent={errorContent}
+      empty={empty}
       loadingLabel="Loading…"
       peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
       peekCardClassName="pointer-events-none box-border overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"

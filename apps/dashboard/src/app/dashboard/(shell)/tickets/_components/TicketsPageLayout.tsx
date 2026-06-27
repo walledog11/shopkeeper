@@ -113,6 +113,88 @@ interface TicketsPageLayoutProps {
   list: TicketsPageLayoutListState
 }
 
+function CorrectReplyBanner({
+  agentName,
+  onDismiss,
+}: {
+  agentName: string
+  onDismiss: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-800 shrink-0">
+      <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-900 transition-colors shrink-0"
+        aria-label="Dismiss"
+      >
+        <X className="size-3.5" />
+      </button>
+    </div>
+  )
+}
+
+function TicketConversation({
+  actions,
+  conversation,
+  conversationTab,
+  embedded,
+  flags,
+}: {
+  actions: TicketsPageLayoutActions
+  conversation: TicketsPageLayoutConversationState
+  conversationTab: ConversationViewProps["activeTab"]
+  embedded: boolean
+  flags: TicketsPageLayoutFlags
+}) {
+  const { activeThread, conversationTicket } = conversation
+  if (!conversationTicket) return null
+
+  return (
+    <ConversationView
+      key={conversationTicket.id}
+      ticket={conversationTicket}
+      agentName={conversation.agentName}
+      hasShopify={flags.hasShopify}
+      orgSettings={conversation.orgSettings}
+      threadContext={activeThread ? {
+        cachedPlan: activeThread.cachedPlan,
+        cachedPlanMessageId: activeThread.cachedPlanMessageId,
+      } : null}
+      shopifyCustomerId={activeThread?.shopifyCustomerId}
+      customerPlatformId={activeThread?.customer?.platformId}
+      agentTurns={conversation.activeAgentTurns}
+      status={{
+        threadLoading: flags.isConversationLoading,
+        sending: flags.isSending,
+        agentRunning: flags.isAgentRunning,
+      }}
+      onAgentTurnAdd={actions.onAgentTurnAdd}
+      onAgentRunningChange={actions.onAgentRunningChange}
+      onAgentComplete={actions.onAgentComplete}
+      activeTab={conversationTab}
+      initialPlan={conversation.cachedPlan}
+      replyText={conversation.replyText}
+      sendError={conversation.sendError}
+      messagesEndRef={conversation.messagesEndRef}
+      failedMessages={conversation.failedMessages}
+      onRetry={actions.onRetry}
+      onRetrySend={actions.onRetrySend}
+      onTicketRefresh={actions.onTicketRefresh}
+      onActionError={actions.onActionError}
+      thread={activeThread ?? null}
+      onLinkShopifyCustomer={actions.onLinkShopifyCustomer}
+      onBack={actions.onBack}
+      onResolve={actions.onResolve}
+      onReopen={actions.onReopen}
+      onReplyChange={actions.onReplyChange}
+      onSend={actions.onSend}
+      embedded={embedded}
+    />
+  )
+}
+
 export function TicketsPageLayout({
   actions,
   conversation,
@@ -121,18 +203,12 @@ export function TicketsPageLayout({
   list,
 }: TicketsPageLayoutProps) {
   const {
-    activeAgentTurns,
     activeThread,
     activeThreadError,
     activeThreadPreview,
     agentName,
-    cachedPlan,
     conversationTicket,
-    failedMessages,
-    messagesEndRef,
     orgSettings,
-    replyText,
-    sendError,
     toast,
   } = conversation
   const {
@@ -154,9 +230,6 @@ export function TicketsPageLayout({
     tagFilter,
   } = filters
   const {
-    onAgentComplete,
-    onAgentRunningChange,
-    onAgentTurnAdd,
     onBack,
     onBulkArchive,
     onBulkClose,
@@ -165,22 +238,13 @@ export function TicketsPageLayout({
     onCorrectReplyDismiss,
     onChannelFilterChange,
     onTagFilterChange,
-    onLinkShopifyCustomer,
     onLoadMore,
     onMarkAsSpam,
     onRecover,
     onQuickApproveFromList,
     onReviewFromList,
-    onReopen,
-    onReplyChange,
-    onResolve,
-    onRetry,
-    onRetrySend,
-    onTicketRefresh,
-    onActionError,
     onSearchChange,
     onSelectTicket,
-    onSend,
     onViewChange,
     onViewSpam,
     onToggleSelect,
@@ -195,71 +259,20 @@ export function TicketsPageLayout({
   const isBoardView = !flags.isSearchMode
     && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open" || effectiveActiveView === "closed")
 
-  const correctReplyBanner = flags.correctReplyVisible ? (
-    <div className="flex items-center justify-between gap-3 border-b border-amber-600/20 bg-amber-600/[0.08] px-4 py-2 text-xs text-amber-800 shrink-0">
-      <span>Send the reply you&apos;d prefer — {agentName} will learn from the difference.</span>
-      <button
-        type="button"
-        onClick={onCorrectReplyDismiss}
-        className="inline-flex items-center gap-1 text-amber-700/70 hover:text-amber-900 transition-colors shrink-0"
-        aria-label="Dismiss"
-      >
-        <X className="size-3.5" />
-      </button>
-    </div>
-  ) : null
-
-  const renderConversationView = (embedded: boolean): ReactNode => {
-    if (!conversationTicket) return null
-
-    return (
-      <ConversationView
-        key={conversationTicket.id}
-        ticket={conversationTicket}
-        agentName={agentName}
-        hasShopify={flags.hasShopify}
-        orgSettings={orgSettings}
-        threadContext={activeThread ? {
-          cachedPlan: activeThread.cachedPlan,
-          cachedPlanMessageId: activeThread.cachedPlanMessageId,
-        } : null}
-        shopifyCustomerId={activeThread?.shopifyCustomerId}
-        customerPlatformId={activeThread?.customer?.platformId}
-        agentTurns={activeAgentTurns}
-        status={{
-          threadLoading: flags.isConversationLoading,
-          sending: flags.isSending,
-          agentRunning: flags.isAgentRunning,
-        }}
-        onAgentTurnAdd={onAgentTurnAdd}
-        onAgentRunningChange={onAgentRunningChange}
-        onAgentComplete={onAgentComplete}
-        activeTab={conversationTab}
-        initialPlan={cachedPlan}
-        replyText={replyText}
-        sendError={sendError}
-        messagesEndRef={messagesEndRef}
-        failedMessages={failedMessages}
-        onRetry={onRetry}
-        onRetrySend={onRetrySend}
-        onTicketRefresh={onTicketRefresh}
-        onActionError={onActionError}
-        thread={activeThread ?? null}
-        onLinkShopifyCustomer={onLinkShopifyCustomer}
-        onBack={onBack}
-        onResolve={onResolve}
-        onReopen={onReopen}
-        onReplyChange={onReplyChange}
-        onSend={onSend}
-        embedded={embedded}
-      />
-    )
-  }
+  const correctReplyBanner = flags.correctReplyVisible
+    ? <CorrectReplyBanner agentName={agentName} onDismiss={onCorrectReplyDismiss} />
+    : null
 
   const conversationBody = conversationTicket ? (
     <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
       {correctReplyBanner}
-      {renderConversationView(false)}
+      <TicketConversation
+        actions={actions}
+        conversation={conversation}
+        conversationTab={conversationTab}
+        embedded={false}
+        flags={flags}
+      />
     </div>
   ) : null
 
@@ -267,7 +280,13 @@ export function TicketsPageLayout({
     conversationTicket ? (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {correctReplyBanner}
-        {renderConversationView(true)}
+        <TicketConversation
+          actions={actions}
+          conversation={conversation}
+          conversationTab={conversationTab}
+          embedded
+          flags={flags}
+        />
       </div>
     ) : (
       <div

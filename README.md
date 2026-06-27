@@ -25,6 +25,11 @@ shopkeeper/
 - `npm run clean:deps` — removes `node_modules/` from the repo root and workspaces. Use this only when you intentionally want to reinstall dependencies.
 - Preview either cleanup without deleting files by running the underlying script with `--dry-run`, for example `node ./scripts/clean.mjs artifacts --dry-run`.
 
+## Local Gateway Development
+- `npm run dev -w apps/gateway` — starts the gateway server and worker without a public tunnel.
+- `npm run dev:tunnel -w apps/gateway` — also starts ngrok. Install the ngrok CLI first.
+- Set `NGROK_DOMAIN` to use a reserved domain; otherwise ngrok assigns a temporary domain. Set `GATEWAY_PORT` to override port `8080`.
+
 ## Hosting (Production)
 - **Dashboard** — Vercel (Next.js 16 serverless)
 - **Gateway** — Railway (Express + BullMQ worker, single service)

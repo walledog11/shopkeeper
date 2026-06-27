@@ -48,6 +48,19 @@ interface DashboardStackColumnProps<T> {
   titleClassName?: string
 }
 
+function DashboardStackItem<T>({
+  item,
+  onOpenItem,
+  renderCard,
+}: {
+  item: T
+  onOpenItem: (item: T) => void
+  renderCard: (item: T, context: DashboardStackColumnRenderContext) => ReactNode
+}) {
+  const card = renderCard(item, { isPeek: false, onOpen: () => onOpenItem(item) })
+  return <div>{card}</div>
+}
+
 export function BoardColumnLoading({
   testId,
   keyPrefix,
@@ -161,9 +174,6 @@ function DashboardStackDeck<T>({
   renderCard: (item: T, context: DashboardStackColumnRenderContext) => ReactNode
   stackTestId?: string
 }) {
-  const renderDeckCard = (item: T, isPeek: boolean) =>
-    renderCard(item, { isPeek, onOpen: onExpand })
-
   return (
     <StackDeck
       items={items}
@@ -178,9 +188,9 @@ function DashboardStackDeck<T>({
         if (context.total === 1) {
           return renderCard(item, { isPeek: false, onOpen: () => onOpenItem(item) })
         }
-        return renderDeckCard(item, context.isPeek)
+        return renderCard(item, { isPeek: context.isPeek, onOpen: onExpand })
       }}
-      renderPeekCard={(item) => renderDeckCard(item, true)}
+      renderPeekCard={(item) => renderCard(item, { isPeek: true, onOpen: onExpand })}
     />
   )
 }
@@ -223,9 +233,12 @@ export function DashboardStackColumn<T>({
   const list = (
     <div className="space-y-2.5" data-testid={expandedTestId}>
       {state.entries.map((item) => (
-        <div key={getId(item)}>
-          {renderCard(item, { isPeek: false, onOpen: () => onOpenItem(item) })}
-        </div>
+        <DashboardStackItem
+          key={getId(item)}
+          item={item}
+          onOpenItem={onOpenItem}
+          renderCard={renderCard}
+        />
       ))}
       {loadMore}
     </div>
@@ -253,9 +266,12 @@ export function DashboardStackColumn<T>({
         <div className="space-y-2.5" data-testid={gridTestId}>
           <div className={gridClassName}>
             {state.entries.map((item) => (
-              <div key={getId(item)}>
-                {renderCard(item, { isPeek: false, onOpen: () => onOpenItem(item) })}
-              </div>
+              <DashboardStackItem
+                key={getId(item)}
+                item={item}
+                onOpenItem={onOpenItem}
+                renderCard={renderCard}
+              />
             ))}
           </div>
           {loadMore}

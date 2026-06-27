@@ -506,6 +506,25 @@ function ReviewStackColumn({
 }) {
   const config = REVIEW_BOARD_COLUMNS.find((column) => column.id === columnId) ?? REVIEW_BOARD_COLUMNS[0]
   const accent = COLUMN_ACCENT[columnId]
+  const loading = useMemo(() => (
+    <BoardColumnLoading
+      testId="review-column-loading"
+      keyPrefix="review-board-skeleton"
+      cardClassName="h-40 rounded-lg"
+    />
+  ), [])
+  const errorContent = useMemo(
+    () => <BoardColumnError className="rounded-lg" onRetry={state.onRetry} />,
+    [state.onRetry],
+  )
+  const empty = useMemo(() => (
+    <BoardColumnEmpty
+      title={config.emptyTitle}
+      body={config.emptyBody}
+      icon={accent.icon}
+      className="h-40 rounded-lg"
+    />
+  ), [accent.icon, config.emptyBody, config.emptyTitle])
 
   return (
     <DashboardStackColumn
@@ -531,22 +550,9 @@ function ReviewStackColumn({
       deckLabels={{ previous: "Previous review item", next: "Next review item" }}
       stackTestId="review-stack-deck"
       expandedTestId="review-stack-expanded"
-      loading={(
-        <BoardColumnLoading
-          testId="review-column-loading"
-          keyPrefix="review-board-skeleton"
-          cardClassName="h-40 rounded-lg"
-        />
-      )}
-      errorContent={<BoardColumnError className="rounded-lg" onRetry={state.onRetry} />}
-      empty={(
-        <BoardColumnEmpty
-          title={config.emptyTitle}
-          body={config.emptyBody}
-          icon={accent.icon}
-          className="h-40 rounded-lg"
-        />
-      )}
+      loading={loading}
+      errorContent={errorContent}
+      empty={empty}
       peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
       peekCardClassName="pointer-events-none box-border overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
     />

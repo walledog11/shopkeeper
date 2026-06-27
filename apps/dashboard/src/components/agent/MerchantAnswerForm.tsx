@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useReducer } from "react"
 import { AlertCircle, Loader2 } from "lucide-react"
 import FloatingToast from "@/components/ui/FloatingToast"
 import { Textarea } from "@/components/ui/textarea"
@@ -17,22 +17,39 @@ interface Props {
   onAnswered: (result: MerchantAnswerResult) => void
 }
 
+interface MerchantAnswerState {
+  answer: string
+  error: string | null
+  isSubmitting: boolean
+  saveToKb: boolean
+  succeeded: boolean
+  toastMessage: string | null
+}
+
+const INITIAL_STATE: MerchantAnswerState = {
+  answer: "",
+  error: null,
+  isSubmitting: false,
+  saveToKb: true,
+  succeeded: false,
+  toastMessage: null,
+}
+
+function mergeState(state: MerchantAnswerState, patch: Partial<MerchantAnswerState>): MerchantAnswerState {
+  return { ...state, ...patch }
+}
+
 // Shared affordance for answering an `ask_operator` question. The merchant supplies the
 // missing fact; the route records it, optionally saves it to the KB, and re-plans the ticket
 // so a normal reply rides the usual approval flow. Used by the home deck and the ticket view.
 export default function MerchantAnswerForm({ threadId, question, agentName, onAnswered }: Props) {
-  const [answer, setAnswer] = useState("")
-  const [saveToKb, setSaveToKb] = useState(true)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [succeeded, setSucceeded] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [{ answer, error, isSubmitting, saveToKb, succeeded, toastMessage }, updateState] =
+    useReducer(mergeState, INITIAL_STATE)
 
   const submit = async () => {
     const trimmed = answer.trim()
     if (!trimmed || isSubmitting || succeeded) return
-    setIsSubmitting(true)
-    setError(null)
+    updateState({ isSubmitting: true, error: null })
 
     try {
       const response = await fetch("/api/agent/answer", {
@@ -43,19 +60,21 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
       const data = await response.json().catch(() => null) as { error?: string } | null
 
       if (!response.ok) {
-        setError(data?.error ?? "Could not send your answer.")
+        updateState({ error: data?.error ?? "Could not send your answer." })
         return
       }
 
-      setSucceeded(true)
-      if (saveToKb) {
-        setToastMessage(`Saved to knowledge base — ${agentName} won't ask this again.`)
-      }
+      updateState({
+        succeeded: true,
+        toastMessage: saveToKb
+          ? `Saved to knowledge base — ${agentName} won't ask this again.`
+          : null,
+      })
       onAnswered({ saveToKb })
     } catch {
-      setError("Network error. Try again.")
+      updateState({ error: "Network error. Try again." })
     } finally {
-      setIsSubmitting(false)
+      updateState({ isSubmitting: false })
     }
   }
 
@@ -75,7 +94,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
 
         <Textarea
           value={answer}
-          onChange={event => setAnswer(event.target.value)}
+          onChange={event => updateState({ answer: event.target.value })}
           placeholder={`Answer ${agentName}…`}
           rows={3}
           disabled={isSubmitting || succeeded}
@@ -98,7 +117,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
           <Switch
             tone="amber"
             checked={saveToKb}
-            onChange={setSaveToKb}
+            onChange={saveToKb => updateState({ saveToKb })}
             disabled={isSubmitting || succeeded}
             className="mt-0.5"
             ariaLabel={saveToKb ? "Don't save this answer" : "Save this answer"}
@@ -126,7 +145,7 @@ export default function MerchantAnswerForm({ threadId, question, agentName, onAn
       {toastMessage && (
         <FloatingToast
           message={toastMessage}
-          onDismiss={() => setToastMessage(null)}
+          onDismiss={() => updateState({ toastMessage: null })}
         />
       )}
     </>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
@@ -17,6 +17,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
   const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const [currentId, setCurrentId] = useState<string | null>(null)
   const deck = items.filter(item => !dismissed.has(item.threadId))
+  const empty = useMemo(() => <NeedsYouAllClear agentName={agentName} />, [agentName])
 
   const dismiss = (
     threadId: string,
@@ -39,7 +40,7 @@ export function NeedsYouDeck({ items, agentName, onApproved }: Props) {
         className="flex flex-col gap-3 w-full"
         getId={(item) => item.threadId}
         activeId={currentId}
-        empty={<NeedsYouAllClear agentName={agentName} />}
+        empty={empty}
         stackSingleItem
         peek={STACKED_BELOW_PEEK}
         isDraggable={(item) => item.kind !== "needs_merchant_input"}

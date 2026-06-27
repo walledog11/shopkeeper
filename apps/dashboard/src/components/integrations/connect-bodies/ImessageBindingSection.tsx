@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useReducer, useRef } from "react"
 import useSWR from "swr"
 import { Bell, Check, Copy, Loader2, Plus, Smartphone, Trash2 } from "lucide-react"
 import { QRCodeSVG } from "qrcode.react"
@@ -24,6 +24,33 @@ const IMESSAGE_PERMISSIONS = [
 ] as const
 
 const DELETE_ALL_NOTE = "Linked iPhones will stop being recognized when they text the line."
+
+interface ImessageBindingState {
+  confirmingDeleteAll: boolean
+  copied: boolean
+  error: string | null
+  justLinked: string | null
+  minting: boolean
+  token: string | null
+  unlinking: string | "all" | null
+}
+
+const INITIAL_STATE: ImessageBindingState = {
+  confirmingDeleteAll: false,
+  copied: false,
+  error: null,
+  justLinked: null,
+  minting: false,
+  token: null,
+  unlinking: null,
+}
+
+function mergeState(
+  state: ImessageBindingState,
+  patch: Partial<ImessageBindingState>,
+): ImessageBindingState {
+  return { ...state, ...patch }
+}
 
 // The line is a phone number, so an `sms:` deep link pre-fills both the recipient
 // and the connect code. Scanned with the iPhone camera, Messages opens ready to
@@ -54,14 +81,9 @@ function formatHandleLabel(label: string): string {
 // `handle` is the fixed line to text, surfaced so the merchant knows where to send it.
 export function ImessageBindingSection({ handle }: { handle: string | null }) {
   const { data, mutate } = useSWR<ImessageBindStatus>('/api/integrations/imessage/bind', fetcher)
-  const [minting, setMinting] = useState(false)
-  const [token, setToken] = useState<string | null>(null)
-  const [handleCountAtMint, setHandleCountAtMint] = useState(0)
-  const [copied, setCopied] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [unlinking, setUnlinking] = useState<string | "all" | null>(null)
-  const [confirmingDeleteAll, setConfirmingDeleteAll] = useState(false)
-  const [justLinked, setJustLinked] = useState<string | null>(null)
+  const [{ confirmingDeleteAll, copied, error, justLinked, minting, token, unlinking }, updateState] =
+    useReducer(mergeState, INITIAL_STATE)
+  const handleCountAtMintRef = useRef(0)
 
   const handles = data?.handles ?? []
   const isConnected = handles.length > 0
@@ -80,26 +102,24 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
   // brief "linked" confirmation so the merchant knows it worked (the code vanishing
   // alone reads as ambiguous).
   useEffect(() => {
-    if (!token || handles.length <= handleCountAtMint) return
-    setJustLinked(newestHandleLabel ?? "iPhone")
-    setToken(null)
-    const id = setTimeout(() => setJustLinked(null), 6000)
+    if (!token || handles.length <= handleCountAtMintRef.current) return
+    updateState({ justLinked: newestHandleLabel ?? "iPhone", token: null })
+    const id = setTimeout(() => updateState({ justLinked: null }), 6000)
     return () => clearTimeout(id)
-  }, [token, handles.length, handleCountAtMint, newestHandleLabel])
+  }, [token, handles.length, newestHandleLabel])
 
   async function mint() {
-    setMinting(true)
-    setError(null)
+    updateState({ minting: true, error: null })
     try {
       const res = await fetch('/api/integrations/imessage/bind', { method: 'POST' })
       const body = await res.json() as { token?: string; error?: string }
       if (!res.ok || !body.token) throw new Error(body.error || 'Failed to create a connect code')
-      setHandleCountAtMint(handles.length)
-      setToken(body.token)
+      handleCountAtMintRef.current = handles.length
+      updateState({ token: body.token })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create a connect code')
+      updateState({ error: e instanceof Error ? e.message : 'Failed to create a connect code' })
     } finally {
-      setMinting(false)
+      updateState({ minting: false })
     }
   }
 
@@ -107,8 +127,8 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
     if (!token) return
     try {
       await navigator.clipboard.writeText(token)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      updateState({ copied: true })
+      setTimeout(() => updateState({ copied: false }), 2000)
     } catch {
       // Clipboard can be unavailable (insecure context) — the code is still shown.
     }
@@ -116,17 +136,16 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
 
   // `target` is a senderId, or "all" to unbind every handle (no senderId query param).
   async function unlink(target: string) {
-    setUnlinking(target)
-    setError(null)
+    updateState({ unlinking: target, error: null })
     try {
       const qs = target === "all" ? "" : `?senderId=${encodeURIComponent(target)}`
       const res = await fetch(`/api/integrations/imessage/bind${qs}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       await mutate()
     } catch {
-      setError('Failed to unlink. Please try again.')
+      updateState({ error: 'Failed to unlink. Please try again.' })
     } finally {
-      setUnlinking(null)
+      updateState({ unlinking: null })
     }
   }
 
@@ -239,7 +258,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
               icon={Trash2}
               label="Delete all connections"
               destructive
-              onClick={() => setConfirmingDeleteAll(true)}
+              onClick={() => updateState({ confirmingDeleteAll: true })}
               disabled={unlinking !== null}
             />
             {confirmingDeleteAll && (
@@ -248,7 +267,7 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
                 <button
                   type="button"
                   onClick={() => {
-                    setConfirmingDeleteAll(false)
+                    updateState({ confirmingDeleteAll: false })
                     void unlink("all")
                   }}
                   className="text-xs font-semibold text-red-400 hover:text-red-300 transition-colors whitespace-nowrap shrink-0"

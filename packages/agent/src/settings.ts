@@ -27,6 +27,20 @@ export type BusinessHoursSettings = Pick<
   | "businessHoursTimezoneOffset"
 >;
 
+export const AUTONOMY_OVERRIDE_PATHS = [
+  "requireApprovalForActions",
+  "maxRefundAmount",
+  "maxDiscountPercent",
+  "blockCancellations",
+  "blockCustomLineItems",
+  "toolsEnabled.action",
+  "toolsEnabled.communication",
+  "toolsEnabled.internal",
+  "toolsEnabled.read",
+] as const;
+
+export type AutonomyOverridePath = typeof AUTONOMY_OVERRIDE_PATHS[number];
+
 export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   aiContext: "",
   brandVoice: "",

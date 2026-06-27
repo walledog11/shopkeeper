@@ -2,8 +2,8 @@
 
 import {
   createContext,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useId,
   useMemo,
@@ -80,19 +80,19 @@ export function MobileChromeProvider({
 }
 
 export function useMobileChrome() {
-  const ctx = useContext(MobileChromeContext);
+  const ctx = use(MobileChromeContext);
   if (!ctx) throw new Error("useMobileChrome must be used inside MobileChromeProvider");
   return ctx.mode;
 }
 
 export function useMobileNav() {
-  const ctx = useContext(MobileNavContext);
+  const ctx = use(MobileNavContext);
   if (!ctx) throw new Error("useMobileNav must be used inside MobileChromeProvider");
   return ctx;
 }
 
 export function useMobileChromeOverride(mode: MobileChromeMode | null) {
-  const ctx = useContext(MobileChromeContext);
+  const ctx = use(MobileChromeContext);
   if (!ctx) throw new Error("useMobileChromeOverride must be used inside MobileChromeProvider");
 
   const { registerOverride } = ctx;

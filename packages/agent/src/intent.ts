@@ -1,7 +1,8 @@
 import type { AgentContext } from "./agent-context.js";
 import { isOperatorChannel } from "./thread-constants.js";
+import { ORDER_REFERENCE_RE } from "./order-reference.js";
 
-export { isOperatorChannel };
+export { isOperatorChannel, ORDER_REFERENCE_RE };
 
 const ORDER_STATUS_PHRASES = [
   "status",
@@ -48,7 +49,6 @@ export const ORDER_STATUS_ACTION_PHRASES = [
   "knowledge base",
 ] as const;
 
-export const ORDER_REFERENCE_RE = /(?:#?[A-Z]{1,4}\d{3,}|\border\s*#?\s*\d{4,}\b)/i;
 const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 
 const CUSTOMER_MUTATIVE_PHRASES = [

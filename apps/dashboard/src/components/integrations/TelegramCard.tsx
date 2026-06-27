@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useReducer, useRef } from "react"
 import useSWR from "swr"
 import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
@@ -36,6 +36,26 @@ interface TelegramStatus {
   botUsername: string | null
 }
 
+interface TelegramCardState {
+  connectUrl: string | null
+  connecting: boolean
+  disconnecting: string | "all" | null
+  error: string | null
+  open: boolean
+}
+
+const INITIAL_STATE: TelegramCardState = {
+  connectUrl: null,
+  connecting: false,
+  disconnecting: null,
+  error: null,
+  open: false,
+}
+
+function mergeState(state: TelegramCardState, patch: Partial<TelegramCardState>): TelegramCardState {
+  return { ...state, ...patch }
+}
+
 export default function TelegramCard({
   config,
   botUsername: configuredBotUsername,
@@ -45,12 +65,9 @@ export default function TelegramCard({
 }) {
   const { data: status, mutate } = useSWR<TelegramStatus>('/api/integrations/telegram', fetcher)
 
-  const [open, setOpen] = useState(false)
-  const [connecting, setConnecting] = useState(false)
-  const [disconnecting, setDisconnecting] = useState<string | "all" | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [connectUrl, setConnectUrl] = useState<string | null>(null)
-  const [connectIssuedChatCount, setConnectIssuedChatCount] = useState<number | null>(null)
+  const [{ connectUrl, connecting, disconnecting, error, open }, updateState] =
+    useReducer(mergeState, INITIAL_STATE)
+  const connectIssuedChatCountRef = useRef<number | null>(null)
 
   const chats = status?.chats ?? []
   const isConnected = chats.length > 0
@@ -58,54 +75,45 @@ export default function TelegramCard({
   const isAvailable = Boolean(botUsername)
   const atDeviceLimit = chats.length >= MAX_TELEGRAM_DEVICES
 
-  useEffect(() => {
-    if (connectUrl && connectIssuedChatCount !== null && chats.length > connectIssuedChatCount) {
-      setConnectUrl(null)
-      setConnectIssuedChatCount(null)
-    }
-  }, [chats.length, connectIssuedChatCount, connectUrl])
-
-  useEffect(() => {
-    if (!open) return
-    setError(null)
-  }, [open])
+  const visibleConnectUrl = connectIssuedChatCountRef.current !== null
+    && chats.length > connectIssuedChatCountRef.current
+    ? null
+    : connectUrl
 
   async function connect() {
-    setConnecting(true)
-    setError(null)
+    updateState({ connecting: true, error: null })
     try {
       const res = await fetch('/api/integrations/telegram', { method: 'POST' })
       const data = await res.json() as { url?: string; error?: string }
       if (!res.ok) throw new Error(data.error || 'Failed to start Telegram connect')
       if (!data.url) throw new Error('Failed to start Telegram connect')
-      setConnectUrl(data.url)
-      setConnectIssuedChatCount(chats.length)
+      updateState({ connectUrl: data.url })
+      connectIssuedChatCountRef.current = chats.length
       window.open(data.url, '_blank', 'noopener,noreferrer')
       setTimeout(() => mutate(), 5000)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start Telegram connect')
+      updateState({ error: e instanceof Error ? e.message : 'Failed to start Telegram connect' })
     } finally {
-      setConnecting(false)
+      updateState({ connecting: false })
     }
   }
 
   async function disconnect(chatId?: string) {
     const key = chatId ?? "all"
-    setDisconnecting(key)
-    setError(null)
+    updateState({ disconnecting: key, error: null })
     try {
       const url = chatId
         ? `/api/integrations/telegram?chatId=${encodeURIComponent(chatId)}`
         : '/api/integrations/telegram'
       const res = await fetch(url, { method: 'DELETE' })
       if (!res.ok) throw new Error('Failed')
-      setConnectUrl(null)
-      setConnectIssuedChatCount(null)
+      updateState({ connectUrl: null })
+      connectIssuedChatCountRef.current = null
       await mutate()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to disconnect Telegram')
+      updateState({ error: e instanceof Error ? e.message : 'Failed to disconnect Telegram' })
     } finally {
-      setDisconnecting(null)
+      updateState({ disconnecting: null })
     }
   }
 
@@ -126,7 +134,7 @@ export default function TelegramCard({
         <div className="mt-4 flex gap-2">
           {!isConnected ? (
             isAvailable ? (
-              <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_PRIMARY}>Connect</button>
+              <button type="button" onClick={() => updateState({ open: true, error: null })} className={CARD_BUTTON_PRIMARY}>Connect</button>
             ) : (
               <button
                 type="button"
@@ -138,14 +146,14 @@ export default function TelegramCard({
               </button>
             )
           ) : (
-            <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_SECONDARY}>Configure</button>
+            <button type="button" onClick={() => updateState({ open: true, error: null })} className={CARD_BUTTON_SECONDARY}>Configure</button>
           )}
         </div>
       </div>
 
       <IntegrationConfigureDialog
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={open => updateState({ open, error: open ? null : error })}
         config={config}
         statusLine={dialogStatusLine}
       >
@@ -172,7 +180,7 @@ export default function TelegramCard({
           <TelegramConnectBody
             botUsername={botUsername}
             connecting={connecting}
-            connectUrl={connectUrl}
+            connectUrl={visibleConnectUrl}
             disabled={!isAvailable}
             onConnect={connect}
           />

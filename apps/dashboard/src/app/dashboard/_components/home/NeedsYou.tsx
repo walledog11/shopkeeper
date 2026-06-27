@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import type { HomeNeedsAttentionItem } from "@/lib/home/summary-contract"
 import { NeedsYouAllClear } from "./NeedsYouAllClear"
 import { NeedsYouDeck } from "./NeedsYouDeck"
-import { needsYouCardShellClassName } from "./needs-you-card-ui"
+import { needsYouCardShellClassName } from "./needs-you-card-styles"
 
 interface Props {
   items: HomeNeedsAttentionItem[]

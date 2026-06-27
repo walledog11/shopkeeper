@@ -23,6 +23,10 @@ const GLASS_SHELL_CLASS =
 
 const GLASS_CONTROL_CLASS =
   "border border-foreground/[0.08] bg-background/40 shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-background/28"
+const QUERY_OPTIONS = {
+  refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
+  revalidateOnFocus: true,
+}
 
 function useLastVisit(): string | null {
   const [lastVisit] = useState<string | null>(() => (
@@ -65,11 +69,6 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
     replaceReviewUrl(replace, params)
   }, [replace, searchParams])
 
-  const queryOptions = {
-    refreshInterval: HOME_SUMMARY_REFRESH_INTERVAL_MS,
-    revalidateOnFocus: true,
-  }
-
   const attentionFilters = useMemo(() => ({
     attention: true,
     excludeOperator: true,
@@ -92,10 +91,10 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
     from,
   }), [from])
 
-  const attentionQuery = useActionLogEntries(attentionFilters, queryOptions)
-  const autoQuery = useActionLogEntries(autoFilters, queryOptions)
-  const storeQuery = useActionLogEntries(storeFilters, queryOptions)
-  const approvedQuery = useActionLogEntries(approvedFilters, queryOptions)
+  const attentionQuery = useActionLogEntries(attentionFilters, QUERY_OPTIONS)
+  const autoQuery = useActionLogEntries(autoFilters, QUERY_OPTIONS)
+  const storeQuery = useActionLogEntries(storeFilters, QUERY_OPTIONS)
+  const approvedQuery = useActionLogEntries(approvedFilters, QUERY_OPTIONS)
 
   const columns: ReviewBoardState = useMemo(() => ({
     attention: {

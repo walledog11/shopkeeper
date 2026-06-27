@@ -33,6 +33,32 @@ import type { Integration } from "@/types"
 
 const INTEGRATION_CARD_GRID = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
+function renderIntegrationSkeletonSection(
+  sectionKind: IntegrationChannelKind,
+  title: string,
+  description: string,
+  count: number,
+) {
+  return (
+    <section key={sectionKind} className="space-y-4">
+      <div>
+        <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
+        <p className="text-xs text-foreground/35 mt-1">{description}</p>
+      </div>
+      <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
+            <Skeleton className="size-14 rounded-2xl" />
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="h-3 w-full" />
+            <Skeleton className="h-10 w-full rounded-[10px]" />
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 export default function IntegrationsPageClient({
   telegramBotUsername,
   imessageHandle,
@@ -240,32 +266,6 @@ function IntegrationsPageContent({
         </div>
         <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
           {configs.map(renderIntegrationCard)}
-        </div>
-      </section>
-    )
-  }
-
-  function renderIntegrationSkeletonSection(
-    sectionKind: IntegrationChannelKind,
-    title: string,
-    description: string,
-    count: number,
-  ) {
-    return (
-      <section key={sectionKind} className="space-y-4">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
-          <p className="text-xs text-foreground/35 mt-1">{description}</p>
-        </div>
-        <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
-          {Array.from({ length: count }).map((_, i) => (
-            <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
-              <Skeleton className="size-14 rounded-2xl" />
-              <Skeleton className="h-5 w-28" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-10 w-full rounded-[10px]" />
-            </div>
-          ))}
         </div>
       </section>
     )

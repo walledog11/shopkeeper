@@ -15,8 +15,8 @@ import {
   NeedsYouCardTitle,
   NeedsYouCustomerName,
   NeedsYouPrimaryButton,
-  type BubbleTone,
 } from "./needs-you-card-ui"
+import type { BubbleTone } from "./needs-you-card-styles"
 
 export function NeedsYouCard({
   item,

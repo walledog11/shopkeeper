@@ -34,12 +34,12 @@ export default async function TicketsPage() {
     : []
 
   const byId = new Map(forMeThreadsRaw.map(thread => [thread.id, thread]))
-  const initialForMeThreads: Thread[] = JSON.parse(JSON.stringify(
-    forMeIds.flatMap((id: string) => {
-      const thread = byId.get(id)
-      return thread ? [thread] : []
-    }),
-  ))
+  const orderedThreads = forMeIds.flatMap((id: string) => {
+    const thread = byId.get(id)
+    return thread ? [thread] : []
+  })
+  const serializedThreads = JSON.stringify(orderedThreads)
+  const initialForMeThreads = JSON.parse(serializedThreads) as Thread[]
 
   const connectedChannels = INBOX_CHANNEL_TYPES.filter(channel =>
     integrations.some(integration => integration.platform === channel),

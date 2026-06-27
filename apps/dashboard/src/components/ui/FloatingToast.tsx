@@ -23,8 +23,7 @@ export default function FloatingToast({
   }, [durationMs, message, onDismiss])
 
   return (
-    <div
-      role="status"
+    <output
       aria-live="polite"
       className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-medium text-background shadow-lg pointer-events-none"
     >
@@ -33,6 +32,6 @@ export default function FloatingToast({
         : <CheckCircle2 aria-hidden className="size-4 shrink-0 text-emerald-400" />
       }
       {message}
-    </div>
+    </output>
   )
 }

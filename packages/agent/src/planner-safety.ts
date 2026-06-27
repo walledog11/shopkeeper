@@ -12,12 +12,15 @@ import {
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
   looksLikeOrderStatusIntent,
-  ORDER_REFERENCE_RE,
   planningIntentTexts,
 } from "./intent.js";
 import type { OrgSettings } from "./types.js";
 import { resolveAgentSettings } from "./settings.js";
 import { kbArticlesCoverQuery } from "./planner-read-skip.js";
+import {
+  findReferencedOrder,
+  ORDER_REFERENCE_RE,
+} from "./order-reference.js";
 
 const ORDER_LOOKUP_TOOLS = new Set([
   "get_order_by_name",
@@ -51,29 +54,6 @@ export function hasAmbiguousCustomerSearchResult(
     }
   }
   return false;
-}
-
-function normalizeOrderName(name: string): string {
-  const trimmed = name.trim();
-  return (trimmed.startsWith("#") ? trimmed : `#${trimmed}`).toUpperCase();
-}
-
-function referencedOrderName(text: string): string | null {
-  const match = text.match(ORDER_REFERENCE_RE);
-  if (!match) return null;
-  const raw = match[0];
-  const orderNumberMatch = raw.match(/\border\s*#?\s*(\d+)/i);
-  if (orderNumberMatch?.[1]) return normalizeOrderName(orderNumberMatch[1]);
-  return normalizeOrderName(raw.replace(/^#/, ""));
-}
-
-function findReferencedOrder(
-  orders: readonly ShopifyOrderSummary[],
-  text: string,
-): ShopifyOrderSummary | null {
-  const reference = referencedOrderName(text);
-  if (!reference) return null;
-  return orders.find((order) => order.name && normalizeOrderName(order.name) === reference) ?? null;
 }
 
 function isOrderFullyRefunded(order: ShopifyOrderSummary): boolean {

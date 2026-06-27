@@ -6,8 +6,8 @@ import type { ToolStatus } from "./tools/result.js";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
 import {
   applySkippedPlanningReadResults,
-  normalizePlanningOrderName,
 } from "./planner-read-skip.js";
+import { normalizeOrderName } from "./order-reference.js";
 
 export {
   partitionPlanningReadBlocks,
@@ -20,10 +20,6 @@ type PlanningReadToolResult = {
   readResultsMap: Map<string, string>;
   readStatusMap: Map<string, ToolStatus>;
 };
-
-function normalizeOrderName(name: string): string {
-  return normalizePlanningOrderName(name);
-}
 
 // Whether the order a lookup tool was asked about is already in the planning
 // context. If so, a live not-found is fixture/timing noise, not a real "order

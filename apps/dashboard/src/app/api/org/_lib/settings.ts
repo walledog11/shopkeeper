@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import {
   AGENT_SETTINGS_DEFAULTS,
+  AUTONOMY_OVERRIDE_PATHS,
   OrgSettingsValidationError,
   isValidBusinessHoursWindow,
   normalizeStoredOrgSettings,
@@ -10,17 +11,7 @@ import {
 } from '@shopkeeper/agent/settings';
 import { BadRequestError } from '@/lib/api/errors';
 
-const ALLOWED_SETTINGS_UNSET = new Set([
-  'requireApprovalForActions',
-  'maxRefundAmount',
-  'maxDiscountPercent',
-  'blockCancellations',
-  'blockCustomLineItems',
-  'toolsEnabled.action',
-  'toolsEnabled.communication',
-  'toolsEnabled.internal',
-  'toolsEnabled.read',
-]);
+const ALLOWED_SETTINGS_UNSET = new Set<string>(AUTONOMY_OVERRIDE_PATHS);
 
 const ORG_PATCH_KEYS = new Set(['name', 'settings', 'settingsUnset', 'version']);
 
