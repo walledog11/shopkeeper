@@ -15,6 +15,7 @@ import logger from '../logger.js';
 import { recordAgentFailureInBackground } from '../agent-failure-alerts.js';
 import { postDashboardInternal } from '../clients/dashboard-internal.js';
 import { pushOperatorEscalation } from '../operator-escalation.js';
+import { publishThreadEvent } from '../realtime/publish.js';
 
 interface ThreadSinkContext {
   threadId: string;
@@ -90,15 +91,20 @@ export const gatewayThreadSink: ThreadSink = {
       senderType: SenderType.note,
       contentText: `${AGENT_NOTE_PREFIX}${input.text}`,
     });
+    await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(`Note logged: "${input.text}"`);
   },
 
-  sendReply(input: SendReplyInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    return dispatchAgentSend('send_reply', ctx, input);
+  async sendReply(input: SendReplyInput, ctx: ThreadSinkContext): Promise<ToolResult> {
+    const result = await dispatchAgentSend('send_reply', ctx, input);
+    if (result.status !== 'error') await publishThreadEvent(ctx.orgId, ctx.threadId);
+    return result;
   },
 
-  sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult> {
-    return dispatchAgentSend('send_email', ctx, input);
+  async sendEmail(input: SendEmailInput, ctx: ThreadSinkContext): Promise<ToolResult> {
+    const result = await dispatchAgentSend('send_email', ctx, input);
+    if (result.status !== 'error') await publishThreadEvent(ctx.orgId, ctx.threadId);
+    return result;
   },
 
   async updateThreadStatus(input: UpdateThreadStatusInput, ctx: ThreadSinkContext): Promise<ToolResult> {
@@ -106,6 +112,7 @@ export const gatewayThreadSink: ThreadSink = {
       where: { id: ctx.threadId },
       data: { status: input.status },
     });
+    await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(`Thread status updated to "${input.status}".`);
   },
 
@@ -114,6 +121,7 @@ export const gatewayThreadSink: ThreadSink = {
       where: { id: ctx.threadId },
       data: { tag: input.tag },
     });
+    await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(`Thread tag updated to "${input.tag}".`);
   },
 
@@ -134,6 +142,7 @@ export const gatewayThreadSink: ThreadSink = {
         '[agent-sink] operator escalation push errored',
       );
     });
+    await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolEscalated(reason);
   },
 
@@ -150,6 +159,7 @@ export const gatewayThreadSink: ThreadSink = {
       senderType: SenderType.note,
       contentText: `${AGENT_NOTE_PREFIX}Asked the merchant: ${question}`,
     });
+    await publishThreadEvent(ctx.orgId, ctx.threadId);
     return toolOk(question);
   },
 };

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, type ComponentProps, type ReactNode } from "react"
-import { AlertCircle, CheckCircle2, Inbox, Loader2, X } from "lucide-react"
+import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
@@ -11,6 +11,10 @@ import { TriageStackBoard } from "./board/TriageStackBoard"
 import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
+import {
+  ConversationLoadState,
+  NoConversationSelectedState,
+} from "./TicketsPageStates"
 
 type ConversationViewProps = ComponentProps<typeof ConversationView>
 type ThreadListProps = ComponentProps<typeof ThreadList>
@@ -44,11 +48,6 @@ interface TicketsPageLayoutConversationState {
   toast: TicketToast | null
 }
 
-interface TicketsPageLayoutDrawerState {
-  isDesktopContext: boolean
-  showContextDrawer: boolean
-}
-
 interface TicketsPageLayoutFilters {
   channelFilter: ChannelType | null
   connectedChannels: ChannelType[]
@@ -58,7 +57,6 @@ interface TicketsPageLayoutFilters {
 
 interface TicketsPageLayoutListState {
   activeTicketId: string | null
-  activeView: TicketListView
   approvingTicketId: string | null
   effectiveActiveView: TicketListView
   filteredTickets: Ticket[]
@@ -84,7 +82,6 @@ interface TicketsPageLayoutActions {
   onLinkShopifyCustomer: (customerId: string | null) => Promise<void>
   onLoadMore: () => void
   onMarkAsSpam: ThreadListProps["onMarkAsSpam"]
-  onOpenContext: () => void
   onRecover: ThreadListProps["onRecover"]
   onQuickApproveFromList: (threadId: string) => void
   onReviewFromList: (threadId: string) => void
@@ -98,7 +95,6 @@ interface TicketsPageLayoutActions {
   onSearchChange: ThreadListProps["onSearchChange"]
   onSelectTicket: ThreadListProps["onSelectTicket"]
   onSend: ConversationViewProps["onSend"]
-  onShowContextDrawerChange: (open: boolean) => void
   onViewChange: ThreadListProps["onViewChange"]
   onViewSpam: ThreadListProps["onViewSpam"]
   onToggleSelect: ThreadListProps["onToggleSelect"]
@@ -107,7 +103,6 @@ interface TicketsPageLayoutActions {
 interface TicketsPageLayoutProps {
   actions: TicketsPageLayoutActions
   conversation: TicketsPageLayoutConversationState
-  drawer: TicketsPageLayoutDrawerState
   filters: TicketsPageLayoutFilters
   flags: TicketsPageLayoutFlags
   list: TicketsPageLayoutListState
@@ -213,7 +208,6 @@ export function TicketsPageLayout({
   } = conversation
   const {
     activeTicketId,
-    activeView,
     approvingTicketId,
     effectiveActiveView,
     filteredTickets,
@@ -289,25 +283,7 @@ export function TicketsPageLayout({
         />
       </div>
     ) : (
-      <div
-        data-testid="inline-ticket-conversation-state"
-        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
-      >
-        {activeThreadError ? (
-          <>
-            <AlertCircle className="size-5 text-red-500" />
-            <div>
-              <p className="text-sm font-semibold text-foreground/70">Unable to load conversation</p>
-              <p className="mt-1 text-xs text-foreground/40">It may have been archived or is no longer available.</p>
-            </div>
-          </>
-        ) : (
-          <>
-            <Loader2 className="size-5 animate-spin text-foreground/30" />
-            <p className="text-sm font-semibold text-foreground/50">Loading conversation</p>
-          </>
-        )}
-      </div>
+      <ConversationLoadState error={activeThreadError} compact />
     )
   ) : null
 
@@ -333,7 +309,7 @@ export function TicketsPageLayout({
     <Dialog open={Boolean(isBoardView && activeTicketId)} onOpenChange={open => { if (!open) onBack() }}>
       <DialogContent
         showCloseButton={false}
-        className="flex h-[86vh] w-[calc(100%-2rem)] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-background p-0 shadow-xl sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
+        className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-[86vh] sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
       >
         <DialogTitle className="sr-only">Conversation</DialogTitle>
         {lastDialogBodyRef.current}
@@ -441,38 +417,10 @@ export function TicketsPageLayout({
       </div>
 
       <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
-        {conversationBody ?? (activeTicketId ? (
-          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
-            {activeThreadError ? (
-              <>
-                <AlertCircle className="size-5 text-red-500" />
-                <div>
-                  <p className="text-sm font-semibold text-foreground/70">Unable to load conversation</p>
-                  <p className="text-xs text-foreground/40 mt-1">It may have been archived or is no longer available.</p>
-                </div>
-              </>
-            ) : null}
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-background p-6 text-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
-              {allCaughtUp
-                ? <CheckCircle2 className="size-5 text-foreground/40" />
-                : <Inbox className="size-5 text-foreground/30" />
-              }
-            </span>
-            <div className="flex flex-col gap-1">
-              <h2 className="text-lg font-semibold text-foreground">
-                {allCaughtUp ? "You're all caught up" : "Pick a conversation"}
-              </h2>
-              <p className="text-sm text-foreground/50 max-w-[230px]">
-                {allCaughtUp
-                  ? `${agentName} will flag anything that needs your eye.`
-                  : "Choose one from the list to jump in."}
-              </p>
-            </div>
-          </div>
-        ))}
+        {conversationBody ?? (activeTicketId
+          ? <ConversationLoadState error={activeThreadError} />
+          : <NoConversationSelectedState agentName={agentName} allCaughtUp={allCaughtUp} />
+        )}
       </div>
 
       {toastNode}

@@ -76,6 +76,8 @@ jobs:
           path: |
             apps/dashboard/coverage/
             apps/gateway/coverage/
+            packages/agent/coverage/
+            packages/email/coverage/
           retention-days: 7
       - name: Stop test services
         if: ${{ always() }}

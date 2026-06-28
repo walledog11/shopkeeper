@@ -1,0 +1,104 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  createMessage,
+  postInternal,
+  pushEscalation,
+  recordFailure,
+  threadUpdate,
+} = vi.hoisted(() => ({
+  createMessage: vi.fn(),
+  postInternal: vi.fn(),
+  pushEscalation: vi.fn(),
+  recordFailure: vi.fn(),
+  threadUpdate: vi.fn(),
+}));
+
+vi.mock('@shopkeeper/db', () => ({
+  db: { thread: { update: threadUpdate } },
+  SenderType: { note: 'note' },
+  createMessage,
+}));
+vi.mock('../clients/dashboard-internal.js', () => ({
+  postDashboardInternal: postInternal,
+}));
+vi.mock('../agent-failure-alerts.js', () => ({
+  recordAgentFailureInBackground: recordFailure,
+}));
+vi.mock('../operator-escalation.js', () => ({
+  pushOperatorEscalation: pushEscalation,
+}));
+vi.mock('../logger.js', () => ({
+  default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+
+import { gatewayThreadSink } from './agent-thread-sink.js';
+
+const ctx = { threadId: 'thread-1', orgId: 'org-1', orgName: 'Acme' };
+
+describe('gatewayThreadSink persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createMessage.mockResolvedValue({});
+    threadUpdate.mockResolvedValue({});
+    pushEscalation.mockResolvedValue(undefined);
+  });
+
+  it('persists notes, status, tags, and merchant questions', async () => {
+    await gatewayThreadSink.addInternalNote({ text: 'Investigating' }, ctx);
+    await gatewayThreadSink.updateThreadStatus({ status: 'closed' }, ctx);
+    await gatewayThreadSink.updateThreadTag({ tag: 'shipping' }, ctx);
+    await gatewayThreadSink.askOperator({ question: '  What is the policy?  ' }, ctx);
+
+    expect(createMessage).toHaveBeenNthCalledWith(1, {
+      threadId: 'thread-1',
+      senderType: 'note',
+      contentText: '__shopkeeper_agent_note__Investigating',
+    });
+    expect(threadUpdate.mock.calls).toEqual([
+      [{ where: { id: 'thread-1' }, data: { status: 'closed' } }],
+      [{ where: { id: 'thread-1' }, data: { tag: 'shipping' } }],
+    ]);
+    expect(createMessage).toHaveBeenNthCalledWith(2, {
+      threadId: 'thread-1',
+      senderType: 'note',
+      contentText: '__shopkeeper_agent_note__Asked the merchant: What is the policy?',
+    });
+  });
+
+  it('persists escalation state before notifying the operator', async () => {
+    const result = await gatewayThreadSink.escalateToHuman({ reason: '  Refund approval needed  ' }, ctx);
+
+    expect(threadUpdate).toHaveBeenCalledWith({
+      where: { id: 'thread-1' },
+      data: { status: 'pending', tag: 'needs_human' },
+    });
+    expect(createMessage).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      senderType: 'note',
+      contentText: '__shopkeeper_agent_note__Escalated to merchant: Refund approval needed',
+    });
+    expect(pushEscalation).toHaveBeenCalledWith('org-1', 'thread-1', 'Refund approval needed');
+    expect(result).toEqual({ status: 'escalated', message: 'Refund approval needed' });
+  });
+
+  it('returns and records dashboard dispatch failures without partial persistence', async () => {
+    postInternal.mockResolvedValue({
+      ok: false,
+      status: 503,
+      responseBody: 'provider unavailable',
+    });
+
+    const result = await gatewayThreadSink.sendReply({ text: 'Hello' }, ctx);
+
+    expect(result).toEqual({ status: 'error', message: 'Error: message dispatch failed (503).' });
+    expect(recordFailure).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'tool_result',
+      orgId: 'org-1',
+      tool: 'send_reply',
+      statusCode: 503,
+    }));
+    expect(createMessage).not.toHaveBeenCalled();
+    expect(threadUpdate).not.toHaveBeenCalled();
+  });
+});

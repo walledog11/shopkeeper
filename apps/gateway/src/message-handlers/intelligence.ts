@@ -1,5 +1,6 @@
 import { db, isSpendCapError, SenderType } from '@shopkeeper/db';
 import logger from '../logger.js';
+import { publishThreadEvent } from '../realtime/publish.js';
 import { CHANNEL, MODEL } from '../constants.js';
 import { enforceSpendCap, recordSpend } from '@shopkeeper/agent/spend';
 import { readModelUsage } from '@shopkeeper/agent/usage';
@@ -69,6 +70,9 @@ export async function generateThreadIntelligence(
     });
 
     logger.info({ tag: aiData.tag, summary: aiData.summary, classification: updated.filterStatus, threadId }, '[Worker] AI Summary saved');
+
+    // Live inbox: summary/tag refreshed — push so the thread card updates.
+    await publishThreadEvent(updated.organizationId, threadId);
 
     return updated;
   } catch (aiError) {

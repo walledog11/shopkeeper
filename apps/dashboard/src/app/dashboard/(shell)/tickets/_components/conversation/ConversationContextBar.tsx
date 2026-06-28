@@ -94,35 +94,37 @@ export default function ConversationContextBar({
   if (facts[0] && facts[0].tone === "muted") facts[0].tone = "lead"
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-      <button
-        type="button"
-        data-testid="conversation-context-bar"
-        aria-expanded={expanded}
-        onClick={() => onExpandedChange(!expanded)}
-        className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-foreground/[0.02]"
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden whitespace-nowrap text-[13px]">
-          {facts.map((fact, index) => {
-            const Icon = fact.icon
-            return (
-              <span key={fact.key} className="flex min-w-0 items-center gap-2.5">
-                {index > 0 && <span aria-hidden className="h-3.5 w-px shrink-0 bg-foreground/10" />}
-                <span className={`flex min-w-0 items-center gap-1.5 ${TEXT_TONE[fact.tone]}`}>
-                  <Icon className={`size-3.5 shrink-0 ${ICON_TONE[fact.tone]}`} />
-                  <span className={index === 0 ? "truncate" : "shrink-0"}>{fact.text}</span>
+    <div className="relative">
+      <div className="rounded-2xl border border-border bg-card shadow-sm">
+        <button
+          type="button"
+          data-testid="conversation-context-bar"
+          aria-expanded={expanded}
+          onClick={() => onExpandedChange(!expanded)}
+          className="group flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-foreground/[0.02]"
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden whitespace-nowrap text-[13px]">
+            {facts.map((fact, index) => {
+              const Icon = fact.icon
+              return (
+                <span key={fact.key} className="flex min-w-0 items-center gap-2.5">
+                  {index > 0 && <span aria-hidden className="h-3.5 w-px shrink-0 bg-foreground/10" />}
+                  <span className={`flex min-w-0 items-center gap-1.5 ${TEXT_TONE[fact.tone]}`}>
+                    <Icon className={`size-3.5 shrink-0 ${ICON_TONE[fact.tone]}`} />
+                    <span className={index === 0 ? "truncate" : "shrink-0"}>{fact.text}</span>
+                  </span>
                 </span>
-              </span>
-            )
-          })}
-        </div>
-        <span className="ml-1 flex size-6 shrink-0 items-center justify-center rounded-full text-foreground/35 transition-colors group-hover:bg-foreground/[0.06] group-hover:text-foreground/60">
-          <ChevronDown className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-        </span>
-      </button>
+              )
+            })}
+          </div>
+          <span className="ml-1 flex size-6 shrink-0 items-center justify-center rounded-full text-foreground/35 transition-colors group-hover:bg-foreground/[0.06] group-hover:text-foreground/60">
+            <ChevronDown className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </span>
+        </button>
+      </div>
 
       {expanded && (
-        <div className="max-h-[45vh] overflow-y-auto border-t border-border custom-scrollbar">
+        <div className="absolute inset-x-0 top-[calc(100%+0.375rem)] z-30 max-h-[45vh] overflow-y-auto rounded-2xl border border-border bg-card shadow-lg custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-200">
           <ContextPanel
             thread={thread}
             hasShopify={hasShopify}

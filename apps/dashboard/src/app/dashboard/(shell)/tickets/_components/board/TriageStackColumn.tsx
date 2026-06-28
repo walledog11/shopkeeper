@@ -1,5 +1,6 @@
 "use client"
 
+import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import { Layers, List } from "lucide-react"
 import type { TicketTriageTier } from "../../_lib/ticket-list-presentation"
 import type { TicketTriageTierGroup } from "../../_lib/group-tickets-by-triage-tier"
@@ -66,38 +67,57 @@ export function TriageStackColumn({
         </button>
       </div>
 
-      {listMode ? (
-        <div className="custom-scrollbar max-h-[460px] divide-y divide-foreground/[0.08] overflow-y-auto rounded-2xl border border-border bg-background">
-          {group.tickets.map(ticket => (
-            <TicketRow
-              key={ticket.id}
-              activeView={activeView}
-              activeTicketId={activeTicketId}
-              approvingTicketId={approvingTicketId}
-              context={{ hasShopify }}
-              selection={{ hasSelection: false, isSelected: false }}
-              orgSettings={orgSettings}
-              ticket={ticket}
-              onQuickApproveFromList={onQuickApprove}
-              onReviewFromList={onReview}
-              onSelectTicket={onSelectTicket}
-              onToggleSelect={() => {}}
-            />
-          ))}
-        </div>
-      ) : (
-        <TicketStackDeck
-          tickets={group.tickets}
-          activeView={activeView}
-          hasShopify={hasShopify}
-          orgSettings={orgSettings}
-          activeTicketId={activeTicketId}
-          approvingTicketId={approvingTicketId}
-          onSelectTicket={onSelectTicket}
-          onQuickApprove={onQuickApprove}
-          onReview={onReview}
-        />
-      )}
+      <LazyMotion features={domAnimation}>
+        <AnimatePresence mode="wait" initial={false}>
+          {listMode ? (
+            <m.div
+              key="list"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+              className="custom-scrollbar max-h-[460px] divide-y divide-foreground/[0.08] overflow-y-auto rounded-2xl border border-border bg-background"
+            >
+              {group.tickets.map(ticket => (
+                <TicketRow
+                  key={ticket.id}
+                  activeView={activeView}
+                  activeTicketId={activeTicketId}
+                  approvingTicketId={approvingTicketId}
+                  context={{ hasShopify }}
+                  selection={{ hasSelection: false, isSelected: false }}
+                  orgSettings={orgSettings}
+                  ticket={ticket}
+                  onQuickApproveFromList={onQuickApprove}
+                  onReviewFromList={onReview}
+                  onSelectTicket={onSelectTicket}
+                  onToggleSelect={() => {}}
+                />
+              ))}
+            </m.div>
+          ) : (
+            <m.div
+              key="stack"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15, ease: "easeOut" }}
+            >
+              <TicketStackDeck
+                tickets={group.tickets}
+                activeView={activeView}
+                hasShopify={hasShopify}
+                orgSettings={orgSettings}
+                activeTicketId={activeTicketId}
+                approvingTicketId={approvingTicketId}
+                onSelectTicket={onSelectTicket}
+                onQuickApprove={onQuickApprove}
+                onReview={onReview}
+              />
+            </m.div>
+          )}
+        </AnimatePresence>
+      </LazyMotion>
     </section>
   )
 }

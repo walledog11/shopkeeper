@@ -1,6 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
+import { AnimatePresence, LazyMotion, domAnimation } from "motion/react"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useIsMobile } from "@/hooks/useMobile"
 import { groupTicketsByTriageTier } from "../../_lib/group-tickets-by-triage-tier"
@@ -90,6 +91,7 @@ function renderTicketRow(ticket: Ticket, props: TicketRowRenderProps) {
   return (
     <TicketRow
       key={ticket.id}
+      animate
       activeView={activeView}
       activeTicketId={activeTicketId}
       approvingTicketId={approvingTicketId}
@@ -159,6 +161,11 @@ export default function ThreadList({
     [hasShopify, isMobile, orgSettings, tickets, useTieredForMeLayout],
   )
 
+  // Remount AnimatePresence whenever the list identity changes (view / filter /
+  // search) so a wholesale set swap is instant; within a stable list, add/remove
+  // of individual tickets animates.
+  const listMotionKey = `${activeView}:${isSearchMode ? "search" : "list"}:${channelFilter ?? "all"}:${tagFilter ?? "all"}:${searchQuery}`
+
   const ticketRowProps: TicketRowRenderProps = {
     activeView,
     activeTicketId,
@@ -210,7 +217,7 @@ export default function ThreadList({
         {listLoading ? (
           <ThreadListLoading />
         ) : (
-          <>
+          <LazyMotion features={domAnimation}>
             <TooltipProvider delayDuration={300}>
               {useTieredForMeLayout ? (
                 <>
@@ -223,12 +230,16 @@ export default function ThreadList({
                       collapsible={group.collapsible}
                       defaultExpanded={group.defaultExpanded}
                     >
-                      {group.tickets.map(ticket => renderTicketRow(ticket, ticketRowProps))}
+                      <AnimatePresence key={`${listMotionKey}:${group.tier}`} initial={false}>
+                        {group.tickets.map(ticket => renderTicketRow(ticket, ticketRowProps))}
+                      </AnimatePresence>
                     </ThreadListTierSection>
                   ))}
                 </>
               ) : (
-                tickets.map(ticket => renderTicketRow(ticket, ticketRowProps))
+                <AnimatePresence key={listMotionKey} initial={false}>
+                  {tickets.map(ticket => renderTicketRow(ticket, ticketRowProps))}
+                </AnimatePresence>
               )}
             </TooltipProvider>
 
@@ -256,7 +267,7 @@ export default function ThreadList({
                 </button>
               </div>
             )}
-          </>
+          </LazyMotion>
         )}
       </div>
     </>

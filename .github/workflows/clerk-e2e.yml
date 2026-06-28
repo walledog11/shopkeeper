@@ -1,0 +1,62 @@
+name: Clerk Browser Contract
+
+on:
+  schedule:
+    - cron: '30 8 * * *'
+  workflow_dispatch:
+
+jobs:
+  clerk-browser:
+    name: Real Clerk browser E2E
+    if: ${{ github.event_name == 'workflow_dispatch' || vars.CLERK_E2E_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+      CLERK_PUBLISHABLE_KEY: ${{ secrets.CLERK_PUBLISHABLE_KEY }}
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || secrets.CLERK_PUBLISHABLE_KEY }}
+      CLERK_E2E_EMAIL: ${{ secrets.CLERK_E2E_EMAIL }}
+      E2E_CLERK_ORG_ID: ${{ secrets.E2E_CLERK_ORG_ID }}
+      ANTHROPIC_API_KEY: test-anthropic-key
+      INTERNAL_API_SECRET: test-internal-secret
+      INTERNAL_API_SECRET_PREV: test-internal-secret-prev
+      META_APP_ID: test-meta-app-id
+      META_APP_SECRET: test-meta-secret
+      META_VERIFY_TOKEN: test-verify-token
+      POSTMARK_API_KEY: test-postmark-key
+      SHOPIFY_APP_SECRET: test-shopify-secret
+      STRIPE_SECRET_KEY: test-stripe-key
+      STRIPE_WEBHOOK_SECRET: test-stripe-webhook-secret
+      TWILIO_ACCOUNT_SID: ACtest
+      TWILIO_AUTH_TOKEN: test-twilio-token
+      TWILIO_FROM_NUMBER: "+15555550123"
+      TWILIO_WHATSAPP_NUMBER: "whatsapp:+15555550123"
+      TWILIO_WEBHOOK_URL: http://127.0.0.1:8180/webhooks/twilio
+      UPSTASH_REDIS_REST_URL: https://example-upstash.local
+      UPSTASH_REDIS_REST_TOKEN: test-upstash-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Start test services
+        run: npm run test:services:up
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      - name: Run real-Clerk browser contract
+        run: npm run test:e2e:browser
+      - name: Upload Playwright artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: clerk-playwright-artifacts
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - name: Stop test services
+        if: ${{ always() }}
+        run: npm run test:services:down

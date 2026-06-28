@@ -9,6 +9,7 @@ import AgentPanelRoot from "../_components/agent-panel/AgentPanelRoot";
 import AgentPanelUrlSync from "../_components/agent-panel/AgentPanelUrlSync";
 import { AgentPanelProvider } from "../_components/agent-panel/AgentPanelContext";
 import { CommandPaletteProvider } from "../_components/CommandPaletteContext";
+import RealtimeProvider from "@/components/realtime/RealtimeProvider";
 import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
@@ -101,6 +102,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         className="dashboard-shell flex h-dvh w-full flex-col overflow-hidden bg-background font-sans"
         style={{ "--m-serif": "Georgia, 'Times New Roman', serif" } as React.CSSProperties}
       >
+        <RealtimeProvider />
         <NotificationBar notifications={notifications} />
         <NavProgressBar />
         <DashboardSidebar initialAutonomyTier={settings.autonomyTier ?? "guarded"} agentName={settings.agentName}>

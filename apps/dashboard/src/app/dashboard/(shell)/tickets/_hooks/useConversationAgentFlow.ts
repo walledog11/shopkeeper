@@ -26,6 +26,10 @@ interface UseConversationAgentFlowProps {
   onNoteModeReset: () => void
 }
 
+// How long the approved plan card lingers on its "Sent ✓" confirmation before it
+// slides away. The run fires immediately; this only delays dismissing the card.
+const SENT_CARD_LINGER_MS = 500
+
 function createAgentTurn(turn: Omit<AgentTurn, "id">): AgentTurn {
   return { id: crypto.randomUUID(), ...turn }
 }
@@ -117,7 +121,9 @@ export function useConversationAgentFlow({
   }
 
   const executeApprovedPlan = async (instruction: string, approvedToolCalls: RawToolCall[]) => {
-    setPendingPlan(null)
+    // Keep the card mounted briefly so it shows its "Sent ✓" confirmation before
+    // dismissing; the run itself starts immediately below.
+    setTimeout(() => setPendingPlan(null), SENT_CARD_LINGER_MS)
     setPendingInstruction(instruction)
     setIsPlanExecuting(true)
     onAgentRunningChange(true)

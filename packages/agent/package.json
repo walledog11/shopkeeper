@@ -163,8 +163,10 @@
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
     "dev": "tsc --watch --preserveWatchOutput",
-    "test:unit": "vitest run --config vitest.config.ts",
-    "lint": "cd ../.. && eslint packages/agent/src --max-warnings 0"
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts",
+    "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
+    "lint": "cd ../.. && eslint packages/agent/src packages/agent/vitest.config.ts packages/agent/vitest.integration.config.ts packages/agent/vitest.unit.config.ts --max-warnings 0"
   },
   "devDependencies": {
     "pino": "^10.3.1",

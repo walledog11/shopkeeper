@@ -157,25 +157,35 @@ describe("runAgent policy enforcement", () => {
   });
 
   it("runs mixed non-read tool calls in order", async () => {
-    let replyFinished = false;
+    let releaseReply!: () => void;
+    let markReplyStarted!: () => void;
+    const replyStarted = new Promise<void>((resolve) => {
+      markReplyStarted = resolve;
+    });
+    const replyRelease = new Promise<void>((resolve) => {
+      releaseReply = resolve;
+    });
     mockCreate
       .mockResolvedValueOnce(toolUseBatch())
       .mockResolvedValueOnce(endTurn("All done."));
     mockSendReply.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      replyFinished = true;
+      markReplyStarted();
+      await replyRelease;
       return { status: "ok", message: "Reply sent." };
     });
-    mockUpdateThreadStatus.mockImplementation(async () => (
-      replyFinished
-        ? { status: "ok", message: "Status updated after reply." }
-        : { status: "ok", message: "Status updated before reply." }
-    ));
+    mockUpdateThreadStatus.mockResolvedValue({
+      status: "ok",
+      message: "Status updated after reply.",
+    });
 
-    const result = await runAgent(
+    const resultPromise = runAgent(
       makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
       "Reply and close",
     );
+    await replyStarted;
+    expect(mockUpdateThreadStatus).not.toHaveBeenCalled();
+    releaseReply();
+    const result = await resultPromise;
 
     expect(result.actionsPerformed.map((action) => action.result)).toEqual([
       "Reply sent.",

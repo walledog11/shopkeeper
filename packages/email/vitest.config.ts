@@ -4,5 +4,23 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.ts'],
+      exclude: [
+        'src/**/*.test.ts',
+        'src/**/*.d.ts',
+        'src/**/test-fixtures/**',
+      ],
+      reporter: ['text', 'json-summary', 'lcov', 'html'],
+      reportsDirectory: './coverage',
+      reportOnFailure: true,
+      thresholds: {
+        statements: 72.95,
+        branches: 65.66,
+        functions: 67,
+        lines: 78.23,
+      },
+    },
   },
 });

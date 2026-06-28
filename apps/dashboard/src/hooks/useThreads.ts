@@ -1,6 +1,7 @@
 import useSWR from "swr";
 import { useEffect, useState } from "react";
 import { fetcher } from "@/lib/api/fetcher";
+import { REALTIME_ENABLED } from "@/lib/realtime/config";
 
 type ThreadCount = { count: number };
 
@@ -23,7 +24,7 @@ export function useOpenThreadCountQuery(enabled = true) {
   const { data, error, isLoading, mutate } = useSWR<ThreadCount>(
     enabled ? '/api/threads?status=open&count=true' : null,
     fetcher,
-    { refreshInterval: isVisible ? 15000 : 0 }
+    { refreshInterval: isVisible ? (REALTIME_ENABLED ? 60000 : 15000) : 0 }
   );
 
   return {

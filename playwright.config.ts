@@ -8,6 +8,9 @@ export default defineConfig({
   timeout: 60_000,
   retries: 0,
   fullyParallel: false,
+  // Smoke specs share one seeded auth-bypass organization. Serial workers keep
+  // onboarding mutation/restore isolated from ticket and billing workflows.
+  workers: 1,
   use: {
     baseURL: 'http://localhost:3100',
     screenshot: 'only-on-failure',

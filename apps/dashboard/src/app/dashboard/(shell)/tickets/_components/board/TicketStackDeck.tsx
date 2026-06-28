@@ -56,6 +56,7 @@ export function TicketStackDeck({
       activeId={activeTicketId}
       isDraggable={(ticket) => activeTicketId !== ticket.id}
       disableControlsWhenNotDraggable
+      stackSingleItem
       labels={{ previous: "Previous ticket", next: "Next ticket" }}
       controls="count"
       peek={STACKED_BELOW_PEEK}

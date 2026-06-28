@@ -6,7 +6,11 @@ Use the root PR verification path before sending changes that touch app behavior
 npm run verify:pr
 ```
 
-That runs structure checks, repo and app lint, unit tests, node script tests, integration tests, smoke E2E, and coverage in the same order CI expects. For a narrower loop, run the smallest script that covers your change:
+That runs structure checks, repo and app lint, fast unit tests, node script tests,
+auth-bypass smoke E2E, comprehensive coverage, and the production build in the
+same order CI expects. The coverage run owns the integration gate, so
+`verify:pr` does not run integration once normally and then repeat it under
+coverage. For a narrower loop, run the smallest script that covers your change:
 
 ```sh
 npm run lint:structure
@@ -20,11 +24,26 @@ npm run test:coverage
 
 ## Test Ownership
 
-Unit tests belong next to deterministic business logic, validation, formatting, policy, and component helpers. They use the `*.unit.test.ts` suffix and should not need Postgres, Redis, Playwright, provider credentials, or live network calls.
+Unit tests belong next to deterministic business logic, validation, formatting,
+policy, and component helpers. Dashboard and gateway unit tests use the
+`*.unit.test.ts` or `*.unit.test.tsx` suffix and should not need Postgres,
+Redis, Playwright, provider credentials, or live network calls. Email package
+tests are unit-owned. Agent tests are unit-owned except explicit
+`*.integration.test.ts` database contracts such as support statistics.
 
-Integration tests cover route handlers, database-backed workflows, queues, Redis locks, and cross-module behavior where the database contract matters. In the dashboard app, regular `*.test.ts` files are integration-owned by default; use `*.integration.test.ts` when the extra clarity helps.
+Integration tests cover route handlers, database-backed workflows, queues,
+Redis locks, and cross-module behavior where the database contract matters. In
+dashboard and gateway, regular `*.test.ts` files are integration-owned by
+default. Do not use an extra integration suffix: ownership is deliberately
+binary, and `npm run lint:structure` rejects overlap, missing configs, missing
+coverage participants, and unowned tests.
 
-Smoke E2E covers the default PR browser path with `E2E_AUTH_BYPASS=true`. Clerk browser-session E2E is intentionally separate via `npm run test:e2e:browser`, requires real development Clerk credentials, and is a release, nightly, or manual check unless those credentials are reliably configured in CI.
+Smoke E2E covers the default PR browser path with `E2E_AUTH_BYPASS=true`,
+including the seeded ticket → manual reply → recorded outbound delivery and
+seeded plan → approval → persistence workflow. Clerk browser-session E2E is
+intentionally separate via `npm run test:e2e:browser`, requires real
+development Clerk credentials, and is a nightly, release, or manual
+identity-provider contract.
 
 Node script tests cover `scripts/*.test.mjs` and are part of PR verification through `npm run test:node`.
 
@@ -36,7 +55,29 @@ Integration and coverage runs expect local Postgres and Redis test services. Sta
 npm run test:services:up
 ```
 
-Coverage bootstraps the DB package, waits for test services, and runs migrations before collecting dashboard and gateway coverage. It should be hermetic in the same way integration tests are.
+Coverage bootstraps the DB package, waits for test services, and runs migrations
+before collecting dashboard, gateway, agent, and email coverage:
+
+```sh
+npm run test:coverage
+```
+
+Each V8 config includes every eligible production `src/**/*.{ts,tsx}` file.
+Tests, declarations, eval harnesses, fixtures, and build outputs are excluded.
+Unimported production files remain in the report at 0%; coverage is not limited
+to modules reached by the tests. CI uploads all four `coverage/` directories.
+
+## Coverage Threshold Policy
+
+Global statement, branch, function, and line thresholds are set one percentage
+point below the measured comprehensive baseline in each workspace. Security,
+billing writes, webhook validation, order-risk safety, Shopify operations, and
+planner safety additionally require at least 80% line and 70% branch coverage
+through `scripts/check-critical-coverage.mjs`.
+
+Thresholds are ratchets. Increasing them after coverage improves is expected.
+Decreasing any threshold requires an explicit reviewed change that explains the
+lost behavior coverage; do not lower a threshold merely to make CI green.
 
 ## Network Calls
 
@@ -73,6 +114,10 @@ npm run test:evals:baseline -w apps/dashboard
 ```
 
 `test:evals:baseline` sets `EVAL_REPEATS=3` and `UPDATE_EVAL_BASELINE=1`. Do not regenerate the baseline at `EVAL_REPEATS=1`; that produces a noisy repeats=1 snapshot that hides flaky fixtures.
+
+The live-AI eval workflow is separate from comprehensive coverage. The
+non-judge eval runs on relevant pull requests and manual dispatches; the
+judge-scored contract runs nightly or manually and remains non-blocking.
 
 Fixtures can set `expectedPlan.mustIncludeActionWhenMutativeIntent: true` to assert the hollow-reply invariant: when the customer asks for a refund/cancel/address change, a plan with `send_reply` must also include an action tool or `escalate_to_human`.
 

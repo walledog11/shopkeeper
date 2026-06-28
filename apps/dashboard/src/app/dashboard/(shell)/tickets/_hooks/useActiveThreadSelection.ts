@@ -77,18 +77,18 @@ export function useActiveThreadSelection({
   const activeThread = activeThreadData?.thread
 
   const effectiveActiveView = useMemo(() => {
-    if (queryThreadId) {
-      if (activeThread?.id === queryThreadId) {
+    if (queryActiveTicketId) {
+      if (activeThread?.id === queryActiveTicketId) {
         if (activeThread.filterStatus === 'filtered') return 'spam'
         return activeThread.status === 'closed' ? 'closed' : activeView === 'all_open' ? 'all_open' : 'for_me'
       }
-      if (forMeThreads.some(thread => thread.id === queryThreadId)) return 'for_me'
-      if (allOpenThreads.some(thread => thread.id === queryThreadId)) return 'all_open'
-      if (closedThreads.some(thread => thread.id === queryThreadId)) return 'closed'
-      if (spamThreads.some(thread => thread.id === queryThreadId)) return 'spam'
+      if (forMeThreads.some(thread => thread.id === queryActiveTicketId)) return 'for_me'
+      if (allOpenThreads.some(thread => thread.id === queryActiveTicketId)) return 'all_open'
+      if (closedThreads.some(thread => thread.id === queryActiveTicketId)) return 'closed'
+      if (spamThreads.some(thread => thread.id === queryActiveTicketId)) return 'spam'
     }
     return activeView
-  }, [activeView, activeThread, allOpenThreads, closedThreads, forMeThreads, queryThreadId, spamThreads])
+  }, [activeView, activeThread, allOpenThreads, closedThreads, forMeThreads, queryActiveTicketId, spamThreads])
 
   const activeTicket = activeThread ? threadToTicket(activeThread, agentName) : undefined
   const activeThreadPreview = useMemo(

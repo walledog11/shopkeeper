@@ -2,6 +2,7 @@
 
 import { useMemo, type Ref } from "react"
 import Image from "next/image"
+import { m, useReducedMotion } from "motion/react"
 import { Ban, CheckSquare, RotateCcw, Square } from "lucide-react"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
@@ -19,6 +20,10 @@ import type { OrgSettings, Ticket } from "@/types"
 import { useTicketRowSwipe, type TicketRowSwipeAction } from "./useTicketRowSwipe"
 
 interface TicketRowProps {
+  // Enter/exit motion is opt-in: only callers that wrap rows in a LazyMotion +
+  // AnimatePresence context (the inbox ThreadList) should set this. Other call
+  // sites (e.g. the triage board column) render a plain row.
+  animate?: boolean
   activeView: TicketListView
   activeTicketId: string | null
   approvingTicketId: string | null
@@ -43,6 +48,7 @@ interface TicketRowProps {
 type TicketRowAction = TicketRowSwipeAction
 
 export function TicketRow({
+  animate = false,
   activeView,
   activeTicketId,
   approvingTicketId,
@@ -59,6 +65,7 @@ export function TicketRow({
 }: TicketRowProps) {
   const { hasShopify, isSearchMode } = context
   const { hasSelection, isSelected } = selection
+  const reduceMotion = useReducedMotion()
   const isMobile = useIsMobile()
   const lastRealMsg = [...ticket.messages].reverse().find(message => message.sender !== "note")
   const awaitingReply = ticket.status === "open" && lastRealMsg?.sender === "customer"
@@ -121,13 +128,17 @@ export function TicketRow({
     />
   ) : null
 
-  return (
-    <div
-      data-testid="ticket-row"
-      data-ticket-id={ticket.id}
-      data-ticket-channel={ticket.channelType}
-      className="relative overflow-hidden"
-    >
+  const motionProps = reduceMotion
+    ? { initial: false as const, exit: { opacity: 0 }, transition: { duration: 0 } }
+    : {
+        initial: { opacity: 0, height: 0 },
+        animate: { opacity: 1, height: "auto" as const },
+        exit: { opacity: 0, height: 0 },
+        transition: { duration: 0.2, ease: "easeOut" as const },
+      }
+
+  const rowBody = (
+    <>
       {canSwipe && rowAction && <TicketRowSwipeBanner ref={bannerRef} kind={rowAction.kind} />}
 
       <div
@@ -207,7 +218,24 @@ export function TicketRow({
 
         </div>
       </div>
-    </div>
+    </>
+  )
+
+  const sharedProps = {
+    "data-testid": "ticket-row",
+    "data-ticket-id": ticket.id,
+    "data-ticket-channel": ticket.channelType,
+    className: "relative overflow-hidden",
+  }
+
+  if (!animate) {
+    return <div {...sharedProps}>{rowBody}</div>
+  }
+
+  return (
+    <m.div {...motionProps} {...sharedProps}>
+      {rowBody}
+    </m.div>
   )
 }
 

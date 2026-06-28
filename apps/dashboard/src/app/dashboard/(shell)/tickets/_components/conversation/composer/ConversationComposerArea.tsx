@@ -4,10 +4,9 @@ import { useCallback, useMemo, useState, type Ref } from "react"
 import { AnimatePresence, LazyMotion, domAnimation, m } from "motion/react"
 import { classifyHomePlan, planReplyText } from "@shopkeeper/agent/plan-preview"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
-import MerchantAnswerForm from "@/components/agent/MerchantAnswerForm"
 import Composer from "./Composer"
-import ActionPlanCard from "./ActionPlanCard"
 import MobileFloatingReplyComposer from "./MobileFloatingReplyComposer"
+import { PlanReviewSurface } from "./PlanReviewSurface"
 import type { AgentPlan, RawToolCall, Ticket } from "@/types"
 
 interface Props {
@@ -80,17 +79,14 @@ export default function ConversationComposerArea({
     const classification = classifyHomePlan(pendingPlan, null)
     return classification.kind === "needs_merchant_input" ? classification.question : null
   }, [pendingPlan])
-  const showMerchantAnswer = merchantQuestion !== null
   const [mobileManualEditState, setMobileManualEditState] = useState<MobileManualEditState>(() => ({
     pendingPlan,
     viewTab,
     enabled: false,
   }))
-  let mobileManualEdit = mobileManualEditState.enabled
-  if (mobileManualEditState.pendingPlan !== pendingPlan || mobileManualEditState.viewTab !== viewTab) {
-    mobileManualEdit = false
-    setMobileManualEditState({ pendingPlan, viewTab, enabled: false })
-  }
+  const mobileManualEdit = mobileManualEditState.enabled
+    && mobileManualEditState.pendingPlan === pendingPlan
+    && mobileManualEditState.viewTab === viewTab
   const showMobileFloatingSurface =
     isMobile && viewTab === "chat" && (Boolean(pendingPlan) || mobileManualEdit)
   const showDesktopPlan = !isMobile && Boolean(pendingPlan) && viewTab === "chat"
@@ -155,25 +151,21 @@ export default function ConversationComposerArea({
                 onSend={handleMobileSend}
                 onBackToPlan={() => setMobileManualEdit(false)}
               />
-            ) : showMerchantAnswer ? (
-              <MerchantAnswerCard
-                threadId={threadId}
-                question={merchantQuestion}
-                agentName={agentName}
-                onAnswered={onAnswered}
-              />
             ) : pendingPlan ? (
-              <ActionPlanCard
-                plan={pendingPlan}
+              <PlanReviewSurface
                 agentName={agentName}
                 customerName={composer.customerName}
                 isExecuting={isPlanExecuting}
                 isRegenerating={isRegenerating}
                 layout="mobile-sticky"
+                onAnswered={onAnswered}
                 onApprove={onPlanApprove}
                 onEdit={handleMobilePlanEdit}
                 onFocusShopifyLink={onFocusShopifyLink}
                 onRegenerate={onPlanRegenerate}
+                pendingPlan={pendingPlan}
+                question={merchantQuestion}
+                threadId={threadId}
               />
             ) : null}
           </m.div>
@@ -189,26 +181,20 @@ export default function ConversationComposerArea({
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="pointer-events-auto px-5 pb-2 pt-1"
           >
-            {showMerchantAnswer ? (
-              <MerchantAnswerCard
-                threadId={threadId}
-                question={merchantQuestion}
-                agentName={agentName}
-                onAnswered={onAnswered}
-              />
-            ) : (
-              <ActionPlanCard
-                plan={pendingPlan}
-                agentName={agentName}
-                customerName={composer.customerName}
-                isExecuting={isPlanExecuting}
-                isRegenerating={isRegenerating}
-                onApprove={onPlanApprove}
-                onEdit={onPlanEdit}
-                onFocusShopifyLink={onFocusShopifyLink}
-                onRegenerate={onPlanRegenerate}
-              />
-            )}
+            <PlanReviewSurface
+              agentName={agentName}
+              customerName={composer.customerName}
+              isExecuting={isPlanExecuting}
+              isRegenerating={isRegenerating}
+              onAnswered={onAnswered}
+              onApprove={onPlanApprove}
+              onEdit={onPlanEdit}
+              onFocusShopifyLink={onFocusShopifyLink}
+              onRegenerate={onPlanRegenerate}
+              pendingPlan={pendingPlan}
+              question={merchantQuestion}
+              threadId={threadId}
+            />
           </m.div>
         )}
       </AnimatePresence>
@@ -225,28 +211,5 @@ export default function ConversationComposerArea({
       )}
     </div>
     </LazyMotion>
-  )
-}
-
-function MerchantAnswerCard({
-  threadId,
-  question,
-  agentName,
-  onAnswered,
-}: {
-  threadId: string
-  question: string | null
-  agentName: string
-  onAnswered: (result?: { saveToKb: boolean }) => void
-}) {
-  return (
-    <div className="w-full rounded-2xl bg-card border border-border shadow-sm px-4 sm:px-5 py-4">
-      <MerchantAnswerForm
-        threadId={threadId}
-        question={question}
-        agentName={agentName}
-        onAnswered={onAnswered}
-      />
-    </div>
   )
 }

@@ -9,6 +9,7 @@ import { getCustomerName } from "@/lib/messaging/customer-name"
 import { fetcher } from "@/lib/api/fetcher"
 import { SectionHeader } from "./SectionHeader"
 import { ShopifySection } from "./ShopifySection"
+import { OrderList } from "./OrderList"
 import { formatShortDate } from "./formatters"
 import { locationString, shopifyName } from "@/lib/format/shopify"
 import { useShopifyCustomer } from "./useShopifyCustomer"
@@ -47,33 +48,38 @@ export default function ContextPanel({
     .filter(t => t.id !== thread.id)
     .slice(0, 3)
 
-  const basePill = "inline-flex h-6 items-center gap-2 rounded-full border border-border bg-foreground/[0.04] px-2.5 text-xs font-medium text-foreground/80"
+  const showOrder = hasShopify && !!shopifyCustomer && shopify.orders.length > 0
+  const olderOrderCount = Math.max((shopifyCustomer?.orders_count ?? 0) - shopify.orders.length, 0)
+
+  const basePill = "inline-flex h-7 items-center gap-2 rounded-full border border-border bg-foreground/[0.04] px-3 text-xs font-medium text-foreground/80"
   const actionPill = `${basePill} transition-colors hover:border-foreground/20 hover:bg-foreground/[0.07]`
 
   return (
-    <aside className="flex w-full flex-col bg-background">
-      <section className="px-3.5 pt-3 pb-3 border-b border-foreground/[0.08]">
-        <div className="flex flex-row items-center gap-4">
-          <div className="size-8 rounded-full overflow-hidden bg-foreground/[0.08] flex items-center justify-center text-foreground/60 text-xs font-semibold shrink-0">
+    <aside className="@container flex w-full flex-col bg-background">
+      <header className="flex items-center justify-between gap-4 border-b border-foreground/[0.08] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="size-9 shrink-0 overflow-hidden rounded-full bg-foreground/[0.08] flex items-center justify-center text-xs font-semibold text-foreground/60">
             {thread.customer?.profilePicUrl ? (
               <Image src={thread.customer.profilePicUrl} alt={displayName} width={40} height={40} className="size-full object-cover" />
             ) : initials}
           </div>
-
-          <div className="mt-1 min-w-0">
-            <p className="text-sm leading-5 font-semibold text-foreground/90 truncate">{displayName}</p>
-            {secondaryHandle && secondaryHandle !== displayName && (
-              <p className="mt-0.5 text-xs leading-4 text-foreground/50 truncate">{secondaryHandle}</p>
-            )}
-            {location && (
-              <p className="mt-0.5 flex items-center gap-1 text-xs italic leading-4 text-foreground/40 truncate">
-                {location}
-              </p>
-            )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold leading-5 text-foreground/90">{displayName}</p>
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-4 text-foreground/50">
+              {secondaryHandle && secondaryHandle !== displayName && (
+                <span className="truncate">{secondaryHandle}</span>
+              )}
+              {location && (
+                <span className="flex shrink-0 items-center gap-1 text-foreground/40">
+                  <MapPin className="size-3" />
+                  {location}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {emailAddress ? (
             <a href={`mailto:${emailAddress}`} className={actionPill}>
               <Mail className="size-3" />
@@ -100,50 +106,60 @@ export default function ContextPanel({
             )
           )}
         </div>
-      </section>
+      </header>
 
-      {hasShopify && (
-        <ShopifySection
-          thread={thread}
-          shopify={shopify}
-          onLinkShopifyCustomer={onLinkShopifyCustomer}
-        />
-      )}
-
-      <section className="px-3.5 py-3">
-        <SectionHeader title="Past conversations" />
-        {recentThreads.length > 0 ? (
-          <div className="divide-y divide-dashed divide-foreground/[0.08]">
-            {recentThreads.map(t => {
-              const preview = t.messages[0]?.contentText
-              const title = t.tag || t.aiSummary || preview || 'No content'
-              return (
-                <NextLink
-                  key={t.id}
-                  href={`?thread=${t.id}`}
-                  className="flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0 group"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-xs leading-4 text-foreground/80 group-hover:text-foreground transition-colors">
-                      {title}
-                    </span>
-                    {preview && preview !== title && (
-                      <span className="mt-0.5 block truncate text-xs leading-3 text-foreground/40">
-                        {preview}
-                      </span>
-                    )}
-                  </span>
-                  <span className="text-xs leading-4 text-foreground/50 shrink-0">
-                    {formatShortDate(t.updatedAt)}
-                  </span>
-                </NextLink>
-              )
-            })}
+      <div className="flex flex-col divide-y divide-foreground/[0.08] @3xl:flex-row @3xl:divide-x @3xl:divide-y-0">
+        {hasShopify && (
+          <div className="min-w-0 flex-1 p-4">
+            <ShopifySection
+              thread={thread}
+              shopify={shopify}
+              onLinkShopifyCustomer={onLinkShopifyCustomer}
+            />
           </div>
-        ) : (
-          <p className="text-xs text-foreground/40">First time you&apos;re hearing from them.</p>
         )}
-      </section>
+
+        {showOrder && (
+          <div className="min-w-0 flex-1 p-4">
+            <OrderList orders={shopify.orders} shop={shopify.shop} olderOrderCount={olderOrderCount} />
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1 p-4">
+          <SectionHeader title="Past conversations" />
+          {recentThreads.length > 0 ? (
+            <div className="divide-y divide-dashed divide-foreground/[0.08]">
+              {recentThreads.map(t => {
+                const preview = t.messages[0]?.contentText
+                const title = t.tag || t.aiSummary || preview || 'No content'
+                return (
+                  <NextLink
+                    key={t.id}
+                    href={`?thread=${t.id}`}
+                    className="group flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs leading-4 text-foreground/80 transition-colors group-hover:text-foreground">
+                        {title}
+                      </span>
+                      {preview && preview !== title && (
+                        <span className="mt-0.5 block truncate text-xs leading-3 text-foreground/40">
+                          {preview}
+                        </span>
+                      )}
+                    </span>
+                    <span className="shrink-0 text-xs leading-4 text-foreground/50">
+                      {formatShortDate(t.updatedAt)}
+                    </span>
+                  </NextLink>
+                )
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-foreground/40">First time you&apos;re hearing from them.</p>
+          )}
+        </div>
+      </div>
     </aside>
   )
 }

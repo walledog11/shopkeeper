@@ -9,6 +9,7 @@ import logger from './logger.js';
 import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
 import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
 import { stopAllSpectrumApps } from './clients/spectrum.js';
+import { mountRealtime } from './realtime/sse.js';
 import { runGatewayEntry } from './bootstrap.js';
 
 export function createGatewayApp() {
@@ -114,6 +115,10 @@ export async function startGatewayServer() {
   app.use('/webhooks', webhookRoutes);
   app.use('/internal', internalOperatorRoutes);
   app.use('/internal', internalQueueRoutes);
+
+  // Live dashboard updates: holds browser SSE connections on this (server-role)
+  // process and pushes Redis-published thread events. No-op unless enabled.
+  mountRealtime(app);
 
   // During local dev, ngrok points to this gateway (port 8080) but dashboard OAuth
   // callbacks arrive here. Forward them to the dashboard so the OAuth flow completes.

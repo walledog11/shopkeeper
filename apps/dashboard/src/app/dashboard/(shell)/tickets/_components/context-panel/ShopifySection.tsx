@@ -2,16 +2,14 @@
 
 import { useEffect, useReducer, useRef } from "react"
 import useSWR from "swr"
-import { Link, Pencil, Unlink } from "lucide-react"
+import { Link, Pencil, RefreshCw, Search, Unlink } from "lucide-react"
 import { fetcher } from "@/lib/api/fetcher"
 import { CustomerInfo } from "./CustomerInfo"
 import { ManageDropdown, type ManageDropdownItem } from "./ManageDropdown"
-import { OrderList } from "./OrderList"
 import { SectionHeader } from "./SectionHeader"
 import { ShopifyCustomerCreate, type CreateCustomerDraft } from "./ShopifyCustomerCreate"
 import { ShopifyCustomerSearch } from "./ShopifyCustomerSearch"
 import { ShopifyCustomerSkeleton } from "./ShopifyCustomerSkeleton"
-import { panelSectionClass } from "./constants"
 import type { ShopifyCustomerState } from "./useShopifyCustomer"
 import { SHOPIFY_LINK_FOCUS_EVENT } from "@/lib/messaging/shopify-link-focus"
 import type { ReactNode } from "react"
@@ -102,6 +100,8 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   const isLinked = !!thread.shopifyCustomerId
   const canLoadCustomer = isEmailThread || isLinked
   const canCreate = !isEmailThread
+  const platformHandle = thread.customer?.platformId
+  const emailHint = platformHandle?.includes('@') ? platformHandle : null
   const [state, dispatch] = useReducer(shopifySectionReducer, initialShopifyState)
   const {
     mode,
@@ -212,13 +212,11 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   }
 
   const dropdownItems: ManageDropdownItem[] = []
-  if (isLinked || (isEmailThread && data?.customer)) {
+  if (data?.customer) {
     dropdownItems.push({ label: 'Change customer', icon: <Link className="size-3" />, onClick: () => dispatch({ type: "mode", mode: 'search' }) })
-  } else if (isEmailThread && !isLoading && !data?.customer) {
-    dropdownItems.push({ label: 'Link existing customer', icon: <Link className="size-3" />, onClick: () => dispatch({ type: "mode", mode: 'search' }) })
-  }
-  if (isLinked) {
-    dropdownItems.push({ label: 'Unlink customer', icon: <Unlink className="size-3" />, onClick: handleUnlink, danger: true })
+    if (isLinked) {
+      dropdownItems.push({ label: 'Unlink customer', icon: <Unlink className="size-3" />, onClick: handleUnlink, danger: true })
+    }
   }
 
   const header = (
@@ -248,12 +246,19 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   )
 
   let body: ReactNode
-  let orderList: ReactNode = null
 
   if (canLoadCustomer && isLoading) {
     body = <ShopifyCustomerSkeleton />
   } else if (canLoadCustomer && customerError) {
-    body = <p className="text-xs text-red-400">Unable to load Shopify customer.</p>
+    body = (
+      <ShopifyFallback
+        title="Couldn't load from Shopify"
+        detail={emailHint}
+        searchLabel="Search manually"
+        onRetry={() => { void mutate() }}
+        onSearch={() => dispatch({ type: "mode", mode: "search" })}
+      />
+    )
   } else if (mode === 'search') {
     body = (
       <ShopifyCustomerSearch
@@ -285,7 +290,14 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
       />
     )
   } else if (isEmailThread && !isLoading && !data?.customer) {
-    body = <p className="text-xs text-foreground/40">No Shopify account found for this email.</p>
+    body = (
+      <ShopifyFallback
+        title="No Shopify customer matched"
+        detail={emailHint}
+        searchLabel="Search Shopify"
+        onSearch={() => dispatch({ type: "mode", mode: "search" })}
+      />
+    )
   } else if (canLoadCustomer && data?.customer) {
     body = (
       <>
@@ -297,13 +309,6 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
         />
         {linkError && <p className="mt-2 text-xs text-red-400">{linkError}</p>}
       </>
-    )
-    orderList = (
-      <OrderList
-        orders={data.orders}
-        shop={data.shop}
-        olderOrderCount={Math.max(data.customer.orders_count - data.orders.length, 0)}
-      />
     )
   } else {
     body = (
@@ -327,12 +332,37 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
   }
 
   return (
-    <>
-      <section ref={sectionRef} className={panelSectionClass}>
-        {header}
-        {body}
-      </section>
-      {orderList}
-    </>
+    <section ref={sectionRef}>
+      {header}
+      {body}
+    </section>
+  )
+}
+
+interface ShopifyFallbackProps {
+  title: string
+  detail?: string | null
+  searchLabel: string
+  onSearch: () => void
+  onRetry?: () => void
+}
+
+function ShopifyFallback({ title, detail, searchLabel, onSearch, onRetry }: ShopifyFallbackProps) {
+  const btn = "inline-flex items-center gap-1.5 rounded-md border border-foreground/[0.12] bg-foreground/[0.05] px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:border-foreground/20 hover:bg-foreground/[0.09]"
+  return (
+    <div className="rounded-lg border border-dashed border-foreground/[0.12] bg-foreground/[0.02] px-3 py-3.5 text-center">
+      <p className="text-xs font-medium text-foreground/55">{title}</p>
+      {detail && <p className="mt-0.5 truncate text-xs text-foreground/35">{detail}</p>}
+      <div className="mt-2.5 flex items-center justify-center gap-2">
+        {onRetry && (
+          <button type="button" onClick={onRetry} className={btn}>
+            <RefreshCw className="size-3" /> Try again
+          </button>
+        )}
+        <button type="button" onClick={onSearch} className={btn}>
+          <Search className="size-3" /> {searchLabel}
+        </button>
+      </div>
+    </div>
   )
 }

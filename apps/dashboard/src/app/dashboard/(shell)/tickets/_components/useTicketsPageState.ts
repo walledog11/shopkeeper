@@ -9,13 +9,11 @@ interface TicketsPageState {
   channelFilter: ChannelType | null
   dismissCorrectHint: boolean
   searchQuery: string
-  showContextDrawer: boolean
   tagFilter: TicketTagFilter | null
 }
 
 export type TicketsPageAction =
   | { type: "channelFilterChanged"; channelFilter: ChannelType | null }
-  | { type: "contextDrawerChanged"; open: boolean }
   | { type: "correctHintDismissed" }
   | { type: "searchChanged"; searchQuery: string }
   | { type: "tagFilterChanged"; tagFilter: TicketTagFilter | null }
@@ -35,7 +33,6 @@ const INITIAL_TICKETS_PAGE_STATE: TicketsPageState = {
   channelFilter: null,
   dismissCorrectHint: false,
   searchQuery: "",
-  showContextDrawer: false,
   tagFilter: null,
 }
 
@@ -43,8 +40,6 @@ function ticketsPageReducer(state: TicketsPageState, action: TicketsPageAction):
   switch (action.type) {
     case "channelFilterChanged":
       return { ...state, channelFilter: action.channelFilter }
-    case "contextDrawerChanged":
-      return { ...state, showContextDrawer: action.open }
     case "correctHintDismissed":
       return { ...state, dismissCorrectHint: true }
     case "searchChanged":

@@ -54,22 +54,20 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: 
     )
   }
 
+  const stats = [
+    { label: "Orders", value: String(customer.orders_count) },
+    { label: "Spent", value: formatMoney(customer.total_spent, customer.currency) },
+    { label: "Since", value: formatMonthYear(customer.created_at) },
+  ]
+
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-foreground/50 shrink-0">Orders</span>
-        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{customer.orders_count}</span>
-      </div>
-
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-foreground/50 shrink-0">Total spent</span>
-        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{formatMoney(customer.total_spent, customer.currency)}</span>
-      </div>
-
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-xs leading-4 text-foreground/50 shrink-0">Since</span>
-        <span className="text-xs leading-4 font-semibold text-foreground/80 tabular-nums">{formatMonthYear(customer.created_at)}</span>
-      </div>
+    <div className="grid grid-cols-3 divide-x divide-foreground/[0.08] overflow-hidden rounded-lg border border-foreground/[0.08]">
+      {stats.map(stat => (
+        <div key={stat.label} className="min-w-0 px-2 py-2 text-center">
+          <span className="block truncate text-[13px] font-semibold leading-4 text-foreground/85 tabular-nums">{stat.value}</span>
+          <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-foreground/40">{stat.label}</span>
+        </div>
+      ))}
     </div>
   )
 }

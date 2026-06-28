@@ -10,16 +10,18 @@
     "dev:e2e": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx src/index.ts\" \"tsx src/worker.ts\"",
     "build": "tsc",
     "typecheck": "tsc -p tsconfig.json --noEmit --pretty false",
-    "lint": "cd ../.. && eslint apps/gateway/src apps/gateway/vitest.config.ts --max-warnings 0",
+    "lint": "cd ../.. && eslint apps/gateway/src apps/gateway/vitest.config.ts apps/gateway/vitest.integration.config.ts apps/gateway/vitest.unit.config.ts --max-warnings 0",
     "start": "node dist/start.js",
     "start:server": "node dist/index.js",
     "start:worker": "node dist/worker.js",
-    "test": "npm run test:integration",
-    "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.config.ts",
-    "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.config.ts",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "node ../../scripts/with-test-env.mjs vitest run --config vitest.unit.config.ts",
+    "test:integration": "node ../../scripts/with-test-env.mjs vitest run --config vitest.integration.config.ts",
+    "test:watch": "node ../../scripts/with-test-env.mjs vitest --config vitest.integration.config.ts",
     "test:coverage": "node ../../scripts/with-test-env.mjs vitest run --coverage --config vitest.config.ts",
     "rebuild-summaries": "tsx src/scripts/rebuild-bad-summaries.ts",
-    "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts"
+    "backfill-titles": "tsx src/scripts/backfill-thread-titles.ts",
+    "realtime:smoke": "tsx src/scripts/realtime-smoke.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",

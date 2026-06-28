@@ -179,7 +179,12 @@ describe("ReviewBoard", () => {
   })
 
   it("opens and closes the detail modal", () => {
-    const item = entry()
+    const item = entry({
+      actions: [
+        action(),
+        action({ tool: "create_refund", result: "Refunded $42." }),
+      ],
+    })
     const view = render(React.createElement(ReviewBoard, {
       columns: boardState({ auto: { entries: [item] } }),
       isNew: () => false,
@@ -191,6 +196,8 @@ describe("ReviewBoard", () => {
 
     expect(reviewDialog()?.textContent).toContain("Tool outcomes")
     expect(reviewDialog()?.textContent).toContain("Customer asked about shipping.")
+    expect(reviewDialog()?.textContent).toContain("Refunded $42.")
+    expect(reviewDialog()?.textContent).not.toContain("Sent reply.")
 
     const doneButton = Array.from(reviewDialog()?.querySelectorAll("button") ?? [])
       .find((button) => button.textContent === "Done")

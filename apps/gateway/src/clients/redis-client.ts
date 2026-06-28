@@ -15,6 +15,7 @@ export type GatewayBullMqConnection = ConnectionOptions & IORedis;
  */
 
 let sharedRedis: IORedis | null = null;
+let subscriberConnection: IORedis | null = null;
 let producerConnection: GatewayBullMqConnection | null = null;
 let workerConnection: GatewayBullMqConnection | null = null;
 
@@ -56,6 +57,20 @@ export function getGatewayRedis(): IORedis {
   return sharedRedis;
 }
 
+// Dedicated connection for realtime pub/sub. ioredis cannot run normal commands
+// on a connection that's in subscriber mode, so this must never be shared with
+// the command client or the BullMQ connections.
+export function getGatewayRedisSubscriber(): IORedis {
+  if (!subscriberConnection) {
+    subscriberConnection = createGatewayRedisClient();
+    subscriberConnection.on('error', (err: Error) => {
+      logger.error({ err: err.message }, '[GatewayRedis] Subscriber error');
+    });
+  }
+
+  return subscriberConnection;
+}
+
 export function getGatewayBullMqProducerConnection(): GatewayBullMqConnection {
   if (producerConnection) {
     return producerConnection;
@@ -92,6 +107,12 @@ export async function closeGatewayRedisConnections(): Promise<void> {
     closers.push(redis.quit().catch(() => redis.disconnect()));
   }
 
+  if (subscriberConnection) {
+    const redis = subscriberConnection;
+    subscriberConnection = null;
+    closers.push(redis.quit().catch(() => redis.disconnect()));
+  }
+
   if (producerConnection) {
     const connection = producerConnection;
     producerConnection = null;
@@ -109,6 +130,7 @@ export async function closeGatewayRedisConnections(): Promise<void> {
 
 export function resetGatewayRedisConnectionsForTests(): void {
   sharedRedis = null;
+  subscriberConnection = null;
   producerConnection = null;
   workerConnection = null;
 }

@@ -1,5 +1,4 @@
 import { ExternalLink } from "lucide-react"
-import { panelSectionClass } from "./constants"
 import { fulfillmentLabel, formatMoney, formatShortDate } from "./formatters"
 import { ProductImage } from "./ProductImage"
 import { SectionHeader } from "./SectionHeader"
@@ -14,10 +13,10 @@ interface OrderListProps {
 export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.length - 1, 0) }: OrderListProps) {
   if (orders.length === 0) {
     return (
-      <section className={panelSectionClass}>
+      <div>
         <SectionHeader title="Order" />
         <p className="text-xs text-foreground/40">No orders found.</p>
-      </section>
+      </div>
     )
   }
   const order = orders[0]
@@ -26,7 +25,7 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
   const adminUrl = shop ? `https://${shop}/admin/orders/${order.id}` : null
 
   return (
-    <section className={panelSectionClass}>
+    <div>
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-xs font-semibold uppercase tracking-[0.12em] text-foreground/40 truncate">
           ORDER {order.name}
@@ -102,6 +101,6 @@ export function OrderList({ orders, shop, olderOrderCount = Math.max(orders.leng
           {olderOrderCount} older order{olderOrderCount !== 1 ? 's' : ''} available in Shopify.
         </p>
       )}
-    </section>
+    </div>
   )
 }

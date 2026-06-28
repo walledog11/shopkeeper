@@ -22,6 +22,7 @@ import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import type { AgentActionResult } from './planning-types.js';
+import { publishThreadEvent } from '../realtime/publish.js';
 import logger from '../logger.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
@@ -122,6 +123,9 @@ export async function generateThreadPlan(
       }) as object,
     },
   });
+
+  // Live inbox: a fresh plan is cached — push so the "Needs you" card appears.
+  await publishThreadEvent(organizationId, threadId);
 
   const autoExecution = allowAutoExecute
     ? await buildAutoExecutionResult(organizationId, threadId, settings)

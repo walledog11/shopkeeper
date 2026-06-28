@@ -1,7 +1,7 @@
 # Shopkeeper Core and Module Roadmap
 
 Current work only. The completed extraction and migration history is archived in
-[core-extraction-and-module-expansion-plan-archive-2026-06.md](core-extraction-and-module-expansion-plan-archive-2026-06.md).
+[core-extraction-and-module-expansion-plan-archive-2026-06.md](archive/core-extraction-and-module-expansion-plan-archive-2026-06.md).
 
 Last reviewed: 2026-06-26.
 

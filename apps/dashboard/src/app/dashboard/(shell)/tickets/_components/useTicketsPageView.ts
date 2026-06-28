@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { getCurrentPlanForThread } from "@shopkeeper/agent/plan-cache-shape"
 import { useMobileChromeOverride } from "@/app/dashboard/_components/mobile-chrome/MobileChromeContext"
-import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useIsMobile } from "@/hooks/useMobile"
 import { useOpenThreadCountOverride } from "@/hooks/OpenThreadCountContext"
 import { useActiveThreadSelection } from "../_hooks/useActiveThreadSelection"
@@ -43,8 +42,7 @@ export function useTicketsPageView({
   const correctReply = searchParams.get("correct") === "1"
   const initialView = parseInitialTicketListView(searchParams.get("view"))
   const [pageState, dispatchPageState] = useTicketsPageState(initialView)
-  const { activeView, channelFilter, dismissCorrectHint, searchQuery, showContextDrawer, tagFilter } = pageState
-  const isDesktopContext = useMediaQuery("(min-width: 1280px)")
+  const { activeView, channelFilter, dismissCorrectHint, searchQuery, tagFilter } = pageState
   const isMobile = useIsMobile()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -223,7 +221,6 @@ export function useTicketsPageView({
     setActiveTicketId(null)
     setReplyText("")
     setSendError(null)
-    dispatchPageState({ type: "contextDrawerChanged", open: false })
   }, [
     activeTicketId,
     dispatchPageState,
@@ -258,10 +255,6 @@ export function useTicketsPageView({
         sendError,
         toast,
       },
-      drawer: {
-        isDesktopContext: Boolean(isDesktopContext),
-        showContextDrawer,
-      },
       filters: {
         channelFilter,
         connectedChannels,
@@ -282,7 +275,6 @@ export function useTicketsPageView({
       },
       list: {
         activeTicketId,
-        activeView,
         approvingTicketId,
         effectiveActiveView,
         filteredTickets,
@@ -299,7 +291,6 @@ export function useTicketsPageView({
         onBack: () => {
           setActiveTicketId(null)
           setSendError(null)
-          dispatchPageState({ type: "contextDrawerChanged", open: false })
         },
         onBulkArchive: () => handleBulkArchive(selectedIds),
         onBulkClose: () => handleBulkClose(selectedIds),
@@ -312,7 +303,6 @@ export function useTicketsPageView({
         onLoadMore: currentThreadSource.loadMore,
         onMarkAsSpam: handleMarkAsSpam,
         onRecover: handleRecover,
-        onOpenContext: () => dispatchPageState({ type: "contextDrawerChanged", open: true }),
         onQuickApproveFromList: handleQuickApproveFromList,
         onReviewFromList: handleReviewFromList,
         onReopen: handleReopen,
@@ -325,7 +315,6 @@ export function useTicketsPageView({
         onSearchChange: handleSearchChange,
         onSelectTicket: (id: string) => { setActiveTicketId(id); setSendError(null) },
         onSend: handleSendMessage,
-        onShowContextDrawerChange: (open: boolean) => dispatchPageState({ type: "contextDrawerChanged", open }),
         onViewChange: handleViewChange,
         onToggleSelect: handleToggleSelect,
         onViewSpam: () => handleViewChange("spam"),

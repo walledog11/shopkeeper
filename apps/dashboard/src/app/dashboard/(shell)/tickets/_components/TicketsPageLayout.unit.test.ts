@@ -72,7 +72,6 @@ type LayoutProps = ComponentProps<typeof TicketsPageLayout>
 type LayoutPropsOverrides = {
   actions?: Partial<LayoutProps["actions"]>
   conversation?: Partial<LayoutProps["conversation"]>
-  drawer?: Partial<LayoutProps["drawer"]>
   filters?: Partial<LayoutProps["filters"]>
   flags?: Partial<LayoutProps["flags"]>
   list?: Partial<LayoutProps["list"]>
@@ -191,7 +190,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
   const selectedThread = threadFromTicket(selectedTicket)
   const list: LayoutProps["list"] = {
     activeTicketId: null,
-    activeView: "for_me",
     approvingTicketId: null,
     effectiveActiveView: "for_me",
     filteredTickets: [selectedTicket],
@@ -219,11 +217,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       sendError: null,
       toast: null,
       ...overrides.conversation,
-    },
-    drawer: {
-      isDesktopContext: true,
-      showContextDrawer: false,
-      ...overrides.drawer,
     },
     filters: {
       channelFilter: null,
@@ -261,7 +254,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       onLinkShopifyCustomer: vi.fn(),
       onLoadMore: vi.fn(),
       onMarkAsSpam: vi.fn(),
-      onOpenContext: vi.fn(),
       onRecover: vi.fn(),
       onQuickApproveFromList: vi.fn(),
       onReviewFromList: vi.fn(),
@@ -275,7 +267,6 @@ function baseProps(overrides: LayoutPropsOverrides = {}): LayoutProps {
       onSearchChange: vi.fn(),
       onSelectTicket: vi.fn(),
       onSend: vi.fn(),
-      onShowContextDrawerChange: vi.fn(),
       onViewChange: vi.fn(),
       onViewSpam: vi.fn(),
       onToggleSelect: vi.fn(),
@@ -293,7 +284,7 @@ function LayoutHarness({
   onQuickApprove = vi.fn(),
 }: {
   tickets: Ticket[]
-  activeView?: LayoutProps["list"]["activeView"]
+  activeView?: LayoutProps["list"]["effectiveActiveView"]
   initialActiveId?: string | null
   loading?: boolean
   error?: unknown
@@ -306,7 +297,6 @@ function LayoutHarness({
   return React.createElement(TicketsPageLayout, baseProps({
     list: {
       activeTicketId: activeId,
-      activeView,
       effectiveActiveView: activeView,
       filteredTickets: tickets,
     },

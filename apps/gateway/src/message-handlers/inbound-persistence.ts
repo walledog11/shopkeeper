@@ -8,6 +8,7 @@ import {
 } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { JOB, STATUS } from '../constants.js';
+import { publishThreadEvent } from '../realtime/publish.js';
 import type { ClassificationResult } from './email-classification.js';
 
 const MAX_INPUT_LENGTH = 4000;
@@ -179,6 +180,9 @@ export async function processInboundMessage(
     traceId: traceId ?? undefined,
     ...(precomputed && { skipSummary: true }),
   });
+
+  // Live inbox: tell connected dashboards a thread changed so they revalidate.
+  await publishThreadEvent(organizationId, thread!.id);
 
   return { thread: thread!, isNew };
 }

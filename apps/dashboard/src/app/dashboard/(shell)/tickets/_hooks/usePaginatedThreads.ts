@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import useSWRInfinite from "swr/infinite";
 import { fetcher } from "@/lib/api/fetcher";
+import { REALTIME_ENABLED } from "@/lib/realtime/config";
 import type { ChannelType, Thread } from "@/types";
 
 const PAGINATED_LIMIT = 25;
@@ -64,7 +65,10 @@ export function usePaginatedThreads(
 ) {
   const isVisible = useIsDocumentVisible();
   const status = query.status ?? "open";
-  const baseInterval = status === "open" && !query.filterStatus ? 15000 : 60000;
+  const isPrimary = status === "open" && !query.filterStatus;
+  const baseInterval = REALTIME_ENABLED
+    ? (isPrimary ? 60000 : 120000)
+    : (isPrimary ? 15000 : 60000);
 
   const getKey = (pageIndex: number, previousPageData: ThreadsPage | null) => {
     if (!enabled) return null;
