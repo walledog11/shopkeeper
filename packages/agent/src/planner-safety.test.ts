@@ -19,7 +19,7 @@ import {
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
   stripNonEscalationTerminalTools,
-} from "./planner-safety.js";
+} from "./planner-safety/index.js";
 import type { AgentContext } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
 

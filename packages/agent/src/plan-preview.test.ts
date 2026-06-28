@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety.js"
+import { MUTATIVE_INTENT_NO_ACTION_WARNING } from "./planner-safety/index.js"
 import { classifyHomePlan, isPlanWarningBlocking, planWarningTiers } from "./plan-preview.js"
 import type { AgentPlan, OrgSettings, PlanStep, RawToolCall } from "./types.js"
 

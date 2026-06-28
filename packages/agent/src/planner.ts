@@ -9,7 +9,7 @@ import { buildPlanSteps } from "./planner-steps.js";
 import { runInitialPlanningPhase } from "./planner-initial-phase.js";
 import { appendPendingToolResults, runMutativeReplan } from "./planner-replan.js";
 import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
-import { shouldForceMutativeReplan } from "./planner-safety.js";
+import { shouldForceMutativeReplan } from "./planner-safety/index.js";
 import { finalizePlanTools } from "./planner-terminal.js";
 import {
   REPLAN_INCLUDE_REPLY_PROMPT,

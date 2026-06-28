@@ -14,7 +14,7 @@ import {
   partitionPlanningReadBlocks,
 } from "./planner-read-tools.js";
 import { runMutativeReplan } from "./planner-replan.js";
-import { shouldUsePolicyGapReplanPrompt } from "./planner-safety.js";
+import { shouldUsePolicyGapReplanPrompt } from "./planner-safety/index.js";
 import {
   POLICY_GAP_REPLAN_PROMPT,
   REPLAN_INCLUDE_REPLY_PROMPT,

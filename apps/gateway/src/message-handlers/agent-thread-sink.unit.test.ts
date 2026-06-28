@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   createMessage,
   postInternal,
+  publishThreadEvent,
   pushEscalation,
   recordFailure,
   threadUpdate,
 } = vi.hoisted(() => ({
   createMessage: vi.fn(),
   postInternal: vi.fn(),
+  publishThreadEvent: vi.fn(),
   pushEscalation: vi.fn(),
   recordFailure: vi.fn(),
   threadUpdate: vi.fn(),
@@ -28,6 +30,9 @@ vi.mock('../agent-failure-alerts.js', () => ({
 vi.mock('../operator-escalation.js', () => ({
   pushOperatorEscalation: pushEscalation,
 }));
+vi.mock('../realtime/publish.js', () => ({
+  publishThreadEvent,
+}));
 vi.mock('../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
@@ -40,6 +45,7 @@ describe('gatewayThreadSink persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     createMessage.mockResolvedValue({});
+    publishThreadEvent.mockResolvedValue(undefined);
     threadUpdate.mockResolvedValue({});
     pushEscalation.mockResolvedValue(undefined);
   });
@@ -64,6 +70,8 @@ describe('gatewayThreadSink persistence', () => {
       senderType: 'note',
       contentText: '__shopkeeper_agent_note__Asked the merchant: What is the policy?',
     });
+    expect(publishThreadEvent).toHaveBeenCalledTimes(4);
+    expect(publishThreadEvent).toHaveBeenCalledWith('org-1', 'thread-1');
   });
 
   it('persists escalation state before notifying the operator', async () => {
@@ -79,6 +87,7 @@ describe('gatewayThreadSink persistence', () => {
       contentText: '__shopkeeper_agent_note__Escalated to merchant: Refund approval needed',
     });
     expect(pushEscalation).toHaveBeenCalledWith('org-1', 'thread-1', 'Refund approval needed');
+    expect(publishThreadEvent).toHaveBeenCalledWith('org-1', 'thread-1');
     expect(result).toEqual({ status: 'escalated', message: 'Refund approval needed' });
   });
 
@@ -100,5 +109,6 @@ describe('gatewayThreadSink persistence', () => {
     }));
     expect(createMessage).not.toHaveBeenCalled();
     expect(threadUpdate).not.toHaveBeenCalled();
+    expect(publishThreadEvent).not.toHaveBeenCalled();
   });
 });
