@@ -23,6 +23,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@clerk/nextjs": "7.3.3",
+    "@sentry/nextjs": "^10.62.0",
     "@shopkeeper/agent": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",

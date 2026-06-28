@@ -1,4 +1,5 @@
 const path = require('path');
+const { withSentryConfig } = require('@sentry/nextjs');
 
 const CSP_DIRECTIVES = {
   'default-src': ["'self'"],
@@ -18,6 +19,9 @@ const CSP_DIRECTIVES = {
     "'self'",
     'https://*.clerk.com',
     'https://*.clerk.accounts.dev',
+    'https://*.sentry.io',
+    'https://*.ingest.sentry.io',
+    'https://*.ingest.us.sentry.io',
   ],
   'frame-src': ['https://*.clerk.com', 'https://challenges.cloudflare.com'],
   'worker-src': ["'self'", 'blob:'],
@@ -93,4 +97,18 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withSentryConfig(nextConfig, {
+  org: 'shopkeeper-me',
+  project: 'shopkeeper',
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  sourcemaps: {
+    disable: process.env.SENTRY_SKIP_UPLOAD === 'true',
+  },
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
+});

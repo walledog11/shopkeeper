@@ -12,10 +12,12 @@ describe("proxy path access policy", () => {
     expect(isPublicPath("/")).toBe(true);
     expect(isPublicPath("/login")).toBe(true);
     expect(isPublicPath("/signup")).toBe(true);
+    expect(isPublicPath("/sentry-example-page")).toBe(true);
   });
 
   it("keeps inbound machine endpoints public", () => {
     expect(isPublicPath("/api/health")).toBe(true);
+    expect(isPublicPath("/api/sentry-example-api")).toBe(true);
     expect(isPublicPath("/api/billing/webhook")).toBe(true);
     expect(isPublicPath("/api/webhooks/clerk")).toBe(true);
     expect(isPublicPath("/api/webhooks/email")).toBe(true);
