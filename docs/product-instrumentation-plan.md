@@ -1,6 +1,6 @@
 # Product instrumentation plan — PostHog
 
-**Status:** In progress — Phase 1 complete
+**Status:** In progress — Phase 1 complete; Phase 2 implementation underway
 
 **Last updated:** 2026-06-28
 
@@ -399,14 +399,14 @@ If Redis is temporarily unavailable, log a warning and continue with the determi
 
 ## Phase 2 — onboarding and integration funnel
 
-1. Capture `workspace_created` after organization persistence.
-2. Add the restricted `POST /api/product-events` route.
-3. Emit onboarding step completion from `useOnboardingFlow` only after the step's own required save/connect operation succeeds.
-4. Capture `onboarding_completed` only after `onboardingCompletedAt` persists.
-5. Emit connection-started events from onboarding and the integrations page.
-6. Capture integration completed/failed events in shared integration upsert and OAuth callback paths.
-7. Update the privacy policy at `apps/dashboard/src/app/(marketing)/privacy/page.tsx`.
-8. Update `docs/production/deployment.md`, environment examples, and production checklists.
+- [x] Capture `workspace_created` after organization persistence.
+- [x] Add the restricted `POST /api/product-events` route.
+- [x] Emit onboarding step completion from `useOnboardingFlow` only after the step's own required save/connect operation succeeds.
+- [x] Capture `onboarding_completed` only after `onboardingCompletedAt` persists.
+- [x] Emit connection-started events from onboarding and the integrations page.
+- [x] Capture integration completed/failed events in shared integration upsert and OAuth callback paths.
+- [x] Update the privacy policy at `apps/dashboard/src/app/(marketing)/privacy/page.tsx`.
+- [x] Update `docs/production/deployment.md`, environment examples, and production checklists.
 
 **Exit criteria:** The funnel from workspace creation through onboarding is visible in staging, tenant-spoofing route tests pass, and reviewed payloads contain no prohibited data.
 

@@ -10,6 +10,7 @@ import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
+import { captureClientProductEvent } from "@/lib/product-events"
 import { CardLogo } from "./IntegrationCardParts"
 import {
   CARD_BUTTON_AMBER,
@@ -92,7 +93,17 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
             <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
           ) : !isConnected ? (
             isOAuthEmail ? (
-              <form action={`/api/integrations/${config.emailProvider}/auth`} method="post" className="flex-1 flex">
+              <form
+                action={`/api/integrations/${config.emailProvider}/auth`}
+                method="post"
+                className="flex-1 flex"
+                onSubmit={() => {
+                  void captureClientProductEvent({
+                    event: "integration_connection_started",
+                    platform: "email",
+                  })
+                }}
+              >
                 <button type="submit" className={cn(CARD_BUTTON_PRIMARY, "w-full")}>Connect</button>
               </form>
             ) : (

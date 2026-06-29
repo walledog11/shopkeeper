@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
+import {
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+  installProductAnalytics,
+} from '@shopkeeper/analytics';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -15,6 +20,7 @@ import { GET, PATCH, DELETE } from './route';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+let analyticsSink: RecordingAnalyticsSink;
 const mockUpdateOrganization = vi.fn();
 const mockDeleteOrganization = vi.fn();
 const mockGetOrganizationMembershipList = vi.fn();
@@ -30,6 +36,8 @@ function setAuth(overrides: Partial<{ userId: string | null; orgId: string | nul
 
 beforeEach(async () => {
   org = await createTestOrg();
+  analyticsSink = new RecordingAnalyticsSink();
+  installProductAnalytics({ sink: analyticsSink, environment: 'test' });
   setAuth();
   vi.mocked(clerkClient).mockResolvedValue({
     organizations: {
@@ -41,6 +49,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' });
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
 });
@@ -89,6 +98,34 @@ describe('/api/org PATCH settings', () => {
       body: JSON.stringify(body),
     });
   }
+
+  it('captures onboarding completion once after its timestamp persists', async () => {
+    const completedAt = new Date().toISOString();
+
+    const first = await PATCH(patchReq({
+      settings: { onboardingCompletedAt: completedAt },
+    }));
+    const second = await PATCH(patchReq({
+      settings: { onboardingCompletedAt: completedAt },
+    }));
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(analyticsSink.events).toEqual([
+      {
+        event: 'onboarding_completed',
+        distinctId: org.id,
+        properties: {
+          organization_id: org.id,
+          schema_version: 1,
+          environment: 'test',
+          source: 'dashboard',
+          '$process_person_profile': false,
+          '$insert_id': `onboarding_completed:${org.id}`,
+        },
+      },
+    ]);
+  });
 
   it('can unset explicit autonomy override fields while preserving other settings', async () => {
     await db.organization.update({

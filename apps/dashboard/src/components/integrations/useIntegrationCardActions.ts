@@ -4,6 +4,7 @@ import { useReducer } from "react"
 import { getEmailReauthorizePath } from "@shopkeeper/email/providers"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
+import { captureClientProductEvent } from "@/lib/product-events"
 import type { Integration } from "@/types"
 
 interface IntegrationCardState {
@@ -72,6 +73,10 @@ export function useIntegrationCardActions({
     if (!email) return
     dispatchCardState({ type: "loadingChanged", loading: true })
     try {
+      void captureClientProductEvent({
+        event: "integration_connection_started",
+        platform: "email",
+      })
       const ok = await onConnect(config.platform!, email)
       if (ok) dispatchCardState({ type: "emailChanged", email: "" })
     } finally {
@@ -84,6 +89,19 @@ export function useIntegrationCardActions({
       returnTo: "/dashboard/integrations",
       ...params,
     })
+    const platform = path.includes("/shopify/")
+      ? "shopify"
+      : path.includes("/instagram/")
+        ? "ig_dm"
+        : path.includes("/gmail/") || path.includes("/outlook/")
+          ? "email"
+          : null
+    if (platform) {
+      void captureClientProductEvent({
+        event: "integration_connection_started",
+        platform,
+      })
+    }
     if (onLaunchOAuth) {
       onLaunchOAuth(url, onClosed)
       return
@@ -105,7 +123,13 @@ export function useIntegrationCardActions({
       launchOAuth("/api/integrations/shopify/auth", { shop: connected[0].externalAccountId })
     } else if (config.connectType === "email" && connected[0]) {
       const path = getEmailReauthorizePath(connected[0])
-      if (path) window.location.href = path
+      if (path) {
+        void captureClientProductEvent({
+          event: "integration_connection_started",
+          platform: "email",
+        })
+        window.location.href = path
+      }
     }
   }
 

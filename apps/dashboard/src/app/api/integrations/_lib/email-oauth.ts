@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
 import { readEnv } from '@/lib/env/helpers';
+import {
+  captureIntegrationConnectionFailed,
+  captureOAuthIntegrationConnectionFailed,
+} from '@/lib/server/product-analytics';
 import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
 import {
@@ -80,11 +84,11 @@ export async function completeEmailOAuth(
   const state = searchParams.get('state');
   const oauthError = searchParams.get('error');
 
-  if (oauthError) {
+  if (oauthError && !state) {
     logger.warn({ error: oauthError }, `[${prefix}] User denied access`);
     return integrationsResponse(appUrl, { error: 'access_denied' });
   }
-  if (!code || !state) {
+  if ((!code && !oauthError) || !state) {
     return integrationsResponse(appUrl, { error: 'invalid_callback' });
   }
 
@@ -94,8 +98,39 @@ export async function completeEmailOAuth(
     prefix: config.provider,
     state,
   });
-  if (!callbackSession.ok) return callbackSession.response;
-  const { clerkOrgId, returnTo } = callbackSession.session;
+  if (!callbackSession.ok) {
+    await captureOAuthIntegrationConnectionFailed({
+      ...callbackSession.analyticsContext,
+      failureCategory: 'state_mismatch',
+      platform: 'email',
+    });
+    return callbackSession.response;
+  }
+  const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
+
+  const orgResult = await resolveOAuthOrganization(clerkOrgId, prefix);
+  if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
+  const organizationId = orgResult.org.id;
+
+  if (oauthError) {
+    logger.warn({ error: oauthError }, `[${prefix}] User denied access`);
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'access_denied',
+      organizationId,
+      platform: 'email',
+    });
+    return integrationsResponse(appUrl, { error: 'access_denied' });
+  }
+  if (!code) {
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'invalid_callback',
+      organizationId,
+      platform: 'email',
+    });
+    return integrationsResponse(appUrl, { error: 'invalid_callback' });
+  }
 
   try {
     const tokenResponse = await fetch(config.tokenUrl, {
@@ -114,6 +149,16 @@ export async function completeEmailOAuth(
 
     if (!tokenData.access_token || !tokenData.refresh_token || !tokenData.expires_in) {
       logger.error({ status: tokenResponse.status }, `[${prefix}] Token exchange failed`);
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory: tokenResponse.status === 429
+          ? 'rate_limited'
+          : tokenResponse.status >= 500
+            ? 'provider_unavailable'
+            : 'invalid_credentials',
+        organizationId,
+        platform: 'email',
+      });
       return integrationsResponse(appUrl, { error: 'token_exchange_failed' });
     }
 
@@ -125,14 +170,17 @@ export async function completeEmailOAuth(
     const userEmail = config.extractEmail(userinfo);
     if (!userEmail) {
       logger.error(`[${prefix}] userinfo missing email`);
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory: 'validation_failed',
+        organizationId,
+        platform: 'email',
+      });
       return integrationsResponse(appUrl, { error: 'no_email' });
     }
 
-    const orgResult = await resolveOAuthOrganization(clerkOrgId, prefix);
-    if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
-
     await upsertExclusiveEmailIntegration({
-      organizationId: orgResult.org.id,
+      organizationId,
       externalAccountId: userEmail,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
@@ -140,10 +188,16 @@ export async function completeEmailOAuth(
       provider: config.provider,
     });
 
-    logger.info({ userEmail, orgId: orgResult.org.id }, `[${prefix}] Integration saved`);
+    logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);
     return oauthDestinationResponse(appUrl, returnTo, config.provider);
   } catch (error) {
     logger.error({ err: error }, `[${prefix}] Unexpected error`);
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'unknown',
+      organizationId,
+      platform: 'email',
+    });
     return integrationsResponse(appUrl, { error: 'server_error' });
   }
 }

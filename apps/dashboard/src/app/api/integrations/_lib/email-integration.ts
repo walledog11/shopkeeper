@@ -1,4 +1,5 @@
 import { db } from '@shopkeeper/db';
+import { captureIntegrationConnectionCompleted } from '@/lib/server/product-analytics';
 import { upsertRaceSafeIntegration } from './integration-upsert';
 
 export type EmailIntegrationProvider = 'gmail' | 'outlook' | 'postmark';
@@ -43,6 +44,11 @@ export async function upsertExclusiveEmailIntegration(
     where: { organizationId: args.organizationId, platform: 'email', id: { not: saved.id } },
   });
 
+  await captureIntegrationConnectionCompleted({
+    integrationId: saved.id,
+    organizationId: args.organizationId,
+    platform: 'email',
+  });
   return saved.id;
 }
 
@@ -68,5 +74,10 @@ export async function saveForwardingEmailIntegration(args: {
     where: { organizationId: args.organizationId, platform: 'email', id: { not: integration.id } },
   });
 
+  await captureIntegrationConnectionCompleted({
+    integrationId: integration.id,
+    organizationId: args.organizationId,
+    platform: 'email',
+  });
   return integration;
 }

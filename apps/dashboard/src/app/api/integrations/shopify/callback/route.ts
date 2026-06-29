@@ -5,6 +5,11 @@ import { getShopifyOAuthCallbackConfig } from '@/lib/env';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 import { recordProviderSendFailure } from '@/lib/server/provider-send-alerts';
 import { getRedis } from '@/lib/server/redis';
+import {
+  captureIntegrationConnectionCompleted,
+  captureIntegrationConnectionFailed,
+  captureOAuthIntegrationConnectionFailed,
+} from '@/lib/server/product-analytics';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import { normalizeShopifyShopDomain, parseShopifyShopIdentity, isSameShopifyStore } from '@/lib/shopify/oauth';
@@ -44,24 +49,53 @@ export async function POST(request: Request) {
     state,
     stateMismatchError: 'shopify_state_mismatch',
   });
-  if (!callbackSession.ok) return callbackSession.response;
+  if (!callbackSession.ok) {
+    await captureOAuthIntegrationConnectionFailed({
+      ...callbackSession.analyticsContext,
+      failureCategory: 'state_mismatch',
+      platform: 'shopify',
+    });
+    return callbackSession.response;
+  }
   const {
+    attemptId,
     clerkOrgId,
     returnTo,
     extra: { shop: savedShop },
   } = callbackSession.session;
+  const orgResult = await resolveOAuthOrganization(clerkOrgId, 'Shopify OAuth');
+  if (!orgResult.ok) return oauthCompleteResponse(appUrl, { error: 'shopify_server_error', returnTo });
+  const org = orgResult.org;
 
   if (!code || !shop || !hmac) {
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'invalid_callback',
+      organizationId: org.id,
+      platform: 'shopify',
+    });
     return oauthCompleteResponse(appUrl, { error: 'shopify_invalid_callback', returnTo });
   }
 
   const shopDomain = normalizeShopifyShopDomain(shop);
   if (!shopDomain || !savedShop) {
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'invalid_callback',
+      organizationId: org.id,
+      platform: 'shopify',
+    });
     return oauthCompleteResponse(appUrl, { error: 'shopify_invalid_callback', returnTo });
   }
 
   if (!isValidShopifyHmac(searchParams, clientSecret, hmac)) {
     logger.error('[Shopify OAuth] HMAC verification failed');
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'invalid_callback',
+      organizationId: org.id,
+      platform: 'shopify',
+    });
     return oauthCompleteResponse(appUrl, { error: 'shopify_hmac_invalid', returnTo });
   }
 
@@ -73,6 +107,12 @@ export async function POST(request: Request) {
       shopDomain,
     });
     if (!accessToken) {
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory: 'invalid_credentials',
+        organizationId: org.id,
+        platform: 'shopify',
+      });
       return oauthCompleteResponse(appUrl, { error: 'shopify_token_failed', returnTo });
     }
 
@@ -82,15 +122,20 @@ export async function POST(request: Request) {
       shopDomain,
     });
     if (!shopIdentityResult.ok) {
+      await captureIntegrationConnectionFailed({
+        attemptId,
+        failureCategory: shopIdentityResult.error === 'shopify_shop_mismatch'
+          ? 'validation_failed'
+          : 'provider_unavailable',
+        organizationId: org.id,
+        platform: 'shopify',
+      });
       return oauthCompleteResponse(appUrl, { error: shopIdentityResult.error, returnTo });
     }
 
     const canonicalShopDomain = shopIdentityResult.shop.myshopifyDomain;
     const shopName = shopIdentityResult.shop.name;
 
-    const orgResult = await resolveOAuthOrganization(clerkOrgId, 'Shopify OAuth');
-    if (!orgResult.ok) return oauthCompleteResponse(appUrl, { error: 'shopify_server_error', returnTo });
-    const org = orgResult.org;
     const shopifyIntegration = await upsertRaceSafeIntegration({
       organizationId: org.id,
       platform: 'shopify',
@@ -98,6 +143,11 @@ export async function POST(request: Request) {
       data: { accessToken, fromEmail: shopName, tokenExpiresAt: null },
     });
     const shopifyIntegrationId = shopifyIntegration.id;
+    await captureIntegrationConnectionCompleted({
+      integrationId: shopifyIntegrationId,
+      organizationId: org.id,
+      platform: 'shopify',
+    });
 
     logger.info({ shopName, shop: canonicalShopDomain, orgId: org.id }, '[Shopify OAuth] Integration saved');
 
@@ -112,6 +162,12 @@ export async function POST(request: Request) {
 
   } catch (err) {
     logger.error({ err }, '[Shopify OAuth] Unexpected error');
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory: 'unknown',
+      organizationId: org.id,
+      platform: 'shopify',
+    });
     return oauthCompleteResponse(appUrl, { error: 'shopify_server_error', returnTo });
   }
 }

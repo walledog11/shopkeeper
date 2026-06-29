@@ -56,6 +56,7 @@ export async function createOAuthSessionCookies(
 }
 
 export interface OAuthCallbackSession {
+  attemptId: string;
   clerkOrgId?: string;
   returnTo: string | null;
   extra: Record<string, string | undefined>;
@@ -63,7 +64,14 @@ export interface OAuthCallbackSession {
 
 export type OAuthCallbackSessionResult =
   | { ok: true; session: OAuthCallbackSession }
-  | { ok: false; response: NextResponse };
+  | {
+      ok: false;
+      response: NextResponse;
+      analyticsContext: {
+        attemptId?: string;
+        clerkOrganizationId?: string;
+      };
+    };
 
 export async function validateOAuthCallbackSession(options: {
   appUrl: string;
@@ -94,6 +102,10 @@ export async function validateOAuthCallbackSession(options: {
     return {
       ok: false,
       response: NextResponse.redirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      analyticsContext: {
+        attemptId: savedState,
+        clerkOrganizationId: clerkOrgId,
+      },
     };
   }
 
@@ -106,12 +118,17 @@ export async function validateOAuthCallbackSession(options: {
     return {
       ok: false,
       response: NextResponse.redirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      analyticsContext: {
+        attemptId: savedState,
+        clerkOrganizationId: clerkOrgId,
+      },
     };
   }
 
   return {
     ok: true,
     session: {
+      attemptId: savedState,
       clerkOrgId,
       returnTo,
       extra,

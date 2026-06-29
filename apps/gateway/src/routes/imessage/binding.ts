@@ -1,4 +1,8 @@
 import { deleteOrgMemberBindToken, findOrgMemberBindToken, db } from '@shopkeeper/db';
+import {
+  captureProductEvent,
+  productEventInsertId,
+} from '@shopkeeper/analytics';
 import logger from '../../logger.js';
 import type { OperatorReply } from '../operator-message.js';
 
@@ -50,7 +54,7 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
 
   // A sender handle binds to one member globally; texting a fresh token moves
   // the binding to whoever minted it.
-  await db.orgMemberImessageBinding.upsert({
+  const binding = await db.orgMemberImessageBinding.upsert({
     where: { senderId },
     create: {
       orgMemberId: member.id,
@@ -66,6 +70,13 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
   });
 
   await deleteOrgMemberBindToken(token);
+  await captureProductEvent({
+    event: 'integration_connection_completed',
+    organizationId: payload.organizationId,
+    source: 'gateway',
+    platform: 'imessage',
+    insertId: productEventInsertId.integrationConnectionCompleted(binding.id),
+  });
 
   await reply("Connected. Text SUMMARY for your inbox or HELP for commands. You can also send instructions like 'refund #1234'.");
 }

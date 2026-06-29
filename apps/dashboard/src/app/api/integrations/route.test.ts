@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
 import {
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+  installProductAnalytics,
+} from '@shopkeeper/analytics';
+import {
   cleanupTestData,
   createTestCustomer,
   createTestOrg,
@@ -16,9 +21,12 @@ import { auth } from '@clerk/nextjs/server';
 import { GET, POST } from './route';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
+let analyticsSink: RecordingAnalyticsSink;
 
 beforeEach(async () => {
   org = await createTestOrg();
+  analyticsSink = new RecordingAnalyticsSink();
+  installProductAnalytics({ sink: analyticsSink, environment: 'test' });
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_test',
     orgId: org.clerkOrgId,
@@ -26,6 +34,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' });
   await cleanupTestData(org?.id);
   vi.clearAllMocks();
 });
@@ -118,6 +127,17 @@ describe('/api/integrations', () => {
     expect(rows[0].refreshToken).toBeNull();
     expect(rows[0].tokenExpiresAt).toBeNull();
     expect(rows[0].metadata).toMatchObject({ provider: 'postmark' });
+    expect(analyticsSink.events).toEqual([
+      expect.objectContaining({
+        event: 'integration_connection_completed',
+        distinctId: org.id,
+        properties: expect.objectContaining({
+          organization_id: org.id,
+          platform: 'email',
+          '$insert_id': `integration_connection_completed:${rows[0].id}`,
+        }),
+      }),
+    ]);
   });
 
   it('rejects malformed JSON before creating an integration', async () => {

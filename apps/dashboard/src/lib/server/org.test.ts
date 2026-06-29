@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'crypto'
 import { db } from '@shopkeeper/db'
+import {
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+  installProductAnalytics,
+} from '@shopkeeper/analytics'
 
 const { mockAuth, mockGetOrganization, mockGetUser } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
@@ -22,6 +27,7 @@ import { getOrCreateOrg } from './org'
 type AuthResult = ReturnType<typeof auth> extends Promise<infer T> ? T : never
 
 const createdClerkOrgIds: string[] = []
+let analyticsSink: RecordingAnalyticsSink
 
 function trackClerkOrg(id: string) {
   createdClerkOrgIds.push(id)
@@ -36,6 +42,8 @@ async function seedOrg(clerkOrgId: string, name = 'Acme') {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  analyticsSink = new RecordingAnalyticsSink()
+  installProductAnalytics({ sink: analyticsSink, environment: 'test' })
   process.env.E2E_AUTH_BYPASS = 'false'
   delete process.env.E2E_CLERK_ORG_ID
   delete process.env.E2E_CLERK_USER_ID
@@ -47,6 +55,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' })
   for (const clerkOrgId of createdClerkOrgIds) {
     await db.organization.deleteMany({ where: { clerkOrgId } }).catch(() => undefined)
   }
@@ -112,6 +121,30 @@ describe('getOrCreateOrg', () => {
       'Solo merchant using Shopkeeper to organize support tickets and automate responses to common questions.'
     )
     expect(settings.agentName).toBe('Shopkeeper')
+  })
+
+  it('captures workspace creation only after the organization is persisted', async () => {
+    const clerkOrgId = trackClerkOrg(`org_clerk_${randomUUID()}`)
+    mockAuth.mockResolvedValue({ userId: 'usr_test', orgId: clerkOrgId } as unknown as AuthResult)
+    mockGetOrganization.mockResolvedValue({ name: 'Instrumented Workspace' })
+    mockGetUser.mockResolvedValue({ unsafeMetadata: {} })
+
+    const created = await getOrCreateOrg()
+
+    expect(analyticsSink.events).toEqual([
+      {
+        event: 'workspace_created',
+        distinctId: created.id,
+        properties: {
+          organization_id: created.id,
+          schema_version: 1,
+          environment: 'test',
+          source: 'dashboard',
+          '$process_person_profile': false,
+          '$insert_id': `workspace_created:${created.id}`,
+        },
+      },
+    ])
   })
 
   it('falls back to default settings when welcome metadata is missing', async () => {

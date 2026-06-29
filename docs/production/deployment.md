@@ -14,6 +14,7 @@ This runbook covers the repo-side production deployment path for the dashboard o
 - Production env vars from [`checklist.md`](checklist.md) are populated in Vercel and Railway.
 - V1 launch env covers email and Shopify. Meta, Twilio, and USPS vars are optional until those channels are reintroduced.
 - Clerk lifecycle webhook endpoint is configured to `https://<dashboard>/api/webhooks/clerk`, and the dashboard has `CLERK_WEBHOOK_SECRET`.
+- Separate staging and production PostHog projects are available before product analytics is enabled.
 
 ## Deploy Order
 
@@ -50,6 +51,31 @@ npm run db:migrate:deploy
 - The gateway readiness endpoints are `/health/deep` and `/health/queues`.
 - Ops alerts emit structured Pino logs with `opsAlert: true` when thresholds are crossed. See [`runbook.md`](runbook.md) for validation steps.
 
+### Product Analytics
+
+Both dashboard and gateway require an explicit `PRODUCT_ANALYTICS_ENABLED` value in production.
+Deploy new instrumentation with capture disabled first:
+
+```dotenv
+PRODUCT_ANALYTICS_ENABLED=false
+POSTHOG_PROJECT_TOKEN=<project-token>
+POSTHOG_HOST=https://us.i.posthog.com
+```
+
+When enabled, use the token for the environment-specific PostHog project. Product analytics is
+server-only and organization-scoped; do not add a browser PostHog key or enable autocapture,
+session replay, cookies, or person profiles.
+
+Before enabling production capture:
+
+1. enable and review every event in staging;
+2. confirm raw payloads contain no names, addresses, message content, prompts, provider identifiers,
+   credentials, or provider payloads;
+3. confirm deterministic retries retain one unique event;
+4. save and verify the reports listed in
+   [`product-instrumentation-plan.md`](../product-instrumentation-plan.md); and
+5. assign an owner to monitor analytics-delivery warnings for the first production week.
+
 ## Post-Deploy Verification
 
 Run the env preflight before deploy:
@@ -70,5 +96,8 @@ After deploy, run the production smoke check:
 ```bash
 npm run verify:production
 ```
+
+For the product analytics rollout, complete one controlled workspace journey after enabling capture
+and verify both the raw events and saved reports. Do not backfill events from before deployment.
 
 See [`runbook.md`](runbook.md) for operational procedures.

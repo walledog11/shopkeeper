@@ -18,7 +18,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy Policy"
-      effectiveDate="May 10, 2026"
+      effectiveDate="June 28, 2026"
       intro={privacyIntro}
       sections={[
         {
@@ -38,6 +38,13 @@ export default function PrivacyPage() {
                 We also collect product usage, device, log, and diagnostic data such as request metadata, error reports,
                 webhook delivery status, and security events. Payments are processed by Stripe; we store payment status
                 and identifiers, not full payment card numbers.
+              </p>
+              <p>
+                We use PostHog for limited product analytics. Shopkeeper sends server-side events tied to a pseudonymous
+                internal workspace identifier, such as onboarding progress, integration connection status, and whether
+                key support workflows succeeded. We do not send names, email addresses, message content, prompts,
+                integration credentials, or connected-platform payloads to PostHog, and we do not use PostHog browser
+                tracking, cookies, session replay, or person profiles.
               </p>
             </>
           ),
@@ -64,8 +71,8 @@ export default function PrivacyPage() {
             <>
               <p>
                 We share information with service providers that help operate Shopkeeper, including hosting, database,
-                email, observability, billing, authentication, and AI infrastructure providers. These providers may only
-                use information to deliver services to us.
+                email, product analytics, observability, billing, authentication, and AI infrastructure providers. These
+                providers may only use information to deliver services to us.
               </p>
               <p>
                 We may share information with connected platforms as directed by a merchant, to comply with law, to

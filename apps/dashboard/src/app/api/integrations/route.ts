@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import type { IntegrationPlatform } from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError } from '@/lib/api/errors';
@@ -9,10 +10,26 @@ import {
   getShopifyConnectionState,
   refreshShopifyIntegrationHealthIfDue,
 } from '@/lib/server/shopify-integration';
+import {
+  captureIntegrationConnectionCompleted,
+  captureIntegrationConnectionFailed,
+} from '@/lib/server/product-analytics';
 import { saveForwardingEmailIntegration } from './_lib/email-integration';
 import { upsertRaceSafeIntegration } from './_lib/integration-upsert';
 
 export const dynamic = 'force-dynamic';
+
+function analyticsIntegrationPlatform(platform: string): IntegrationPlatform | null {
+  if (
+    platform === 'shopify'
+    || platform === 'email'
+    || platform === 'ig_dm'
+    || platform === 'imessage'
+  ) {
+    return platform;
+  }
+  return null;
+}
 
 function serializeIntegration<T extends {
   accessToken?: string | null;
@@ -112,23 +129,53 @@ export const POST = withOrgRoute(
         ? normalizedEmail
         : String(fromEmail).trim().toLowerCase() || normalizedEmail;
 
-      const integration = await saveForwardingEmailIntegration({
-        organizationId: org.id,
-        externalAccountId: normalizedEmail,
-        fromEmail: normalizedFromEmail,
-      });
+      let integration;
+      try {
+        integration = await saveForwardingEmailIntegration({
+          organizationId: org.id,
+          externalAccountId: normalizedEmail,
+          fromEmail: normalizedFromEmail,
+        });
+      } catch (error) {
+        await captureIntegrationConnectionFailed({
+          failureCategory: 'unknown',
+          organizationId: org.id,
+          platform: 'email',
+        });
+        throw error;
+      }
 
       return NextResponse.json(serializeIntegration(integration), { status: 201 });
     }
 
-    const integration = await upsertRaceSafeIntegration({
-      organizationId: org.id,
-      platform: platformValue,
-      externalAccountId: String(externalAccountId),
-      data: {
-        ...(fromEmail !== undefined && { fromEmail: fromEmail === null ? null : String(fromEmail) }),
-      },
-    });
+    const analyticsPlatform = analyticsIntegrationPlatform(platformValue);
+    let integration;
+    try {
+      integration = await upsertRaceSafeIntegration({
+        organizationId: org.id,
+        platform: platformValue,
+        externalAccountId: String(externalAccountId),
+        data: {
+          ...(fromEmail !== undefined && { fromEmail: fromEmail === null ? null : String(fromEmail) }),
+        },
+      });
+    } catch (error) {
+      if (analyticsPlatform) {
+        await captureIntegrationConnectionFailed({
+          failureCategory: 'unknown',
+          organizationId: org.id,
+          platform: analyticsPlatform,
+        });
+      }
+      throw error;
+    }
+    if (analyticsPlatform) {
+      await captureIntegrationConnectionCompleted({
+        integrationId: integration.id,
+        organizationId: org.id,
+        platform: analyticsPlatform,
+      });
+    }
 
     return NextResponse.json(serializeIntegration(integration), { status: 201 });
   },

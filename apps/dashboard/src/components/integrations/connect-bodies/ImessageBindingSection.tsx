@@ -7,6 +7,7 @@ import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
 import { fetcher } from "@/lib/api/fetcher"
 import { formatDate } from "@/lib/format/date"
+import { captureClientProductEvent } from "@/lib/product-events"
 import { ConfigureSection } from "../ConfigureSection"
 import { ConfigureAccountRow } from "../ConfigureAccountRow"
 import { ActionRow } from "../ActionRow"
@@ -111,6 +112,10 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
   async function mint() {
     updateState({ minting: true, error: null })
     try {
+      void captureClientProductEvent({
+        event: "integration_connection_started",
+        platform: "imessage",
+      })
       const res = await fetch('/api/integrations/imessage/bind', { method: 'POST' })
       const body = await res.json() as { token?: string; error?: string }
       if (!res.ok || !body.token) throw new Error(body.error || 'Failed to create a connect code')

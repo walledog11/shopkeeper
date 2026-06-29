@@ -1,6 +1,6 @@
 # Production Checklist
 
-Last reviewed: 2026-06-14.
+Last reviewed: 2026-06-28.
 
 This is the short release gate for production readiness. Keep detailed deploy procedure in
 [deployment.md](deployment.md) and operational response steps in [runbook.md](runbook.md).
@@ -31,6 +31,8 @@ Notes:
 
 - Vercel and Railway production env vars are populated for the launch scope in
   [runbook.md](runbook.md#environment-matrix).
+- `PRODUCT_ANALYTICS_ENABLED` is explicitly set for both applications. Keep it `false` until the
+  privacy policy is deployed, staging payload review passes, and production reports are saved.
 - Production migrations are run with both pooled `DATABASE_URL` and direct `DIRECT_DATABASE_URL`
   set, as shown in [deployment.md](deployment.md#deploy-order).
 - Dashboard deploy completes and `GET /api/health` returns healthy.
@@ -47,6 +49,8 @@ Before marking production ready, record the evidence listed in
 - Neon PITR status and retention window
 - at least one real inbound message through webhook, queue, dashboard, plan generation, and outbound
   reply
+- product analytics staging payload review, deterministic retry verification, saved report URLs,
+  and the owner for first-week delivery-warning monitoring
 
 Remaining readiness work lives in [../to-do-list.md](../to-do-list.md). Do not treat unchecked
 pre-release items there as complete unless they are explicitly deferred by the launch owner.

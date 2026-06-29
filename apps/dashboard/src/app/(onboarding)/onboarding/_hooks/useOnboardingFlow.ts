@@ -18,6 +18,7 @@ import {
   type OnboardingResumeStep,
 } from "@/lib/integrations/onboarding-setup";
 import { isShopifyIntegrationActive } from "@/lib/integrations/shopify-connection";
+import { captureClientProductEvent } from "@/lib/product-events";
 import {
   openOAuthPopup,
   subscribeOAuthDone,
@@ -255,6 +256,10 @@ export function useOnboardingFlow() {
     try {
       const ready = await ensureOrganization();
       if (!ready) return false;
+      void captureClientProductEvent({
+        event: "integration_connection_started",
+        platform: "email",
+      });
       const response = await fetch("/api/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -276,6 +281,17 @@ export function useOnboardingFlow() {
     const ready = await ensureOrganization();
     dispatch({ type: "setSaving", saving: false });
     if (!ready) return;
+    const platform = url.includes("/shopify/")
+      ? "shopify"
+      : url.includes("/gmail/") || url.includes("/outlook/")
+        ? "email"
+        : null;
+    if (platform) {
+      void captureClientProductEvent({
+        event: "integration_connection_started",
+        platform,
+      });
+    }
     const popup = openOAuthPopup(url);
     if (!popup) return;
     watchOAuthPopup(popup, () => {
@@ -312,17 +328,25 @@ export function useOnboardingFlow() {
       try {
         const ready = await ensureOrganization();
         if (!ready) return;
-        await persistSettings();
+        const persisted = await persistSettings();
+        if (!persisted) return;
       } finally {
         dispatch({ type: "setSaving", saving: false });
       }
     } else if (organization && stepId === "autonomy") {
       dispatch({ type: "setSaving", saving: true });
       try {
-        await persistSettings();
+        const persisted = await persistSettings();
+        if (!persisted) return;
       } finally {
         dispatch({ type: "setSaving", saving: false });
       }
+    }
+    if (stepId !== "intro" && stepId !== "plan") {
+      void captureClientProductEvent({
+        event: "onboarding_step_completed",
+        step: stepId,
+      });
     }
     dispatch({ type: "advance" });
   }, [canContinue, ensureOrganization, organization, persistSettings, saving, stepId]);
@@ -350,6 +374,10 @@ export function useOnboardingFlow() {
       const completed = await persistSettings({ markOnboardingComplete: true });
       if (!completed) return;
 
+      void captureClientProductEvent({
+        event: "onboarding_step_completed",
+        step: "plan",
+      });
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {}

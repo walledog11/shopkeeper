@@ -1,4 +1,8 @@
 import { cache } from 'react';
+import {
+  captureProductEvent,
+  productEventInsertId,
+} from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
@@ -76,13 +80,20 @@ export const getOrCreateOrg = cache(async () => {
   const settings: Partial<OrgSettings> = aiContext ? { aiContext } : {};
 
   try {
-    return await db.organization.create({
+    const created = await db.organization.create({
       data: {
         clerkOrgId: orgId,
         name: clerkOrg.name,
         settings: JSON.parse(JSON.stringify(settings)),
       },
     });
+    await captureProductEvent({
+      event: 'workspace_created',
+      organizationId: created.id,
+      source: 'dashboard',
+      insertId: productEventInsertId.workspaceCreated(created.id),
+    });
+    return created;
   } catch (err) {
     if ((err as { code?: string }).code !== 'P2002') throw err;
     return db.organization.findUniqueOrThrow({ where: { clerkOrgId: orgId } });

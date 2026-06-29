@@ -26,7 +26,7 @@ describe('/api/integrations/instagram/connect', () => {
     vi.stubEnv('META_PAGE_ACCESS_TOKEN', 'page-token');
     vi.stubEnv('META_INSTAGRAM_ACCOUNT_ID', 'ig-123');
     getOrg.mockResolvedValue({ id: 'org-1' });
-    upsert.mockResolvedValue({});
+    upsert.mockResolvedValue({ id: 'integration-1' });
   });
 
   afterEach(() => {

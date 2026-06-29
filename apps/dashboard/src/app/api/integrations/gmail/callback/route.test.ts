@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, db } from '@shopkeeper/db';
+import {
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+  installProductAnalytics,
+} from '@shopkeeper/analytics';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const {
@@ -40,9 +45,12 @@ import { auth } from '@clerk/nextjs/server';
 import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
+let analyticsSink: RecordingAnalyticsSink;
 
 beforeEach(async () => {
   org = await createTestOrg();
+  analyticsSink = new RecordingAnalyticsSink();
+  installProductAnalytics({ sink: analyticsSink, environment: 'test' });
   vi.stubEnv('APP_URL', 'http://dashboard.test');
   vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
   vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret');
@@ -53,6 +61,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' });
   await cleanupTestData(org?.id);
   org = null;
   vi.clearAllMocks();
@@ -73,6 +82,17 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=state_mismatch');
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.error).toHaveBeenCalledWith('[Gmail OAuth] State mismatch — possible CSRF attempt');
+    expect(analyticsSink.events).toEqual([
+      expect.objectContaining({
+        event: 'integration_connection_failed',
+        distinctId: org!.id,
+        properties: expect.objectContaining({
+          platform: 'email',
+          failure_category: 'state_mismatch',
+          '$insert_id': 'integration_connection_failed:state_123',
+        }),
+      }),
+    ]);
   });
 
   it('rejects user session mismatch', async () => {
@@ -134,6 +154,16 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(integration.tokenExpiresAt).toBeInstanceOf(Date);
     expect(integration.metadata).toMatchObject({ provider: 'gmail' });
     expect(integration.id).not.toBe(staleEmail.id);
+    expect(analyticsSink.events).toEqual([
+      expect.objectContaining({
+        event: 'integration_connection_completed',
+        distinctId: org!.id,
+        properties: expect.objectContaining({
+          platform: 'email',
+          '$insert_id': `integration_connection_completed:${integration.id}`,
+        }),
+      }),
+    ]);
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://oauth2.googleapis.com/token');

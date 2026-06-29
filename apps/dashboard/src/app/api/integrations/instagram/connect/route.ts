@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrCreateOrg } from '@/lib/server/org';
 import logger from '@/lib/server/logger';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
+import { captureIntegrationConnectionCompleted } from '@/lib/server/product-analytics';
 import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
 
 const FB_GRAPH = 'https://graph.facebook.com/v22.0';
@@ -41,11 +42,16 @@ export async function POST() {
     }
 
     const org = await getOrCreateOrg();
-    await upsertRaceSafeIntegration({
+    const integration = await upsertRaceSafeIntegration({
       organizationId: org.id,
       platform: 'ig_dm',
       externalAccountId: igAccountId,
       data: { accessToken: pageAccessToken, fromEmail: accountName },
+    });
+    await captureIntegrationConnectionCompleted({
+      integrationId: integration.id,
+      organizationId: org.id,
+      platform: 'ig_dm',
     });
 
     logger.info({ accountName, igAccountId, orgId: org.id }, '[IG Setup] Connected');

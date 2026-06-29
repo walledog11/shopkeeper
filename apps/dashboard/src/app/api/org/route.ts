@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
+import {
+  captureProductEvent,
+  productEventInsertId,
+} from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
@@ -69,6 +73,21 @@ export const PATCH = withOrgRoute(
         }),
       },
     });
+
+    const onboardingWasCompleted = Boolean(
+      normalizeStoredOrgSettings(org.settings).onboardingCompletedAt,
+    );
+    const onboardingIsCompleted = Boolean(
+      normalizeStoredOrgSettings(updated.settings).onboardingCompletedAt,
+    );
+    if (!onboardingWasCompleted && onboardingIsCompleted) {
+      await captureProductEvent({
+        event: 'onboarding_completed',
+        organizationId: updated.id,
+        source: 'dashboard',
+        insertId: productEventInsertId.onboardingCompleted(updated.id),
+      });
+    }
 
     if (settingsUpdate.changed) {
       revalidatePath('/dashboard', 'layout');
