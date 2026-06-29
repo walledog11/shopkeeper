@@ -17,6 +17,7 @@ function stubProductionGatewayEnv() {
   vi.stubEnv('DASHBOARD_URL', 'https://app.example.com');
   vi.stubEnv('POSTMARK_INBOUND_USERNAME', 'postmark-inbound-user');
   vi.stubEnv('POSTMARK_INBOUND_PASSWORD', 'postmark-inbound-pass');
+  vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'false');
 }
 
 afterEach(() => {
@@ -118,5 +119,12 @@ describe('validateGatewayEnv', () => {
     vi.stubEnv('POSTMARK_INBOUND_PASSWORD', '');
 
     expect(() => validateGatewayEnv()).not.toThrow();
+  });
+
+  it('requires an explicit product analytics setting in production', () => {
+    stubProductionGatewayEnv();
+    vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', '');
+
+    expect(() => validateGatewayEnv()).toThrow(/PRODUCT_ANALYTICS_ENABLED/);
   });
 });

@@ -20,6 +20,7 @@ function stubProductionDashboardEnv() {
   vi.stubEnv('UPSTASH_REDIS_REST_URL', 'https://example.upstash.io');
   vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', 'upstash-token');
   vi.stubEnv('BLOB_READ_WRITE_TOKEN', 'vercel-blob-token');
+  vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'false');
 }
 
 afterEach(() => {
@@ -88,6 +89,21 @@ describe('validateDashboardEnv', () => {
     vi.stubEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', '   ');
 
     expect(() => validateDashboardEnv()).toThrow(/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY/);
+  });
+
+  it('requires an explicit product analytics setting in production', () => {
+    stubProductionDashboardEnv();
+    vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', '');
+
+    expect(() => validateDashboardEnv()).toThrow(/PRODUCT_ANALYTICS_ENABLED/);
+  });
+
+  it('requires valid PostHog configuration when product analytics is enabled', () => {
+    stubProductionDashboardEnv();
+    vi.stubEnv('PRODUCT_ANALYTICS_ENABLED', 'true');
+    vi.stubEnv('POSTHOG_PROJECT_TOKEN', '');
+
+    expect(() => validateDashboardEnv()).toThrow(/POSTHOG_PROJECT_TOKEN/);
   });
 });
 

@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/email && npm run build -w packages/agent",
+    "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/email && npm run build -w packages/agent && npm run build -w packages/analytics",
     "dev": "npx turbo run dev",
     "build": "npx turbo run build",
     "clean": "node ./scripts/clean.mjs artifacts",
@@ -26,7 +26,7 @@
     "test:services:down": "node ./scripts/test-services.mjs down",
     "test:services:status": "node ./scripts/test-services.mjs status",
     "test:integration": "node ./scripts/test-bootstrap.mjs && npx turbo run test:integration --env-mode=loose",
-    "test:coverage": "node ./scripts/test-bootstrap.mjs && npm run test:coverage -w apps/dashboard && npm run test:coverage -w apps/gateway && npm run test:coverage -w packages/agent && npm run test:coverage -w packages/email && node ./scripts/check-critical-coverage.mjs",
+    "test:coverage": "node ./scripts/test-bootstrap.mjs && npm run test:coverage -w apps/dashboard && npm run test:coverage -w apps/gateway && npm run test:coverage -w packages/agent && npm run test:coverage -w packages/analytics && npm run test:coverage -w packages/email && node ./scripts/check-critical-coverage.mjs",
     "test:integration:local": "node ./scripts/test-integration-local.mjs",
     "test:e2e": "npm run test:e2e:smoke && npm run test:e2e:browser",
     "test:e2e:smoke": "E2E_AUTH_BYPASS=true node ./scripts/with-test-env.mjs npx playwright test --config=playwright.config.ts",

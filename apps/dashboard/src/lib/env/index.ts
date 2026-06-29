@@ -4,6 +4,7 @@ import {
   readEnv,
   requireEnv,
 } from "./helpers";
+import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
 
 export function getDashboardAppUrl(): string {
   const appUrl = readEnv('APP_URL');
@@ -165,6 +166,8 @@ export function validateDashboardEnv(): void {
       }
     }
   }
+
+  parseProductAnalyticsConfig();
 
   const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();

@@ -26,6 +26,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.104.1",
     "@shopkeeper/agent": "*",
+    "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
     "@vercel/blob": "2.3.3",

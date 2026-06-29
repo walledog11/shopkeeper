@@ -30,6 +30,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     PRICE_ID_STARTER: 'price_starter',
     PRICE_ID_PRO: 'price_pro',
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
+    PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
 }
@@ -47,6 +48,7 @@ function createGatewayLaunchEnv(overrides = {}) {
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     POSTMARK_INBOUND_USERNAME: 'postmark-inbound-user',
     POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
+    PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
 }
@@ -249,6 +251,44 @@ test('gateway launch contract warns when Redis is not configured with TLS', () =
   );
 });
 
+test('production contracts require an explicit product analytics setting', () => {
+  const result = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({ PRODUCT_ANALYTICS_ENABLED: '' }),
+  });
+
+  assert.equal(
+    result.errors.includes(
+      'Missing required environment variable: PRODUCT_ANALYTICS_ENABLED',
+    ),
+    true
+  );
+});
+
+test('enabled product analytics requires a token and HTTPS host', () => {
+  const result = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      PRODUCT_ANALYTICS_ENABLED: 'true',
+      POSTHOG_PROJECT_TOKEN: '',
+      POSTHOG_HOST: 'http://us.i.posthog.com',
+    }),
+  });
+
+  assert.equal(
+    result.errors.includes(
+      'POSTHOG_PROJECT_TOKEN is required when PRODUCT_ANALYTICS_ENABLED=true',
+    ),
+    true
+  );
+  assert.equal(
+    result.errors.includes(
+      'POSTHOG_HOST must use https when product analytics is enabled',
+    ),
+    true
+  );
+});
+
 test('env file parser trims comments and quoted values the same way prod env files are written', async () => {
   const tempDir = mkdtempSync(join(tmpdir(), 'shopkeeper-env-check-'));
   const envFile = join(tempDir, 'gateway.env');
@@ -266,6 +306,7 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'BLOB_READ_WRITE_TOKEN=vercel-blob-token   # attachment storage',
       'POSTMARK_INBOUND_USERNAME=postmark-inbound-user',
       'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
+      'PRODUCT_ANALYTICS_ENABLED=false',
       '',
     ].join('\n')
   );

@@ -1,4 +1,5 @@
 import logger from '../logger.js';
+import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
 
 const REQUIRED_ENV = [
   'DATABASE_URL',
@@ -74,6 +75,8 @@ export function validateGatewayEnv(): void {
   if (process.env.NODE_ENV === 'production' && !hasEnv('DIRECT_DATABASE_URL')) {
     throw new Error('[Gateway] Missing required environment variable: DIRECT_DATABASE_URL');
   }
+
+  parseProductAnalyticsConfig();
 
   const redisUrl = requireEnv('REDIS_URL');
   try {

@@ -19,6 +19,7 @@ const CONTRACTS = {
       'TOKEN_ENCRYPTION_KEY',
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
+      'PRODUCT_ANALYTICS_ENABLED',
     ],
     launchRequired: [
       'GATEWAY_INTERNAL_URL',
@@ -34,7 +35,13 @@ const CONTRACTS = {
       'PRICE_ID_STARTER',
       'PRICE_ID_PRO',
     ],
-    absoluteUrlVars: ['APP_URL', 'NEXT_PUBLIC_APP_URL', 'GATEWAY_INTERNAL_URL', 'TWILIO_WEBHOOK_URL'],
+    absoluteUrlVars: [
+      'APP_URL',
+      'NEXT_PUBLIC_APP_URL',
+      'GATEWAY_INTERNAL_URL',
+      'TWILIO_WEBHOOK_URL',
+      'POSTHOG_HOST',
+    ],
     equalPairs: [['APP_URL', 'NEXT_PUBLIC_APP_URL']],
   },
   gateway: {
@@ -47,6 +54,7 @@ const CONTRACTS = {
       'INTERNAL_API_SECRET',
       'DASHBOARD_URL',
       'TOKEN_ENCRYPTION_KEY',
+      'PRODUCT_ANALYTICS_ENABLED',
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
@@ -54,7 +62,7 @@ const CONTRACTS = {
       'POSTMARK_INBOUND_USERNAME',
       'POSTMARK_INBOUND_PASSWORD',
     ],
-    absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL'],
+    absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL', 'POSTHOG_HOST'],
     expectedPathSuffixes: {
       TWILIO_WEBHOOK_URL: '/webhooks/twilio',
     },
@@ -198,6 +206,26 @@ export function validateProductionEnv(target, options = {}) {
     const parsed = new URL(value);
     if (parsed.pathname !== suffix) {
       errors.push(`${name} must point to ${suffix}`);
+    }
+  }
+
+  const productAnalyticsEnabled = readEnv(env, 'PRODUCT_ANALYTICS_ENABLED');
+  if (
+    productAnalyticsEnabled
+    && productAnalyticsEnabled !== 'true'
+    && productAnalyticsEnabled !== 'false'
+  ) {
+    errors.push('PRODUCT_ANALYTICS_ENABLED must be either true or false');
+  }
+  if (productAnalyticsEnabled === 'true' && !readEnv(env, 'POSTHOG_PROJECT_TOKEN')) {
+    errors.push(
+      'POSTHOG_PROJECT_TOKEN is required when PRODUCT_ANALYTICS_ENABLED=true',
+    );
+  }
+  const posthogHost = normalizedUrls.POSTHOG_HOST;
+  if (productAnalyticsEnabled === 'true' && posthogHost) {
+    if (new URL(posthogHost).protocol !== 'https:') {
+      errors.push('POSTHOG_HOST must use https when product analytics is enabled');
     }
   }
 

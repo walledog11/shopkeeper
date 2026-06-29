@@ -25,6 +25,7 @@
     "@clerk/nextjs": "7.3.3",
     "@sentry/nextjs": "^10.62.0",
     "@shopkeeper/agent": "*",
+    "@shopkeeper/analytics": "*",
     "@shopkeeper/db": "*",
     "@shopkeeper/email": "*",
     "@upstash/redis": "^1.37.0",

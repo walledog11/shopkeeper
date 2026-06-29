@@ -17,9 +17,14 @@ import {
   mergeGatewayWorkerResources,
   registerGatewayShutdownSignals,
 } from './workers/resources.js';
+import {
+  createProductAnalyticsShutdownResource,
+  initializeGatewayProductAnalytics,
+} from './product-analytics.js';
 
 export async function startWorkerRuntime() {
   validateGatewayEnv();
+  initializeGatewayProductAnalytics();
 
   const workerRedisConfig = getGatewayWorkerRedisConfig();
 
@@ -47,6 +52,7 @@ export async function startWorkerRuntime() {
     queues: maintenanceQueues,
     heartbeats: [heartbeat],
     shutdownResources: [
+      createProductAnalyticsShutdownResource(),
       {
         label: 'spectrum-apps',
         close: async () => {

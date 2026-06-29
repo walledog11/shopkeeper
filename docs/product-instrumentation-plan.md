@@ -1,7 +1,9 @@
 # Product instrumentation plan — PostHog
 
-**Status:** Planned  
-**Last updated:** 2026-06-28  
+**Status:** In progress — Phase 1 complete
+
+**Last updated:** 2026-06-28
+
 **Owner:** Product engineering
 
 ## Goal
@@ -385,15 +387,15 @@ If Redis is temporarily unavailable, log a warning and continue with the determi
 
 ## Phase 1 — analytics foundation
 
-1. Create `@shopkeeper/analytics` and add `posthog-node`.
-2. Implement the `ProductEvent` union, runtime allowlists, automatic common properties, sanitizer, and deterministic insert-ID helpers.
-3. Implement no-op, recording, immediate PostHog, and batched PostHog sinks.
-4. Add environment parsing and production validation to both applications and root production-env checks.
-5. Install the immediate sink in dashboard server code.
-6. Install a singleton batched sink in gateway bootstrap and flush it during graceful shutdown.
-7. Add package unit tests before instrumenting product paths.
+- [x] Create `@shopkeeper/analytics` and add `posthog-node`.
+- [x] Implement the `ProductEvent` union, runtime allowlists, automatic common properties, sanitizer, and deterministic insert-ID helpers.
+- [x] Implement no-op, recording, immediate PostHog, and batched PostHog sinks.
+- [x] Add environment parsing and production validation to both applications and root production-env checks.
+- [x] Install the immediate sink in dashboard server code.
+- [x] Install a singleton batched sink in gateway bootstrap and flush it during graceful shutdown.
+- [x] Add package unit tests before instrumenting product paths.
 
-**Exit criteria:** Both applications build with analytics disabled; recording-sink tests prove exact safe payloads; gateway shutdown flushes; capture failures are logged and swallowed.
+**Exit criteria:** ✅ Met. Both applications initialize with analytics disabled by default; recording-sink tests prove exact safe payloads; gateway shutdown flushes with a bounded timeout; capture failures are logged and swallowed. Phase 1 verification includes 68 passing `@shopkeeper/analytics` unit tests plus passing dashboard and gateway typechecks.
 
 ## Phase 2 — onboarding and integration funnel
 

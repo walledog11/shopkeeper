@@ -11,6 +11,10 @@ import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-c
 import { stopAllSpectrumApps } from './clients/spectrum.js';
 import { mountRealtime } from './realtime/sse.js';
 import { runGatewayEntry } from './bootstrap.js';
+import {
+  createProductAnalyticsShutdownResource,
+  initializeGatewayProductAnalytics,
+} from './product-analytics.js';
 
 export function createGatewayApp() {
   const app = express();
@@ -36,6 +40,7 @@ export function createGatewayApp() {
 
 export async function startGatewayServer() {
   validateGatewayEnv();
+  initializeGatewayProductAnalytics();
 
   const app = createGatewayApp();
   const PORT = process.env.PORT || 8080;
@@ -157,6 +162,7 @@ export async function startGatewayServer() {
         stopAllSpectrumApps(),
         closeGatewayBullMqQueues(),
         closeGatewayRedisConnections(),
+        createProductAnalyticsShutdownResource().close(),
       ]).finally(() => {
         clearTimeout(forceExit);
         process.exit(0);
