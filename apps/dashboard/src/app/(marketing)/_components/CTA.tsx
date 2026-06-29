@@ -6,7 +6,7 @@ export function CTA() {
     <div className="px-6 pb-20 pt-6">
       <Reveal className="mx-auto max-w-6xl">
         <div className="m-grain rounded-[40px] bg-[#2b2118] px-8 py-20 text-center text-[#f6f2eb] sm:py-24">
-          <h2 className="mx-auto mb-6 max-w-[16ch] text-[clamp(40px,6.5vw,88px)] font-normal leading-[0.98] tracking-[-0.02em] [font-family:var(--m-serif)]">
+          <h2 className="mx-auto mb-6 max-w-[16ch] text-[clamp(40px,6.5vw,88px)] font-black leading-[0.98] tracking-[-0.02em] [font-family:var(--m-caveat)]">
             Your next hire <em className="italic text-[#cdbfa3]">doesn&apos;t need a desk.</em>
           </h2>
           <p className="mx-auto mb-9 max-w-[44ch] text-base leading-relaxed text-[#f6f2eb]/70">

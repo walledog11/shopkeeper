@@ -55,10 +55,9 @@ export function Integrations() {
 
       <div className="mx-auto max-w-6xl px-6">
         <Reveal>
-          <h2 className="mx-auto max-w-3xl text-[clamp(34px,4.5vw,60px)] font-normal leading-[1.15] tracking-[-0.01em] [font-family:var(--m-serif)]">
+          <h2 className="mx-auto max-w-3xl text-[clamp(34px,4.5vw,60px)] font-black leading-[1.15] tracking-[-0.01em] [font-family:var(--m-caveat)]">
             <span className="block">
-              Shopkeeper fits into your store
-              <sup className="ml-0.5 align-super text-[0.38em] text-stone-400 [font-family:var(--m-mono)]">(1)</sup>,
+              Shopkeeper fits into your store,
             </span>
             <span className="block pl-[14%] text-[#9c9285] sm:pl-[22%]">not the other way around</span>
           </h2>
@@ -85,7 +84,6 @@ export function Integrations() {
 
         <Reveal delay={120}>
           <div className="mx-auto mt-4 max-w-md text-left">
-            <p className="mb-1.5 text-sm text-stone-400 [font-family:var(--m-mono)]">(1)</p>
             <p className="text-[16px] leading-relaxed text-stone-600">
               Shopify, Instagram, Gmail, email, and iMessage today — WhatsApp and TikTok on the way. One
               employee across all of them, with a personality that keeps things as real as your best hire.

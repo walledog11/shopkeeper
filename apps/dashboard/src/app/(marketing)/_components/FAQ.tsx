@@ -39,7 +39,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       aria-expanded={open}
       className="w-full cursor-pointer border-0 border-t border-solid border-stone-900/10 bg-transparent py-6 text-left [font-family:inherit]"
     >
-      <div className="flex items-center justify-between text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-serif)]">
+      <div className="flex items-center justify-between text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-caveat)]">
         <span>{q}</span>
         <span className={`ml-4 shrink-0 text-lg font-normal transition-transform duration-200 [font-family:var(--m-mono)] ${open ? "rotate-45" : ""}`}>+</span>
       </div>
@@ -60,7 +60,7 @@ export function FAQ() {
   return (
     <section id="faq" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
           Things people ask{" "}
           <em className="italic text-[#9c9285]">before they trust an AI.</em>
         </h2>

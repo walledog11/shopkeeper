@@ -55,7 +55,7 @@ export function Pricing() {
   return (
     <section id="pricing" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
           Costs less than <em className="italic text-[#9c9285]">a part-time hire.</em>
         </h2>
         <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
@@ -74,16 +74,16 @@ export function Pricing() {
             }`}
           >
             <div className="mb-5 flex items-center gap-2.5">
-              <span className="text-[24px] font-normal tracking-tight [font-family:var(--m-serif)]">{tier.name}</span>
+              <span className="text-[24px] font-bold tracking-tight [font-family:var(--m-caveat)]">{tier.name}</span>
               {tier.badge && (
                 <span className="rounded-full bg-[#f6f2eb]/15 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#f6f2eb]">
                   {tier.badge}
                 </span>
               )}
             </div>
-            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] leading-none tracking-[-0.02em] [font-family:var(--m-serif)]">
+            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] font-extrabold leading-none tracking-[-0.02em] [font-family:var(--m-caveat)]">
               {tier.price}
-              <small className={`text-sm font-medium ${tier.featured ? "text-[#f6f2eb]/60" : "text-stone-500"}`}>
+              <small className={`text-sm font-bold ${tier.featured ? "text-[#f6f2eb]/60" : "text-stone-500"}`}>
                 {tier.per}
               </small>
             </div>

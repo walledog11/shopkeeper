@@ -28,7 +28,7 @@ export function Hero() {
       </div>
 
       <h1
-        className="mx-auto mb-4 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-normal leading-[1.05] tracking-[-0.01em] [font-family:var(--m-serif)]"
+        className="mx-auto mb-4 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-black leading-[1.05] tracking-[-0.01em] [font-family:var(--m-caveat)]"
         style={rise(80)}
       >
         Meet Shopkeeper,

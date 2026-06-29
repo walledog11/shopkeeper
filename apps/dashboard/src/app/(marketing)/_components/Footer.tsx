@@ -38,7 +38,7 @@ export function Footer() {
         {/* Giant wordmark outro, descenders cropped by the page edge */}
         <div
           aria-hidden
-          className="-mb-[0.26em] mt-10 select-none whitespace-nowrap text-center text-[clamp(72px,14.5vw,200px)] leading-none tracking-[-0.03em] text-[#2b2118] [font-family:var(--m-serif)]"
+          className="-mb-[0.26em] mt-10 select-none whitespace-nowrap text-center text-[clamp(72px,14.5vw,200px)] leading-none tracking-[-0.03em] text-[#2b2118] [font-family:var(--m-caveat)]"
         >
           shopkeeper
         </div>

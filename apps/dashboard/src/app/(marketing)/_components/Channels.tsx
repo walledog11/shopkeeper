@@ -3,8 +3,6 @@ import { Reveal } from "./Reveal";
 const surfaces = [
   {
     name: "Telegram",
-    status: "Live now",
-    live: true,
     body: "Approve replies, ask about any order, get the morning digest — all without opening a laptop.",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
@@ -14,8 +12,6 @@ const surfaces = [
   },
   {
     name: "Dashboard",
-    status: "When you want depth",
-    live: true,
     body: "A full inbox with every conversation, your knowledge base, and team seats.",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-6">
@@ -28,8 +24,6 @@ const surfaces = [
   },
   {
     name: "iMessage",
-    status: "Live now",
-    live: true,
     body: "Text your store's employee straight from iMessage — order lookups, daily digests, and one-tap approvals, right in the app you already live in.",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
@@ -39,8 +33,6 @@ const surfaces = [
   },
   {
     name: "WhatsApp",
-    status: "Next up",
-    live: false,
     body: "The same employee, one more doorway. Coming soon.",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
@@ -54,7 +46,7 @@ export function Channels() {
   return (
     <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
           Reach your new hire from <em className="italic text-[#9c9285]">wherever you already are.</em>
         </h2>
         <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
@@ -70,14 +62,7 @@ export function Channels() {
                 {s.icon}
               </div>
               <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[26px] font-normal tracking-tight [font-family:var(--m-serif)]">{s.name}</h3>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${
-                    s.live ? "bg-[#2b2118]/10 text-[#2b2118]" : "bg-stone-900/5 text-stone-500"
-                  }`}
-                >
-                  {s.status}
-                </span>
+                <h3 className="text-[26px] font-bold tracking-tight [font-family:var(--m-caveat)]">{s.name}</h3>
               </div>
               <p className="text-[14px] leading-relaxed text-stone-700">{s.body}</p>
             </div>

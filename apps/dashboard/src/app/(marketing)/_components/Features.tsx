@@ -127,11 +127,11 @@ export function Features() {
           className="grid items-center gap-12 border-t border-stone-900/10 py-20 md:grid-cols-2 md:gap-20"
         >
           <Reveal className={i % 2 === 1 ? "md:order-2" : ""}>
-            <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-500 [font-family:var(--m-mono)]">
+            <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-500 [font-family:var(--m-caveat)]">
               <span className="inline-block h-px w-6 bg-stone-400" />
               {f.num}
             </div>
-            <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-normal leading-[1] tracking-[-0.01em] [font-family:var(--m-serif)]">
+            <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-extrabold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
               {f.title}
             </h2>
             <p className="mb-7 max-w-[46ch] text-[16px] leading-relaxed text-stone-700">{f.body}</p>
