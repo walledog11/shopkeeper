@@ -1,13 +1,11 @@
 import { cache } from 'react';
-import {
-  captureProductEvent,
-  productEventInsertId,
-} from '@shopkeeper/analytics';
+import { productEventInsertId } from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { NoActiveOrganizationError, UnauthorizedError } from '@/lib/api/errors';
 import type { OrgSettings } from '@/types';
 import { getE2EBypassOrg } from './e2e-org';
+import { captureDashboardProductEvent } from './product-analytics';
 
 const USE_CASE_PHRASES: Record<string, string> = {
   organize: 'organize support tickets',
@@ -87,7 +85,7 @@ export const getOrCreateOrg = cache(async () => {
         settings: JSON.parse(JSON.stringify(settings)),
       },
     });
-    await captureProductEvent({
+    await captureDashboardProductEvent({
       event: 'workspace_created',
       organizationId: created.id,
       source: 'dashboard',

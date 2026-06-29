@@ -1,18 +1,46 @@
 import {
   captureProductEvent,
+  initializeProductAnalytics,
   productEventInsertId,
   type IntegrationFailureCategory,
   type IntegrationPlatform,
+  type ProductEvent,
 } from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import logger from '@/lib/server/logger';
+
+let initializationAttempted = false;
+
+function ensureDashboardProductAnalytics(): void {
+  // Tests install a RecordingAnalyticsSink explicitly. Initializing here would
+  // replace it and could make tests issue real PostHog requests.
+  if (process.env.NODE_ENV === 'test' || initializationAttempted) return;
+
+  initializationAttempted = true;
+
+  try {
+    initializeProductAnalytics({ delivery: 'immediate', logger });
+  } catch (error) {
+    logger.warn(
+      {
+        errorClass: error instanceof Error ? error.name : 'UnknownError',
+      },
+      '[ProductAnalytics] Dashboard initialization failed',
+    );
+  }
+}
+
+export async function captureDashboardProductEvent(event: ProductEvent): Promise<void> {
+  ensureDashboardProductAnalytics();
+  await captureProductEvent(event);
+}
 
 export async function captureIntegrationConnectionCompleted(args: {
   integrationId: string;
   organizationId: string;
   platform: IntegrationPlatform;
 }): Promise<void> {
-  await captureProductEvent({
+  await captureDashboardProductEvent({
     event: 'integration_connection_completed',
     organizationId: args.organizationId,
     source: 'dashboard',
@@ -27,7 +55,7 @@ export async function captureIntegrationConnectionFailed(args: {
   organizationId: string;
   platform: IntegrationPlatform;
 }): Promise<void> {
-  await captureProductEvent({
+  await captureDashboardProductEvent({
     event: 'integration_connection_failed',
     organizationId: args.organizationId,
     source: 'dashboard',

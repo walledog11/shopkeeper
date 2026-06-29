@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import {
   INTEGRATION_PLATFORMS,
   ONBOARDING_STEPS,
-  captureProductEvent,
   productEventInsertId,
   type IntegrationPlatform,
   type OnboardingStep,
@@ -10,6 +9,7 @@ import {
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import logger from '@/lib/server/logger';
+import { captureDashboardProductEvent } from '@/lib/server/product-analytics';
 import { getRedis } from '@/lib/server/redis';
 
 const MAX_BODY_BYTES = 1_024;
@@ -123,14 +123,14 @@ export const POST = withOrgRoute(
       const claimed = await claimOnboardingStep(org.id, event.step);
       if (!claimed) return NextResponse.json({ ok: true });
 
-      await captureProductEvent({
+      await captureDashboardProductEvent({
         ...event,
         organizationId: org.id,
         source: 'dashboard',
         insertId: productEventInsertId.onboardingStepCompleted(org.id, event.step),
       });
     } else {
-      await captureProductEvent({
+      await captureDashboardProductEvent({
         ...event,
         organizationId: org.id,
         source: 'dashboard',

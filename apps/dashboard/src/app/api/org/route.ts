@@ -1,13 +1,11 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
-import {
-  captureProductEvent,
-  productEventInsertId,
-} from '@shopkeeper/analytics';
+import { productEventInsertId } from '@shopkeeper/analytics';
 import { db } from '@shopkeeper/db';
 import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { clerkClient, auth } from '@clerk/nextjs/server';
 import { getOrCreateOrg } from '@/lib/server/org';
+import { captureDashboardProductEvent } from '@/lib/server/product-analytics';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { withClerkOrgRoute } from '@/lib/api/clerk-route';
 import { withOrgRoute } from '@/lib/api/route';
@@ -81,7 +79,7 @@ export const PATCH = withOrgRoute(
       normalizeStoredOrgSettings(updated.settings).onboardingCompletedAt,
     );
     if (!onboardingWasCompleted && onboardingIsCompleted) {
-      await captureProductEvent({
+      await captureDashboardProductEvent({
         event: 'onboarding_completed',
         organizationId: updated.id,
         source: 'dashboard',
