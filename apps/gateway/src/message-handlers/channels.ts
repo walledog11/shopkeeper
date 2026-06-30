@@ -104,6 +104,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       externalMessageId: messagingEvent.message.mid ?? null,
       attachments: attachmentUrls,
       traceId,
+      isRealCustomerMessage: true,
     });
     logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved IG DM');
   } catch (error) {
@@ -190,6 +191,7 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       attachments: attachmentUrls,
       precomputed,
       lockAsGenuine: !spamFilterEnabled,
+      isRealCustomerMessage: true,
     });
     logger.info({ senderEmail, organizationId, traceId, classification: precomputed?.filterStatus ?? null }, '[Worker] Successfully saved Email');
   } catch (error) {

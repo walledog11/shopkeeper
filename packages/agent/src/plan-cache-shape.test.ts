@@ -72,7 +72,13 @@ describe("isThreadAwaitingReply", () => {
 describe("getCurrentPlanForThread", () => {
   it("returns the cached plan while the thread is awaiting a reply", () => {
     const thread = threadWithPlan("cust_1")
-    expect(getCurrentPlanForThread(thread, [{ id: "cust_1", senderType: "customer" }])).toEqual(PLAN)
+    expect(getCurrentPlanForThread(
+      thread,
+      [{ id: "cust_1", senderType: "customer" }],
+    )).toEqual({
+      ...PLAN,
+      planId: expect.any(String),
+    })
   })
 
   it("returns null after the thread has been answered even if cache remains", () => {

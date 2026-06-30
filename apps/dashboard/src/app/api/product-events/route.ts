@@ -6,10 +6,14 @@ import {
   type IntegrationPlatform,
   type OnboardingStep,
 } from '@shopkeeper/analytics';
+import { db } from '@shopkeeper/db';
 import { BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import logger from '@/lib/server/logger';
-import { captureDashboardProductEvent } from '@/lib/server/product-analytics';
+import {
+  captureAgentPlanDecided,
+  captureDashboardProductEvent,
+} from '@/lib/server/product-analytics';
 import { getRedis } from '@/lib/server/redis';
 
 const MAX_BODY_BYTES = 1_024;
@@ -17,7 +21,14 @@ const ONBOARDING_DEDUP_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 type RestrictedProductEvent =
   | { event: 'onboarding_step_completed'; step: OnboardingStep }
-  | { event: 'integration_connection_started'; platform: IntegrationPlatform };
+  | { event: 'integration_connection_started'; platform: IntegrationPlatform }
+  | {
+      event: 'agent_plan_decided';
+      decision: 'dismissed' | 'regenerated';
+      planId: string;
+    };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -62,6 +73,22 @@ export function parseRestrictedProductEvent(value: unknown): RestrictedProductEv
       throw new BadRequestError('Invalid product event');
     }
     return { event: value.event, platform: value.platform };
+  }
+
+  if (value.event === 'agent_plan_decided') {
+    if (
+      !hasExactKeys(value, ['decision', 'event', 'planId'])
+      || (value.decision !== 'dismissed' && value.decision !== 'regenerated')
+      || typeof value.planId !== 'string'
+      || !UUID_RE.test(value.planId)
+    ) {
+      throw new BadRequestError('Invalid product event');
+    }
+    return {
+      event: value.event,
+      decision: value.decision,
+      planId: value.planId,
+    };
   }
 
   throw new BadRequestError('Invalid product event');
@@ -129,11 +156,31 @@ export const POST = withOrgRoute(
         source: 'dashboard',
         insertId: productEventInsertId.onboardingStepCompleted(org.id, event.step),
       });
-    } else {
+    } else if (event.event === 'integration_connection_started') {
       await captureDashboardProductEvent({
         ...event,
         organizationId: org.id,
         source: 'dashboard',
+      });
+    } else {
+      const thread = await db.thread.findFirst({
+        where: {
+          organizationId: org.id,
+          cachedPlan: {
+            path: ['planId'],
+            equals: event.planId,
+          },
+        },
+        select: { channelType: true },
+      });
+      if (!thread) throw new BadRequestError('Invalid product event');
+
+      await captureAgentPlanDecided({
+        changed: false,
+        channel: thread.channelType,
+        decision: event.decision,
+        organizationId: org.id,
+        planId: event.planId,
       });
     }
 

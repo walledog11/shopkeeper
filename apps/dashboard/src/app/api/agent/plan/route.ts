@@ -9,6 +9,10 @@ import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
+import {
+  captureAgentPlanDecided,
+  captureAgentPlanGenerated,
+} from "@/lib/server/product-analytics";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -58,12 +62,31 @@ export const POST = withOrgRoute(
     }
 
     const cachedPlan = readAgentPlanCache(thread.cachedPlan);
+    if (force && cachedPlan?.planId) {
+      void captureAgentPlanDecided({
+        changed: false,
+        channel: thread.channelType,
+        decision: 'regenerated',
+        organizationId: org.id,
+        planId: cachedPlan.planId,
+      });
+    }
     if (!force && isAgentPlanCacheHit({
       cache: cachedPlan,
       instruction,
       lastCustomerMessageId: pendingCustomerMessageId,
       settings,
     })) {
+      if (cachedPlan?.planId) {
+        void captureAgentPlanGenerated({
+          cacheHit: true,
+          channel: thread.channelType,
+          generationMs: Date.now() - startedAt,
+          organizationId: org.id,
+          planId: cachedPlan.planId,
+          stepCount: cachedPlan.plan.steps.length,
+        });
+      }
       logger.info({
         orgId: org.id,
         threadId,
@@ -72,26 +95,40 @@ export const POST = withOrgRoute(
         visibleStepCount: cachedPlan?.plan.steps.length ?? 0,
         instructionHash,
       }, "[agent:plan] cache hit");
-      return NextResponse.json(cachedPlan?.plan);
+      return NextResponse.json(cachedPlan?.planId
+        ? { ...cachedPlan.plan, planId: cachedPlan.planId }
+        : cachedPlan?.plan);
     }
 
     // Cache miss — generate via LLM
     const ctx = await buildContext(threadId, org.id);
     const plan = await planAgent(ctx, instruction, settings);
+    const cacheRecord = buildAgentPlanCacheRecord({
+      instruction,
+      lastCustomerMessageId: pendingCustomerMessageId,
+      settings,
+      plan,
+    });
 
     // Persist to DB so future calls (hard reload, other agents) skip the LLM
     await db.thread.update({
       where: { id: threadId },
       data: {
         cachedPlanMessageId: pendingCustomerMessageId,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction,
-          lastCustomerMessageId: pendingCustomerMessageId,
-          settings,
-          plan,
-        }) as object,
+        cachedPlan: cacheRecord as object,
       },
     });
+
+    if (cacheRecord.planId && plan.steps.length > 0) {
+      void captureAgentPlanGenerated({
+        cacheHit: false,
+        channel: thread.channelType,
+        generationMs: Date.now() - startedAt,
+        organizationId: org.id,
+        planId: cacheRecord.planId,
+        stepCount: plan.steps.length,
+      });
+    }
 
     logger.info({
       orgId: org.id,
@@ -103,6 +140,8 @@ export const POST = withOrgRoute(
       instructionHash,
     }, "[agent:plan] response");
 
-    return NextResponse.json(plan);
+    return NextResponse.json(cacheRecord.planId
+      ? { ...plan, planId: cacheRecord.planId }
+      : plan);
   },
 );

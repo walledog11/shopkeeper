@@ -1,5 +1,10 @@
 import './test-fixtures/worker-test-setup.js';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  installProductAnalytics,
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+} from '@shopkeeper/analytics';
 import { ChannelType, db } from '@shopkeeper/db';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import { org } from './test-fixtures/worker-test-setup.js';
@@ -11,6 +16,39 @@ import {
 } from './test-fixtures/worker-test-helpers.js';
 
 describe('Message worker — email branch', () => {
+  it('captures analytics only after a real inbound email is persisted', async () => {
+    const sink = new RecordingAnalyticsSink();
+    installProductAnalytics({ sink, environment: 'test' });
+
+    try {
+      getMockAnthropicCreate().mockResolvedValueOnce(
+        classifierResponse('genuine', { summary: 'Customer needs help.', tag: 'General' }),
+      );
+      const handler = getCapturedHandlers().get('inbound-messages');
+
+      await handler!(makeEmailJob(org.id));
+
+      const message = await db.message.findFirst({
+        where: { organizationId: org.id, senderType: 'customer' },
+      });
+      await vi.waitFor(() => {
+        expect(sink.events).toEqual([
+          expect.objectContaining({
+            event: 'inbound_message_processed',
+            distinctId: org.id,
+            properties: expect.objectContaining({
+              channel: 'email',
+              is_first_for_workspace: true,
+              '$insert_id': `inbound_message_processed:${message!.id}`,
+            }),
+          }),
+        ]);
+      });
+    } finally {
+      installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' });
+    }
+  });
+
   it('persists genuine email with filterStatus + filterDecidedAt set inline', async () => {
     getMockAnthropicCreate().mockResolvedValueOnce(
       classifierResponse('genuine', { summary: 'Customer needs shipping help.', tag: 'Shipping' }),

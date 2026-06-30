@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
+import type { AgentActionMode } from "@shopkeeper/agent/context";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { BadRequestError } from "@/lib/api/errors";
 import { withInternalRoute } from "@/lib/api/internal-route";
@@ -19,6 +20,7 @@ import { withInternalRoute } from "@/lib/api/internal-route";
 export const maxDuration = 60;
 
 interface IoSendBody {
+  agentActionMode?: AgentActionMode;
   orgId: string;
   threadId: string;
   orgName: string;
@@ -27,7 +29,7 @@ interface IoSendBody {
 }
 
 function parseBody(value: Record<string, unknown>): IoSendBody {
-  const { orgId, threadId, orgName, op, input } = value;
+  const { agentActionMode, orgId, threadId, orgName, op, input } = value;
   if (typeof orgId !== "string" || typeof threadId !== "string") {
     throw new BadRequestError("orgId and threadId are required");
   }
@@ -37,7 +39,22 @@ function parseBody(value: Record<string, unknown>): IoSendBody {
   if (!input || typeof input !== "object") {
     throw new BadRequestError("input is required");
   }
-  return { orgId, threadId, orgName: typeof orgName === "string" ? orgName : "", op, input };
+  if (
+    agentActionMode !== undefined
+    && agentActionMode !== "human_approved"
+    && agentActionMode !== "auto_executed"
+    && agentActionMode !== "read_only"
+  ) {
+    throw new BadRequestError("invalid agentActionMode");
+  }
+  return {
+    ...(agentActionMode ? { agentActionMode } : {}),
+    orgId,
+    threadId,
+    orgName: typeof orgName === "string" ? orgName : "",
+    op,
+    input,
+  };
 }
 
 export const POST = withInternalRoute(
@@ -46,7 +63,7 @@ export const POST = withInternalRoute(
     errorMessage: "Failed to dispatch agent message",
   },
   async ({ request }) => {
-    const { orgId, threadId, orgName, op, input } = parseBody(
+    const { agentActionMode, orgId, threadId, orgName, op, input } = parseBody(
       await readRequiredJsonObject(request, {
         malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
         empty: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
@@ -54,7 +71,12 @@ export const POST = withInternalRoute(
       }),
     );
 
-    const ctx = { threadId, orgId, orgName };
+    const ctx = {
+      threadId,
+      orgId,
+      orgName,
+      ...(agentActionMode ? { agentActionMode } : {}),
+    };
     const result = op === "send_reply"
       ? await sendReply(input as SendReplyInput, ctx)
       : await sendEmail(input as SendEmailInput, ctx);

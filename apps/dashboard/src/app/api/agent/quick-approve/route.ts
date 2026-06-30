@@ -16,6 +16,7 @@ import {
 import { getRedis } from "@/lib/server/redis";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
+import { captureAgentPlanDecided } from "@/lib/server/product-analytics";
 
 export const POST = withOrgRoute(
   {
@@ -95,6 +96,16 @@ export const POST = withOrgRoute(
       actionCount: executed.result.actionsPerformed.length,
       instructionHash,
     }, "[agent:quick-approve] result");
+
+    if (executed.planId) {
+      void captureAgentPlanDecided({
+        changed: false,
+        channel: executed.channel,
+        decision: 'approved',
+        organizationId: org.id,
+        planId: executed.planId,
+      });
+    }
 
     return NextResponse.json(executed.result);
   },

@@ -12,6 +12,7 @@ import type {
   DispatchOrg,
   DispatchThread,
 } from "./dispatch-message-types"
+import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics"
 
 export type { DispatchMessageResult } from "./dispatch-message-types"
 
@@ -34,7 +35,13 @@ export async function dispatchMessage(
     thread.channelType === CHANNEL_TYPE.EMAIL || thread.channelType === CHANNEL_TYPE.SHOPIFY
 
   if (isEmailChannel && isOutboundEmailAsyncEnabled()) {
-    return dispatchEmailViaGatewayQueue(thread, org, text, source)
+    return dispatchEmailViaGatewayQueue(
+      thread,
+      org,
+      text,
+      source,
+      options.analyticsReplySource,
+    )
   }
 
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
@@ -55,5 +62,12 @@ export async function dispatchMessage(
   if (!providerResult.ok) return providerResult
 
   const message = await createSentAgentMessage(thread, text)
+  void captureDashboardOutboundReplySent({
+    channel: thread.channelType,
+    messageId: message.id,
+    organizationId: org.id,
+    replySource: options.analyticsReplySource
+      ?? (source === "agent_send_reply" ? "agent_approved" : "manual"),
+  })
   return { ok: true, message }
 }

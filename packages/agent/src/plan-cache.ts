@@ -1,9 +1,10 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import type { AgentPlan } from "./types.js";
 import { AGENT_PLAN_CACHE_VERSION, readAgentPlanCacheRecordShape } from "./plan-cache-shape.js";
 
 export interface AgentPlanCacheRecord {
   version: number;
+  planId: string | null;
   instruction: string;
   lastCustomerMessageId: string | null;
   settingsFingerprint: string;
@@ -22,6 +23,7 @@ export function buildAgentPlanCacheRecord(params: {
 }): AgentPlanCacheRecord {
   return {
     version: AGENT_PLAN_CACHE_VERSION,
+    planId: randomUUID(),
     instruction: params.instruction,
     lastCustomerMessageId: params.lastCustomerMessageId,
     settingsFingerprint: fingerprintSettings(params.settings),

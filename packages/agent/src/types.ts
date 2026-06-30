@@ -101,6 +101,8 @@ export interface PlanStep {
 }
 
 export interface AgentPlan {
+  /** Stable internal analytics identifier for this cached plan version. */
+  planId?: string
   instruction: string
   steps: PlanStep[]          // visible steps (reads excluded)
   rawToolCalls: RawToolCall[] // all tool calls including reads

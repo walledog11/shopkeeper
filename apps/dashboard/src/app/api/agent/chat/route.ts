@@ -32,6 +32,7 @@ import { parseAgentChatBody } from "@/lib/agent/api/validation";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import logger from "@/lib/server/logger";
+import { captureAgentPlanDecided } from "@/lib/server/product-analytics";
 import type { OrgSettings } from "@/types";
 
 function dashboardActionResponse(
@@ -116,6 +117,15 @@ export const POST = withOrgRoute(
           auditMode: "human_approved",
         });
         await clearDashboardPendingApproval(resolvedSessionId);
+        if (pendingApproval.planId) {
+          void captureAgentPlanDecided({
+            changed: false,
+            channel: 'dashboard_agent',
+            decision: 'approved',
+            organizationId: org.id,
+            planId: pendingApproval.planId,
+          });
+        }
 
         return NextResponse.json({
           sessionId: resolvedSessionId,
@@ -126,6 +136,15 @@ export const POST = withOrgRoute(
 
       if (replyKind === "dismiss") {
         const summary = await dismissDashboardPendingApproval(resolvedSessionId, instruction);
+        if (pendingApproval.planId) {
+          void captureAgentPlanDecided({
+            changed: false,
+            channel: 'dashboard_agent',
+            decision: 'dismissed',
+            organizationId: org.id,
+            planId: pendingApproval.planId,
+          });
+        }
         return NextResponse.json({
           sessionId: resolvedSessionId,
           summary,
@@ -134,6 +153,15 @@ export const POST = withOrgRoute(
       }
 
       const revisedInstruction = buildRevisedDashboardInstruction(pendingApproval, instruction);
+      if (pendingApproval.planId) {
+        void captureAgentPlanDecided({
+          changed: false,
+          channel: 'dashboard_agent',
+          decision: 'regenerated',
+          organizationId: org.id,
+          planId: pendingApproval.planId,
+        });
+      }
       const revised = await planDashboardApproval({
         orgId: org.id,
         threadId: resolvedSessionId,

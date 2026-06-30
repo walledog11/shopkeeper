@@ -4,7 +4,15 @@ import {
   RecordingAnalyticsSink,
   installProductAnalytics,
 } from '@shopkeeper/analytics';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import { ChannelType, db } from '@shopkeeper/db';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestMessage,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 
 const {
   mockAuth,
@@ -116,6 +124,57 @@ describe('POST /api/product-events', () => {
     },
   );
 
+  it('captures a plan dismissal only when the cached plan belongs to the organization', async () => {
+    const customer = await createTestCustomer(org.id, 'plan-event@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    const message = await createTestMessage(thread.id, 'Please help');
+    const cachedPlan = buildAgentPlanCacheRecord({
+      instruction: 'Help the customer',
+      lastCustomerMessageId: message.id,
+      settings: {},
+      plan: {
+        instruction: 'Help the customer',
+        steps: [{
+          id: 'send-1',
+          tool: 'send_reply',
+          label: 'Reply',
+          description: 'Reply to the customer',
+          category: 'communication',
+          enabled: true,
+        }],
+        rawToolCalls: [{
+          id: 'send-1',
+          name: 'send_reply',
+          input: { text: 'Hello' },
+        }],
+      },
+    });
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlan: cachedPlan as object, cachedPlanMessageId: message.id },
+    });
+
+    const response = await POST(productEventRequest({
+      event: 'agent_plan_decided',
+      decision: 'dismissed',
+      planId: cachedPlan.planId,
+    }));
+
+    expect(response.status).toBe(200);
+    expect(sink.events).toEqual([
+      expect.objectContaining({
+        event: 'agent_plan_decided',
+        distinctId: org.id,
+        properties: expect.objectContaining({
+          decision: 'dismissed',
+          channel: 'email',
+          changed: false,
+          '$insert_id': `agent_plan_decided:${cachedPlan.planId}`,
+        }),
+      }),
+    ]);
+  });
+
   it('requires authentication with an active organization', async () => {
     mockAuth.mockResolvedValue({ userId: null, orgId: null });
 
@@ -149,6 +208,11 @@ describe('POST /api/product-events', () => {
     {
       event: 'onboarding_step_completed',
       step: 'intro',
+    },
+    {
+      event: 'agent_plan_decided',
+      decision: 'dismissed',
+      planId: 'not-a-uuid',
     },
   ])('rejects unsupported, spoofed, or unknown input %#', async (body) => {
     const response = await POST(productEventRequest(body));

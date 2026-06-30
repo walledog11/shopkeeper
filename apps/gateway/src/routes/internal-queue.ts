@@ -31,6 +31,11 @@ export function registerInternalQueueRoutes(router: Router): void {
     const threadId = typeof body.threadId === 'string' ? body.threadId.trim() : '';
     const integrationId = typeof body.integrationId === 'string' ? body.integrationId.trim() : '';
     const source = body.source as OutboundEmailSource;
+    const replySource = body.replySource === 'manual'
+      || body.replySource === 'agent_approved'
+      || body.replySource === 'agent_automatic'
+      ? body.replySource
+      : undefined;
     const traceId = typeof body.traceId === 'string' ? body.traceId.trim() : undefined;
 
     if (!organizationId || !messageId || !threadId || !integrationId) {
@@ -48,6 +53,7 @@ export function registerInternalQueueRoutes(router: Router): void {
       threadId,
       integrationId,
       source,
+      ...(replySource && { replySource }),
       ...(traceId && { traceId }),
     };
 

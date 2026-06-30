@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
+import {
+  installProductAnalytics,
+  NoopAnalyticsSink,
+  RecordingAnalyticsSink,
+} from '@shopkeeper/analytics';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 import type Stripe from 'stripe';
 
@@ -26,6 +31,7 @@ import { POST } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>> | null;
 let stripeCustomerId: string;
+let analyticsSink: RecordingAnalyticsSink;
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -35,12 +41,17 @@ beforeEach(async () => {
     data: { stripeCustomerId },
   });
   vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_test_stripe');
+  vi.stubEnv('PRICE_ID_PRO', 'price_pro');
+  vi.stubEnv('PRICE_ID_STARTER', 'price_starter');
+  analyticsSink = new RecordingAnalyticsSink();
+  installProductAnalytics({ sink: analyticsSink, environment: 'test' });
   mockRedisSet.mockResolvedValue('OK');
 });
 
 afterEach(async () => {
   await cleanupTestData(org?.id);
   org = null;
+  installProductAnalytics({ sink: new NoopAnalyticsSink(), environment: 'test' });
   vi.clearAllMocks();
   vi.unstubAllEnvs();
 });
@@ -89,6 +100,18 @@ describe('POST /api/billing/webhook', () => {
     expect(updated.stripeStatus).toBe('active');
     expect(updated.stripePriceId).toBe('price_pro');
     expect(updated.trialEndsAt?.toISOString()).toBe(new Date(1_800_000_000 * 1000).toISOString());
+    expect(analyticsSink.events).toEqual([
+      expect.objectContaining({
+        event: 'subscription_status_changed',
+        distinctId: org!.id,
+        properties: expect.objectContaining({
+          previous_status: 'none',
+          new_status: 'active',
+          plan: 'pro',
+          '$insert_id': 'subscription_status_changed:evt_sub_updated',
+        }),
+      }),
+    ]);
   });
 
   it('dedupes replayed Stripe events before applying a second update', async () => {

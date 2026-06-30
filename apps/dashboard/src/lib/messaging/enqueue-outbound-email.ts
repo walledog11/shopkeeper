@@ -1,4 +1,5 @@
 import logger from '@/lib/server/logger';
+import type { ReplySource } from '@shopkeeper/analytics';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
 export type OutboundEmailSource =
@@ -12,6 +13,7 @@ export interface EnqueueOutboundEmailInput {
   messageId: string;
   threadId: string;
   integrationId: string;
+  replySource?: ReplySource;
   source: OutboundEmailSource;
 }
 

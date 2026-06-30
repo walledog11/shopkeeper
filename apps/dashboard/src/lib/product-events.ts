@@ -6,6 +6,11 @@ export type ClientProductEvent =
   | {
       event: 'integration_connection_started';
       platform: 'shopify' | 'email' | 'ig_dm' | 'imessage';
+    }
+  | {
+      event: 'agent_plan_decided';
+      decision: 'dismissed' | 'regenerated';
+      planId: string;
     };
 
 export async function captureClientProductEvent(event: ClientProductEvent): Promise<void> {

@@ -1,4 +1,4 @@
-import { Prisma, db } from "@shopkeeper/db";
+import { Prisma, db, type DbChannelType } from "@shopkeeper/db";
 import { BadRequestError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
@@ -34,8 +34,10 @@ export function formatApproverId(identity: ApproverIdentity): string {
 }
 
 interface CurrentCachedPlan {
+  channel: DbChannelType;
   instruction: string;
   lastCustomerMessageId: string | null;
+  planId: string | null;
   plan: AgentPlan | null;
   classification: HomePlanClassification;
 }
@@ -96,8 +98,10 @@ async function loadCurrentCachedHomePlan(params: {
     : null;
 
   return {
+    channel: thread.channelType,
     instruction,
     lastCustomerMessageId: cachedPlan?.lastCustomerMessageId ?? null,
+    planId: cachedPlan?.planId ?? null,
     plan,
     classification: classifyHomePlan(plan, params.settings, { filterStatus: thread.filterStatus }),
   };

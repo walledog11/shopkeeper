@@ -31,7 +31,11 @@ export type ExecuteTurnRunAgent = (
 // worker supplies its ioredis lock + own context/runAgent (Track 4.2/4.3).
 export interface ExecuteAgentTurnDeps {
   lock: LockProvider;
-  buildContext: (threadId: string, orgId: string) => Promise<AgentContext>;
+  buildContext: (
+    threadId: string,
+    orgId: string,
+    mode?: AgentActionMode,
+  ) => Promise<AgentContext>;
   runAgent: ExecuteTurnRunAgent;
 }
 
@@ -81,7 +85,11 @@ export async function executeAgentTurn(
     }
 
     const turnId = randomUUID();
-    const ctx = await deps.buildContext(params.threadId, params.orgId);
+    const ctx = await deps.buildContext(
+      params.threadId,
+      params.orgId,
+      params.auditMode,
+    );
     const result = await deps.runAgent(
       ctx,
       params.instruction,

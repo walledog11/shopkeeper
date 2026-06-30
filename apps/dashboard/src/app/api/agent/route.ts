@@ -14,8 +14,13 @@ import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
 import { hashInstruction, hashPlan } from "@shopkeeper/agent/agent-actions";
 import { resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
-import { consumeThreadCachedPlan, formatApproverId } from "@/lib/agent/api/plan-execution";
+import {
+  consumeThreadCachedPlan,
+  formatApproverId,
+  getExecutablePlanToolCalls,
+} from "@/lib/agent/api/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
+import { captureAgentPlanDecided } from "@/lib/server/product-analytics";
 import type { OrgSettings } from "@/types";
 import logger from "@/lib/server/logger";
 
@@ -121,6 +126,24 @@ export const POST = withOrgRoute(
       threadId,
       approvedToolCalls,
     });
+    if (cachedPlan?.planId) {
+      const executablePlanCalls = getExecutablePlanToolCalls(currentPlan);
+      const changed = executablePlanCalls.length !== approvedToolCalls.length
+        || executablePlanCalls.some((planned, index) => {
+          const approved = approvedToolCalls[index];
+          return !approved
+            || planned.id !== approved.id
+            || planned.name !== approved.name
+            || serializeToolInput(planned.input) !== serializeToolInput(approved.input);
+        });
+      void captureAgentPlanDecided({
+        changed,
+        channel: thread.channelType,
+        decision: 'approved',
+        organizationId: org.id,
+        planId: cachedPlan.planId,
+      });
+    }
 
     logger.info({
       orgId: org.id,

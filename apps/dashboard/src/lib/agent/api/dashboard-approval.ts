@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createMessage, db, Prisma } from "@shopkeeper/db";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
@@ -8,6 +9,7 @@ import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
 import type { AgentResult } from "@shopkeeper/agent/context";
+import { captureAgentPlanGenerated } from "@/lib/server/product-analytics";
 
 const APPROVAL_INTENT_RE =
   /\b(create|place|make|refund|issue\s+a?\s*refund|cancel|update|change|edit|swap|remove|add|note|email|send|close|tag)\b/i;
@@ -25,6 +27,7 @@ export interface DashboardPendingApproval {
   instructionHash: string;
   summary: string;
   plan: AgentPlan;
+  planId?: string;
   createdAt: string;
 }
 
@@ -269,8 +272,20 @@ export async function planDashboardApproval(params: {
   | { autoExecuted: true; plan: AgentPlan; approvedToolCalls: RawToolCall[]; result: AgentResult }
   | null
 > {
+  const generationStartedAt = Date.now();
   const ctx = await buildContext(params.threadId, params.orgId);
   const plan = await planAgent(ctx, params.instruction, params.settings);
+  const planId = randomUUID();
+  if (plan.steps.length > 0) {
+    void captureAgentPlanGenerated({
+      cacheHit: false,
+      channel: 'dashboard_agent',
+      generationMs: Date.now() - generationStartedAt,
+      organizationId: params.orgId,
+      planId,
+      stepCount: plan.steps.length,
+    });
+  }
   const actionCalls = getDashboardActionCalls(plan);
   const requiresApproval = actionCalls.length > 0;
   const instructionHash = hashInstructionForLog(params.instruction);
@@ -323,6 +338,7 @@ export async function planDashboardApproval(params: {
     instructionHash,
     summary,
     plan,
+    planId,
     createdAt: new Date().toISOString(),
   };
 

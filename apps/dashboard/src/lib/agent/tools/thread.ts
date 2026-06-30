@@ -13,6 +13,7 @@ import {
   isOutboundEmailAsyncEnabled,
 } from "@/lib/messaging/enqueue-outbound-email";
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures";
+import { captureDashboardOutboundReplySent } from "@/lib/server/product-analytics";
 import { toolError, toolEscalated, toolOk, type ToolResult } from "@shopkeeper/agent/tools";
 import type {
   AddInternalNoteInput,
@@ -23,11 +24,18 @@ import type {
   UpdateThreadTagInput,
   EscalateToHumanInput,
 } from "@shopkeeper/agent/tools";
+import type { AgentActionMode } from "@shopkeeper/agent/context";
+import type { ReplySource } from "@shopkeeper/analytics";
 
 interface ThreadContext {
+  agentActionMode?: AgentActionMode;
   threadId: string;
   orgId: string;
   orgName: string;
+}
+
+function agentReplySource(mode: AgentActionMode | undefined): ReplySource {
+  return mode === 'auto_executed' ? 'agent_automatic' : 'agent_approved';
 }
 
 function agentReplyDispatchError(
@@ -96,6 +104,7 @@ export async function sendReply(
     input.text,
     {
       source: "agent_send_reply",
+      analyticsReplySource: agentReplySource(ctx.agentActionMode),
       emailSubjectFallback: thread.tag || "Your inquiry",
     },
   );
@@ -188,6 +197,7 @@ export async function sendEmail(
       messageId: message.id,
       threadId: targetThreadId,
       integrationId: emailIntegration.id,
+      replySource: agentReplySource(ctx.agentActionMode),
       source: 'agent_send_email',
     });
     if (!enqueued) {
@@ -251,10 +261,16 @@ export async function sendEmail(
   }
 
   // Send confirmed — persist the message
-  await createMessage({
+  const sentMessage = await createMessage({
     threadId: targetThreadId,
     senderType: SenderType.agent,
     contentText: input.body,
+  });
+  void captureDashboardOutboundReplySent({
+    channel: CHANNEL_TYPE.EMAIL,
+    messageId: sentMessage.id,
+    organizationId: ctx.orgId,
+    replySource: agentReplySource(ctx.agentActionMode),
   });
 
   return toolOk(existingThread

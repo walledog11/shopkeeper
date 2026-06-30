@@ -10,7 +10,11 @@ import type {
   BaseAgentContext,
   SupportContext,
 } from "./agent-context.js";
-import { recordAgentActionsBatch, type AgentActionApproval } from "./agent-actions.js";
+import {
+  recordAgentActionsBatch,
+  type AgentActionApproval,
+  type PersistedAgentAction,
+} from "./agent-actions.js";
 import type { ModelUsageMetrics } from "./usage.js";
 
 export type AgentToolCall = {
@@ -98,6 +102,7 @@ export async function finishAgentRun(input: {
   instructionHash: string;
   turnId?: string;
   approval?: AgentActionApproval;
+  onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
 }): Promise<AgentResult> {
   const {
     ctx,
@@ -124,7 +129,7 @@ export async function finishAgentRun(input: {
 
   if (result.actionsPerformed.length > 0) {
     try {
-      await recordAgentActionsBatch({
+      const persistedActions = await recordAgentActionsBatch({
         orgId: ctx.orgId,
         threadId: supportThread?.id ?? null,
         customerId: supportCustomer?.id ?? null,
@@ -135,6 +140,7 @@ export async function finishAgentRun(input: {
         ...(turnId ? { turnId } : {}),
         ...(approval ? { approval } : {}),
       });
+      input.onActionsPersisted?.(persistedActions);
     } catch (err) {
       logger.error({
         err,

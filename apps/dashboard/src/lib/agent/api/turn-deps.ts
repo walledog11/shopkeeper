@@ -13,6 +13,7 @@ import { getRedis } from "@/lib/server/redis";
 import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from "@shopkeeper/agent/turn";
 import type { OpsAlertCounterClient } from "@/lib/server/ops-alerts";
 import type { AgentFailureAlertRoute } from "@/lib/server/agent-failure-alerts";
+import { captureAgentActionsCompleted } from "@/lib/server/product-analytics";
 
 const runWithFailureCounter: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCalls, settings, options) => {
   let failureCounterClient: OpsAlertCounterClient | undefined;
@@ -27,13 +28,15 @@ const runWithFailureCounter: ExecuteTurnRunAgent = (ctx, instruction, approvedTo
     ...options,
     failureRoute: options.failureRoute as AgentFailureAlertRoute | undefined,
     ...(failureCounterClient ? { failureCounterClient } : {}),
+    onActionsPersisted: captureAgentActionsCompleted,
   });
 };
 
 export function buildDashboardTurnDeps(): ExecuteAgentTurnDeps {
   return {
     lock: upstashLockProvider,
-    buildContext,
+    buildContext: (threadId, orgId, mode) =>
+      buildContext(threadId, orgId, mode ? { agentActionMode: mode } : undefined),
     runAgent: runWithFailureCounter,
   };
 }

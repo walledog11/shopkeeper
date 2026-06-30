@@ -6,11 +6,12 @@ export type PlanThreadMessage = {
   senderType: string
 }
 
-export const AGENT_PLAN_CACHE_VERSION = 3
-export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, AGENT_PLAN_CACHE_VERSION]
+export const AGENT_PLAN_CACHE_VERSION = 4
+export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, 3, AGENT_PLAN_CACHE_VERSION]
 
 export interface AgentPlanCacheRecordShape {
   version: number
+  planId: string | null
   instruction: string
   lastCustomerMessageId: string | null
   settingsFingerprint: string
@@ -72,6 +73,7 @@ export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRec
 
   return {
     version: value.version,
+    planId: typeof value.planId === "string" && value.planId.length > 0 ? value.planId : null,
     instruction: value.instruction,
     lastCustomerMessageId: typeof value.lastCustomerMessageId === "string" ? value.lastCustomerMessageId : null,
     settingsFingerprint: value.settingsFingerprint,
@@ -80,7 +82,9 @@ export function readAgentPlanCacheRecordShape(value: unknown): AgentPlanCacheRec
 }
 
 function readAgentPlanCachePlan(value: unknown): AgentPlan | null {
-  return readAgentPlanCacheRecordShape(value)?.plan ?? null
+  const cached = readAgentPlanCacheRecordShape(value)
+  if (!cached) return null
+  return cached.planId ? { ...cached.plan, planId: cached.planId } : cached.plan
 }
 
 // The reply text the agent drafted for this thread, pulled from the cached

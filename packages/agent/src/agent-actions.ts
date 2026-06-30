@@ -31,6 +31,14 @@ export interface RecordAgentActionsBatchParams extends CommonRecordParams {
   actions: ActionEntry[];
 }
 
+export interface PersistedAgentAction {
+  id: string;
+  category: string;
+  organizationId: string;
+  status: AgentActionStatus;
+  tool: string;
+}
+
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -68,9 +76,15 @@ function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
 }
 
-function entryToRow(params: CommonRecordParams & { entry: ActionEntry; turnId: string; executedAt: Date }) {
+function entryToRow(params: CommonRecordParams & {
+  entry: ActionEntry;
+  executedAt: Date;
+  id: string;
+  turnId: string;
+}) {
   const status = deriveStatus(params.entry);
   return {
+    id: params.id,
     turnId: params.turnId,
     organizationId: params.orgId,
     threadId: params.threadId ?? null,
@@ -93,19 +107,30 @@ function entryToRow(params: CommonRecordParams & { entry: ActionEntry; turnId: s
   };
 }
 
-export async function recordAgentActionsBatch(params: RecordAgentActionsBatchParams): Promise<void> {
-  if (params.actions.length === 0) return;
+export async function recordAgentActionsBatch(
+  params: RecordAgentActionsBatchParams,
+): Promise<PersistedAgentAction[]> {
+  if (params.actions.length === 0) return [];
   const turnId = params.turnId ?? randomUUID();
   // PostgreSQL's CURRENT_TIMESTAMP is constant within a single createMany
   // statement, so we set executedAt explicitly with millisecond offsets to
   // preserve the order the agent executed tools in.
   const base = Date.now();
-  await db.agentAction.createMany({
-    data: params.actions.map((action, idx) => entryToRow({
+  const rows = params.actions.map((action, idx) => entryToRow({
       ...params,
       entry: action,
+      id: randomUUID(),
       turnId,
       executedAt: new Date(base + idx),
-    })),
+    }));
+  await db.agentAction.createMany({
+    data: rows,
   });
+  return rows.map((row) => ({
+    id: row.id,
+    category: row.category,
+    organizationId: row.organizationId,
+    status: row.status,
+    tool: row.tool,
+  }));
 }

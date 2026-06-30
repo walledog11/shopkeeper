@@ -4,6 +4,7 @@ import type { ExecuteAgentTurnDeps, ExecuteTurnRunAgent } from '@shopkeeper/agen
 import type { PlanExecutionDeps, ShadowRecorder } from '@shopkeeper/agent/plan-execution';
 import type { AgentContext } from '@shopkeeper/agent/context';
 import { getGatewayLockProvider } from '../clients/agent-runtime.js';
+import { captureAgentActionsCompleted } from '../product-analytics.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 
 // Injected turn seams for the gateway worker — counterpart to the dashboard's
@@ -22,6 +23,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
     turnId: options.turnId,
     mode: options.mode,
     approval: options.approval,
+    onActionsPersisted: captureAgentActionsCompleted,
   });
 
 const noopShadow: ShadowRecorder = {
@@ -32,8 +34,17 @@ const noopShadow: ShadowRecorder = {
 export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
   return {
     lock: getGatewayLockProvider(),
-    buildContext: (threadId: string, orgId: string): Promise<AgentContext> =>
-      buildContext(threadId, orgId, gatewayThreadSink),
+    buildContext: (
+      threadId: string,
+      orgId: string,
+      mode,
+    ): Promise<AgentContext> =>
+      buildContext(
+        threadId,
+        orgId,
+        gatewayThreadSink,
+        mode ? { agentActionMode: mode } : undefined,
+      ),
     runAgent: gatewayRunAgent,
   };
 }

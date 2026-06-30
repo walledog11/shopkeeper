@@ -23,6 +23,7 @@ import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
 import type { AgentActionResult } from './planning-types.js';
 import { publishThreadEvent } from '../realtime/publish.js';
+import { captureAgentPlanGenerated } from '../product-analytics.js';
 import logger from '../logger.js';
 
 const FAILURE_ROUTE = 'gateway:auto-plan';
@@ -56,6 +57,7 @@ export async function generateThreadPlan(
   allowAutoExecute: boolean,
   options: { instruction?: string } = {},
 ): Promise<GeneratedThreadPlan> {
+  const generationStartedAt = Date.now();
   const thread = await requireOrgThread(threadId, organizationId);
   const instruction = options.instruction?.trim()
     || thread.aiSummary
@@ -97,6 +99,16 @@ export async function generateThreadPlan(
     lastCustomerMessageId: pendingCustomerMessageId,
     settings,
   })) {
+    if (cached?.planId && cached.plan.steps.length > 0) {
+      void captureAgentPlanGenerated({
+        cacheHit: true,
+        channel: thread.channelType,
+        generationMs: Date.now() - generationStartedAt,
+        organizationId,
+        planId: cached.planId,
+        stepCount: cached.plan.steps.length,
+      });
+    }
     const autoExecution = allowAutoExecute
       ? await buildAutoExecutionResult(organizationId, threadId, settings)
       : {};
@@ -110,22 +122,34 @@ export async function generateThreadPlan(
 
   const ctx = await buildContext(threadId, organizationId, gatewayThreadSink);
   const plan = await planAgent(ctx, instruction, settings);
+  const cacheRecord = buildAgentPlanCacheRecord({
+    instruction,
+    lastCustomerMessageId: pendingCustomerMessageId,
+    settings,
+    plan,
+  });
 
   await db.thread.update({
     where: { id: threadId },
     data: {
       cachedPlanMessageId: pendingCustomerMessageId,
-      cachedPlan: buildAgentPlanCacheRecord({
-        instruction,
-        lastCustomerMessageId: pendingCustomerMessageId,
-        settings,
-        plan,
-      }) as object,
+      cachedPlan: cacheRecord as object,
     },
   });
 
   // Live inbox: a fresh plan is cached — push so the "Needs you" card appears.
   await publishThreadEvent(organizationId, threadId);
+
+  if (cacheRecord.planId && plan.steps.length > 0) {
+    void captureAgentPlanGenerated({
+      cacheHit: false,
+      channel: thread.channelType,
+      generationMs: Date.now() - generationStartedAt,
+      organizationId,
+      planId: cacheRecord.planId,
+      stepCount: plan.steps.length,
+    });
+  }
 
   const autoExecution = allowAutoExecute
     ? await buildAutoExecutionResult(organizationId, threadId, settings)

@@ -20,6 +20,7 @@ import type {
   DispatchThread,
   DispatchMessageResult,
 } from "./dispatch-message-types"
+import type { ReplySource } from "@shopkeeper/analytics"
 
 // Dashboard records the pending message, then hands provider delivery to the
 // gateway queue. The gateway worker owns retry/backoff and final sendStatus.
@@ -28,6 +29,7 @@ export async function dispatchEmailViaGatewayQueue(
   org: DispatchOrg,
   text: string,
   source: DispatchSource,
+  replySource?: ReplySource,
 ): Promise<DispatchMessageResult> {
   const integration = await db.integration.findFirst({
     where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
@@ -41,6 +43,7 @@ export async function dispatchEmailViaGatewayQueue(
     messageId: message.id,
     threadId: thread.id,
     integrationId: integration.id,
+    ...(replySource ? { replySource } : {}),
     source,
   })
 

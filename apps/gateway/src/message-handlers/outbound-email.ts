@@ -8,6 +8,7 @@ import {
   EmailNotConfiguredError,
 } from '@shopkeeper/email';
 import logger from '../logger.js';
+import { captureOutboundReplySent } from '../product-analytics.js';
 import type { OutboundEmailJobData } from '../types.js';
 
 // Phase 1.5: async outbound email send. The message row is pre-created by the
@@ -15,7 +16,18 @@ import type { OutboundEmailJobData } from '../types.js';
 // provider send and transitions the row to 'sent' or 'failed'. Idempotent under
 // at-least-once delivery via the sendStatus gate.
 export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Promise<void> {
-  const { messageId, integrationId, source, organizationId, traceId } = job.data;
+  const {
+    messageId,
+    integrationId,
+    replySource,
+    source,
+    organizationId,
+    traceId,
+  } = job.data;
+  const analyticsReplySource = replySource
+    ?? (source === 'agent_send_reply' || source === 'agent_send_email'
+      ? 'agent_approved'
+      : 'manual');
 
   const message = await db.message.findUnique({
     where: { id: messageId },
@@ -48,6 +60,12 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
   // Idempotency: a prior attempt already delivered this message.
   if (message.sendStatus === 'sent') {
     logger.info({ messageId, traceId }, '[OutboundEmail] Message already sent — skipping');
+    void captureOutboundReplySent({
+      channel: 'email',
+      messageId,
+      organizationId,
+      replySource: analyticsReplySource,
+    });
     return;
   }
 
@@ -106,6 +124,13 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
   await db.message.update({
     where: { id: messageId },
     data: { sendStatus: 'sent', sendError: null },
+  });
+
+  void captureOutboundReplySent({
+    channel: 'email',
+    messageId,
+    organizationId,
+    replySource: analyticsReplySource,
   });
 }
 

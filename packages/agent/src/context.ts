@@ -11,13 +11,19 @@ import type {
   UpdateThreadTagInput,
   EscalateToHumanInput,
 } from "./tools/registry/index.js";
-import type { AgentContext, BaseAgentContext, ShopifyOrderSummary } from "./agent-context.js";
+import type {
+  AgentActionMode,
+  AgentContext,
+  BaseAgentContext,
+  ShopifyOrderSummary,
+} from "./agent-context.js";
 
 // Where a thread-coupled tool delivers. Support injects the dashboard messaging
 // stack (Postmark/IG/email) here; the package itself never imports a provider.
 // `escalate` and `io` on the built context are wired from these, bound to the
 // thread's identity.
 interface ThreadSinkContext {
+  agentActionMode?: AgentActionMode;
   threadId: string;
   orgId: string;
   orgName: string;
@@ -62,6 +68,7 @@ type RawShopifyOrder = {
 };
 
 export interface BuildContextOptions {
+  agentActionMode?: AgentActionMode;
   pinKbArticles?: readonly { title: string; body: string }[];
 }
 
@@ -251,7 +258,14 @@ export async function buildContext(
     ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
     : loadedKbArticles;
 
-  const threadIo = { threadId: thread.id, orgId, orgName: org?.name ?? "Support" };
+  const threadIo = {
+    threadId: thread.id,
+    orgId,
+    orgName: org?.name ?? "Support",
+    ...(options?.agentActionMode
+      ? { agentActionMode: options.agentActionMode }
+      : {}),
+  };
 
   const base: BaseAgentContext = {
     orgId,

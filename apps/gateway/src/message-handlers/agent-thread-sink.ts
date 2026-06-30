@@ -11,6 +11,7 @@ import type {
   UpdateThreadStatusInput,
   UpdateThreadTagInput,
 } from '@shopkeeper/agent/tools';
+import type { AgentActionMode } from '@shopkeeper/agent/context';
 import logger from '../logger.js';
 import { recordAgentFailureInBackground } from '../agent-failure-alerts.js';
 import { postDashboardInternal } from '../clients/dashboard-internal.js';
@@ -18,6 +19,7 @@ import { pushOperatorEscalation } from '../operator-escalation.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 
 interface ThreadSinkContext {
+  agentActionMode?: AgentActionMode;
   threadId: string;
   orgId: string;
   orgName: string;
@@ -57,6 +59,7 @@ async function dispatchAgentSend(
       orgName: ctx.orgName,
       op,
       input,
+      agentActionMode: ctx.agentActionMode,
     });
     if (!response.ok) {
       logger.warn(

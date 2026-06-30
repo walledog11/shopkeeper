@@ -1,8 +1,8 @@
 # Product instrumentation plan — PostHog
 
-**Status:** In progress — Phase 1 complete; Phase 2 implementation underway
+**Status:** In progress — Phases 1 and 2 complete; Phase 3 verification underway
 
-**Last updated:** 2026-06-28
+**Last updated:** 2026-06-29
 
 **Owner:** Product engineering
 
@@ -392,6 +392,7 @@ If Redis is temporarily unavailable, log a warning and continue with the determi
 - [x] Implement no-op, recording, immediate PostHog, and batched PostHog sinks.
 - [x] Add environment parsing and production validation to both applications and root production-env checks.
 - [x] Install the immediate sink in dashboard server code.
+- [x] Initialize the dashboard sink inside each capturing Vercel function bundle rather than relying on mutable state from the separate Next.js instrumentation entry point.
 - [x] Install a singleton batched sink in gateway bootstrap and flush it during graceful shutdown.
 - [x] Add package unit tests before instrumenting product paths.
 
@@ -408,19 +409,36 @@ If Redis is temporarily unavailable, log a warning and continue with the determi
 - [x] Update the privacy policy at `apps/dashboard/src/app/(marketing)/privacy/page.tsx`.
 - [x] Update `docs/production/deployment.md`, environment examples, and production checklists.
 
-**Exit criteria:** The funnel from workspace creation through onboarding is visible in staging, tenant-spoofing route tests pass, and reviewed payloads contain no prohibited data.
+**Exit criteria:** ✅ Met. The onboarding funnel is visible in PostHog, and tenant-spoofing and affected organization/product-event integration tests pass.
+
+**Verification progress (2026-06-29):**
+
+- [x] Verify the PostHog project token and ingest host with a controlled direct-ingestion event.
+- [x] Verify deployed dashboard delivery through the authenticated `POST /api/product-events` route; `integration_connection_started` was observed in PostHog Activity.
+- [x] Pass tenant-spoofing and affected organization/product-event integration tests.
+- [x] Confirm onboarding-step events appear in PostHog.
+
+The exhaustive raw-payload review remains part of Phase 5 staging validation.
 
 ## Phase 3 — agent value funnel
 
-1. Capture inbound success from `apps/gateway/src/message-handlers/inbound-persistence.ts` after deduplication and persistence.
-2. Capture generated and cached plan outcomes from the shared plan-generation paths.
-3. Capture approvals from server approval paths and add dismissal/regeneration to the restricted endpoint.
-4. Capture terminal tool outcomes from shared execution boundaries.
-5. Capture outbound delivery success from the shared dispatch/worker completion boundaries.
-6. Capture Stripe subscription transitions after webhook persistence.
-7. Evaluate and capture workspace activation after each successful agent-assisted reply.
+- [x] Capture inbound success from `apps/gateway/src/message-handlers/inbound-persistence.ts` after deduplication and persistence.
+- [x] Capture generated and cached plan outcomes from the shared plan-generation paths.
+- [x] Capture approvals from server approval paths and add dismissal/regeneration to the restricted endpoint.
+- [x] Capture terminal tool outcomes from shared execution boundaries.
+- [x] Capture outbound delivery success from the shared dispatch/worker completion boundaries.
+- [x] Capture Stripe subscription transitions after webhook persistence.
+- [x] Evaluate and capture workspace activation after each successful agent-assisted reply.
 
 **Exit criteria:** Integration tests cover every success boundary and prove that persistence/provider failures do not emit success events.
+
+**Verification progress (2026-06-29):**
+
+- [x] Pass analytics, agent-cache, action-persistence, restricted-route, subscription, inbound, plan, and outbound focused tests.
+- [x] Pass dashboard, gateway, and shared-agent typechecks and lint.
+- [x] Verify provider delivery failures do not emit `outbound_reply_sent`.
+- [ ] Complete the remaining persistence-failure and duplicate-event assertions for every Phase 3 boundary.
+- [ ] Run a controlled agent-assisted activation journey in staging and review every raw Phase 3 payload.
 
 ## Phase 4 — PostHog reports
 

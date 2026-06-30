@@ -11,6 +11,7 @@ import {
 import type { OutboundEmailJobData } from '../types.js';
 
 const sendMock = vi.fn();
+const captureOutboundReplySent = vi.hoisted(() => vi.fn());
 
 vi.mock('@shopkeeper/email', async (importActual) => {
   const actual = await importActual<typeof import('@shopkeeper/email')>();
@@ -19,6 +20,10 @@ vi.mock('@shopkeeper/email', async (importActual) => {
 
 vi.mock('../logger.js', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('../product-analytics.js', () => ({
+  captureOutboundReplySent,
 }));
 
 import { handleOutboundEmailJob } from './outbound-email.js';
@@ -69,6 +74,8 @@ describe('handleOutboundEmailJob', () => {
   beforeEach(async () => {
     org = await createTestOrg();
     sendMock.mockReset();
+    captureOutboundReplySent.mockReset();
+    captureOutboundReplySent.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -90,6 +97,12 @@ describe('handleOutboundEmailJob', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('sent');
     expect(after?.sendError).toBeNull();
+    expect(captureOutboundReplySent).toHaveBeenCalledWith({
+      channel: 'email',
+      messageId: message.id,
+      organizationId: org.id,
+      replySource: 'agent_approved',
+    });
   });
 
   it('skips a message that is already sent (idempotency)', async () => {
@@ -98,6 +111,12 @@ describe('handleOutboundEmailJob', () => {
     await handleOutboundEmailJob(makeJob(data));
 
     expect(sendMock).not.toHaveBeenCalled();
+    expect(captureOutboundReplySent).toHaveBeenCalledWith({
+      channel: 'email',
+      messageId: message.id,
+      organizationId: org.id,
+      replySource: 'agent_approved',
+    });
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('sent');
   });
@@ -113,6 +132,7 @@ describe('handleOutboundEmailJob', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('pending');
     expect(after?.sendError).toBeNull();
+    expect(captureOutboundReplySent).not.toHaveBeenCalled();
   });
 
   it('marks the message failed and rethrows on the final transient failure', async () => {
@@ -126,6 +146,7 @@ describe('handleOutboundEmailJob', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('failed');
     expect(after?.sendError).toContain('503 upstream');
+    expect(captureOutboundReplySent).not.toHaveBeenCalled();
   });
 
   it('sends an agent-initiated new-thread email with the subject verbatim (no Re:)', async () => {

@@ -13,9 +13,14 @@ const {
 vi.mock('@shopkeeper/analytics', () => ({
   captureProductEvent,
   initializeProductAnalytics,
+  TOOL_CATEGORIES: ['action', 'communication', 'internal', 'read'],
+  TOOL_NAMES: ['send_reply'],
   productEventInsertId: {
+    agentActionCompleted: (actionId: string) => `agent_action_completed:${actionId}`,
+    agentPlanGenerated: (planId: string) => `agent_plan_generated:${planId}`,
     integrationConnectionCompleted: vi.fn(),
     integrationConnectionFailed: vi.fn(),
+    subscriptionStatusChanged: (eventId: string) => `subscription_status_changed:${eventId}`,
   },
 }));
 
@@ -93,5 +98,92 @@ describe('captureDashboardProductEvent', () => {
       '[ProductAnalytics] Dashboard initialization failed',
     );
     expect(captureProductEvent).toHaveBeenCalledWith(EVENT);
+  });
+});
+
+describe('captureSubscriptionStatusChanged', () => {
+  it('captures a committed status transition with the Stripe event insert ID', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    const { captureSubscriptionStatusChanged } = await import('./product-analytics');
+
+    await captureSubscriptionStatusChanged({
+      previousStatus: 'trialing',
+      newStatus: 'active',
+      plan: 'pro',
+      organizationId: EVENT.organizationId,
+      stripeEventId: 'evt_subscription_updated',
+    });
+
+    expect(captureProductEvent).toHaveBeenCalledWith({
+      event: 'subscription_status_changed',
+      organizationId: EVENT.organizationId,
+      source: 'dashboard',
+      previousStatus: 'trialing',
+      newStatus: 'active',
+      plan: 'pro',
+      insertId: 'subscription_status_changed:evt_subscription_updated',
+    });
+  });
+
+  it('does not capture a webhook that leaves status unchanged', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    const { captureSubscriptionStatusChanged } = await import('./product-analytics');
+
+    await captureSubscriptionStatusChanged({
+      previousStatus: 'active',
+      newStatus: 'active',
+      plan: 'pro',
+      organizationId: EVENT.organizationId,
+      stripeEventId: 'evt_no_change',
+    });
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('agent value events', () => {
+  it('captures a cached plan and persisted action without content fields', async () => {
+    vi.stubEnv('NODE_ENV', 'test');
+    const {
+      captureAgentActionsCompleted,
+      captureAgentPlanGenerated,
+    } = await import('./product-analytics');
+
+    await captureAgentPlanGenerated({
+      cacheHit: true,
+      channel: 'email',
+      generationMs: 9,
+      organizationId: EVENT.organizationId,
+      planId: 'plan-1',
+      stepCount: 3,
+    });
+    captureAgentActionsCompleted([{
+      id: 'action-1',
+      organizationId: EVENT.organizationId,
+      tool: 'send_reply',
+      category: 'communication',
+      status: 'success',
+    }]);
+
+    expect(captureProductEvent).toHaveBeenNthCalledWith(1, {
+      event: 'agent_plan_generated',
+      organizationId: EVENT.organizationId,
+      source: 'dashboard',
+      channel: 'email',
+      planSource: 'cached',
+      stepCount: 3,
+      generationMs: 9,
+      cacheHit: true,
+      insertId: 'agent_plan_generated:plan-1',
+    });
+    expect(captureProductEvent).toHaveBeenNthCalledWith(2, {
+      event: 'agent_action_completed',
+      organizationId: EVENT.organizationId,
+      source: 'dashboard',
+      toolName: 'send_reply',
+      toolCategory: 'communication',
+      outcome: 'succeeded',
+      insertId: 'agent_action_completed:action-1',
+    });
   });
 });

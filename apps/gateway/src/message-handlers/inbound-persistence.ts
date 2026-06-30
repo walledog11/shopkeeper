@@ -8,6 +8,7 @@ import {
 } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { JOB, STATUS } from '../constants.js';
+import { captureInboundMessageProcessed } from '../product-analytics.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 import type { ClassificationResult } from './email-classification.js';
 
@@ -43,6 +44,9 @@ export interface ProcessMessageOptions {
   // still generates summary+tag but skips reclassifying (gated on
   // filterDecidedAt === null). filterStatus stays at the 'genuine' default.
   lockAsGenuine?: boolean;
+  // Only true for a real customer-authored provider message. Synthetic
+  // provider events such as Shopify order webhooks are not activation input.
+  isRealCustomerMessage?: boolean;
 }
 
 function normalizeExternalMessageId(externalMessageId: string | null | undefined): string | null {
@@ -67,6 +71,7 @@ export async function processInboundMessage(
     attachments = [],
     precomputed = null,
     lockAsGenuine = false,
+    isRealCustomerMessage = false,
   }: ProcessMessageOptions = {},
 ): Promise<{ thread: Awaited<ReturnType<typeof db.thread.create>>; isNew: boolean } | null> {
   messageText = sanitizeUserInput(messageText);
@@ -149,8 +154,9 @@ export async function processInboundMessage(
     });
   }
 
+  let message: Awaited<ReturnType<typeof createMessage>>;
   try {
-    await createMessage(
+    message = await createMessage(
       {
         threadId: thread!.id,
         organizationId,
@@ -170,6 +176,14 @@ export async function processInboundMessage(
       return null;
     }
     throw error;
+  }
+
+  if (isRealCustomerMessage) {
+    void captureInboundMessageProcessed({
+      channel: channelType,
+      messageId: message.id,
+      organizationId,
+    });
   }
 
   await aiSummaryQueue.add(JOB.SUMMARIZE_THREAD, {

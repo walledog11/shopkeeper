@@ -9,6 +9,7 @@ import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
 import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path.js";
 import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
+import type { PersistedAgentAction } from "./agent-actions.js";
 import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
 import { enforceSpendCap, recordSpend } from "./spend.js";
 import {
@@ -37,6 +38,7 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // Pre-generated turn id so the caller can embed it in the agent-turn note
   // and join AgentAction rows back to the note when rendering inline.
   turnId?: string;
+  onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
 }
 
 export async function runAgent(
@@ -83,6 +85,9 @@ export async function runAgent(
     instructionHash,
     ...(options?.turnId ? { turnId: options.turnId } : {}),
     ...(approval ? { approval } : {}),
+    ...(options?.onActionsPersisted
+      ? { onActionsPersisted: options.onActionsPersisted }
+      : {}),
   });
   const recordAgentFailureSafely = createAgentFailureRecorder({
     ctx,

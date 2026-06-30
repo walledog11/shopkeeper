@@ -79,7 +79,7 @@ export interface OutboundEmailJobData {
   messageId: string;
   threadId: string;
   integrationId: string;
+  replySource?: 'manual' | 'agent_approved' | 'agent_automatic';
   source: OutboundEmailSource;
   traceId?: string;
 }
-

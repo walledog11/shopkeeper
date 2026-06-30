@@ -1,5 +1,6 @@
 import type { createMessage } from "@shopkeeper/db"
 import type { OutboundSource } from "@/lib/server/outbound-recorder"
+import type { ReplySource } from "@shopkeeper/analytics"
 
 export interface DispatchThread {
   id: string
@@ -19,6 +20,7 @@ export type DispatchSource = Extract<
 >
 
 export interface DispatchMessageOptions {
+  analyticsReplySource?: ReplySource
   source?: DispatchSource
   emailSubjectFallback?: string
 }

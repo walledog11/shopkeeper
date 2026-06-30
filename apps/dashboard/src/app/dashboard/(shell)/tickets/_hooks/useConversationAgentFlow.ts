@@ -10,6 +10,7 @@ import {
   planRequestErrorTurn,
   regenerateAgentPlan,
 } from "./conversation-agent-requests"
+import { captureClientProductEvent } from "@/lib/product-events"
 
 interface UseConversationAgentFlowProps {
   ticket: Ticket
@@ -210,6 +211,13 @@ export function useConversationAgentFlow({
   }
 
   const handlePlanDismiss = () => {
+    if (pendingPlan?.planId) {
+      void captureClientProductEvent({
+        event: "agent_plan_decided",
+        decision: "dismissed",
+        planId: pendingPlan.planId,
+      })
+    }
     setPendingPlan(null)
   }
 
