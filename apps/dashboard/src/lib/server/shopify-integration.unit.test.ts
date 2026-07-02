@@ -88,6 +88,17 @@ describe('isShopifyAuthFailure', () => {
 });
 
 describe('refreshShopifyIntegrationHealthIfDue', () => {
+  it('never probes a simulated integration', async () => {
+    const result = await refreshShopifyIntegrationHealthIfDue({
+      ...integration,
+      metadata: { simulated: true },
+    });
+
+    expect(result).toBeNull();
+    expect(redisSet).not.toHaveBeenCalled();
+    expect(shopifyRestJson).not.toHaveBeenCalled();
+  });
+
   it('skips probe when integration is not operational', async () => {
     const result = await refreshShopifyIntegrationHealthIfDue({
       ...integration,

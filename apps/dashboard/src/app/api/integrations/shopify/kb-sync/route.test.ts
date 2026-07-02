@@ -86,6 +86,27 @@ describe('POST /api/integrations/shopify/kb-sync', () => {
       expect.objectContaining({ title: 'Shipping', body: 'Ships fast', tags: ['shopify:page:2'] }),
     ]);
   });
+
+  it('seeds demo knowledge without calling Shopify for a simulated integration', async () => {
+    await db.integration.create({
+      data: {
+        organizationId: org!.id,
+        platform: ChannelType.shopify,
+        externalAccountId: 'demo-store.shopkeeper.test',
+        accessToken: 'simulated-token',
+        metadata: { simulated: true },
+      },
+    });
+
+    const res = await POST();
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ syncedPolicies: 1, syncedPages: 1 });
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.kbArticle.count({
+      where: { organizationId: org!.id },
+    })).resolves.toBe(2);
+  });
 });
 
 function jsonResponse(body: unknown, init: ResponseInit = {}) {

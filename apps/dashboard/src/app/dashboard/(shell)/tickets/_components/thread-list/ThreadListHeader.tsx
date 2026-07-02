@@ -117,7 +117,7 @@ export function ThreadListHeader({
             className={`flex-1 min-w-0 h-full rounded-full px-2 text-[11px] font-semibold transition-colors ${
               active
                 ? "bg-card/80 text-foreground shadow-sm"
-                : "text-foreground/40 hover:bg-background/35 hover:text-foreground/60"
+                : "text-faint hover:bg-background/35 hover:text-muted-foreground"
             }`}
           >
             <span className="truncate">{option.label}</span>
@@ -145,7 +145,7 @@ export function ThreadListHeader({
             className={`flex-1 min-w-0 h-full rounded-full px-1.5 text-[11px] font-semibold transition-colors ${
               active
                 ? "bg-card/80 text-foreground shadow-sm"
-                : "text-foreground/40 hover:bg-background/35 hover:text-foreground/60"
+                : "text-faint hover:bg-background/35 hover:text-muted-foreground"
             }`}
           >
             <span className="truncate">{mobileViewLabel(option, forMeCount)}</span>
@@ -179,7 +179,7 @@ export function ThreadListHeader({
           className={`relative shrink-0 h-9 px-3 rounded-full flex items-center justify-center gap-1.5 text-xs font-semibold transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 ${
             hasActiveFilter
               ? "border border-foreground/15 bg-background/55 text-foreground"
-              : "border border-foreground/[0.08] bg-background/30 text-foreground/45 hover:border-foreground/15 hover:bg-background/45 hover:text-foreground/65"
+              : "border border-foreground/[0.08] bg-background/30 text-muted-foreground hover:border-foreground/15 hover:bg-background/45 hover:text-muted-foreground"
           }`}
         >
           <SlidersHorizontal className="size-3.5" />
@@ -204,7 +204,7 @@ export function ThreadListHeader({
           className={`relative size-9 shrink-0 rounded-full flex items-center justify-center transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 ${
             hasActiveFilter
               ? "border border-foreground/15 bg-background/55 text-foreground"
-              : "border border-foreground/[0.08] bg-background/30 text-foreground/45 hover:border-foreground/15 hover:bg-background/45 hover:text-foreground/65"
+              : "border border-foreground/[0.08] bg-background/30 text-muted-foreground hover:border-foreground/15 hover:bg-background/45 hover:text-muted-foreground"
           }`}
         >
           <MoreHorizontal className="size-4" />
@@ -217,7 +217,7 @@ export function ThreadListHeader({
         <button
           type="button"
           onClick={openMobileSearch}
-          className={`w-full h-9 rounded-full text-xs font-semibold text-foreground/60 hover:border-foreground/15 hover:bg-background/45 hover:text-foreground transition-all flex items-center justify-center gap-2 ${GLASS_CONTROL_CLASS}`}
+          className={`w-full h-9 rounded-full text-xs font-semibold text-muted-foreground hover:border-foreground/15 hover:bg-background/45 hover:text-foreground transition-all flex items-center justify-center gap-2 ${GLASS_CONTROL_CLASS}`}
         >
           <Search className="size-3.5" />
           Search tickets
@@ -229,22 +229,22 @@ export function ThreadListHeader({
 
   const searchField = (mobile = false) => (
     <div className={`flex items-center gap-2 rounded-full px-3.5 h-9 ${GLASS_CONTROL_CLASS} ${mobile ? "" : "flex-1 min-w-0"}`}>
-      <Search className="size-3.5 text-foreground/25 shrink-0" />
+      <Search className="size-3.5 text-faint shrink-0" />
       <input
         ref={mobile ? inputRef : undefined}
         aria-label="Search tickets"
         value={searchQuery}
         onChange={event => onSearchChange(event.target.value)}
         placeholder="Search all tickets…"
-        className="flex-1 bg-transparent text-sm text-foreground/70 placeholder:text-foreground/30 outline-none min-w-0"
+        className="flex-1 bg-transparent text-sm text-strong placeholder:text-faint outline-none min-w-0"
       />
-      {isSearchLoading && <Loader2 className="size-3.5 text-foreground/30 animate-spin shrink-0" />}
+      {isSearchLoading && <Loader2 className="size-3.5 text-faint animate-spin shrink-0" />}
       {searchQuery && (
         <button
           type="button"
           onClick={() => onSearchChange("")}
           aria-label="Clear search"
-          className="text-foreground/25 hover:text-foreground/50 transition-colors"
+          className="text-faint hover:text-muted-foreground transition-colors"
         >
           <X className="size-3.5" />
         </button>
@@ -262,18 +262,18 @@ export function ThreadListHeader({
               <button
                 type="button"
                 onClick={closeMobileSearch}
-                className="shrink-0 text-xs text-foreground/40 hover:text-foreground/60 font-medium transition-colors"
+                className="shrink-0 text-xs text-faint hover:text-muted-foreground font-medium transition-colors"
               >
                 Cancel
               </button>
             </div>
           ) : activeView === "spam" ? (
             <div className="flex items-center justify-between px-0.5">
-              <span className="text-xs font-semibold text-foreground/40">Spam messages</span>
+              <span className="text-xs font-semibold text-faint">Spam messages</span>
               <button
                 type="button"
                 onClick={() => onViewChange("for_me")}
-                className="text-xs text-foreground/30 hover:text-foreground/60 font-medium"
+                className="text-xs text-faint hover:text-muted-foreground font-medium"
               >
                 Back
               </button>
@@ -294,11 +294,11 @@ export function ThreadListHeader({
 
           {!isSearchMode && activeView === "spam" && (
             <div className="flex items-center justify-between px-0.5">
-              <span className="text-xs font-semibold text-foreground/40">Spam messages</span>
+              <span className="text-xs font-semibold text-faint">Spam messages</span>
               <button
                 type="button"
                 onClick={() => onViewChange("for_me")}
-                className="text-xs text-foreground/30 hover:text-foreground/60 font-medium"
+                className="text-xs text-faint hover:text-muted-foreground font-medium"
               >
                 Back to inbox
               </button>

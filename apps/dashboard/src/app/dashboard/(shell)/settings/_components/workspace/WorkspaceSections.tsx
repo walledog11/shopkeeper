@@ -45,13 +45,13 @@ function GeneralSection({ orgName, state }: { orgName: string; state: WorkspaceT
     <SectionCard title="General" description="How your workspace is identified across the dashboard.">
       <div className="space-y-4">
         <div className="space-y-1.5">
-          <span className="block text-xs font-semibold text-foreground/60">Workspace name</span>
+          <span className="block text-xs font-semibold text-muted-foreground">Workspace name</span>
           <Input
             aria-label="Workspace name"
             value={workspaceName}
             onChange={e => setWorkspaceName(e.target.value)}
             placeholder="My Store"
-            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-foreground/80 placeholder:text-foreground/25"
+            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
           />
         </div>
         <div className="flex items-center justify-end gap-3">
@@ -84,7 +84,7 @@ function BrandingSection({ orgName, state }: { orgName: string; state: Workspace
         <OrgAvatar
           name={organization?.name ?? orgName}
           imageUrl={organization?.imageUrl}
-          className="size-14 rounded-md bg-foreground/[0.06] border border-foreground/[0.10] text-foreground/60 font-semibold text-sm shrink-0"
+          className="size-14 rounded-md bg-foreground/[0.06] border border-foreground/[0.10] text-muted-foreground font-semibold text-sm shrink-0"
         />
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -105,7 +105,7 @@ function BrandingSection({ orgName, state }: { orgName: string; state: Workspace
               size="sm"
               onClick={() => fileInputRef.current?.click()}
               disabled={logoBusy || !organization}
-              className="h-8 text-xs font-semibold border-foreground/[0.10] text-foreground/60 hover:bg-foreground/[0.08]"
+              className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08]"
             >
               {logoBusy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
               {organization?.imageUrl ? "Replace" : "Upload"}
@@ -114,13 +114,13 @@ function BrandingSection({ orgName, state }: { orgName: string; state: Workspace
               <button type="button"
                 onClick={removeLogo}
                 disabled={logoBusy}
-                className="text-xs text-foreground/40 hover:text-foreground/70 transition-colors disabled:opacity-40"
+                className="text-xs text-faint hover:text-strong transition-colors disabled:opacity-40"
               >
                 Remove
               </button>
             )}
           </div>
-          <p className="text-xs text-foreground/30 mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
+          <p className="text-xs text-faint mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
           {logoError && <p className="text-xs text-red-400 mt-1">{logoError}</p>}
         </div>
       </div>
@@ -138,7 +138,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
   return (
     <SectionCard title="Data export" description="Download a JSON snapshot of all customers, tickets, messages, and memory.">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-        <p className="text-xs text-foreground/35 max-w-md">
+        <p className="text-xs text-faint max-w-md">
           Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
         </p>
         <div className="flex items-center gap-2 shrink-0">
@@ -148,7 +148,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
             size="sm"
             onClick={exportData}
             disabled={exporting}
-            className="h-8 text-xs font-semibold border-foreground/[0.10] text-foreground/60 hover:bg-foreground/[0.08]"
+            className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08]"
           >
             {exporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
             Export JSON
@@ -179,21 +179,21 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
             onChange={e => setGdprEmail(e.target.value)}
             onKeyDown={e => e.key === "Enter" && exportGdprData()}
             placeholder="customer@example.com"
-            className="h-9 flex-1 min-w-48 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-foreground/80 placeholder:text-foreground/25"
+            className="h-9 flex-1 min-w-48 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
           />
           <Button
             variant="outline"
             size="sm"
             onClick={exportGdprData}
             disabled={gdprExporting || !gdprEmail.trim()}
-            className="h-8 text-xs font-semibold border-foreground/[0.10] text-foreground/60 hover:bg-foreground/[0.08] shrink-0"
+            className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
           >
             {gdprExporting ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
             Export data
           </Button>
         </div>
         {gdprError && <p className="text-xs text-red-400">{gdprError}</p>}
-        <p className="text-xs text-foreground/30">
+        <p className="text-xs text-faint">
           Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
         </p>
       </div>
@@ -220,30 +220,30 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
     <div className="rounded-md border border-red-500/20 overflow-hidden">
       <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
         <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
-        <p className="text-xs text-foreground/35 mt-0.5">These actions are permanent and cannot be undone.</p>
+        <p className="text-xs text-faint mt-0.5">These actions are permanent and cannot be undone.</p>
       </div>
       <div className="p-5 sm:p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
           <div>
-            <p className="text-sm font-semibold text-foreground/70">Clear all ticket history</p>
-            <p className="text-xs text-foreground/35 mt-0.5">Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
+            <p className="text-sm font-semibold text-strong">Clear all ticket history</p>
+            <p className="text-xs text-faint mt-0.5">Permanently deletes all threads and messages for this workspace. This affects every member of the workspace.</p>
             {clearError && <p className="text-xs text-red-400 mt-1">{clearError}</p>}
             {clearSuccess && <p className="text-xs text-green-400 mt-1">All ticket history has been cleared.</p>}
           </div>
           {confirmClear ? (
             <div className="flex items-center gap-2 shrink-0">
-              <span className="text-xs text-foreground/35">Are you sure?</span>
+              <span className="text-xs text-faint">Are you sure?</span>
               <Button
                 size="sm"
                 onClick={clearTickets}
                 disabled={clearing}
-                className="h-7 px-3 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold"
+                className="h-7 px-3 bg-red-600 hover:bg-red-700 text-[#ffffff] text-xs font-semibold"
               >
                 {clearing ? <Loader2 className="size-3 animate-spin" /> : "Yes, clear"}
               </Button>
               <button type="button"
                 onClick={() => setConfirmClear(false)}
-                className="text-xs text-foreground/30 hover:text-foreground/70 transition-colors"
+                className="text-xs text-faint hover:text-strong transition-colors"
               >
                 Cancel
               </button>
@@ -263,14 +263,14 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
         {isAdmin && (
           <div className="pt-5 border-t border-red-500/15 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
             <div>
-              <p className="text-sm font-semibold text-foreground/70">Delete workspace</p>
-              <p className="text-xs text-foreground/35 mt-0.5">
-                Permanently delete <span className="text-foreground/60 font-medium">{orgName}</span> and all of its data — tickets, customers, integrations, memory, and billing. Every member will lose access.
+              <p className="text-sm font-semibold text-strong">Delete workspace</p>
+              <p className="text-xs text-faint mt-0.5">
+                Permanently delete <span className="text-muted-foreground font-medium">{orgName}</span> and all of its data — tickets, customers, integrations, memory, and billing. Every member will lose access.
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
                   This is your only workspace. Create another workspace first, or delete your account from{" "}
-                  <Link href="/dashboard/account" className="font-semibold text-foreground/55 hover:text-foreground/75">
+                  <Link href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
                     Account settings
                   </Link>{" "}
                   to leave Shopkeeper.
@@ -330,8 +330,8 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
-          <span className="block text-xs font-semibold text-foreground/60">
-            Type <span className="text-foreground/85 font-mono">{orgName}</span> to confirm
+          <span className="block text-xs font-semibold text-muted-foreground">
+            Type <span className="text-strong font-mono">{orgName}</span> to confirm
           </span>
           <Input
             aria-label="Confirm workspace name"
@@ -340,7 +340,7 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
             onChange={(e) => setDeleteConfirmName(e.target.value)}
             placeholder={orgName}
             disabled={deleting}
-            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-foreground/85 placeholder:text-foreground/25"
+            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
           />
           {deleteError && <p className="text-xs text-red-400">{deleteError}</p>}
         </div>
@@ -349,14 +349,14 @@ function DeleteWorkspaceDialog({ orgName, state }: { orgName: string; state: Wor
             variant="outline"
             onClick={() => setDeleteOpen(false)}
             disabled={deleting}
-            className="border-foreground/[0.12] text-foreground/70 hover:bg-foreground/[0.06]"
+            className="border-foreground/[0.12] text-strong hover:bg-foreground/[0.06]"
           >
             Cancel
           </Button>
           <Button
             onClick={deleteWorkspace}
             disabled={deleting || deleteConfirmName !== orgName}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-red-600 hover:bg-red-700 text-[#ffffff]"
           >
             {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
             Delete forever

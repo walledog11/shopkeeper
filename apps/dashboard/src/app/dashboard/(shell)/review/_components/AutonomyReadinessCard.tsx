@@ -37,28 +37,28 @@ export default function AutonomyReadinessCard() {
     <div className="rounded-[18px] border border-foreground/[0.08] bg-foreground/[0.03] p-3">
       <div className="flex flex-wrap items-center gap-2">
         <ShieldCheck className="size-4 text-emerald-300" />
-        <h2 className="text-sm font-semibold text-foreground/80">Trust readiness</h2>
-        <span className="ml-auto text-xs text-foreground/30">last {data.resolved} of {data.windowSize}</span>
+        <h2 className="text-sm font-semibold text-strong">Trust readiness</h2>
+        <span className="ml-auto text-xs text-faint">last {data.resolved} of {data.windowSize}</span>
       </div>
-      <p className="mt-0.5 text-xs text-foreground/40">
+      <p className="mt-0.5 text-xs text-faint">
         How often the agent&apos;s would-be auto-action matched what you approved. Watched before going live.
       </p>
 
       <div className="mt-2 grid grid-cols-3 gap-2">
         <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2">
-          <p className="text-xs text-foreground/40">Agreement</p>
+          <p className="text-xs text-faint">Agreement</p>
           <p className="text-base font-semibold text-white">{pct(data.agreementRate)}</p>
         </div>
         <div className="rounded-lg border border-foreground/[0.06] bg-foreground/[0.02] p-2">
-          <p className="text-xs text-foreground/40">Pending</p>
-          <p className="text-base font-semibold text-foreground/80">{data.pending}</p>
+          <p className="text-xs text-faint">Pending</p>
+          <p className="text-base font-semibold text-strong">{data.pending}</p>
         </div>
         <div className={`rounded-lg border p-2 ${data.dangerousRejections > 0 ? "border-amber-800/40 bg-amber-900/[0.12]" : "border-foreground/[0.06] bg-foreground/[0.02]"}`}>
           <div className="flex items-center gap-1">
             {data.dangerousRejections > 0 && <AlertTriangle className="size-3 text-amber-300" />}
-            <p className={`text-xs ${data.dangerousRejections > 0 ? "text-amber-300" : "text-foreground/40"}`}>Rejected</p>
+            <p className={`text-xs ${data.dangerousRejections > 0 ? "text-amber-300" : "text-faint"}`}>Rejected</p>
           </div>
-          <p className={`text-base font-semibold ${data.dangerousRejections > 0 ? "text-amber-200" : "text-foreground/80"}`}>
+          <p className={`text-base font-semibold ${data.dangerousRejections > 0 ? "text-amber-200" : "text-strong"}`}>
             {data.dangerousRejections}
           </p>
         </div>
@@ -66,13 +66,13 @@ export default function AutonomyReadinessCard() {
 
       {data.byTier.length > 0 && (
         <div className="mt-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/35 mb-1.5">By tier</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-faint mb-1.5">By tier</p>
           <div className="space-y-1">
             {data.byTier.map((row) => (
               <div key={row.tier} className="flex items-baseline gap-2 text-xs">
-                <span className="font-medium text-foreground/55 capitalize w-16 shrink-0">{row.tier}</span>
-                <span className="text-foreground/70">{pct(row.agreementRate)}</span>
-                <span className="text-foreground/30">({row.agreements}/{row.resolved})</span>
+                <span className="font-medium text-muted-foreground capitalize w-16 shrink-0">{row.tier}</span>
+                <span className="text-strong">{pct(row.agreementRate)}</span>
+                <span className="text-faint">({row.agreements}/{row.resolved})</span>
                 {row.dangerousRejections > 0 && (
                   <span className="ml-auto text-amber-300">{row.dangerousRejections} rejected</span>
                 )}
@@ -84,13 +84,13 @@ export default function AutonomyReadinessCard() {
 
       {data.byTool.length > 0 && (
         <div className="mt-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-foreground/35 mb-1.5">By tool</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-faint mb-1.5">By tool</p>
           <div className="space-y-1">
             {data.byTool.map((row) => (
               <div key={row.tool} className="flex items-baseline gap-2 text-xs">
-                <span className="font-medium text-foreground/55 w-32 shrink-0 truncate">{TOOL_LABELS[row.tool] ?? row.tool}</span>
-                <span className="text-foreground/70">{pct(row.agreementRate)}</span>
-                <span className="text-foreground/30">({row.agreements}/{row.resolved})</span>
+                <span className="font-medium text-muted-foreground w-32 shrink-0 truncate">{TOOL_LABELS[row.tool] ?? row.tool}</span>
+                <span className="text-strong">{pct(row.agreementRate)}</span>
+                <span className="text-faint">({row.agreements}/{row.resolved})</span>
                 {row.dangerousRejections > 0 && (
                   <span className="ml-auto text-amber-300">{row.dangerousRejections} rejected</span>
                 )}
@@ -103,7 +103,7 @@ export default function AutonomyReadinessCard() {
       <div className="mt-2 flex justify-end">
         <Link
           href={agentConfigureHref()}
-          className="text-xs font-semibold text-foreground/45 hover:text-white transition-colors"
+          className="text-xs font-semibold text-muted-foreground hover:text-white transition-colors"
         >
           Adjust trust level in Configure -&gt;
         </Link>

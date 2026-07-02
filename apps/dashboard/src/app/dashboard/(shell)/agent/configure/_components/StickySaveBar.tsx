@@ -24,7 +24,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
           ) : (
             <>
               <span className="size-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
-              <p className="text-xs text-foreground/70">Unsaved changes</p>
+              <p className="text-xs text-strong">Unsaved changes</p>
             </>
           )}
         </div>
@@ -33,7 +33,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
             type="button"
             onClick={reset}
             disabled={saving || (!isDirty && !staleVersion)}
-            className="text-xs font-semibold text-foreground/50 hover:text-foreground/80 disabled:opacity-30 disabled:hover:text-foreground/50 transition-colors px-2 py-1.5"
+            className="text-xs font-semibold text-muted-foreground hover:text-strong disabled:opacity-30 disabled:hover:text-muted-foreground transition-colors px-2 py-1.5"
           >
             Reset
           </button>

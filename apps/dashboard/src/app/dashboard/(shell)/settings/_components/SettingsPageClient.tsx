@@ -90,7 +90,7 @@ function SettingsPageContent({ orgName, version }: Props) {
                   className={`inline-flex h-7 flex-1 items-center justify-center gap-1.5 rounded-full px-3.5 text-xs font-semibold transition-colors ${
                     active
                       ? "bg-foreground/[0.12] text-white"
-                      : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                      : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                   }`}
                 >
                   <Icon className="size-3.5 shrink-0" />

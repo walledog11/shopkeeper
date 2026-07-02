@@ -5,7 +5,7 @@ export function CustomersEmptyState({ isSearch, query }: { isSearch: boolean; qu
   return (
     <EmptyState
       className="py-20"
-      icon={<Users className="size-5 text-foreground/40" />}
+      icon={<Users className="size-5 text-faint" />}
       title={isSearch ? `No customers match "${query}"` : "No customers found"}
       description={isSearch ? "Try a different name or email address." : undefined}
     />

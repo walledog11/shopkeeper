@@ -51,14 +51,14 @@ export function ReviewCompactCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground/90">{headline}</h3>
-            <span className="shrink-0 text-xs tabular-nums text-foreground/35">
+            <h3 className="truncate text-sm font-semibold text-strong">{headline}</h3>
+            <span className="shrink-0 text-xs tabular-nums text-faint">
               {formatRelativeTime(entry.sentAt)}
             </span>
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-1.5">
             <Image src={channel.logo} alt={channel.name} width={12} height={12} className="size-3 object-contain" />
-            <span className="truncate text-xs text-foreground/40">{channel.name}</span>
+            <span className="truncate text-xs text-faint">{channel.name}</span>
           </div>
         </div>
       </div>
@@ -67,7 +67,7 @@ export function ReviewCompactCard({
           {chrome.label}
         </span>
         {entry.mode && (
-          <span className="rounded-full border border-foreground/[0.08] bg-foreground/[0.04] px-2 py-0.5 text-xs font-medium text-foreground/45">
+          <span className="rounded-full border border-foreground/[0.08] bg-foreground/[0.04] px-2 py-0.5 text-xs font-medium text-muted-foreground">
             {MODE_LABELS[entry.mode]}
           </span>
         )}
@@ -82,7 +82,7 @@ export function ReviewCompactCard({
           </span>
         )}
       </div>
-      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-foreground/55">
+      <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
         {primaryPreviewText(entry)}
       </p>
     </>
@@ -91,7 +91,7 @@ export function ReviewCompactCard({
   return (
     <article
       aria-hidden={isPeek || undefined}
-      className={`rounded-lg border border-border bg-card px-4 py-4 shadow-sm transition-colors ${tone.border}`}
+      className={`rounded-3xl border border-border bg-card px-4 py-4 shadow-sm transition-colors ${tone.border}`}
     >
       {isPeek ? (
         <div className="block w-full border-0 bg-transparent p-0 text-left [font-family:inherit]">{body}</div>
@@ -106,20 +106,20 @@ export function ReviewCompactCard({
       )}
       <div className="mt-4 flex min-h-5 items-center justify-between gap-3">
         {isPeek ? (
-          <span className="inline-flex min-w-0 items-center gap-1 text-xs font-semibold text-foreground/35">
+          <span className="inline-flex min-w-0 items-center gap-1 text-xs font-semibold text-faint">
             <ExternalLink className="size-3 shrink-0" />
             <span className="truncate">{sourceLabel ?? "No source link"}</span>
           </span>
         ) : href && sourceLabel ? (
           <Link
             href={href}
-            className="inline-flex min-w-0 items-center gap-1 text-xs font-semibold text-foreground/40 transition-colors hover:text-foreground/75"
+            className="inline-flex min-w-0 items-center gap-1 text-xs font-semibold text-faint transition-colors hover:text-strong"
           >
             <ExternalLink className="size-3 shrink-0" />
             <span className="truncate">{sourceLabel}</span>
           </Link>
         ) : (
-          <span className="text-xs text-foreground/30">No source link</span>
+          <span className="text-xs text-faint">No source link</span>
         )}
         {!isPeek && (
           <ReviewFeedbackControls

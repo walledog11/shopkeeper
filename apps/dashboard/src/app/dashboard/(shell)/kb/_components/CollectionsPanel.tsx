@@ -39,7 +39,7 @@ export function NewKbForm({
       )}
       <div className="flex justify-end gap-1 mt-2">
         <button type="button" onClick={onCancel}
-          className="text-xs text-foreground/40 hover:text-foreground/70 px-2 py-1"
+          className="text-xs text-faint hover:text-strong px-2 py-1"
         >
           Cancel
         </button>
@@ -75,16 +75,16 @@ function CollectionRow({
         aria-pressed={active}
         className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70 focus-visible:ring-inset"
       >
-        <span className={`shrink-0 ${active ? 'text-foreground/85' : 'text-foreground/55'}`}>{icon}</span>
-        <span className={`text-xs flex-1 truncate ${active ? 'text-white font-medium' : 'text-foreground/80'}`}>{label}</span>
-        <span className={`text-xs tabular-nums ${active ? 'text-foreground/60' : 'text-foreground/35'}`}>{count}</span>
+        <span className={`shrink-0 ${active ? 'text-strong' : 'text-muted-foreground'}`}>{icon}</span>
+        <span className={`text-xs flex-1 truncate ${active ? 'text-white font-medium' : 'text-strong'}`}>{label}</span>
+        <span className={`text-xs tabular-nums ${active ? 'text-muted-foreground' : 'text-faint'}`}>{count}</span>
       </button>
       {onDelete && (
         <button
           type="button"
           onClick={onDelete}
           aria-label={`Delete ${label}`}
-          className="flex items-center justify-center shrink-0 w-0 opacity-0 overflow-hidden text-foreground/30 hover:text-red-400 transition-all duration-200 group-hover:w-7 group-hover:opacity-100 focus-visible:w-7 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70"
+          className="flex items-center justify-center shrink-0 w-0 opacity-0 overflow-hidden text-faint hover:text-red-400 transition-all duration-200 group-hover:w-7 group-hover:opacity-100 focus-visible:w-7 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70"
         >
           <X className="size-3 shrink-0" />
         </button>
@@ -131,7 +131,7 @@ export function CollectionList({
       {userKbs.map(kb => (
         <CollectionRow
           key={kb.id}
-          icon={<BookOpen className="size-3.5 text-foreground/40" />}
+          icon={<BookOpen className="size-3.5 text-faint" />}
           label={kb.name}
           count={kb.articles.length}
           active={selectedBaseId === kb.id}
@@ -187,11 +187,11 @@ export function CollectionsDropdown({
   }, [open])
 
   const active = (() => {
-    if (selectedBaseId === 'all') return { icon: <Library className="size-3.5 text-foreground/55" />, label: 'All memory', count: allArticlesCount }
+    if (selectedBaseId === 'all') return { icon: <Library className="size-3.5 text-muted-foreground" />, label: 'All memory', count: allArticlesCount }
     const kb = knowledgeBases.find(k => k.id === selectedBaseId)
-    if (!kb) return { icon: <Library className="size-3.5 text-foreground/55" />, label: 'All memory', count: allArticlesCount }
+    if (!kb) return { icon: <Library className="size-3.5 text-muted-foreground" />, label: 'All memory', count: allArticlesCount }
     if (kb.source === 'shopify') return { icon: <ShoppingBag className="size-3.5 text-green-400/70" />, label: 'Shopify', count: kb.articles.length }
-    return { icon: <BookOpen className="size-3.5 text-foreground/40" />, label: kb.name, count: kb.articles.length }
+    return { icon: <BookOpen className="size-3.5 text-faint" />, label: kb.name, count: kb.articles.length }
   })()
 
   return (
@@ -202,9 +202,9 @@ export function CollectionsDropdown({
         className="flex items-center gap-2 w-full bg-foreground/[0.04] hover:bg-foreground/[0.08] border border-foreground/[0.10] rounded-md px-3 py-2"
       >
         <span className="shrink-0">{active.icon}</span>
-        <span className="text-xs text-foreground/85 font-medium flex-1 truncate text-left">{active.label}</span>
-        <span className="text-xs tabular-nums text-foreground/40">{active.count}</span>
-        <ChevronDown className={`size-3.5 text-foreground/50 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <span className="text-xs text-strong font-medium flex-1 truncate text-left">{active.label}</span>
+        <span className="text-xs tabular-nums text-faint">{active.count}</span>
+        <ChevronDown className={`size-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -230,7 +230,7 @@ export function CollectionsDropdown({
               <button
                 type="button"
                 onClick={() => { setIsCreatingKb(true); onClearActionError() }}
-                className="flex items-center gap-2 w-full px-2.5 py-1.5 text-xs text-foreground/70 hover:text-white hover:bg-foreground/[0.05] rounded transition-colors"
+                className="flex items-center gap-2 w-full px-2.5 py-1.5 text-xs text-strong hover:text-white hover:bg-foreground/[0.05] rounded transition-colors"
               >
                 <Plus className="size-3.5" />
                 New folder

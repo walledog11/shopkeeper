@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import NextLink from "next/link"
-import { Mail, MapPin, ShoppingBagIcon } from "lucide-react"
+import { Mail, ShoppingBagIcon } from "lucide-react"
 import useSWR from "swr"
 import { getChannelInfo } from "@/lib/messaging/channels"
 import { getCustomerName } from "@/lib/messaging/customer-name"
@@ -11,7 +11,7 @@ import { SectionHeader } from "./SectionHeader"
 import { ShopifySection } from "./ShopifySection"
 import { OrderList } from "./OrderList"
 import { formatShortDate } from "./formatters"
-import { locationString, shopifyName } from "@/lib/format/shopify"
+import { shopifyName } from "@/lib/format/shopify"
 import { useShopifyCustomer } from "./useShopifyCustomer"
 import type { Thread } from "@/types"
 
@@ -35,7 +35,6 @@ export default function ContextPanel({
   const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || '?'
   const emailAddress = shopifyCustomer?.email || (platformHandle.includes('@') ? platformHandle : null)
   const secondaryHandle = emailAddress || (platformHandle ? (platformHandle.startsWith('@') ? platformHandle : `@${platformHandle}`) : null)
-  const location = locationString(shopifyCustomer?.default_address)
   const shopifyAdminCustomerUrl = shopify.shop && shopifyCustomer
     ? `https://${shopify.shop}/admin/customers/${shopifyCustomer.id}`
     : null
@@ -51,31 +50,23 @@ export default function ContextPanel({
   const showOrder = hasShopify && !!shopifyCustomer && shopify.orders.length > 0
   const olderOrderCount = Math.max((shopifyCustomer?.orders_count ?? 0) - shopify.orders.length, 0)
 
-  const basePill = "inline-flex h-7 items-center gap-2 rounded-full border border-border bg-foreground/[0.04] px-3 text-xs font-medium text-foreground/80"
+  const basePill = "inline-flex h-7 items-center gap-2 rounded-full border border-border bg-foreground/[0.04] px-3 text-xs font-medium text-strong"
   const actionPill = `${basePill} transition-colors hover:border-foreground/20 hover:bg-foreground/[0.07]`
 
   return (
     <aside className="@container flex w-full flex-col bg-background">
       <header className="flex items-center justify-between gap-4 border-b border-foreground/[0.08] px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="size-9 shrink-0 overflow-hidden rounded-full bg-foreground/[0.08] flex items-center justify-center text-xs font-semibold text-foreground/60">
+          <div className="size-9 shrink-0 overflow-hidden rounded-full bg-foreground/[0.08] flex items-center justify-center text-xs font-semibold text-muted-foreground">
             {thread.customer?.profilePicUrl ? (
               <Image src={thread.customer.profilePicUrl} alt={displayName} width={40} height={40} className="size-full object-cover" />
             ) : initials}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold leading-5 text-foreground/90">{displayName}</p>
-            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs leading-4 text-foreground/50">
-              {secondaryHandle && secondaryHandle !== displayName && (
-                <span className="truncate">{secondaryHandle}</span>
-              )}
-              {location && (
-                <span className="flex shrink-0 items-center gap-1 text-foreground/40">
-                  <MapPin className="size-3" />
-                  {location}
-                </span>
-              )}
-            </div>
+            <p className="truncate text-sm font-semibold leading-5 text-strong">{displayName}</p>
+            {secondaryHandle && secondaryHandle !== displayName && (
+              <p className="mt-0.5 truncate text-xs leading-4 text-muted-foreground">{secondaryHandle}</p>
+            )}
           </div>
         </div>
 
@@ -139,16 +130,16 @@ export default function ContextPanel({
                     className="group flex items-start justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate text-xs leading-4 text-foreground/80 transition-colors group-hover:text-foreground">
+                      <span className="block truncate text-xs leading-4 text-strong transition-colors group-hover:text-foreground">
                         {title}
                       </span>
                       {preview && preview !== title && (
-                        <span className="mt-0.5 block truncate text-xs leading-3 text-foreground/40">
+                        <span className="mt-0.5 block truncate text-xs leading-3 text-faint">
                           {preview}
                         </span>
                       )}
                     </span>
-                    <span className="shrink-0 text-xs leading-4 text-foreground/50">
+                    <span className="shrink-0 text-xs leading-4 text-muted-foreground">
                       {formatShortDate(t.updatedAt)}
                     </span>
                   </NextLink>
@@ -156,7 +147,7 @@ export default function ContextPanel({
               })}
             </div>
           ) : (
-            <p className="text-xs text-foreground/40">First time you&apos;re hearing from them.</p>
+            <p className="text-xs text-faint">No earlier conversations.</p>
           )}
         </div>
       </div>

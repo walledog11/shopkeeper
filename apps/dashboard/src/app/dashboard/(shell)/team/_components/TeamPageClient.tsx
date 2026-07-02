@@ -39,7 +39,7 @@ function RolePill({ role }: { role: string }) {
   const isAdmin = role === "org:admin";
   return (
     <Badge variant="ghost" className={`text-xs font-semibold gap-1 ${
-      isAdmin ? "bg-foreground/[0.08] text-foreground/70" : "bg-foreground/[0.05] text-foreground/40"
+      isAdmin ? "bg-foreground/[0.08] text-strong" : "bg-foreground/[0.05] text-faint"
     }`}>
       {isAdmin ? <Shield className="size-2.5" /> : <User className="size-2.5" />}
       {roleLabel(role)}
@@ -181,7 +181,7 @@ function TeamPageContent(props: Props) {
         {/* Members list */}
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border">
-            <h2 className="text-sm font-semibold text-foreground/75">Members</h2>
+            <h2 className="text-sm font-semibold text-strong">Members</h2>
           </div>
           <div className="divide-y divide-border">
             {members.map(member => {
@@ -189,23 +189,23 @@ function TeamPageContent(props: Props) {
               const isSelf = member.userId === currentUserId;
               return (
                 <div key={member.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="size-9 rounded-full bg-foreground/[0.10] text-foreground/60 font-semibold text-xs shrink-0" />
+                  <OrgAvatar name={fullName} imageUrl={member.imageUrl} className="size-9 rounded-full bg-foreground/[0.10] text-muted-foreground font-semibold text-xs shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-foreground/80 truncate">{fullName}</span>
-                      {isSelf && <Badge variant="ghost" className="text-xs font-semibold text-foreground/30 bg-foreground/[0.08]">You</Badge>}
+                      <span className="text-sm font-semibold text-strong truncate">{fullName}</span>
+                      {isSelf && <Badge variant="ghost" className="text-xs font-semibold text-faint bg-foreground/[0.08]">You</Badge>}
                     </div>
-                    <p className="text-xs text-foreground/30 truncate">{member.identifier}</p>
+                    <p className="text-xs text-faint truncate">{member.identifier}</p>
                   </div>
                   <RolePill role={member.role} />
-                  <span className="hidden md:block text-xs text-foreground/25 shrink-0">
+                  <span className="hidden md:block text-xs text-faint shrink-0">
                     Joined {timeAgo(new Date(member.createdAt).toISOString())}
                   </span>
                   {isAdmin && !isSelf && (
                     <button type="button"
                       onClick={() => handleRemoveMember(member.userId)}
                       disabled={removing === member.userId}
-                      className="p-1.5 rounded-md text-foreground/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-faint hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                       title="Remove member"
                     >
                       <Trash2 className="size-4" />
@@ -221,25 +221,25 @@ function TeamPageContent(props: Props) {
         {invitations.length > 0 && (
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
-              <h2 className="text-sm font-semibold text-foreground/75">Pending invitations</h2>
-              <Badge variant="ghost" className="text-xs font-semibold text-foreground/40 bg-foreground/[0.08]">{invitations.length}</Badge>
+              <h2 className="text-sm font-semibold text-strong">Pending invitations</h2>
+              <Badge variant="ghost" className="text-xs font-semibold text-faint bg-foreground/[0.08]">{invitations.length}</Badge>
             </div>
             <div className="divide-y divide-border">
               {invitations.map(invite => (
                 <div key={invite.id} className="flex items-center gap-3 px-5 py-3.5">
                   <div className="size-9 rounded-full bg-foreground/[0.08] flex items-center justify-center shrink-0">
-                    <Mail className="size-4 text-foreground/30" />
+                    <Mail className="size-4 text-faint" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-foreground/60 truncate">{invite.emailAddress}</p>
-                    <p className="text-xs text-foreground/30">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
+                    <p className="text-sm font-medium text-muted-foreground truncate">{invite.emailAddress}</p>
+                    <p className="text-xs text-faint">Invited {timeAgo(new Date(invite.createdAt).toISOString())}</p>
                   </div>
                   <RolePill role={invite.role} />
                   {isAdmin && (
                     <button type="button"
                       onClick={() => handleRevokeInvite(invite.id)}
                       disabled={removing === invite.id}
-                      className="p-1.5 rounded-md text-foreground/20 hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
+                      className="p-1.5 rounded-md text-faint hover:text-red-400 hover:bg-red-400/[0.08] transition-colors disabled:opacity-50"
                       title="Revoke invitation"
                     >
                       <X className="size-4" />
@@ -256,11 +256,11 @@ function TeamPageContent(props: Props) {
       <Dialog open={showInviteModal} onOpenChange={setShowInviteModal}>
         <DialogContent className="border-border sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-foreground/85">Invite team member</DialogTitle>
+            <DialogTitle className="text-strong">Invite team member</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4">
             <div>
-              <span className="block text-xs font-semibold text-foreground/60 mb-1.5">Email address</span>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Email address</span>
               <input
                 aria-label="Email address"
                 type="email"
@@ -268,16 +268,16 @@ function TeamPageContent(props: Props) {
                 onChange={e => setInviteEmail(e.target.value)}
                 placeholder="colleague@company.com"
                 required
-                className="w-full px-3 py-2 text-sm text-foreground/80 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/25 transition"
+                className="w-full px-3 py-2 text-sm text-strong border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] placeholder:text-faint transition"
               />
             </div>
             <div>
-              <span className="block text-xs font-semibold text-foreground/60 mb-1.5">Role</span>
+              <span className="block text-xs font-semibold text-muted-foreground mb-1.5">Role</span>
               <select
                 aria-label="Role"
                 value={inviteRole}
                 onChange={e => setInviteRole(e.target.value)}
-                className="w-full px-3 py-2 text-sm text-foreground/80 border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] transition"
+                className="w-full px-3 py-2 text-sm text-strong border border-foreground/[0.12] bg-foreground/[0.06] rounded-md focus:outline-none focus:border-foreground/[0.25] transition"
               >
                 <option value="org:member">Member — can view and respond to tickets</option>
                 <option value="org:admin">Admin — full access including settings</option>
@@ -291,7 +291,7 @@ function TeamPageContent(props: Props) {
                 type="button"
                 variant="outline"
                 onClick={() => setShowInviteModal(false)}
-                className="border-foreground/[0.12] text-foreground/70 hover:bg-foreground/[0.06]"
+                className="border-foreground/[0.12] text-strong hover:bg-foreground/[0.06]"
               >
                 Cancel
               </Button>

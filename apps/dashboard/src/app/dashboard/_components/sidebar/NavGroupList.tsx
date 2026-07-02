@@ -34,7 +34,7 @@ export function NavGroupList({
 
         return (
           <div key={heading} className="flex flex-col gap-2">
-            <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-foreground/40">
+            <p className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-faint">
               {heading}
             </p>
             <div className="overflow-hidden rounded-2xl border border-border bg-card divide-y divide-border">
@@ -58,14 +58,14 @@ export function NavGroupList({
                     <item.icon
                       className={cn(
                         "size-[18px] shrink-0 stroke-[1.5]",
-                        isActive ? "text-foreground" : "text-foreground/50",
+                        isActive ? "text-foreground" : "text-muted-foreground",
                       )}
                     />
                     <div className="min-w-0 flex-1">
                       <p
                         className={cn(
                           "text-sm leading-tight",
-                          isActive ? "font-semibold text-foreground" : "font-medium text-foreground/85",
+                          isActive ? "font-semibold text-foreground" : "font-medium text-strong",
                         )}
                       >
                         {label}

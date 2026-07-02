@@ -45,7 +45,7 @@ export function MobileHubHeader({
       <Logo iconOnly />
 
       {routeTitle ? (
-        <span className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-foreground/85 pointer-events-none">
+        <span className="absolute left-1/2 -translate-x-1/2 text-sm font-semibold text-strong pointer-events-none">
           {routeTitle}
         </span>
       ) : null}
@@ -65,7 +65,7 @@ export function MobileHubHeader({
           type="button"
           onClick={onOpenNav}
           aria-label="Open navigation"
-          className="p-2 rounded-md text-foreground/60 hover:text-white hover:bg-foreground/[0.08] transition-colors"
+          className="p-2 rounded-md text-muted-foreground hover:text-white hover:bg-foreground/[0.08] transition-colors"
         >
           <Menu className="size-5" />
         </button>

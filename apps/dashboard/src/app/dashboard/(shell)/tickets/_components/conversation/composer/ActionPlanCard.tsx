@@ -55,24 +55,24 @@ function ActionPlanCardHeader({
           className="flex min-w-0 flex-1 items-center gap-2 text-left hover:opacity-80 transition-opacity"
         >
           <span className="size-5 rounded-full bg-foreground/[0.06] flex items-center justify-center shrink-0">
-            <ChevronUp className="size-3 text-foreground/55" />
+            <ChevronUp className="size-3 text-muted-foreground" />
           </span>
-          <span className="text-xs font-semibold text-foreground/60 shrink-0">{agentName}&apos;s draft</span>
+          <span className="text-xs font-semibold text-muted-foreground shrink-0">{agentName}&apos;s draft</span>
           {collapsedPreview && (
-            <span className="text-xs text-foreground/45 truncate ml-auto">
+            <span className="text-xs text-muted-foreground truncate ml-auto">
               {collapsedPreview}
             </span>
           )}
         </button>
       ) : (
         <>
-          <p className="flex-1 min-w-0 text-sm font-medium text-foreground/70 truncate">{headerLabel}</p>
+          <p className="flex-1 min-w-0 text-sm font-medium text-strong truncate">{headerLabel}</p>
           {onRegenerate && (
             <button type="button"
               onClick={onRegenerate}
               disabled={status.isExecuting || status.isRegenerating}
               title="Rewrite"
-              className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors disabled:opacity-40"
+              className="shrink-0 p-1.5 rounded-lg text-faint hover:text-strong hover:bg-foreground/[0.05] transition-colors disabled:opacity-40"
             >
               <RefreshCw className={`size-3.5 ${status.isRegenerating ? "animate-spin" : ""}`} />
             </button>
@@ -81,7 +81,7 @@ function ActionPlanCardHeader({
             <button type="button"
               onClick={onCollapse}
               title="Collapse"
-              className="shrink-0 p-1.5 rounded-lg text-foreground/35 hover:text-foreground/70 hover:bg-foreground/[0.05] transition-colors"
+              className="shrink-0 p-1.5 rounded-lg text-faint hover:text-strong hover:bg-foreground/[0.05] transition-colors"
             >
               <ChevronUp className="size-4" />
             </button>
@@ -127,9 +127,9 @@ function ActionPlanControls({
           disabled={status.isExecuting || status.enabledCount === 0 || status.sent}
           className={`${status.showEditTakeover ? "flex-1" : "w-full"} inline-flex items-center justify-center gap-2 py-3 rounded-2xl text-[15px] font-semibold transition active:scale-[0.98] disabled:opacity-40 ${
             status.sent
-              ? "bg-green-600 text-white disabled:opacity-100"
+              ? "bg-green-600 text-[#ffffff] disabled:opacity-100"
               : status.inReviewFlow || (status.hasBlockingWarnings && status.warningsReviewed)
-                ? "bg-amber-600 hover:bg-amber-700 text-white"
+                ? "bg-amber-600 hover:bg-amber-700 text-[#ffffff]"
                 : status.primaryNeedsCaution
                   ? "bg-foreground text-background hover:bg-foreground/90 ring-2 ring-amber-500/70 ring-offset-2 ring-offset-card"
                   : "bg-foreground text-background hover:bg-foreground/90"
@@ -148,7 +148,7 @@ function ActionPlanControls({
             data-testid="action-plan-edit"
             onClick={onEdit}
             disabled={status.isExecuting}
-            className="flex-1 inline-flex items-center justify-center py-3 rounded-2xl text-[15px] font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-foreground/70 transition-colors disabled:opacity-40"
+            className="flex-1 inline-flex items-center justify-center py-3 rounded-2xl text-[15px] font-semibold bg-foreground/[0.05] hover:bg-foreground/[0.08] text-strong transition-colors disabled:opacity-40"
           >
             Edit & send myself
           </button>
@@ -161,7 +161,7 @@ function ActionPlanControls({
             data-testid="action-plan-cancel"
             onClick={onCancelReview}
             disabled={status.isExecuting}
-            className="text-xs font-medium text-foreground/40 hover:text-foreground/65 transition-colors disabled:opacity-40"
+            className="text-xs font-medium text-faint hover:text-muted-foreground transition-colors disabled:opacity-40"
           >
             Cancel
           </button>

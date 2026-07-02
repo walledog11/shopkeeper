@@ -12,7 +12,6 @@ export default async function AgentConfigurePage() {
   return (
     <Suspense fallback={null}>
       <ConfigurePageClient
-        orgName={org.name}
         settings={settings}
         rawSettings={rawSettings}
         version={org.updatedAt.toISOString()}

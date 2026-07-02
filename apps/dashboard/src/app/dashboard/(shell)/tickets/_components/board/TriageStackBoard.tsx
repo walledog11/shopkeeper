@@ -66,13 +66,13 @@ export function TriageStackBoard({
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
         <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
-          <CheckCircle2 className="size-5 text-foreground/40" />
+          <CheckCircle2 className="size-5 text-faint" />
         </span>
         <div className="flex flex-col gap-1">
           <h2 className="text-lg font-semibold text-foreground">
             {activeView === "closed" ? "No closed tickets" : "You're all caught up"}
           </h2>
-          <p className="max-w-[230px] text-sm text-foreground/50">
+          <p className="max-w-[230px] text-sm text-muted-foreground">
             {activeView === "closed"
               ? "Resolved conversations will show up here."
               : `${agentName} will flag anything that needs your eye.`}

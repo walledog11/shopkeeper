@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import { ApiError, BadRequestError } from '@/lib/api/errors';
 import { withOrgRoute } from '@/lib/api/route';
 import { shopifyRestJson, type ShopifyContext } from '@shopkeeper/agent/shopify';
+import { isSimulatedShopifyIntegration } from '@/lib/integrations/shopify-simulator';
 
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/\s+/g, ' ').trim();
@@ -18,22 +19,38 @@ export const POST = withOrgRoute(
       throw new BadRequestError('No Shopify integration connected');
     }
 
-    const ctx: ShopifyContext = { shop: integration.externalAccountId, accessToken: integration.accessToken };
-
     let policies: { id: number; title: string; body: string }[];
     let pages: { id: number; title: string; body_html: string }[];
-    try {
-      const [policiesData, pagesData] = await Promise.all([
-        shopifyRestJson<{ policies?: { id: number; title: string; body: string }[] }>(ctx, 'policies.json', { maxRetries: 0 }),
-        shopifyRestJson<{ pages?: { id: number; title: string; body_html: string }[] }>(ctx, 'pages.json', {
-          query: { published_status: 'published', limit: 250 },
-          maxRetries: 0,
-        }),
-      ]);
-      policies = policiesData.policies ?? [];
-      pages = pagesData.pages ?? [];
-    } catch {
-      throw new ApiError('Failed to fetch data from Shopify', 502);
+    if (isSimulatedShopifyIntegration(integration.metadata)) {
+      policies = [
+        {
+          id: -1,
+          title: 'Demo return policy',
+          body: '<p>Unused items can be returned within 30 days. Contact support before sending anything back.</p>',
+        },
+      ];
+      pages = [
+        {
+          id: -1,
+          title: 'Demo shipping information',
+          body_html: '<p>Orders ship within two business days. Tracking is emailed after fulfillment.</p>',
+        },
+      ];
+    } else {
+      const ctx: ShopifyContext = { shop: integration.externalAccountId, accessToken: integration.accessToken };
+      try {
+        const [policiesData, pagesData] = await Promise.all([
+          shopifyRestJson<{ policies?: { id: number; title: string; body: string }[] }>(ctx, 'policies.json', { maxRetries: 0 }),
+          shopifyRestJson<{ pages?: { id: number; title: string; body_html: string }[] }>(ctx, 'pages.json', {
+            query: { published_status: 'published', limit: 250 },
+            maxRetries: 0,
+          }),
+        ]);
+        policies = policiesData.policies ?? [];
+        pages = pagesData.pages ?? [];
+      } catch {
+        throw new ApiError('Failed to fetch data from Shopify', 502);
+      }
     }
 
     const shopifyKbInitial = await db.knowledgeBase.findFirst({

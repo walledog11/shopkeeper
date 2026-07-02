@@ -29,31 +29,31 @@ export function ArticleReadDetail({
     <div className="px-4 md:px-8 py-6 max-w-3xl">
       <button type="button"
         onClick={onBack}
-        className="md:hidden flex items-center gap-1 text-xs text-foreground/50 hover:text-foreground/80 transition-colors mb-4"
+        className="md:hidden flex items-center gap-1 text-xs text-muted-foreground hover:text-strong transition-colors mb-4"
       >
         <ChevronLeft className="size-3.5" />
         Back
       </button>
-      <p className="text-xs text-foreground/35 uppercase tracking-wide mb-2">{article.baseName}</p>
+      <p className="text-xs text-faint uppercase tracking-wide mb-2">{article.baseName}</p>
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <h1 className="text-xl font-semibold text-foreground/90">{article.title}</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">{article.title}</h1>
         {isAgentLearned && <AgentLearnedBadge />}
       </div>
 
-      <div className="flex items-center gap-6 pt-2 pb-2 border-t border-b border-border text-xs text-foreground/40">
+      <div className="flex items-center gap-6 pt-2 pb-2 border-t border-b border-border text-xs text-faint">
         <div>
-          <p className="text-foreground/30 uppercase tracking-wide text-xs">Updated</p>
-          <p className="text-foreground/60 mt-0.5">{formatDate(article.updatedAt)}</p>
+          <p className="text-faint uppercase tracking-wide text-xs">Updated</p>
+          <p className="text-muted-foreground mt-0.5">{formatDate(article.updatedAt)}</p>
         </div>
         <div>
-          <p className="text-foreground/30 uppercase tracking-wide text-xs">Cited</p>
-          <p className="text-foreground/60 mt-0.5">{article.citationCount ?? 0} times</p>
+          <p className="text-faint uppercase tracking-wide text-xs">Cited</p>
+          <p className="text-muted-foreground mt-0.5">{article.citationCount ?? 0} times</p>
         </div>
         {article.baseSource === 'user' && (
           <div className="ml-auto flex items-center gap-1">
             <button type="button"
               onClick={onStartEdit}
-              className="flex items-center gap-1.5 text-xs text-foreground/60 hover:text-foreground/90 bg-foreground/[0.05] hover:bg-foreground/[0.10] border border-foreground/[0.08] px-3 py-1.5 rounded transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-strong bg-foreground/[0.05] hover:bg-foreground/[0.10] border border-foreground/[0.08] px-3 py-1.5 rounded transition-colors"
             >
               <Pencil className="size-3" />
               Edit
@@ -61,7 +61,7 @@ export function ArticleReadDetail({
             <button type="button"
               onClick={onDelete}
               disabled={isDeleting}
-              className="flex items-center gap-1.5 text-xs text-foreground/60 hover:text-red-400 bg-foreground/[0.05] hover:bg-foreground/[0.10] border border-foreground/[0.08] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded transition-colors"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-red-400 bg-foreground/[0.05] hover:bg-foreground/[0.10] border border-foreground/[0.08] disabled:opacity-40 disabled:cursor-not-allowed px-3 py-1.5 rounded transition-colors"
             >
               {isDeleting ? <Loader2 className="size-3 animate-spin" /> : <Trash2 className="size-3" />}
               {isDeleting ? 'Deleting…' : 'Delete'}
@@ -72,13 +72,13 @@ export function ArticleReadDetail({
       {deleteError && (
         <p className="mt-3 text-xs text-red-400" aria-live="polite">{deleteError}</p>
       )}
-      <div className="text-sm text-foreground/65 leading-relaxed pt-6 whitespace-pre-wrap mb-6">
+      <div className="text-sm text-muted-foreground leading-relaxed pt-6 whitespace-pre-wrap mb-6">
         {article.body}
       </div>
       {displayTags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-6">
           {displayTags.map(tag => (
-            <span key={tag} className="text-xs font-medium text-foreground/55 bg-foreground/[0.05] border border-foreground/[0.08] px-2 py-0.5 rounded-full">
+            <span key={tag} className="text-xs font-medium text-muted-foreground bg-foreground/[0.05] border border-foreground/[0.08] px-2 py-0.5 rounded-full">
               #{tag}
             </span>
           ))}

@@ -122,7 +122,7 @@ export function NeedsYouCardHeaderRow({
         <span aria-hidden className="shrink-0" />
       )}
 
-      <div className="inline-flex shrink-0 items-center gap-1.5 text-xs text-foreground/45">
+      <div className="inline-flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
         <Image
           src={channel.logo}
           alt=""
@@ -131,7 +131,7 @@ export function NeedsYouCardHeaderRow({
           className="size-3.5 shrink-0 object-contain opacity-55"
         />
         <span>{item.channelName}</span>
-        <span className="text-foreground/25">{"\u00b7"}</span>
+        <span className="text-faint">{"\u00b7"}</span>
         <span className="tabular-nums">{item.timeAgo}</span>
       </div>
     </div>
@@ -142,7 +142,7 @@ export function NeedsYouCustomerName({ name }: { name: string | null }) {
   if (!name?.trim()) return null
 
   return (
-    <p className="mt-1.5 text-sm font-medium text-foreground/55">{name.trim()}</p>
+    <p className="mt-1.5 text-sm font-medium text-muted-foreground">{name.trim()}</p>
   )
 }
 
@@ -179,7 +179,7 @@ export function NeedsYouBubble({
         )}
       >
         {tone === "reply" && agentInitial && (
-          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-foreground/55">
+          <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[9px] font-bold text-muted-foreground">
             {agentInitial}
           </span>
         )}
@@ -192,11 +192,11 @@ export function NeedsYouBubble({
         )}
       >
         {tone === "customer" ? (
-          <p className="text-sm leading-relaxed text-foreground/70 line-clamp-3">
+          <p className="text-sm leading-relaxed text-strong line-clamp-3">
             {children}
           </p>
         ) : (
-          <div className="text-sm font-medium leading-relaxed text-foreground/85 line-clamp-4">
+          <div className="text-sm font-medium leading-relaxed text-strong line-clamp-4">
             {children}
           </div>
         )}
@@ -225,7 +225,7 @@ export function NeedsYouPrimaryButton({
         "inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-semibold transition-all",
         "disabled:opacity-40 disabled:hover:translate-y-0",
         confirming
-          ? "bg-gradient-to-b from-amber-600 to-amber-700 text-white shadow-md shadow-amber-600/20 hover:-translate-y-0.5 hover:from-amber-600 hover:to-amber-700/95"
+          ? "bg-gradient-to-b from-amber-600 to-amber-700 text-[#ffffff] shadow-md shadow-amber-600/20 hover:-translate-y-0.5 hover:from-amber-600 hover:to-amber-700/95"
           : "bg-gradient-to-b from-foreground to-foreground/90 text-background shadow-md shadow-foreground/10 hover:-translate-y-0.5 hover:from-foreground hover:to-foreground/85",
       )}
     >

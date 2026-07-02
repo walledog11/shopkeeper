@@ -229,7 +229,7 @@ function ShopifySectionContent({ thread, shopify, onLinkShopifyCustomer }: Shopi
               <button
                 type="button"
                 onClick={() => dispatch({ type: "editing", editing: true })}
-                className="flex size-6 items-center justify-center rounded text-foreground/40 transition-colors hover:bg-foreground/[0.05] hover:text-foreground/70"
+                className="flex size-6 items-center justify-center rounded text-faint transition-colors hover:bg-foreground/[0.05] hover:text-strong"
                 aria-label="Edit customer"
                 title="Edit customer"
               >
@@ -348,11 +348,11 @@ interface ShopifyFallbackProps {
 }
 
 function ShopifyFallback({ title, detail, searchLabel, onSearch, onRetry }: ShopifyFallbackProps) {
-  const btn = "inline-flex items-center gap-1.5 rounded-md border border-foreground/[0.12] bg-foreground/[0.05] px-2.5 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:border-foreground/20 hover:bg-foreground/[0.09]"
+  const btn = "inline-flex items-center gap-1.5 rounded-md border border-foreground/[0.12] bg-foreground/[0.05] px-2.5 py-1.5 text-xs font-medium text-strong transition-colors hover:border-foreground/20 hover:bg-foreground/[0.09]"
   return (
     <div className="rounded-lg border border-dashed border-foreground/[0.12] bg-foreground/[0.02] px-3 py-3.5 text-center">
-      <p className="text-xs font-medium text-foreground/55">{title}</p>
-      {detail && <p className="mt-0.5 truncate text-xs text-foreground/35">{detail}</p>}
+      <p className="text-xs font-medium text-muted-foreground">{title}</p>
+      {detail && <p className="mt-0.5 truncate text-xs text-faint">{detail}</p>}
       <div className="mt-2.5 flex items-center justify-center gap-2">
         {onRetry && (
           <button type="button" onClick={onRetry} className={btn}>

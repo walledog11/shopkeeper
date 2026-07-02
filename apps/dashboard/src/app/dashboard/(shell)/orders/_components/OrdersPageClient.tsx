@@ -157,16 +157,16 @@ export default function OrdersPageClient() {
         <div className={GLASS_SHELL_CLASS}>
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
-              <Search className="size-3.5 shrink-0 text-foreground/25" />
+              <Search className="size-3.5 shrink-0 text-faint" />
               <input
                 aria-label={shopTab === "customers" ? "Search customers" : "Search orders"}
                 placeholder={shopTab === "customers" ? "Search customers by name or email…" : "Search orders…"}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground/70 outline-none placeholder:text-foreground/30"
+                className="min-w-0 flex-1 bg-transparent text-sm text-strong outline-none placeholder:text-faint"
               />
               {searchInput && (
-                <button type="button" onClick={() => setSearchInput("")} aria-label="Clear search" className="text-foreground/25 transition-colors hover:text-foreground/50">
+                <button type="button" onClick={() => setSearchInput("")} aria-label="Clear search" className="text-faint transition-colors hover:text-muted-foreground">
                   <X className="size-3.5" />
                 </button>
               )}
@@ -186,7 +186,7 @@ export default function OrdersPageClient() {
                     aria-selected={active}
                     onClick={() => setShopTab(tab.id)}
                     className={`h-7 flex-1 rounded-full px-3 text-xs font-semibold transition-colors md:flex-none ${
-                      active ? "bg-foreground/[0.12] text-white" : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                      active ? "bg-foreground/[0.12] text-white" : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                     }`}
                   >
                     {tab.label}
@@ -204,7 +204,7 @@ export default function OrdersPageClient() {
             <CustomersPanel query={debouncedSearch} />
           ) : searchActive ? (
             <>
-              <p className="text-xs font-medium text-foreground/40">
+              <p className="text-xs font-medium text-faint">
                 {search.isLoading ? "Searching…" : `${search.allItems.length} result${search.allItems.length !== 1 ? "s" : ""}`}
               </p>
               <OrdersSearchResults

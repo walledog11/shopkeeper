@@ -1,12 +1,12 @@
 # Shopkeeper — AI operating layer for solo & small e-commerce businesses
 
-**Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram now; iMessage and WhatsApp next; the dashboard is one surface, not *the* surface). Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
+**Vision:** a general-purpose AI agent that runs the operational work of a small Shopify business and is reachable from wherever the merchant is (Telegram and iMessage now; WhatsApp next; the dashboard is one surface, not *the* surface). The flagship experience is the proactive messaging loop: plan approvals, questions, escalations, and the morning briefing arrive as texts on the merchant's phone — the dashboard is for setup and review, not the daily driver. Over time the same agent core (memory, approval/autonomy, multi-channel interaction, tool use) extends across workflow modules: support → order operations → inventory & supplier → marketing → finance.
 
 **V1 wedge = customer support.** Only the support module is built today. The architecture assumes more modules will share one *general-purpose* core, not a support-coupled one — support remains the V1 focus and the thing that must ship. Solo merchants and small teams. Multi-channel support inbox + AI agent that reads/writes Shopify directly.
 
 **Product principles** (the rubric for agent work):
 1. The agent should feel like an employee, not a chatbot — real memory, judgment, brand-voice consistency, and the honesty to say "you handle this" instead of hallucinating confidence.
-2. The merchant interacts from wherever they are (mobile, messaging), not just the dashboard.
+2. The merchant interacts from wherever they are (mobile, messaging), not just the dashboard. Proactive pushes (plans, questions, digests) must reach every bound operator channel — a feature that only notifies the dashboard, or only Telegram, is unfinished.
 3. Trust is binary — one bad refund undoes months of goodwill. Bias toward escalation over confident wrong action; failure modes matter more than success modes.
 4. Every workflow module shares one general-purpose agent core. The core must not couple to support specifically.
 
@@ -19,7 +19,7 @@
 - Redis: `@upstash/redis` (REST) in dashboard; `ioredis` (`REDIS_URL`) in gateway — **separate instances** (gateway needs a dedicated per-instance Redis for BullMQ, not Upstash). Daily LLM spend cap is shared across both apps via Postgres (`llm_daily_spend`), not Redis.
 - AI: Anthropic SDK (agent, plan, summary); OpenAI (embeddings)
 - Multi-tenant: every DB query is scoped by `organizationId`. `getOrCreateOrg()` maps Clerk org → DB `Organization`.
-- Ops alerts emit structured Pino logs (`opsAlert: true`) when thresholds are crossed; no external error-tracking vendor.
+- Ops alerts emit structured Pino logs (`opsAlert: true`) when thresholds are crossed; the dashboard also reports errors to Sentry (`@sentry/nextjs`).
 
 ## Inbound flow
 External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue BullMQ) → `apps/gateway/src/message-handlers/` (upsert customer/thread/message, sanitize prompt-injection, dedupe by `externalMessageId`, enqueue summary) → Claude tags + 1-sentence summary → gateway generates the agent plan in-process (`@shopkeeper/agent` planner, `message-handlers/generate-thread-plan.ts`) and caches it on the thread → Telegram notify bound org members. Dashboard polls `/api/threads?status=open` via SWR every 3s.

@@ -44,7 +44,7 @@ export function ArticleEditDetail({
         <p className="text-xs text-red-400" aria-live="polite">{editError}</p>
       )}
       <div className="flex justify-end gap-2">
-        <button type="button" onClick={onCancelEdit} className="text-xs text-foreground/40 hover:text-foreground/70 transition-colors px-3 py-1.5">
+        <button type="button" onClick={onCancelEdit} className="text-xs text-faint hover:text-strong transition-colors px-3 py-1.5">
           Cancel
         </button>
         <button type="button"

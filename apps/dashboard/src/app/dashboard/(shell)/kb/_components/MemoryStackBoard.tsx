@@ -68,11 +68,11 @@ function MemoryStackColumn({
     <section className="flex min-w-0 flex-col">
       <div className="mb-3 flex items-center justify-between gap-2 px-1">
         <div className="flex min-w-0 items-center gap-2">
-          <Icon className="size-3.5 shrink-0 text-foreground/40" aria-hidden />
-          <span className="truncate font-sans text-xs font-semibold uppercase tracking-wide text-foreground/70">
+          <Icon className="size-3.5 shrink-0 text-faint" aria-hidden />
+          <span className="truncate font-sans text-xs font-semibold uppercase tracking-wide text-strong">
             {group.label}
           </span>
-          <span className="text-xs font-medium tabular-nums text-foreground/35">{group.articles.length}</span>
+          <span className="text-xs font-medium tabular-nums text-faint">{group.articles.length}</span>
         </div>
         {group.source === "user" && (
           <div className="flex shrink-0 items-center gap-1.5">
@@ -80,7 +80,7 @@ function MemoryStackColumn({
               type="button"
               onClick={() => onCreateArticleInKb(group.id)}
               aria-label={`New note in ${group.label}`}
-              className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/35 transition-colors hover:bg-foreground/[0.04] hover:text-foreground/70"
+              className="inline-flex size-7 items-center justify-center rounded-full border border-border text-faint transition-colors hover:bg-foreground/[0.04] hover:text-strong"
             >
               <Plus className="size-3" />
             </button>
@@ -88,7 +88,7 @@ function MemoryStackColumn({
               type="button"
               onClick={() => onDeleteKb(group.id)}
               aria-label={`Delete ${group.label}`}
-              className="inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/35 transition-colors hover:bg-foreground/[0.04] hover:text-red-400"
+              className="inline-flex size-7 items-center justify-center rounded-full border border-border text-faint transition-colors hover:bg-foreground/[0.04] hover:text-red-400"
             >
               <Trash2 className="size-3" />
             </button>
@@ -109,12 +109,12 @@ function MemoryStackColumn({
 function EmptyFolderCard() {
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-3 rounded-3xl border border-border bg-card px-5 py-5 text-center shadow-sm">
-      <span className="flex size-10 items-center justify-center rounded-xl border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35">
+      <span className="flex size-10 items-center justify-center rounded-xl border border-foreground/[0.10] bg-foreground/[0.04] text-faint">
         <FileText className="size-4" />
       </span>
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground/60">No notes yet</p>
-        <p className="max-w-[180px] text-xs leading-relaxed text-foreground/35">
+        <p className="text-sm font-semibold text-muted-foreground">No notes yet</p>
+        <p className="max-w-[180px] text-xs leading-relaxed text-faint">
           Use the plus button above to add one.
         </p>
       </div>
@@ -134,11 +134,11 @@ function NewFolderStackCard({ onCreateKb }: { onCreateKb: () => void }) {
         className="group flex h-72 w-full flex-col rounded-3xl border border-dashed border-foreground/[0.12] bg-card/35 px-5 py-5 text-left shadow-sm transition-colors hover:border-foreground/[0.22] hover:bg-card/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/70"
       >
         <div className="flex items-center gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35 transition-colors group-hover:text-foreground/60">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-foreground/[0.10] bg-foreground/[0.04] text-faint transition-colors group-hover:text-muted-foreground">
             <Plus className="size-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-foreground/65 transition-colors group-hover:text-foreground/85">
+            <p className="truncate text-sm font-semibold text-muted-foreground transition-colors group-hover:text-strong">
               New Folder
             </p>
             <div className="h-2.5 w-16 rounded-full bg-foreground/[0.05]" />

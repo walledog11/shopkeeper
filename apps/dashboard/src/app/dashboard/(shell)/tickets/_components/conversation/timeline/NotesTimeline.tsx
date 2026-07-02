@@ -32,8 +32,8 @@ export default function NotesTimeline({
           <Users className="size-4 text-violet-400" />
         </div>
         <div>
-          <p className="text-sm font-semibold text-foreground/50">No internal activity yet</p>
-          <p className="text-xs text-foreground/30 mt-1">
+          <p className="text-sm font-semibold text-muted-foreground">No internal activity yet</p>
+          <p className="text-xs text-faint mt-1">
             Type <span className="font-mono font-semibold text-violet-400">@{agentName.toLowerCase()}</span> to ask {agentName}, or add a note for your team.
           </p>
         </div>
@@ -57,17 +57,17 @@ export default function NotesTimeline({
             )}
             <div className="flex-1 min-w-0">
               <div className="flex items-baseline gap-1.5 mb-1.5">
-                <span className={`text-[12px] font-semibold ${msg.isAgentNote ? "text-violet-400" : "text-foreground/60"}`}>
+                <span className={`text-[12px] font-semibold ${msg.isAgentNote ? "text-violet-400" : "text-muted-foreground"}`}>
                   {msg.author ?? "You"}
                 </span>
-                <span className="text-xs text-foreground/30">added a note</span>
-                <span className="text-xs text-foreground/25 ml-auto">{msg.time}</span>
+                <span className="text-xs text-faint">added a note</span>
+                <span className="text-xs text-faint ml-auto">{msg.time}</span>
               </div>
               <div className={msg.isAgentNote
                 ? "bg-violet-500/10 border border-violet-500/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
                 : "bg-amber-400/10 border border-amber-400/20 rounded-lg rounded-tl-sm px-3.5 py-2.5"
               }>
-                <p className="text-[13px] text-foreground/70 leading-relaxed">{msg.text}</p>
+                <p className="text-[13px] text-strong leading-relaxed">{msg.text}</p>
               </div>
             </div>
           </div>
@@ -78,12 +78,12 @@ export default function NotesTimeline({
         <div key={turn.id ?? `${turn.instruction}-${index}`} className="space-y-2">
           <div className="flex flex-col gap-1 items-end">
             {turn.senderPhone && (
-              <div className="flex items-center gap-1 text-xs text-foreground/30 mr-1">
+              <div className="flex items-center gap-1 text-xs text-faint mr-1">
                 <Smartphone className="size-3" />
                 Via Telegram
               </div>
             )}
-            <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-foreground/70 rounded-md rounded-tr-sm">
+            <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
               <span className="text-violet-400 font-semibold">@{agentName.toLowerCase()}</span>{" "}
               {turn.instruction}
             </div>
@@ -110,7 +110,7 @@ export default function NotesTimeline({
                               ? <AlertCircle className="size-3 text-red-400 shrink-0" />
                               : <Check className="size-3 text-green-400 shrink-0" />
                             }
-                            <span className={`text-xs ${isError ? "text-red-400" : "text-foreground/40"}`}>
+                            <span className={`text-xs ${isError ? "text-red-400" : "text-faint"}`}>
                               {isError ? action.result : (TOOL_LABELS[action.tool] ?? action.tool)}
                             </span>
                           </div>
@@ -119,7 +119,7 @@ export default function NotesTimeline({
                     </div>
                   )}
                   {turn.summary && (
-                    <p className="text-[14px] text-foreground/70 leading-relaxed">{turn.summary}</p>
+                    <p className="text-[14px] text-strong leading-relaxed">{turn.summary}</p>
                   )}
                 </>
               )}
@@ -132,7 +132,7 @@ export default function NotesTimeline({
         <div className="space-y-2">
           {pendingInstruction && (
             <div className="flex flex-col gap-1 items-end">
-              <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-foreground/70 rounded-md rounded-tr-sm">
+              <div className="px-4 py-3.5 text-[14px] max-w-[80%] leading-relaxed bg-foreground/[0.08] text-strong rounded-md rounded-tr-sm">
                 <span className="text-violet-400 font-semibold">@{agentName.toLowerCase()}</span>{" "}
                 {pendingInstruction}
               </div>

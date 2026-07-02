@@ -1,7 +1,7 @@
 import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from './logger.js';
 import { getGatewayDashboardUrl } from './config/env.js';
-import { notifyOperator } from './operator-notify.js';
+import { listOperatorBindings, notifyOperator } from './operator-notify.js';
 import { formatChannelLabel } from './lib/channel-format.js';
 
 export function formatEscalationMessage(
@@ -44,10 +44,7 @@ export async function pushOperatorEscalation(
     return null;
   }
 
-  const members = await db.orgMemberTelegramChat.findMany({
-    where: { orgMember: { organizationId } },
-    select: { chatId: true },
-  });
+  const members = await listOperatorBindings(organizationId);
 
   if (members.length === 0) {
     logger.info({ organizationId, threadId }, '[OperatorEscalation] No bound members — escalation skipped');

@@ -42,7 +42,7 @@ export function TicketRowActions({
           event.stopPropagation()
           onSend()
         }}
-        className={`inline-flex items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold bg-emerald-500 text-white shadow-sm hover:bg-emerald-400 disabled:opacity-50 transition-colors ${className}`}
+        className={`inline-flex items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold bg-emerald-500 text-[#ffffff] shadow-sm hover:bg-emerald-400 disabled:opacity-50 transition-colors ${className}`}
       >
         {isApproving ? <Loader2 aria-hidden className="size-3 animate-spin" /> : null}
         {isApproving ? "Sending" : "Send"}
@@ -59,7 +59,7 @@ export function TicketRowActions({
         event.stopPropagation()
         onReview()
       }}
-      className={`inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold bg-foreground/10 text-foreground/80 hover:bg-foreground/15 hover:text-white transition-colors ${className}`}
+      className={`inline-flex items-center justify-center rounded-full px-3 py-1.5 text-xs font-semibold bg-foreground/10 text-strong hover:bg-foreground/15 hover:text-white transition-colors ${className}`}
     >
       Review
     </button>

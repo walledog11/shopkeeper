@@ -34,18 +34,18 @@ export function MemoryStackCard({
         <div className={`flex size-9 shrink-0 items-center justify-center rounded-xl border ${
           isShopify
             ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-            : "border-foreground/[0.10] bg-foreground/[0.06] text-foreground/65"
+            : "border-foreground/[0.10] bg-foreground/[0.06] text-muted-foreground"
         }`}>
           <SourceIcon className="size-4" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold text-foreground/90">{article.baseName}</span>
-            <span className="shrink-0 text-xs tabular-nums text-foreground/35">
+            <span className="truncate text-sm font-semibold text-strong">{article.baseName}</span>
+            <span className="shrink-0 text-xs tabular-nums text-faint">
               {formatDate(article.updatedAt)}
             </span>
           </div>
-          <span className="block text-xs text-foreground/40">
+          <span className="block text-xs text-faint">
             {isShopify ? "Shopify memory" : "Team memory"}
           </span>
         </div>
@@ -60,7 +60,7 @@ export function MemoryStackCard({
         <h3 className="font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
           {article.title}
         </h3>
-        <p className="text-sm leading-relaxed text-foreground/55 line-clamp-5">{article.body}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground line-clamp-5">{article.body}</p>
       </button>
 
       <div className="mt-1 flex min-h-6 items-center justify-between gap-2">
@@ -69,18 +69,18 @@ export function MemoryStackCard({
           {visibleTags.map(tag => (
             <span
               key={tag}
-              className="max-w-[8rem] truncate rounded-full border border-foreground/[0.08] bg-foreground/[0.05] px-2 py-0.5 text-xs font-medium text-foreground/55"
+              className="max-w-[8rem] truncate rounded-full border border-foreground/[0.08] bg-foreground/[0.05] px-2 py-0.5 text-xs font-medium text-muted-foreground"
             >
               #{tag}
             </span>
           ))}
           {hiddenTagCount > 0 && (
-            <span className="rounded-full border border-foreground/[0.08] bg-foreground/[0.04] px-2 py-0.5 text-xs font-medium text-foreground/45">
+            <span className="rounded-full border border-foreground/[0.08] bg-foreground/[0.04] px-2 py-0.5 text-xs font-medium text-muted-foreground">
               +{hiddenTagCount}
             </span>
           )}
         </div>
-        <span className="shrink-0 text-xs tabular-nums text-foreground/35">
+        <span className="shrink-0 text-xs tabular-nums text-faint">
           {article.citationCount ?? 0} cited
         </span>
       </div>

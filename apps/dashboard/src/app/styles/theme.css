@@ -26,6 +26,8 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
+  --color-strong: var(--text-strong);
+  --color-faint: var(--text-faint);
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
@@ -77,6 +79,10 @@
   --muted: #191919;
   --muted-foreground: rgba(255, 255, 255, 0.40);
 
+  /* Text emphasis ramp (canonical doc lives in the paper block below) */
+  --text-strong: rgba(255, 255, 255, 0.80);
+  --text-faint: rgba(255, 255, 255, 0.30);
+
   /* Accent = hover/active fills */
   --accent: #1e1e1e;
   --accent-foreground: #ffffff;
@@ -121,6 +127,8 @@
   --secondary-foreground: rgba(255, 255, 255, 0.85);
   --muted: #191919;
   --muted-foreground: rgba(255, 255, 255, 0.40);
+  --text-strong: rgba(255, 255, 255, 0.80);
+  --text-faint: rgba(255, 255, 255, 0.30);
   --accent: #1e1e1e;
   --accent-foreground: #ffffff;
   --destructive: oklch(0.704 0.191 22.216);
@@ -142,7 +150,7 @@
   --sidebar-ring: rgba(255, 255, 255, 0.15);
 }
 
-/* ── Paper theme — the dashboard matches the marketing site's cream/ink world.
+/* ── Paper theme — the product surfaces match the marketing site's cream/ink world.
    Hung on body:has() so portaled surfaces (dialogs, popovers, command palette)
    inherit it too, not just descendants of the shell div.
 
@@ -155,7 +163,8 @@
    to their readable-on-paper counterparts (200→800, 300→700, 400→600);
    800/900 dark-surface tints remap to light chip tints (800→200, 900→100).
    Shades 500–700 are identity — new code should use those directly. ── */
-body:has(.dashboard-shell) {
+body:has(.dashboard-shell),
+body:has(.onboarding-shell) {
   --color-white: #2b2118;
   --color-black: #f6f2eb;
 
@@ -171,6 +180,15 @@ body:has(.dashboard-shell) {
   --secondary-foreground: rgba(43, 33, 24, 0.85);
   --muted: rgba(43, 33, 24, 0.05);
   --muted-foreground: rgba(43, 33, 24, 0.55);
+
+  /* Text emphasis ramp — the canonical secondary-text scale for the dashboard.
+     Collapses the legacy spread of raw text-foreground/NN onto three steps:
+       /70–/90  → text-strong            (emphasized labels, section titles)
+       /45–/65  → text-muted-foreground  (body secondary, captions, descriptions)
+       /15–/40  → text-faint             (placeholders, timestamps, hints)
+     Primary content and page titles stay on text-foreground (100%). */
+  --text-strong: rgba(43, 33, 24, 0.80);
+  --text-faint: rgba(43, 33, 24, 0.35);
   --accent: rgba(43, 33, 24, 0.06);
   --accent-foreground: #2b2118;
   --destructive: #b91c1c;
@@ -249,7 +267,8 @@ body:has(.dashboard-shell) {
 }
 
 /* Paper grain over the whole shell, dialogs included */
-body:has(.dashboard-shell)::after {
+body:has(.dashboard-shell)::after,
+body:has(.onboarding-shell)::after {
   content: "";
   position: fixed;
   inset: 0;
@@ -258,6 +277,12 @@ body:has(.dashboard-shell)::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E");
   background-size: 160px 160px;
   opacity: 0.45;
+}
+
+/* Onboarding leans into the marketing/Poke serif for its headlines — Instrument
+   Serif, scoped to the onboarding shell only so the dashboard keeps its sans. */
+body:has(.onboarding-shell) {
+  --m-serif: "Instrument Serif", Georgia, "Times New Roman", serif;
 }
 
 .font-display-serif {
@@ -282,4 +307,3 @@ body.dashboard-locked {
   overflow: hidden;
   overscroll-behavior: none;
 }
-

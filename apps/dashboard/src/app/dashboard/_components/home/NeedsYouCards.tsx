@@ -62,7 +62,7 @@ export function NeedsYouCard({
         <NeedsYouCardFooter>
           <Link
             href={`/dashboard/tickets?thread=${item.threadId}`}
-            className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3 text-sm font-semibold text-foreground/60 transition-colors hover:bg-foreground/[0.04]"
+            className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04]"
           >
             View Ticket
           </Link>
@@ -187,14 +187,14 @@ export function NeedsYouCard({
               type="button"
               onClick={() => setConfirming(false)}
               disabled={isApproving}
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-foreground/60 transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] disabled:opacity-40"
             >
               Cancel
             </button>
           ) : (
             <Link
               href={`/dashboard/tickets?thread=${item.threadId}`}
-              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-foreground/60 transition-colors hover:bg-foreground/[0.04]"
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-border bg-transparent py-3.5 text-base font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04]"
             >
               View Ticket
             </Link>

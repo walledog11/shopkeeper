@@ -4,6 +4,7 @@ import {
   productEventInsertId,
 } from '@shopkeeper/analytics';
 import logger from '../../logger.js';
+import { finalizeOperatorBind } from '../../operator-onboarding.js';
 import type { OperatorReply } from '../operator-message.js';
 
 const CONNECT_INSTRUCTIONS =
@@ -78,5 +79,6 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
     insertId: productEventInsertId.integrationConnectionCompleted(binding.id),
   });
 
-  await reply("Connected. Text SUMMARY for your inbox or HELP for commands. You can also send instructions like 'refund #1234'.");
+  const welcome = await finalizeOperatorBind(payload.organizationId);
+  await reply(welcome);
 }

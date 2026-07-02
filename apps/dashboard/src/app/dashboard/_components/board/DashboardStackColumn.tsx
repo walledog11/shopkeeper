@@ -2,6 +2,7 @@
 
 import type { ComponentType, ReactNode } from "react"
 import { StackDeck } from "@/app/dashboard/_components/stack/StackDeck"
+import type { StackPeekConfig } from "@/app/dashboard/_components/home/needs-you-motion"
 import { cn } from "@/lib/ui/cn"
 import { BoardColumnShell } from "./BoardColumnShell"
 import { BoardLoadMoreButton } from "./BoardLoadMoreButton"
@@ -42,6 +43,8 @@ interface DashboardStackColumnProps<T> {
   errorContent: ReactNode
   empty: ReactNode
   loadingLabel?: string
+  peek?: StackPeekConfig
+  stackSingleItem?: boolean
   peekShellClassName?: string
   peekCardClassName?: string
   headerClassName?: string
@@ -117,12 +120,12 @@ export function BoardColumnEmpty({
 }) {
   return (
     <div className={cn("flex flex-col items-center justify-center gap-3 border border-dashed border-foreground/[0.10] bg-card/35 px-4 text-center", className)}>
-      <span className="flex size-9 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35">
+      <span className="flex size-9 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-faint">
         <Icon className="size-4" />
       </span>
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-foreground/60">{title}</p>
-        <p className="mx-auto max-w-[210px] text-xs leading-relaxed text-foreground/35">
+        <p className="text-sm font-semibold text-muted-foreground">{title}</p>
+        <p className="mx-auto max-w-[210px] text-xs leading-relaxed text-faint">
           {body}
         </p>
       </div>
@@ -159,6 +162,8 @@ function DashboardStackDeck<T>({
   items,
   onExpand,
   onOpenItem,
+  peek,
+  stackSingleItem,
   peekCardClassName,
   peekShellClassName,
   renderCard,
@@ -169,6 +174,8 @@ function DashboardStackDeck<T>({
   items: readonly T[]
   onExpand: () => void
   onOpenItem: (item: T) => void
+  peek?: StackPeekConfig
+  stackSingleItem?: boolean
   peekCardClassName?: string
   peekShellClassName?: string
   renderCard: (item: T, context: DashboardStackColumnRenderContext) => ReactNode
@@ -182,6 +189,8 @@ function DashboardStackDeck<T>({
       labels={deckLabels}
       controls="count"
       testId={stackTestId}
+      peek={peek}
+      stackSingleItem={stackSingleItem}
       peekShellClassName={peekShellClassName}
       peekCardClassName={peekCardClassName}
       renderCard={(item, context) => {
@@ -216,6 +225,8 @@ export function DashboardStackColumn<T>({
   errorContent,
   empty,
   loadingLabel,
+  peek,
+  stackSingleItem,
   peekShellClassName,
   peekCardClassName,
   headerClassName,
@@ -286,6 +297,8 @@ export function DashboardStackColumn<T>({
             items={state.entries}
             onExpand={() => onExpandedChange(true)}
             onOpenItem={onOpenItem}
+            peek={peek}
+            stackSingleItem={stackSingleItem}
             peekCardClassName={peekCardClassName}
             peekShellClassName={peekShellClassName}
             renderCard={renderCard}

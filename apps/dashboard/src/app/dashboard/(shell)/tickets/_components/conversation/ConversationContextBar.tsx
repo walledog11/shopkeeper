@@ -28,14 +28,14 @@ interface Fact {
 
 const TEXT_TONE: Record<FactTone, string> = {
   value: "font-semibold text-emerald-700",
-  lead: "font-medium text-foreground/80",
-  muted: "text-foreground/50",
+  lead: "font-medium text-strong",
+  muted: "text-muted-foreground",
 }
 
 const ICON_TONE: Record<FactTone, string> = {
   value: "text-emerald-600/80",
-  lead: "text-foreground/45",
-  muted: "text-foreground/35",
+  lead: "text-muted-foreground",
+  muted: "text-faint",
 }
 
 export default function ConversationContextBar({
@@ -117,7 +117,7 @@ export default function ConversationContextBar({
               )
             })}
           </div>
-          <span className="ml-1 flex size-6 shrink-0 items-center justify-center rounded-full text-foreground/35 transition-colors group-hover:bg-foreground/[0.06] group-hover:text-foreground/60">
+          <span className="ml-1 flex size-6 shrink-0 items-center justify-center rounded-full text-faint transition-colors group-hover:bg-foreground/[0.06] group-hover:text-muted-foreground">
             <ChevronDown className={`size-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
           </span>
         </button>

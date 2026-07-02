@@ -161,8 +161,8 @@ export function TicketRow({
             }`}
           >
             {isSelected
-              ? <CheckSquare className="size-3.5 text-foreground/70" />
-              : <Square className="size-3.5 text-foreground/20" />
+              ? <CheckSquare className="size-3.5 text-strong" />
+              : <Square className="size-3.5 text-faint" />
             }
           </button>
 
@@ -251,7 +251,7 @@ function TicketRowSwipeBanner({
       ref={ref}
       aria-hidden="true"
       style={{ visibility: "hidden" }}
-      className={`absolute inset-0 flex items-center justify-end gap-2 pr-5 text-white text-sm font-semibold pointer-events-none ${
+      className={`absolute inset-0 flex items-center justify-end gap-2 pr-5 text-[#ffffff] text-sm font-semibold pointer-events-none ${
         kind === "spam" ? "bg-red-500/90" : "bg-emerald-500/90"
       }`}
     >
@@ -295,7 +295,7 @@ function TicketRowDesktopContent({
   return (
     <>
       <div className="relative size-9 shrink-0">
-        <div className={`size-9 rounded-xl bg-gradient-to-br ${avatar.gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+        <div className={`size-9 rounded-xl bg-gradient-to-br ${avatar.gradient} flex items-center justify-center text-[#ffffff] text-[14px] font-bold shadow-sm`}>
           {avatar.initials}
         </div>
         <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
@@ -305,12 +305,12 @@ function TicketRowDesktopContent({
 
       <div className={`flex-1 min-w-0 ${flags.showListActions ? "pr-16" : ""}`}>
         <div className="flex items-baseline justify-between gap-2 mb-0.5">
-          <span className="text-sm font-semibold text-foreground/90 truncate">
+          <span className="text-sm font-semibold text-strong truncate">
             {presentation.customerLabel}
           </span>
           <div className="relative shrink-0 flex items-center justify-end min-h-[14px]">
             <span
-              className={`text-xs transition-opacity ${flags.longWait ? "text-foreground/55 font-medium" : "text-foreground/30"} ${
+              className={`text-xs transition-opacity ${flags.longWait ? "text-muted-foreground font-medium" : "text-faint"} ${
                 showHoverTime ? "group-hover:opacity-0" : ""
               }`}
             >
@@ -320,15 +320,15 @@ function TicketRowDesktopContent({
         </div>
 
         {presentation.showSubject && (
-          <p className="text-[13px] font-medium text-foreground/80 truncate mb-0.5">{ticket.subject}</p>
+          <p className="text-[13px] font-medium text-strong truncate mb-0.5">{ticket.subject}</p>
         )}
 
         {flags.isSpam && ticket.filterReason ? (
-          <p className="text-xs text-foreground/45 line-clamp-2 mb-2">{ticket.filterReason}</p>
+          <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{ticket.filterReason}</p>
         ) : presentation.subline ? (
-          <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{presentation.subline}</p>
+          <p className="text-xs text-faint line-clamp-1 mb-2">{presentation.subline}</p>
         ) : (
-          <p className="text-xs text-foreground/40 line-clamp-1 mb-2">{ticket.preview}</p>
+          <p className="text-xs text-faint line-clamp-1 mb-2">{ticket.preview}</p>
         )}
 
         <TicketRowDesktopMeta
@@ -351,7 +351,7 @@ function TicketRowHoverAction({ action }: { action: TicketRowAction }) {
       onClick={event => { event.stopPropagation(); action.run() }}
       title={action.kind === "spam" ? "Mark as spam" : "Recover to inbox"}
       className={`absolute right-4 top-3 flex items-center justify-end opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity ${
-        action.kind === "spam" ? "text-foreground/50 hover:text-red-400" : "text-foreground/50 hover:text-emerald-400"
+        action.kind === "spam" ? "text-muted-foreground hover:text-red-400" : "text-muted-foreground hover:text-emerald-400"
       }`}
     >
       {action.kind === "spam"

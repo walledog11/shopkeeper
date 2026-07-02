@@ -13,7 +13,7 @@ import type {
 } from "./order-requests"
 
 const HEADER_CLASS = "mb-3 flex items-center justify-between gap-3 px-1"
-const TITLE_CLASS = "truncate text-xs font-semibold uppercase tracking-normal text-foreground/70"
+const TITLE_CLASS = "truncate text-xs font-semibold uppercase tracking-normal text-strong"
 const RETURNS_LOADING = <div className="h-[68px] animate-pulse rounded-2xl border border-border bg-card" />
 const RETURNS_ERROR = (
   <div className="rounded-2xl border border-red-500/15 bg-red-500/[0.06] px-4 py-3.5">
@@ -22,10 +22,10 @@ const RETURNS_ERROR = (
 )
 const RETURNS_EMPTY = (
   <div className="flex items-center gap-3 rounded-2xl border border-dashed border-foreground/[0.10] bg-card/35 px-4 py-3.5">
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-foreground/35">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-foreground/[0.10] bg-foreground/[0.04] text-faint">
       <Undo2 className="size-4" />
     </span>
-    <p className="text-sm text-foreground/45">No open return requests right now.</p>
+    <p className="text-sm text-muted-foreground">No open return requests right now.</p>
   </div>
 )
 
@@ -62,13 +62,13 @@ function RowShell({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-sm font-semibold text-foreground/90">{title}</h3>
-          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-foreground/35">
+          <h3 className="truncate text-sm font-semibold text-strong">{title}</h3>
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-faint">
             {formatRelativeTime(at)}
             {external ? <ExternalLink className="size-3" /> : null}
           </span>
         </div>
-        {detail && <p className="mt-1 truncate text-xs text-foreground/45">{detail}</p>}
+        {detail && <p className="mt-1 truncate text-xs text-muted-foreground">{detail}</p>}
       </div>
     </>
   )

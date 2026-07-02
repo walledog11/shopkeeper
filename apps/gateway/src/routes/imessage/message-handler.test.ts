@@ -63,13 +63,24 @@ describe('handleImessageOperatorMessage', () => {
     });
 
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply.mock.calls[0]?.[0]).toContain('Connected');
+    const welcome = reply.mock.calls[0]?.[0] as string;
+    expect(welcome).toContain("it's Shopkeeper");
+    expect(welcome).toContain('watching');
 
     const binding = await db.orgMemberImessageBinding.findUnique({
       where: { senderId: SENDER },
     });
     expect(binding?.orgMemberId).toBe(member.id);
     expect(binding?.spaceId).toBe('space_2');
+
+    // First operator channel for the org — the morning digest and first briefing
+    // are armed as part of the bind.
+    const activated = (await db.organization.findUnique({
+      where: { id: org.id },
+      select: { settings: true },
+    }))?.settings as Record<string, unknown>;
+    expect(activated.digestEnabled).toBe(true);
+    expect(activated.firstBriefingPending).toBe(true);
     expect(analyticsSink.events).toEqual([
       expect.objectContaining({
         event: 'integration_connection_completed',

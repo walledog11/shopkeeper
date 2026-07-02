@@ -14,7 +14,7 @@ const SEGMENT_TONE: Record<CustomerSegment, string> = {
   vip: "border-amber-500/20 bg-amber-500/10 text-amber-300",
   repeat: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
   new: "border-sky-500/20 bg-sky-500/10 text-sky-300",
-  prospect: "border-foreground/[0.08] bg-foreground/[0.04] text-foreground/45",
+  prospect: "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground",
 }
 
 export function CustomerCard({
@@ -43,14 +43,14 @@ export function CustomerCard({
         <CustomerAvatar customer={customer} size="md" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="truncate text-sm font-semibold leading-tight text-foreground/90">{name}</p>
+            <p className="truncate text-sm font-semibold leading-tight text-strong">{name}</p>
             <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-semibold ${SEGMENT_TONE[segment]}`}>
               {SEGMENT_LABEL[segment]}
             </span>
           </div>
-          <p className="mt-0.5 truncate text-xs text-foreground/40">{customer.email}</p>
+          <p className="mt-0.5 truncate text-xs text-faint">{customer.email}</p>
           {location && (
-            <p className="mt-1 inline-flex items-center gap-1 truncate text-xs text-foreground/35">
+            <p className="mt-1 inline-flex items-center gap-1 truncate text-xs text-faint">
               <MapPin className="size-3 shrink-0" />
               {location}
             </p>
@@ -60,10 +60,10 @@ export function CustomerCard({
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
         <div className="min-w-0">
-          <span className="text-base font-bold text-foreground/85">{ltv}</span>
-          <span className="ml-1 text-xs text-foreground/40">lifetime</span>
+          <span className="text-base font-bold text-strong">{ltv}</span>
+          <span className="ml-1 text-xs text-faint">lifetime</span>
         </div>
-        <span className="shrink-0 text-xs tabular-nums text-foreground/45">
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           {customer.orders_count} order{customer.orders_count !== 1 ? "s" : ""}
         </span>
       </div>

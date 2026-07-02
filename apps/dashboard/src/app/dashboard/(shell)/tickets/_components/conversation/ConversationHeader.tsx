@@ -20,10 +20,10 @@ interface Props {
 
 const COCO_ACTION_CLASS: Record<NonNullable<TicketCocoAction>["variant"], string> = {
   send: "border-emerald-600/30 text-emerald-700 hover:bg-emerald-600/10 hover:text-emerald-800",
-  draft: "border-border text-foreground/75 hover:bg-foreground/[0.06] hover:text-foreground/90",
+  draft: "border-border text-strong hover:bg-foreground/[0.06] hover:text-strong",
   caution: "border-amber-600/30 text-amber-700 hover:bg-amber-600/10 hover:text-amber-800",
-  neutral: "border-border text-foreground/75 hover:bg-foreground/[0.06] hover:text-foreground/90",
-  loading: "border-border text-foreground/50 hover:bg-transparent hover:text-foreground/50",
+  neutral: "border-border text-strong hover:bg-foreground/[0.06] hover:text-strong",
+  loading: "border-border text-muted-foreground hover:bg-transparent hover:text-muted-foreground",
 }
 
 function initialsOf(name: string): string {
@@ -53,14 +53,14 @@ export default function ConversationHeader({
 
   const identity = (
     <>
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-xs font-semibold text-foreground/60">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-xs font-semibold text-muted-foreground">
         {initials}
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[15px] font-semibold leading-tight text-foreground/85">
+        <span className="block truncate text-[15px] font-semibold leading-tight text-strong">
           {customer}
         </span>
-        <span className="block text-xs font-medium capitalize text-foreground/40">via {platform}</span>
+        <span className="block text-xs font-medium capitalize text-faint">via {platform}</span>
       </span>
     </>
   )
@@ -72,7 +72,7 @@ export default function ConversationHeader({
           variant="ghost"
           size="icon"
           aria-label={embedded ? "Close conversation" : "Back"}
-          className={`${embedded ? "" : "md:hidden"} shrink-0 -ml-1 text-foreground/40 hover:text-foreground/80 hover:bg-foreground/[0.06] size-8`}
+          className={`${embedded ? "" : "md:hidden"} shrink-0 -ml-1 text-faint hover:text-strong hover:bg-foreground/[0.06] size-8`}
           onClick={onBack}
         >
           <BackIcon className="size-4" />
@@ -127,7 +127,7 @@ export default function ConversationHeader({
               variant="outline"
               size="sm"
               onClick={onReopen}
-              className="text-foreground/50 border-border hover:bg-foreground/[0.06] hover:text-foreground/80 text-xs font-semibold flex items-center gap-1.5 h-8"
+              className="text-muted-foreground border-border hover:bg-foreground/[0.06] hover:text-strong text-xs font-semibold flex items-center gap-1.5 h-8"
             >
               <RotateCcw className="size-3.5" /> Reopen
             </Button>

@@ -62,6 +62,7 @@ const SETTINGS_KEYS = [
   "spamFilterEnabled",
   "autonomyTier",
   "onboardingCompletedAt",
+  "firstBriefingPending",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const BOOLEAN_FIELDS = [
@@ -72,6 +73,7 @@ const BOOLEAN_FIELDS = [
   "digestEnabled",
   "businessHoursEnabled",
   "spamFilterEnabled",
+  "firstBriefingPending",
 ] as const satisfies readonly (keyof OrgSettings)[];
 
 const STRING_FIELDS = [

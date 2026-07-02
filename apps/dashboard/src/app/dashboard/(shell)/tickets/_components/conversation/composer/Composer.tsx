@@ -47,7 +47,7 @@ export default function Composer(props: ComposerProps) {
 
       <div className={`flex items-end gap-2 rounded-[24px] border px-2 py-1.5 shadow-sm transition-colors ${barTone}`}>
         {isAgentMode ? (
-          <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-foreground/70">
+          <span className="mb-1 inline-flex shrink-0 items-center gap-1 self-center rounded-full bg-foreground/[0.07] px-2.5 py-[5px] text-xs font-semibold text-strong">
             <Bot className="size-3" />
             @{agentName.toLowerCase()}
           </span>
@@ -62,7 +62,7 @@ export default function Composer(props: ComposerProps) {
             className={`relative flex size-9 shrink-0 items-center justify-center rounded-full transition-colors ${
               isNoteTab
                 ? "bg-amber-500/20 text-amber-700"
-                : "text-foreground/40 hover:bg-foreground/[0.06] hover:text-foreground/70"
+                : "text-faint hover:bg-foreground/[0.06] hover:text-strong"
             }`}
           >
             <StickyNote className="size-4" />
@@ -94,7 +94,7 @@ export default function Composer(props: ComposerProps) {
           }}
           disabled={isSending}
           rows={1}
-          className="custom-scrollbar w-0 min-h-[36px] max-h-[40vh] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-base leading-relaxed text-foreground/90 outline-none placeholder:text-foreground/35 disabled:opacity-50 md:text-sm"
+          className="custom-scrollbar w-0 min-h-[36px] max-h-[40vh] flex-1 resize-none overflow-y-auto bg-transparent py-1.5 text-base leading-relaxed text-strong outline-none placeholder:text-faint disabled:opacity-50 md:text-sm"
           placeholder={placeholder}
         />
 
@@ -111,7 +111,7 @@ export default function Composer(props: ComposerProps) {
       </div>
 
       <div className="flex min-h-[16px] items-center px-3 pt-1">
-        <span className="min-w-0 truncate text-[11px] text-foreground/40">
+        <span className="min-w-0 truncate text-[11px] text-faint">
           {error ? (
             <span className="font-medium text-red-500">{error}</span>
           ) : isNoteTab ? (
@@ -119,7 +119,7 @@ export default function Composer(props: ComposerProps) {
           ) : isAgentMode ? (
             `${agentName} replies here — only you see this`
           ) : isEmailLike && senderEmail ? (
-            <>Replies as <span className="font-semibold text-foreground/65">{senderEmail}</span></>
+            <>Replies as <span className="font-semibold text-muted-foreground">{senderEmail}</span></>
           ) : null}
         </span>
       </div>

@@ -20,9 +20,9 @@ export function EmptyState({
         {icon}
       </span>
       <div>
-        <p className="text-sm font-semibold text-foreground/70 mb-1">{title}</p>
+        <p className="text-sm font-semibold text-strong mb-1">{title}</p>
         {description && (
-          <p className={cn("text-xs text-foreground/45", action && "mb-3")}>{description}</p>
+          <p className={cn("text-xs text-muted-foreground", action && "mb-3")}>{description}</p>
         )}
         {action}
       </div>

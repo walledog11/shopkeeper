@@ -42,8 +42,8 @@ function renderIntegrationSkeletonSection(
   return (
     <section key={sectionKind} className="space-y-4">
       <div>
-        <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
-        <p className="text-xs text-foreground/35 mt-1">{description}</p>
+        <h2 className="text-sm font-semibold text-strong">{title}</h2>
+        <p className="text-xs text-faint mt-1">{description}</p>
       </div>
       <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
         {Array.from({ length: count }).map((_, i) => (
@@ -261,8 +261,8 @@ function IntegrationsPageContent({
     return (
       <section key={sectionKind} className="space-y-4">
         <div>
-          <h2 className="text-sm font-semibold text-foreground/80">{title}</h2>
-          <p className="text-xs text-foreground/35 mt-1">{description}</p>
+          <h2 className="text-sm font-semibold text-strong">{title}</h2>
+          <p className="text-xs text-faint mt-1">{description}</p>
         </div>
         <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
           {configs.map(renderIntegrationCard)}
@@ -290,8 +290,8 @@ function IntegrationsPageContent({
         {showSetup && (
           <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] px-5 py-4">
             <div className="flex items-baseline justify-between gap-3">
-              <p className="text-sm font-semibold text-foreground/80">Connect your channels</p>
-              <p className="text-xs text-foreground/35">{setupDoneCount} of {setupSteps.length} connected</p>
+              <p className="text-sm font-semibold text-strong">Connect your channels</p>
+              <p className="text-xs text-faint">{setupDoneCount} of {setupSteps.length} connected</p>
             </div>
             <ol className="mt-3 space-y-2.5">
               {setupSteps.map((step, i) => (
@@ -301,23 +301,23 @@ function IntegrationsPageContent({
                   ) : (
                     <span className={cn(
                       "size-4 mt-0.5 rounded-full border text-[10px] font-semibold flex items-center justify-center shrink-0",
-                      i === nextStepIndex ? "border-foreground/40 text-foreground/70" : "border-foreground/[0.15] text-foreground/30",
+                      i === nextStepIndex ? "border-foreground/40 text-strong" : "border-foreground/[0.15] text-faint",
                     )}>
                       {i + 1}
                     </span>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className={cn("text-xs font-medium", step.done ? "text-foreground/35" : "text-foreground/70")}>
+                    <p className={cn("text-xs font-medium", step.done ? "text-faint" : "text-strong")}>
                       {step.label}
                     </p>
                     {!step.done && i === nextStepIndex && (
-                      <p className="text-xs text-foreground/35 mt-0.5">{step.detail}</p>
+                      <p className="text-xs text-faint mt-0.5">{step.detail}</p>
                     )}
                   </div>
                   {!step.done && i === nextStepIndex && (
                     <button type="button"
                       onClick={() => goToStep(step.id)}
-                      className="text-xs font-semibold text-foreground/90 bg-foreground/[0.08] hover:bg-foreground/[0.14] border border-foreground/[0.15] rounded-md px-3 py-1.5 transition-colors shrink-0"
+                      className="text-xs font-semibold text-strong bg-foreground/[0.08] hover:bg-foreground/[0.14] border border-foreground/[0.15] rounded-md px-3 py-1.5 transition-colors shrink-0"
                     >
                       Connect
                     </button>

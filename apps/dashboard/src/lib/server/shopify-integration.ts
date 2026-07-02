@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import { shopifyRestJson, ShopifyRequestError } from '@shopkeeper/agent/shopify';
 import { getRedis } from '@/lib/server/redis';
 import logger from '@/lib/server/logger';
+import { isSimulatedShopifyIntegration } from '@/lib/integrations/shopify-simulator';
 
 export type ShopifyConnectionState = 'active' | 'invalid' | 'incomplete';
 
@@ -99,7 +100,12 @@ export async function refreshShopifyIntegrationHealthIfDue(integration: {
   externalAccountId: string;
   accessToken: string | null;
   tokenExpiresAt: Date | null;
+  metadata?: unknown;
 }): Promise<Date | null> {
+  if (isSimulatedShopifyIntegration(integration.metadata)) {
+    return integration.tokenExpiresAt;
+  }
+
   if (!isShopifyIntegrationOperational(integration)) {
     return integration.tokenExpiresAt;
   }

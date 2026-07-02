@@ -75,9 +75,9 @@ export default function ConciergeBriefing({
       <div className="flex items-start gap-3.5 px-6 pt-5 pb-5">
         <div className="min-w-0 flex-1">
           <h1 className="font-sans text-[27px] font-semibold leading-tight tracking-[-0.02em] text-foreground">
-            {greeting}{userName ? <>, <span className="italic text-[#9c9285]">{userName}</span></> : ""}.
+            {greeting}{userName ? <>, <span className="italic text-muted-foreground">{userName}</span></> : ""}.
           </h1>
-          <p className="mt-1.5 text-sm text-foreground/60 leading-relaxed tracking-[-0.01em] max-w-2xl">
+          <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed tracking-[-0.01em] max-w-2xl">
             <BriefingNarrativeInline segments={narrativeSegments} />
             {opsNotes.map(note => (
               <span key={note.id}> <OpsNoteLink note={note} />.</span>
@@ -100,7 +100,7 @@ export default function ConciergeBriefing({
             </button>
             <Link
               href="/dashboard/tickets"
-              className="text-xs font-medium text-foreground/45 hover:text-foreground/70 transition-colors"
+              className="text-xs font-medium text-muted-foreground hover:text-strong transition-colors"
             >
               Browse all tickets
             </Link>

@@ -72,9 +72,12 @@ export function EmailForwardingSetupPanel({
   const guide = FORWARDING_GUIDES.find(g => g.id === provider) ?? FORWARDING_GUIDES[0]
 
   return (
-    <div className="px-4 py-3.5 bg-foreground/[0.02] space-y-3">
+    <div className="space-y-5 bg-foreground/[0.02] px-4 py-4 sm:px-5 sm:py-5">
       <div className="space-y-2">
-        <p className="text-xs text-foreground/40">Forward incoming mail to</p>
+        <div>
+          <p className="text-[13px] font-semibold text-foreground/80">Your private forwarding address</p>
+          <p className="mt-0.5 text-[12.5px] text-foreground/50">Copy this into your email provider&apos;s forwarding settings.</p>
+        </div>
         <div className="flex items-center gap-2 rounded-lg border border-foreground/[0.08] bg-foreground/[0.03] px-3 py-2.5">
           {inboundAddress ? (
             <>
@@ -88,7 +91,7 @@ export function EmailForwardingSetupPanel({
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs text-foreground/40">Set up forwarding</p>
+        <p className="text-[13px] font-semibold text-foreground/80">Set up forwarding with</p>
         <div className="flex flex-wrap gap-1.5">
           {FORWARDING_GUIDES.map(g => (
             <button
@@ -96,7 +99,7 @@ export function EmailForwardingSetupPanel({
               type="button"
               onClick={() => setProvider(g.id)}
               className={cn(
-                "text-xs font-medium rounded-lg px-2.5 py-1.5 border transition-colors",
+                "rounded-lg border px-2.5 py-1.5 text-[12.5px] font-medium transition-colors",
                 provider === g.id
                   ? "bg-foreground/[0.08] border-foreground/[0.15] text-foreground/85"
                   : "bg-transparent border-foreground/[0.08] text-foreground/40 hover:text-foreground/65 hover:border-foreground/[0.12]",
@@ -106,14 +109,17 @@ export function EmailForwardingSetupPanel({
             </button>
           ))}
         </div>
-        <ol className="text-xs text-foreground/40 space-y-1 list-decimal list-inside leading-relaxed">
+        <ol className="list-inside list-decimal space-y-1.5 text-[13px] leading-relaxed text-foreground/55">
           {guide.steps.map((step) => <li key={step}>{step}</li>)}
         </ol>
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs text-foreground/40">Your support address</p>
-        <div className="flex items-center gap-3">
+        <div>
+          <p className="text-[13px] font-semibold text-foreground/80">Address your customers use</p>
+          <p className="mt-0.5 text-[12.5px] text-foreground/50">For example, support@yourstore.com.</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <Input
             aria-label="support@yourstore.com"
             type="email"
@@ -123,15 +129,15 @@ export function EmailForwardingSetupPanel({
             onKeyDown={(e) => { if (e.key === "Enter") onSave() }}
             className="h-10 flex-1 border-foreground/[0.10] bg-foreground/[0.03] text-sm text-white placeholder:text-foreground/30"
           />
-          <div className="shrink-0 flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
             {loading && <Loader2 className="size-3.5 animate-spin text-foreground/50" />}
             <PermissionActionLink onClick={onSave} disabled={!email || loading}>
-              {isConnected ? "Replace" : "Save"}
+              {isConnected ? "Update inbox" : "Save inbox"}
             </PermissionActionLink>
           </div>
         </div>
-        <p className="text-xs text-foreground/35 leading-relaxed">
-          Replies go out under this address.
+        <p className="text-[12.5px] leading-relaxed text-foreground/45">
+          Customer replies are sent from this address.
         </p>
       </div>
     </div>

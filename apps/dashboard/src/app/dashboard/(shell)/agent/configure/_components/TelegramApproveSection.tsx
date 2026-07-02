@@ -34,10 +34,10 @@ export function TelegramApproveSection() {
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-foreground/90">
+          <h3 className="text-sm font-semibold text-strong">
             {connected ? "Approve from your phone" : "Link Telegram to approve from your phone"}
           </h3>
-          <p className="mt-1 text-xs leading-relaxed text-foreground/40">
+          <p className="mt-1 text-xs leading-relaxed text-faint">
             {connected ? (
               <>
                 Telegram is linked

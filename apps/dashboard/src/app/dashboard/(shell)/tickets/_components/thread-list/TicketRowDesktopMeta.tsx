@@ -64,7 +64,7 @@ export function TicketRowDesktopMeta({
       <TicketTagPill tag={ticket.tag} className="shrink-0" />
 
       {showSlaStatus && isSearchMode && ticket.status && !closed ? (
-        <span className="text-xs text-foreground/25 font-medium capitalize ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="text-xs text-faint font-medium capitalize ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
           {ticket.status}
         </span>
       ) : null}

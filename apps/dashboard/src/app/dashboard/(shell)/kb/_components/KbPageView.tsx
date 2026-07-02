@@ -85,19 +85,19 @@ export function KbPageView({ state }: KbPageViewProps) {
         <div className={GLASS_SHELL_CLASS}>
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <div className={`flex h-9 min-w-0 items-center gap-2 rounded-full px-3.5 md:flex-1 ${GLASS_CONTROL_CLASS}`}>
-              <Search className="size-3.5 shrink-0 text-foreground/25" />
+              <Search className="size-3.5 shrink-0 text-faint" />
               <input aria-label="Search memory"
                 placeholder="Search memory..."
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground/70 placeholder:text-foreground/30 outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm text-strong placeholder:text-faint outline-none"
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch("")}
                   aria-label="Clear search"
-                  className="text-foreground/25 transition-colors hover:text-foreground/50"
+                  className="text-faint transition-colors hover:text-muted-foreground"
                 >
                   <X className="size-3.5" />
                 </button>
@@ -109,7 +109,7 @@ export function KbPageView({ state }: KbPageViewProps) {
                 aria-label="Sort notes"
                 value={sort}
                 onChange={e => setSort(e.target.value as SortKey)}
-                className={`h-9 min-w-0 flex-1 appearance-none rounded-full pl-3.5 pr-9 text-xs font-semibold text-foreground/55 outline-none transition-colors hover:text-foreground/70 md:w-44 md:flex-none ${GLASS_CONTROL_CLASS}`}
+                className={`h-9 min-w-0 flex-1 appearance-none rounded-full pl-3.5 pr-9 text-xs font-semibold text-muted-foreground outline-none transition-colors hover:text-strong md:w-44 md:flex-none ${GLASS_CONTROL_CLASS}`}
               >
                 {SORT_OPTIONS.map((option) => (
                   <option
@@ -121,7 +121,7 @@ export function KbPageView({ state }: KbPageViewProps) {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-foreground/40" />
+              <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 size-3.5 -translate-y-1/2 text-faint" />
             </div>
           </div>
         </div>
@@ -135,7 +135,7 @@ export function KbPageView({ state }: KbPageViewProps) {
 
       {isLoading ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="size-5 animate-spin text-foreground/30" />
+          <Loader2 className="size-5 animate-spin text-faint" />
         </div>
       ) : (
         <MemoryStackBoard
@@ -172,8 +172,8 @@ export function KbPageView({ state }: KbPageViewProps) {
         <DialogContent className="w-[calc(100%-2rem)] max-w-2xl rounded-2xl border-border bg-background p-5 shadow-xl">
           <DialogTitle className="text-base font-semibold text-foreground">New Note</DialogTitle>
           <div className="space-y-3">
-            <p className="text-xs text-foreground/40">
-              Folder <span className="text-foreground/70">{articleTargetKb?.name}</span>
+            <p className="text-xs text-faint">
+              Folder <span className="text-strong">{articleTargetKb?.name}</span>
             </p>
             <input aria-label="Note title"
               placeholder="Note title"
@@ -200,7 +200,7 @@ export function KbPageView({ state }: KbPageViewProps) {
             <div className="flex justify-end gap-2">
               <button type="button"
                 onClick={closeCreateArticle}
-                className="px-3 py-1.5 text-xs text-foreground/40 transition-colors hover:text-foreground/70"
+                className="px-3 py-1.5 text-xs text-faint transition-colors hover:text-strong"
               >
                 Cancel
               </button>

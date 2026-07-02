@@ -160,7 +160,7 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
                     className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
                       active
                         ? "bg-foreground/[0.12] text-white"
-                        : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                        : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                     }`}
                   >
                     {opt.id === "all" ? "Full board" : opt.label}
@@ -176,7 +176,7 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
                 className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
                   !fromParam
                     ? "bg-foreground/[0.12] text-white"
-                    : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                    : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                 }`}
               >
                 All time
@@ -187,13 +187,13 @@ export default function QualityPanel({ agentName }: { agentName: string }) {
                 className={`h-7 rounded-full px-3 text-xs font-semibold transition-colors ${
                   fromParam === "24h"
                     ? "bg-foreground/[0.12] text-white"
-                    : "text-foreground/50 hover:bg-foreground/[0.06] hover:text-foreground/75"
+                    : "text-muted-foreground hover:bg-foreground/[0.06] hover:text-strong"
                 }`}
               >
                 24h
               </button>
               {hasCustomFrom && (
-                <span className="px-2 text-xs font-medium text-foreground/35">Custom</span>
+                <span className="px-2 text-xs font-medium text-faint">Custom</span>
               )}
             </div>
           </div>

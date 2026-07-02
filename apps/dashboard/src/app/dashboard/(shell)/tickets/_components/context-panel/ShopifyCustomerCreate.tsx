@@ -30,8 +30,8 @@ export function ShopifyCustomerCreate({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-foreground/30">New Shopify customer</p>
-        <button type="button" onClick={onBack} className="text-xs text-foreground/40 hover:text-foreground/70 transition-colors">Back</button>
+        <p className="text-xs text-faint">New Shopify customer</p>
+        <button type="button" onClick={onBack} className="text-xs text-faint hover:text-strong transition-colors">Back</button>
       </div>
       <div className="space-y-1.5">
         {(['first_name', 'last_name', 'email'] as const).map(field => (
@@ -42,7 +42,7 @@ export function ShopifyCustomerCreate({
             aria-label={field === 'first_name' ? 'First name' : field === 'last_name' ? 'Last name' : 'Email'}
             value={draft[field]}
             onChange={e => onDraftChange({ ...draft, [field]: e.target.value })}
-            className="w-full text-xs text-foreground/70 rounded-md border border-foreground/[0.12] bg-foreground/[0.06] px-2.5 py-1.5 focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/20"
+            className="w-full text-xs text-strong rounded-md border border-foreground/[0.12] bg-foreground/[0.06] px-2.5 py-1.5 focus:outline-none focus:border-foreground/[0.25] placeholder:text-faint"
           />
         ))}
       </div>
@@ -51,7 +51,7 @@ export function ShopifyCustomerCreate({
         type="button"
         onClick={onCreate}
         disabled={isDisabled}
-        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-white bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded-md py-1.5 transition-colors"
+        className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded-md py-1.5 transition-colors"
       >
         {isCreating ? <RefreshCw className="size-3 animate-spin" /> : <UserPlus className="size-3" />}
         Create & link

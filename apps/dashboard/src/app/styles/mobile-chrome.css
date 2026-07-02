@@ -1,7 +1,10 @@
 @media (max-width: 767px) {
   .dashboard-shell input:not([type="checkbox"]):not([type="radio"]),
   .dashboard-shell textarea,
-  .dashboard-shell select {
+  .dashboard-shell select,
+  .onboarding-shell input:not([type="checkbox"]):not([type="radio"]),
+  .onboarding-shell textarea,
+  .onboarding-shell select {
     font-size: max(16px, 1rem);
   }
 

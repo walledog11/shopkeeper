@@ -58,8 +58,8 @@ export const REVIEW_TONE_CLASS: Record<
     border: "hover:border-red-500/25",
   },
   note: {
-    icon: "border-foreground/[0.10] bg-foreground/[0.05] text-foreground/55",
-    badge: "border-foreground/[0.08] bg-foreground/[0.04] text-foreground/50",
+    icon: "border-foreground/[0.10] bg-foreground/[0.05] text-muted-foreground",
+    badge: "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground",
     border: "hover:border-foreground/[0.16]",
   },
 }
@@ -100,7 +100,7 @@ export function ReviewFeedbackControls({
           className={`inline-flex items-center gap-1 font-semibold transition-colors ${
             feedback === "good"
               ? "text-emerald-300"
-              : "text-foreground/40 hover:text-emerald-200"
+              : "text-faint hover:text-emerald-200"
           }`}
         >
           <ThumbsUp className="size-3" />
@@ -110,7 +110,7 @@ export function ReviewFeedbackControls({
       {showSoundsOff && correctionHref && (
         <Link
           href={correctionHref}
-          className="inline-flex items-center gap-1 font-semibold text-foreground/40 transition-colors hover:text-amber-200"
+          className="inline-flex items-center gap-1 font-semibold text-faint transition-colors hover:text-amber-200"
         >
           <ThumbsDown className="size-3" />
           Sounds off

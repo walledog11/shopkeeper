@@ -32,7 +32,7 @@ export function TicketListFiltersPanel({
     <div className="space-y-3">
       {channelFilters.length > 0 && (
         <div className="space-y-1.5">
-          <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/30">Channel</div>
+          <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-faint">Channel</div>
           <div className="flex flex-wrap gap-1.5">
             <button
               type="button"
@@ -40,7 +40,7 @@ export function TicketListFiltersPanel({
               className={`h-7 px-2.5 rounded-md border text-xs font-semibold transition-all ${
                 channelFilter === null
                   ? "bg-foreground/[0.08] text-foreground border-foreground/20"
-                  : "bg-transparent border-border text-foreground/40 hover:border-foreground/20 hover:text-foreground/60"
+                  : "bg-transparent border-border text-faint hover:border-foreground/20 hover:text-muted-foreground"
               }`}
             >
               All
@@ -53,7 +53,7 @@ export function TicketListFiltersPanel({
                 className={`h-7 px-2.5 rounded-md border text-xs font-semibold transition-all flex items-center gap-1.5 ${
                   channelFilter === channel.id
                     ? "bg-foreground/[0.08] text-foreground border-foreground/20"
-                    : "bg-transparent border-border text-foreground/40 hover:border-foreground/20 hover:text-foreground/60"
+                    : "bg-transparent border-border text-faint hover:border-foreground/20 hover:text-muted-foreground"
                 }`}
               >
                 <Image src={channel.logo} alt={channel.label} width={12} height={12} className="object-contain opacity-70" />
@@ -65,7 +65,7 @@ export function TicketListFiltersPanel({
       )}
 
       <div className="space-y-1.5">
-        <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-foreground/30">Issue type</div>
+        <div className="px-0.5 text-[11px] font-semibold uppercase tracking-wide text-faint">Issue type</div>
         <div className="flex flex-wrap gap-1.5">
           {TICKET_TAG_FILTERS.map(tag => {
             const style = getTagStyle(tag)
@@ -78,7 +78,7 @@ export function TicketListFiltersPanel({
                 className={`h-7 px-2.5 rounded-full text-xs font-semibold transition-all border ${
                   active
                     ? `${style.className} border-foreground/15`
-                    : "bg-transparent border-border text-foreground/40 hover:border-foreground/20 hover:text-foreground/60"
+                    : "bg-transparent border-border text-faint hover:border-foreground/20 hover:text-muted-foreground"
                 }`}
               >
                 {tag}
@@ -92,7 +92,7 @@ export function TicketListFiltersPanel({
         <button
           type="button"
           onClick={onViewSpam}
-          className="w-full h-8 rounded-md border border-border text-xs font-semibold text-foreground/40 hover:border-foreground/20 hover:text-foreground/60 transition-all"
+          className="w-full h-8 rounded-md border border-border text-xs font-semibold text-faint hover:border-foreground/20 hover:text-muted-foreground transition-all"
         >
           View spam ({spamCount})
         </button>

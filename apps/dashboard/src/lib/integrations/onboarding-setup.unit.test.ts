@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest"
 import {
-  countOnboardingEssentials,
   isEmailIntegrationConfigured,
   resolveOnboardingRedirectStep,
   resolveOnboardingStepIndex,
@@ -57,21 +56,11 @@ describe("resolveOnboardingRedirectStep", () => {
   })
 })
 
-describe("countOnboardingEssentials", () => {
-  it("counts store, shopify, and email milestones", () => {
-    expect(countOnboardingEssentials({
-      storeBriefed: true,
-      hasShopify: true,
-      hasEmail: false,
-    })).toBe(2)
-  })
-})
-
 describe("resolveOnboardingStepIndex", () => {
   it("maps step query params to onboarding indices", () => {
-    const ids = ["intro", "store", "shopify", "email", "autonomy", "plan"]
-    expect(resolveOnboardingStepIndex("email", 0, ids)).toBe(3)
-    expect(resolveOnboardingStepIndex("plan", 0, ids)).toBe(5)
+    const ids = ["intro", "shopify", "email", "connect", "plan"]
+    expect(resolveOnboardingStepIndex("email", 0, ids)).toBe(2)
+    expect(resolveOnboardingStepIndex("plan", 0, ids)).toBe(4)
     expect(resolveOnboardingStepIndex(null, 2, ids)).toBe(2)
   })
 })

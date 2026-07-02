@@ -9,8 +9,6 @@ export type EmailIntegrationLike = {
 
 export type OnboardingResumeStep = "shopify" | "email" | "plan"
 
-export const ONBOARDING_ESSENTIALS_TOTAL = 3
-
 export function isEmailIntegrationConfigured(integration: EmailIntegrationLike): boolean {
   if (!integration || integration.platform !== "email") return false
   if (getEmailProvider(integration) === "postmark") return true
@@ -26,14 +24,6 @@ export function resolveOnboardingRedirectStep(args: {
   if (!args.hasShopify) return "shopify"
   if (!args.hasEmail) return "email"
   return "plan"
-}
-
-export function countOnboardingEssentials(args: {
-  storeBriefed: boolean
-  hasShopify: boolean
-  hasEmail: boolean
-}): number {
-  return [args.storeBriefed, args.hasShopify, args.hasEmail].filter(Boolean).length
 }
 
 export function resolveOnboardingStepIndex(

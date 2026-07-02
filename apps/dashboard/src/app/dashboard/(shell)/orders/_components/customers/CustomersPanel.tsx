@@ -75,7 +75,7 @@ export default function CustomersPanel({ query }: { query: string }) {
     <>
       <div className="space-y-5">
         {isSearchMode && (
-          <p className="text-xs font-medium text-foreground/40">
+          <p className="text-xs font-medium text-faint">
             {isLoading ? "Searching…" : `${allCustomers.length} result${allCustomers.length !== 1 ? "s" : ""}`}
           </p>
         )}

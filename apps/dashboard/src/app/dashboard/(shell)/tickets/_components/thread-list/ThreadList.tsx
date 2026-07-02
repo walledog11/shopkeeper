@@ -261,7 +261,7 @@ export default function ThreadList({
                 <button type="button"
                   onClick={onLoadMore}
                   disabled={isLoadingMore}
-                  className="w-full text-xs font-semibold text-foreground/40 hover:text-foreground/70 disabled:opacity-40 transition-colors py-1"
+                  className="w-full text-xs font-semibold text-faint hover:text-strong disabled:opacity-40 transition-colors py-1"
                 >
                   {isLoadingMore ? "Loading…" : "Load more"}
                 </button>

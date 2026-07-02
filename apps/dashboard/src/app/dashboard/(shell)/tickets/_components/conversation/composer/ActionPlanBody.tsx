@@ -46,8 +46,8 @@ export function ActionPlanBody({
   toggleStep: (id: string, tool: string) => void
 }) {
   const draftTextClass = isMobileSticky
-    ? "text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
-    : "text-[15px] leading-relaxed text-foreground/90 whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
+    ? "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[32vh] overflow-y-auto custom-scrollbar"
+    : "text-[15px] leading-relaxed text-strong whitespace-pre-wrap max-h-[34vh] overflow-y-auto custom-scrollbar"
 
   return (
     <>
@@ -103,7 +103,7 @@ export function ActionPlanBody({
                 <span className={`mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-md border transition-colors ${
                   step.enabled
                     ? "border-foreground bg-foreground text-background"
-                    : "border-border text-foreground/25"
+                    : "border-border text-faint"
                 }`}>
                   {isExecuting && step.enabled
                     ? <Loader2 className="size-2.5 animate-spin" />
@@ -111,7 +111,7 @@ export function ActionPlanBody({
                   }
                 </span>
                 <span className={`min-w-0 flex-1 text-sm leading-relaxed ${
-                  step.enabled ? "text-foreground/85" : "text-foreground/30 line-through"
+                  step.enabled ? "text-strong" : "text-faint line-through"
                 }`}>
                   {formatPlanStepSentence(step, customerName)}
                 </span>
@@ -123,7 +123,7 @@ export function ActionPlanBody({
 
       {showReplyHero && shopifyActionSteps.length > 0 && (
         <div className="mt-3 flex flex-col gap-1.5">
-          <span className="text-[11px] font-semibold text-foreground/35">Also in Shopify</span>
+          <span className="text-[11px] font-semibold text-faint">Also in Shopify</span>
           <div className="flex flex-wrap gap-1.5">
             {shopifyActionSteps.map(step => (
               <button
@@ -137,7 +137,7 @@ export function ActionPlanBody({
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                   step.enabled
                     ? "border-amber-600/25 bg-amber-600/[0.08] text-amber-700/90"
-                    : "border-border text-foreground/30 line-through"
+                    : "border-border text-faint line-through"
                 }`}
               >
                 {isExecuting && step.enabled

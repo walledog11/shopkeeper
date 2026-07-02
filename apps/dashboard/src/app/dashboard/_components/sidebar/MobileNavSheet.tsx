@@ -58,7 +58,7 @@ export function MobileNavSheet({
             type="button"
             onClick={onClose}
             aria-label="Close menu"
-            className="shrink-0 rounded-md p-2 text-foreground/50 transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
+            className="shrink-0 rounded-md p-2 text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground"
           >
             <X className="size-5" />
           </button>

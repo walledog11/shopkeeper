@@ -50,7 +50,7 @@ export function BusinessHoursSection({
       {settingsState.businessHoursEnabled && (
         <>
           <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-foreground/60">Opening days</span>
+              <span className="block text-xs font-semibold text-muted-foreground">Opening days</span>
               <div className="flex gap-1.5 flex-wrap">
                 {DAY_OPTIONS.map(([value, label]) => (
                   <button
@@ -67,7 +67,7 @@ export function BusinessHoursSection({
                     className={`h-8 w-12 rounded-md border text-xs font-semibold transition-all ${
                       settingsState.businessHoursDays.includes(value)
                         ? "bg-foreground/[0.15] text-white border-foreground/[0.35]"
-                        : "bg-transparent border-foreground/[0.12] text-foreground/40 hover:border-foreground/[0.22] hover:text-foreground/60"
+                        : "bg-transparent border-foreground/[0.12] text-faint hover:border-foreground/[0.22] hover:text-muted-foreground"
                     }`}
                   >
                     {label}
@@ -100,14 +100,14 @@ export function BusinessHoursSection({
             )}
 
             <div className="space-y-1.5">
-              <span className="block text-xs font-semibold text-foreground/60">Timezone</span>
+              <span className="block text-xs font-semibold text-muted-foreground">Timezone</span>
               <TimezoneSelect
                 aria-label="Business hours timezone"
                 value={settingsState.businessHoursTimezone ?? ""}
                 onChange={value => dispatch({ type: "set", patch: { businessHoursTimezone: value } })}
                 className={settingsSelectClassName("w-80")}
               />
-              <p className="text-xs text-foreground/30">Daylight Saving Time is handled automatically.</p>
+              <p className="text-xs text-faint">Daylight Saving Time is handled automatically.</p>
             </div>
 
             <CharacterCountTextarea
@@ -129,8 +129,8 @@ export function BusinessHoursSection({
     return (
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-semibold text-foreground/70">After-hours away message</h3>
-          <p className="text-xs text-foreground/35 mt-0.5 leading-relaxed">
+          <h3 className="text-sm font-semibold text-strong">After-hours away message</h3>
+          <p className="text-xs text-faint mt-0.5 leading-relaxed">
             Outside these hours, I&apos;ll hold replies for your approval and send customers a quick acknowledgment so they&apos;re not left waiting.
           </p>
         </div>

@@ -119,7 +119,7 @@ export function CustomerDrawerView({
             <div className="min-w-0">
               <p className="text-xs text-muted-foreground mb-0.5">Phone</p>
               <div className="flex items-center gap-1">
-                <p className="text-xs font-medium text-foreground/80 truncate">{customer.phone}</p>
+                <p className="text-xs font-medium text-strong truncate">{customer.phone}</p>
                 <CopyButton value={customer.phone} />
               </div>
             </div>
@@ -197,7 +197,7 @@ export function CustomerDrawerView({
                 <button type="button"
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex items-center gap-1 text-xs font-semibold text-white bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded px-2.5 py-1 transition-colors"
+                  className="flex items-center gap-1 text-xs font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded px-2.5 py-1 transition-colors"
                 >
                   {isSaving ? <RefreshCw className="size-3 animate-spin" /> : <Check className="size-3" />}
                   Save
@@ -209,7 +209,7 @@ export function CustomerDrawerView({
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs text-muted-foreground shrink-0">Email</span>
                 <div className="flex items-center gap-1 min-w-0">
-                  <span className="text-xs text-foreground/80 truncate">{customer.email}</span>
+                  <span className="text-xs text-strong truncate">{customer.email}</span>
                   <CopyButton value={customer.email} />
                 </div>
               </div>
@@ -217,7 +217,7 @@ export function CustomerDrawerView({
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-xs text-muted-foreground shrink-0">Phone</span>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-foreground/80">{customer.phone}</span>
+                    <span className="text-xs text-strong">{customer.phone}</span>
                     <CopyButton value={customer.phone} />
                   </div>
                 </div>
@@ -225,7 +225,7 @@ export function CustomerDrawerView({
               {hasAddress && (
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-xs text-muted-foreground shrink-0 mt-0.5">Address</span>
-                  <div className="text-xs text-foreground/80 text-right space-y-0.5">
+                  <div className="text-xs text-strong text-right space-y-0.5">
                     {addr?.address1 && <p>{addr.address1}</p>}
                     {(addr?.city || addr?.province || addr?.zip) && (
                       <p>{[addr?.city, [addr?.province, addr?.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ")}</p>
@@ -259,7 +259,7 @@ export function CustomerDrawerView({
               ))}
             </div>
           ) : orders.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No orders found.</p>
+            <p className="text-xs text-muted-foreground">No orders found.</p>
           ) : (
             <div className="space-y-2">
               {orders.map(order => {
@@ -283,7 +283,7 @@ export function CustomerDrawerView({
                       )}
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-foreground/80">${parseFloat(order.total_price).toFixed(2)}</span>
+                      <span className="text-xs font-semibold text-strong">${parseFloat(order.total_price).toFixed(2)}</span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-xs text-muted-foreground">{formatDate(order.created_at)}</span>
                         {adminUrl && (
@@ -306,7 +306,7 @@ export function CustomerDrawerView({
         <button type="button"
           onClick={handleStartThread}
           disabled={isStartingThread || !customer.email}
-          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-white bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-40 rounded-md py-2.5 transition-colors"
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-40 rounded-md py-2.5 transition-colors"
         >
           {isStartingThread
             ? <Loader2 className="size-4 animate-spin" />

@@ -62,7 +62,7 @@ export function TicketStackCard({
     >
       <div className="flex items-center gap-3">
         <div className="relative size-9 shrink-0">
-          <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+          <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-[#ffffff] text-[14px] font-bold shadow-sm`}>
             {initials}
           </div>
           <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
@@ -71,10 +71,10 @@ export function TicketStackCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <span className="truncate text-sm font-semibold text-foreground/90">{presentation.customerLabel}</span>
-            <span className="shrink-0 text-xs tabular-nums text-foreground/35">{presentation.timeAgo}</span>
+            <span className="truncate text-sm font-semibold text-strong">{presentation.customerLabel}</span>
+            <span className="shrink-0 text-xs tabular-nums text-faint">{presentation.timeAgo}</span>
           </div>
-          <span className="block text-xs text-foreground/40">{presentation.channelName}</span>
+          <span className="block text-xs text-faint">{presentation.channelName}</span>
         </div>
       </div>
 
@@ -88,7 +88,7 @@ export function TicketStackCard({
           {title}
         </h3>
         {preview && (
-          <p className="text-sm leading-relaxed text-foreground/55 line-clamp-3">{preview}</p>
+          <p className="text-sm leading-relaxed text-muted-foreground line-clamp-3">{preview}</p>
         )}
       </button>
 

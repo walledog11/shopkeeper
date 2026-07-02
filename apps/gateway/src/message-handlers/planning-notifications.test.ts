@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType } from '@shopkeeper/db';
 
-const { mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
+const { listOperatorBindingsSpy, mockLogger, notifyOperatorSpy } = vi.hoisted(() => ({
+  listOperatorBindingsSpy: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -16,29 +17,12 @@ vi.mock('../logger.js', () => ({
 }));
 
 vi.mock('../operator-notify.js', () => ({
+  listOperatorBindings: listOperatorBindingsSpy,
   notifyOperator: notifyOperatorSpy,
   OperatorNotifyError: class OperatorNotifyError extends Error {
     name = 'OperatorNotifyError';
   },
 }));
-
-const { findManySpy } = vi.hoisted(() => ({
-  findManySpy: vi.fn(),
-}));
-
-vi.mock('@shopkeeper/db', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shopkeeper/db')>();
-  return {
-    ...actual,
-    db: {
-      ...actual.db,
-      orgMemberTelegramChat: {
-        ...actual.db.orgMemberTelegramChat,
-        findMany: findManySpy,
-      },
-    },
-  };
-});
 
 import {
   sendOperatorAutoExecutionNotification,
@@ -62,7 +46,7 @@ const plan: AgentPlan = {
 };
 
 beforeEach(() => {
-  findManySpy.mockReset();
+  listOperatorBindingsSpy.mockReset();
   notifyOperatorSpy.mockReset();
   mockLogger.info.mockClear();
   mockLogger.error.mockClear();
@@ -70,8 +54,11 @@ beforeEach(() => {
 
 describe('sendOperatorPlanNotification', () => {
   it('uses critical notification policy for each bound operator', async () => {
-    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }, { chatId: 'chat_2' }]);
-    notifyOperatorSpy.mockResolvedValue({ chatId: 'chat_1' });
+    listOperatorBindingsSpy.mockResolvedValue([
+      { channel: 'telegram', chatId: 'chat_1' },
+      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
+    ]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorPlanNotification(
       'org_1',
@@ -91,7 +78,7 @@ describe('sendOperatorPlanNotification', () => {
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
-    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
     notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
 
     await expect(
@@ -110,8 +97,11 @@ describe('sendOperatorPlanNotification', () => {
 
 describe('sendOperatorQuestionNotification', () => {
   it('parks pendingQuestion and clears pendingPlan on each operator, critical policy', async () => {
-    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }, { chatId: 'chat_2' }]);
-    notifyOperatorSpy.mockResolvedValue({ chatId: 'chat_1' });
+    listOperatorBindingsSpy.mockResolvedValue([
+      { channel: 'telegram', chatId: 'chat_1' },
+      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
+    ]);
+    notifyOperatorSpy.mockResolvedValue({ channel: 'telegram', chatId: 'chat_1' });
 
     await sendOperatorQuestionNotification(
       'org_1',
@@ -134,7 +124,7 @@ describe('sendOperatorQuestionNotification', () => {
   });
 
   it('no-ops when no operators are bound', async () => {
-    findManySpy.mockResolvedValue([]);
+    listOperatorBindingsSpy.mockResolvedValue([]);
 
     await sendOperatorQuestionNotification(
       'org_1',
@@ -150,7 +140,7 @@ describe('sendOperatorQuestionNotification', () => {
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
-    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
     notifyOperatorSpy.mockRejectedValue(new OperatorNotifyError('Telegram send failed'));
 
     await expect(
@@ -169,7 +159,7 @@ describe('sendOperatorQuestionNotification', () => {
 
 describe('sendOperatorAutoExecutionNotification', () => {
   it('swallows notification failures without rethrowing', async () => {
-    findManySpy.mockResolvedValue([{ chatId: 'chat_1' }]);
+    listOperatorBindingsSpy.mockResolvedValue([{ channel: 'telegram', chatId: 'chat_1' }]);
     notifyOperatorSpy.mockRejectedValue(new Error('network down'));
 
     await expect(

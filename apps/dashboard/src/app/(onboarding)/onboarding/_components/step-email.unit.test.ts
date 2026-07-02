@@ -9,11 +9,12 @@ vi.mock("@/components/integrations/EmailForwardingDisclosure", () => ({
 }))
 
 describe("StepEmail", () => {
-  it("renders forwarding-first setup instead of channel cards", () => {
+  it("puts Gmail and Outlook first and marks social channels as coming soon", () => {
     const html = renderToStaticMarkup(createElement(StepEmail, {
       data: DEFAULT_DATA,
       update: vi.fn(),
       emailConnected: false,
+      emailIntegration: undefined,
       orgReady: true,
       orgLoading: false,
       orgError: false,
@@ -23,20 +24,29 @@ describe("StepEmail", () => {
       onOAuth: vi.fn(),
     }))
 
-    expect(html).toContain("Forward your support inbox to me")
-    expect(html).toContain("Forwarding panel")
-    expect(html).toContain("Connect Gmail or Outlook instead")
-    expect(html).toContain("add later in Integrations")
-    expect(html).not.toContain("Instagram DM")
+    expect(html).toContain("Where do customers reach you?")
+    expect(html).toContain("Connect Gmail")
+    expect(html).toContain("Connect Outlook")
+    expect(html).toContain("Forward another inbox")
+    expect(html).toContain("Instagram")
+    expect(html).toContain("TikTok")
+    expect(html).toContain("coming soon")
+    expect(html).not.toContain("Forwarding panel")
   })
 
-  it("shows loading state while the workspace is being prepared", () => {
+  it("shows which direct email provider is connected", () => {
     const html = renderToStaticMarkup(createElement(StepEmail, {
-      data: DEFAULT_DATA,
+      data: { ...DEFAULT_DATA, primaryEmail: "support@example.com" },
       update: vi.fn(),
-      emailConnected: false,
-      orgReady: false,
-      orgLoading: true,
+      emailConnected: true,
+      emailIntegration: {
+        platform: "email",
+        externalAccountId: "support@example.com",
+        fromEmail: "support@example.com",
+        metadata: { provider: "gmail" },
+      },
+      orgReady: true,
+      orgLoading: false,
       orgError: false,
       onRetryOrg: vi.fn(),
       emailSaving: false,
@@ -44,7 +54,9 @@ describe("StepEmail", () => {
       onOAuth: vi.fn(),
     }))
 
-    expect(html).toContain("Preparing your inbox address")
-    expect(html).not.toContain("Forwarding panel")
+    expect(html).toContain("Email connected")
+    expect(html).toContain("support@example.com")
+    expect(html).toContain("Reconnect Gmail")
+    expect(html).toContain("Connect Outlook")
   })
 })

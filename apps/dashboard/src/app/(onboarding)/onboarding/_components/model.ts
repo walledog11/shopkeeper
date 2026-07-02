@@ -1,44 +1,38 @@
-import type { AutonomyTier } from "@shopkeeper/agent/settings";
-import { AUTONOMY_TIERS } from "@/lib/agent/autonomy-tiers";
-
-export type { AutonomyTier };
-export { AUTONOMY_TIERS };
-
 export const RETURN_TO = "/onboarding";
-export const STORAGE_KEY = "concierge-onboarding-v1";
-export type StepId = "intro" | "store" | "shopify" | "email" | "autonomy" | "plan";
+export const STORAGE_KEY = "concierge-onboarding-v2";
+export type StepId = "intro" | "shopify" | "email" | "connect" | "plan";
 export type OnboardingPlatform = "email" | "shopify";
 
 export interface OnboardingData {
   storeName: string;
-  sells: string;
   founderName: string;
   primaryEmail: string;
-  autonomy: AutonomyTier;
 }
 
 export type IntegrationRow = {
   platform: string;
   externalAccountId: string;
   fromEmail: string | null;
+  metadata?: unknown;
   lastActivity?: string | null;
+};
+
+export type KbSyncState = {
+  status: "idle" | "syncing" | "done" | "error";
+  policies: number;
+  pages: number;
 };
 
 export const DEFAULT_DATA: OnboardingData = {
   storeName: "",
-  sells: "",
   founderName: "",
   primaryEmail: "",
-  autonomy: "guarded",
 };
 
 export const STEPS: Array<{ id: StepId; label: string }> = [
-  { id: "intro",    label: "Meet me" },
-  { id: "store",    label: "Your store" },
-  { id: "shopify",  label: "Connect Shopify" },
-  { id: "email",    label: "Set up email" },
-  { id: "autonomy", label: "My limits" },
-  { id: "plan",     label: "First night" },
+  { id: "intro",   label: "Your operator" },
+  { id: "shopify", label: "Shopify" },
+  { id: "email",   label: "Channels" },
+  { id: "connect", label: "Your phone" },
+  { id: "plan",    label: "Review" },
 ];
-
-export const ONBOARDING_ESSENTIALS_TOTAL = 3;

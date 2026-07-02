@@ -64,7 +64,7 @@ const ORDER_TONE: Record<OrderColumnId, { icon: string; border: string }> = {
   needs_fulfillment: { icon: "border-amber-500/20 bg-amber-500/10 text-amber-300", border: "hover:border-amber-500/25" },
   unpaid: { icon: "border-rose-500/20 bg-rose-500/10 text-rose-300", border: "hover:border-rose-500/25" },
   fulfilled: { icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300", border: "hover:border-emerald-500/25" },
-  refunded: { icon: "border-foreground/[0.10] bg-foreground/[0.05] text-foreground/55", border: "hover:border-foreground/[0.16]" },
+  refunded: { icon: "border-foreground/[0.10] bg-foreground/[0.05] text-muted-foreground", border: "hover:border-foreground/[0.16]" },
 }
 
 function customerLabel(order: OrderRow): string {
@@ -154,12 +154,12 @@ function OrderCompactCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate text-sm font-semibold text-foreground/90">{order.name}</h3>
-            <span className="shrink-0 text-xs tabular-nums text-foreground/35">
+            <h3 className="truncate text-sm font-semibold text-strong">{order.name}</h3>
+            <span className="shrink-0 text-xs tabular-nums text-faint">
               {formatRelativeTime(order.created_at)}
             </span>
           </div>
-          <p className="mt-1 truncate text-xs text-foreground/40">{customerLabel(order)}</p>
+          <p className="mt-1 truncate text-xs text-faint">{customerLabel(order)}</p>
         </div>
       </div>
 
@@ -169,7 +169,7 @@ function OrderCompactCard({
       </div>
 
       {summary && (
-        <p className="mt-3 text-sm leading-relaxed text-foreground/55 line-clamp-2">{summary}</p>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground line-clamp-2">{summary}</p>
       )}
     </>
   )
@@ -189,9 +189,9 @@ function OrderCompactCard({
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
-        <span className="text-xs text-foreground/45">
-          <span className="text-sm font-bold text-foreground/85">${parseFloat(order.total_price).toFixed(2)}</span>
-          <span className="text-foreground/35"> · {itemCount} item{itemCount !== 1 ? "s" : ""}</span>
+        <span className="text-xs text-muted-foreground">
+          <span className="text-sm font-bold text-strong">${parseFloat(order.total_price).toFixed(2)}</span>
+          <span className="text-faint"> · {itemCount} item{itemCount !== 1 ? "s" : ""}</span>
         </span>
       </div>
     </article>
@@ -230,7 +230,7 @@ function OrderDetail({
               <StatusPill label={fn.label} tone={fn.tone} />
               <StatusPill label={ff.label} tone={ff.tone} />
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/40">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
               <span className="inline-flex items-center gap-1.5">
                 <Clock3 className="size-3" />
                 {formatShortDate(order.created_at)}
@@ -249,16 +249,16 @@ function OrderDetail({
       <div className="custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
         {order.customer && (
           <section className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/35">Customer</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-faint">Customer</h3>
             <div className="rounded-lg border border-border bg-foreground/[0.02] p-3">
-              <p className="text-sm font-semibold text-foreground/80">{order.customer.name || "—"}</p>
-              <p className="text-sm text-foreground/55">{order.customer.email}</p>
+              <p className="text-sm font-semibold text-strong">{order.customer.name || "—"}</p>
+              <p className="text-sm text-muted-foreground">{order.customer.email}</p>
             </div>
           </section>
         )}
 
         <section className="space-y-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/35">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-faint">
             Items · {itemCount}
           </h3>
           <div className="space-y-2">
@@ -269,16 +269,16 @@ function OrderDetail({
                   className="flex items-start justify-between gap-3 rounded-lg border border-border bg-foreground/[0.02] p-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-foreground/80">{item.title}</p>
+                    <p className="text-sm font-medium text-strong">{item.title}</p>
                     {item.variant_title && (
-                      <p className="text-xs text-foreground/45">{item.variant_title}</p>
+                      <p className="text-xs text-muted-foreground">{item.variant_title}</p>
                     )}
                   </div>
-                  <span className="shrink-0 text-sm tabular-nums text-foreground/55">×{item.quantity}</span>
+                  <span className="shrink-0 text-sm tabular-nums text-muted-foreground">×{item.quantity}</span>
                 </div>
               ))
             ) : (
-              <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-foreground/40">
+              <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-faint">
                 No line items recorded.
               </p>
             )}
@@ -286,8 +286,8 @@ function OrderDetail({
         </section>
 
         <section className="flex items-center justify-between rounded-lg border border-border bg-foreground/[0.02] px-3 py-3">
-          <span className="text-xs font-semibold uppercase tracking-wide text-foreground/35">Total</span>
-          <span className="text-base font-bold text-foreground/90">${parseFloat(order.total_price).toFixed(2)}</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-faint">Total</span>
+          <span className="text-base font-bold text-strong">${parseFloat(order.total_price).toFixed(2)}</span>
         </section>
       </div>
 
@@ -299,7 +299,7 @@ function OrderDetail({
               href={adminHref}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground/55 transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ExternalLink className="size-3.5" />
               View in Shopify
@@ -309,7 +309,7 @@ function OrderDetail({
         <button
           type="button"
           onClick={onClose}
-          className="h-8 rounded-md border border-border px-3 text-xs font-semibold text-foreground/55 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+          className="h-8 rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
         >
           Done
         </button>
@@ -410,7 +410,7 @@ function OrderStackColumn({
       peekShellClassName="h-full w-full rounded-2xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
       peekCardClassName="pointer-events-none box-border overflow-hidden rounded-2xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
       headerClassName="mb-3 flex items-center justify-between gap-3 px-1"
-      titleClassName="truncate text-xs font-semibold uppercase tracking-normal text-foreground/70"
+      titleClassName="truncate text-xs font-semibold uppercase tracking-normal text-strong"
     />
   )
 }
@@ -443,7 +443,7 @@ export function OrdersBoard({ columns, shop }: { columns: OrdersBoardState; shop
 
         <div className="space-y-4">
           <div className="flex items-center gap-3 px-1">
-            <h2 className="text-[11px] font-semibold uppercase tracking-normal text-foreground/40">Browse all</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-faint">Browse all</h2>
             <span className="h-px flex-1 bg-border/70" aria-hidden />
           </div>
           <div className="grid grid-cols-1 gap-x-6 gap-y-8 md:grid-cols-2">

@@ -18,9 +18,9 @@ interface NotificationBarProps {
 }
 
 const TYPE_STYLES: Record<NonNullable<Notification["type"]>, { bar: string; icon: string; title: string; action: string }> = {
-  info:    { bar: "bg-blue-600/10 text-foreground/70 border-border",  icon: "text-blue-700",  title: "text-foreground", action: "text-blue-700" },
-  warning: { bar: "bg-amber-500/10 text-foreground/70 border-border", icon: "text-amber-600", title: "text-foreground", action: "text-amber-700" },
-  success: { bar: "bg-green-600/10 text-foreground/70 border-border", icon: "text-green-700", title: "text-foreground", action: "text-green-700" },
+  info:    { bar: "bg-blue-600/10 text-strong border-border",  icon: "text-blue-700",  title: "text-foreground", action: "text-blue-700" },
+  warning: { bar: "bg-amber-500/10 text-strong border-border", icon: "text-amber-600", title: "text-foreground", action: "text-amber-700" },
+  success: { bar: "bg-green-600/10 text-strong border-border", icon: "text-green-700", title: "text-foreground", action: "text-green-700" },
 };
 
 const TYPE_ICONS = {
@@ -125,7 +125,7 @@ export default function NotificationBar({ notifications }: NotificationBarProps)
                 <Icon className={`size-4 shrink-0 ${styles.icon}`} />
                 <div className="flex items-center gap-1.5 min-w-0">
                   <span className={`font-bold whitespace-nowrap ${styles.title}`}>{n.title}</span>
-                  {n.message && <span className="font-normal text-foreground/50 hidden sm:inline whitespace-nowrap">{n.message}</span>}
+                  {n.message && <span className="font-normal text-muted-foreground hidden sm:inline whitespace-nowrap">{n.message}</span>}
                   {n.action && (
                     <>
                       {" "}

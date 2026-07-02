@@ -1,9 +1,9 @@
 import type { TicketListPresentationStatusTone } from "../../_lib/ticket-list-presentation"
 
 const TONE_CLASS: Record<TicketListPresentationStatusTone, string> = {
-  send: "bg-emerald-500 text-white shadow-sm",
+  send: "bg-emerald-500 text-[#ffffff] shadow-sm",
   caution: "bg-amber-500/15 text-amber-400",
-  neutral: "bg-foreground/10 text-foreground/55",
+  neutral: "bg-foreground/10 text-muted-foreground",
   danger: "bg-red-500/10 text-red-400",
 }
 

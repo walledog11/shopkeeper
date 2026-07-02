@@ -230,7 +230,7 @@ export function StackDeck<T>({
     })
   }
 
-  const buttonClassName = "inline-flex size-7 items-center justify-center rounded-full border border-border text-foreground/50 transition-colors hover:bg-foreground/[0.04] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-foreground/50"
+  const buttonClassName = "inline-flex size-7 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
   const countText = labels.count?.(activeIndex + 1, n) ?? `${activeIndex + 1} of ${n}`
   const peekContext = renderContext(true)
   const renderedBackShell = renderBackShell?.(peekContext)
@@ -326,7 +326,7 @@ export function StackDeck<T>({
             </div>
           )}
 
-          <span className="text-xs tabular-nums text-foreground/45">{countText}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{countText}</span>
 
           <button
             type="button"

@@ -31,7 +31,7 @@ export function BulkActions({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between bg-foreground/[0.10] border border-foreground/[0.12] rounded-md px-3 py-2">
-        <span className="text-xs font-semibold text-foreground/80">
+        <span className="text-xs font-semibold text-strong">
           {selectedCount} selected
         </span>
         <div className="flex items-center gap-2">
@@ -44,18 +44,18 @@ export function BulkActions({
           <button type="button"
             onClick={onBulkArchive}
             title="Archive selected"
-            className="text-foreground/50 hover:text-white transition-colors"
+            className="text-muted-foreground hover:text-white transition-colors"
           >
             <Archive className="size-3.5" />
           </button>
           <button type="button"
             onClick={() => setShowTagInput(value => !value)}
             title="Tag selected"
-            className="text-foreground/50 hover:text-white transition-colors"
+            className="text-muted-foreground hover:text-white transition-colors"
           >
             <Tag className="size-3.5" />
           </button>
-          <button type="button" onClick={onClearSelection} className="text-foreground/40 hover:text-white transition-colors">
+          <button type="button" onClick={onClearSelection} className="text-faint hover:text-white transition-colors">
             <X className="size-3.5" />
           </button>
         </div>
@@ -72,7 +72,7 @@ export function BulkActions({
               if (event.key === "Enter") applyBulkTag()
             }}
             placeholder="Tag name…"
-            className="flex-1 text-xs text-foreground/70 bg-foreground/[0.06] border border-foreground/[0.12] rounded px-2 py-1 focus:outline-none focus:border-foreground/[0.25] placeholder:text-foreground/25"
+            className="flex-1 text-xs text-strong bg-foreground/[0.06] border border-foreground/[0.12] rounded px-2 py-1 focus:outline-none focus:border-foreground/[0.25] placeholder:text-faint"
           />
           <button
             type="button"

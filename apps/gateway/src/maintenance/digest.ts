@@ -1,8 +1,10 @@
 import { getSupportStats, type SupportStatsSummary } from '@shopkeeper/agent/support-stats';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { db, ThreadFilterStatus, type DbThreadFilterStatus } from '@shopkeeper/db';
+import type { Prisma } from '@prisma/client';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { notifyOperator } from '../operator-notify.js';
+import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -181,19 +183,56 @@ export async function buildOrgDigest(organizationId: string, now: Date): Promise
   };
 }
 
+const FIRST_BRIEFING_PREAMBLE = "Good morning — here's your first rundown. You'll get one like this every morning.";
+
+// The welcome briefing sent when the first scheduled digest lands on an empty
+// inbox: introduce the morning ritual and show what the agent has already
+// learned from the merchant's Shopify store instead of skipping the send.
+export async function buildFirstNightMessage(
+  organizationId: string,
+  storeName: string | null,
+  agentName: string,
+): Promise<string> {
+  const syncedArticles = await db.kbArticle.count({
+    where: { organizationId, knowledgeBase: { source: 'shopify' } },
+  });
+  const store = storeName?.trim() ? storeName.trim() : 'your store';
+
+  const lines = [`Good morning — ${agentName} here with your first rundown.`, '', 'It was quiet overnight — no new tickets came in.', ''];
+  if (syncedArticles > 0) {
+    lines.push(
+      `While it was slow I read through ${store} — ${syncedArticles} ${syncedArticles === 1 ? 'page is' : 'pages are'} now in my memory, so I can answer questions about returns, shipping, and your products.`,
+    );
+  } else {
+    lines.push(`I'm set up and watching ${store}'s inbox — the moment a customer writes in, I'll get to work.`);
+  }
+  lines.push(
+    '',
+    "This is the same briefing you'll get every morning: what came in, what I handled, and what needs you. Text SUMMARY anytime to see your inbox.",
+  );
+  return lines.join('\n');
+}
+
+async function clearFirstBriefingPending(organizationId: string, currentSettings: unknown): Promise<void> {
+  const raw = (currentSettings as Record<string, unknown> | null) ?? {};
+  await db.organization.update({
+    where: { id: organizationId },
+    data: { settings: { ...raw, firstBriefingPending: false } as Prisma.InputJsonObject },
+  });
+}
+
 export async function sendScheduledDigests(): Promise<void> {
   const now = new Date();
   const nowMs = now.getTime();
   const orgs = await db.organization.findMany({
-    where: { members: { some: { telegramChats: { some: {} } } } },
-    select: {
-      id: true,
-      settings: true,
+    where: {
       members: {
-        where: { telegramChats: { some: {} } },
-        select: { telegramChats: { select: { chatId: true } } },
+        some: {
+          OR: [{ telegramChats: { some: {} } }, { imessageBindings: { some: {} } }],
+        },
       },
     },
+    select: { id: true, name: true, settings: true },
   });
 
   const eligibleOrgs = orgs.filter(org => {
@@ -204,20 +243,39 @@ export async function sendScheduledDigests(): Promise<void> {
   if (eligibleOrgs.length === 0) return;
 
   for (const org of eligibleOrgs) {
+    const firstBriefingPending = ((org.settings as Record<string, unknown> | null) ?? {}).firstBriefingPending === true;
     const digest = await buildOrgDigest(org.id, now);
-    if (!digest) continue;
 
-    const chats = org.members.flatMap((m) => m.telegramChats);
-    for (const member of chats) {
-      const result = await notifyOperator(org.id, member, digest.message, {
-        pendingDigest: digest.pendingDigest,
-      });
+    // A brand-new merchant with an empty inbox would otherwise never get a
+    // first digest. Send a welcome briefing once so they see the morning ritual.
+    if (!digest && !firstBriefingPending) continue;
+
+    let message: string;
+    let pendingDigest: OrgDigest['pendingDigest'];
+    let flaggedCount = 0;
+    if (digest) {
+      message = firstBriefingPending ? `${FIRST_BRIEFING_PREAMBLE}\n\n${digest.message}` : digest.message;
+      pendingDigest = digest.pendingDigest;
+      flaggedCount = digest.flaggedCount;
+    } else {
+      const agentName = resolveAgentSettings(org.settings).agentName;
+      message = await buildFirstNightMessage(org.id, org.name, agentName);
+      pendingDigest = { threadIds: [], sentAt: now.toISOString() };
+    }
+
+    const bindings = await listOperatorBindings(org.id);
+    for (const member of bindings) {
+      const result = await notifyOperator(org.id, member, message, { pendingDigest });
       if (result) {
         logger.info(
-          { organizationId: org.id, chatId: result.chatId, flagged: digest.flaggedCount },
+          { organizationId: org.id, chatId: result.chatId, flagged: flaggedCount, firstBriefing: firstBriefingPending },
           '[Digest] Sent digest',
         );
       }
+    }
+
+    if (firstBriefingPending) {
+      await clearFirstBriefingPending(org.id, org.settings);
     }
   }
 }

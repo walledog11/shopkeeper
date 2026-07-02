@@ -85,7 +85,7 @@ export function OrgSwitcher({
                   {organization?.name ?? "Workspace"}
                 </p>
               </div>
-              <ChevronDown className="size-3.5 shrink-0 text-foreground/40" />
+              <ChevronDown className="size-3.5 shrink-0 text-faint" />
             </>
           )}
         </button>

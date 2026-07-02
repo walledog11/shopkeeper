@@ -345,7 +345,7 @@ export function TicketsPageLayout({
 
         {flags.listLoading && !activeTicketId ? (
           <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="size-5 animate-spin text-foreground/30" />
+            <Loader2 className="size-5 animate-spin text-faint" />
           </div>
         ) : (
           <TriageStackBoard

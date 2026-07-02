@@ -8,7 +8,8 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { formatEscalationMessage, pushOperatorEscalation } from './operator-escalation.js';
 
-const { sendMessageSpy } = vi.hoisted(() => ({
+const { sendImessageToSpaceSpy, sendMessageSpy } = vi.hoisted(() => ({
+  sendImessageToSpaceSpy: vi.fn().mockResolvedValue(undefined),
   sendMessageSpy: vi.fn().mockResolvedValue(true),
 }));
 
@@ -16,6 +17,11 @@ vi.mock('./clients/telegram-client.js', () => ({
   isTelegramConfigured: vi.fn(() => true),
   sendMessage: sendMessageSpy,
   setWebhook: vi.fn(),
+}));
+
+vi.mock('./clients/spectrum.js', () => ({
+  isImessageConfigured: vi.fn(() => true),
+  sendImessageToSpace: sendImessageToSpaceSpy,
 }));
 
 vi.mock('ioredis', () => ({
@@ -82,6 +88,7 @@ describe('pushOperatorEscalation', () => {
   beforeEach(async () => {
     process.env.DASHBOARD_URL = DASHBOARD_URL;
     sendMessageSpy.mockClear();
+    sendImessageToSpaceSpy.mockClear();
     org = await createTestOrg();
   });
 
@@ -138,6 +145,32 @@ describe('pushOperatorEscalation', () => {
     expect(bodyArg).toContain('Escalated — Shopify');
     expect(bodyArg).toContain('Order issue');
     expect(bodyArg).toContain(`/dashboard/tickets/${thread.id}`);
+  });
+
+  it('notifies operators bound over iMessage alongside Telegram', async () => {
+    const customer = await createTestCustomer(org.id, 'imessage-member@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-im` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId: `chat-${org.id}-im` },
+    });
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: `sender-${org.id}`, spaceId: `space-${org.id}` },
+    });
+
+    const notified = await pushOperatorEscalation(org.id, thread.id, 'Order issue');
+
+    expect(notified).toBe(2);
+    expect(sendMessageSpy).toHaveBeenCalledTimes(1);
+    expect(sendImessageToSpaceSpy).toHaveBeenCalledTimes(1);
+
+    const [spaceId, body] = sendImessageToSpaceSpy.mock.calls[0] as [string, string];
+    expect(spaceId).toBe(`space-${org.id}`);
+    expect(body).toContain('Escalated — Email');
+    expect(body).toContain('Order issue');
   });
 
   it('throws when Telegram send fails for a bound operator', async () => {

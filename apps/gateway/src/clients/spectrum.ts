@@ -69,6 +69,18 @@ export function clearSpectrumAppCache(): void {
   platformApp = null;
 }
 
+export function isImessageConfigured(): boolean {
+  return getSpectrumConfig() !== null;
+}
+
+// Proactive operator send: reach a space persisted from an earlier inbound
+// event (`OrgMemberImessageBinding.spaceId`) without a webhook reply in hand.
+export async function sendImessageToSpace(spaceId: string, text: string): Promise<void> {
+  const app = await getPlatformSpectrumApp();
+  const space = await imessage(app).space.get(spaceId);
+  await space.send(text);
+}
+
 // Graceful shutdown: stop the cached Spectrum app so its connection is torn down
 // cleanly on redeploy instead of leaking until the process is killed.
 export async function stopAllSpectrumApps(): Promise<void> {

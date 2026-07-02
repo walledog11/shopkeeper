@@ -30,7 +30,7 @@ import type { ReviewFeedback } from "./useReviewFeedback"
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-foreground/35">{title}</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-faint">{title}</h3>
       {children}
     </section>
   )
@@ -41,7 +41,7 @@ function OutputBlockView({ block }: { block: OutputBlock }) {
   return (
     <div className={`rounded-lg border p-3 ${tone.container}`}>
       <p className={`mb-1.5 text-xs font-semibold uppercase tracking-wide ${tone.label}`}>{block.label}</p>
-      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground/80">{block.text}</p>
+      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-strong">{block.text}</p>
     </div>
   )
 }
@@ -50,7 +50,7 @@ function statusClassName(status: ActionLogEntry["actions"][number]["status"]): s
   if (status === "success") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
   if (status === "escalated") return "border-amber-500/20 bg-amber-500/10 text-amber-200"
   if (status === "error" || status === "policy_block") return "border-red-500/20 bg-red-500/10 text-red-200"
-  return "border-foreground/[0.08] bg-foreground/[0.04] text-foreground/45"
+  return "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground"
 }
 
 export function ReviewDetail({
@@ -90,7 +90,7 @@ export function ReviewDetail({
                 {chrome.label}
               </span>
             </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground/40">
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-faint">
               <span className="inline-flex items-center gap-1.5">
                 <Image src={channel.logo} alt={channel.name} width={12} height={12} className="size-3 object-contain" />
                 {channel.name}
@@ -110,7 +110,7 @@ export function ReviewDetail({
       <div className="custom-scrollbar min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
         {entry.summary.trim() && (
           <DetailSection title="Summary">
-            <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm leading-relaxed text-foreground/70">
+            <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm leading-relaxed text-strong">
               {entry.summary}
             </p>
           </DetailSection>
@@ -121,7 +121,7 @@ export function ReviewDetail({
               {outputs.map(block => <OutputBlockView key={block.key} block={block} />)}
             </div>
           ) : (
-            <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-foreground/40">
+            <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-faint">
               No customer-facing output recorded for this turn.
             </p>
           )}
@@ -140,16 +140,16 @@ export function ReviewDetail({
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-foreground/75">{toolLabel(action.tool)}</p>
-                    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${statusClassName(action.status)}`}>
+                    <p className="text-sm font-semibold text-strong">{toolLabel(action.tool)}</p>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${statusClassName(action.status)}`}>
                       {action.status ?? "recorded"}
                     </span>
                     {typeof action.durationMs === "number" && (
-                      <span className="text-xs text-foreground/35">{action.durationMs} ms</span>
+                      <span className="text-xs text-faint">{action.durationMs} ms</span>
                     )}
                   </div>
                   <p className={`mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed ${
-                    action.result ? "text-foreground/60" : "text-foreground/35"
+                    action.result ? "text-muted-foreground" : "text-faint"
                   }`}>
                     {action.result || "No result text recorded."}
                   </p>
@@ -157,7 +157,7 @@ export function ReviewDetail({
               )
             })}
             {outcomes.length === 0 && (
-              <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-foreground/40">
+              <p className="rounded-lg border border-border bg-foreground/[0.03] p-3 text-sm text-faint">
                 No tool outcomes recorded.
               </p>
             )}
@@ -170,7 +170,7 @@ export function ReviewDetail({
           {href && sourceLabel && (
             <Link
               href={href}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-foreground/55 transition-colors hover:text-foreground"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
             >
               <ArrowUpRight className="size-3.5" />
               {sourceLabel}
@@ -185,7 +185,7 @@ export function ReviewDetail({
         <button
           type="button"
           onClick={onClose}
-          className="h-8 rounded-md border border-border px-3 text-xs font-semibold text-foreground/55 transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+          className="h-8 rounded-md border border-border px-3 text-xs font-semibold text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
         >
           Done
         </button>

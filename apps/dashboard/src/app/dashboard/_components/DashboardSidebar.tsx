@@ -50,7 +50,7 @@ function DashboardSidebarContent({
       <MobileChromeSync />
       {isSwitching && (
         <div className="fixed inset-0 z-50 bg-background/70 backdrop-blur-sm flex items-center justify-center">
-          <div className="flex items-center gap-3 text-foreground/60">
+          <div className="flex items-center gap-3 text-muted-foreground">
             <div className="size-4 rounded-full border-2 border-foreground/20 border-t-foreground/70 animate-spin" />
             <span className="text-sm font-medium">Switching workspace…</span>
           </div>

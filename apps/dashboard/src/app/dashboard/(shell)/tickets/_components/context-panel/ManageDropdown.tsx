@@ -40,7 +40,7 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
       <button
         type="button"
         onClick={() => setOpen(o => !o)}
-        className="flex size-6 items-center justify-center rounded text-foreground/40 hover:bg-foreground/[0.05] hover:text-foreground/70 transition-colors"
+        className="flex size-6 items-center justify-center rounded text-faint hover:bg-foreground/[0.05] hover:text-strong transition-colors"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Manage customer"
@@ -58,8 +58,8 @@ export function ManageDropdown({ items }: ManageDropdownProps) {
               role="menuitem"
               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors ${
                 item.danger
-                  ? 'text-foreground/50 hover:text-red-400 hover:bg-red-400/[0.08]'
-                  : 'text-foreground/60 hover:bg-foreground/[0.05]'
+                  ? 'text-muted-foreground hover:text-red-400 hover:bg-red-400/[0.08]'
+                  : 'text-muted-foreground hover:bg-foreground/[0.05]'
               }`}
             >
               {item.icon}

@@ -19,6 +19,17 @@ body,
   scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
+/* Keyboard focus ring for every hand-rolled interactive control. Scoped to the
+   dashboard shell and excludes the shadcn primitive (data-slot="button"), which
+   ships its own focus-visible ring — so this fills the gap for the many custom
+   <button>s without per-file churn or doubling up. :focus-visible is keyboard
+   only, so mouse users never see it. */
+body:has(.dashboard-shell) button:not([data-slot="button"]):focus-visible,
+body:has(.dashboard-shell) [role="button"]:not([data-slot="button"]):focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

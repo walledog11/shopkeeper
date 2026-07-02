@@ -14,7 +14,7 @@ export function ProductImage({ src, title }: ProductImageProps) {
   if (!src || failedSrc === src) {
     return (
       <div className="size-7 rounded bg-foreground/[0.05] border border-foreground/[0.08] flex items-center justify-center shrink-0">
-        <Package className="size-3.5 text-foreground/20" />
+        <Package className="size-3.5 text-faint" />
       </div>
     )
   }

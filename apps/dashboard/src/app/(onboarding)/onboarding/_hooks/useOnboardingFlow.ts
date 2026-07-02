@@ -7,12 +7,14 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
 } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { useClerk, useOrganization, useOrganizationList, useUser } from "@clerk/nextjs";
 import { useIntegrations } from "@/hooks/useIntegrations";
+import { fetcher } from "@/lib/api/fetcher";
 import {
-  countOnboardingEssentials,
   isEmailIntegrationConfigured,
   resolveOnboardingStepIndex,
   type OnboardingResumeStep,
@@ -28,9 +30,19 @@ import {
   DEFAULT_DATA,
   STEPS,
   STORAGE_KEY,
+  type KbSyncState,
   type OnboardingData,
   type StepId,
 } from "../_components/model";
+
+function resolveBrowserTimezone(): string | undefined {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz && tz.trim() ? tz : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function readStepParam(): OnboardingResumeStep | null {
   if (typeof window === "undefined") return null;
@@ -138,7 +150,26 @@ export function useOnboardingFlow() {
 
   const [state, dispatch] = useReducer(onboardingReducer, undefined, createInitialOnboardingState);
   const { data, emailSaving, idx, orgEnsureFailed, orgEnsuring, saving } = state;
+  const [shopifySimulating, setShopifySimulating] = useState(false);
   const orgCreationInFlight = useRef(false);
+  const founderPrefillApplied = useRef(false);
+  const storePrefillApplied = useRef(false);
+
+  useEffect(() => {
+    if (founderPrefillApplied.current || !user?.firstName) return;
+    founderPrefillApplied.current = true;
+    if (!data.founderName.trim()) {
+      dispatch({ type: "patchData", patch: { founderName: user.firstName } });
+    }
+  }, [data.founderName, user?.firstName]);
+
+  useEffect(() => {
+    if (storePrefillApplied.current || !organization?.name) return;
+    storePrefillApplied.current = true;
+    if (!data.storeName.trim()) {
+      dispatch({ type: "patchData", patch: { storeName: organization.name } });
+    }
+  }, [data.storeName, organization?.name]);
 
   useEffect(() => {
     try {
@@ -161,23 +192,52 @@ export function useOnboardingFlow() {
     }
   }, [savedEmail, state.prefilledEmail]);
 
+  // Live operator-channel status: poll while the org exists and the channel is
+  // still unlinked, then stop once connected. The connect step also reads these
+  // keys, so SWR dedupes to a single request per endpoint.
+  const { data: telegramStatus } = useSWR<{ connected: boolean }>(
+    organization ? "/api/integrations/telegram" : null,
+    fetcher,
+    { refreshInterval: (latest) => (latest?.connected ? 0 : 3000) },
+  );
+  const { data: imessageStatus } = useSWR<{ connected: boolean }>(
+    organization ? "/api/integrations/imessage/bind" : null,
+    fetcher,
+    { refreshInterval: (latest) => (latest?.connected ? 0 : 3000) },
+  );
+  const hasMessaging = Boolean(telegramStatus?.connected || imessageStatus?.connected);
+
   const hasShopify = isShopifyIntegrationActive(shopifyRow);
+
+  // The instant Shopify connects, pull its policies and pages into Memory so the
+  // agent can answer store questions on night one and the Shopify step can show
+  // what it learned. Fires once per session.
+  const [kbSync, setKbSync] = useState<KbSyncState>({ status: "idle", policies: 0, pages: 0 });
+  const kbSyncStartedRef = useRef(false);
+  useEffect(() => {
+    if (!hasShopify || kbSyncStartedRef.current) return;
+    kbSyncStartedRef.current = true;
+    setKbSync((prev) => ({ ...prev, status: "syncing" }));
+    void (async () => {
+      try {
+        const res = await fetch("/api/integrations/shopify/kb-sync", { method: "POST" });
+        const body = await res.json() as { syncedPolicies?: number; syncedPages?: number };
+        if (!res.ok) throw new Error("sync failed");
+        setKbSync({ status: "done", policies: body.syncedPolicies ?? 0, pages: body.syncedPages ?? 0 });
+      } catch {
+        setKbSync({ status: "error", policies: 0, pages: 0 });
+      }
+    })();
+  }, [hasShopify]);
   const hasEmailReady = isEmailIntegrationConfigured(emailRow);
   const storeBriefed = data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
-  const essentialsDone = countOnboardingEssentials({
-    storeBriefed,
-    hasShopify,
-    hasEmail: hasEmailReady,
-  });
-
   const isStepComplete = useCallback((step: StepId) => {
-    if (step === "intro") return idx > 0;
-    if (step === "store") return storeBriefed;
+    if (step === "intro") return storeBriefed;
     if (step === "shopify") return hasShopify;
+    if (step === "connect") return hasMessaging;
     if (step === "email") return hasEmailReady;
-    if (step === "autonomy") return idx > STEPS.findIndex(item => item.id === "autonomy");
     return false;
-  }, [idx, storeBriefed, hasShopify, hasEmailReady]);
+  }, [storeBriefed, hasShopify, hasMessaging, hasEmailReady]);
 
   const update = useCallback((patch: Partial<OnboardingData>) => {
     dispatch({ type: "patchData", patch });
@@ -187,19 +247,21 @@ export function useOnboardingFlow() {
     options?: { markOnboardingComplete?: boolean },
   ): Promise<boolean> => {
     const name = data.storeName.trim();
-    const aiContext = data.sells.trim();
     const firstName = data.founderName.trim();
+    const timezone = resolveBrowserTimezone();
     const body: {
       name?: string;
       settings: {
-        aiContext: string;
-        autonomyTier: OnboardingData["autonomy"];
+        autonomyTier: "guarded";
+        autoExecuteMode: "off";
+        digestTimezone?: string;
         onboardingCompletedAt?: string;
       };
     } = {
       settings: {
-        aiContext,
-        autonomyTier: data.autonomy,
+        autonomyTier: "guarded",
+        autoExecuteMode: "off",
+        ...(timezone ? { digestTimezone: timezone } : {}),
         ...(options?.markOnboardingComplete && {
           onboardingCompletedAt: new Date().toISOString(),
         }),
@@ -299,6 +361,25 @@ export function useOnboardingFlow() {
     });
   }, [ensureOrganization, refreshIntegrations]);
 
+  const simulateShopify = useCallback(async (): Promise<boolean> => {
+    setShopifySimulating(true);
+    try {
+      const ready = await ensureOrganization();
+      if (!ready) return false;
+      const response = await fetch("/api/integrations/shopify/simulate", {
+        method: "POST",
+      });
+      if (!response.ok) return false;
+      await refreshIntegrations();
+      dispatch({ type: "advance" });
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setShopifySimulating(false);
+    }
+  }, [ensureOrganization, refreshIntegrations]);
+
   const handleOAuthResult = useEffectEvent(() => {
     void refreshIntegrations();
   });
@@ -308,22 +389,24 @@ export function useOnboardingFlow() {
   const stepId = STEPS[idx].id;
 
   useEffect(() => {
-    if (stepId !== "email") return;
+    // The connect step's bind endpoints are org-scoped, so make sure the org
+    // exists by the time the merchant lands there (and on email, as before).
+    if (stepId !== "connect" && stepId !== "email") return;
     void ensureOrganization();
   }, [stepId, ensureOrganization]);
 
   const canContinue = useMemo(() => {
-    if (stepId === "store") {
+    if (stepId === "intro") {
       return data.storeName.trim().length > 0 && data.founderName.trim().length > 0;
     }
     if (stepId === "shopify") return hasShopify;
-    if (stepId === "email") return hasEmailReady;
+    // Customer channels and phone linking are optional during onboarding.
     return true;
-  }, [stepId, data, hasShopify, hasEmailReady]);
+  }, [stepId, data, hasShopify]);
 
   const next = useCallback(async () => {
     if (!canContinue || saving) return;
-    if (stepId === "store") {
+    if (stepId === "intro") {
       dispatch({ type: "setSaving", saving: true });
       try {
         const ready = await ensureOrganization();
@@ -333,23 +416,17 @@ export function useOnboardingFlow() {
       } finally {
         dispatch({ type: "setSaving", saving: false });
       }
-    } else if (organization && stepId === "autonomy") {
-      dispatch({ type: "setSaving", saving: true });
-      try {
-        const persisted = await persistSettings();
-        if (!persisted) return;
-      } finally {
-        dispatch({ type: "setSaving", saving: false });
-      }
     }
-    if (stepId !== "intro" && stepId !== "plan") {
+    const analyticsStep = stepId === "intro" ? "store" : stepId;
+    const completedOptionalStep = analyticsStep !== "email" || hasEmailReady;
+    if (analyticsStep !== "plan" && analyticsStep !== "connect" && completedOptionalStep) {
       void captureClientProductEvent({
         event: "onboarding_step_completed",
-        step: stepId,
+        step: analyticsStep,
       });
     }
     dispatch({ type: "advance" });
-  }, [canContinue, ensureOrganization, organization, persistSettings, saving, stepId]);
+  }, [canContinue, ensureOrganization, hasEmailReady, persistSettings, saving, stepId]);
 
   const advanceFromKeyboard = useEffectEvent(() => {
     void next();
@@ -364,12 +441,6 @@ export function useOnboardingFlow() {
     try {
       const ready = await ensureOrganization();
       if (!ready || !hasShopify) return;
-
-      if (!hasEmailReady) {
-        if (!data.primaryEmail.trim()) return;
-        const saved = await saveEmailIntegration(data.primaryEmail);
-        if (!saved) return;
-      }
 
       const completed = await persistSettings({ markOnboardingComplete: true });
       if (!completed) return;
@@ -387,13 +458,10 @@ export function useOnboardingFlow() {
       dispatch({ type: "setSaving", saving: false });
     }
   }, [
-    data.primaryEmail,
     ensureOrganization,
-    hasEmailReady,
     hasShopify,
     persistSettings,
     router,
-    saveEmailIntegration,
   ]);
 
   const otherMembership = userMemberships?.data?.find(
@@ -453,8 +521,9 @@ export function useOnboardingFlow() {
 
   return {
     data,
-    essentialsDone,
+    emailRow,
     exit,
+    kbSync,
     handlers: {
       back,
       ensureOrganization,
@@ -462,6 +531,7 @@ export function useOnboardingFlow() {
       launchOAuth,
       next,
       saveEmailIntegration,
+      simulateShopify,
       update,
     },
     idx,
@@ -472,11 +542,13 @@ export function useOnboardingFlow() {
       canContinue,
       emailSaving,
       hasEmailReady,
+      hasMessaging,
       hasShopify,
       orgEnsureFailed,
       orgEnsuring,
       orgReady: !!organization && !orgEnsuring && !orgEnsureFailed,
       saving,
+      shopifySimulating,
     },
     step: STEPS[idx],
   };

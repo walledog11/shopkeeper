@@ -69,12 +69,12 @@ export default function MobileFloatingReplyComposer({
           data-testid="mobile-edit-back-to-plan"
           onClick={onBackToPlan}
           disabled={isSending}
-          className="inline-flex min-w-0 items-center gap-0.5 rounded-lg py-1 pr-2 text-sm font-medium text-foreground/55 transition-colors hover:bg-foreground/[0.05] hover:text-foreground/80 disabled:opacity-40"
+          className="inline-flex min-w-0 items-center gap-0.5 rounded-lg py-1 pr-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-strong disabled:opacity-40"
         >
           <ChevronLeft className="size-4 shrink-0" />
           Back to plan
         </button>
-        <p className="flex-1 min-w-0 truncate text-right text-sm font-medium text-foreground/70">
+        <p className="flex-1 min-w-0 truncate text-right text-sm font-medium text-strong">
           Edit reply
         </p>
       </div>
@@ -94,7 +94,7 @@ export default function MobileFloatingReplyComposer({
           }}
           disabled={isSending}
           rows={5}
-          className="w-full min-h-[120px] max-h-[32vh] overflow-y-auto resize-none rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3 text-base leading-relaxed text-foreground/90 outline-none placeholder:text-foreground/30 disabled:opacity-50"
+          className="w-full min-h-[120px] max-h-[32vh] overflow-y-auto resize-none rounded-2xl border border-border bg-foreground/[0.04] px-4 py-3 text-base leading-relaxed text-strong outline-none placeholder:text-faint disabled:opacity-50"
           placeholder={placeholder}
         />
 
@@ -104,7 +104,7 @@ export default function MobileFloatingReplyComposer({
             data-testid="reply-composer-send"
             disabled={sendDisabled}
             onClick={() => onSend(false)}
-            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-2 rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-[#ffffff] transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSending ? (
               <>

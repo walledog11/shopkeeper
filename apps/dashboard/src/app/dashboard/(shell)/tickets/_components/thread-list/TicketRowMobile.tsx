@@ -26,7 +26,7 @@ export function TicketRowMobile({
   return (
     <>
       <div className="relative size-9 shrink-0">
-        <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[14px] font-bold shadow-sm`}>
+        <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-[#ffffff] text-[14px] font-bold shadow-sm`}>
           {initials}
         </div>
         <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
@@ -35,16 +35,16 @@ export function TicketRowMobile({
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-foreground/90 truncate leading-snug">
+        <p className="text-sm font-semibold text-strong truncate leading-snug">
           {presentation.headline}
         </p>
 
-        <p className={`text-xs truncate mt-0.5 ${longWait ? "text-foreground/55 font-medium" : "text-foreground/40"}`}>
+        <p className={`text-xs truncate mt-0.5 ${longWait ? "text-muted-foreground font-medium" : "text-faint"}`}>
           {meta}
         </p>
 
         {presentation.subline ? (
-          <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${browseMode ? "text-foreground/40" : "text-foreground/50"}`}>
+          <p className={`text-xs line-clamp-2 mt-1 leading-relaxed ${browseMode ? "text-faint" : "text-muted-foreground"}`}>
             {presentation.subline}
           </p>
         ) : null}

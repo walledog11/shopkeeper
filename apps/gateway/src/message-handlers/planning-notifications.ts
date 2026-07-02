@@ -1,7 +1,7 @@
-import { db, type DbChannelType } from '@shopkeeper/db';
+import type { DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
-import { notifyOperator } from '../operator-notify.js';
+import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
 
@@ -79,12 +79,9 @@ export async function sendOperatorAutoExecutionNotification(
   result: PrecomputedPlanResult,
 ): Promise<void> {
   try {
-    const chats = await db.orgMemberTelegramChat.findMany({
-      where: { orgMember: { organizationId } },
-      select: { chatId: true },
-    });
+    const bindings = await listOperatorBindings(organizationId);
 
-    if (chats.length === 0) {
+    if (bindings.length === 0) {
       logger.info({ organizationId }, '[Worker] No bound operator members — skipping auto-execution notification');
       return;
     }
@@ -92,7 +89,7 @@ export async function sendOperatorAutoExecutionNotification(
     const summary = aiSummary || result.instruction;
     const message = formatAutoExecutionMessage(customerName, channelType, summary, result.plan, result);
 
-    for (const member of chats) {
+    for (const member of bindings) {
       const sent = await notifyOperator(organizationId, member, message, {
         lastThreadId: threadId,
         pendingPlan: null,
@@ -142,12 +139,9 @@ export async function sendOperatorQuestionNotification(
   question: string,
   instruction: string,
 ): Promise<void> {
-  const chats = await db.orgMemberTelegramChat.findMany({
-    where: { orgMember: { organizationId } },
-    select: { chatId: true },
-  });
+  const bindings = await listOperatorBindings(organizationId);
 
-  if (chats.length === 0) {
+  if (bindings.length === 0) {
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping question notification');
     return;
   }
@@ -155,7 +149,7 @@ export async function sendOperatorQuestionNotification(
   const summary = aiSummary || instruction;
   const message = formatQuestionMessage(customerName, channelType, summary, question);
 
-  for (const member of chats) {
+  for (const member of bindings) {
     const result = await notifyOperator(organizationId, member, message, {
       pendingPlan: null,
       pendingQuestion: { threadId, question },
@@ -181,12 +175,9 @@ export async function sendOperatorPlanNotification(
   plan: AgentPlan,
   instruction: string,
 ): Promise<void> {
-  const chats = await db.orgMemberTelegramChat.findMany({
-    where: { orgMember: { organizationId } },
-    select: { chatId: true },
-  });
+  const bindings = await listOperatorBindings(organizationId);
 
-  if (chats.length === 0) {
+  if (bindings.length === 0) {
     logger.info({ organizationId }, '[Worker] No bound operator members — skipping plan notification');
     return;
   }
@@ -194,7 +185,7 @@ export async function sendOperatorPlanNotification(
   const summary = aiSummary || instruction;
   const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
 
-  for (const member of chats) {
+  for (const member of bindings) {
     const result = await notifyOperator(organizationId, member, message, {
       pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
     }, {

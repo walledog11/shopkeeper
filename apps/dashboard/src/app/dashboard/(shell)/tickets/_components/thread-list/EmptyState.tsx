@@ -27,7 +27,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   if (isSearchMode) {
     return (
-      <div className="text-center p-8 text-foreground/40 text-sm">
+      <div className="text-center p-8 text-faint text-sm">
         No results for &ldquo;{searchQuery}&rdquo;
       </div>
     )
@@ -37,14 +37,14 @@ export function EmptyState({
     if (activeView === "for_me") {
       return (
         <EmptyStatePanel
-          icon={<CheckCircle2 className="size-5 text-foreground/40" />}
+          icon={<CheckCircle2 className="size-5 text-faint" />}
           title="You're all caught up"
           description="Nothing needs your reply right now."
           action={
             <button
               type="button"
               onClick={() => onViewChange("all_open")}
-              className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors"
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
             >
               Browse all open tickets →
             </button>
@@ -55,7 +55,7 @@ export function EmptyState({
 
     if (activeView === "spam") {
       return (
-        <div className="text-center p-8 text-foreground/40 text-sm">
+        <div className="text-center p-8 text-faint text-sm">
           No spam messages.
         </div>
       )
@@ -63,11 +63,11 @@ export function EmptyState({
 
     return (
       <EmptyStatePanel
-        icon={<Inbox className="size-5 text-foreground/30" />}
+        icon={<Inbox className="size-5 text-faint" />}
         title="No conversations yet"
         description="Connect a channel and customer messages will land here."
         action={
-          <Link href="/dashboard/integrations" className="text-xs font-semibold text-foreground/60 hover:text-foreground transition-colors">
+          <Link href="/dashboard/integrations" className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors">
             Set up integrations →
           </Link>
         }
@@ -92,7 +92,7 @@ export function EmptyState({
   ].filter(Boolean)
 
   return (
-    <div className="text-center p-8 text-foreground/40 text-sm">
+    <div className="text-center p-8 text-faint text-sm">
       {searchQuery
         ? `No results for "${searchQuery}"`
         : `No ${viewLabel} conversations${filterParts.length > 0 ? ` ${filterParts.join(", ")}` : ""}.`

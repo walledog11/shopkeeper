@@ -1,6 +1,7 @@
 import { deleteOrgMemberBindToken, findOrgMemberBindToken, db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { sendMessage } from '../../clients/telegram-client.js';
+import { finalizeOperatorBind } from '../../operator-onboarding.js';
 import type { TelegramChatMetadata, TelegramReply } from './types.js';
 
 const MAX_TELEGRAM_DEVICES = 3;
@@ -89,5 +90,6 @@ export async function handleStartBinding(
     );
   }
 
-  await reply("Connected. Text SUMMARY for your inbox or HELP for commands. You can also reply to digests or send instructions like 'refund #1234'.");
+  const welcome = await finalizeOperatorBind(member.organizationId);
+  await reply(welcome);
 }

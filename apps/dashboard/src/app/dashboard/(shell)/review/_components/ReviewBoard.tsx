@@ -14,6 +14,7 @@ import {
   BoardColumnLoading,
   DashboardStackColumn,
 } from "@/app/dashboard/_components/board/DashboardStackColumn"
+import { STACKED_BELOW_PEEK } from "@/app/dashboard/_components/home/needs-you-motion"
 import type { ActionLogEntry } from "@/types"
 import {
   REVIEW_BOARD_COLUMNS,
@@ -76,11 +77,11 @@ function ReviewStackColumn({
     <BoardColumnLoading
       testId="review-column-loading"
       keyPrefix="review-board-skeleton"
-      cardClassName="h-40 rounded-lg"
+      cardClassName="h-40 rounded-3xl"
     />
   ), [])
   const errorContent = useMemo(
-    () => <BoardColumnError className="rounded-lg" onRetry={state.onRetry} />,
+    () => <BoardColumnError className="rounded-3xl" onRetry={state.onRetry} />,
     [state.onRetry],
   )
   const empty = useMemo(() => (
@@ -88,7 +89,7 @@ function ReviewStackColumn({
       title={config.emptyTitle}
       body={config.emptyBody}
       icon={accent.icon}
-      className="h-40 rounded-lg"
+      className="h-40 rounded-3xl"
     />
   ), [accent.icon, config.emptyBody, config.emptyTitle])
 
@@ -119,8 +120,10 @@ function ReviewStackColumn({
       loading={loading}
       errorContent={errorContent}
       empty={empty}
-      peekShellClassName="h-full w-full rounded-lg border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
-      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-lg shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
+      peek={STACKED_BELOW_PEEK}
+      stackSingleItem
+      peekShellClassName="h-full w-full rounded-3xl border border-border bg-card shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] box-border"
+      peekCardClassName="pointer-events-none box-border overflow-hidden rounded-3xl shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)]"
     />
   )
 }

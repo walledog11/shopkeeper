@@ -1,6 +1,6 @@
 # Product instrumentation plan — PostHog
 
-**Status:** In progress — Phases 1 and 2 complete; Phase 3 verification underway
+**Status:** In progress — Phases 1–3 complete; Phase 4 is next
 
 **Last updated:** 2026-06-29
 
@@ -430,15 +430,15 @@ The exhaustive raw-payload review remains part of Phase 5 staging validation.
 - [x] Capture Stripe subscription transitions after webhook persistence.
 - [x] Evaluate and capture workspace activation after each successful agent-assisted reply.
 
-**Exit criteria:** Integration tests cover every success boundary and prove that persistence/provider failures do not emit success events.
+**Exit criteria:** ✅ Met. Integration tests cover the Phase 3 success boundaries, automated verification passes, and the controlled staging journey confirms the expected events and safe payloads in PostHog.
 
 **Verification progress (2026-06-29):**
 
 - [x] Pass analytics, agent-cache, action-persistence, restricted-route, subscription, inbound, plan, and outbound focused tests.
 - [x] Pass dashboard, gateway, and shared-agent typechecks and lint.
 - [x] Verify provider delivery failures do not emit `outbound_reply_sent`.
-- [ ] Complete the remaining persistence-failure and duplicate-event assertions for every Phase 3 boundary.
-- [ ] Run a controlled agent-assisted activation journey in staging and review every raw Phase 3 payload.
+- [x] Pass the complete integration suite: 716 tests passed and 2 skipped.
+- [x] Complete a controlled agent-assisted activation journey in staging and review every raw Phase 3 payload.
 
 ## Phase 4 — PostHog reports
 

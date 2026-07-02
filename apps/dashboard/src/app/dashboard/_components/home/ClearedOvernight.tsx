@@ -29,14 +29,13 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
   return (
     <section className="flex flex-col gap-2.5">
       <div className="flex items-baseline gap-3 flex-wrap">
-        <h2 className="text-sm font-bold text-foreground/85">{agentName} cleared overnight</h2>
-        <span className="text-xs text-foreground/35 tabular-nums">{totalCount}</span>
-        <span className="text-xs text-foreground/35">
+        <h2 className="text-sm font-bold text-strong">{agentName} cleared overnight</h2>
+        <span className="text-xs text-faint">
           · Saved you ~{formatHours(timeSavedHours)} · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
         </span>
         <Link
           href="/dashboard/review?focus=auto&from=24h"
-          className="text-xs font-semibold text-foreground/45 hover:text-foreground/75 transition-colors"
+          className="text-xs font-semibold text-muted-foreground hover:text-strong transition-colors"
         >
           See what was sent
         </Link>
@@ -51,7 +50,7 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
                 {t.tag}
               </span>
               <p className="text-2xl font-bold tabular-nums text-white leading-none">{t.count}</p>
-              <p className="text-xs text-foreground/40 mt-1.5 leading-snug">{t.subtitle}</p>
+              <p className="text-xs text-faint mt-1.5 leading-snug">{t.subtitle}</p>
             </Card>
           )
         })}

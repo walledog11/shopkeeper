@@ -98,13 +98,13 @@ export default function AgentPanelBriefing({
     <div className="flex w-full flex-col gap-8 pb-4">
       <div className="space-y-3">
         <h2 className="text-2xl font-semibold leading-snug text-foreground">
-          {greeting}{firstName ? <>, <span className="italic text-[#9c9285]">{firstName}</span></> : ""}.
+          {greeting}{firstName ? <>, <span className="italic text-muted-foreground">{firstName}</span></> : ""}.
         </h2>
-        <p className="text-sm text-foreground/60 leading-relaxed">
+        <p className="text-sm text-muted-foreground leading-relaxed">
           <BriefingNarrativeInline segments={narrativeSegments} />
         </p>
         {opsNotes.map((note) => (
-          <p key={note.id} className="text-sm text-foreground/60 leading-relaxed">
+          <p key={note.id} className="text-sm text-muted-foreground leading-relaxed">
             {note.text}.
           </p>
         ))}
@@ -117,7 +117,7 @@ export default function AgentPanelBriefing({
               key={chip.id}
               type="button"
               onClick={() => onChipSelect(chip)}
-              className="w-full px-4 py-2.5 rounded-full border border-border hover:bg-foreground/[0.04] text-xs font-semibold text-foreground/75 transition-colors text-left whitespace-normal"
+              className="w-full px-4 py-2.5 rounded-full border border-border hover:bg-foreground/[0.04] text-xs font-semibold text-strong transition-colors text-left whitespace-normal"
             >
               {chip.label}
             </button>

@@ -21,8 +21,8 @@ const STATUS_CONFIG = {
   active:   { label: 'Active',   icon: CheckCircle2,    className: 'text-green-400 bg-green-400/10 border-green-400/20' },
   trialing: { label: 'Trial',    icon: Clock,           className: 'text-blue-400 bg-blue-400/10 border-blue-400/20' },
   past_due: { label: 'Past due', icon: AlertTriangle,   className: 'text-amber-400 bg-amber-400/10 border-amber-400/20' },
-  canceled: { label: 'Canceled', icon: XCircle,         className: 'text-foreground/40 bg-foreground/[0.06] border-foreground/[0.10]' },
-  none:     { label: 'Free',     icon: CheckCircle2,    className: 'text-foreground/40 bg-foreground/[0.06] border-foreground/[0.10]' },
+  canceled: { label: 'Canceled', icon: XCircle,         className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
+  none:     { label: 'Free',     icon: CheckCircle2,    className: 'text-faint bg-foreground/[0.06] border-foreground/[0.10]' },
 }
 
 function formatAmount(cents: number) {
@@ -32,7 +32,7 @@ function formatAmount(cents: number) {
 function CardBrandIcon({ brand }: { brand: string }) {
   const label = brand.charAt(0).toUpperCase() + brand.slice(1)
   return (
-    <span className="inline-flex items-center gap-1 rounded bg-foreground/[0.06] px-2 py-0.5 text-xs font-semibold text-foreground/45">
+    <span className="inline-flex items-center gap-1 rounded bg-foreground/[0.06] px-2 py-0.5 text-xs font-semibold text-muted-foreground">
       {label}
     </span>
   )
@@ -51,7 +51,7 @@ export default function BillingTab() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-24">
-        <Loader2 className="size-5 animate-spin text-foreground/35" />
+        <Loader2 className="size-5 animate-spin text-faint" />
       </div>
     )
   }
@@ -77,14 +77,14 @@ export default function BillingTab() {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-foreground/75">Current plan</h2>
-            <p className="text-xs text-foreground/35 mt-1 leading-relaxed">Your active subscription and billing cycle.</p>
+            <h2 className="text-sm font-semibold text-strong">Current plan</h2>
+            <p className="text-xs text-faint mt-1 leading-relaxed">Your active subscription and billing cycle.</p>
           </div>
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-bold text-foreground/80">
+                  <p className="text-sm font-bold text-strong">
                     {data.planName ?? (isActive ? 'Pro' : 'Free')}
                   </p>
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${statusCfg.className}`}>
@@ -93,7 +93,7 @@ export default function BillingTab() {
                   </span>
                 </div>
                 {data.amount !== null && data.interval && (
-                  <p className="text-xs text-foreground/35">
+                  <p className="text-xs text-faint">
                     {formatAmount(data.amount)} / {data.interval}
                   </p>
                 )}
@@ -103,7 +103,7 @@ export default function BillingTab() {
                   </p>
                 )}
                 {data.nextInvoice && isActive && (
-                  <p className="text-xs text-foreground/35">
+                  <p className="text-xs text-faint">
                     Next invoice {formatAmount(data.nextInvoice.amount)} on {formatUnixDate(data.nextInvoice.date)}
                   </p>
                 )}
@@ -123,24 +123,24 @@ export default function BillingTab() {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-foreground/75">Payment method</h2>
-            <p className="text-xs text-foreground/35 mt-1 leading-relaxed">The card charged at each renewal.</p>
+            <h2 className="text-sm font-semibold text-strong">Payment method</h2>
+            <p className="text-xs text-faint mt-1 leading-relaxed">The card charged at each renewal.</p>
           </div>
           <div className="flex items-center justify-between gap-4">
             {data.paymentMethod ? (
               <div className="flex items-center gap-2.5">
-                <CreditCard className="size-4 text-foreground/35 shrink-0" />
+                <CreditCard className="size-4 text-faint shrink-0" />
                 <CardBrandIcon brand={data.paymentMethod.brand} />
-                <span className="text-sm text-foreground/75">ending in <span className="font-semibold text-foreground/85">{data.paymentMethod.last4}</span></span>
+                <span className="text-sm text-strong">ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span></span>
               </div>
             ) : (
-              <p className="text-sm text-foreground/35 italic">No payment method on file</p>
+              <p className="text-sm text-faint italic">No payment method on file</p>
             )}
             <Button
               variant="outline"
               size="sm"
               onClick={openBillingPortal}
-              className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-foreground/60 hover:bg-foreground/[0.08] shrink-0"
+              className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
             >
               {data.paymentMethod ? 'Update' : 'Add card'}
             </Button>
@@ -150,30 +150,30 @@ export default function BillingTab() {
 
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="p-5 sm:p-6 border-b border-foreground/[0.08]">
-          <h2 className="text-sm font-semibold text-foreground/75">Invoice history</h2>
+          <h2 className="text-sm font-semibold text-strong">Invoice history</h2>
         </div>
         {data.invoices.length === 0 ? (
-          <div className="px-6 py-8 text-sm text-foreground/35 text-center">No invoices yet.</div>
+          <div className="px-6 py-8 text-xs text-muted-foreground text-center">No invoices yet.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-foreground/[0.08]">
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-foreground/35 uppercase tracking-wide">Date</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-foreground/35 uppercase tracking-wide">Amount</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-foreground/35 uppercase tracking-wide hidden sm:table-cell">Status</th>
-                <th className="px-5 sm:px-6 py-3 text-right text-xs font-semibold text-foreground/35 uppercase tracking-wide">PDF</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide">Date</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide">Amount</th>
+                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide hidden sm:table-cell">Status</th>
+                <th className="px-5 sm:px-6 py-3 text-right text-xs font-semibold text-faint uppercase tracking-wide">PDF</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-foreground/[0.06]">
               {data.invoices.map(inv => (
                 <tr key={inv.id} className="hover:bg-foreground/[0.02] transition-colors">
-                  <td className="px-5 sm:px-6 py-3.5 text-foreground/45">{formatUnixDate(inv.date)}</td>
-                  <td className="px-5 sm:px-6 py-3.5 font-medium text-foreground/75">{formatAmount(inv.amount)}</td>
+                  <td className="px-5 sm:px-6 py-3.5 text-muted-foreground">{formatUnixDate(inv.date)}</td>
+                  <td className="px-5 sm:px-6 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
                   <td className="px-5 sm:px-6 py-3.5 hidden sm:table-cell">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
                       inv.status === 'paid'
                         ? 'text-green-400 bg-green-400/10 border-green-400/20'
-                        : 'text-foreground/40 bg-foreground/[0.06] border-foreground/[0.10]'
+                        : 'text-faint bg-foreground/[0.06] border-foreground/[0.10]'
                     }`}>
                       {inv.status ?? '—'}
                     </span>
@@ -184,12 +184,12 @@ export default function BillingTab() {
                         href={inv.pdfUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-foreground/45 hover:text-foreground/75 transition-colors"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-strong transition-colors"
                       >
                         Download <ExternalLink className="size-3" />
                       </a>
                     ) : (
-                      <span className="text-xs text-foreground/25">—</span>
+                      <span className="text-xs text-faint">—</span>
                     )}
                   </td>
                 </tr>

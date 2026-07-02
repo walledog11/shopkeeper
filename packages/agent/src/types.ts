@@ -76,6 +76,11 @@ export interface OrgSettings {
 
   // Onboarding — set when merchant completes the v1 onboarding flow
   onboardingCompletedAt?: string;
+
+  // Onboarding — set when the first operator channel binds; makes the next
+  // scheduled digest send a welcome briefing even when the inbox is empty,
+  // then cleared by the digest worker.
+  firstBriefingPending?: boolean;
 }
 
 export type OrgSettingsPatch = Omit<Partial<OrgSettings>, 'toolsEnabled'> & {

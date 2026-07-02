@@ -64,8 +64,8 @@ export function CustomerInfo({ customer, isEditing, onEditingChange, onSaved }: 
     <div className="grid grid-cols-3 divide-x divide-foreground/[0.08] overflow-hidden rounded-lg border border-foreground/[0.08]">
       {stats.map(stat => (
         <div key={stat.label} className="min-w-0 px-2 py-2 text-center">
-          <span className="block truncate text-[13px] font-semibold leading-4 text-foreground/85 tabular-nums">{stat.value}</span>
-          <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-foreground/40">{stat.label}</span>
+          <span className="block truncate text-[13px] font-semibold leading-4 text-strong tabular-nums">{stat.value}</span>
+          <span className="mt-1 block text-[10px] font-medium uppercase tracking-wide text-faint">{stat.label}</span>
         </div>
       ))}
     </div>
@@ -128,8 +128,8 @@ function CustomerInfoEditor({
     }
   }
 
-  const inputCls = "w-full text-xs text-foreground/80 bg-foreground/[0.05] border border-foreground/[0.12] rounded px-2 py-1.5 focus:outline-none focus:border-foreground/[0.25]"
-  const labelCls = "block text-xs text-foreground/30 mb-0.5"
+  const inputCls = "w-full text-xs text-strong bg-foreground/[0.05] border border-foreground/[0.12] rounded px-2 py-1.5 focus:outline-none focus:border-foreground/[0.25]"
+  const labelCls = "block text-xs text-faint mb-0.5"
   const field = (label: string, key: keyof EditState, textarea?: boolean) => (
       <div key={key}>
         <label htmlFor={`shopify-customer-${customer.id}-${key}`} className={labelCls}>{label}</label>
@@ -159,12 +159,12 @@ function CustomerInfoEditor({
     <div className="space-y-2.5">
       <div className="rounded-md border border-foreground/[0.07] bg-foreground/[0.03] p-2.5 space-y-2">
         <div className="flex items-center justify-between pb-1 border-b border-foreground/[0.07]">
-          <span className="text-xs text-foreground/30 font-medium">Edit customer</span>
+          <span className="text-xs text-faint font-medium">Edit customer</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => { onEditingChange(false); setSaveError(null) }}
-              className="text-xs text-foreground/30 hover:text-foreground/60 transition-colors"
+              className="text-xs text-faint hover:text-muted-foreground transition-colors"
             >
               Cancel
             </button>
@@ -172,7 +172,7 @@ function CustomerInfoEditor({
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="flex items-center gap-1 text-xs font-semibold text-white bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded px-2 py-0.5 transition-colors"
+              className="flex items-center gap-1 text-xs font-semibold text-[#ffffff] bg-[#96BF48] hover:bg-[#7da33a] disabled:opacity-50 rounded px-2 py-0.5 transition-colors"
             >
               {isSaving ? <RefreshCw className="size-2.5 animate-spin" /> : <Check className="size-2.5" />}
               Save
