@@ -54,6 +54,25 @@
   background-size: 160px 160px;
 }
 
+/* Crumpled-paper sheet — one sheet of real crumpled paper rendered in its own
+   position:fixed layer behind the page. We deliberately avoid
+   background-attachment:fixed: iOS Safari renders that unreliably and rasterizes
+   it into a blurry low-res layer. A fixed element scrolls-under natively and
+   stays sharp. The white overlay lightens the grey photo toward paper-white and
+   softens the creases so text and cards stay readable; tune its alpha to taste. */
+.m-paper-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: #fdfdfb;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5)),
+    url("/atmosphere/paper.jpg");
+  background-size: cover;
+  background-position: center;
+}
+
 /* Liquid glass buttons — marketing landing page */
 .m-glass-btn {
   position: relative;
@@ -210,6 +229,27 @@
 }
 
 /* Marketing navbar + dropdown menus */
+/* Floating cardstock pill — a slip of warm paper resting above the desk.
+   Depth comes from a soft, warm drop shadow (not glass frost); the fill is
+   near-opaque cream so the crumpled backdrop stays crisp behind it. */
+.m-navbar-pill {
+  border: 1px solid rgba(43, 33, 24, 0.09);
+  background: rgba(250, 246, 239, 0.9);
+  -webkit-backdrop-filter: blur(6px) saturate(115%);
+  backdrop-filter: blur(6px) saturate(115%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    0 1px 2px rgba(43, 33, 24, 0.05),
+    0 14px 30px -14px rgba(43, 33, 24, 0.3),
+    0 5px 14px -8px rgba(43, 33, 24, 0.16);
+}
+
+@supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  .m-navbar-pill {
+    background: rgba(250, 246, 239, 0.82);
+  }
+}
+
 .m-nav-trigger,
 .m-nav-link {
   display: inline-flex;
