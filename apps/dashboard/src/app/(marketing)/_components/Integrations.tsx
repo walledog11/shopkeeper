@@ -75,7 +75,7 @@ function BriefingConversation() {
         return (
           <div key={`${message.from}-${message.time}-${index}`} className="flex flex-col gap-2.5">
             {message.divider && (
-              <div className="animate-[m-msg_0.35s_ease] py-1 text-center text-[16px] text-stone-500 [font-family:var(--m-caveat)]">
+              <div className="animate-[m-msg_0.35s_ease] py-1 text-center text-[13px] text-stone-500">
                 {message.divider}
               </div>
             )}
@@ -114,7 +114,7 @@ function BriefingConversation() {
 
 export function Integrations() {
   return (
-    <section id="briefing" className="relative isolate scroll-mt-24 overflow-hidden border-t border-stone-900/10 py-24">
+    <section id="briefing" className="relative isolate scroll-mt-24 overflow-hidden py-18">
       {/* Photographic wash band — placeholder photography, swap
           /atmosphere/integrations-leaves.jpg for the final shot. */}
       <div
@@ -134,7 +134,7 @@ export function Integrations() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-6 md:grid-cols-[0.8fr_1fr] md:gap-16">
         <Reveal>
-          <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-bold leading-[1.1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+          <h2 className="mb-5 text-[clamp(36px,4.5vw,60px)] font-bold leading-[1.1] tracking-[0.03em] [font-family:var(--m-hand)]">
             Wake up to a briefing, <em className="italic text-[var(--m-quill)]">not a backlog.</em>
           </h2>
           <p className="max-w-[46ch] text-[16px] leading-relaxed text-stone-700">

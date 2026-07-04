@@ -11,6 +11,7 @@
   --m-quill: #7d7264;
   --m-serif: Georgia, Cambria, 'Times New Roman', serif;
   --m-caveat: var(--font-caveat), var(--m-serif);
+  --m-hand: var(--font-just-another-hand), var(--m-serif);
   --m-mono: ui-monospace, SFMono-Regular, 'SF Mono', Consolas, 'Liberation Mono', monospace;
 }
 
@@ -41,6 +42,16 @@ html:has(.m-paper-sheet) {
   50%      { transform: translateY(-10px); }
 }
 
+/* A tilted card settling onto the desk — rotates from flat to its resting
+   tilt (--m-tilt, matching the element's Tailwind `rotate-*`) as it reveals.
+   Animates the independent `rotate` property (Tailwind v4) so it doesn't stack
+   on the hover-lift `translate`; no forwards fill, so once it lands control
+   returns to the element's own rotate and hover keeps working. */
+@keyframes m-settle {
+  from { rotate: 0deg; }
+  to   { rotate: var(--m-tilt, 0deg); }
+}
+
 /* Subtle paper grain, tiled SVG turbulence noise */
 .m-grain {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.14'/%3E%3C/svg%3E");
@@ -64,6 +75,71 @@ html:has(.m-paper-sheet) {
     url("/atmosphere/paper.webp");
   background-size: cover;
   background-position: center;
+}
+
+/* Torn-notebook CTA card — a photographed ripped, ruled, taped sheet
+   (torn edges + tape baked into the PNG). background-size is set per-breakpoint
+   on the element: aspect-locked `contain` on desktop (no distortion), and a
+   content-sized stretch on mobile where the sheet is too narrow to aspect-lock. */
+.m-torn-paper {
+  background-image: url("/illustrations/scrap-paper.png");
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+/* Hand-drawn ink underline for the one load-bearing clause in a paragraph —
+   a repeating wavy pen stroke tile so the line survives wrapping onto
+   multiple lines (box-decoration-break: clone re-draws it per fragment). */
+.m-ink-underline {
+  padding-bottom: 3px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='90' height='7' viewBox='0 0 90 7'%3E%3Cpath d='M2 4.5 C 15 2.5, 30 6, 45 4 C 60 2.2, 75 5.5, 88 3.5' stroke='%235f5648' stroke-opacity='0.55' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+  background-size: 90px 7px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Rubber ink-stamp — "Most picked" on the Pro pricing card. A tiled turbulence
+   mask nibbles the ring and lettering with fine, sparse holes so the ink reads
+   as unevenly transferred without hurting legibility. */
+.m-stamp {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 -0.32'/%3E%3C/filter%3E%3Crect width='70' height='70' filter='url(%23s)'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 -0.32'/%3E%3C/filter%3E%3Crect width='70' height='70' filter='url(%23s)'/%3E%3C/svg%3E");
+  -webkit-mask-size: 70px 70px;
+  mask-size: 70px 70px;
+}
+
+/* Postage-stamp perforated edge — the channel chips in Channels. Four
+   edge-scallop masks (a semicircular bite of radius --r punched at regular
+   intervals along each edge) intersected so the interior and the logo stay
+   solid, leaving only the perimeter scalloped like a torn stamp. The
+   drop-shadow follows the masked alpha, so the scallops cast their own shadow
+   (a box-shadow would stay rectangular). */
+.m-perf-stamp {
+  --r: 3px;
+  -webkit-mask:
+    radial-gradient(var(--r) at 50% 0,    #0000 97%, #000) 50% 0    / calc(2 * var(--r)) 100% repeat-x,
+    radial-gradient(var(--r) at 50% 100%, #0000 97%, #000) 50% 100% / calc(2 * var(--r)) 100% repeat-x,
+    radial-gradient(var(--r) at 0 50%,    #0000 97%, #000) 0 50%    / 100% calc(2 * var(--r)) repeat-y,
+    radial-gradient(var(--r) at 100% 50%, #0000 97%, #000) 100% 50% / 100% calc(2 * var(--r)) repeat-y;
+  -webkit-mask-composite: source-in;
+          mask-composite: intersect;
+  filter: drop-shadow(0 2px 3px rgba(22, 20, 19, 0.22));
+}
+
+/* Faint coffee-ring stain — a mug set down on the desk once. Darker at the rim
+   (the coffee-ring effect), hollow center; kept very low-alpha so it reads as
+   an accidental mark rather than decoration. One instance only. */
+.m-coffee-ring {
+  background:
+    radial-gradient(closest-side,
+      transparent 60%,
+      rgba(122, 84, 46, 0.04) 63%,
+      rgba(122, 84, 46, 0.12) 71%,
+      rgba(122, 84, 46, 0.15) 74%,
+      rgba(122, 84, 46, 0.05) 80%,
+      transparent 83%);
 }
 
 /* Liquid glass buttons — marketing landing page */

@@ -10,7 +10,7 @@ function rise(delayMs: number) {
 
 export function Hero() {
   return (
-    <section className="relative isolate px-6 pb-20 pt-14 text-center sm:pt-20">
+    <section className="relative isolate px-6 pb-20 pt-14 text-center sm:pt-14">
 
       {/* Soft paper-white clearing behind the copy — lets the crumpled texture
           recede directly under the type, then return to full grain at the edges. */}
@@ -19,23 +19,20 @@ export function Hero() {
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
       />
 
-      <div className="mb-7 inline-flex items-center gap-2.5" style={rise(0)}>
-        <span className="rounded-full border border-stone-900/10 bg-white/80 px-2.5 py-1 text-[12px] font-medium text-stone-600">
-          New
-        </span>
+      <div className="mb-7 inline-block" style={rise(0)}>
         <a
           href="#channels"
-          className="inline-flex items-center gap-1 text-[13px] font-medium text-stone-800 transition-colors hover:text-black"
+          className="inline-flex -rotate-[2.2deg] items-center gap-2 rounded-lg border border-stone-900/10 bg-[#fbf8f2] px-3 py-1.5 text-[13px] font-medium text-stone-600 shadow-[3px_3px_0_rgba(43,33,24,0.11)] transition-transform duration-200 hover:-rotate-[0.8deg]"
         >
+          <span className="font-semibold text-stone-900">New</span>
+          <span aria-hidden className="text-stone-300">·</span>
           Apple Messages
-          <span aria-hidden className="text-stone-400">
-            ›
-          </span>
+          <span aria-hidden className="text-stone-400">›</span>
         </a>
       </div>
 
       <h1
-        className="mx-auto mb-4 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-bold leading-[1.05] tracking-[-0.01em] [font-family:var(--m-caveat)] [text-shadow:0_1px_0_rgba(255,255,255,0.55),0_2px_16px_rgba(249,245,238,0.9)]"
+        className="mx-auto mb-7 max-w-[min(760px,92vw)] text-[clamp(42px,5.5vw,72px)] font-bold leading-[1.05] tracking-[0.03em] [font-family:var(--m-hand)] [text-shadow:0_1px_0_rgba(255,255,255,0.55),0_2px_16px_rgba(249,245,238,0.9)]"
         style={rise(80)}
       >
         The AI employee

@@ -89,9 +89,13 @@ export function Channels() {
   }, []);
 
   return (
-    <section id="channels" className="mx-auto max-w-6xl scroll-mt-24 border-t border-stone-900/10 px-6 py-24 text-center">
+    <section id="channels" className="relative mx-auto max-w-6xl scroll-mt-24 px-6 py-24 text-center">
+      <span
+        aria-hidden
+        className="m-coffee-ring pointer-events-none absolute left-1 top-[42%] hidden size-36 -translate-y-1/2 lg:block"
+      />
       <Reveal>
-        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Reach your new hire from{" "}
           <em className="italic text-[var(--m-quill)]">
             <HandUnderline>wherever you already are.</HandUnderline>
@@ -128,7 +132,7 @@ export function Channels() {
             style={{ animationDelay: `${0.2 + i * 0.35}s` }}
           >
             <span
-              className={`mb-2 block pl-12 text-left text-[17px] font-bold leading-none text-stone-500 [font-family:var(--m-caveat)] sm:absolute sm:top-1/2 sm:mb-0 sm:-translate-y-1/2 sm:pl-0 sm:text-[22px] ${
+              className={`mb-2 block pl-12 text-left text-[17px] font-bold leading-none text-stone-500 [font-family:var(--m-hand)] sm:absolute sm:top-1/2 sm:mb-0 sm:-translate-y-1/2 sm:pl-0 sm:text-[22px] ${
                 m.side === "left" ? "sm:left-[calc(50%+28px)]" : "sm:right-[calc(50%+28px)]"
               }`}
             >
@@ -141,7 +145,7 @@ export function Channels() {
                 }`}
               >
                 <span
-                  className={`absolute -top-3.5 right-3.5 grid size-9 place-items-center rounded-lg border border-dashed border-stone-900/35 bg-[#f6f2eb] ${m.stampTilt}`}
+                  className={`m-perf-stamp absolute -top-3.5 right-3.5 grid size-9 place-items-center rounded-[3px] bg-[#efe9df] ${m.stampTilt}`}
                 >
                   <Image src={m.logo} alt={`${m.channel} logo`} width={20} height={20} />
                 </span>
@@ -157,14 +161,9 @@ export function Channels() {
         ))}
       </div>
 
-      <div className="pt-8 text-[24px] text-[var(--m-quill)] [font-family:var(--m-caveat)]">
+      <div className="pt-8 text-[24px] text-[var(--m-quill)] [font-family:var(--m-hand)]">
         covering the night shift 🌙
       </div>
-
-      <p className="mt-8 flex items-center justify-center gap-2 text-[13.5px] text-stone-500">
-        <Image src="/logos/whatsapp-logo.png" alt="WhatsApp logo" width={18} height={18} />
-        WhatsApp — one more doorway, coming soon.
-      </p>
     </section>
   );
 }

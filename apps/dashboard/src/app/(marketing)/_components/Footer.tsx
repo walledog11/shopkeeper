@@ -6,7 +6,7 @@ const COPYRIGHT_YEAR = 2026;
 
 export function Footer() {
   return (
-    <footer className="relative isolate overflow-hidden border-t border-stone-900/10 px-6 pt-12">
+    <footer className="relative isolate overflow-hidden px-6 pt-12">
       {/* Dawn-sky wash behind the wordmark — placeholder photography, swap
           /atmosphere/footer-dawn.jpg for the final shot. */}
       <div
@@ -38,7 +38,7 @@ export function Footer() {
         {/* Giant wordmark outro, descenders cropped by the page edge */}
         <div
           aria-hidden
-          className="-mb-[0.26em] mt-10 select-none whitespace-nowrap text-center text-[clamp(72px,14.5vw,200px)] leading-none tracking-[-0.03em] text-[#2b2118] [font-family:var(--m-caveat)]"
+          className="-mb-[0.26em] mt-2 select-none whitespace-nowrap text-center text-[clamp(72px,14.5vw,200px)] leading-none tracking-[0.03em] text-[#2b2118] [font-family:var(--m-hand)]"
         >
           shopkeeper
         </div>

@@ -5,6 +5,7 @@ import { IMessageScreen } from "./chat-demo/IMessageChatDemo";
 import { InstagramScreen } from "./chat-demo/InstagramChatDemo";
 import { PhoneFrame } from "./chat-demo/PhoneFrame";
 import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
+import { InkCheck } from "./InkCheck";
 import type { ChatMessage } from "./chat-demo/shared";
 
 type ChatVariant = "instagram" | "imessage";
@@ -12,8 +13,9 @@ type ChatVariant = "instagram" | "imessage";
 interface Feature {
   num: string;
   title: React.ReactNode;
-  body: string;
+  body: React.ReactNode;
   bullets: string[];
+  note: string;
   annotation: string;
   chat: {
     variant: ChatVariant;
@@ -34,12 +36,19 @@ const FEATURES: Feature[] = [
         Answers customers <em className="italic text-[var(--m-quill)]">while you sleep.</em>
       </>
     ),
-    body: "Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and replies the way you would. When it isn't sure, it doesn't guess — it hands the thread to you.",
+    body: (
+      <>
+        Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and
+        replies the way you would. When it isn&apos;t sure, it doesn&apos;t guess —{" "}
+        <span className="m-ink-underline">it hands the thread to you</span>.
+      </>
+    ),
     bullets: [
       "Instagram, email & iMessage in one brain",
       "Learns your tone from the replies you've already sent",
       "Escalates to you instead of bluffing",
     ],
+    note: "11 DMs handled before your alarm.",
     annotation: "2:14 am — you were asleep",
     chat: {
       variant: "instagram",
@@ -66,12 +75,19 @@ const FEATURES: Feature[] = [
         Asks <em className="italic text-[var(--m-quill)]">before it acts.</em>
       </>
     ),
-    body: "You set the rules — refund caps, blocked actions, how much rope it gets. Shopkeeper starts cautious and earns autonomy one approval at a time, because one bad refund can undo months of trust.",
+    body: (
+      <>
+        You set the rules — refund caps, blocked actions, how much rope it gets. Shopkeeper starts cautious
+        and earns autonomy one approval at a time, because{" "}
+        <span className="m-ink-underline">one bad refund can undo months of trust</span>.
+      </>
+    ),
     bullets: [
       "Refund limits and blocked cancellations you control",
       "Approve with one text — iMessage or Telegram",
       "Every action logged on the thread",
     ],
+    note: "$212 saved — order intact.",
     annotation: "your call — one tap",
     chat: {
       variant: "imessage",
@@ -102,12 +118,18 @@ const FEATURES: Feature[] = [
         Knows your store <em className="italic text-[var(--m-quill)]">cold.</em>
       </>
     ),
-    body: "Live Shopify orders and inventory, your policies, every past conversation. Ask it anything about your store and it answers from data, not vibes.",
+    body: (
+      <>
+        Live Shopify orders and inventory, your policies, every past conversation. Ask it anything about
+        your store and it answers <span className="m-ink-underline">from data, not vibes</span>.
+      </>
+    ),
     bullets: [
       "Reads live orders, inventory & tracking",
       "Remembers every customer conversation",
       "Cites your policies and FAQs, not generic ones",
     ],
+    note: "restock day: all 9 got a text.",
     annotation: "live from your Shopify",
     chat: {
       variant: "imessage",
@@ -152,26 +174,61 @@ function useInViewOnce(ref: RefObject<Element | null>) {
   return inView;
 }
 
+/** Step number ringed by a quick pen ellipse — the loop deliberately doesn't close. */
+function InkCircledNum({ num, className = "" }: { num: string; className?: string }) {
+  return (
+    <span className={`relative inline-flex size-12 items-center justify-center ${className}`}>
+      <svg viewBox="0 0 48 48" fill="none" aria-hidden className="absolute inset-0 size-full text-stone-900/50">
+        <path
+          d="M24 3.5 C 12 3, 4.5 11, 4 23 C 3.6 35, 12 44.5, 24.5 44.5 C 36.5 44.5, 44.5 36, 44 23.5 C 43.5 12.5, 35.5 4.8, 27 4"
+          stroke="currentColor"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+        />
+      </svg>
+      <span className="pt-0.5 text-[26px] leading-none text-stone-700 [font-family:var(--m-hand)]">{num}</span>
+    </span>
+  );
+}
+
+/** Per-scrap tilt/offset/tape placement so the stack reads as pinned slips, not a list. */
+const SCRAP_POSES = [
+  { card: "-rotate-[1.2deg]", tape: "-top-2 left-7 -rotate-3" },
+  { card: "ml-8 rotate-[0.9deg]", tape: "-top-2 right-8 -rotate-6" },
+  { card: "ml-2 -rotate-[0.7deg]", tape: "-top-2 left-10 rotate-3" },
+];
+
 function StepCopy({ feature }: { feature: Feature }) {
   return (
-    <>
-      <div className="mb-4 flex items-center gap-2.5 text-xs uppercase tracking-[0.15em] text-stone-500 [font-family:var(--m-caveat)]">
-        <span className="inline-block h-px w-6 bg-stone-400" />
-        {feature.num}
-      </div>
-      <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4vw,56px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+    <div className="relative md:pl-[76px]">
+      <InkCircledNum num={feature.num} className="mb-5 md:absolute md:left-0 md:top-1 md:mb-0" />
+      <span
+        aria-hidden
+        className="absolute bottom-1 left-6 top-[60px] hidden w-0 border-l-2 border-dotted border-stone-900/15 md:block"
+      />
+      <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4vw,56px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
         {feature.title}
       </h2>
-      <p className="mb-7 max-w-[46ch] text-[16px] leading-relaxed text-stone-700">{feature.body}</p>
-      <ul className="m-0 flex list-none flex-col gap-3 p-0 text-[14px] text-stone-700">
-        {feature.bullets.map(b => (
-          <li key={b} className="flex items-start gap-2.5">
-            <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-[#2b2118] text-[9px] text-[#f6f2eb]">✓</span>
+      <p className="mb-8 max-w-[46ch] text-[17px] leading-relaxed text-stone-700">{feature.body}</p>
+      <ul className="m-0 flex list-none flex-col gap-4 p-0 text-[15px] text-stone-800">
+        {feature.bullets.map((b, i) => (
+          <li
+            key={b}
+            className={`relative flex w-fit max-w-[40ch] items-start gap-3 border border-stone-900/10 bg-[#fcfaf4] py-3.5 pl-4 pr-6 shadow-[2px_4px_12px_rgba(22,20,19,0.09)] ${SCRAP_POSES[i % SCRAP_POSES.length].card}`}
+          >
+            <span
+              aria-hidden
+              className={`absolute h-[18px] w-12 border-x border-stone-400/20 bg-stone-100/50 shadow-[0_1px_2px_rgba(22,20,19,0.07)] backdrop-blur-[1px] ${SCRAP_POSES[i % SCRAP_POSES.length].tape}`}
+            />
+            <InkCheck className="mt-[3px] size-4 shrink-0 text-[#2b2118]" />
             {b}
           </li>
         ))}
       </ul>
-    </>
+      <p className="mt-7 w-fit -rotate-1 text-[21px] leading-none text-stone-500 [font-family:var(--m-hand)] md:ml-14">
+        — {feature.note}
+      </p>
+    </div>
   );
 }
 
@@ -235,14 +292,14 @@ function MobileCarousel() {
             aria-label={`Step ${f.num}`}
             aria-current={i === active ? "step" : undefined}
             onClick={() => go(i)}
-            className={`rounded-full px-3.5 py-1 text-[16px] leading-none transition-colors duration-300 [font-family:var(--m-caveat)] ${
+            className={`rounded-full px-3.5 py-1 text-[16px] leading-none transition-colors duration-300 [font-family:var(--m-hand)] ${
               i === active ? "bg-stone-900/85 text-[#f6f2eb]" : "bg-stone-900/[0.06] text-stone-500"
             }`}
           >
             {f.num}
           </button>
         ))}
-        <span className="ml-1.5 text-[17px] leading-none text-stone-400 [font-family:var(--m-caveat)]">
+        <span className="ml-1.5 text-[17px] leading-none text-stone-400 [font-family:var(--m-hand)]">
           swipe →
         </span>
       </div>
@@ -315,9 +372,9 @@ export function Features() {
   }, []);
 
   return (
-    <section id="how" className="scroll-mt-24 border-t border-stone-900/10">
+    <section id="how" className="scroll-mt-24">
       <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 md:pb-0 md:pt-20">
-        <div className="flex items-center justify-center gap-3 text-[22px] text-stone-500 [font-family:var(--m-caveat)]">
+        <div className="flex items-center justify-center gap-3 text-[22px] text-stone-500 [font-family:var(--m-hand)]">
           <span className="h-px w-10 bg-stone-400/60" aria-hidden />
           how it works
           <span className="h-px w-10 bg-stone-400/60" aria-hidden />
@@ -325,7 +382,7 @@ export function Features() {
 
         <MobileCarousel />
 
-        <div className="hidden md:grid md:grid-cols-2 md:gap-20">
+        <div className="hidden md:grid md:grid-cols-[1.15fr_1fr] md:gap-14">
           <div className="py-[8vh]">
             {FEATURES.map((f, i) => (
               <div
@@ -367,7 +424,7 @@ export function Features() {
                     />
                   ))}
                 </PhoneFrame>
-                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] text-stone-500 [font-family:var(--m-caveat)]">
+                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] text-stone-500 [font-family:var(--m-hand)]">
                   {FEATURES.map((f, i) => (
                     <span
                       key={f.num}

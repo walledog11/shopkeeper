@@ -1,23 +1,22 @@
 import { Reveal } from "./Reveal";
-import { GlassLink } from "./GlassLink";
 
 export function CTA() {
   return (
     <div className="px-6 pb-20 pt-6">
-      <Reveal className="mx-auto max-w-6xl">
-        <div className="m-grain rounded-[40px] bg-[#2b2118] px-8 py-20 text-center text-[#f6f2eb] sm:py-24">
-          <h2 className="mx-auto mb-6 max-w-[16ch] text-[clamp(40px,6.5vw,88px)] font-bold leading-[0.98] tracking-[-0.02em] [font-family:var(--m-caveat)]">
-            Your next hire <em className="italic text-[#cdbfa3]">doesn&apos;t need a desk.</em>
+      <Reveal className="mx-auto max-w-5xl">
+        <div className="m-torn-paper bg-[length:100%_100%] px-8 py-20 text-center sm:flex sm:aspect-[3842/2724] sm:flex-col sm:items-center sm:justify-center sm:bg-contain sm:py-0">
+          <h2 className="mx-auto mb-3 max-w-[15ch] -rotate-[2deg] text-[clamp(56px,9vw,116px)] font-normal leading-[0.9] text-stone-900 [font-family:var(--m-hand)]">
+            Your next hire doesn&apos;t need a desk.
           </h2>
-          <p className="mx-auto mb-9 max-w-[44ch] text-base leading-relaxed text-[#f6f2eb]/70">
+          <p className="mx-auto mb-8 max-w-[46ch] text-[clamp(22px,3vw,32px)] leading-[1.05] text-stone-600 [font-family:var(--m-hand)]">
             Set up in five minutes. Your customers will never know you slept.
           </p>
-          <GlassLink href="/signup" variant="light" className="px-7 py-3.5">
+          <a
+            href="/signup"
+            className="inline-flex rounded-full bg-white px-8 py-3 text-[clamp(22px,2.6vw,28px)] leading-none text-stone-900 shadow-[0_10px_24px_-10px_rgba(43,33,24,0.4)] transition-transform duration-200 hover:-translate-y-0.5 [font-family:var(--m-hand)]"
+          >
             Hire Shopkeeper — start free
-          </GlassLink>
-          <p className="mt-5 text-[12px] text-[#f6f2eb]/50 [font-family:var(--m-mono)]">
-            14 days free · no credit card
-          </p>
+          </a>
         </div>
       </Reveal>
     </div>

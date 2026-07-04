@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Caveat } from "next/font/google";
+import { Caveat, Just_Another_Hand } from "next/font/google";
 import { getDashboardAppUrl } from "@/lib/env";
 import { Providers } from "./providers";
 import "./globals.css";
@@ -8,6 +8,13 @@ const caveat = Caveat({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-caveat",
+});
+
+const justAnotherHand = Just_Another_Hand({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  variable: "--font-just-another-hand",
 });
 
 export const viewport: Viewport = {
@@ -55,7 +62,7 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en" className={caveat.variable}>
+    <html lang="en" className={`${caveat.variable} ${justAnotherHand.variable}`}>
       <body className="font-sans antialiased">
         <Providers publishableKey={publishableKey}>
           {children}

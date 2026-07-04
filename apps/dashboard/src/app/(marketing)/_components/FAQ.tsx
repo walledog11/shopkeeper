@@ -38,7 +38,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         type="button"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
-        className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent py-6 text-left text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-caveat)]"
+        className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent py-6 text-left font-sans text-[clamp(17px,2.5vw,21px)] font-semibold tracking-[-0.01em]"
       >
         <span>{q}</span>
         <span className={`ml-4 shrink-0 text-lg font-normal transition-transform duration-200 [font-family:var(--m-mono)] ${open ? "rotate-45" : ""}`}>+</span>
@@ -58,9 +58,9 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export function FAQ() {
   return (
-    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 border-t border-stone-900/10 px-6 py-24 text-center">
+    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Things people ask{" "}
           <em className="italic text-[var(--m-quill)]">before they trust an AI.</em>
         </h2>

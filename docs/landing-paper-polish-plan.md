@@ -2,7 +2,7 @@
 
 Extend the crumpled-paper / desk-stationery language across the marketing landing page. Several sections still speak generic-SaaS (flat pills, glyph checkmarks, straight rule lines, frosted-glass buttons) while sitting on the paper backdrop.
 
-**Status:** not started.
+**Status:** Phases 1–2 shipped. Phase 3 not started.
 
 **Last reviewed:** 2026-07-04
 
@@ -12,19 +12,21 @@ Extend the crumpled-paper / desk-stationery language across the marketing landin
 - Restraint over scrapbook clutter — the reference aesthetic (poke.com) is warm and quiet. Any single motif appears at most once or twice on the page.
 - All work is in `apps/dashboard/src/app/(marketing)/` and `apps/dashboard/src/app/styles/marketing.css`. Reuse existing tokens (`--m-ink`, `--m-quill`, `--m-caveat`) and existing techniques (the `stroke-dashoffset` draw-on already used for the Channels timeline path).
 
-## Phase 1 — ink, not chrome (highest payoff)
+## Phase 1 — ink, not chrome (highest payoff) — DONE
 
-1. **Hand-drawn underlines/circles on headline italics.** Every section headline has an `em` phrase in quill color ("while you sleep.", "a part-time hire."). Add a rough SVG pen-stroke underline (or circled word), drawn on with `stroke-dashoffset` when scrolled into view — same technique as the timeline path in `Channels.tsx`. Start with one headline, judge, then roll out.
-2. **Handwritten checkmarks.** Feature bullets (`Features.tsx`) and pricing rows (`Pricing.tsx`) use a dark circle + `✓` glyph. Replace with a small inline-SVG scribbled ink check.
-3. **Section dividers.** Replace the flat `border-t border-stone-900/10` between sections with either a wobbly hand-ruled SVG line (the "— how it works —" divider is the existing good example) or no line at all.
+1. **Hand-drawn underlines/circles on headline italics.** ✅ `HandUnderline.tsx` — rough SVG pen-stroke, draws on via `stroke-dashoffset` on scroll-into-view, inherits the phrase color via `currentColor`. Applied to **one** headline (Channels "wherever you already are."). Kept to a single instance on purpose: the restraint rule caps this motif at once/twice, and it's the only major section headline whose `em` stays single-line at every breakpoint — the others (Pricing "a part-time hire.", FAQ "before they trust an AI.", Integrations "not a backlog.", Hero "doesn't need a desk.") wrap, and an `inline-block` underline can't break mid-phrase. Features' ems are single-line but are a set of three (underlining one looks arbitrary). If a second instance is ever wanted, the component supports it — pick a single-line phrase.
+2. **Handwritten checkmarks.** ✅ `InkCheck.tsx` — two-stroke scribbled ink check, `currentColor` so it's ink on light cards and cream on the dark Pro card. Swapped into `Features.tsx` bullets and `Pricing.tsx` rows (dropped the circle backing).
+3. **Section dividers.** ✅ `HandDivider.tsx` — short, faint, hand-ruled pen tick. Replaced the flat `border-t border-stone-900/10` at every section boundary (Integrations, Channels, Features, Pricing, FAQ, Footer); dividers are rendered in `page.tsx` between sections so the seam sits where the old hairline was. (FAQ's internal accordion rule was left as-is — it's not a section boundary.)
 
-## Phase 2 — stationery objects
+## Phase 2 — stationery objects — DONE
 
-4. **"Most picked" as a rubber stamp.** The Pro-card badge (`Pricing.tsx`) becomes an angled, slightly distressed ink-stamp oval (~-8°, overlapping the card edge) instead of a pill.
-5. **Pricing cards as index cards.** Alternate ±0.5–1° rotation (matching the Channels note cards) plus a washi-tape strip pseudo-element on one corner. Optional: torn-receipt treatment for the price block to play into "costs less than a part-time hire."
-6. **Hero "New · Apple Messages" badge as a paper tag/sticker** — small tilt, hard shadow — instead of the current pill (`Hero.tsx`).
-7. **One sticky note.** A single handwritten Post-it near the CTA or hero (e.g. "gone to bed — Shopkeeper's got it 🌙"). One, not several.
-8. **Footer signature.** A Caveat "— your shopkeeper" sign-off near the giant footer wordmark.
+4. **"Most picked" as a rubber stamp.** ✅ `Pricing.tsx` — the Pro badge is now an angled ink-stamp oval (`-8°`), lifted out of the header row and absolutely positioned overlapping the card's top-right corner. Ink is a **muted oxblood red** (`#b0472f`), not cream: because the oval straddles the corner, ~half of it sits on the light crumpled-paper background where cream had no contrast and read as an invisible deboss — red reads on both the dark card and the light paper, and is the actual rubber-stamp convention. Distress via a new `.m-stamp` class in `marketing.css`: a tiled turbulence `mask-image` nibbles the ring/lettering with fine, sparse holes (kept light — an earlier heavier erosion destroyed legibility).
+5. **Pricing cards as index cards.** ✅ `Pricing.tsx` — sub-degree alternating tilt on all three cards (`-0.7°` / `+0.5°` / `-0.7°`), plus a translucent washi-tape strip straddling the top edge of the two **light** outer cards (`mix-blend-multiply` tan, mirrored corners). The dark Pro card keeps the stamp as its object — `mix-blend-multiply` tape wouldn't register on it, and one object per card avoids clutter. Torn-receipt price block was skipped (restraint; the stamp + tape already carry the section).
+6. **Hero badge as a paper tag/sticker.** ✅ `Hero.tsx` — the frosted "New · Apple Messages" pill is now a warm-paper sticker: `rounded-lg`, `-2.2°` tilt, hard offset shadow (`3px 3px 0`), un-tilts slightly on hover. Note the `rise()` entrance animates `transform`, so the tilt lives on an inner `<a>` and `rise()` stays on an outer wrapper (otherwise `m-rise`'s `to { transform: none }` flattens it).
+7. **One sticky note.** ✅ `CTA.tsx` — a single butter-yellow Post-it ("gone to bed — Shopkeeper's got it 🌙", Caveat, `+5°`, soft shadow) stuck on the dark CTA card's top-right corner. Placed here (not the hero) because it pays off the card's "your customers will never know you slept" line.
+8. **Footer signature.** ✅ `Footer.tsx` — a Caveat "— your shopkeeper" sign-off, quill color, right-aligned and slightly tilted, sits just above the giant wordmark so the logo reads as the signature's flourish.
+
+All five were screenshot-judged at desktop (1440) and mobile (390); the sticky note and index cards were checked on both. The hero sticker must be judged from a **viewport** screenshot, not an element screenshot of the hero section — the `sticky` navbar overlaps a section-scoped shot and hides the badge (screenshot artifact, not a real overlap).
 
 ## Phase 3 — texture & motion
 
