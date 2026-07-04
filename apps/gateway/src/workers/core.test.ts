@@ -124,6 +124,7 @@ describe('createCoreWorkerResources', () => {
     const resources = createCoreWorkerResources(producerConn, workerOptions);
 
     expect(resources.aiSummaryQueue).toBe(queueInstances[0]);
+    expect(resources.inboundQueue).toBe(queueInstances[1]);
     expect(resources.messageWorker).toBe(workerInstances[0]);
     expect(resources.aiSummaryWorker).toBe(workerInstances[1]);
     expect(resources.workers).toEqual(workerInstances);
@@ -131,7 +132,10 @@ describe('createCoreWorkerResources', () => {
     expect(resources.heartbeats).toHaveLength(0);
     expect(resources.shutdownResources).toHaveLength(0);
 
-    expect(queueInstances.map((queue) => queue.name)).toEqual([QUEUE.AI_SUMMARY]);
+    expect(queueInstances.map((queue) => queue.name)).toEqual([
+      QUEUE.AI_SUMMARY,
+      QUEUE.INBOUND,
+    ]);
     expect(readOptions(queueInstances[0])).toMatchObject({
       connection: producerConn,
       defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
@@ -142,6 +146,7 @@ describe('createCoreWorkerResources', () => {
       QUEUE.AI_SUMMARY,
       QUEUE.ORDER_REVIEW,
       QUEUE.OUTBOUND_EMAIL,
+      QUEUE.GMAIL_SYNC,
     ]);
     expect(workerInstances.every((worker) => {
       const options = readOptions(worker);

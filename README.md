@@ -243,6 +243,8 @@ Required for launch-scope features:
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
 - `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for authenticated attachment download proxy
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth and token refresh
+- `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
 
 Optional dashboard variables:
 - `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
@@ -250,7 +252,6 @@ Optional dashboard variables:
 - `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
 - `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
 - `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` — Instagram OAuth and webhook setup
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth
 - `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` — Outlook OAuth
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
@@ -268,6 +269,10 @@ Required at production boot:
 Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachment upload
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail token refresh
+- `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
+- `GMAIL_PUBSUB_AUDIENCE` — expected Pub/Sub OIDC token audience
+- `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` — expected Pub/Sub OIDC service-account email
 
 Optional gateway variables:
 - `PORT` — Railway sets this automatically

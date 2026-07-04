@@ -1,4 +1,6 @@
 import {
+  getEmailAuthReauthorizationReason,
+  getGmailInboundStatus,
   getEmailProvider,
   isEmailAuthReauthorizationRequired,
 } from "@shopkeeper/email/providers"
@@ -38,6 +40,69 @@ export function isPostmarkEmail(integration: Integration): boolean {
   return getEmailProvider(integration) === "postmark"
 }
 
+export interface EmailReceivingDisplay {
+  action: string
+  description: string
+}
+
+function getGmailWatchFailureCount(integration: Integration): number {
+  const metadata = integration.metadata
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return 0
+  const gmail = "gmail" in metadata ? metadata.gmail : null
+  if (!gmail || typeof gmail !== "object" || Array.isArray(gmail)) return 0
+  const count = "watchFailureCount" in gmail ? gmail.watchFailureCount : null
+  return typeof count === "number" && Number.isInteger(count) && count > 0 ? count : 0
+}
+
+export function getEmailReceivingDisplay(
+  integration: Integration,
+  inboundAddress: string | null,
+): EmailReceivingDisplay {
+  const provider = getEmailProvider(integration)
+  if (provider !== "gmail") {
+    return {
+      action: inboundAddress ? "Forwarding" : "Setup needed",
+      description: inboundAddress
+        ? `Forward mail to ${inboundAddress}`
+        : "Forward your support inbox to receive tickets",
+    }
+  }
+
+  const authIssue = getEmailAuthReauthorizationReason(integration)
+  if (authIssue) {
+    return {
+      action: "Reconnect",
+      description: authIssue === "missing_gmail_read_scope"
+        ? "Reconnect Gmail to grant inbox access for native receiving"
+        : "Reconnect Gmail to restore inbox access",
+    }
+  }
+
+  const inboundStatus = getGmailInboundStatus(integration)
+  if (inboundStatus === "active") {
+    return { action: "Active", description: "Native Gmail inbox sync is active" }
+  }
+  if (inboundStatus === "degraded") {
+    const failureCount = getGmailWatchFailureCount(integration)
+    return {
+      action: "Degraded",
+      description: failureCount > 1
+        ? `Gmail watch renewal has failed ${failureCount} times; keep forwarding enabled`
+        : "Gmail inbox sync needs attention; keep forwarding enabled",
+    }
+  }
+  if (inboundStatus === "reauthorization_required") {
+    return {
+      action: "Reconnect",
+      description: "Reconnect Gmail to restore native inbox sync",
+    }
+  }
+  return {
+    action: "Pending",
+    description: "Native Gmail receiving is pending; keep forwarding enabled",
+  }
+}
+
 const QUIET_CHANNEL_DAYS = 5
 const SHOPIFY_EXPIRED_NOTE =
   "Your Shopify connection expired — order lookups and syncing have stopped."
@@ -66,9 +131,13 @@ export function deriveIntegrationHealth(
   }
 
   if (connected.some(isTokenExpired)) {
-    const note =
-      connectType === "ig"
-        ? "Your Instagram sign-in expired — new DMs aren't coming in."
+    const emailAuthIssue = connectType === "email"
+      ? connected.map(getEmailAuthReauthorizationReason).find(Boolean)
+      : null
+    const note = connectType === "ig"
+      ? "Your Instagram sign-in expired — new DMs aren't coming in."
+      : emailAuthIssue === "missing_gmail_read_scope"
+        ? "Reconnect Gmail to grant inbox access for native receiving."
         : "Your email sign-in expired — new customer emails aren't coming in."
     return { state: "needs-attention", note, canFix: true }
   }
@@ -82,6 +151,34 @@ export function deriveIntegrationHealth(
   }
 
   if (connectType === "email") {
+    const gmailIntegration = connected.find(integration => getEmailProvider(integration) === "gmail")
+    if (gmailIntegration) {
+      const inboundStatus = getGmailInboundStatus(gmailIntegration)
+      if (inboundStatus === "degraded") {
+        const failureCount = getGmailWatchFailureCount(gmailIntegration)
+        return {
+          state: "needs-attention",
+          note: failureCount > 1
+            ? `Gmail watch renewal has failed ${failureCount} times. Sending still works; keep forwarding enabled.`
+            : "Gmail inbox sync needs attention. Sending still works; keep forwarding enabled.",
+          canFix: false,
+        }
+      }
+      if (inboundStatus === "reauthorization_required") {
+        return {
+          state: "needs-attention",
+          note: "Reconnect Gmail to restore native inbox sync.",
+          canFix: true,
+        }
+      }
+      if (inboundStatus !== "active") {
+        return {
+          state: "waiting",
+          note: "Sending is connected. Native Gmail receiving is pending; keep forwarding enabled.",
+          canFix: false,
+        }
+      }
+    }
     if (!lastActivity && connected.every(isPostmarkEmail)) {
       return { state: "waiting", note: null, canFix: false }
     }

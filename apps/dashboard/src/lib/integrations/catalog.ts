@@ -71,6 +71,7 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     channelKind: 'support',
     permissions: [
       "Send replies from your Gmail address",
+      "Read messages sent to your support inbox",
       "View your email address",
     ],
   },

@@ -20,9 +20,10 @@ Notes:
 
 - `npm run verify:production:env` validates the current shell by default. To validate app env
   files directly, use the commands in [runbook.md](runbook.md#deploy-sequence).
-- `npm run verify:pr` already includes lint, unit tests, node tests, integration tests, e2e smoke,
-  coverage, and build. Keep the standalone integration run in the gate because it fails earlier and
-  is the most likely release-blocking suite.
+- `npm run verify:pr` already includes lint, unit tests, node tests, e2e smoke, coverage, and build.
+  The coverage command executes the integration suites under coverage, so those tests are included
+  even though `verify:pr` does not call `test:integration` directly. Keep the standalone integration
+  run in the gate because it fails earlier and is the most likely release-blocking suite.
 - In sandboxed local environments, Next/Turbopack builds can require permission to bind an internal
   worker port. Treat that sandbox-only bind failure as inconclusive and rerun in CI or a normal
   developer shell.

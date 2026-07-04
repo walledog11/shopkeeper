@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/integrations/gmail/auth', () => {
-  it('requests send-only Gmail scope', async () => {
+  it('requests Gmail send and read scopes', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/auth?returnTo=/dashboard/integrations'));
 
     expect(res.status).toBe(307);
@@ -36,7 +36,12 @@ describe('POST /api/integrations/gmail/auth', () => {
     expect(redirectUrl.origin).toBe('https://accounts.google.com');
     expect(redirectUrl.searchParams.get('redirect_uri')).toBe('http://dashboard.test/api/integrations/gmail/callback');
     const scopes = redirectUrl.searchParams.get('scope')!.split(' ');
-    expect(scopes).toContain('https://www.googleapis.com/auth/gmail.send');
+    expect(scopes).toEqual(expect.arrayContaining([
+      'openid',
+      'email',
+      'https://www.googleapis.com/auth/gmail.send',
+      'https://www.googleapis.com/auth/gmail.readonly',
+    ]));
     expect(scopes).not.toContain('https://www.googleapis.com/auth/gmail.modify');
 
     expect(mockCookieSet).toHaveBeenCalledWith('gmail_oauth_return', '/dashboard/integrations', expect.any(Object));

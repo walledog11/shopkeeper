@@ -4,6 +4,7 @@ import { registerEmailWebhookRoutes } from './webhooks-email.js';
 import { registerTelegramWebhookRoutes } from './webhooks-telegram.js';
 import { registerShopifyWebhookRoutes } from './webhooks-shopify.js';
 import { registerPhotonWebhookRoutes } from './webhooks-photon.js';
+import { registerGmailWebhookRoutes } from './webhooks-gmail.js';
 
 export {
   recordWebhookSignatureFailure,
@@ -22,5 +23,6 @@ registerEmailWebhookRoutes(router);
 registerTelegramWebhookRoutes(router);
 registerShopifyWebhookRoutes(router);
 registerPhotonWebhookRoutes(router);
+registerGmailWebhookRoutes(router);
 
 export default router;

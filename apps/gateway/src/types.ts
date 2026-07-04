@@ -83,3 +83,9 @@ export interface OutboundEmailJobData {
   source: OutboundEmailSource;
   traceId?: string;
 }
+
+export interface GmailSyncJobData {
+  integrationId: string;
+  notifiedHistoryId: string;
+  traceId: string;
+}

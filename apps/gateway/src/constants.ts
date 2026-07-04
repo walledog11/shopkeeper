@@ -24,6 +24,8 @@ export const QUEUE = {
   ORDER_RISK: 'order-risk-monitor',
   ORDER_REVIEW: 'order-review',
   OUTBOUND_EMAIL: 'outbound-email',
+  GMAIL_SYNC: 'gmail-sync',
+  GMAIL_WATCH: 'gmail-watch-maintenance',
   // Channel-agnostic sweep for stale `pending` async outbound (email + iMessage).
   // String value stays email-legacy so the live BullMQ repeatable job isn't orphaned.
   OUTBOUND_SEND_SWEEP: 'outbound-email-sweep',
@@ -51,6 +53,9 @@ export const JOB = {
   ORDER_RISK_ID: 'order-risk-monitor-hourly',
   ORDER_REVIEW: 'process-order-review',
   SEND_EMAIL: 'send-email',
+  GMAIL_SYNC: 'sync-gmail-mailbox',
+  GMAIL_WATCH_MAINTENANCE: 'maintain-gmail-watches',
+  GMAIL_WATCH_MAINTENANCE_ID: 'gmail-watch-maintenance-12h',
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
 } as const;

@@ -30,6 +30,9 @@ function createDashboardLaunchEnv(overrides = {}) {
     PRICE_ID_STARTER: 'price_starter',
     PRICE_ID_PRO: 'price_pro',
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
+    GOOGLE_CLIENT_ID: 'google-client-id',
+    GOOGLE_CLIENT_SECRET: 'google-client-secret',
+    GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
@@ -48,6 +51,12 @@ function createGatewayLaunchEnv(overrides = {}) {
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     POSTMARK_INBOUND_USERNAME: 'postmark-inbound-user',
     POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
+    GOOGLE_CLIENT_ID: 'google-client-id',
+    GOOGLE_CLIENT_SECRET: 'google-client-secret',
+    GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
+    GMAIL_PUBSUB_AUDIENCE: 'https://gateway.example.com/webhooks/gmail/push',
+    GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT:
+      'shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
@@ -237,6 +246,34 @@ test('gateway launch contract requires Postmark inbound basic auth credentials',
   );
 });
 
+test('Gmail Pub/Sub production settings use deployable identifiers', () => {
+  const dashboard = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      GMAIL_PUBSUB_TOPIC: 'gmail-inbound',
+    }),
+  });
+  const gateway = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({
+      GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT: 'not-an-email',
+    }),
+  });
+
+  assert.equal(
+    dashboard.errors.includes(
+      'GMAIL_PUBSUB_TOPIC must use projects/<project>/topics/<topic>',
+    ),
+    true,
+  );
+  assert.equal(
+    gateway.errors.includes(
+      'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT must be a Google service-account email',
+    ),
+    true,
+  );
+});
+
 test('gateway launch contract warns when Redis is not configured with TLS', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -306,6 +343,11 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'BLOB_READ_WRITE_TOKEN=vercel-blob-token   # attachment storage',
       'POSTMARK_INBOUND_USERNAME=postmark-inbound-user',
       'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
+      'GOOGLE_CLIENT_ID=google-client-id',
+      'GOOGLE_CLIENT_SECRET=google-client-secret',
+      'GMAIL_PUBSUB_TOPIC=projects/shopkeeper-prod/topics/gmail-inbound',
+      'GMAIL_PUBSUB_AUDIENCE=https://gateway.example.com/webhooks/gmail/push',
+      'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT=shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',
       'PRODUCT_ANALYTICS_ENABLED=false',
       '',
     ].join('\n')

@@ -34,6 +34,9 @@ const CONTRACTS = {
       'CLERK_WEBHOOK_SECRET',
       'PRICE_ID_STARTER',
       'PRICE_ID_PRO',
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GMAIL_PUBSUB_TOPIC',
     ],
     absoluteUrlVars: [
       'APP_URL',
@@ -61,6 +64,11 @@ const CONTRACTS = {
       'BLOB_READ_WRITE_TOKEN',
       'POSTMARK_INBOUND_USERNAME',
       'POSTMARK_INBOUND_PASSWORD',
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GMAIL_PUBSUB_TOPIC',
+      'GMAIL_PUBSUB_AUDIENCE',
+      'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT',
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL', 'POSTHOG_HOST'],
     expectedPathSuffixes: {
@@ -254,6 +262,26 @@ export function validateProductionEnv(target, options = {}) {
     if (redisUrl && !redisUrl.startsWith('rediss://')) {
       warnings.push('REDIS_URL is not using the TLS rediss:// form');
     }
+  }
+
+  const gmailPubsubTopic = readEnv(env, 'GMAIL_PUBSUB_TOPIC');
+  if (
+    gmailPubsubTopic
+    && !/^projects\/[^/]+\/topics\/[^/]+$/.test(gmailPubsubTopic)
+  ) {
+    errors.push(
+      'GMAIL_PUBSUB_TOPIC must use projects/<project>/topics/<topic>',
+    );
+  }
+
+  const gmailPushServiceAccount = readEnv(env, 'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT');
+  if (
+    gmailPushServiceAccount
+    && !/^[^@\s]+@[^@\s]+\.gserviceaccount\.com$/.test(gmailPushServiceAccount)
+  ) {
+    errors.push(
+      'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT must be a Google service-account email',
+    );
   }
 
   if (target === 'dashboard' && readEnv(env, 'GATEWAY_PUBLIC_URL')) {

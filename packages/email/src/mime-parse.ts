@@ -35,6 +35,26 @@ function htmlToText(html: string): string {
     .trim();
 }
 
+function routingHeaders(
+  headerLines: ReadonlyArray<{ key: string; line: string }>,
+): Record<string, string | string[]> {
+  const headers: Record<string, string | string[]> = {};
+  for (const { key, line } of headerLines) {
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey !== 'delivered-to' && normalizedKey !== 'x-original-to') continue;
+    const separator = line.indexOf(':');
+    const value = (separator >= 0 ? line.slice(separator + 1) : line).trim();
+    if (!value) continue;
+    const existing = headers[normalizedKey];
+    headers[normalizedKey] = existing === undefined
+      ? value
+      : Array.isArray(existing)
+        ? [...existing, value]
+        : [existing, value];
+  }
+  return headers;
+}
+
 export async function parseMime(raw: Buffer | string): Promise<ParsedEmail> {
   const parsed = await simpleParser(raw);
 
@@ -59,6 +79,7 @@ export async function parseMime(raw: Buffer | string): Promise<ParsedEmail> {
     from: from.address,
     fromName: from.name,
     to: allAddresses(parsed.to),
+    routingHeaders: routingHeaders(parsed.headerLines),
     subject: parsed.subject ?? null,
     text,
     html: typeof parsed.html === 'string' ? parsed.html : null,

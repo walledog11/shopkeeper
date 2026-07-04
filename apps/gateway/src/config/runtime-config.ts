@@ -196,3 +196,15 @@ export function getPostmarkWebhookConfig(): PostmarkWebhookConfig {
     inboundPassword: readOptionalTrimmedEnv('POSTMARK_INBOUND_PASSWORD'),
   };
 }
+
+export interface GmailPubSubPushConfig {
+  audience: string;
+  serviceAccountEmail: string;
+}
+
+export function getGmailPubSubPushConfig(): GmailPubSubPushConfig | null {
+  const audience = readOptionalTrimmedEnv('GMAIL_PUBSUB_AUDIENCE');
+  const serviceAccountEmail = readOptionalTrimmedEnv('GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT');
+  if (!audience || !serviceAccountEmail) return null;
+  return { audience, serviceAccountEmail };
+}

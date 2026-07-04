@@ -15,7 +15,16 @@ import {
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
-const { mockLogger, queueAddSpy, getPlatformSpectrumAppSpy, spectrumWebhookSpy, uploadInboundAttachmentSpy, SpectrumConfigError } = vi.hoisted(() => ({
+const {
+  googleTokenVerifySpy,
+  mockLogger,
+  queueAddSpy,
+  getPlatformSpectrumAppSpy,
+  spectrumWebhookSpy,
+  uploadInboundAttachmentSpy,
+  SpectrumConfigError,
+} = vi.hoisted(() => ({
+  googleTokenVerifySpy: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -52,6 +61,12 @@ vi.mock('bullmq', () => ({
   }),
 }));
 
+vi.mock('google-auth-library', () => ({
+  OAuth2Client: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
+    this.verifyIdToken = googleTokenVerifySpy;
+  }),
+}));
+
 vi.mock('../logger.js', () => ({
   default: mockLogger,
 }));
@@ -71,6 +86,9 @@ import webhookRoutes from '../routes/webhooks.js';
 export const META_SECRET = process.env.META_APP_SECRET!;
 export const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN!;
 export const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
+export const GMAIL_PUBSUB_AUDIENCE = 'https://gateway.example.com/webhooks/gmail/push';
+export const GMAIL_PUSH_SERVICE_ACCOUNT =
+  'shopkeeper-gmail-push@test-project.iam.gserviceaccount.com';
 
 export let org!: Awaited<ReturnType<typeof createTestOrg>>;
 export const app = createWebhookRouterApp(webhookRoutes, { urlencoded: true });
@@ -78,6 +96,7 @@ export const webhookFixture = {
   SpectrumConfigError,
   app,
   getPlatformSpectrumAppSpy,
+  googleTokenVerifySpy,
   mockLogger,
   queueAddSpy,
   spectrumWebhookSpy,
@@ -88,12 +107,23 @@ export const webhookFixture = {
 };
 
 beforeEach(async () => {
+  process.env.GMAIL_PUBSUB_AUDIENCE = GMAIL_PUBSUB_AUDIENCE;
+  process.env.GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT = GMAIL_PUSH_SERVICE_ACCOUNT;
   org = await createTestOrg();
   queueAddSpy.mockClear();
   getPlatformSpectrumAppSpy.mockReset();
+  googleTokenVerifySpy.mockReset();
   spectrumWebhookSpy.mockReset();
   uploadInboundAttachmentSpy.mockReset();
   getPlatformSpectrumAppSpy.mockResolvedValue({ webhook: spectrumWebhookSpy });
+  googleTokenVerifySpy.mockResolvedValue({
+    getPayload: () => ({
+      aud: GMAIL_PUBSUB_AUDIENCE,
+      email: GMAIL_PUSH_SERVICE_ACCOUNT,
+      email_verified: true,
+      iss: 'https://accounts.google.com',
+    }),
+  });
   spectrumWebhookSpy.mockResolvedValue({ status: 200, headers: {}, body: new Uint8Array() });
   uploadInboundAttachmentSpy.mockResolvedValue('blob:attachments/test/attachment');
   clearMockLogger(mockLogger);

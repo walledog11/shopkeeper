@@ -15,7 +15,7 @@ function normalizeAddress(value: string | null | undefined): string | null {
 export function isForSupportAddress(
   parsed: ParsedEmail,
   supportAddress: string,
-  extraHeaders?: Record<string, string | string[] | undefined>,
+  extraHeaders = parsed.routingHeaders,
 ): boolean {
   const target = normalizeAddress(supportAddress);
   if (!target) return false;

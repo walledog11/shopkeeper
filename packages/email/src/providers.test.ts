@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  GMAIL_READONLY_SCOPE,
+  getEmailAuthReauthorizationReason,
+  getGmailInboundStatus,
   getEmailProvider,
   getEmailProviderLabel,
   getEmailReauthorizePath,
@@ -15,7 +18,7 @@ describe('email provider helpers', () => {
   it('does not require reauthorization for normal OAuth access-token expiry', () => {
     const recentlyExpired = new Date(Date.now() - 60_000);
     expect(isEmailAuthReauthorizationRequired({
-      metadata: { provider: 'gmail' },
+      metadata: { provider: 'gmail', oauthScopes: [GMAIL_READONLY_SCOPE] },
       tokenExpiresAt: recentlyExpired,
     })).toBe(false);
   });
@@ -26,6 +29,39 @@ describe('email provider helpers', () => {
       tokenExpiresAt: new Date(0),
     })).toBe(true);
     expect(getEmailReauthorizePath({ metadata: { provider: 'outlook' } })).toBe('/api/integrations/outlook/auth');
+  });
+
+  it('requires Gmail reauthorization when the read scope is missing', () => {
+    const integration = {
+      metadata: {
+        provider: 'gmail',
+        oauthScopes: ['openid', 'https://www.googleapis.com/auth/gmail.send'],
+      },
+      tokenExpiresAt: new Date(Date.now() + 60_000),
+    };
+
+    expect(getEmailAuthReauthorizationReason(integration)).toBe('missing_gmail_read_scope');
+    expect(isEmailAuthReauthorizationRequired(integration)).toBe(true);
+  });
+
+  it('accepts Gmail integrations with the read scope and exposes inbound status', () => {
+    const integration = {
+      metadata: {
+        provider: 'gmail',
+        oauthScopes: [GMAIL_READONLY_SCOPE],
+        gmail: { inboundStatus: 'pending' },
+      },
+    };
+
+    expect(getEmailAuthReauthorizationReason(integration)).toBeNull();
+    expect(getGmailInboundStatus(integration)).toBe('pending');
+  });
+
+  it('prioritizes an expired grant over a missing Gmail read scope', () => {
+    expect(getEmailAuthReauthorizationReason({
+      metadata: { provider: 'gmail' },
+      tokenExpiresAt: new Date(0),
+    })).toBe('expired_grant');
   });
 
   it('does not show forwarding integrations as OAuth auth failures', () => {

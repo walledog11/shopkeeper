@@ -115,6 +115,7 @@ describe('POST /api/integrations/outlook/callback', () => {
         access_token: 'outlook_access_token',
         refresh_token: 'outlook_refresh_token',
         expires_in: 3600,
+        scope: 'openid email offline_access User.Read Mail.Send',
       }))
       .mockResolvedValueOnce(jsonResponse({ mail: 'merchant@outlook.test' }));
 
@@ -132,7 +133,10 @@ describe('POST /api/integrations/outlook/callback', () => {
     expect(integration.accessToken).toBe('outlook_access_token');
     expect(integration.refreshToken).toBe('outlook_refresh_token');
     expect(integration.tokenExpiresAt).toBeInstanceOf(Date);
-    expect(integration.metadata).toMatchObject({ provider: 'outlook' });
+    expect(integration.metadata).toMatchObject({
+      provider: 'outlook',
+      oauthScopes: ['openid', 'email', 'offline_access', 'User.Read', 'Mail.Send'],
+    });
     expect(integration.id).not.toBe(staleEmail.id);
 
     expect(mockFetch).toHaveBeenCalledTimes(2);

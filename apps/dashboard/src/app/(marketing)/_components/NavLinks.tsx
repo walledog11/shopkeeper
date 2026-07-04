@@ -7,7 +7,7 @@ import {
   CircleHelp,
   Heart,
   LayoutGrid,
-  ShoppingBag,
+  Sunrise,
   Tag,
   type LucideIcon,
 } from "lucide-react";
@@ -35,10 +35,10 @@ const productItems: NavItem[] = [
     icon: Heart,
   },
   {
-    href: "#integrations",
-    title: "Integrations",
-    subtitle: "Connect apps & services",
-    icon: ShoppingBag,
+    href: "#briefing",
+    title: "Morning briefing",
+    subtitle: "Wake up to work already done",
+    icon: Sunrise,
   },
 ];
 

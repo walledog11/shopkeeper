@@ -1,7 +1,11 @@
 import { Queue, type ConnectionOptions, type Worker } from 'bullmq';
 import { PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
-import type { AiSummaryJobData, InboundJobData } from '../types.js';
+import type { AiSummaryJobData, GmailSyncJobData, InboundJobData } from '../types.js';
 import { createAiSummaryWorker } from './ai-summary.js';
+import {
+  createGmailSyncWorker,
+  type GmailSyncWorkerRegistrationOptions,
+} from './gmail-sync.js';
 import { createInboundWorker } from './inbound.js';
 import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
@@ -14,6 +18,8 @@ export interface CoreWorkerResources extends GatewayWorkerResources {
   aiSummaryQueue: Queue<AiSummaryJobData>;
   orderReviewWorker: Worker<OrderReviewJobData>;
   outboundEmailWorker: Worker<OutboundEmailJobData>;
+  gmailSyncWorker: Worker<GmailSyncJobData>;
+  inboundQueue: Queue<InboundJobData>;
 }
 
 export function createCoreWorkerResources(
@@ -24,10 +30,19 @@ export function createCoreWorkerResources(
     connection: producerConn,
     defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
   });
+  const inboundQueue = new Queue<InboundJobData>(QUEUE.INBOUND, {
+    connection: producerConn,
+    defaultJobOptions: PROCESSING_QUEUE_DEFAULTS,
+  });
   const messageWorker = createInboundWorker({ aiSummaryQueue, workerOptions });
   const aiSummaryWorker = createAiSummaryWorker(workerOptions);
   const orderReviewWorker = createOrderReviewWorker({ workerOptions });
   const outboundEmailWorker = createOutboundEmailWorker({ workerOptions });
+  const gmailSyncWorker = createGmailSyncWorker({
+    inboundQueue,
+    redis: producerConn as GmailSyncWorkerRegistrationOptions['redis'],
+    workerOptions,
+  });
 
   return {
     messageWorker,
@@ -35,8 +50,16 @@ export function createCoreWorkerResources(
     aiSummaryQueue,
     orderReviewWorker,
     outboundEmailWorker,
-    workers: [messageWorker, aiSummaryWorker, orderReviewWorker, outboundEmailWorker],
-    queues: [aiSummaryQueue],
+    gmailSyncWorker,
+    inboundQueue,
+    workers: [
+      messageWorker,
+      aiSummaryWorker,
+      orderReviewWorker,
+      outboundEmailWorker,
+      gmailSyncWorker,
+    ],
+    queues: [aiSummaryQueue, inboundQueue],
     heartbeats: [],
     shutdownResources: [],
   };

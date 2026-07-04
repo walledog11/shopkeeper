@@ -1,7 +1,9 @@
 import {
-  IOS_FONT,
-  PhoneStatusBar,
+  TimeDivider,
   TypingBubble,
+  getClusterPosition,
+  receivedBubbleRadius,
+  sentBubbleRadius,
   type ChatVariantViewProps,
 } from "./shared"
 
@@ -12,7 +14,7 @@ function InstagramHeader({
   avatarBg,
 }: Pick<ChatVariantViewProps, "title" | "subtitle" | "avatar" | "avatarBg">) {
   return (
-    <div className="flex shrink-0 items-center gap-2.5 px-3 pb-2.5 pt-1">
+    <div className="flex shrink-0 items-center gap-2.5 px-3 pb-2.5 pt-1.5">
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -32,8 +34,8 @@ function InstagramHeader({
         {avatar}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold leading-tight text-stone-900">{title}</div>
-        <div className="truncate text-[12px] leading-tight text-stone-500">{subtitle}</div>
+        <div className="truncate text-[1.15em] font-semibold leading-tight text-stone-900">{title}</div>
+        <div className="truncate text-[0.92em] leading-tight text-stone-500">{subtitle}</div>
       </div>
       <div className="flex shrink-0 items-center gap-2.5">
         <svg
@@ -68,7 +70,7 @@ function InstagramHeader({
 
 function InstagramInputBar() {
   return (
-    <div className="flex items-center gap-2.5 pb-2">
+    <div className="flex items-center gap-2.5">
       <svg
         viewBox="0 0 24 24"
         fill="none"
@@ -82,7 +84,7 @@ function InstagramInputBar() {
         <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
         <circle cx="12" cy="13" r="4" />
       </svg>
-      <span className="flex-1 rounded-full bg-[#efefef] px-4 py-[8px] text-[14px] text-stone-500">
+      <span className="flex-1 rounded-full bg-[#efefef] px-4 py-[8px] text-[1.05em] text-stone-500">
         Message...
       </span>
       <svg
@@ -116,70 +118,77 @@ function InstagramInputBar() {
   )
 }
 
-function InstagramMessages({
-  messages,
-  count,
-  typing,
-}: Pick<ChatVariantViewProps, "messages" | "count" | "typing">) {
-  const receivedBubble = "rounded-[18px] rounded-bl-[4px] bg-[#efefef] text-stone-900"
-  const sentBubble =
-    "rounded-[18px] rounded-br-[4px] bg-gradient-to-br from-[#8A3AB9] to-[#6B37B7] text-white"
-
+function Avatar({ avatar, avatarBg }: Pick<ChatVariantViewProps, "avatar" | "avatarBg">) {
   return (
-    <div className="flex flex-col gap-1.5 px-3 pb-1 pt-2">
-      {messages.slice(0, count).map(message => (
-        <div
-          key={`${message.from}-${message.text}`}
-          className={`max-w-[82%] animate-[m-msg_0.35s_ease] ${
-            message.from === "agent" ? "self-start" : "self-end"
-          }`}
-        >
-          <div className={`px-3.5 py-2 text-[13px] leading-[1.4] ${
-            message.from === "agent" ? receivedBubble : sentBubble
-          }`}>
-            {message.text}
-            <span className={`mt-0.5 block text-right text-[10px] leading-none ${
-              message.from === "agent" ? "text-stone-400" : "text-white/70"
-            }`}>
-              {message.time}
-            </span>
-          </div>
-        </div>
-      ))}
-      {typing && (
-        <div className="max-w-[82%] self-start animate-[m-msg_0.25s_ease]">
-          <TypingBubble receivedClass="bg-[#efefef]" />
-        </div>
-      )}
-    </div>
+    <span
+      className="grid size-[22px] shrink-0 place-items-center self-end rounded-full text-[9px] font-semibold text-white ring-1 ring-black/[0.06]"
+      style={{ background: avatarBg }}
+    >
+      {avatar}
+    </span>
   )
 }
 
-export function InstagramChatDemo(props: ChatVariantViewProps) {
+/** Instagram DM screen — no frame chrome; rendered inside PhoneFrame. */
+export function InstagramScreen({
+  title,
+  subtitle,
+  avatar,
+  avatarBg,
+  messages,
+  count,
+  typing,
+}: ChatVariantViewProps) {
+  const visible = messages.slice(0, count)
+
   return (
-    <div
-      className="relative aspect-[393/852] w-full overflow-hidden rounded-[32px] bg-white sm:rounded-[36px]"
-      style={{ fontFamily: IOS_FONT }}
-    >
-      <div className="absolute inset-0 overflow-y-auto overflow-x-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="px-0 pb-[76px] pt-[98px]">
-          <InstagramMessages messages={props.messages} count={props.count} typing={props.typing} />
-        </div>
+    <div className="absolute inset-0 flex flex-col bg-white text-[min(13px,4.4cqw)]">
+      <div className="shrink-0 border-b border-black/[0.06] pt-[44px]">
+        <InstagramHeader title={title} subtitle={subtitle} avatar={avatar} avatarBg={avatarBg} />
       </div>
-      <div className="absolute inset-x-0 top-0 z-10 border-b border-black/[0.06] bg-white">
-        <PhoneStatusBar />
-        <InstagramHeader
-          title={props.title}
-          subtitle={props.subtitle}
-          avatar={props.avatar}
-          avatarBg={props.avatarBg}
-        />
+      <div className="flex min-h-0 flex-1 flex-col justify-start overflow-hidden px-3 pb-2">
+        {count > 0 && <TimeDivider>Today {messages[0].time}</TimeDivider>}
+        {visible.map((message, index) => {
+          const cluster = getClusterPosition(visible, index)
+          const gap = index === 0 ? "" : visible[index - 1].from === message.from ? "mt-[2px]" : "mt-2.5"
+
+          if (message.from === "agent") {
+            const showAvatar = cluster === "single" || cluster === "last"
+            return (
+              <div
+                key={`${message.from}-${message.text}`}
+                className={`flex max-w-[82%] animate-[m-msg_0.35s_ease] items-end gap-1.5 self-start ${gap}`}
+              >
+                {showAvatar
+                  ? <Avatar avatar={avatar} avatarBg={avatarBg} />
+                  : <span className="size-[22px] shrink-0" aria-hidden />}
+                <div className={`min-w-0 bg-[#efefef] px-3.5 py-[7px] text-[1em] leading-[1.4] text-stone-900 ${receivedBubbleRadius(cluster)}`}>
+                  {message.text}
+                </div>
+              </div>
+            )
+          }
+
+          return (
+            <div
+              key={`${message.from}-${message.text}`}
+              className={`max-w-[76%] animate-[m-msg_0.35s_ease] self-end ${gap}`}
+            >
+              <div className={`bg-gradient-to-b from-[#8A3AB9] to-[#6B37B7] px-3.5 py-[7px] text-[1em] leading-[1.4] text-white ${sentBubbleRadius(cluster)}`}>
+                {message.text}
+              </div>
+            </div>
+          )
+        })}
+        {typing && (
+          <div className="mt-2.5 flex max-w-[82%] items-end gap-1.5 self-start">
+            <Avatar avatar={avatar} avatarBg={avatarBg} />
+            <TypingBubble receivedClass="bg-[#efefef]" />
+          </div>
+        )}
       </div>
-      <div className="absolute inset-x-0 bottom-0 z-10 border-t border-black/[0.06] bg-white px-3 pt-1.5">
+      <div className="shrink-0 px-3 pb-[20px] pt-1">
         <InstagramInputBar />
-        <div className="flex justify-center pb-1.5 pt-0.5">
-          <span className="h-[5px] w-[112px] rounded-full bg-stone-900/20" />
-        </div>
       </div>
     </div>
   )

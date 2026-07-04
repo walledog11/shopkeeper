@@ -105,4 +105,23 @@ describe('parseMime', () => {
     expect(parsed.attachments[0].name).toBe('note.txt');
     expect(Buffer.from(parsed.attachments[0].contentBase64, 'base64').toString('utf8')).toBe(fileContent);
   });
+
+  it('retains alias routing headers for support-address filtering', async () => {
+    const raw = mime([
+      'From: jane@example.test',
+      'To: mailbox-owner@merchant.test',
+      'Delivered-To: support@merchant.test',
+      'X-Original-To: first@merchant.test',
+      'X-Original-To: support@merchant.test',
+      '',
+      'alias delivery',
+    ]);
+
+    const parsed = await parseMime(raw);
+
+    expect(parsed.routingHeaders).toEqual({
+      'delivered-to': 'support@merchant.test',
+      'x-original-to': ['first@merchant.test', 'support@merchant.test'],
+    });
+  });
 });

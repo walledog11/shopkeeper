@@ -39,6 +39,7 @@ export interface ParsedEmail {
   from: string | null;
   fromName: string | null;
   to: string[];
+  routingHeaders?: Record<string, string | string[]>;
   subject: string | null;
   text: string | null;
   html: string | null;

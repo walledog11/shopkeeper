@@ -12,10 +12,15 @@ export type {
 export { EmailNotConfiguredError } from './types.js';
 
 export {
+  GMAIL_READONLY_SCOPE,
+  getEmailAuthReauthorizationReason,
+  getGmailInboundStatus,
   getEmailProvider,
   getEmailProviderLabel,
   getEmailReauthorizePath,
   isEmailAuthReauthorizationRequired,
+  type EmailAuthReauthorizationReason,
+  type GmailInboundStatus,
 } from './providers.js';
 
 export {
@@ -41,6 +46,8 @@ export {
   type RefreshedToken,
   type TokenRefreshResult,
 } from './token.js';
+
+export * from './gmail/index.js';
 
 export {
   installEmailLogger,

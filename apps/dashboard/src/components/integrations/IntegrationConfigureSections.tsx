@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { getEmailAuthReauthorizationReason } from "@shopkeeper/email/providers"
 import {
   BookOpen,
   Check,
@@ -18,6 +19,7 @@ import { ConfigureSection } from "./ConfigureSection"
 import { EmailForwardingSetupPanel } from "./EmailForwardingDisclosure"
 import { PermissionActionLink, PermissionRow } from "./PermissionRow"
 import { ShopifyPermissionRows } from "./ShopifyPermissionsPanel"
+import { getEmailReceivingDisplay } from "./integration-card-helpers"
 
 const DISCONNECT_NOTES: Record<ConnectType, string> = {
   email: "Your past tickets stay. New customer emails will stop arriving.",
@@ -39,6 +41,12 @@ export function IntegrationPermissionsSection({
   const isPostmark = config.emailProvider === "postmark"
   const { data: org } = useOrg({ enabled: isEmail })
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
+  const emailReceiving = isEmail && integration
+    ? getEmailReceivingDisplay(integration, inboundAddress)
+    : null
+  const gmailReadScopeMissing = config.emailProvider === "gmail"
+    && integration
+    && getEmailAuthReauthorizationReason(integration) === "missing_gmail_read_scope"
 
   if (connectType === "shopify") {
     return (
@@ -54,7 +62,13 @@ export function IntegrationPermissionsSection({
         key={permission}
         icon={Check}
         title={permission}
-        action={<PermissionActionLink>Connected</PermissionActionLink>}
+        action={
+          <PermissionActionLink>
+            {gmailReadScopeMissing && permission === "Read messages sent to your support inbox"
+              ? "Not granted"
+              : "Connected"}
+          </PermissionActionLink>
+        }
       />
     )) ?? []),
     ...(isEmail && (integration || isPostmark) ? [
@@ -63,13 +77,14 @@ export function IntegrationPermissionsSection({
         icon={Mail}
         title="Receiving"
         description={
-          inboundAddress
-            ? `Forward mail to ${inboundAddress}`
-            : "Forward your support inbox to receive tickets"
+          emailReceiving?.description
+            ?? (inboundAddress
+              ? `Forward mail to ${inboundAddress}`
+              : "Forward your support inbox to receive tickets")
         }
         action={
           <PermissionActionLink>
-            {integration || isPostmark ? "Connected" : "Connect"}
+            {emailReceiving?.action ?? (integration || isPostmark ? "Connected" : "Connect")}
           </PermissionActionLink>
         }
       />,

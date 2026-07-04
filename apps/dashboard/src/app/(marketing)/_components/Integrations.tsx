@@ -1,41 +1,120 @@
+"use client";
+
 import Image from "next/image";
+import { useRef } from "react";
 import { Reveal } from "./Reveal";
+import { TypingBubble, type ChatMessage, type ClusterPosition } from "./chat-demo/shared";
+import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
 
-function TelegramMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-7">
-      <circle cx="12" cy="12" r="11" fill="#229ED9" />
-      <path
-        fill="#fff"
-        d="M17.3 7.3 15.6 16c-.13.6-.49.75-.99.47l-2.74-2.02-1.32 1.27c-.15.15-.27.27-.55.27l.2-2.78 5.06-4.58c.22-.2-.05-.3-.34-.11l-6.25 3.94-2.7-.84c-.58-.18-.6-.58.13-.86l10.55-4.07c.49-.18.92.11.65.61z"
-      />
-    </svg>
-  );
-}
+type BriefingMessage = ChatMessage & { divider?: string };
 
-function WhatsAppMark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-7" fill="#25D366">
-      <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5 13.7c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.1.1.6-.2 1.2z" />
-    </svg>
-  );
-}
-
-/** Floating app tiles arranged in a loose wave, like poke's integrations art. */
-const tiles: { name: string; left: string; top: string; logo?: string; mark?: React.ReactNode }[] = [
-  { name: "Shopify", left: "4%", top: "44%", logo: "/logos/shopify.svg" },
-  { name: "Instagram", left: "16%", top: "24%", logo: "/logos/instagram-logo.png" },
-  { name: "Gmail", left: "28%", top: "12%", logo: "/logos/gmail.png" },
-  { name: "Email", left: "40%", top: "22%", logo: "/logos/email.svg" },
-  { name: "iMessage", left: "51%", top: "40%", logo: "/logos/sms.svg" },
-  { name: "Telegram", left: "63%", top: "58%", mark: <TelegramMark /> },
-  { name: "WhatsApp", left: "75%", top: "70%", mark: <WhatsAppMark /> },
-  { name: "TikTok", left: "88%", top: "48%", logo: "/logos/tiktok-logo.png" },
+const briefingMessages: BriefingMessage[] = [
+  {
+    from: "agent",
+    text: "Morning ☀️ 6 messages came in overnight — all handled. Four tracking checks, a sizing question, and Maya ordered the linen jumpsuit in M but meant S. I fixed order #3102 in Shopify before it shipped and sent her the new confirmation.",
+    time: "7:31 AM",
+    divider: "Today 7:31 AM",
+  },
+  { from: "user", text: "anything need me?", time: "7:48 AM" },
+  {
+    from: "agent",
+    text: "Just one: Dana's parcel says delivered but she can't find it. I sent her the carrier's delivery photo and opened a trace with USPS — I'll update you at 5 if it hasn't turned up.",
+    time: "7:48 AM",
+  },
+  {
+    from: "agent",
+    text: "Update: found it — safe with her neighbor 📦 Nothing else needs you today.",
+    time: "4:02 PM",
+    divider: "4:02 PM",
+  },
 ];
+
+const agentBubble =
+  "border border-stone-900/10 bg-[#fdfbf7]/95 text-stone-800 shadow-[0_14px_34px_rgba(43,33,24,0.14)]";
+
+function agentRadius(cluster: ClusterPosition) {
+  if (cluster === "single" || cluster === "last") return "rounded-[22px] rounded-bl-[8px]";
+  return "rounded-[22px]";
+}
+
+/** Like getClusterPosition, but a time divider also breaks the cluster. */
+function clusterOf(visible: BriefingMessage[], index: number): ClusterPosition {
+  const current = visible[index];
+  const previousMatches = index > 0 && visible[index - 1].from === current.from && !current.divider;
+  const nextMatches =
+    index < visible.length - 1 && visible[index + 1].from === current.from && !visible[index + 1].divider;
+  if (!previousMatches && !nextMatches) return "single";
+  if (!previousMatches && nextMatches) return "first";
+  if (previousMatches && nextMatches) return "middle";
+  return "last";
+}
+
+function Avatar() {
+  return (
+    <span className="mb-1 grid size-8 shrink-0 place-items-center self-end rounded-full bg-[#2f7a4a] text-[12px] font-semibold text-white shadow-[0_6px_16px_rgba(43,33,24,0.2)]">
+      S
+    </span>
+  );
+}
+
+function BriefingConversation() {
+  const frameRef = useRef<HTMLDivElement>(null);
+  const { count, typing } = useChatDemoAnimation(briefingMessages, frameRef);
+  const visible = briefingMessages.slice(0, count);
+
+  return (
+    <div
+      ref={frameRef}
+      className="flex min-h-[560px] w-full flex-col justify-start gap-6 animate-[m-float_7s_ease-in-out_infinite] motion-reduce:animate-none md:h-[620px]"
+    >
+      {visible.map((message, index) => {
+        const cluster = clusterOf(visible, index);
+        const showSender =
+          message.from === "agent" && (cluster === "single" || cluster === "first");
+
+        return (
+          <div key={`${message.from}-${message.time}-${index}`} className="flex flex-col gap-2.5">
+            {message.divider && (
+              <div className="animate-[m-msg_0.35s_ease] py-1 text-center text-[16px] text-stone-500 [font-family:var(--m-caveat)]">
+                {message.divider}
+              </div>
+            )}
+            {message.from === "agent" ? (
+              <div className="flex max-w-[96%] animate-[m-msg_0.35s_ease] items-end gap-2.5 self-start">
+                {showSender ? <Avatar /> : <span className="size-8 shrink-0" aria-hidden />}
+                <div className="min-w-0">
+                  {showSender && (
+                    <div className="mb-1 pl-1 text-[12px] leading-tight text-stone-500">Shopkeeper</div>
+                  )}
+                  <div className={`px-5 py-3.5 text-[15px] leading-relaxed ${agentBubble} ${agentRadius(cluster)}`}>
+                    {message.text}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex max-w-[72%] animate-[m-msg_0.35s_ease] flex-col items-end self-end">
+                <div className="rounded-[22px] rounded-br-[8px] bg-[#2b2118] px-5 py-3.5 text-[15px] leading-relaxed text-[#f6f2eb] shadow-[0_14px_34px_rgba(43,33,24,0.2)]">
+                  {message.text}
+                </div>
+                <span className="mt-1 pr-1 text-[11px] leading-none text-stone-400">Read {message.time}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {typing && (
+        <div className="flex max-w-[96%] animate-[m-msg_0.25s_ease] items-end gap-2.5 self-start">
+          <Avatar />
+          <TypingBubble receivedClass={agentBubble} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Integrations() {
   return (
-    <section id="integrations" className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
+    <section id="briefing" className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
       {/* Photographic wash band — placeholder photography, swap
           /atmosphere/integrations-leaves.jpg for the final shot. */}
       <div
@@ -53,42 +132,19 @@ export function Integrations() {
         <div className="m-grain absolute inset-0" />
       </div>
 
-      <div className="mx-auto max-w-6xl px-6">
+      <div className="mx-auto grid max-w-6xl items-center gap-14 px-6 md:grid-cols-[0.8fr_1fr] md:gap-16">
         <Reveal>
-          <h2 className="mx-auto max-w-3xl text-[clamp(34px,4.5vw,60px)] font-black leading-[1.15] tracking-[-0.01em] [font-family:var(--m-caveat)]">
-            <span className="block">
-              Shopkeeper fits into your store,
-            </span>
-            <span className="block pl-[14%] text-[#9c9285] sm:pl-[22%]">not the other way around</span>
+          <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-black leading-[1.1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+            Wake up to a briefing, <em className="italic text-[#9c9285]">not a backlog.</em>
           </h2>
+          <p className="max-w-[46ch] text-[16px] leading-relaxed text-stone-700">
+            Every morning, Shopkeeper texts you what happened overnight — the questions it answered, the
+            orders it fixed in Shopify, and the rare thing that actually needs your call.
+          </p>
         </Reveal>
 
-        {/* Floating tiles */}
-        <div className="relative mx-auto mt-6 h-[300px] max-w-4xl sm:h-[340px]">
-          {tiles.map((t, i) => (
-            <span
-              key={t.name}
-              title={t.name}
-              className="absolute grid size-12 -translate-x-1/2 place-items-center rounded-2xl bg-white shadow-[0_10px_24px_rgba(43,33,24,0.14)] sm:size-14"
-              style={{
-                left: t.left,
-                top: t.top,
-                animation: "m-float 900ms ease-in-out infinite",
-                animationDelay: `${-i * 0.7}s`,
-              }}
-            >
-              {t.mark ?? <Image src={t.logo as string} alt={t.name} width={28} height={28} className="size-7 object-contain" />}
-            </span>
-          ))}
-        </div>
-
         <Reveal delay={120}>
-          <div className="mx-auto mt-4 max-w-md text-left">
-            <p className="text-[16px] leading-relaxed text-stone-600">
-              Shopify, Instagram, Gmail, email, and iMessage today — WhatsApp and TikTok on the way. One
-              employee across all of them, with a personality that keeps things as real as your best hire.
-            </p>
-          </div>
+          <BriefingConversation />
         </Reveal>
       </div>
     </section>

@@ -42,6 +42,10 @@
       "types": "./dist/token.d.ts",
       "default": "./dist/token.js"
     },
+    "./gmail": {
+      "types": "./dist/gmail/index.d.ts",
+      "default": "./dist/gmail/index.js"
+    },
     "./senders": {
       "types": "./dist/senders/index.d.ts",
       "default": "./dist/senders/index.js"

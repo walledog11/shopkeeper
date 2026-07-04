@@ -31,15 +31,28 @@ function reducer(state: ChatAnimationState, action: ChatAnimationAction): ChatAn
 
 export function useChatDemoAnimation(
   messages: ChatMessage[],
-  frameRef: RefObject<HTMLDivElement | null>,
+  frameRef: RefObject<HTMLDivElement | null> | null,
+  /** When provided, starting is driven by this flag instead of observing frameRef. */
+  active?: boolean,
 ) {
   const messageCountRef = useRef(messages.length)
   messageCountRef.current = messages.length
   const [animation, dispatch] = useReducer(reducer, { count: null, typing: false })
   const count = animation.count ?? 0
+  const externallyDriven = active !== undefined
 
   useEffect(() => {
-    const element = frameRef.current
+    if (!externallyDriven) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      dispatch({ type: "showAll", total: messageCountRef.current })
+      return
+    }
+    if (active) dispatch({ type: "start" })
+  }, [externallyDriven, active])
+
+  useEffect(() => {
+    if (externallyDriven) return
+    const element = frameRef?.current
     if (!element) return
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       dispatch({ type: "showAll", total: messageCountRef.current })
@@ -52,7 +65,7 @@ export function useChatDemoAnimation(
     }, { threshold: 0.45 })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [frameRef])
+  }, [frameRef, externallyDriven])
 
   useEffect(() => {
     if (animation.count === null || count >= messages.length) return

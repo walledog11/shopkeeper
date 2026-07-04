@@ -30,4 +30,13 @@ describe('email reply metadata', () => {
       { name: 'References', value: messageId },
     ]);
   });
+
+  it('does not emit provider deduplication keys as RFC reply headers', () => {
+    const messageId = createThreadMessageId('thread-3', 'mail.test');
+    expect(buildThreadReplyHeaders('thread-3', 'gmail:provider-message-1', 'mail.test')).toEqual([
+      { name: 'Message-ID', value: messageId },
+      { name: 'In-Reply-To', value: messageId },
+      { name: 'References', value: messageId },
+    ]);
+  });
 });

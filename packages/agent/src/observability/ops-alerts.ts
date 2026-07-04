@@ -11,6 +11,7 @@ export const OPS_ALERT_CATEGORIES = [
   'webhook_signature',
   'provider_send',
   'agent_failure',
+  'gmail_inbound',
 ] as const;
 
 export type OpsAlertCategory = typeof OPS_ALERT_CATEGORIES[number];

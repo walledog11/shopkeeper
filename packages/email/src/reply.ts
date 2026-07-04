@@ -24,7 +24,12 @@ export function buildThreadReplyHeaders(
   inboundDomain?: string,
 ): EmailHeader[] {
   const messageId = createThreadMessageId(threadId, inboundDomain);
-  const referenceId = inReplyTo ?? messageId;
+  // Provider fallback keys (for example `gmail:abc123`) are database
+  // idempotency values, not RFC Message-IDs, and must never leak into reply
+  // threading headers.
+  const referenceId = /^<[^<>\s]+@[^<>\s]+>$/.test(inReplyTo?.trim() ?? '')
+    ? inReplyTo!.trim()
+    : messageId;
 
   return [
     { name: 'Message-ID', value: messageId },

@@ -54,6 +54,7 @@ beforeEach(async () => {
   vi.stubEnv('APP_URL', 'http://dashboard.test');
   vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
   vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret');
+  vi.stubEnv('GMAIL_PUBSUB_TOPIC', 'projects/test-project/topics/gmail-inbound');
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
@@ -123,6 +124,24 @@ describe('POST /api/integrations/gmail/callback', () => {
         metadata: { provider: 'postmark' },
       },
     });
+    const existingGmail = await db.integration.create({
+      data: {
+        organizationId: org!.id,
+        platform: ChannelType.email,
+        externalAccountId: 'merchant@gmail.test',
+        accessToken: 'old-gmail-access-token',
+        refreshToken: 'old-gmail-refresh-token',
+        tokenExpiresAt: new Date(0),
+        metadata: {
+          provider: 'gmail',
+          inboundMode: 'hybrid',
+          gmail: {
+            inboundStatus: 'degraded',
+            lastError: 'watch_setup_failed',
+          },
+        },
+      },
+    });
 
     mockSavedCookies({
       gmail_oauth_state: 'state_123',
@@ -135,8 +154,13 @@ describe('POST /api/integrations/gmail/callback', () => {
         access_token: 'gmail_access_token',
         refresh_token: 'gmail_refresh_token',
         expires_in: 3600,
+        scope: 'openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
       }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }));
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse({
+        historyId: '12345',
+        expiration: '1783382400000',
+      }));
 
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123'));
 
@@ -152,7 +176,22 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(integration.accessToken).toBe('gmail_access_token');
     expect(integration.refreshToken).toBe('gmail_refresh_token');
     expect(integration.tokenExpiresAt).toBeInstanceOf(Date);
-    expect(integration.metadata).toMatchObject({ provider: 'gmail' });
+    expect(integration.metadata).toMatchObject({
+      provider: 'gmail',
+      inboundMode: 'hybrid',
+      oauthScopes: [
+        'openid',
+        'email',
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.readonly',
+      ],
+      gmail: {
+        inboundStatus: 'active',
+        historyId: '12345',
+        watchExpiration: '1783382400000',
+      },
+    });
+    expect(integration.id).toBe(existingGmail.id);
     expect(integration.id).not.toBe(staleEmail.id);
     expect(analyticsSink.events).toEqual([
       expect.objectContaining({
@@ -165,9 +204,103 @@ describe('POST /api/integrations/gmail/callback', () => {
       }),
     ]);
 
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://oauth2.googleapis.com/token');
     expect(String(mockFetch.mock.calls[1][0])).toBe('https://openidconnect.googleapis.com/v1/userinfo');
+    expect(String(mockFetch.mock.calls[2][0])).toBe(
+      'https://gmail.googleapis.com/gmail/v1/users/me/watch',
+    );
+    expect(mockFetch.mock.calls[2][1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({
+        topicName: 'projects/test-project/topics/gmail-inbound',
+        labelIds: ['INBOX'],
+        labelFilterBehavior: 'include',
+      }),
+    });
+  });
+
+  it('keeps outbound connected and marks inbound degraded when watch setup fails', async () => {
+    mockSavedCookies({
+      gmail_oauth_state: 'state_123',
+      gmail_oauth_org: org!.clerkOrgId,
+      gmail_oauth_user: 'usr_oauth',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'gmail_access_token',
+        refresh_token: 'gmail_refresh_token',
+        expires_in: 3600,
+        scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
+      }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse(
+        { error: { errors: [{ reason: 'rateLimitExceeded' }] } },
+        { status: 429 },
+      ));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+    ));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations?connected=gmail',
+    );
+    const integration = await db.integration.findFirstOrThrow({
+      where: { organizationId: org!.id, platform: ChannelType.email },
+    });
+    expect(integration.accessToken).toBe('gmail_access_token');
+    expect(integration.refreshToken).toBe('gmail_refresh_token');
+    expect(integration.metadata).toMatchObject({
+      provider: 'gmail',
+      gmail: {
+        inboundStatus: 'degraded',
+        lastError: 'watch_quota',
+      },
+    });
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      {
+        integrationId: integration.id,
+        errorCategory: 'watch_quota',
+      },
+      '[Gmail Watch] Watch registration failed',
+    );
+  });
+
+  it('records the read scope after a successful watch when Google omits scope', async () => {
+    mockSavedCookies({
+      gmail_oauth_state: 'state_123',
+      gmail_oauth_org: org!.clerkOrgId,
+      gmail_oauth_user: 'usr_oauth',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'gmail_access_token',
+        refresh_token: 'gmail_refresh_token',
+        expires_in: 3600,
+      }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse({
+        historyId: '67890',
+        expiration: '1783382400000',
+      }));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+    ));
+
+    expect(res.status).toBe(307);
+    const integration = await db.integration.findFirstOrThrow({
+      where: { organizationId: org!.id, platform: ChannelType.email },
+    });
+    expect(integration.metadata).toMatchObject({
+      oauthScopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+      gmail: {
+        inboundStatus: 'active',
+        historyId: '67890',
+      },
+    });
   });
 
   it('redirects to access_denied when user cancels', async () => {

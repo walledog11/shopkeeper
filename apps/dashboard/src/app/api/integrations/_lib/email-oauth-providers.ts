@@ -38,6 +38,7 @@ export const GMAIL_EMAIL_OAUTH: EmailOAuthProviderConfig = {
     'openid',
     'email',
     'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
   ],
   tokenUrl: 'https://oauth2.googleapis.com/token',
   userinfoUrl: 'https://openidconnect.googleapis.com/v1/userinfo',

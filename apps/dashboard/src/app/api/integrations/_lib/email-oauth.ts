@@ -17,11 +17,19 @@ import {
   requireAuthenticatedOAuthSession,
   validateOAuthCallbackSession,
 } from './oauth-session';
+import { registerGmailWatch } from './gmail-watch';
 
 interface OAuthTokenResponse {
   access_token?: string;
   refresh_token?: string;
   expires_in?: number;
+  scope?: string;
+}
+
+function normalizeOAuthScopes(scope: string | undefined): string[] | undefined {
+  if (!scope) return undefined;
+  const scopes = [...new Set(scope.split(/\s+/).map((value) => value.trim()).filter(Boolean))];
+  return scopes.length > 0 ? scopes : undefined;
 }
 
 function callbackPath(config: EmailOAuthProviderConfig): string {
@@ -179,14 +187,18 @@ export async function completeEmailOAuth(
       return integrationsResponse(appUrl, { error: 'no_email' });
     }
 
-    await upsertExclusiveEmailIntegration({
+    const integrationId = await upsertExclusiveEmailIntegration({
       organizationId,
       externalAccountId: userEmail,
       accessToken: tokenData.access_token,
       refreshToken: tokenData.refresh_token,
       tokenExpiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
       provider: config.provider,
+      oauthScopes: normalizeOAuthScopes(tokenData.scope),
     });
+    if (config.provider === 'gmail') {
+      await registerGmailWatch(integrationId);
+    }
 
     logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);
     return oauthDestinationResponse(appUrl, returnTo, config.provider);

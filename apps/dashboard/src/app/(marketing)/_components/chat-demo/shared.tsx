@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 export interface ChatMessage {
   from: "agent" | "user"
   text: string
@@ -9,6 +11,7 @@ export interface ChatVariantViewProps {
   subtitle: string
   avatar: string
   avatarBg: string
+  avatarSrc?: string
   messages: ChatMessage[]
   count: number
   typing: boolean
@@ -21,19 +24,19 @@ export const IOS_FONT =
 
 function StatusBarIcons() {
   return (
-    <div className="flex items-center gap-[5px]">
-      <svg width="17" height="11" viewBox="0 0 17 11" fill="currentColor" aria-hidden>
+    <div className="flex items-center gap-[0.37em]">
+      <svg width="1.26em" height="0.81em" viewBox="0 0 17 11" fill="currentColor" aria-hidden>
         <rect x="0" y="7" width="3" height="4" rx="0.5" />
         <rect x="4.5" y="5" width="3" height="6" rx="0.5" />
         <rect x="9" y="2.5" width="3" height="8.5" rx="0.5" />
         <rect x="13.5" y="0" width="3" height="11" rx="0.5" />
       </svg>
-      <svg width="15" height="11" viewBox="0 0 15 11" fill="currentColor" aria-hidden>
+      <svg width="1.11em" height="0.81em" viewBox="0 0 15 11" fill="currentColor" aria-hidden>
         <path d="M7.5 2.2C5.1 2.2 2.9 3.1 1 4.8l1.1 1.1C3.7 4.3 5.5 3.5 7.5 3.5s3.8.8 5.4 2.4l1.1-1.1C10.1 3.1 7.9 2.2 7.5 2.2z" />
         <path d="M7.5 5.5c-1.5 0-2.9.6-3.9 1.7l1.1 1.1c.7-.7 1.7-1.1 2.8-1.1s2.1.4 2.8 1.1l1.1-1.1C10.4 6.1 9 5.5 7.5 5.5z" />
         <circle cx="7.5" cy="9.5" r="1.5" />
       </svg>
-      <svg width="25" height="12" viewBox="0 0 25 12" fill="none" aria-hidden>
+      <svg width="1.85em" height="0.89em" viewBox="0 0 25 12" fill="none" aria-hidden>
         <rect x="0.5" y="0.5" width="21" height="11" rx="2.5" stroke="currentColor" strokeOpacity="0.35" />
         <rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor" />
         <path d="M23 4.5v3a1.5 1.5 0 0 0 0-3z" fill="currentColor" fillOpacity="0.4" />
@@ -42,16 +45,30 @@ function StatusBarIcons() {
   )
 }
 
+/** Frame-level overlay: stays put while app screens slide beneath it. */
 export function PhoneStatusBar() {
   return (
-    <div className="relative min-h-[44px] shrink-0 px-5 pb-1 pt-[10px]">
-      <div className="pointer-events-none absolute left-1/2 top-[11px] -translate-x-1/2">
-        <span className="block h-[22px] w-[84px] rounded-full bg-stone-900 sm:h-[24px] sm:w-[90px]" />
-      </div>
-      <div className="flex items-center justify-between text-[11px] font-semibold tracking-tight text-stone-900">
-        <span>9:41</span>
-        <StatusBarIcons />
-      </div>
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex items-start justify-between px-[2em] pt-[1em] text-[min(13.5px,4.5cqw)] text-stone-900">
+      <span className="font-semibold leading-none tracking-tight">9:41</span>
+      <StatusBarIcons />
+    </div>
+  )
+}
+
+export function DynamicIsland() {
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-[min(9px,3cqw)] z-40 h-[min(27px,9.2cqw)] w-[min(93px,31.6cqw)] -translate-x-1/2 rounded-full bg-black">
+      <span className="absolute right-[min(6px,2cqw)] top-1/2 size-[min(15px,5.1cqw)] -translate-y-1/2 rounded-full bg-[#0c0c10]">
+        <span className="absolute left-1/2 top-1/2 size-[min(7px,2.4cqw)] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#141c2a] shadow-[inset_0_0_3px_rgba(70,110,180,0.55)]" />
+      </span>
+    </div>
+  )
+}
+
+export function TimeDivider({ children }: { children: ReactNode }) {
+  return (
+    <div className="animate-[m-msg_0.35s_ease] py-2.5 text-center text-[0.85em] text-stone-400">
+      {children}
     </div>
   )
 }

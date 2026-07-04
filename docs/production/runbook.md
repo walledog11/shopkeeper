@@ -105,6 +105,10 @@ Rules:
   Used by `GET /api/attachments` to stream private inbound email attachments to authenticated workspace members.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+  Gmail OAuth credentials used for connection and watch registration.
+- `GMAIL_PUBSUB_TOPIC`
+  Fully qualified topic name, for example `projects/shopkeeper-prod/topics/gmail-inbound`.
 
 Optional:
 
@@ -139,6 +143,12 @@ Rules:
   architecture note below.
 - `BLOB_READ_WRITE_TOKEN`
   Required for inbound email attachment upload in the gateway worker.
+- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+- `GMAIL_PUBSUB_TOPIC`
+- `GMAIL_PUBSUB_AUDIENCE`
+- `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`
+  Gmail and authenticated Pub/Sub push settings. The audience and service-account email must
+  exactly match the push subscription configuration.
 
 Optional:
 
@@ -146,11 +156,10 @@ Optional:
   `hybrid` (default) | `postmark` | `gmail-only`. Selects which inbound rail(s) the gateway
   expects. `gmail-only` lets the gateway boot without Postmark inbound creds (dev / future
   native-only); production stays `hybrid` until the last forwarding merchant migrates.
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
+- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
   Same values as the dashboard. Used by the daily `email-token-health` maintenance job to probe
-  Gmail/Outlook refresh tokens and flag "Reconnect" in Integrations when a refresh token dies.
-  If absent, the probe is skipped (no reconnect flag is set) and outbound senders still refresh
-  tokens at send time.
+  Outlook refresh tokens and flag "Reconnect" in Integrations when a refresh token dies.
+  If absent, the Outlook probe is skipped and outbound senders still refresh tokens at send time.
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` for Instagram DM after v1.
@@ -160,19 +169,37 @@ Optional:
 
 Email is a **hybrid model** — keep the two concerns separate when debugging:
 
-- **Inbound rail** (how customer mail becomes a ticket): today every provider uses Postmark
-  forwarding — the merchant forwards their mailbox to `{orgId}@inbound.<domain>`, Postmark hits
-  `POST /webhooks/email/inbound`, and the gateway enqueues a `process-email` BullMQ job. Native
-  Gmail/Outlook inbound (no forwarding) is planned but not yet shipped; `EMAIL_INBOUND_MODE`
-  gates whether Postmark inbound creds are required at boot.
+- **Inbound rail** (how customer mail becomes a ticket): Gmail can receive native Pub/Sub push
+  notifications, synchronize mailbox history through `gmail-sync`, and enqueue the same
+  `process-email` jobs used by Postmark forwarding. Watch renewal runs every 12 hours, and an
+  expired history checkpoint triggers a bounded seven-day inbox recovery. Keep
+  `EMAIL_INBOUND_MODE=hybrid` during rollout so Postmark remains the fallback.
 - **Outbound provider** (how replies are sent): chosen per integration from
   `Integration.metadata.provider` — `gmail` (Gmail API), `outlook` (Graph), or `postmark`
   (forwarding fallback). The reply `From` uses `Integration.fromEmail` (falling back to
   `externalAccountId`); the OAuth account email is the identity used for `replyTo` and token
   refresh.
 
-A merchant who connected Gmail/Outlook via OAuth today gets **outbound via that provider but
-inbound still via forwarding** until native inbound ships.
+Gmail native inbound is implemented but remains in controlled rollout. Outlook OAuth remains
+outbound-only and still requires Postmark forwarding for inbound.
+
+### Gmail Pub/Sub provisioning
+
+Authenticate `gcloud` as an administrator for the Google Cloud project that owns the Gmail OAuth
+client, then run the idempotent setup command:
+
+```bash
+GCP_PROJECT_ID='shopkeeper-prod' \
+GMAIL_PUBSUB_PUSH_ENDPOINT='https://gateway.example.com/webhooks/gmail/push' \
+GMAIL_PUBSUB_AUDIENCE='https://gateway.example.com/webhooks/gmail/push' \
+npm run configure:gmail-pubsub
+```
+
+The command creates the topic, grants Gmail's system publisher, creates the dedicated push service
+account, grants Pub/Sub permission to mint its OIDC token, and creates or updates the authenticated
+push subscription. Copy the three printed `GMAIL_PUBSUB_*` values into Vercel and Railway as listed
+above. The operator running it needs Pub/Sub Admin and permission to manage service accounts and
+their IAM policies, including `iam.serviceAccounts.actAs` on the push service account.
 
 ## Deploy Sequence
 
@@ -430,6 +457,17 @@ Run these in a safe production window with test org/user data only.
 3. If queues are clean, trigger one controlled gateway-side queue alert through the existing alert helper with `category=queue_health`, `queue=inbound`, and test metadata.
 4. Confirm the log drain receives an entry tagged `category=queue_health`, `service=gateway`, and `queue=inbound`.
 
+`gmail_inbound`:
+
+1. Use a Gmail test integration; do not revoke or alter a production merchant grant.
+2. Force the test integration's watch expiration into the renewal window and let
+   `gmail-watch-maintenance` run.
+3. For the failure path, use an isolated test configuration and confirm the third consecutive
+   renewal failure emits `category=gmail_inbound`. An expired watch emits the same category
+   immediately.
+4. Confirm the alert includes only integration identifiers, the safe error category, and the
+   failure count—not OAuth tokens or message content.
+
 After each category, record the log entry timestamp, alert recipient, tags/extras checked, and any side-effect notes in [`alerting-evidence.md`](alerting-evidence.md).
 
 ### BullMQ Failed Jobs
@@ -438,6 +476,8 @@ Retry-exhausted BullMQ jobs land in the queue's `failed` set after all configure
 
 - `inbound-messages` for inbound email, Shopify order events, and deferred Instagram DM jobs.
 - `ai-summary` for summary, plan precompute, auto-ack, and notification work.
+- `gmail-sync` for Gmail history synchronization and stale-history recovery.
+- `gmail-watch-maintenance` for 12-hour watch renewal and inbound health monitoring.
 
 Inspect failed jobs from a shell with production `REDIS_URL` loaded:
 
@@ -483,6 +523,7 @@ Reliability evidence to record before updating [`checklist.md`](checklist.md):
 - Ops alert `webhook_signature`: log timestamp, routed owner, validation time
 - Ops alert `provider_send`: log timestamp, routed owner, validation time
 - Ops alert `agent_failure`: log timestamp, routed owner, validation time
+- Ops alert `gmail_inbound`: log timestamp, routed owner, validation time
 - Better Stack dashboard monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway deep monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time
 - Better Stack gateway queue monitor: monitor id, monitor URL, escalation policy or owner, required keyword, first passing check time

@@ -1,48 +1,92 @@
+"use client";
+
+import Image from "next/image";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Reveal } from "./Reveal";
 
-const surfaces = [
+const moments: {
+  time: string;
+  channel: string;
+  logo: string;
+  side: "left" | "right";
+  stampTilt: string;
+  body: ReactNode;
+  chip?: string;
+}[] = [
   {
-    name: "Telegram",
-    body: "Approve replies, ask about any order, get the morning digest — all without opening a laptop.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
-        <path d="M21.9 4.6a1.5 1.5 0 0 0-2-1.1L2.9 10.2c-1.3.5-1.2 2.3.1 2.7l4.3 1.4 1.7 5.2c.4 1.2 1.9 1.5 2.7.6l2.4-2.6 4.5 3.3c.9.6 2.1.2 2.4-.9l3-14.2-.1-.1zM9.4 13.7l8.4-5.3c.4-.2.7.3.4.6l-6.9 6.4-.3 3-1.6-4.7z" />
-      </svg>
+    time: "7:02 am",
+    channel: "iMessage",
+    logo: "/logos/imessage.svg",
+    side: "left",
+    stampTilt: "rotate-[4deg]",
+    body: (
+      <>
+        A sizing question came in at 6:40 — <b>answered from your size guide</b> before you were up.
+      </>
     ),
   },
   {
-    name: "Dashboard",
-    body: "A full inbox with every conversation, your knowledge base, and team seats.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-6">
-        <rect x="3" y="4" width="18" height="14" rx="2" />
-        <path d="M3 9h18" />
-        <path d="M8 21h8" />
-        <path d="M12 18v3" />
-      </svg>
+    time: "11:34 am",
+    channel: "Telegram",
+    logo: "/logos/telegram.svg",
+    side: "right",
+    stampTilt: "-rotate-[3deg]",
+    body: (
+      <>
+        Caught a wrong address on #3114 <b>before it shipped</b>{" "}— the customer confirmed the
+        fix, Shopify&apos;s updated.
+      </>
     ),
   },
   {
-    name: "iMessage",
-    body: "Text your store's employee straight from iMessage — order lookups, daily digests, and one-tap approvals, right in the app you already live in.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
-        <path d="M12 3C6.5 3 2 6.6 2 11c0 2.45 1.38 4.62 3.5 6.02-.18 1.2-.76 2.32-1.6 3.2-.22.23-.06.62.26.58 1.74-.22 3.3-.86 4.54-1.86.42.04.85.06 1.3.06 5.5 0 10-3.6 10-8s-4.5-8-10-8z" />
-      </svg>
+    time: "4:20 pm",
+    channel: "Dashboard",
+    logo: "/logos/shopkeeper-shop-logo.png",
+    side: "left",
+    stampTilt: "rotate-[3deg]",
+    body: (
+      <>
+        You answered &ldquo;do you ship to Canada?&rdquo; once — <b>it&apos;s in the knowledge base
+        now.</b> I take it from here.
+      </>
     ),
   },
   {
-    name: "WhatsApp",
-    body: "The same employee, one more doorway. Coming soon.",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="size-6">
-        <path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5 13.7c-.2.6-1.2 1.2-1.7 1.2-.4.1-1 .1-1.6-.1-.4-.1-.9-.3-1.5-.6-2.6-1.1-4.3-3.8-4.4-4-.1-.2-1.1-1.4-1.1-2.7 0-1.3.7-1.9.9-2.2.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.4l.8 2c.1.2.1.4 0 .6l-.4.6-.4.5c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.4 2.4 1.5.3.1.5.1.7-.1l1-1.2c.2-.3.4-.2.7-.1l1.9.9c.3.1.5.2.5.3.1.1.1.6-.2 1.2z" />
-      </svg>
+    time: "9:47 pm",
+    channel: "iMessage",
+    logo: "/logos/imessage.svg",
+    side: "right",
+    stampTilt: "-rotate-[4deg]",
+    body: (
+      <>
+        Priya&apos;s return window closed yesterday — she&apos;s a 9-order regular, so I&apos;d{" "}
+        <b>extend it once.</b> Your call.
+      </>
     ),
+    chip: "✓ approve with one tap",
   },
 ];
 
 export function Channels() {
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = timelineRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
@@ -54,21 +98,69 @@ export function Channels() {
         </p>
       </Reveal>
 
-      <div className="grid gap-5 text-left sm:grid-cols-2 lg:grid-cols-4">
-        {surfaces.map((s, i) => (
-          <Reveal key={s.name} delay={i * 100}>
-            <div className="h-full rounded-3xl border border-stone-900/10 bg-[#fdfbf7] p-7 transition-transform duration-300 hover:-translate-y-1">
-              <div className="mb-5 grid size-12 place-items-center rounded-2xl bg-[#efe9df] text-stone-800">
-                {s.icon}
+      <div ref={timelineRef} className="relative mx-auto max-w-[660px]">
+        <svg
+          aria-hidden
+          className="absolute left-[18px] top-0 h-full w-10 -translate-x-1/2 sm:left-1/2"
+          viewBox="0 0 40 700"
+          preserveAspectRatio="none"
+        >
+          <path
+            d="M 20 0 C 27 90 13 180 20 260 C 26 340 14 430 20 510 C 25 580 16 650 20 700"
+            pathLength={1}
+            strokeWidth={1.5}
+            className={`fill-none stroke-stone-900/25 [stroke-dasharray:1] transition-[stroke-dashoffset] duration-[2200ms] ease-out motion-reduce:transition-none ${
+              inView ? "[stroke-dashoffset:0]" : "[stroke-dashoffset:1] motion-reduce:[stroke-dashoffset:0]"
+            }`}
+          />
+        </svg>
+
+        {moments.map((m, i) => (
+          <div
+            key={m.time}
+            className={`relative py-6 opacity-0 motion-reduce:opacity-100 sm:py-7 ${
+              inView ? "animate-[m-rise_0.7s_ease-out_both] motion-reduce:animate-none" : ""
+            }`}
+            style={{ animationDelay: `${0.2 + i * 0.35}s` }}
+          >
+            <span
+              className={`mb-2 block pl-12 text-left text-[17px] font-bold leading-none text-stone-500 [font-family:var(--m-caveat)] sm:absolute sm:top-1/2 sm:mb-0 sm:-translate-y-1/2 sm:pl-0 sm:text-[22px] ${
+                m.side === "left" ? "sm:left-[calc(50%+28px)]" : "sm:right-[calc(50%+28px)]"
+              }`}
+            >
+              {m.time}
+            </span>
+            <div className={`pl-12 sm:pl-0 ${m.side === "right" ? "sm:flex sm:justify-end" : ""}`}>
+              <div
+                className={`relative rounded-2xl border border-stone-900/10 bg-[#fdfbf7] px-[18px] py-4 text-left text-[13.5px] leading-relaxed text-stone-700 shadow-[0_18px_40px_-20px_rgba(22,20,19,0.3),0_4px_12px_-6px_rgba(22,20,19,0.12)] [&_b]:font-semibold [&_b]:text-stone-900 sm:w-[46%] ${
+                  m.side === "left" ? "-rotate-[1.2deg]" : "rotate-[1deg]"
+                }`}
+              >
+                <span
+                  className={`absolute -top-3.5 right-3.5 grid size-9 place-items-center rounded-lg border border-dashed border-stone-900/35 bg-[#f6f2eb] ${m.stampTilt}`}
+                >
+                  <Image src={m.logo} alt={`${m.channel} logo`} width={20} height={20} />
+                </span>
+                {m.body}
+                {m.chip && (
+                  <span className="mt-2.5 flex w-fit items-center gap-1.5 rounded-full border border-[#2f7a4a]/40 bg-[#2f7a4a]/5 px-2.5 py-1 text-[11.5px] font-semibold text-[#2f7a4a]">
+                    {m.chip}
+                  </span>
+                )}
               </div>
-              <div className="mb-1 flex items-center gap-2">
-                <h3 className="text-[26px] font-bold tracking-tight [font-family:var(--m-caveat)]">{s.name}</h3>
-              </div>
-              <p className="text-[14px] leading-relaxed text-stone-700">{s.body}</p>
             </div>
-          </Reveal>
+          </div>
         ))}
       </div>
+
+      <div className="pt-8 text-[24px] text-[#9c9285] [font-family:var(--m-caveat)]">
+        covering the night shift 🌙
+      </div>
+
+      <p className="mt-8 flex items-center justify-center gap-2 text-[13.5px] text-stone-500">
+        <Image src="/logos/whatsapp-logo.png" alt="WhatsApp logo" width={18} height={18} />
+        WhatsApp — one more doorway, coming soon.
+      </p>
     </section>
   );
 }

@@ -1,6 +1,21 @@
 import type { EmailProvider } from './types.js';
 
 const EXPLICIT_EXPIRED_TOKEN_MS = 0;
+export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+
+export type EmailAuthReauthorizationReason =
+  | 'expired_grant'
+  | 'missing_gmail_read_scope';
+
+export type GmailInboundStatus =
+  | 'pending'
+  | 'active'
+  | 'degraded'
+  | 'reauthorization_required';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
 
 export function getEmailProvider(integration: { metadata?: unknown | null }): EmailProvider {
   const meta = integration.metadata;
@@ -23,18 +38,50 @@ export function getEmailReauthorizePath(integration: { metadata?: unknown | null
   return null;
 }
 
-function isOAuthEmailProvider(integration: { metadata?: unknown | null }): boolean {
+function hasExplicitExpiredToken(tokenExpiresAt: string | Date | null | undefined): boolean {
+  if (!tokenExpiresAt) return false;
+  const expiresAt = tokenExpiresAt instanceof Date
+    ? tokenExpiresAt
+    : new Date(tokenExpiresAt);
+  return Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() <= EXPLICIT_EXPIRED_TOKEN_MS;
+}
+
+function hasOAuthScope(metadata: unknown, requiredScope: string): boolean {
+  if (!isRecord(metadata) || !Array.isArray(metadata.oauthScopes)) return false;
+  return metadata.oauthScopes.some((scope) => scope === requiredScope);
+}
+
+export function getGmailInboundStatus(
+  integration: { metadata?: unknown | null },
+): GmailInboundStatus | null {
+  if (getEmailProvider(integration) !== 'gmail' || !isRecord(integration.metadata)) return null;
+  const gmail = integration.metadata.gmail;
+  if (!isRecord(gmail)) return null;
+  const status = gmail.inboundStatus;
+  return status === 'pending'
+    || status === 'active'
+    || status === 'degraded'
+    || status === 'reauthorization_required'
+    ? status
+    : null;
+}
+
+export function getEmailAuthReauthorizationReason(integration: {
+  metadata?: unknown | null;
+  tokenExpiresAt?: string | Date | null;
+}): EmailAuthReauthorizationReason | null {
   const provider = getEmailProvider(integration);
-  return provider === 'gmail' || provider === 'outlook';
+  if (provider !== 'gmail' && provider !== 'outlook') return null;
+  if (hasExplicitExpiredToken(integration.tokenExpiresAt)) return 'expired_grant';
+  if (provider === 'gmail' && !hasOAuthScope(integration.metadata, GMAIL_READONLY_SCOPE)) {
+    return 'missing_gmail_read_scope';
+  }
+  return null;
 }
 
 export function isEmailAuthReauthorizationRequired(integration: {
   metadata?: unknown | null;
   tokenExpiresAt?: string | Date | null;
 }): boolean {
-  if (!isOAuthEmailProvider(integration) || !integration.tokenExpiresAt) return false;
-  const expiresAt = integration.tokenExpiresAt instanceof Date
-    ? integration.tokenExpiresAt
-    : new Date(integration.tokenExpiresAt);
-  return Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() <= EXPLICIT_EXPIRED_TOKEN_MS;
+  return getEmailAuthReauthorizationReason(integration) !== null;
 }
