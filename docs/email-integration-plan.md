@@ -2,7 +2,7 @@
 
 Native Gmail inbound, reliable outbound delivery, and a forwarding fallback.
 
-**Status:** shared email infrastructure, async outbound, and Phases 1–6 of native Gmail inbound are complete. Controlled rollout remains. Google Cloud resources still need to be provisioned per environment with `npm run configure:gmail-pubsub`.
+**Status:** shared email infrastructure, async outbound, and implementation for Phases 1–7 of native Gmail inbound are complete. Controlled production rollout remains. Google Cloud resources still need to be provisioned per environment with `npm run configure:gmail-pubsub`.
 
 **Last reviewed:** 2026-07-03
 
@@ -326,7 +326,7 @@ Acceptance:
 - Recovery does not duplicate existing tickets.
 - Renewal and token failures produce actionable integration status.
 
-### Phase 7 — Gmail UX and controlled rollout
+### Phase 7 — Gmail UX and controlled rollout — implementation complete (2026-07-03)
 
 **Purpose:** make the native-inbound state accurate and usable.
 
@@ -347,6 +347,7 @@ UX:
 Feature flags:
 
 - Add `GMAIL_NATIVE_INBOUND` to the dashboard and gateway.
+- The flag defaults off and must have the same value in both services.
 - Keep `EMAIL_INBOUND_MODE=hybrid` throughout development and initial production rollout.
 - Do not select `gmail-only` until native inbound has passed production soak and no forwarding integrations remain.
 

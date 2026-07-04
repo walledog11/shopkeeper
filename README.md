@@ -50,7 +50,7 @@ shopkeeper/
 - All DB queries are scoped by `organizationId`
 
 ## Channels
-- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding for every provider today (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job); native Gmail/Outlook inbound is planned, gated by `EMAIL_INBOUND_MODE`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API, Graph, or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail/Outlook refresh tokens and flags "Reconnect" in Integrations on failure.
+- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`; Outlook remains forwarding-only. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API, Graph, or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail/Outlook refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
 - **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
@@ -245,6 +245,7 @@ Required for launch-scope features:
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for authenticated attachment download proxy
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth and token refresh
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
+- `GMAIL_NATIVE_INBOUND` — explicit controlled rollout flag (`false` until enabled); must match the gateway
 
 Optional dashboard variables:
 - `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
@@ -273,8 +274,10 @@ Required for launch-scope features:
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
 - `GMAIL_PUBSUB_AUDIENCE` — expected Pub/Sub OIDC token audience
 - `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT` — expected Pub/Sub OIDC service-account email
+- `GMAIL_NATIVE_INBOUND` — explicit controlled rollout flag (`false` until enabled); must match the dashboard
 
 Optional gateway variables:
+- `EMAIL_INBOUND_MODE` — `hybrid` (default), `postmark`, or development-only `gmail-only`
 - `PORT` — Railway sets this automatically
 - `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes

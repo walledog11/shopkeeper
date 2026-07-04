@@ -114,7 +114,7 @@ function BriefingConversation() {
 
 export function Integrations() {
   return (
-    <section id="briefing" className="relative isolate overflow-hidden border-t border-stone-900/10 py-24">
+    <section id="briefing" className="relative isolate scroll-mt-24 overflow-hidden border-t border-stone-900/10 py-24">
       {/* Photographic wash band — placeholder photography, swap
           /atmosphere/integrations-leaves.jpg for the final shot. */}
       <div
@@ -134,8 +134,8 @@ export function Integrations() {
 
       <div className="mx-auto grid max-w-6xl items-center gap-14 px-6 md:grid-cols-[0.8fr_1fr] md:gap-16">
         <Reveal>
-          <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-black leading-[1.1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
-            Wake up to a briefing, <em className="italic text-[#9c9285]">not a backlog.</em>
+          <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4.5vw,60px)] font-bold leading-[1.1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+            Wake up to a briefing, <em className="italic text-[var(--m-quill)]">not a backlog.</em>
           </h2>
           <p className="max-w-[46ch] text-[16px] leading-relaxed text-stone-700">
             Every morning, Shopkeeper texts you what happened overnight — the questions it answered, the

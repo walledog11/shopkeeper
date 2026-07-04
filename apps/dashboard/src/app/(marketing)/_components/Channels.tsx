@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { HandUnderline } from "./HandUnderline";
 import { Reveal } from "./Reveal";
 
 const moments: {
@@ -88,10 +89,13 @@ export function Channels() {
   }, []);
 
   return (
-    <section id="channels" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
+    <section id="channels" className="mx-auto max-w-6xl scroll-mt-24 border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
-          Reach your new hire from <em className="italic text-[#9c9285]">wherever you already are.</em>
+        <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+          Reach your new hire from{" "}
+          <em className="italic text-[var(--m-quill)]">
+            <HandUnderline>wherever you already are.</HandUnderline>
+          </em>
         </h2>
         <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
           Texting Shopkeeper feels like texting your best employee — because that&apos;s what it is.
@@ -153,7 +157,7 @@ export function Channels() {
         ))}
       </div>
 
-      <div className="pt-8 text-[24px] text-[#9c9285] [font-family:var(--m-caveat)]">
+      <div className="pt-8 text-[24px] text-[var(--m-quill)] [font-family:var(--m-caveat)]">
         covering the night shift 🌙
       </div>
 

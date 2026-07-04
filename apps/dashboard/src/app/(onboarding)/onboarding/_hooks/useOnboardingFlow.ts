@@ -30,10 +30,21 @@ import {
   DEFAULT_DATA,
   STEPS,
   STORAGE_KEY,
+  type IntegrationRow,
   type KbSyncState,
   type OnboardingData,
   type StepId,
 } from "../_components/model";
+
+function providerOf(integration: IntegrationRow): "gmail" | "outlook" | "postmark" {
+  const metadata = integration.metadata;
+  if (!metadata || typeof metadata !== "object" || !("provider" in metadata)) {
+    return "postmark";
+  }
+  return metadata.provider === "gmail" || metadata.provider === "outlook"
+    ? metadata.provider
+    : "postmark";
+}
 
 function resolveBrowserTimezone(): string | undefined {
   try {
@@ -322,11 +333,17 @@ export function useOnboardingFlow() {
         event: "integration_connection_started",
         platform: "email",
       });
-      const response = await fetch("/api/integrations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform: "email", externalAccountId: normalized }),
-      });
+      const isOAuthEmail = emailRow && providerOf(emailRow) !== "postmark";
+      const response = await fetch(
+        isOAuthEmail ? `/api/integrations/${emailRow.id}` : "/api/integrations",
+        {
+          method: isOAuthEmail ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(isOAuthEmail
+            ? { fromEmail: normalized }
+            : { platform: "email", externalAccountId: normalized }),
+        },
+      );
       if (!response.ok) return false;
       update({ primaryEmail: normalized });
       await refreshIntegrations();
@@ -336,7 +353,7 @@ export function useOnboardingFlow() {
     } finally {
       dispatch({ type: "setEmailSaving", saving: false });
     }
-  }, [ensureOrganization, refreshIntegrations, update]);
+  }, [emailRow, ensureOrganization, refreshIntegrations, update]);
 
   const launchOAuth = useCallback(async (url: string) => {
     dispatch({ type: "setSaving", saving: true });

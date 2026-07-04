@@ -4,8 +4,8 @@ import Link, { useLinkStatus } from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Loader2 } from "lucide-react";
 
-const signInLinkClass =
-  "hidden sm:inline-flex items-center px-1 py-2 text-[15px] font-medium text-[#2b2118] hover:text-stone-600 transition-colors";
+const quietLinkClass =
+  "inline-flex items-center px-1 py-2 text-[15px] font-medium text-[#2b2118] hover:text-stone-600 transition-colors";
 
 const primaryLinkClass = "m-glass-btn m-glass-btn-primary px-5 py-2.5 text-sm";
 
@@ -30,7 +30,7 @@ export function AuthNavLinks() {
   if (!isLoaded || !isSignedIn) {
     return (
       <>
-        <Link href="/login" className={signInLinkClass}>
+        <Link href="/login" className={quietLinkClass}>
           Log in
         </Link>
         <Link href="/signup" className={primaryLinkClass}>
@@ -42,11 +42,11 @@ export function AuthNavLinks() {
 
   return (
     <>
-      <Link href="/dashboard" className={signInLinkClass}>
-        <DashboardLinkContent />
-      </Link>
-      <Link href="/login" className={primaryLinkClass}>
+      <Link href="/login" className={quietLinkClass}>
         Switch account
+      </Link>
+      <Link href="/dashboard" className={primaryLinkClass}>
+        <DashboardLinkContent />
       </Link>
     </>
   );

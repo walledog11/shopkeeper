@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
+import { isGmailNativeInboundEnabled } from '@/lib/env';
 import { readEnv } from '@/lib/env/helpers';
 import {
   captureIntegrationConnectionFailed,
@@ -141,6 +142,8 @@ export async function completeEmailOAuth(
   }
 
   try {
+    const gmailNativeInboundEnabled = config.provider === 'gmail'
+      && isGmailNativeInboundEnabled();
     const tokenResponse = await fetch(config.tokenUrl, {
       cache: 'no-store',
       method: 'POST',
@@ -194,9 +197,10 @@ export async function completeEmailOAuth(
       refreshToken: tokenData.refresh_token,
       tokenExpiresAt: new Date(Date.now() + tokenData.expires_in * 1000),
       provider: config.provider,
+      ...(gmailNativeInboundEnabled ? { inboundMode: 'hybrid' as const } : {}),
       oauthScopes: normalizeOAuthScopes(tokenData.scope),
     });
-    if (config.provider === 'gmail') {
+    if (gmailNativeInboundEnabled) {
       await registerGmailWatch(integrationId);
     }
 

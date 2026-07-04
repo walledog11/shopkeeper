@@ -56,10 +56,34 @@ function redis() {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('EMAIL_INBOUND_MODE', 'hybrid');
+  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
   dbMock.integration.update.mockResolvedValue({});
 });
 
 describe('runGmailWatchMaintenance', () => {
+  it('does not enroll an existing send-only Gmail connection into native inbound', async () => {
+    dbMock.integration.findMany.mockResolvedValue([
+      integration({
+        metadata: {
+          provider: 'gmail',
+          oauthScopes: ['https://www.googleapis.com/auth/gmail.readonly'],
+        },
+      }),
+    ]);
+    const createClient = vi.fn();
+
+    const result = await runGmailWatchMaintenance({
+      redis: redis(),
+      createClient,
+      emitAlert: vi.fn(),
+      now: () => NOW,
+      topicName: 'projects/test/topics/gmail-inbound',
+    });
+
+    expect(result).toMatchObject({ checked: 0, renewed: 0, failed: 0 });
+    expect(createClient).not.toHaveBeenCalled();
+  });
+
   it('renews an expiring watch without replacing its sync checkpoint', async () => {
     const row = integration();
     dbMock.integration.findMany.mockResolvedValue([row]);

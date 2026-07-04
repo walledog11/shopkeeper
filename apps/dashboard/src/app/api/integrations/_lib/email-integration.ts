@@ -9,6 +9,7 @@ export type EmailIntegrationProvider = 'gmail' | 'outlook' | 'postmark';
 export type UpsertExclusiveEmailIntegrationArgs = {
   externalAccountId: string;
   fromEmail?: string;
+  inboundMode?: 'hybrid' | 'native' | 'postmark';
   oauthScopes?: readonly string[];
   organizationId: string;
   provider: EmailIntegrationProvider;
@@ -35,6 +36,7 @@ function mergeEmailMetadata(
   existingMetadata: unknown,
   provider: EmailIntegrationProvider,
   oauthScopes?: readonly string[],
+  inboundMode?: 'hybrid' | 'native' | 'postmark',
 ): PrismaTypes.InputJsonObject {
   const existing = isRecord(existingMetadata) && existingMetadata.provider === provider
     ? existingMetadata
@@ -42,6 +44,7 @@ function mergeEmailMetadata(
   return {
     ...existing,
     provider,
+    ...(inboundMode && { inboundMode }),
     ...(oauthScopes && { oauthScopes: [...oauthScopes] }),
   } as PrismaTypes.InputJsonObject;
 }
@@ -60,7 +63,7 @@ export async function upsertExclusiveEmailIntegration(
         externalAccountId: args.externalAccountId,
       },
     },
-    select: { metadata: true },
+    select: { fromEmail: true, metadata: true },
   });
   const saved = await upsertRaceSafeIntegration({
     organizationId: args.organizationId,
@@ -70,8 +73,13 @@ export async function upsertExclusiveEmailIntegration(
       accessToken: args.accessToken ?? null,
       refreshToken: args.refreshToken ?? null,
       tokenExpiresAt: args.tokenExpiresAt ?? null,
-      fromEmail: args.fromEmail ?? args.externalAccountId,
-      metadata: mergeEmailMetadata(existing?.metadata, args.provider, args.oauthScopes),
+      fromEmail: args.fromEmail ?? existing?.fromEmail ?? args.externalAccountId,
+      metadata: mergeEmailMetadata(
+        existing?.metadata,
+        args.provider,
+        args.oauthScopes,
+        args.inboundMode,
+      ),
     },
   });
 

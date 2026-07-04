@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { db } from '@shopkeeper/db';
 import {
@@ -56,10 +56,12 @@ async function createGmailIntegration(organizationId: string, mailbox: string) {
 beforeEach(() => {
   org = webhookFixture.org;
   additionalOrgIds = [];
+  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
 });
 
 afterEach(async () => {
   await Promise.all(additionalOrgIds.map((organizationId) => cleanupTestData(organizationId)));
+  vi.unstubAllEnvs();
 });
 
 describe('POST /webhooks/gmail/push', () => {
@@ -142,6 +144,16 @@ describe('POST /webhooks/gmail/push', () => {
 
   it('acknowledges an unknown mailbox without queueing work', async () => {
     const response = await postPush(pushEnvelope('unknown@example.com'));
+
+    expect(response.status).toBe(204);
+    expect(queueAddSpy).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges valid notifications without queueing when rollout is disabled', async () => {
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
+    await createGmailIntegration(org.id, 'owner@example.com');
+
+    const response = await postPush(pushEnvelope('owner@example.com'));
 
     expect(response.status).toBe(204);
     expect(queueAddSpy).not.toHaveBeenCalled();

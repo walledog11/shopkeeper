@@ -13,7 +13,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 vi.stubGlobal('fetch', mockFetch);
 
 import { auth } from '@clerk/nextjs/server';
-import { DELETE } from './route';
+import { DELETE, PATCH } from './route';
 
 let org: Awaited<ReturnType<typeof createTestOrg>>;
 let otherOrg: Awaited<ReturnType<typeof createTestOrg>> | null;
@@ -72,6 +72,64 @@ describe('DELETE /api/integrations/[id]', () => {
     await expect(
       db.integration.findUnique({ where: { id: retained.id } }),
     ).resolves.not.toBeNull();
+  });
+});
+
+describe('PATCH /api/integrations/[id]', () => {
+  it('updates and normalizes the customer-facing email address', async () => {
+    const integration = await createActiveGmailIntegration(org.id);
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/integrations/${integration.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromEmail: ' Support@Merchant.Test ' }),
+      }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      id: integration.id,
+      fromEmail: 'support@merchant.test',
+    });
+    await expect(
+      db.integration.findUniqueOrThrow({ where: { id: integration.id } }),
+    ).resolves.toMatchObject({ fromEmail: 'support@merchant.test' });
+  });
+
+  it('rejects invalid addresses without changing the integration', async () => {
+    const integration = await createActiveGmailIntegration(org.id);
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/integrations/${integration.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromEmail: 'not-an-email' }),
+      }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(400);
+    await expect(
+      db.integration.findUniqueOrThrow({ where: { id: integration.id } }),
+    ).resolves.toMatchObject({ fromEmail: null });
+  });
+
+  it('does not allow updating another organization’s integration', async () => {
+    otherOrg = await createTestOrg();
+    const integration = await createActiveGmailIntegration(otherOrg.id);
+
+    const response = await PATCH(
+      new Request(`http://localhost/api/integrations/${integration.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromEmail: 'support@merchant.test' }),
+      }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(404);
   });
 });
 

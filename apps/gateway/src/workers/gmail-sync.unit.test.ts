@@ -120,6 +120,7 @@ function dependencies(client: {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.stubEnv('EMAIL_INBOUND_MODE', 'hybrid');
+  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
   dbMock.integration.findUnique.mockResolvedValue(integration());
   dbMock.integration.update.mockResolvedValue(integration());
 });

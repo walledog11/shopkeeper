@@ -3,8 +3,15 @@
 import * as Sentry from "@sentry/nextjs"
 import { useEffect } from "react"
 import Link from "next/link"
+import { Caveat } from "next/font/google"
 import { AlertTriangle, Store } from "lucide-react"
 import "./globals.css"
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-caveat",
+})
 
 export default function GlobalError({
   error,
@@ -18,7 +25,7 @@ export default function GlobalError({
   }, [error])
 
   return (
-    <html lang="en">
+    <html lang="en" className={caveat.variable}>
       <body className="font-sans antialiased">
         <div className="dashboard-shell m-grain relative flex min-h-dvh w-full flex-col items-center justify-center gap-3 bg-background p-8 text-center">
           <Link
@@ -27,7 +34,7 @@ export default function GlobalError({
             className="absolute left-1/2 top-6 flex -translate-x-1/2 items-center gap-2 text-[#2b2118] transition-colors hover:text-[#2b2118]/75"
           >
             <Store className="size-6" strokeWidth={1.75} />
-            <span className="text-2xl font-bold leading-none [font-family:Caveat,cursive]">shopkeeper</span>
+            <span className="text-2xl font-bold leading-none [font-family:var(--m-caveat)]">shopkeeper</span>
           </Link>
           <span className="flex size-11 items-center justify-center rounded-full border border-border bg-foreground/[0.04]">
             <AlertTriangle className="size-5 text-foreground/50" />

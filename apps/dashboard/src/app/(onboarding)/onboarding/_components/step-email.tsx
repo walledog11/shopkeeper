@@ -3,6 +3,7 @@ import Image from "next/image";
 import { AlertCircle, Check, ChevronDown, Clock3, Loader2, Mail } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { EmailForwardingSetupPanel } from "@/components/integrations/EmailForwardingDisclosure";
+import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupportAddressPanel";
 import { Accent, Headline, Lede } from "./primitives";
 import { RETURN_TO, type IntegrationRow, type OnboardingData } from "./model";
 
@@ -48,14 +49,26 @@ export function StepEmail({
       </Lede>
 
       {emailConnected && (
-        <div className="mt-6 flex w-full max-w-[560px] items-start gap-2.5 rounded-xl border border-foreground/12 bg-foreground/[0.03] px-4 py-3.5 text-left">
-          <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
-          <div>
-            <div className="text-[13px] font-semibold text-foreground">Email connected</div>
-            <div className="mt-0.5 text-[12.5px] text-foreground/55">
-              {data.primaryEmail || emailIntegration?.externalAccountId || "Your support inbox"} is ready.
+        <div className="mt-6 w-full max-w-[560px] overflow-hidden rounded-xl border border-foreground/12 bg-foreground/[0.03] text-left">
+          <div className="flex items-start gap-2.5 px-4 py-3.5">
+            <Check className="mt-0.5 size-4 shrink-0 text-foreground" />
+            <div>
+              <div className="text-[13px] font-semibold text-foreground">Email connected</div>
+              <div className="mt-0.5 text-[12.5px] text-foreground/55">
+                {data.primaryEmail || emailIntegration?.externalAccountId || "Your support inbox"} is ready.
+              </div>
             </div>
           </div>
+          {connectedProvider === "gmail" && (
+            <div className="border-t border-foreground/[0.08]">
+              <GmailSupportAddressPanel
+                email={data.primaryEmail}
+                setEmail={value => update({ primaryEmail: value })}
+                loading={emailSaving}
+                onSave={onSaveEmail}
+              />
+            </div>
+          )}
         </div>
       )}
 

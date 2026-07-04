@@ -10,6 +10,7 @@ export interface OnboardingData {
 }
 
 export type IntegrationRow = {
+  id: string;
   platform: string;
   externalAccountId: string;
   fromEmail: string | null;

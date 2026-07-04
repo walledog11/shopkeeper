@@ -27,21 +27,23 @@ interface Props {
   config: PlatformConfig
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
+  onUpdateEmailAddress?: (integrationId: string, email: string) => Promise<boolean>
   onDisconnect: (integrationId: string) => void
   onLaunchOAuth?: (url: string, onClosed?: () => void) => void
   lastActivity?: string | null
   open: boolean
   onOpenChange: (open: boolean) => void
+  gmailNativeInboundEnabled?: boolean
 }
 
-export default function IntegrationCard({ config, connected, onConnect, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange }: Props) {
+export default function IntegrationCard({ config, connected, onConnect, onUpdateEmailAddress, onDisconnect, onLaunchOAuth, lastActivity, open, onOpenChange, gmailNativeInboundEnabled = false }: Props) {
   const isConnected = config.connectType === "shopify"
     ? isShopifyIntegrationLinked(connected[0])
     : connected.length > 0
   const isOAuthEmail = config.emailProvider === "gmail" || config.emailProvider === "outlook"
 
   const health = config.connectType
-    ? deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null)
+    ? deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null, gmailNativeInboundEnabled)
     : { state: 'not-connected' as const, note: null, canFix: false }
 
   const threadsThisWeek = isConnected ? connected[0].threadsThisWeek ?? 0 : 0
@@ -76,6 +78,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
     config,
     connected,
     onConnect,
+    onUpdateEmailAddress,
     onLaunchOAuth,
     onOpenChange,
   })
@@ -137,6 +140,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
             <IntegrationPermissionsSection
               config={config}
               connected={connected}
+              gmailNativeInboundEnabled={gmailNativeInboundEnabled}
             />
             <IntegrationActionsSection
               config={config}
@@ -150,6 +154,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
               setEmail={config.connectType === "email" ? setEmail : undefined}
               emailLoading={config.connectType === "email" ? loading : undefined}
               onEmailSave={config.connectType === "email" ? handleEmailConnect : undefined}
+              gmailNativeInboundEnabled={gmailNativeInboundEnabled}
             />
           </>
         )}
@@ -159,6 +164,7 @@ export default function IntegrationCard({ config, connected, onConnect, onDiscon
             <IntegrationPermissionsSection
               config={config}
               connected={connected}
+              gmailNativeInboundEnabled={gmailNativeInboundEnabled}
             />
             <IntegrationActionsSection
               config={config}

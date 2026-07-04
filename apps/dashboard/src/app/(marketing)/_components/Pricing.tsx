@@ -24,7 +24,7 @@ const tiers = [
     features: [
       "Everything in Starter",
       "Shopify actions (refund, address, track)",
-      "Telegram agent — approve from your phone",
+      "Approve from your phone — iMessage or Telegram",
       "Custom voice training",
       "2 team seats included",
     ],
@@ -53,10 +53,10 @@ const tiers = [
 
 export function Pricing() {
   return (
-    <section id="pricing" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
+    <section id="pricing" className="mx-auto max-w-6xl scroll-mt-24 border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
-          Costs less than <em className="italic text-[#9c9285]">a part-time hire.</em>
+        <h2 className="mx-auto mb-5 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+          Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
         </h2>
         <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
           Every plan starts with 14 days free. No credit card, no &ldquo;talk to sales&rdquo; maze.
@@ -81,7 +81,7 @@ export function Pricing() {
                 </span>
               )}
             </div>
-            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] font-extrabold leading-none tracking-[-0.02em] [font-family:var(--m-caveat)]">
+            <div className="mb-2 flex items-baseline gap-1.5 text-[56px] font-bold leading-none tracking-[-0.02em] [font-family:var(--m-caveat)]">
               {tier.price}
               <small className={`text-sm font-bold ${tier.featured ? "text-[#f6f2eb]/60" : "text-stone-500"}`}>
                 {tier.per}

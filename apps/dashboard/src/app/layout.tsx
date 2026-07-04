@@ -1,6 +1,14 @@
 import type { Metadata, Viewport } from "next";
+import { Caveat } from "next/font/google";
+import { getDashboardAppUrl } from "@/lib/env";
 import { Providers } from "./providers";
 import "./globals.css";
+
+const caveat = Caveat({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-caveat",
+});
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -8,13 +16,31 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+const title = "Shopkeeper — the AI employee for your Shopify store";
+const description =
+  "Shopkeeper is the AI employee for your Shopify store. It answers customers overnight, fixes orders directly in Shopify, and texts you on iMessage or Telegram when it needs your call.";
+
 export const metadata: Metadata = {
-  title: "Shopkeeper — AI support for Shopify brands",
-  description:
-    "Consolidate customer messages from Instagram, TikTok, Shopify, and email into one AI-powered dashboard. Respond faster and smarter.",
+  metadataBase: new URL(getDashboardAppUrl()),
+  title,
+  description,
   icons: {
     icon: "/logos/shopkeeper-shop-logo.png",
     apple: "/logos/shopkeeper-shop-logo.png",
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "Shopkeeper",
+    title,
+    description,
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: title }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title,
+    description,
+    images: ["/og.png"],
   },
 };
 
@@ -29,7 +55,7 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
+    <html lang="en" className={caveat.variable}>
       <body className="font-sans antialiased">
         <Providers publishableKey={publishableKey}>
           {children}

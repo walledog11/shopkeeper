@@ -55,6 +55,7 @@ beforeEach(async () => {
   vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id');
   vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret');
   vi.stubEnv('GMAIL_PUBSUB_TOPIC', 'projects/test-project/topics/gmail-inbound');
+  vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
   vi.mocked(auth).mockResolvedValue({
     userId: 'usr_oauth',
     orgId: org.clerkOrgId,
@@ -132,6 +133,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         accessToken: 'old-gmail-access-token',
         refreshToken: 'old-gmail-refresh-token',
         tokenExpiresAt: new Date(0),
+        fromEmail: 'support@merchant.test',
         metadata: {
           provider: 'gmail',
           inboundMode: 'hybrid',
@@ -173,6 +175,7 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(rows).toHaveLength(1);
     const integration = rows[0];
     expect(integration.externalAccountId).toBe('merchant@gmail.test');
+    expect(integration.fromEmail).toBe('support@merchant.test');
     expect(integration.accessToken).toBe('gmail_access_token');
     expect(integration.refreshToken).toBe('gmail_refresh_token');
     expect(integration.tokenExpiresAt).toBeInstanceOf(Date);
@@ -266,6 +269,45 @@ describe('POST /api/integrations/gmail/callback', () => {
       },
       '[Gmail Watch] Watch registration failed',
     );
+  });
+
+  it('keeps Gmail outbound connected without registering a watch when rollout is disabled', async () => {
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'false');
+    mockSavedCookies({
+      gmail_oauth_state: 'state_123',
+      gmail_oauth_org: org!.clerkOrgId,
+      gmail_oauth_user: 'usr_oauth',
+    });
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse({
+        access_token: 'gmail_access_token',
+        refresh_token: 'gmail_refresh_token',
+        expires_in: 3600,
+        scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
+      }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }));
+
+    const res = await POST(new Request(
+      'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
+    ));
+
+    expect(res.status).toBe(307);
+    const integration = await db.integration.findFirstOrThrow({
+      where: { organizationId: org!.id, platform: ChannelType.email },
+    });
+    expect(integration).toMatchObject({
+      externalAccountId: 'merchant@gmail.test',
+      fromEmail: 'merchant@gmail.test',
+    });
+    expect(integration.metadata).toMatchObject({
+      provider: 'gmail',
+      oauthScopes: [
+        'https://www.googleapis.com/auth/gmail.send',
+        'https://www.googleapis.com/auth/gmail.readonly',
+      ],
+    });
+    expect(integration.metadata).not.toMatchObject({ gmail: expect.anything() });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
   it('records the read scope after a successful watch when Google omits scope', async () => {

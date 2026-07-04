@@ -128,6 +128,10 @@ export function isOrderRiskMonitorEnabled(): boolean {
   return parseBooleanEnv('ORDER_RISK_MONITOR_ENABLED', false);
 }
 
+export function isGmailNativeInboundEnabled(): boolean {
+  return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
+}
+
 function readOptionalTrimmedEnv(name: string): string | null {
   const rawValue = process.env[name];
   if (typeof rawValue !== 'string') {

@@ -138,7 +138,7 @@ export function NavLinks() {
       <NavDropdown label="Product" items={productItems} />
       <NavDropdown label="Resources" items={resourceItems} />
       <Link href={`mailto:${CONTACT_EMAIL}`} className="m-nav-link">
-        Company
+        Contact
       </Link>
     </div>
   );

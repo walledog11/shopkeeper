@@ -17,6 +17,7 @@ import type { Integration } from "@/types"
 import { ActionRow } from "./ActionRow"
 import { ConfigureSection } from "./ConfigureSection"
 import { EmailForwardingSetupPanel } from "./EmailForwardingDisclosure"
+import { GmailSupportAddressPanel } from "./GmailSupportAddressPanel"
 import { PermissionActionLink, PermissionRow } from "./PermissionRow"
 import { ShopifyPermissionRows } from "./ShopifyPermissionsPanel"
 import { getEmailReceivingDisplay } from "./integration-card-helpers"
@@ -31,9 +32,11 @@ const DISCONNECT_NOTES: Record<ConnectType, string> = {
 export function IntegrationPermissionsSection({
   config,
   connected,
+  gmailNativeInboundEnabled = false,
 }: {
   config: PlatformConfig
   connected: Integration[]
+  gmailNativeInboundEnabled?: boolean
 }) {
   const integration = connected[0]
   const connectType = config.connectType!
@@ -42,7 +45,7 @@ export function IntegrationPermissionsSection({
   const { data: org } = useOrg({ enabled: isEmail })
   const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
   const emailReceiving = isEmail && integration
-    ? getEmailReceivingDisplay(integration, inboundAddress)
+    ? getEmailReceivingDisplay(integration, inboundAddress, gmailNativeInboundEnabled)
     : null
   const gmailReadScopeMissing = config.emailProvider === "gmail"
     && integration
@@ -113,6 +116,7 @@ export function IntegrationActionsSection({
   emailLoading,
   onEmailSave,
   defaultForwardingOpen = false,
+  gmailNativeInboundEnabled = false,
 }: {
   config: PlatformConfig
   connected: Integration[]
@@ -126,6 +130,7 @@ export function IntegrationActionsSection({
   emailLoading?: boolean
   onEmailSave?: () => void
   defaultForwardingOpen?: boolean
+  gmailNativeInboundEnabled?: boolean
 }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
   const [forwardingOpen, setForwardingOpen] = useState(defaultForwardingOpen)
@@ -133,6 +138,7 @@ export function IntegrationActionsSection({
   const integration = connected[0]
   const isEmail = connectType === "email"
   const isPostmark = config.emailProvider === "postmark"
+  const isGmail = config.emailProvider === "gmail"
   // iMessage has no OAuth reconnect — changing creds means re-entering them via
   // the connect form, so don't show a dead "Reconnect account" action.
   const showReconnect = !(isEmail && isPostmark) && connectType !== "imessage"
@@ -140,6 +146,16 @@ export function IntegrationActionsSection({
 
   return (
     <div className="space-y-2">
+      {isGmail && integration && showForwardingSetup && (
+        <ConfigureSection title="Support address">
+          <GmailSupportAddressPanel
+            email={email}
+            setEmail={setEmail}
+            loading={emailLoading ?? false}
+            onSave={onEmailSave}
+          />
+        </ConfigureSection>
+      )}
       <ConfigureSection title="Actions">
         {showForwardingSetup && (
           <>
@@ -155,6 +171,7 @@ export function IntegrationActionsSection({
                 setEmail={setEmail}
                 loading={emailLoading ?? false}
                 onSave={onEmailSave}
+                showAddressEditor={!isGmail}
               />
             )}
           </>
@@ -196,6 +213,12 @@ export function IntegrationActionsSection({
           </>
         )}
       </ConfigureSection>
+      {isGmail && integration && !gmailNativeInboundEnabled && (
+        <p className="px-1 text-xs leading-relaxed text-foreground/45">
+          Native Gmail receiving is in controlled rollout. Keep forwarding enabled
+          until it is activated for this environment.
+        </p>
+      )}
       {kbSyncResult && (
         <p className={cn(
           "text-xs px-1",

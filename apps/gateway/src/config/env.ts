@@ -1,5 +1,6 @@
 import logger from '../logger.js';
 import { parseProductAnalyticsConfig } from '@shopkeeper/analytics';
+import { isGmailNativeInboundEnabled } from './runtime-config.js';
 
 const REQUIRED_ENV = [
   'DATABASE_URL',
@@ -77,6 +78,7 @@ export function validateGatewayEnv(): void {
   }
 
   parseProductAnalyticsConfig();
+  isGmailNativeInboundEnabled();
 
   const redisUrl = requireEnv('REDIS_URL');
   try {

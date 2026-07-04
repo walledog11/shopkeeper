@@ -6,7 +6,7 @@ import { Reveal } from "./Reveal";
 const faqs = [
   {
     q: "Will it ever send something embarrassing on my behalf?",
-    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval via Telegram or inbox. As you build trust you can opt into Trusted mode to send simple replies on its own — refunds and cancellations still need your OK.",
+    a: "Not unless you tell it to. By default, Shopkeeper drafts every reply and waits for your approval — one text on your phone (iMessage or Telegram) or right in the dashboard. As you build trust you can raise its trust level to send simple replies on its own — refunds and cancellations still need your OK.",
   },
   {
     q: "How does it learn my voice?",
@@ -33,36 +33,36 @@ const faqs = [
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={() => setOpen(!open)}
-      aria-expanded={open}
-      className="w-full cursor-pointer border-0 border-t border-solid border-stone-900/10 bg-transparent py-6 text-left [font-family:inherit]"
-    >
-      <div className="flex items-center justify-between text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+    <div className="border-t border-solid border-stone-900/10">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex w-full cursor-pointer items-center justify-between border-0 bg-transparent py-6 text-left text-[clamp(18px,3vw,24px)] tracking-[-0.01em] [font-family:var(--m-caveat)]"
+      >
         <span>{q}</span>
         <span className={`ml-4 shrink-0 text-lg font-normal transition-transform duration-200 [font-family:var(--m-mono)] ${open ? "rotate-45" : ""}`}>+</span>
-      </div>
+      </button>
       <div
         className={`grid transition-[grid-template-rows] duration-300 ease-out ${
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
       >
         <div className="overflow-hidden">
-          <div className="pt-3 text-sm leading-[1.6] text-stone-700">{a}</div>
+          <div className="pb-6 text-sm leading-[1.6] text-stone-700">{a}</div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 
 export function FAQ() {
   return (
-    <section id="faq" className="mx-auto max-w-6xl border-t border-stone-900/10 px-6 py-24 text-center">
+    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 border-t border-stone-900/10 px-6 py-24 text-center">
       <Reveal>
-        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-black leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+        <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
           Things people ask{" "}
-          <em className="italic text-[#9c9285]">before they trust an AI.</em>
+          <em className="italic text-[var(--m-quill)]">before they trust an AI.</em>
         </h2>
       </Reveal>
 

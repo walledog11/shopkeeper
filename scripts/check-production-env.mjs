@@ -36,6 +36,7 @@ const CONTRACTS = {
       'PRICE_ID_PRO',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
+      'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
     ],
     absoluteUrlVars: [
@@ -66,6 +67,7 @@ const CONTRACTS = {
       'POSTMARK_INBOUND_PASSWORD',
       'GOOGLE_CLIENT_ID',
       'GOOGLE_CLIENT_SECRET',
+      'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
       'GMAIL_PUBSUB_AUDIENCE',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT',
@@ -229,6 +231,15 @@ export function validateProductionEnv(target, options = {}) {
     errors.push(
       'POSTHOG_PROJECT_TOKEN is required when PRODUCT_ANALYTICS_ENABLED=true',
     );
+  }
+
+  const gmailNativeInbound = readEnv(env, 'GMAIL_NATIVE_INBOUND');
+  if (
+    gmailNativeInbound
+    && gmailNativeInbound !== 'true'
+    && gmailNativeInbound !== 'false'
+  ) {
+    errors.push('GMAIL_NATIVE_INBOUND must be either true or false');
   }
   const posthogHost = normalizedUrls.POSTHOG_HOST;
   if (productAnalyticsEnabled === 'true' && posthogHost) {

@@ -7,6 +7,7 @@ import {
   getMetaWebhookConfig,
   getPostmarkWebhookConfig,
   getTelegramConfig,
+  isGmailNativeInboundEnabled,
   isOrderRiskMonitorEnabled,
   shouldRunGatewayServer,
   shouldRunGatewayWorker,
@@ -151,6 +152,20 @@ describe('isOrderRiskMonitorEnabled', () => {
   it('rejects invalid boolean strings', () => {
     vi.stubEnv('ORDER_RISK_MONITOR_ENABLED', 'maybe');
     expect(() => isOrderRiskMonitorEnabled()).toThrow(/ORDER_RISK_MONITOR_ENABLED/);
+  });
+});
+
+describe('isGmailNativeInboundEnabled', () => {
+  it('is disabled by default and supports an explicit rollout', () => {
+    expect(isGmailNativeInboundEnabled()).toBe(false);
+
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'on');
+    expect(isGmailNativeInboundEnabled()).toBe(true);
+  });
+
+  it('rejects invalid values', () => {
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'gradual');
+    expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
   });
 });
 

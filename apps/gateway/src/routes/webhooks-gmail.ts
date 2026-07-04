@@ -3,7 +3,11 @@ import type { Request, Response, Router } from 'express';
 import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { db } from '@shopkeeper/db';
 import { getEmailProvider } from '@shopkeeper/email';
-import { getGmailPubSubPushConfig, type GmailPubSubPushConfig } from '../config/runtime-config.js';
+import {
+  getGmailPubSubPushConfig,
+  isGmailNativeInboundEnabled,
+  type GmailPubSubPushConfig,
+} from '../config/runtime-config.js';
 import { JOB } from '../constants.js';
 import logger from '../logger.js';
 import type { GmailSyncJobData } from '../types.js';
@@ -114,6 +118,11 @@ function gmailSyncJobId(integrationId: string, historyId: string): string {
 
 export function registerGmailWebhookRoutes(router: Router): void {
   router.post('/gmail/push', async (req: Request, res: Response) => {
+    if (!isGmailNativeInboundEnabled()) {
+      logger.info('[Gmail Push] Native inbound is disabled; notification acknowledged');
+      return res.sendStatus(204);
+    }
+
     const token = readBearerToken(req);
     if (!token) {
       logger.warn('[Gmail Push] Rejected request with missing bearer token');

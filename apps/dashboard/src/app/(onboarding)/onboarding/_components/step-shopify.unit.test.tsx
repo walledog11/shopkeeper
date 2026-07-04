@@ -36,6 +36,7 @@ describe("StepShopify", () => {
       connected: true,
       simulatorEnabled: true,
       shopifyRow: {
+        id: "shopify-integration",
         platform: "shopify",
         externalAccountId: "demo-store.shopkeeper.test",
         fromEmail: null,

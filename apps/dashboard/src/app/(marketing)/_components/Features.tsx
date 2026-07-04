@@ -31,7 +31,7 @@ const FEATURES: Feature[] = [
     num: "01",
     title: (
       <>
-        Answers customers <em className="italic text-[#9c9285]">while you sleep.</em>
+        Answers customers <em className="italic text-[var(--m-quill)]">while you sleep.</em>
       </>
     ),
     body: "Shopkeeper reads every DM and email the second it lands, pulls the real order from Shopify, and replies the way you would. When it isn't sure, it doesn't guess — it hands the thread to you.",
@@ -63,13 +63,13 @@ const FEATURES: Feature[] = [
     num: "02",
     title: (
       <>
-        Asks <em className="italic text-[#9c9285]">before it acts.</em>
+        Asks <em className="italic text-[var(--m-quill)]">before it acts.</em>
       </>
     ),
     body: "You set the rules — refund caps, blocked actions, how much rope it gets. Shopkeeper starts cautious and earns autonomy one approval at a time, because one bad refund can undo months of trust.",
     bullets: [
       "Refund limits and blocked cancellations you control",
-      "Approvals are one tap, right in Telegram",
+      "Approve with one text — iMessage or Telegram",
       "Every action logged on the thread",
     ],
     annotation: "your call — one tap",
@@ -99,7 +99,7 @@ const FEATURES: Feature[] = [
     num: "03",
     title: (
       <>
-        Knows your store <em className="italic text-[#9c9285]">cold.</em>
+        Knows your store <em className="italic text-[var(--m-quill)]">cold.</em>
       </>
     ),
     body: "Live Shopify orders and inventory, your policies, every past conversation. Ask it anything about your store and it answers from data, not vibes.",
@@ -159,7 +159,7 @@ function StepCopy({ feature }: { feature: Feature }) {
         <span className="inline-block h-px w-6 bg-stone-400" />
         {feature.num}
       </div>
-      <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4vw,56px)] font-extrabold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
+      <h2 className="mb-5 max-w-[16ch] text-[clamp(36px,4vw,56px)] font-bold leading-[1] tracking-[-0.01em] [font-family:var(--m-caveat)]">
         {feature.title}
       </h2>
       <p className="mb-7 max-w-[46ch] text-[16px] leading-relaxed text-stone-700">{feature.body}</p>
@@ -233,13 +233,16 @@ function MobileCarousel() {
             key={f.num}
             type="button"
             aria-label={`Step ${f.num}`}
+            aria-current={i === active ? "step" : undefined}
             onClick={() => go(i)}
-            className={`h-[7px] rounded-full transition-all duration-300 ${
-              i === active ? "w-6 bg-stone-900/70" : "w-[7px] bg-stone-900/20"
+            className={`rounded-full px-3.5 py-1 text-[16px] leading-none transition-colors duration-300 [font-family:var(--m-caveat)] ${
+              i === active ? "bg-stone-900/85 text-[#f6f2eb]" : "bg-stone-900/[0.06] text-stone-500"
             }`}
-          />
+          >
+            {f.num}
+          </button>
         ))}
-        <span className="ml-2 text-[18px] leading-none text-stone-400 [font-family:var(--m-caveat)]">
+        <span className="ml-1.5 text-[17px] leading-none text-stone-400 [font-family:var(--m-caveat)]">
           swipe →
         </span>
       </div>
@@ -312,7 +315,7 @@ export function Features() {
   }, []);
 
   return (
-    <section id="how" className="border-t border-stone-900/10">
+    <section id="how" className="scroll-mt-24 border-t border-stone-900/10">
       <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 md:pb-0 md:pt-20">
         <div className="flex items-center justify-center gap-3 text-[22px] text-stone-500 [font-family:var(--m-caveat)]">
           <span className="h-px w-10 bg-stone-400/60" aria-hidden />

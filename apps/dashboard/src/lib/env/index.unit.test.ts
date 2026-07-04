@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 // Deterministic environment validation unit coverage.
-import { getDashboardAppUrl, getDashboardOpsAlertConfig, validateDashboardEnv } from './index';
+import {
+  getDashboardAppUrl,
+  getDashboardOpsAlertConfig,
+  isGmailNativeInboundEnabled,
+  validateDashboardEnv,
+} from './index';
 
 function stubBaseDashboardEnv() {
   vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@127.0.0.1:5432/shopkeeper?pgbouncer=true&connection_limit=1');
@@ -121,6 +126,20 @@ describe('getDashboardAppUrl', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
 
     expect(getDashboardAppUrl()).toBe('http://localhost:3000');
+  });
+});
+
+describe('isGmailNativeInboundEnabled', () => {
+  it('is disabled by default and supports explicit rollout values', () => {
+    expect(isGmailNativeInboundEnabled()).toBe(false);
+
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'true');
+    expect(isGmailNativeInboundEnabled()).toBe(true);
+  });
+
+  it('rejects invalid values', () => {
+    vi.stubEnv('GMAIL_NATIVE_INBOUND', 'some-merchants');
+    expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
   });
 });
 

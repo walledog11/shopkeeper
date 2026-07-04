@@ -62,13 +62,19 @@ function renderIntegrationSkeletonSection(
 export default function IntegrationsPageClient({
   telegramBotUsername,
   imessageHandle,
+  gmailNativeInboundEnabled,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
+  gmailNativeInboundEnabled: boolean
 }) {
   return (
     <Suspense fallback={null}>
-      <IntegrationsPageContent telegramBotUsername={telegramBotUsername} imessageHandle={imessageHandle} />
+      <IntegrationsPageContent
+        telegramBotUsername={telegramBotUsername}
+        imessageHandle={imessageHandle}
+        gmailNativeInboundEnabled={gmailNativeInboundEnabled}
+      />
     </Suspense>
   )
 }
@@ -76,9 +82,11 @@ export default function IntegrationsPageClient({
 function IntegrationsPageContent({
   telegramBotUsername,
   imessageHandle,
+  gmailNativeInboundEnabled,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
+  gmailNativeInboundEnabled: boolean
 }) {
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
@@ -102,14 +110,17 @@ function IntegrationsPageContent({
     const error = params.get('error')
     if (connected === 'instagram') showToast('success', 'Instagram connected.')
     else if (connected === 'shopify') showToast('success', 'Shopify store connected.')
-    else if (connected === 'gmail') showToast('success', 'Gmail connected.')
+    else if (connected === 'gmail') {
+      showToast('success', 'Gmail connected.')
+      setOpenId('gmail')
+    }
     else if (connected === 'outlook') showToast('success', 'Outlook connected.')
     else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
   }, [searchParams, showToast])
 
   const handleOAuthResult = useEffectEvent((payload: OAuthDoneMessage) => {
     void mutate()
-    setOpenId(null)
+    setOpenId(payload.connected === 'gmail' ? 'gmail' : null)
     if (payload.connected === 'instagram') {
       showToast('success', 'Instagram connected.')
     } else if (payload.connected === 'shopify') {
@@ -148,8 +159,9 @@ function IntegrationsPageContent({
       return
     }
     watchOAuthPopup(popup, () => {
-      void mutate()
-      setOpenId(null)
+      void mutate().then(() => {
+        setOpenId(url.includes('/gmail/') ? 'gmail' : null)
+      })
       onClosed?.()
     })
   }, [mutate])
@@ -178,6 +190,26 @@ function IntegrationsPageContent({
       showToast('success', 'Disconnected.')
     } catch {
       showToast('error', 'Failed to disconnect. Please try again.')
+    }
+  }
+
+  async function handleUpdateEmailAddress(
+    integrationId: string,
+    fromEmail: string,
+  ): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/integrations/${integrationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fromEmail }),
+      })
+      if (!res.ok) throw new Error()
+      await mutate()
+      showToast('success', 'Support address updated.')
+      return true
+    } catch {
+      showToast('error', 'Enter a valid support email address and try again.')
+      return false
     }
   }
 
@@ -242,10 +274,12 @@ function IntegrationsPageContent({
         connected={getConnected(def)}
         lastActivity={getLastActivity(def)}
         onConnect={handleConnect}
+        onUpdateEmailAddress={handleUpdateEmailAddress}
         onDisconnect={handleDisconnect}
         onLaunchOAuth={launchOAuth}
         open={openId === def.id}
         onOpenChange={(o) => setOpenId(o ? def.id : null)}
+        gmailNativeInboundEnabled={gmailNativeInboundEnabled}
       />
     )
   }

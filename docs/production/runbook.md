@@ -109,6 +109,10 @@ Rules:
   Gmail OAuth credentials used for connection and watch registration.
 - `GMAIL_PUBSUB_TOPIC`
   Fully qualified topic name, for example `projects/shopkeeper-prod/topics/gmail-inbound`.
+- `GMAIL_NATIVE_INBOUND`
+  Controlled-rollout switch. Defaults to `false`; use the same value in the dashboard and
+  gateway. When disabled, Gmail OAuth remains available for sending and the dashboard directs
+  merchants to the forwarding fallback.
 
 Optional:
 
@@ -149,6 +153,10 @@ Rules:
 - `GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT`
   Gmail and authenticated Pub/Sub push settings. The audience and service-account email must
   exactly match the push subscription configuration.
+- `GMAIL_NATIVE_INBOUND`
+  Explicit controlled-rollout switch. Set `false` until Pub/Sub provisioning is verified, and
+  keep its value in sync with the dashboard. When disabled, Gmail pushes are acknowledged
+  without queueing, sync jobs no-op, and watch renewal skips Gmail integrations.
 
 Optional:
 
@@ -182,6 +190,30 @@ Email is a **hybrid model** — keep the two concerns separate when debugging:
 
 Gmail native inbound is implemented but remains in controlled rollout. Outlook OAuth remains
 outbound-only and still requires Postmark forwarding for inbound.
+
+### Gmail native-inbound rollout
+
+Keep `EMAIL_INBOUND_MODE=hybrid` for every rollout stage so Postmark forwarding remains active.
+Set `GMAIL_NATIVE_INBOUND=true` in both dashboard and gateway only after the environment's
+Pub/Sub topic, push subscription, OIDC audience, and service account have been verified.
+Enabling the flag does not automatically enroll existing send-only Gmail connections; they enter
+native inbound only after an explicit reconnect (or an operator sets their integration
+`inboundMode` to `hybrid`/`native`). Existing active watches continue to renew.
+
+Roll out in this order:
+
+1. Local and automated tests with mocked Gmail and Pub/Sub.
+2. One OAuth test user through a public development tunnel.
+3. Internal organizations with Gmail and Postmark dual delivery.
+4. Google OAuth test users while restricted-scope verification is pending.
+5. Newly connected external merchants after verification.
+6. Existing Gmail merchants after explicit reconnection.
+
+For every stage, verify watch expiration, last successful sync, duplicate suppression, alias
+filtering, outbound send-as behavior, and reconnect/degraded states in Integrations. Roll back by
+setting `GMAIL_NATIVE_INBOUND=false` in both services; leave `EMAIL_INBOUND_MODE=hybrid`.
+Do not use `gmail-only` until the production soak is complete and no forwarding integrations
+remain.
 
 ### Gmail Pub/Sub provisioning
 

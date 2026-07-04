@@ -32,6 +32,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     BLOB_READ_WRITE_TOKEN: 'vercel-blob-token',
     GOOGLE_CLIENT_ID: 'google-client-id',
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
+    GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
@@ -53,6 +54,7 @@ function createGatewayLaunchEnv(overrides = {}) {
     POSTMARK_INBOUND_PASSWORD: 'postmark-inbound-pass',
     GOOGLE_CLIENT_ID: 'google-client-id',
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
+    GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     GMAIL_PUBSUB_AUDIENCE: 'https://gateway.example.com/webhooks/gmail/push',
     GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT:
@@ -256,6 +258,7 @@ test('Gmail Pub/Sub production settings use deployable identifiers', () => {
   const gateway = validateProductionEnv('gateway', {
     scope: 'launch',
     env: createGatewayLaunchEnv({
+      GMAIL_NATIVE_INBOUND: 'gradual',
       GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT: 'not-an-email',
     }),
   });
@@ -263,6 +266,12 @@ test('Gmail Pub/Sub production settings use deployable identifiers', () => {
   assert.equal(
     dashboard.errors.includes(
       'GMAIL_PUBSUB_TOPIC must use projects/<project>/topics/<topic>',
+    ),
+    true,
+  );
+  assert.equal(
+    gateway.errors.includes(
+      'GMAIL_NATIVE_INBOUND must be either true or false',
     ),
     true,
   );
@@ -345,6 +354,7 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'POSTMARK_INBOUND_PASSWORD=postmark-inbound-pass',
       'GOOGLE_CLIENT_ID=google-client-id',
       'GOOGLE_CLIENT_SECRET=google-client-secret',
+      'GMAIL_NATIVE_INBOUND=false',
       'GMAIL_PUBSUB_TOPIC=projects/shopkeeper-prod/topics/gmail-inbound',
       'GMAIL_PUBSUB_AUDIENCE=https://gateway.example.com/webhooks/gmail/push',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT=shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',

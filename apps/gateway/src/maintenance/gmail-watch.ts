@@ -7,6 +7,7 @@ import {
   isGmailApiError,
 } from '@shopkeeper/email';
 import { getEmailInboundMode } from '../config/env.js';
+import { isGmailNativeInboundEnabled } from '../config/runtime-config.js';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { emitOpsAlert } from '../ops-alerts.js';
@@ -122,12 +123,19 @@ function metadataWithGmailState(
 }
 
 function isNativeGmailIntegration(integration: GmailWatchIntegration): boolean {
+  if (!isGmailNativeInboundEnabled()) return false;
   if (getEmailInboundMode() === 'postmark') return false;
   if (getEmailProvider(integration) !== 'gmail' || !isRecord(integration.metadata)) {
     return false;
   }
   if (integration.metadata.inboundMode === 'postmark') return false;
-  return getGmailMetadata(integration.metadata)?.inboundStatus !== 'reauthorization_required';
+  const gmail = getGmailMetadata(integration.metadata);
+  if (gmail?.inboundStatus === 'reauthorization_required') return false;
+  return integration.metadata.inboundMode === 'hybrid'
+    || integration.metadata.inboundMode === 'native'
+    || gmail?.inboundStatus === 'pending'
+    || gmail?.inboundStatus === 'active'
+    || gmail?.inboundStatus === 'degraded';
 }
 
 function needsWatchRenewal(integration: GmailWatchIntegration, nowMs: number): boolean {

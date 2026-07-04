@@ -1,6 +1,6 @@
 "use client"
 
-import { useReducer } from "react"
+import { useEffect, useReducer } from "react"
 import { getEmailReauthorizePath } from "@shopkeeper/email/providers"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import { buildOAuthAuthUrl } from "@/lib/integrations/oauth-flow"
@@ -52,6 +52,7 @@ interface UseIntegrationCardActionsParams {
   config: PlatformConfig
   connected: Integration[]
   onConnect: (platform: string, email: string) => Promise<boolean>
+  onUpdateEmailAddress?: (integrationId: string, email: string) => Promise<boolean>
   onLaunchOAuth?: (url: string, onClosed?: () => void) => void
   onOpenChange: (open: boolean) => void
 }
@@ -60,6 +61,7 @@ export function useIntegrationCardActions({
   config,
   connected,
   onConnect,
+  onUpdateEmailAddress,
   onLaunchOAuth,
   onOpenChange,
 }: UseIntegrationCardActionsParams) {
@@ -68,6 +70,22 @@ export function useIntegrationCardActions({
 
   const setEmail = (nextEmail: string) => dispatchCardState({ type: "emailChanged", email: nextEmail })
   const setShop = (nextShop: string) => dispatchCardState({ type: "shopChanged", shop: nextShop })
+  const connectedIntegrationId = connected[0]?.id
+  const connectedFromEmail = connected[0]?.fromEmail
+  const connectedExternalAccountId = connected[0]?.externalAccountId
+
+  useEffect(() => {
+    if (config.connectType !== "email" || !connectedIntegrationId) return
+    dispatchCardState({
+      type: "emailChanged",
+      email: connectedFromEmail || connectedExternalAccountId || "",
+    })
+  }, [
+    config.connectType,
+    connectedExternalAccountId,
+    connectedFromEmail,
+    connectedIntegrationId,
+  ])
 
   async function handleEmailConnect() {
     if (!email) return
@@ -77,8 +95,11 @@ export function useIntegrationCardActions({
         event: "integration_connection_started",
         platform: "email",
       })
-      const ok = await onConnect(config.platform!, email)
-      if (ok) dispatchCardState({ type: "emailChanged", email: "" })
+      const integration = connected[0]
+      const ok = integration && onUpdateEmailAddress
+        ? await onUpdateEmailAddress(integration.id, email)
+        : await onConnect(config.platform!, email)
+      if (ok && !integration) dispatchCardState({ type: "emailChanged", email: "" })
     } finally {
       dispatchCardState({ type: "loadingChanged", loading: false })
     }

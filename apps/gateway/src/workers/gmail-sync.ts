@@ -12,6 +12,7 @@ import {
   parseMime,
 } from '@shopkeeper/email';
 import { getEmailInboundMode } from '../config/env.js';
+import { isGmailNativeInboundEnabled } from '../config/runtime-config.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import type { GmailSyncJobData, InboundJobData } from '../types.js';
@@ -75,6 +76,7 @@ function gmailMetadata(metadata: unknown): Record<string, unknown> | null {
 }
 
 function isNativeGmailInboundEnabled(integration: GmailSyncIntegration): boolean {
+  if (!isGmailNativeInboundEnabled()) return false;
   if (getEmailInboundMode() === 'postmark') return false;
   if (getEmailProvider(integration) !== 'gmail' || !isRecord(integration.metadata)) return false;
   if (integration.metadata.inboundMode === 'postmark') return false;

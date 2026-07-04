@@ -59,12 +59,14 @@ export function EmailForwardingSetupPanel({
   setEmail,
   loading,
   onSave,
+  showAddressEditor = true,
 }: {
   isConnected: boolean
   email: string
   setEmail: (v: string) => void
   loading: boolean
   onSave: () => void
+  showAddressEditor?: boolean
 }) {
   const [provider, setProvider] = useState<ForwardingProviderId>("google")
   const { data: org } = useOrg({ enabled: true })
@@ -73,7 +75,7 @@ export function EmailForwardingSetupPanel({
 
   return (
     <div className="space-y-5 bg-foreground/[0.02] px-4 py-4 sm:px-5 sm:py-5">
-      <div className="space-y-2">
+      {showAddressEditor && <div className="space-y-2">
         <div>
           <p className="text-[13px] font-semibold text-foreground/80">Your private forwarding address</p>
           <p className="mt-0.5 text-[12.5px] text-foreground/50">Copy this into your email provider&apos;s forwarding settings.</p>
@@ -88,7 +90,7 @@ export function EmailForwardingSetupPanel({
             <p className="text-sm text-foreground/35">Loading…</p>
           )}
         </div>
-      </div>
+      </div>}
 
       <div className="space-y-2">
         <p className="text-[13px] font-semibold text-foreground/80">Set up forwarding with</p>

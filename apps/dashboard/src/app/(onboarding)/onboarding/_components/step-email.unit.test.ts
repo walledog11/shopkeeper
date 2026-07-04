@@ -40,6 +40,7 @@ describe("StepEmail", () => {
       update: vi.fn(),
       emailConnected: true,
       emailIntegration: {
+        id: "gmail-integration",
         platform: "email",
         externalAccountId: "support@example.com",
         fromEmail: "support@example.com",
@@ -56,6 +57,8 @@ describe("StepEmail", () => {
 
     expect(html).toContain("Email connected")
     expect(html).toContain("support@example.com")
+    expect(html).toContain("Address customers use")
+    expect(html).toContain("existing Google Workspace alias")
     expect(html).toContain("Reconnect Gmail")
     expect(html).toContain("Connect Outlook")
   })
