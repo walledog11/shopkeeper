@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useRef } from "react";
 import { Reveal } from "./Reveal";
+import { SectionLabel } from "./SectionLabel";
 import { TypingBubble, type ChatMessage, type ClusterPosition } from "./chat-demo/shared";
 import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
 
@@ -65,7 +66,7 @@ function BriefingConversation() {
   return (
     <div
       ref={frameRef}
-      className="flex min-h-[560px] w-full flex-col justify-start gap-6 animate-[m-float_7s_ease-in-out_infinite] motion-reduce:animate-none md:h-[620px]"
+      className="flex min-h-[480px] w-full flex-col justify-start gap-6 animate-[m-float_7s_ease-in-out_infinite] motion-reduce:animate-none md:h-[540px]"
     >
       {visible.map((message, index) => {
         const cluster = clusterOf(visible, index);
@@ -96,7 +97,7 @@ function BriefingConversation() {
                 <div className="rounded-[22px] rounded-br-[8px] bg-[#2b2118] px-5 py-3.5 text-[15px] leading-relaxed text-[#f6f2eb] shadow-[0_14px_34px_rgba(43,33,24,0.2)]">
                   {message.text}
                 </div>
-                <span className="mt-1 pr-1 text-[11px] leading-none text-stone-400">Read {message.time}</span>
+                <span className="mt-1 pr-1 text-[11px] leading-none text-stone-500">Read {message.time}</span>
               </div>
             )}
           </div>
@@ -114,7 +115,7 @@ function BriefingConversation() {
 
 export function Integrations() {
   return (
-    <section id="briefing" className="relative isolate scroll-mt-24 overflow-hidden py-18">
+    <section id="briefing" className="relative isolate scroll-mt-24 overflow-hidden py-12">
       {/* Photographic wash band — placeholder photography, swap
           /atmosphere/integrations-leaves.jpg for the final shot. */}
       <div
@@ -132,18 +133,19 @@ export function Integrations() {
         <div className="m-grain absolute inset-0" />
       </div>
 
-      <div className="mx-auto grid max-w-6xl items-center gap-14 px-6 md:grid-cols-[0.8fr_1fr] md:gap-16">
+      <div className="mx-auto max-w-6xl px-6 text-center">
         <Reveal>
-          <h2 className="mb-5 text-[clamp(36px,4.5vw,60px)] font-bold leading-[1.1] tracking-[0.03em] [font-family:var(--m-hand)]">
+          <SectionLabel>every morning</SectionLabel>
+          <h2 className="mx-auto mb-5 max-w-[18ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1.05] tracking-[0.03em] [font-family:var(--m-hand)]">
             Wake up to a briefing, <em className="italic text-[var(--m-quill)]">not a backlog.</em>
           </h2>
-          <p className="max-w-[46ch] text-[16px] leading-relaxed text-stone-700">
+          <p className="mx-auto mb-14 max-w-[52ch] text-[16px] leading-relaxed text-stone-700">
             Every morning, Shopkeeper texts you what happened overnight — the questions it answered, the
             orders it fixed in Shopify, and the rare thing that actually needs your call.
           </p>
         </Reveal>
 
-        <Reveal delay={120}>
+        <Reveal delay={120} className="mx-auto max-w-[620px] text-left">
           <BriefingConversation />
         </Reveal>
       </div>

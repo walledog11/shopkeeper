@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Reveal } from "./Reveal";
+import { SectionLabel } from "./SectionLabel";
 
 const faqs = [
   {
@@ -58,8 +59,9 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 
 export function FAQ() {
   return (
-    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-24 text-center">
+    <section id="faq" className="mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
       <Reveal>
+        <SectionLabel>before you hire</SectionLabel>
         <h2 className="mx-auto mb-12 max-w-[20ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Things people ask{" "}
           <em className="italic text-[var(--m-quill)]">before they trust an AI.</em>

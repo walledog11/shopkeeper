@@ -6,6 +6,7 @@ import { InstagramScreen } from "./chat-demo/InstagramChatDemo";
 import { PhoneFrame } from "./chat-demo/PhoneFrame";
 import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
 import { InkCheck } from "./InkCheck";
+import { SectionLabel } from "./SectionLabel";
 import type { ChatMessage } from "./chat-demo/shared";
 
 type ChatVariant = "instagram" | "imessage";
@@ -225,7 +226,7 @@ function StepCopy({ feature }: { feature: Feature }) {
           </li>
         ))}
       </ul>
-      <p className="mt-7 w-fit -rotate-1 text-[21px] leading-none text-stone-500 [font-family:var(--m-hand)] md:ml-14">
+      <p className="mt-7 w-fit -rotate-1 text-[21px] leading-none text-stone-600 [font-family:var(--m-hand)] md:ml-14">
         — {feature.note}
       </p>
     </div>
@@ -299,7 +300,7 @@ function MobileCarousel() {
             {f.num}
           </button>
         ))}
-        <span className="ml-1.5 text-[17px] leading-none text-stone-400 [font-family:var(--m-hand)]">
+        <span className="ml-1.5 text-[17px] leading-none text-stone-500 [font-family:var(--m-hand)]">
           swipe →
         </span>
       </div>
@@ -319,8 +320,14 @@ function PhonePanel({
   index: number;
   started: boolean;
 }) {
-  const { count, typing } = useChatDemoAnimation(feature.chat.messages, null, started);
+  const { count: animCount, typing } = useChatDemoAnimation(feature.chat.messages, null, started);
   const Screen = feature.chat.variant === "instagram" ? InstagramScreen : IMessageScreen;
+  const total = feature.chat.messages.length;
+  // Never leave the screen blank: a parked panel keeps its whole thread, and the
+  // active/queued panel shows at least its first bubble as a resting state before
+  // the rest types in.
+  const count = state === "parked" ? total : Math.max(1, animCount);
+  const showTyping = state === "parked" ? false : typing && animCount >= 1;
 
   return (
     <div
@@ -339,7 +346,7 @@ function PhonePanel({
         avatarSrc={feature.chat.avatarSrc}
         messages={feature.chat.messages}
         count={count}
-        typing={typing}
+        typing={showTyping}
       />
       <div
         className={`pointer-events-none absolute inset-0 bg-black transition-opacity duration-700 motion-reduce:transition-none ${
@@ -373,23 +380,19 @@ export function Features() {
 
   return (
     <section id="how" className="scroll-mt-24">
-      <div className="mx-auto max-w-6xl px-6 pb-10 pt-16 md:pb-0 md:pt-20">
-        <div className="flex items-center justify-center gap-3 text-[22px] text-stone-500 [font-family:var(--m-hand)]">
-          <span className="h-px w-10 bg-stone-400/60" aria-hidden />
-          how it works
-          <span className="h-px w-10 bg-stone-400/60" aria-hidden />
-        </div>
+      <div className="mx-auto max-w-6xl px-6 pb-10 pt-12 md:pb-0">
+        <SectionLabel>how it works</SectionLabel>
 
         <MobileCarousel />
 
         <div className="hidden md:grid md:grid-cols-[1.15fr_1fr] md:gap-14">
-          <div className="py-[8vh]">
+          <div className="py-[6vh]">
             {FEATURES.map((f, i) => (
               <div
                 key={f.num}
                 ref={el => { stepRefs.current[i] = el; }}
                 data-step={i}
-                className="flex min-h-[88vh] flex-col justify-center"
+                className="flex min-h-[74vh] flex-col justify-center"
               >
                 <div
                   className={`transition-opacity duration-500 motion-reduce:transition-none ${
@@ -424,7 +427,7 @@ export function Features() {
                     />
                   ))}
                 </PhoneFrame>
-                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] text-stone-500 [font-family:var(--m-hand)]">
+                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] text-stone-600 [font-family:var(--m-hand)]">
                   {FEATURES.map((f, i) => (
                     <span
                       key={f.num}

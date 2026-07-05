@@ -2,7 +2,7 @@
 
 Extend the crumpled-paper / desk-stationery language across the marketing landing page. Several sections still speak generic-SaaS (flat pills, glyph checkmarks, straight rule lines, frosted-glass buttons) while sitting on the paper backdrop.
 
-**Status:** Phases 1–2 shipped. Phase 3 not started.
+**Status:** Phases 1–3 shipped.
 
 **Last reviewed:** 2026-07-04
 
@@ -28,11 +28,11 @@ Extend the crumpled-paper / desk-stationery language across the marketing landin
 
 All five were screenshot-judged at desktop (1440) and mobile (390); the sticky note and index cards were checked on both. The hero sticker must be judged from a **viewport** screenshot, not an element screenshot of the hero section — the `sticky` navbar overlaps a section-scoped shot and hides the badge (screenshot artifact, not a real overlap).
 
-## Phase 3 — texture & motion
+## Phase 3 — texture & motion — DONE
 
-9. **Postage-stamp perforated edges** on the channel logo chips in `Channels.tsx` — they're already dashed-border "stamps"; real perforation (radial-gradient punched holes) finishes the thought.
-10. **Papers "settling" on reveal.** For tilted cards, animate from flat to final ±1° tilt in the `Reveal` motion so notes read as being laid on the desk. Respect `prefers-reduced-motion` like the existing animations.
-11. **Coffee-ring stain or pencil margin doodle**, extremely faint, `aria-hidden`, in one section corner. Highest kitsch risk — one instance max, cut it if it doesn't survive the screenshot check.
+9. **Postage-stamp perforated edges.** ✅ `Channels.tsx` chips — dropped the dashed border for a real scalloped edge via a new `.m-perf-stamp` mask in `marketing.css`: four edge radial-gradient scallops intersected (`mask-composite: intersect`) so the perimeter is bitten but the interior + logo stay solid, plus a `drop-shadow` (which follows the masked alpha, so the scallops cast their own shadow — a box-shadow would stay rectangular). Chip fill nudged to `#efe9df` for contrast against the `#fdfbf7` cards; corner radius dropped to `3px`. Judged at 1440/390 and at an 8× element zoom.
+10. **Papers "settling" on reveal.** ✅ `Pricing.tsx` — each index card now animates from flat to its resting tilt via a new `m-settle` keyframe. **Tailwind v4 gotcha:** `rotate-*` sets the independent `rotate` property (not `transform`), so the keyframe animates `rotate` (an earlier `transform: rotate()` version stacked on top of the base tilt and double-rotated, then snapped). No forwards fill — once it lands, control returns to the element's own `rotate` and the hover `-translate-y-1` (which is the independent `translate` property in v4) keeps composing. Per-card `--m-tilt` + `animationDelay` match the existing `Reveal` stagger; `motion-reduce:animate-none` respects reduced motion. Verified by sampling computed `rotate` over time (0→−0.7deg, holds, no snap) and confirming hover still lifts.
+11. **Coffee-ring stain.** ✅ `Channels.tsx` — one faint `.m-coffee-ring` (radial-gradient annulus, darker rim / hollow center, ~0.12–0.15 alpha oxblood-brown, `aria-hidden`, `pointer-events-none`) sits in the section's empty left gutter, `hidden lg:block` (no room on mobile). Reads as an accidental desk mark, not decoration; survived the screenshot check. One instance only, per the kitsch cap.
 
 ## Flagged, not scheduled
 

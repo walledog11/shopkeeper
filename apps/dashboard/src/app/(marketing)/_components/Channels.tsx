@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HandUnderline } from "./HandUnderline";
 import { Reveal } from "./Reveal";
+import { SectionLabel } from "./SectionLabel";
 
 const moments: {
   time: string;
@@ -89,12 +90,13 @@ export function Channels() {
   }, []);
 
   return (
-    <section id="channels" className="relative mx-auto max-w-6xl scroll-mt-24 px-6 py-24 text-center">
+    <section id="channels" className="relative mx-auto max-w-6xl scroll-mt-24 px-6 py-12 text-center">
       <span
         aria-hidden
         className="m-coffee-ring pointer-events-none absolute left-1 top-[42%] hidden size-36 -translate-y-1/2 lg:block"
       />
       <Reveal>
+        <SectionLabel>everywhere you are</SectionLabel>
         <h2 className="mx-auto mb-5 max-w-[22ch] text-[clamp(36px,5vw,68px)] font-bold leading-[1] tracking-[0.03em] [font-family:var(--m-hand)]">
           Reach your new hire from{" "}
           <em className="italic text-[var(--m-quill)]">
@@ -126,13 +128,13 @@ export function Channels() {
         {moments.map((m, i) => (
           <div
             key={m.time}
-            className={`relative py-6 opacity-0 motion-reduce:opacity-100 sm:py-7 ${
+            className={`relative py-5 opacity-0 motion-reduce:opacity-100 sm:py-6 ${
               inView ? "animate-[m-rise_0.7s_ease-out_both] motion-reduce:animate-none" : ""
             }`}
             style={{ animationDelay: `${0.2 + i * 0.35}s` }}
           >
             <span
-              className={`mb-2 block pl-12 text-left text-[17px] font-bold leading-none text-stone-500 [font-family:var(--m-hand)] sm:absolute sm:top-1/2 sm:mb-0 sm:-translate-y-1/2 sm:pl-0 sm:text-[22px] ${
+              className={`mb-2 block pl-12 text-left text-[17px] font-bold leading-none text-stone-600 [font-family:var(--m-hand)] sm:absolute sm:top-1/2 sm:mb-0 sm:-translate-y-1/2 sm:pl-0 sm:text-[22px] ${
                 m.side === "left" ? "sm:left-[calc(50%+28px)]" : "sm:right-[calc(50%+28px)]"
               }`}
             >
@@ -161,7 +163,7 @@ export function Channels() {
         ))}
       </div>
 
-      <div className="pt-8 text-[24px] text-[var(--m-quill)] [font-family:var(--m-hand)]">
+      <div className="pt-6 text-[24px] text-[var(--m-quill)] [font-family:var(--m-hand)]">
         covering the night shift 🌙
       </div>
     </section>

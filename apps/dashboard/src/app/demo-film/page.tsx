@@ -181,7 +181,7 @@ function SceneIcon({ t }: { t: number }) {
             <div className="text-[26px] font-semibold text-[#161413]">Jess Martin</div>
             <div className="truncate text-[24px] text-stone-500">hey my order never arrived 😡</div>
           </div>
-          <span className="text-[22px] text-stone-400">9:41</span>
+          <span className="text-[22px] text-stone-400">2:14 AM</span>
         </div>
       </div>
     </div>
@@ -205,7 +205,7 @@ function SceneComplaint({ t }: { t: number }) {
         className="absolute left-[170px] top-[472px] text-[22px] text-stone-500 [font-family:var(--m-mono)]"
         style={{ opacity: seg(t, 5.6, 6.1) }}
       >
-        Jess Martin · order #1042 · 9:41 AM
+        Jess Martin · order #1042 · 2:14 AM
       </div>
       <div className="absolute left-[150px] top-[548px]" style={pop(t, 6.8)}>
         <div className="rounded-[40px] rounded-bl-xl bg-white px-12 py-9 text-[40px] leading-snug text-[#161413] shadow-sm">
@@ -271,8 +271,8 @@ const THREAD: ThreadMsg[] = [
     side: "agent",
     render: () => (
       <Bubble side="agent">
-        Jess&apos;s order <strong>#1042</strong>{" "}never arrived — tracking shows it stuck in transit for 6
-        days. She&apos;s emailed twice.
+        While you slept, Jess emailed twice — order <strong>#1042</strong>{" "}never arrived, tracking&apos;s
+        stuck in transit at 6 days.
       </Bubble>
     ),
   },
@@ -300,7 +300,7 @@ const THREAD: ThreadMsg[] = [
     render: () => (
       <Bubble side="user">
         <span className="font-semibold">Refund $42</span>
-        <span className="mt-1 block text-[20px] text-stone-500">Selected · 9:42</span>
+        <span className="mt-1 block text-[20px] text-stone-500">Selected · 7:04 AM</span>
       </Bubble>
     ),
   },
@@ -326,7 +326,7 @@ const THREAD: ThreadMsg[] = [
         </div>
         <p className="pt-4 text-[24px] leading-normal text-[#161413]">
           Hi Jess — I&apos;m so sorry your parcel got stuck. I&apos;ve refunded you in full today, and if it
-          still turns up, keep it on us. <span className="text-stone-500">— Maya</span>
+          still turns up, keep it on us.
         </p>
         {/* merchant tapback */}
         <div
@@ -434,9 +434,9 @@ function SceneThread({ t }: { t: number }) {
           <div className="flex items-center gap-2 text-[26px] font-semibold leading-tight text-[#161413]">
             Shopkeeper <VerifiedBadge size={22} />
           </div>
-          <div className="text-[20px] leading-tight text-stone-500">bot · connected to your Shopify</div>
+          <div className="text-[20px] leading-tight text-stone-500">your employee · connected to your Shopify</div>
         </div>
-        <span className="ml-auto text-[22px] text-stone-400">9:42</span>
+        <span className="ml-auto text-[22px] text-stone-400">7:03 AM</span>
       </div>
 
       {/* input bar */}
@@ -476,8 +476,8 @@ function SceneCapabilities({ t }: { t: number }) {
 
   return (
     <div className="absolute inset-0" style={{ opacity: o }}>
-      <h2 className="absolute inset-x-0 top-[108px] text-center text-[52px] tracking-tight text-[#161413] [font-family:var(--m-serif)]" style={rise(t, 24.4)}>
-        It runs the rest, <em className="italic text-[#9c9285]">too.</em>
+      <h2 className="absolute inset-x-0 top-[104px] text-center text-[60px] text-[#161413] [font-family:var(--m-hand)]" style={rise(t, 24.4)}>
+        It runs the rest, <span className="text-[#9c9285]">too.</span>
       </h2>
       <div className="absolute left-1/2 w-[840px] -translate-x-1/2 overflow-hidden" style={{ top: viewTop, height: viewH }}>
         <div style={{ transform: `translateY(${-scroll}px)` }}>
@@ -502,46 +502,95 @@ function SceneCapabilities({ t }: { t: number }) {
 
 /* ---------- scene 6: channels (30.0 – 35.2) ---------- */
 
-const TILES: { name: string; x: number; y: number; logo?: string; mark?: (s: number) => React.ReactNode }[] = [
-  { name: "Shopify", x: 110, y: 470, logo: "/logos/shopify.svg" },
-  { name: "Instagram", x: 245, y: 360, logo: "/logos/instagram-logo.png" },
-  { name: "Gmail", x: 385, y: 300, logo: "/logos/gmail.png" },
-  { name: "Email", x: 530, y: 355, logo: "/logos/email.svg" },
-  { name: "SMS", x: 665, y: 450, logo: "/logos/sms.svg" },
-  { name: "Telegram", x: 800, y: 545, mark: (s) => <TelegramMark size={s} /> },
-  { name: "WhatsApp", x: 935, y: 610, mark: (s) => <WhatsAppMark size={s} /> },
-  { name: "TikTok", x: 1065, y: 490, logo: "/logos/tiktok-logo.png" },
+const HUB = { x: 600, y: 566 };
+const RADIUS = 244;
+
+// Customer channels spaced evenly around the one employee. Offset 30° so the
+// top-center stays clear for the heading and nothing sits dead-center.
+const CHANNELS: { name: string; logo?: string; mark?: (s: number) => React.ReactNode }[] = [
+  { name: "Instagram", logo: "/logos/instagram-logo.png" },
+  { name: "Email", logo: "/logos/email.svg" },
+  { name: "iMessage", logo: "/logos/sms.svg" },
+  { name: "WhatsApp", mark: (s) => <WhatsAppMark size={s} /> },
+  { name: "Telegram", mark: (s) => <TelegramMark size={s} /> },
+  { name: "TikTok", logo: "/logos/tiktok-logo.png" },
 ];
+
+function channelPos(i: number) {
+  const theta = ((30 + i * 60) * Math.PI) / 180;
+  return { x: HUB.x + RADIUS * Math.sin(theta), y: HUB.y - RADIUS * Math.cos(theta) };
+}
 
 function SceneChannels({ t }: { t: number }) {
   const o = win(t, 30.0, 30.6, 34.4, 35.2);
   if (o === 0) return null;
 
+  const hubP = seg(t, 30.45, 31.05);
+
   return (
     <div className="absolute inset-0" style={{ opacity: o }}>
-      <h2 className="absolute inset-x-0 top-[130px] text-center text-[52px] leading-[1.2] tracking-tight text-[#161413] [font-family:var(--m-serif)]" style={rise(t, 30.2)}>
+      <h2 className="absolute inset-x-0 top-[86px] text-center text-[58px] leading-[1.12] text-[#161413] [font-family:var(--m-hand)]" style={rise(t, 30.2)}>
         Wherever your customers are,
         <br />
-        <em className="italic text-[#9c9285]">one employee across all of it.</em>
+        <span className="text-[#9c9285]">one employee across all of it.</span>
       </h2>
-      {TILES.map((tile, i) => {
-        const p = seg(t, 30.7 + i * 0.13, 31.25 + i * 0.13);
-        const float = Math.sin(t * 1.3 + i * 1.7) * 7;
+
+      {/* spokes from the one employee out to every channel */}
+      <svg className="absolute inset-0" viewBox="0 0 1200 900" fill="none" aria-hidden>
+        {CHANNELS.map((c, i) => {
+          const { x, y } = channelPos(i);
+          const fy = Math.sin(t * 1.1 + i) * 4;
+          const p = easeOut(seg(t, 30.9 + i * 0.08, 31.6 + i * 0.08));
+          return (
+            <line
+              key={c.name}
+              x1={HUB.x}
+              y1={HUB.y}
+              x2={x}
+              y2={y + fy}
+              stroke="rgba(22,20,19,0.12)"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeDasharray={RADIUS}
+              strokeDashoffset={RADIUS * (1 - p)}
+            />
+          );
+        })}
+      </svg>
+
+      {/* the one employee, at the center */}
+      <div
+        className="absolute"
+        style={{ left: HUB.x - 70, top: HUB.y - 70, opacity: Math.min(1, hubP * 2), transform: `scale(${0.5 + 0.5 * back(hubP)})` }}
+      >
+        <div className="relative">
+          <AppIcon size={140} />
+          <span className="absolute -bottom-1.5 -right-1.5">
+            <VerifiedBadge size={40} />
+          </span>
+        </div>
+      </div>
+
+      {/* channels around the ring */}
+      {CHANNELS.map((c, i) => {
+        const { x, y } = channelPos(i);
+        const fy = Math.sin(t * 1.1 + i) * 4;
+        const p = seg(t, 31.0 + i * 0.1, 31.55 + i * 0.1);
         return (
           <div
-            key={tile.name}
-            className="absolute grid size-[112px] place-items-center rounded-[28px] bg-white shadow-[0_18px_38px_rgba(43,33,24,0.16)]"
+            key={c.name}
+            className="absolute grid size-[108px] place-items-center rounded-[26px] bg-white shadow-[0_18px_38px_rgba(43,33,24,0.16)]"
             style={{
-              left: tile.x - 56,
-              top: tile.y - 56 + float,
+              left: x - 54,
+              top: y - 54 + fy,
               opacity: Math.min(1, p * 2),
               transform: `scale(${0.55 + 0.45 * back(p)})`,
             }}
           >
-            {tile.mark ? (
-              tile.mark(58)
+            {c.mark ? (
+              c.mark(56)
             ) : (
-              <Image src={tile.logo as string} alt={tile.name} width={58} height={58} className="size-[58px] object-contain" />
+              <Image src={c.logo as string} alt={c.name} width={56} height={56} className="size-[56px] object-contain" />
             )}
           </div>
         );
@@ -561,10 +610,10 @@ function SceneOutro({ t }: { t: number }) {
       <div className="absolute left-1/2 top-[300px] -translate-x-1/2" style={pop(t, 35.2)}>
         <AppIcon size={116} />
       </div>
-      <h1 className="absolute inset-x-0 top-[448px] text-center text-[96px] tracking-[-0.02em] text-[#161413] [font-family:var(--m-serif)]" style={rise(t, 35.5)}>
+      <h1 className="absolute inset-x-0 top-[430px] text-center text-[132px] leading-none tracking-[0.01em] text-[#161413] [font-family:var(--m-hand)]" style={rise(t, 35.5)}>
         Shopkeeper
       </h1>
-      <p className="absolute inset-x-0 top-[590px] text-center text-[38px] italic text-[#9c9285] [font-family:var(--m-serif)]" style={rise(t, 36.1)}>
+      <p className="absolute inset-x-0 top-[586px] text-center text-[44px] text-[#9c9285] [font-family:var(--m-hand)]" style={rise(t, 36.1)}>
         your newest employee.
       </p>
     </div>

@@ -65,7 +65,7 @@ export function Hero() {
         </div>
         <video
           aria-label="Shopkeeper demo film"
-          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4"
+          src="https://cfkjygwgphgv2dom.public.blob.vercel-storage.com/demo-film.mp4?v=2"
           poster="/atmosphere/demo-poster.webp"
           autoPlay
           muted
@@ -76,7 +76,14 @@ export function Hero() {
         />
       </div>
 
-      <div className="mt-9 flex flex-wrap items-center justify-center gap-3" style={rise(420)}>
+      <p
+        className="mx-auto mt-5 max-w-[min(520px,88vw)] -rotate-[0.6deg] text-[17px] leading-none text-stone-600 [font-family:var(--m-hand)]"
+        style={rise(380)}
+      >
+        Live today for support — order ops, inventory &amp; suppliers on the way.
+      </p>
+
+      <div className="mt-7 flex flex-wrap items-center justify-center gap-3" style={rise(420)}>
         <GlassLink href="/signup" variant="primary" className="px-6 py-3">
           Hire Shopkeeper — free for 14 days
         </GlassLink>
