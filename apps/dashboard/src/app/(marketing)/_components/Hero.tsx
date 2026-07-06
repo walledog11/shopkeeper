@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { GlassLink } from "./GlassLink";
+import { InkDoodle } from "./Marginalia";
 
 function rise(delayMs: number) {
   return {
@@ -17,6 +18,12 @@ export function Hero() {
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[600px] [background:radial-gradient(58%_52%_at_50%_40%,rgba(249,245,238,0.95)_0%,rgba(249,245,238,0.55)_42%,transparent_72%)]"
+      />
+
+      <InkDoodle
+        kind="asterisk"
+        delay={700}
+        className="pointer-events-none absolute left-[8%] top-[290px] hidden w-6 -rotate-6 text-stone-900/35 lg:block"
       />
 
       <div className="mb-7 inline-block" style={rise(0)}>

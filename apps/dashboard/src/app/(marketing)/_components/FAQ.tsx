@@ -31,10 +31,12 @@ const faqs = [
   },
 ];
 
+/* One ruled row on the notebook sheet — the rule runs full-bleed to the sheet
+   edges (negative margins undo the sheet padding), like a printed line. */
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="border-t border-solid border-stone-900/10">
+    <div className="-ml-14 -mr-6 border-t border-solid border-[#88aac9]/40 pl-14 pr-6 sm:-ml-20 sm:-mr-10 sm:pl-20 sm:pr-10">
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -50,7 +52,12 @@ function FaqItem({ q, a }: { q: string; a: string }) {
         }`}
       >
         <div className="overflow-hidden">
-          <div className="pb-6 text-sm leading-[1.6] text-stone-700">{a}</div>
+          <div className="flex gap-2.5 pb-6 text-sm leading-[1.6] text-stone-700">
+            <span aria-hidden className="text-[20px] leading-[1.1] [color:var(--m-pen)] [font-family:var(--m-hand)]">
+              A.
+            </span>
+            <span>{a}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -69,10 +76,21 @@ export function FAQ() {
       </Reveal>
 
       <Reveal delay={120} className="mx-auto max-w-[780px] text-left">
-        {faqs.map(item => (
-          <FaqItem key={item.q} {...item} />
-        ))}
-        <div className="border-t border-solid border-stone-900/10" />
+        {/* Ruled notebook sheet: pale-blue printed rules, red margin line, taped
+            to the desk at the top. Questions are the printed matter; answers come
+            back in pen. */}
+        <div className="relative rounded-[3px] border border-stone-900/10 bg-[#fcfaf4] pl-14 pr-6 pt-4 shadow-[0_28px_60px_-28px_rgba(43,33,24,0.4),0_8px_20px_-10px_rgba(43,33,24,0.14)] sm:pl-20 sm:pr-10">
+          <span
+            aria-hidden
+            className="absolute -top-2 left-1/2 h-[18px] w-24 -translate-x-1/2 -rotate-[3deg] border-x border-stone-400/20 bg-stone-100/50 shadow-[0_1px_2px_rgba(22,20,19,0.07)] backdrop-blur-[1px]"
+          />
+          <span aria-hidden className="absolute inset-y-0 left-9 w-px bg-[#c05a45]/50 sm:left-14" />
+          <span aria-hidden className="absolute inset-y-0 left-[calc(2.25rem+3px)] w-px bg-[#c05a45]/25 sm:left-[calc(3.5rem+3px)]" />
+          {faqs.map(item => (
+            <FaqItem key={item.q} {...item} />
+          ))}
+          <div className="-ml-14 -mr-6 border-t border-solid border-[#88aac9]/40 pb-5 sm:-ml-20 sm:-mr-10" />
+        </div>
       </Reveal>
     </section>
   );

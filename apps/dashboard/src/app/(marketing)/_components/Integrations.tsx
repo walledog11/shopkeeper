@@ -6,6 +6,7 @@ import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 import { TypingBubble, type ChatMessage, type ClusterPosition } from "./chat-demo/shared";
 import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
+import { InkDoodle } from "./Marginalia";
 
 type BriefingMessage = ChatMessage & { divider?: string };
 
@@ -145,7 +146,13 @@ export function Integrations() {
           </p>
         </Reveal>
 
-        <Reveal delay={120} className="mx-auto max-w-[620px] text-left">
+        <Reveal delay={120} className="relative mx-auto max-w-[620px] text-left">
+          {/* Pen arrow from the gutter at the first briefing bubble */}
+          <InkDoodle
+            kind="arrow"
+            delay={900}
+            className="pointer-events-none absolute -left-28 top-8 hidden w-[72px] opacity-70 [color:var(--m-pen)] lg:block"
+          />
           <BriefingConversation />
         </Reveal>
       </div>

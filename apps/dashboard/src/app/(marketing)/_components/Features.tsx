@@ -6,6 +6,7 @@ import { InstagramScreen } from "./chat-demo/InstagramChatDemo";
 import { PhoneFrame } from "./chat-demo/PhoneFrame";
 import { useChatDemoAnimation } from "./chat-demo/useChatDemoAnimation";
 import { InkCheck } from "./InkCheck";
+import { InkDoodle } from "./Marginalia";
 import { SectionLabel } from "./SectionLabel";
 import type { ChatMessage } from "./chat-demo/shared";
 
@@ -228,6 +229,13 @@ function StepCopy({ feature }: { feature: Feature }) {
       </ul>
       <p className="mt-7 w-fit -rotate-1 text-[21px] leading-none text-stone-600 [font-family:var(--m-hand)] md:ml-14">
         — {feature.note}
+        {feature.num === "01" && (
+          <InkDoodle
+            kind="tally"
+            delay={400}
+            className="ml-2.5 inline-block h-[0.8em] w-auto align-[-0.08em] text-stone-900/40"
+          />
+        )}
       </p>
     </div>
   );
@@ -427,7 +435,7 @@ export function Features() {
                     />
                   ))}
                 </PhoneFrame>
-                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] text-stone-600 [font-family:var(--m-hand)]">
+                <div className="pointer-events-none absolute -left-48 bottom-24 h-16 w-[160px] -rotate-3 text-right text-[21px] leading-[1.15] opacity-85 [color:var(--m-pen)] [font-family:var(--m-hand)]">
                   {FEATURES.map((f, i) => (
                     <span
                       key={f.num}

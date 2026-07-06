@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { HandUnderline } from "./HandUnderline";
+import { InkDoodle } from "./Marginalia";
 import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 
@@ -109,6 +110,12 @@ export function Channels() {
       </Reveal>
 
       <div ref={timelineRef} className="relative mx-auto max-w-[660px]">
+        {/* Pen "!!" beside the one moment that needs the merchant's call */}
+        <InkDoodle
+          kind="bangbang"
+          delay={300}
+          className="pointer-events-none absolute -right-12 bottom-24 hidden w-5 rotate-6 opacity-75 [color:var(--m-pen)] xl:block"
+        />
         <svg
           aria-hidden
           className="absolute left-[18px] top-0 h-full w-10 -translate-x-1/2 sm:left-1/2"

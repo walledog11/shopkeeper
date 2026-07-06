@@ -88,6 +88,7 @@ jobs:
     needs: [secret-scan, lint, unit]
     runs-on: ubuntu-latest
     env:
+      APP_URL: https://app.example.com
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: test-clerk-publishable-key
     steps:
       - uses: actions/checkout@v4

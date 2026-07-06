@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { CONTACT_EMAIL } from "@/lib/brand";
 import { InkCheck } from "./InkCheck";
+import { InkDoodle } from "./Marginalia";
 import { Reveal } from "./Reveal";
 import { SectionLabel } from "./SectionLabel";
 import { cn } from "@/lib/ui/cn";
@@ -63,7 +64,25 @@ export function Pricing() {
           Costs less than <em className="italic text-[var(--m-quill)]">a part-time hire.</em>
         </h2>
         <p className="mx-auto mb-14 max-w-[48ch] text-[16px] leading-relaxed text-stone-700">
-          Every plan starts with 14 days free. No credit card, no &ldquo;talk to sales&rdquo; maze.
+          Every plan starts with{" "}
+          <span className="relative inline-block whitespace-nowrap">
+            14 days free
+            <InkDoodle
+              kind="ellipse"
+              delay={500}
+              className="pointer-events-none absolute -inset-x-2 -inset-y-1 h-[calc(100%+8px)] w-[calc(100%+16px)] opacity-70 [color:var(--m-pen)]"
+            />
+          </span>
+          . No credit card, no{" "}
+          <span className="relative inline-block whitespace-nowrap">
+            &ldquo;talk to sales&rdquo;
+            <InkDoodle
+              kind="scribble"
+              delay={900}
+              className="pointer-events-none absolute inset-x-0 top-1/2 h-[0.55em] w-full -translate-y-1/2 text-stone-900/50"
+            />
+          </span>{" "}
+          maze.
         </p>
       </Reveal>
 
