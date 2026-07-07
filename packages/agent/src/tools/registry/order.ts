@@ -1,7 +1,10 @@
 import { noShopify, cancelReasons, requireShopify, returnReasons } from "./helpers.js";
 import { arrayArg, booleanArg, defineTool, numberArg, stringArg } from "./schema.js";
 import type {
+  AttachReturnLabelInput,
   CancelOrderInput,
+  CreateExchangeInput,
+  CreateGiftCardInput,
   CreateRefundInput,
   CreateReturnInput,
   CreateShopifyOrderInput,
@@ -10,6 +13,7 @@ import type {
   GetOrderTrackingInput,
   GetShopifyOrdersInput,
   IssueDiscountInput,
+  IssueStoreCreditInput,
   UpdateShopifyOrderAddressInput,
 } from "./types.js";
 
@@ -232,6 +236,101 @@ export const ORDER_TOOL_DEFINITIONS = [
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
       const shopify = requireShopify(ctx);
       return shopify ? deps.createReturn(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "create_exchange",
+    description:
+      "Set up an exchange on a fulfilled Shopify order: opens a return for the item the customer is sending back and records the replacement variant to ship once the return is processed. Use this instead of create_refund when the customer wants a different size, color, or variant and is keeping their money with the store. No money moves - the customer is not refunded or charged. Only works for items that have shipped; for unshipped orders use edit_shopify_order to swap items directly. The replacement must cost the same or less than the returned item - if it costs more, the customer would owe a balance, so escalate to the merchant instead of calling this.",
+    fields: {
+      order_id: stringArg("Shopify order ID (numeric). Use the id field from the orders context.", { required: true }),
+      variant_id: stringArg("Variant ID of the item the customer is sending back, from the orders context.", { required: true }),
+      exchange_variant_id: stringArg("Variant ID of the replacement item to ship instead. Use search_shopify_products to find it if it is not in context.", { required: true }),
+      quantity: numberArg("How many units to exchange. Defaults to 1."),
+      reason: stringArg("Why the item is coming back.", { enum: returnReasons }),
+    },
+    category: "action",
+    group: "order",
+    label: "Set up exchange",
+    planStepLabel: "Set up exchange",
+    execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.createExchange(input, shopify) : noShopify;
+    },
+  }),
+  defineTool({
+    name: "issue_store_credit",
+    description:
+      "Add store credit to the customer's account as a goodwill gesture that keeps the money with the store. The credit applies automatically at checkout when the customer is logged in - no code needed. Prefer this over create_refund when the customer is owed money back but is staying with the store; prefer issue_discount for minor inconveniences that don't owe money. The amount counts against the same workspace caps as refunds. Requires the store to have store credit enabled - if this tool fails saying store credit is unavailable, call create_gift_card for the same amount instead.",
+    fields: {
+      customer_id: stringArg("Shopify customer ID (numeric).", { required: true }),
+      amount: stringArg("Amount of store credit in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
+      expires_in_days: numberArg("Optional whole number of days until the credit expires. Omit for no expiry."),
+    },
+    category: "action",
+    group: "order",
+    label: "Issued store credit",
+    planStepLabel: "Issue store credit",
+    policy: {
+      refundAmountLimits: true,
+      dailyRefundSpendLimit: true,
+    },
+    execute: async (input: IssueStoreCreditInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      if (!shopify) return noShopify;
+
+      const credit = await deps.issueStoreCredit(input, shopify);
+      if (credit.spentCents !== null && credit.spentCents > 0) {
+        await deps.incrementDailyRefundSpendCents(ctx.orgId, credit.spentCents);
+      }
+      return credit;
+    },
+  }),
+  defineTool({
+    name: "create_gift_card",
+    description:
+      "Create a Shopify gift card as a goodwill gesture that keeps the money with the store. Always pass customer_id when known - Shopify then emails the gift card code to the customer, so your reply can say the code is on its way by email. Without customer_id the code is only shown once in the tool result and your reply MUST include it. Works for any store (unlike issue_store_credit, which needs store credit enabled). Prefer this or issue_store_credit over create_refund when the customer is owed money back but is staying with the store. The amount counts against the same workspace caps as refunds.",
+    fields: {
+      amount: stringArg("Gift card value in the store's currency (e.g. '25.00'). Must be within the workspace refund cap.", { required: true }),
+      customer_id: stringArg("Shopify customer ID (numeric). Always provide it when known - Shopify emails the gift card code to this customer."),
+      reason: stringArg("Short internal reason for the gesture (e.g. 'damaged item'). Used only as a note inside Shopify."),
+      expires_in_days: numberArg("Optional whole number of days until the gift card expires. Omit for no expiry."),
+    },
+    category: "action",
+    group: "order",
+    label: "Created gift card",
+    planStepLabel: "Create gift card",
+    policy: {
+      refundAmountLimits: true,
+      dailyRefundSpendLimit: true,
+    },
+    execute: async (input: CreateGiftCardInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      if (!shopify) return noShopify;
+
+      const giftCard = await deps.createGiftCard(input, shopify);
+      if (giftCard.spentCents !== null && giftCard.spentCents > 0) {
+        await deps.incrementDailyRefundSpendCents(ctx.orgId, giftCard.spentCents);
+      }
+      return giftCard;
+    },
+  }),
+  defineTool({
+    name: "attach_return_label",
+    description:
+      "Attach a return shipping label (a URL to the label file, e.g. a PDF) to the open return on a Shopify order, creating the reverse delivery. Use this after the merchant provides a label URL - typically as their answer to an ask_operator question. Requires an open return on the order: open one first with create_return or create_exchange. After attaching, your reply to the customer MUST include the label link so they can ship the items back.",
+    fields: {
+      order_id: stringArg("Shopify order ID (numeric) whose open return the label belongs to.", { required: true }),
+      label_url: stringArg("Direct URL to the label file provided by the merchant.", { required: true }),
+      tracking_number: stringArg("Tracking number for the return shipment, if the merchant provided one."),
+    },
+    category: "action",
+    group: "order",
+    label: "Attached return label",
+    planStepLabel: "Attach return label",
+    execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {
+      const shopify = requireShopify(ctx);
+      return shopify ? deps.attachReturnLabel(input, shopify) : noShopify;
     },
   }),
 ] as const;

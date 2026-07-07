@@ -25,6 +25,7 @@ let initializationAttempted = false;
 const ACTIVATION_INBOUND_CHANNELS: DbChannelType[] = [
   'email',
   'ig_dm',
+  'tiktok',
   'imessage',
   'sms',
 ];

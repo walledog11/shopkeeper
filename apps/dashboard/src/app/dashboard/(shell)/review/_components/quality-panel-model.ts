@@ -95,7 +95,10 @@ export const STORE_ACTION_TOOLS = [
   "cancel_order",
   "create_shopify_order",
   "edit_shopify_order",
+  "create_exchange",
   "update_shopify_order_address",
+  "issue_store_credit",
+  "create_gift_card",
   "issue_discount",
   "flag_order",
 ] as const

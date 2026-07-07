@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "tunnel": "node ../../scripts/start-ngrok.mjs",
     "dev": "concurrently --kill-others-on-fail --names \"server,worker\" --prefix-colors \"bgBlue.bold,bgMagenta.bold\" \"tsx watch src/index.ts\" \"tsx watch src/worker.ts\"",

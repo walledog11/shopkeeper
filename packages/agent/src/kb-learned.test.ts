@@ -57,4 +57,22 @@ describe("kb-learned", () => {
       saveToKb: false,
     })).not.toContain("knowledge base");
   });
+
+  it("buildMerchantAnswerPlanningInstruction adds the attach step for label-URL answers", () => {
+    const labelInstruction = buildMerchantAnswerPlanningInstruction({
+      baseInstruction: "Reply to the customer about their return.",
+      question: "Can you reply with a return label URL for order #11111?",
+      answer: "https://labels.example.com/rma-11111.pdf",
+      saveToKb: true,
+    });
+    expect(labelInstruction).toContain("call attach_return_label");
+    expect(labelInstruction).toContain("do NOT call create_return");
+
+    expect(buildMerchantAnswerPlanningInstruction({
+      baseInstruction: "Reply to the customer.",
+      question: "Do we ship globally?",
+      answer: "Yes — details at https://example.com/shipping.",
+      saveToKb: true,
+    })).not.toContain("attach_return_label");
+  });
 });

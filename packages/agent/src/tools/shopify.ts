@@ -1,8 +1,12 @@
 export {
+  attachReturnLabel,
   cancelOrder,
+  createExchange,
+  createGiftCard,
   createRefund,
   createReturn,
   issueDiscount,
+  issueStoreCredit,
   createShopifyOrder,
   editShopifyOrder,
   getOrderByName,

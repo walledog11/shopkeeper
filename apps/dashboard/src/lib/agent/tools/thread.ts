@@ -45,6 +45,9 @@ function agentReplyDispatchError(
   if (channelType === CHANNEL_TYPE.IG_DM && result.providerStatus !== undefined) {
     return toolError(`Error: Instagram dispatch failed (${result.providerStatus}).`);
   }
+  if (channelType === CHANNEL_TYPE.TIKTOK && result.providerStatus !== undefined) {
+    return toolError(`Error: TikTok Shop dispatch failed (${result.providerStatus}).`);
+  }
   if (result.error === "Email not configured" && result.detail) {
     return toolError(`Error: email not configured — ${result.detail}`);
   }
@@ -54,6 +57,9 @@ function agentReplyDispatchError(
 
   const agentMessage = {
     "No Instagram integration configured": "no Instagram integration configured",
+    "No TikTok Shop integration configured": "no TikTok Shop integration configured",
+    "TikTok Shop messaging is not configured": "TikTok Shop messaging is not configured",
+    "TikTok Shop token expired": "TikTok Shop token expired",
     "No iMessage integration configured": "no iMessage integration configured",
     "No inbound iMessage conversation to reply into":
       "can't reply on iMessage — the customer must message first (no open iMessage conversation to reply into)",
@@ -92,6 +98,7 @@ export async function sendReply(
   if (!thread) return toolError("Error: thread not found.");
   if (
     thread.channelType !== CHANNEL_TYPE.IG_DM &&
+    thread.channelType !== CHANNEL_TYPE.TIKTOK &&
     thread.channelType !== CHANNEL_TYPE.EMAIL &&
     thread.channelType !== CHANNEL_TYPE.IMESSAGE
   ) {
@@ -112,6 +119,9 @@ export async function sendReply(
 
   if (thread.channelType === CHANNEL_TYPE.IG_DM) {
     return toolOk(`Reply sent to customer via Instagram DM.`);
+  }
+  if (thread.channelType === CHANNEL_TYPE.TIKTOK) {
+    return toolOk(`Reply sent to customer via TikTok Shop.`);
   }
   // iMessage has no delivery confirmation — the send is queued, not confirmed
   // delivered. Say "queued" so the agent never implies delivery certainty.

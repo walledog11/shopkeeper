@@ -141,6 +141,33 @@ export interface CreateReturnInput {
     | "other";
 }
 
+export interface IssueStoreCreditInput {
+  customer_id: string;
+  amount: string;
+  expires_in_days?: number;
+}
+
+export interface CreateGiftCardInput {
+  amount: string;
+  customer_id?: string;
+  reason?: string;
+  expires_in_days?: number;
+}
+
+export interface CreateExchangeInput {
+  order_id: string;
+  variant_id: string;
+  exchange_variant_id: string;
+  quantity?: number;
+  reason?: CreateReturnInput["reason"];
+}
+
+export interface AttachReturnLabelInput {
+  order_id: string;
+  label_url: string;
+  tracking_number?: string;
+}
+
 export interface GetOrderTrackingInput {
   order_id: string;
 }
@@ -164,6 +191,10 @@ export type ToolGroup =
 
 export interface RefundToolResult extends ToolResult {
   refundedCents: number | null;
+}
+
+export interface SpendToolResult extends ToolResult {
+  spentCents: number | null;
 }
 
 export interface KnowledgeBaseToolArticle {
@@ -198,6 +229,10 @@ export interface ToolExecutionDeps {
   editShopifyOrder(input: EditShopifyOrderInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   issueDiscount(input: IssueDiscountInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   createReturn(input: CreateReturnInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  createExchange(input: CreateExchangeInput, ctx: ShopifyToolContext): Promise<ToolResult>;
+  issueStoreCredit(input: IssueStoreCreditInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
+  createGiftCard(input: CreateGiftCardInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
+  attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
   incrementDailyRefundSpendCents(orgId: string, cents: number): Promise<unknown>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;

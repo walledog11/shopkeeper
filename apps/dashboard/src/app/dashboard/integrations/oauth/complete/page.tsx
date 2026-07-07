@@ -11,13 +11,14 @@ import {
   OAUTH_DONE_MESSAGE_TYPE,
 } from "@/lib/integrations/oauth-flow";
 
-const CONNECTED_VALUES = new Set(["instagram", "shopify", "gmail", "outlook"]);
+const CONNECTED_VALUES = new Set(["instagram", "shopify", "gmail", "outlook", "tiktok-shop"]);
 
 const CONNECTED_LABELS: Record<string, string> = {
   shopify: "Shopify",
   instagram: "Instagram",
   gmail: "Gmail",
   outlook: "Outlook",
+  "tiktok-shop": "TikTok Shop",
 };
 
 function safeConnected(value: string | null): string | null {

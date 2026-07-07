@@ -63,10 +63,12 @@ export default function IntegrationsPageClient({
   telegramBotUsername,
   imessageHandle,
   gmailNativeInboundEnabled,
+  tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
+  tiktokShopConfigured: boolean
 }) {
   return (
     <Suspense fallback={null}>
@@ -74,6 +76,7 @@ export default function IntegrationsPageClient({
         telegramBotUsername={telegramBotUsername}
         imessageHandle={imessageHandle}
         gmailNativeInboundEnabled={gmailNativeInboundEnabled}
+        tiktokShopConfigured={tiktokShopConfigured}
       />
     </Suspense>
   )
@@ -83,10 +86,12 @@ function IntegrationsPageContent({
   telegramBotUsername,
   imessageHandle,
   gmailNativeInboundEnabled,
+  tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
+  tiktokShopConfigured: boolean
 }) {
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
@@ -115,6 +120,7 @@ function IntegrationsPageContent({
       setOpenId('gmail')
     }
     else if (connected === 'outlook') showToast('success', 'Outlook connected.')
+    else if (connected === 'tiktok-shop') showToast('success', 'TikTok Shop connected.')
     else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
   }, [searchParams, showToast])
 
@@ -129,6 +135,8 @@ function IntegrationsPageContent({
       showToast('success', 'Gmail connected.')
     } else if (payload.connected === 'outlook') {
       showToast('success', 'Outlook connected.')
+    } else if (payload.connected === 'tiktok-shop') {
+      showToast('success', 'TikTok Shop connected.')
     } else if (payload.error) {
       showToast('error', OAUTH_ERROR_MESSAGES[payload.error] ?? 'An unexpected error occurred.')
     }
@@ -232,9 +240,21 @@ function IntegrationsPageContent({
     [telegramBotUsername, telegramStatus?.botUsername],
   )
   const showTelegram = shouldShowTelegramIntegration(telegramAvailability)
+  const runtimePlatformConfig = useMemo(
+    () => PLATFORM_CONFIG.map(def => def.id === 'tiktok-shop'
+      ? {
+          ...def,
+          comingSoon: !tiktokShopConfigured,
+          description: tiktokShopConfigured
+            ? def.description
+            : 'TikTok Shop buyer messaging is in beta. Configure Partner Center credentials to enable OAuth.',
+        }
+      : def),
+    [tiktokShopConfigured],
+  )
   const visiblePlatformConfig = useMemo(
-    () => filterTelegramPlatformConfigs(PLATFORM_CONFIG, telegramAvailability),
-    [telegramAvailability],
+    () => filterTelegramPlatformConfigs(runtimePlatformConfig, telegramAvailability),
+    [runtimePlatformConfig, telegramAvailability],
   )
   const platformConfigsByChannelKind = useMemo(() => ({
     support: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'support'),
@@ -378,7 +398,7 @@ function IntegrationsPageContent({
               section.kind,
               section.title,
               section.description,
-              section.kind === 'support' ? 5 : 3,
+              section.kind === 'support' ? 6 : 3,
             ))}
           </div>
         )}

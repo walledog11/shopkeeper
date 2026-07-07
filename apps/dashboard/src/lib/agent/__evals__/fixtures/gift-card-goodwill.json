@@ -1,0 +1,49 @@
+{
+  "id": "gift-card-goodwill",
+  "description": "Merchant instructs the agent (via the ticket instruction) to send the customer a $20 gift card for a botched embroidery job. The agent must create the gift card with the customer attached (so Shopify emails them the code - the planned reply cannot contain a code that does not exist yet) and reply about the gesture without refunding.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Rosa Nguyen",
+    "customerPlatformId": "rosa@example.com",
+    "shopifyCustomerId": "10000009090",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The custom embroidery on the tote from order #9090 is crooked and the thread is already fraying. Pretty disappointed with the quality." }
+    ],
+    "simulateToolResults": [
+      { "tool": "create_gift_card", "result": "Created a $20.00 gift card with code gjh3 k2m9 p4qr 8stv. Shopify is emailing the code to the customer; include it in your reply too when you can." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000009090",
+        "name": "#9090",
+        "created_at": "2026-06-22T11:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "38.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_9090",
+            "title": "Embroidered Canvas Tote",
+            "quantity": 1,
+            "variant_id": "710000009090",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Apologize for the embroidery quality and send them a $20 gift card as a goodwill gesture.",
+  "expectedPlan": {
+    "mustCallTools": ["create_gift_card", "send_reply"],
+    "mustNotCallTools": ["create_refund", "cancel_order", "escalate_to_human"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_gift_card", "inputIncludes": { "amount": "20", "customer_id": "10000009090" } }
+    ]
+  }
+}

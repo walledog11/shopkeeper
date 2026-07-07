@@ -11,6 +11,7 @@ const channelHandlers = vi.hoisted(() => ({
   handleEmailJob: vi.fn(),
   handleIgDmJob: vi.fn(),
   handleShopifyJob: vi.fn(),
+  handleTikTokShopJob: vi.fn(),
 }));
 
 let processor: ((job: { id: string; data: InboundJobData }) => Promise<void>) | undefined;
@@ -41,6 +42,7 @@ beforeEach(() => {
   channelHandlers.handleEmailJob.mockClear();
   channelHandlers.handleIgDmJob.mockClear();
   channelHandlers.handleShopifyJob.mockClear();
+  channelHandlers.handleTikTokShopJob.mockClear();
   processor = undefined;
 });
 
@@ -67,5 +69,6 @@ describe('createInboundWorker', () => {
     expect(channelHandlers.handleEmailJob).not.toHaveBeenCalled();
     expect(channelHandlers.handleIgDmJob).not.toHaveBeenCalled();
     expect(channelHandlers.handleShopifyJob).not.toHaveBeenCalled();
+    expect(channelHandlers.handleTikTokShopJob).not.toHaveBeenCalled();
   });
 });

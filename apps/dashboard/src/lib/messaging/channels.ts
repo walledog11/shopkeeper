@@ -32,8 +32,8 @@ const CHANNEL_INFO: Record<ChannelType, ChannelInfo> = {
     badgeClassName: 'bg-blue-500/15 text-blue-400',
   },
   tiktok: {
-    name: 'TikTok',
-    label: 'TikTok',
+    name: 'TikTok Shop',
+    label: 'TikTok Shop',
     logo: '/logos/tiktok-logo.png',
     badgeClassName: 'bg-slate-500/15 text-slate-400',
   },

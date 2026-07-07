@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-06-24T08:19:07.721Z",
+  "generatedAt": "2026-07-07T07:26:47.510Z",
   "repeats": 3,
-  "total": 195,
-  "passed": 188,
-  "passRate": 0.9641025641025641,
+  "total": 222,
+  "passed": 212,
+  "passRate": 0.954954954954955,
   "categories": {
     "address-change": {
       "total": 9,
-      "passed": 8,
-      "passRate": 0.8888888888888888
+      "passed": 9,
+      "passRate": 1
     },
     "ask-operator-bulk-discount-gap": {
       "total": 3,
@@ -53,6 +53,16 @@
     "escalate": {
       "total": 24,
       "passed": 24,
+      "passRate": 1
+    },
+    "exchange": {
+      "total": 9,
+      "passed": 9,
+      "passRate": 1
+    },
+    "gift-card": {
+      "total": 3,
+      "passed": 3,
       "passRate": 1
     },
     "issue-discount-goodwill-over-refund": {
@@ -102,25 +112,35 @@
     },
     "refund": {
       "total": 18,
-      "passed": 16,
-      "passRate": 0.8888888888888888
+      "passed": 15,
+      "passRate": 0.8333333333333334
+    },
+    "return-label": {
+      "total": 6,
+      "passed": 6,
+      "passRate": 1
     },
     "sample-reply": {
       "total": 3,
       "passed": 3,
       "passRate": 1
     },
+    "store-credit": {
+      "total": 6,
+      "passed": 3,
+      "passRate": 0.5
+    },
     "tier": {
-      "total": 33,
-      "passed": 33,
+      "total": 36,
+      "passed": 36,
       "passRate": 1
     }
   },
   "fixtures": {
     "address-change-missing-fields": {
       "repeats": 3,
-      "passes": 2,
-      "passRate": 0.6666666666666666
+      "passes": 3,
+      "passRate": 1
     },
     "address-change-post-fulfillment-escalate": {
       "repeats": 3,
@@ -218,6 +238,26 @@
       "passRate": 1
     },
     "escalate-tool-failure-mid-action": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "exchange-price-upgrade-escalate": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "exchange-size-swap": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "exchange-vs-refund-preference": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "gift-card-goodwill": {
       "repeats": 3,
       "passes": 3,
       "passRate": 1
@@ -369,15 +409,25 @@
     },
     "refund-over-cap-escalate": {
       "repeats": 3,
-      "passes": 2,
-      "passRate": 0.6666666666666666
+      "passes": 0,
+      "passRate": 0
     },
     "refund-partial": {
       "repeats": 3,
-      "passes": 2,
-      "passRate": 0.6666666666666666
+      "passes": 3,
+      "passRate": 1
     },
     "refund-under-cap": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "return-label-ask-merchant": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "return-label-attach-after-answer": {
       "repeats": 3,
       "passes": 3,
       "passRate": 1
@@ -386,6 +436,16 @@
       "repeats": 3,
       "passes": 3,
       "passRate": 1
+    },
+    "store-credit-goodwill-over-refund": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "store-credit-over-cap-escalate": {
+      "repeats": 3,
+      "passes": 0,
+      "passRate": 0
     },
     "tier-broad-refund-over-250-escalate": {
       "repeats": 3,
@@ -418,6 +478,11 @@
       "passRate": 1
     },
     "tier-guarded-refund-no-hollow-reply": {
+      "repeats": 3,
+      "passes": 3,
+      "passRate": 1
+    },
+    "tier-guarded-store-credit-approval": {
       "repeats": 3,
       "passes": 3,
       "passRate": 1

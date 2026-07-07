@@ -95,6 +95,45 @@ export function makeShopifyJob(
   };
 }
 
+export function makeTikTokShopJob(
+  organizationId: string,
+  options: {
+    accountId?: string;
+    buyerId?: string;
+    conversationId?: string;
+    messageId?: string | null;
+    text?: string;
+    attachments?: Array<{ url: string }>;
+  } = {},
+) {
+  const accountId = options.accountId ?? 'shop_123';
+  const buyerId = options.buyerId ?? 'buyer_123';
+  const conversationId = options.conversationId ?? 'conversation_123';
+  const messageId = options.messageId === undefined ? `tts_mid_${Date.now()}` : options.messageId;
+
+  return {
+    id: 'job-tiktok-test',
+    data: {
+      platform: 'tiktok',
+      organizationId,
+      traceId: 'trace-tiktok-test',
+      rawPayload: {
+        event_type: 'buyer_message.created',
+        shop_id: accountId,
+        data: {
+          conversation_id: conversationId,
+          buyer_id: buyerId,
+          message_id: messageId,
+          text: options.text ?? 'Hi from TikTok Shop',
+          attachments: options.attachments ?? [],
+          sender_type: 'buyer',
+        },
+      },
+      inboundMessageId: messageId ? `tiktok:${accountId}:${messageId}` : null,
+    },
+  };
+}
+
 export function classifierResponse(
   classification: 'genuine' | 'questionable' | 'filtered',
   opts: { summary?: string; tag?: string; reason?: string } = {},

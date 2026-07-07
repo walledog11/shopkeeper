@@ -103,7 +103,7 @@ describe('POST /api/product-events', () => {
     },
   );
 
-  it.each(['shopify', 'email', 'ig_dm', 'imessage'] as const)(
+  it.each(['shopify', 'email', 'ig_dm', 'imessage', 'tiktok'] as const)(
     'captures an allowed %s connection start',
     async (platform) => {
       const response = await POST(productEventRequest({

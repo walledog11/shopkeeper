@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     { shop: shopDomain },
   );
 
-  const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_returns,write_returns,read_products,read_content';
+  const scopes = 'read_customers,write_customers,read_orders,write_orders,write_order_edits,read_returns,write_returns,read_products,read_content,write_gift_cards,read_store_credit_accounts,write_store_credit_account_transactions';
 
   const authUrl = new URL(`https://${shopDomain}/admin/oauth/authorize`);
   authUrl.searchParams.set('client_id', oauthConfig.clientId);

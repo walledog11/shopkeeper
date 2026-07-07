@@ -114,9 +114,11 @@ export function useIntegrationCardActions({
       ? "shopify"
       : path.includes("/instagram/")
         ? "ig_dm"
-        : path.includes("/gmail/") || path.includes("/outlook/")
-          ? "email"
-          : null
+        : path.includes("/tiktok-shop/")
+          ? "tiktok"
+          : path.includes("/gmail/") || path.includes("/outlook/")
+            ? "email"
+            : null
     if (platform) {
       void captureClientProductEvent({
         event: "integration_connection_started",
@@ -140,6 +142,8 @@ export function useIntegrationCardActions({
   function handleReauthorize() {
     if (config.connectType === "ig") {
       launchOAuth("/api/integrations/instagram/auth", {})
+    } else if (config.connectType === "tiktok_shop") {
+      launchOAuth("/api/integrations/tiktok-shop/auth", {})
     } else if (config.connectType === "shopify" && connected[0]) {
       launchOAuth("/api/integrations/shopify/auth", { shop: connected[0].externalAccountId })
     } else if (config.connectType === "email" && connected[0]) {
@@ -174,6 +178,10 @@ export function useIntegrationCardActions({
   function handleConnectClick() {
     if (config.connectType === "ig") {
       launchOAuth("/api/integrations/instagram/auth", {})
+      return
+    }
+    if (config.connectType === "tiktok_shop") {
+      launchOAuth("/api/integrations/tiktok-shop/auth", {})
       return
     }
     onOpenChange(true)

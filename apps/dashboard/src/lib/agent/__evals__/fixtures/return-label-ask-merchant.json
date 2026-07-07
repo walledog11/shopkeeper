@@ -1,0 +1,47 @@
+{
+  "id": "return-label-ask-merchant",
+  "description": "Customer wants to return a delivered item and asks for a prepaid shipping label. The agent cannot generate labels - it must open the return AND ask the merchant for a label URL via ask_operator (classifying as needs_merchant_input), not promise a label it doesn't have, reply without asking, or escalate. Advisory: pairing the return with the ask is a novel two-step judgment; tracked as a quality signal.",
+  "advisory": true,
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Iris Fontaine",
+    "customerPlatformId": "iris@example.com",
+    "shopifyCustomerId": "10000011111",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The linen curtains from order #11111 don't match my walls at all. I'd like to return them - could you send me a prepaid shipping label?" }
+    ],
+    "simulateToolResults": [
+      { "tool": "create_return", "result": "Opened return #11111-R1 (status OPEN) on order 9000011111 for: 1x Linen Curtains. No refund was issued - this only authorizes the customer to send the items back. Tell the customer the return is set up and how to ship the items." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000011111",
+        "name": "#11111",
+        "created_at": "2026-06-26T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "89.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_11111",
+            "title": "Linen Curtains",
+            "quantity": 1,
+            "variant_id": "710000011111",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Set up the customer's return and get them a shipping label.",
+  "expectedPlan": {
+    "mustCallTools": ["create_return", "ask_operator"],
+    "mustNotCallTools": ["attach_return_label", "create_refund", "escalate_to_human"],
+    "mustClassifyAs": "needs_merchant_input"
+  }
+}

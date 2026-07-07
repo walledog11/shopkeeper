@@ -1,0 +1,48 @@
+{
+  "id": "exchange-vs-refund-preference",
+  "description": "Customer's hoodie doesn't fit and they are open to either a refund or a swap to the next size. Preferring the exchange keeps the sale and the customer said it works for them - the agent should set up the exchange rather than default to returning money. Advisory: refunding is defensible when the customer offered it, so which gesture wins is model judgment; the gated property is that the agent doesn't reach for cancel/escalate.",
+  "advisory": true,
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "June Park",
+    "customerPlatformId": "june@example.com",
+    "shopifyCustomerId": "10000006060",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The medium hoodie from order #6060 is too snug on me. Could I get a refund, or swap it for a large if that's easier for you?" }
+    ],
+    "simulateToolResults": [
+      { "tool": "search_shopify_products", "result": "[{\"product_id\":\"7000006060\",\"title\":\"Fleece Hoodie\",\"variants\":[{\"variant_id\":\"710000006060\",\"title\":\"Medium\",\"price\":\"64.00\",\"inventory_quantity\":10},{\"variant_id\":\"710000006061\",\"title\":\"Large\",\"price\":\"64.00\",\"inventory_quantity\":7}]}]" },
+      { "tool": "create_exchange", "result": "Opened exchange #6060-R1 (status REQUESTED) on order 9000006060: returning 1x Fleece Hoodie - Medium in exchange for 1x Fleece Hoodie - Large. No refund was issued and the customer was not charged. The replacement ships once the return is processed in Shopify. Tell the customer the exchange is set up and how to send the item back." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000006060",
+        "name": "#6060",
+        "created_at": "2026-06-15T14:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "64.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_6060",
+            "title": "Fleece Hoodie - Medium",
+            "quantity": 1,
+            "variant_id": "710000006060",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and resolve their sizing issue.",
+  "expectedPlan": {
+    "mustCallTools": ["create_exchange", "send_reply"],
+    "mustNotCallTools": ["cancel_order", "escalate_to_human"]
+  }
+}

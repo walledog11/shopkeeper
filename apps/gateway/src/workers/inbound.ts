@@ -1,7 +1,7 @@
 import { Worker, type Queue } from 'bullmq';
 import { CHANNEL, QUEUE } from '../constants.js';
 import logger from '../logger.js';
-import { handleEmailJob, handleIgDmJob, handleShopifyJob } from '../message-handlers/channels.js';
+import { handleEmailJob, handleIgDmJob, handleShopifyJob, handleTikTokShopJob } from '../message-handlers/channels.js';
 import type { AiSummaryJobData, InboundJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
@@ -27,6 +27,8 @@ export function createInboundWorker(options: InboundWorkerRegistrationOptions): 
       await handleEmailJob(job, options.aiSummaryQueue);
     } else if (job.data.platform === CHANNEL.SHOPIFY) {
       await handleShopifyJob(job, options.aiSummaryQueue);
+    } else if (job.data.platform === CHANNEL.TIKTOK) {
+      await handleTikTokShopJob(job, options.aiSummaryQueue);
     } else {
       logger.error(
         { jobId: job.id, platform: job.data.platform, traceId },

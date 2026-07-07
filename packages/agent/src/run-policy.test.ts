@@ -270,13 +270,13 @@ describe("runAgent policy enforcement", () => {
       { ...AGENT_SETTINGS_DEFAULTS, dailyRefundCap: 100 },
     );
 
-    expect(mockEscalateToHuman).toHaveBeenCalledWith("daily refund cap of $100 reached; $10.00 remaining today.");
+    expect(mockEscalateToHuman).toHaveBeenCalledWith("daily goodwill cap of $100 reached (shared across refunds, store credit, and gift cards); $10.00 remaining today.");
     expect(result.actionsPerformed).toHaveLength(1);
     expect(result.actionsPerformed[0]).toMatchObject({
       tool: "create_refund",
       status: "escalated",
     });
-    expect(result.summary).toBe("Escalated to merchant: daily refund cap of $100 reached; $10.00 remaining today.");
+    expect(result.summary).toBe("Escalated to merchant: daily goodwill cap of $100 reached (shared across refunds, store credit, and gift cards); $10.00 remaining today.");
     expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
   });
 

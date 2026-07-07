@@ -1,4 +1,4 @@
-export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', IMESSAGE: 'imessage' } as const;
+export const CHANNEL = { IG_DM: 'ig_dm', EMAIL: 'email', SHOPIFY: 'shopify', IMESSAGE: 'imessage', TIKTOK: 'tiktok' } as const;
 export const STATUS = { OPEN: 'open' } as const;
 export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',
@@ -32,6 +32,7 @@ export const QUEUE = {
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
+  TIKTOK_SHOP: 'process-tiktok-shop-message',
   EMAIL: 'process-email',
   TOKEN_HEALTH_CHECK: 'check-ig-tokens',
   TOKEN_HEALTH_ID: 'ig-token-health-daily',

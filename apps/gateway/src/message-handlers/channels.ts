@@ -2,6 +2,7 @@ import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { fetchInstagramUserProfile } from '../clients/meta-graph.js';
+import { normalizeTikTokShopWebhookPayload } from '../clients/tiktok-shop.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
 import type { InboundJobData, ShopifyOrderPayload } from '../types.js';
@@ -235,6 +236,41 @@ export async function handleShopifyJob(job: Job<InboundJobData>, aiSummaryQueue:
     logger.info({ platformId, organizationId, topic, traceId }, '[Worker] Successfully saved Shopify order event');
   } catch (error) {
     logger.error({ err: error, traceId }, '[Worker] DB operation failed for Shopify order event');
+    throw error;
+  }
+}
+
+export async function handleTikTokShopJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
+  const { organizationId, traceId } = job.data;
+  const message = normalizeTikTokShopWebhookPayload(job.data.rawPayload);
+
+  if (!message || message.isEcho) return;
+
+  const buyerIdentity = message.buyerId ?? message.conversationId;
+  const platformId = `tiktok:${message.accountId}:${buyerIdentity}`;
+
+  try {
+    await processInboundMessage(organizationId, platformId, CHANNEL.TIKTOK, message.text, aiSummaryQueue, {
+      attachments: message.attachments,
+      customerName: message.customerName,
+      externalMessageId: job.data.inboundMessageId ?? (
+        message.messageId ? `tiktok:${message.accountId}:${message.messageId}` : null
+      ),
+      externalSpaceId: message.conversationId,
+      traceId,
+      isRealCustomerMessage: true,
+    });
+    logger.info(
+      {
+        accountId: message.accountId,
+        conversationId: message.conversationId,
+        organizationId,
+        traceId,
+      },
+      '[Worker] Successfully saved TikTok Shop buyer message',
+    );
+  } catch (error) {
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for TikTok Shop buyer message');
     throw error;
   }
 }

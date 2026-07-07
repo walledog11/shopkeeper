@@ -26,20 +26,21 @@ export function checkParsedStaticToolPolicy(
 
   if (definition.policy.refundAmountLimits) {
     const refundInput = input as CreateRefundInput;
+    const noun = definition.name === "create_refund" ? "refund" : "goodwill";
     const hasPerCallCap = settings.maxRefundAmount !== null && settings.maxRefundAmount > 0;
     const hasDailyCap = settings.dailyRefundCap !== null && settings.dailyRefundCap > 0;
 
     if (hasPerCallCap || hasDailyCap) {
       if (!refundInput.amount) {
         const limit = hasPerCallCap ? settings.maxRefundAmount : settings.dailyRefundCap;
-        return { blocked: true, reason: `refund amount must be specified and cannot exceed $${limit}.` };
+        return { blocked: true, reason: `${noun} amount must be specified and cannot exceed $${limit}.` };
       }
       const amount = Number(refundInput.amount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        return { blocked: true, reason: "refund amount must be a positive decimal value." };
+        return { blocked: true, reason: `${noun} amount must be a positive decimal value.` };
       }
       if (hasPerCallCap && amount > (settings.maxRefundAmount as number)) {
-        return { blocked: true, reason: `refund amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
+        return { blocked: true, reason: `${noun} amount $${refundInput.amount} exceeds the workspace limit of $${settings.maxRefundAmount}.` };
       }
     }
   }

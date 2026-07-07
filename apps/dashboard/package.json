@@ -2,6 +2,9 @@
   "name": "shopkeeper-dashboard",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "NEXT_DIST_DIR=.next-dev node ../../scripts/with-dev-env.mjs next dev -p 3000",
     "dev:e2e": "NEXT_DIST_DIR=.next-e2e next dev -p 3100",

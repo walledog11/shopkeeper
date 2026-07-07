@@ -20,6 +20,7 @@ import type { GatewayShutdownResource } from './workers/resources.js';
 const ACTIVATION_INBOUND_CHANNELS: DbChannelType[] = [
   'email',
   'ig_dm',
+  'tiktok',
   'imessage',
   'sms',
 ];

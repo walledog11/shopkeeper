@@ -5,6 +5,7 @@ import type { ReplySource } from "@shopkeeper/analytics"
 export interface DispatchThread {
   id: string
   channelType: string
+  externalSpaceId?: string | null
   organizationId: string
   customer: { platformId: string }
 }

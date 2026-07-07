@@ -86,13 +86,13 @@ what ships.
 
 - [ ] **Close the agent-capability gaps in support workflows.** The tool registry
   (`packages/agent/src/tools/registry/`) covers refunds, cancellations, order
-  edits, address changes, tracking, notes, KB, stats, return-only RMAs, and
-  discount codes. Remaining gaps:
-  - [ ] Exchanges and return labels.
-  - [ ] Softer resolutions — goodwill gestures other than a full refund, which
-    fights principle #3 ("one bad refund undoes months of goodwill").
-    - [ ] Store credit + gift card — deferred; need a shared goodwill spend cap
-      (likely folded into `dailyRefundCap`) before they're safe to add.
+  edits, address changes, tracking, notes, KB, stats, return-only RMAs,
+  exchanges (`create_exchange`, even-or-cheaper only), return labels
+  (`attach_return_label`, merchant-supplied URL via the ask_operator loop),
+  store credit + gift cards (`issue_store_credit` / `create_gift_card`, sharing
+  `maxRefundAmount` and the `dailyRefundCap` goodwill pool — added 2026-07-06;
+  note the new OAuth scopes mean already-connected stores must re-auth Shopify),
+  and discount codes. Remaining gap:
   - [ ] Fulfillment — no "mark fulfilled" / create shipment / reship-replacement
     helper distinct from `create_shopify_order`. Deferred.
 

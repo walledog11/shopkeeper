@@ -13,10 +13,14 @@ import {
   getOrderTracking,
   createRefund,
   createReturn,
+  createExchange,
   cancelOrder,
   createShopifyOrder,
   editShopifyOrder,
   issueDiscount,
+  issueStoreCredit,
+  createGiftCard,
+  attachReturnLabel,
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
@@ -72,7 +76,7 @@ async function enforceToolPolicy(
       const spentCents = await getDailyRefundSpendCents(orgId);
       if (spentCents + requestedCents > capCents) {
         const remaining = Math.max(0, capCents - spentCents) / 100;
-        return formatPolicyError(`daily refund cap of $${s.dailyRefundCap} reached; $${remaining.toFixed(2)} remaining today.`);
+        return formatPolicyError(`daily goodwill cap of $${s.dailyRefundCap} reached (shared across refunds, store credit, and gift cards); $${remaining.toFixed(2)} remaining today.`);
       }
     }
   }
@@ -92,10 +96,14 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   getOrderTracking,
   createRefund,
   createReturn,
+  createExchange,
   cancelOrder,
   createShopifyOrder,
   editShopifyOrder,
   issueDiscount,
+  issueStoreCredit,
+  createGiftCard,
+  attachReturnLabel,
   incrementDailyRefundSpendCents,
   async searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]> {
     const wordConditions = words.flatMap((word) => [

@@ -4,7 +4,7 @@ export type EventSource = (typeof EVENT_SOURCES)[number];
 export const ONBOARDING_STEPS = ['store', 'shopify', 'email', 'autonomy', 'plan'] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
-export const INTEGRATION_PLATFORMS = ['shopify', 'email', 'ig_dm', 'imessage'] as const;
+export const INTEGRATION_PLATFORMS = ['shopify', 'email', 'ig_dm', 'imessage', 'tiktok'] as const;
 export type IntegrationPlatform = (typeof INTEGRATION_PLATFORMS)[number];
 
 export const INTEGRATION_FAILURE_CATEGORIES = [

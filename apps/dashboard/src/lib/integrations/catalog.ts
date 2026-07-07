@@ -1,4 +1,4 @@
-export type ConnectType = 'email' | 'ig' | 'shopify' | 'imessage'
+export type ConnectType = 'email' | 'ig' | 'shopify' | 'imessage' | 'tiktok_shop'
 export type EmailProviderFilter = 'gmail' | 'outlook' | 'postmark'
 export type IntegrationChannelKind = 'operator' | 'support'
 
@@ -102,6 +102,21 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     ],
   },
   {
+    id: "tiktok-shop",
+    platform: "tiktok",
+    name: "TikTok Shop",
+    logo: "/logos/tiktok-logo.png",
+    fullBleedLogo: true,
+    description: "Manage TikTok Shop buyer messages and send support replies from your connected seller account.",
+    connectType: 'tiktok_shop',
+    channelKind: 'support',
+    permissions: [
+      "Read buyer-service conversations for your TikTok Shop",
+      "Send text replies from your seller account",
+      "View shop and seller authorization details",
+    ],
+  },
+  {
     id: "imessage",
     platform: "imessage",
     name: "iMessage",
@@ -164,6 +179,10 @@ export const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   token_exchange_failed: 'Authentication failed. Please try again.',
   state_mismatch: 'Security check failed. Please try again.',
   server_error: 'Something went wrong on our end. Please try again.',
+  tiktok_shop_invalid_callback: 'Invalid callback from TikTok Shop. Please try again.',
+  tiktok_shop_missing_shop: 'TikTok Shop did not return a seller or shop id. Please check your app permissions.',
+  tiktok_shop_state_mismatch: 'Security check failed. Please try again.',
+  tiktok_shop_token_failed: 'Could not obtain a TikTok Shop access token. Please try again.',
   shopify_state_mismatch: 'Security check failed. Please try again.',
   shopify_hmac_invalid: 'Authentication failed. The response from Shopify could not be verified.',
   shopify_token_failed: 'Could not obtain a Shopify access token. Please try again.',

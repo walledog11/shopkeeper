@@ -349,7 +349,7 @@ html:has(.m-paper-sheet) {
 
 .m-nav-trigger:hover,
 .m-nav-link:hover {
-  color: #57534e;
+  color: var(--m-quill);
 }
 
 /* Dropdown enter/exit — soft rise + fade. Visibility flips after the fade on

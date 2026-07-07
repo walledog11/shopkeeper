@@ -1,4 +1,5 @@
 import { Queue, Worker, type ConnectionOptions, type Processor, type QueueOptions, type WorkerOptions } from 'bullmq';
+import { PROCESSING_QUEUE_DEFAULTS } from '../constants.js';
 import type { OpsAlertCounterClient } from '../ops-alerts.js';
 import { registerJobFailureLogging } from '../workers/failure.js';
 
@@ -59,7 +60,11 @@ export async function scheduleRepeatableJob(
   jobId: string,
   everyMs: number,
 ): Promise<void> {
-  await queue.add(name, {}, { repeat: { every: everyMs }, jobId });
+  await queue.add(name, {}, {
+    repeat: { every: everyMs },
+    jobId,
+    ...PROCESSING_QUEUE_DEFAULTS,
+  });
 }
 
 export async function buildMaintenanceResources(

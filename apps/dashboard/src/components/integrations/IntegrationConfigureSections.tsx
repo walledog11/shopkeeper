@@ -27,6 +27,7 @@ const DISCONNECT_NOTES: Record<ConnectType, string> = {
   ig: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
   imessage: "Your past tickets stay. New iMessages will stop arriving.",
+  tiktok_shop: "Your past tickets stay. New TikTok Shop buyer messages will stop arriving.",
 }
 
 export function IntegrationPermissionsSection({

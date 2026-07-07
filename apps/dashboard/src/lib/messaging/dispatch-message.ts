@@ -6,6 +6,7 @@ import {
   sendEmailSynchronously,
 } from "./email-dispatch"
 import { dispatchInstagramDirect } from "./instagram-dispatch"
+import { dispatchTikTokShopMessage } from "./tiktok-shop-dispatch"
 import type {
   DispatchMessageOptions,
   DispatchMessageResult,
@@ -46,6 +47,8 @@ export async function dispatchMessage(
 
   const providerResult = thread.channelType === CHANNEL_TYPE.IG_DM
     ? await dispatchInstagramDirect(thread, org, text, source)
+    : thread.channelType === CHANNEL_TYPE.TIKTOK
+      ? await dispatchTikTokShopMessage(thread, org, text, source)
     : thread.channelType === CHANNEL_TYPE.EMAIL
       ? await sendEmailSynchronously(thread, org, text, {
         source,

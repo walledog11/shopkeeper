@@ -24,5 +24,9 @@ export { createShopifyOrder, type CreateShopifyOrderOptions } from "./order-crea
 export { editShopifyOrder } from "./order-edit.js";
 export { createRefund } from "./refunds.js";
 export { createReturn } from "./returns.js";
+export { createExchange } from "./exchanges.js";
+export { issueStoreCredit } from "./store-credit.js";
+export { createGiftCard } from "./gift-cards.js";
+export { attachReturnLabel } from "./return-labels.js";
 export { issueDiscount } from "./discounts.js";
 export { getOrderTracking } from "./tracking.js";

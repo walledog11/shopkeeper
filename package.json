@@ -5,6 +5,10 @@
     "apps/*",
     "packages/*"
   ],
+  "engines": {
+    "node": "22.x",
+    "npm": "10.x"
+  },
   "scripts": {
     "predev": "npm run db:generate -w packages/db && npm run build -w packages/db && npm run build -w packages/email && npm run build -w packages/agent && npm run build -w packages/analytics",
     "dev": "npx turbo run dev",
@@ -40,7 +44,7 @@
     "@clerk/testing": "^2.0.22",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.59.1",
-    "@types/node": "^20",
+    "@types/node": "^22.19.17",
     "dotenv": "^16.4.5",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",

@@ -1,0 +1,50 @@
+{
+  "id": "exchange-size-swap",
+  "description": "Customer received boots that are too small and asks to swap them for the next size up. The right move is create_exchange (return the shipped item, ship the same-priced replacement) plus a reply - not a refund, not edit_shopify_order (the order already shipped), and not an escalation.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Dana Reyes",
+    "customerPlatformId": "dana@example.com",
+    "shopifyCustomerId": "10000004040",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "Hi - the trail boots from order #4040 arrived but they're too small. Could I swap them for a size 11 instead?" }
+    ],
+    "simulateToolResults": [
+      { "tool": "search_shopify_products", "result": "[{\"product_id\":\"7000004040\",\"title\":\"Trail Boots\",\"variants\":[{\"variant_id\":\"710000004040\",\"title\":\"Size 10\",\"price\":\"120.00\",\"inventory_quantity\":8},{\"variant_id\":\"710000004041\",\"title\":\"Size 11\",\"price\":\"120.00\",\"inventory_quantity\":5}]}]" },
+      { "tool": "create_exchange", "result": "Opened exchange #4040-R1 (status REQUESTED) on order 9000004040: returning 1x Trail Boots - Size 10 in exchange for 1x Trail Boots - Size 11. No refund was issued and the customer was not charged. The replacement ships once the return is processed in Shopify. Tell the customer the exchange is set up and how to send the item back." },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000004040",
+        "name": "#4040",
+        "created_at": "2026-06-18T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "120.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_4040",
+            "title": "Trail Boots - Size 10",
+            "quantity": 1,
+            "variant_id": "710000004040",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer and set up their size exchange.",
+  "expectedPlan": {
+    "mustCallTools": ["create_exchange", "send_reply"],
+    "mustNotCallTools": ["create_refund", "cancel_order", "edit_shopify_order", "create_return", "escalate_to_human"],
+    "mustCallToolsWithInput": [
+      { "tool": "create_exchange", "inputIncludes": { "order_id": "9000004040", "variant_id": "710000004040" } }
+    ]
+  }
+}

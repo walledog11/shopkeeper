@@ -204,7 +204,7 @@ describe('POST /api/messages', () => {
     expect(res.status).toBe(502);
   });
 
-  it('returns 502 for unsupported channels without saving an agent message', async () => {
+  it('returns 502 when no TikTok Shop integration is configured without saving an agent message', async () => {
     const customer = await createTestCustomer(org.id, 'tiktok_sender_456');
     const thread = await createTestThread(org.id, customer.id, ChannelType.tiktok);
 
@@ -217,7 +217,7 @@ describe('POST /api/messages', () => {
     const res = await POST(req);
     expect(res.status).toBe(502);
     const body = await res.json() as { error: string };
-    expect(body.error).toBe('Unsupported channel');
+    expect(body.error).toBe('No TikTok Shop integration configured');
 
     const agentMessageCount = await db.message.count({
       where: { threadId: thread.id, senderType: SenderType.agent },

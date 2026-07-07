@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { JOB, QUEUE } from '../constants.js';
+import { JOB, PROCESSING_QUEUE_DEFAULTS, QUEUE } from '../constants.js';
 
 interface MockQueueInstance {
   name: string;
@@ -184,6 +184,21 @@ describe('createMaintenanceWorkers', () => {
     });
     expect(findQueue(QUEUE.INBOUND).add).not.toHaveBeenCalled();
     expect(findQueue(QUEUE.AI_SUMMARY).add).not.toHaveBeenCalled();
+  });
+
+  it('applies processing retry defaults to repeatable maintenance jobs', async () => {
+    await createMaintenanceWorkers(
+      { name: 'worker-conn' },
+      createProducerConnection(),
+      { drainDelay: 7, stalledInterval: 8 },
+    );
+
+    const repeatableAdds = queueInstances.flatMap((queue) => queue.add.mock.calls);
+    expect(repeatableAdds).toHaveLength(10);
+
+    for (const addCall of repeatableAdds) {
+      expect(addCall[2]).toEqual(expect.objectContaining(PROCESSING_QUEUE_DEFAULTS));
+    }
   });
 
   it('attaches the shared failure logger to every registered worker', async () => {

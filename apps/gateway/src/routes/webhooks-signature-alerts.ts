@@ -7,7 +7,7 @@ import {
 import { getGatewayOpsAlertConfig, type GatewayOpsAlertConfig } from '../config/runtime-config.js';
 import type { Request } from 'express';
 
-export type WebhookSignatureProvider = 'meta' | 'shopify' | 'telegram' | 'photon';
+export type WebhookSignatureProvider = 'meta' | 'shopify' | 'telegram' | 'photon' | 'tiktok_shop';
 export type WebhookSignatureFailureReason =
   | 'missing_signature'
   | 'missing_raw_body'

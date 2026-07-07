@@ -183,9 +183,11 @@ export function deriveIntegrationHealth(
       : null
     const note = connectType === "ig"
       ? "Your Instagram sign-in expired — new DMs aren't coming in."
-      : emailAuthIssue === "missing_gmail_read_scope"
-        ? "Reconnect Gmail to grant inbox access for native receiving."
-        : "Your email sign-in expired — new customer emails aren't coming in."
+      : connectType === "tiktok_shop"
+        ? "Your TikTok Shop sign-in expired — new buyer messages aren't coming in."
+        : emailAuthIssue === "missing_gmail_read_scope"
+          ? "Reconnect Gmail to grant inbox access for native receiving."
+          : "Your email sign-in expired — new customer emails aren't coming in."
     return { state: "needs-attention", note, canFix: true }
   }
 

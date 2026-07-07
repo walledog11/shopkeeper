@@ -35,11 +35,15 @@ const CUSTOMER_OR_ORDER_READ_TOOLS = new Set([
 const ACTION_TOOL_PRIORITY = [
   "create_refund",
   "cancel_order",
+  "create_exchange",
+  "attach_return_label",
   "edit_shopify_order",
   "create_shopify_order",
   "update_shopify_order_address",
   "update_shopify_customer_info",
   "add_shopify_customer_note",
+  "issue_store_credit",
+  "create_gift_card",
   "issue_discount",
 ]
 

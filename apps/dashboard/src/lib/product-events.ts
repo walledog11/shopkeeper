@@ -5,7 +5,7 @@ export type ClientProductEvent =
     }
   | {
       event: 'integration_connection_started';
-      platform: 'shopify' | 'email' | 'ig_dm' | 'imessage';
+      platform: 'shopify' | 'email' | 'ig_dm' | 'imessage' | 'tiktok';
     }
   | {
       event: 'agent_plan_decided';

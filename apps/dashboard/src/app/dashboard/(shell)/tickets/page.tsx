@@ -6,7 +6,7 @@ import { listThreadIdsBySqlFilters } from "@/lib/messaging/thread-list-query"
 import TicketsPageClient from "./_components/TicketsPageClient"
 import type { Thread, OrgSettings } from "@/types"
 
-const INBOX_CHANNEL_TYPES: ChannelType[] = [ChannelType.email, ChannelType.ig_dm, ChannelType.imessage]
+const INBOX_CHANNEL_TYPES: ChannelType[] = [ChannelType.email, ChannelType.ig_dm, ChannelType.tiktok, ChannelType.imessage]
 
 export default async function TicketsPage() {
   const org = await getOrCreateOrg()

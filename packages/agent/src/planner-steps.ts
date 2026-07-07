@@ -54,6 +54,14 @@ function describeTool(name: string, input: unknown): string {
     }
     case "issue_discount":
       return `Issue ${a.percentage}% discount code${a.reason ? ` (${a.reason})` : ""}`;
+    case "create_exchange":
+      return `Set up exchange - return variant ${a.variant_id}, ship variant ${a.exchange_variant_id}${a.quantity ? ` (${a.quantity}x)` : ""}`;
+    case "issue_store_credit":
+      return `Issue $${a.amount} store credit`;
+    case "create_gift_card":
+      return `Create $${a.amount} gift card${a.reason ? ` (${a.reason})` : ""}`;
+    case "attach_return_label":
+      return `Attach return label${a.tracking_number ? ` (tracking ${a.tracking_number})` : ""}`;
     default:
       return name.replace(/_/g, " ");
   }

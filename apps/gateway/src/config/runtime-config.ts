@@ -212,3 +212,80 @@ export function getGmailPubSubPushConfig(): GmailPubSubPushConfig | null {
   if (!audience || !serviceAccountEmail) return null;
   return { audience, serviceAccountEmail };
 }
+
+export type TikTokShopHttpMethod = 'GET' | 'POST';
+export type TikTokShopSignatureEncoding = 'hex' | 'base64';
+
+export interface TikTokShopWebhookConfig {
+  enabled: boolean;
+  secret: string | null;
+  signatureAlgorithm: string;
+  signatureEncoding: TikTokShopSignatureEncoding;
+  signatureHeader: string;
+  signaturePrefix: string | null;
+  messageEventNames: Set<string>;
+}
+
+export interface TikTokShopApiConfig {
+  apiBaseUrl: string | null;
+  appKey: string | null;
+  appSecret: string | null;
+  enabled: boolean;
+  refreshTokenMethod: TikTokShopHttpMethod;
+  refreshTokenUrl: string | null;
+}
+
+function parseTikTokShopMethodEnv(name: string, fallback: TikTokShopHttpMethod): TikTokShopHttpMethod {
+  const rawValue = readOptionalTrimmedEnv(name);
+  if (!rawValue) return fallback;
+
+  const normalizedValue = rawValue.toUpperCase();
+  if (normalizedValue === 'GET' || normalizedValue === 'POST') return normalizedValue;
+
+  throw new Error(`[Gateway] ${name} must be GET or POST`);
+}
+
+function parseTikTokShopSignatureEncoding(): TikTokShopSignatureEncoding {
+  const rawValue = readOptionalTrimmedEnv('TIKTOK_SHOP_WEBHOOK_SIGNATURE_ENCODING');
+  if (!rawValue) return 'hex';
+
+  const normalizedValue = rawValue.toLowerCase();
+  if (normalizedValue === 'hex' || normalizedValue === 'base64') return normalizedValue;
+
+  throw new Error('[Gateway] TIKTOK_SHOP_WEBHOOK_SIGNATURE_ENCODING must be hex or base64');
+}
+
+function parseCsvEnv(name: string): Set<string> {
+  return new Set(
+    (readOptionalTrimmedEnv(name) ?? '')
+      .split(/[,\s]+/)
+      .map(value => value.trim())
+      .filter(Boolean),
+  );
+}
+
+export function getTikTokShopWebhookConfig(): TikTokShopWebhookConfig {
+  return {
+    enabled: parseBooleanEnv('TIKTOK_SHOP_ENABLED', false),
+    secret: readOptionalTrimmedEnv('TIKTOK_SHOP_WEBHOOK_SECRET'),
+    signatureAlgorithm: readOptionalTrimmedEnv('TIKTOK_SHOP_WEBHOOK_SIGNATURE_ALGORITHM') ?? 'sha256',
+    signatureEncoding: parseTikTokShopSignatureEncoding(),
+    signatureHeader: (readOptionalTrimmedEnv('TIKTOK_SHOP_WEBHOOK_SIGNATURE_HEADER') ?? 'x-tts-signature').toLowerCase(),
+    signaturePrefix: readOptionalTrimmedEnv('TIKTOK_SHOP_WEBHOOK_SIGNATURE_PREFIX'),
+    messageEventNames: parseCsvEnv('TIKTOK_SHOP_MESSAGE_EVENT_NAMES'),
+  };
+}
+
+export function getTikTokShopApiConfig(): TikTokShopApiConfig {
+  return {
+    apiBaseUrl: readOptionalTrimmedEnv('TIKTOK_SHOP_API_BASE_URL'),
+    appKey: readOptionalTrimmedEnv('TIKTOK_SHOP_APP_KEY') ?? readOptionalTrimmedEnv('TIKTOK_SHOP_CLIENT_KEY'),
+    appSecret: readOptionalTrimmedEnv('TIKTOK_SHOP_APP_SECRET') ?? readOptionalTrimmedEnv('TIKTOK_SHOP_CLIENT_SECRET'),
+    enabled: parseBooleanEnv('TIKTOK_SHOP_ENABLED', false),
+    refreshTokenMethod: parseTikTokShopMethodEnv(
+      'TIKTOK_SHOP_REFRESH_TOKEN_METHOD',
+      parseTikTokShopMethodEnv('TIKTOK_SHOP_TOKEN_METHOD', 'POST'),
+    ),
+    refreshTokenUrl: readOptionalTrimmedEnv('TIKTOK_SHOP_REFRESH_TOKEN_URL') ?? readOptionalTrimmedEnv('TIKTOK_SHOP_TOKEN_URL'),
+  };
+}

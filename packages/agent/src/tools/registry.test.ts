@@ -50,6 +50,10 @@ const VALID_TOOL_INPUTS: Record<ToolName, unknown> = {
   edit_shopify_order: { order_id: "2001", variant_id: "3002", quantity: 1 },
   issue_discount: { percentage: 10, reason: "Shipping delay" },
   create_return: { order_id: "2001", variant_id: "3002", reason: "defective" },
+  create_exchange: { order_id: "2001", variant_id: "3002", exchange_variant_id: "3003", quantity: 1, reason: "too_small" },
+  issue_store_credit: { customer_id: "1001", amount: "25.00" },
+  create_gift_card: { amount: "25.00", customer_id: "1001", reason: "Damaged item" },
+  attach_return_label: { order_id: "2001", label_url: "https://labels.example.com/rma-2001.pdf" },
   add_internal_note: { text: "Documented action." },
   send_reply: { text: "Thanks, this is handled." },
   send_email: { to: "jane@example.com", subject: "Order update", body: "Your order was updated." },
@@ -76,6 +80,10 @@ const SHOPIFY_TOOL_ROUTES = [
   ["edit_shopify_order", "editShopifyOrder"],
   ["issue_discount", "issueDiscount"],
   ["create_return", "createReturn"],
+  ["create_exchange", "createExchange"],
+  ["issue_store_credit", "issueStoreCredit"],
+  ["create_gift_card", "createGiftCard"],
+  ["attach_return_label", "attachReturnLabel"],
 ] as const satisfies readonly (readonly [ToolName, keyof ToolExecutionDeps])[];
 
 const THREAD_TOOL_ROUTES = [
@@ -145,6 +153,10 @@ function makeDeps(): ToolExecutionDeps {
     editShopifyOrder: vi.fn().mockResolvedValue(toolOk("editShopifyOrder")),
     issueDiscount: vi.fn().mockResolvedValue(toolOk("issueDiscount")),
     createReturn: vi.fn().mockResolvedValue(toolOk("createReturn")),
+    createExchange: vi.fn().mockResolvedValue(toolOk("createExchange")),
+    issueStoreCredit: vi.fn().mockResolvedValue({ ...toolOk("issueStoreCredit"), spentCents: 2500 }),
+    createGiftCard: vi.fn().mockResolvedValue({ ...toolOk("createGiftCard"), spentCents: 2500 }),
+    attachReturnLabel: vi.fn().mockResolvedValue(toolOk("attachReturnLabel")),
     incrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
     searchKnowledgeBaseArticles: vi.fn().mockResolvedValue([{
       id: "kb_1",

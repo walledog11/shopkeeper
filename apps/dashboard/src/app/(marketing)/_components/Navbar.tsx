@@ -12,7 +12,7 @@ export function Navbar() {
           <Link
             href="/"
             aria-label="Shopkeeper"
-            className="flex shrink-0 items-center gap-2 px-1 text-[#2b2118] no-underline transition-colors hover:text-stone-600"
+            className="flex shrink-0 items-center gap-2 px-1 text-[#2b2118] no-underline transition-colors hover:text-[var(--m-quill)]"
           >
             <Store className="size-6" strokeWidth={1.75} />
             <span className="translate-y-[0.06em] text-[26px] leading-none tracking-[0.03em] [font-family:var(--m-hand)] max-[359px]:hidden">

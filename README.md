@@ -20,6 +20,9 @@ shopkeeper/
 └── packages/db/        # Prisma schema + shared @shopkeeper/db client (Neon PostgreSQL)
 ```
 
+Local development and all deployed services use Node.js 22.x with npm 10.x.
+Run `nvm use` from the repository root to select the version declared in `.nvmrc`.
+
 ## Maintenance Commands
 - `npm run clean` — removes ignored build/test artifacts from the repo root and workspaces: `.turbo/`, `.next/`, `.next-dev/`, `.next-e2e/`, `coverage/`, `dist/`, `playwright-report/`, `test-results/`, `.nyc_output/`, `*.tsbuildinfo`, and `.DS_Store`.
 - `npm run clean:deps` — removes `node_modules/` from the repo root and workspaces. Use this only when you intentionally want to reinstall dependencies.

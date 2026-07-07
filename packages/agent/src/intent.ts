@@ -29,6 +29,7 @@ const ORDER_STATUS_PHRASES = [
 export const ORDER_STATUS_ACTION_PHRASES = [
   "cancel",
   "refund",
+  "exchange",
   "return policy",
   "change",
   "update",
@@ -54,8 +55,10 @@ const EMAIL_RE = /[^\s@]+@[^\s@]+\.[^\s@]+/;
 const CUSTOMER_MUTATIVE_PHRASES = [
   "cancel",
   "refund",
+  "exchange",
   "return my order",
   "return the order",
+  "return label",
   "chargeback",
   "dispute",
 ] as const;
@@ -95,7 +98,7 @@ const RETURN_POLICY_QUESTION_RE: readonly RegExp[] = [
 // An explicit directive to cancel/refund/return — overrides the question framing above.
 const MUTATIVE_REQUEST_RE: readonly RegExp[] = [
   /\b(?:please\s+)?(?:cancel|refund)\s+(?:my|the|this|that|it|order)\b/,
-  /\bi(?:'d| would)?\s*(?:like|want|need|wanna)\s+(?:to\s+(?:cancel|refund|return)|an?\s+(?:refund|cancellation|return))\b/,
+  /\bi(?:'d| would)?\s*(?:like|want|need|wanna)\s+(?:to\s+(?:cancel|refund|return|exchange)|an?\s+(?:refund|cancellation|return|exchange))\b/,
 ];
 
 export function isInformationalReturnQuestion(text: string): boolean {

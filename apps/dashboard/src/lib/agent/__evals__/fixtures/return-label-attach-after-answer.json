@@ -1,0 +1,51 @@
+{
+  "id": "return-label-attach-after-answer",
+  "description": "The merchant has answered the agent's earlier label question with a URL (the re-plan path after ask_operator). The agent must attach the label to the open return with attach_return_label and send the customer the label link - not re-ask the merchant, not escalate, and not leave the label out of the reply.",
+  "setup": {
+    "channelType": "email",
+    "tag": "Support",
+    "customerName": "Iris Fontaine",
+    "customerPlatformId": "iris@example.com",
+    "shopifyCustomerId": "10000011111",
+    "shopify": { "shop": "test-store.myshopify.com", "accessToken": "shpat_test_fixture" },
+    "messages": [
+      { "senderType": "customer", "contentText": "The linen curtains from order #11111 don't match my walls at all. I'd like to return them - could you send me a prepaid shipping label?" },
+      { "senderType": "note", "contentText": "Return #11111-R1 opened on order 9000011111 for 1x Linen Curtains. Asked the merchant for a return label URL." }
+    ],
+    "simulateToolResults": [
+      { "tool": "attach_return_label", "result": "Attached the return label to return #11111-R1 on order 9000011111. Send the customer the label link in your reply so they can ship the items back: https://labels.example.com/rma-11111.pdf" },
+      { "tool": "send_reply", "result": "Reply sent to customer via email." }
+    ],
+    "recentOrders": [
+      {
+        "id": "9000011111",
+        "name": "#11111",
+        "created_at": "2026-06-26T10:00:00-07:00",
+        "financial_status": "paid",
+        "fulfillment_status": "fulfilled",
+        "total_price": "89.00",
+        "currency": "USD",
+        "items": [
+          {
+            "line_item_id": "lineitem_11111",
+            "title": "Linen Curtains",
+            "quantity": 1,
+            "variant_id": "710000011111",
+            "fulfillable_quantity": 0,
+            "current_quantity": 1,
+            "fulfillment_status": "fulfilled"
+          }
+        ]
+      }
+    ]
+  },
+  "instruction": "Reply to the customer about their return.\n\nThe store owner answered your question \"Can you reply with a return label URL for the curtains return on order #11111?\" with: \"https://labels.example.com/rma-11111.pdf\". Use this to draft the customer reply — do not ask again. The answer is a return label URL: call attach_return_label with the order_id and this URL, then include the link in your reply to the customer. The return itself is already open - do NOT call create_return or create_exchange again.",
+  "expectedPlan": {
+    "mustCallTools": ["attach_return_label", "send_reply"],
+    "mustNotCallTools": ["ask_operator", "escalate_to_human", "create_return"],
+    "mustCallToolsWithInput": [
+      { "tool": "attach_return_label", "inputIncludes": { "order_id": "9000011111", "label_url": "https://labels.example.com/rma-11111.pdf" } }
+    ],
+    "replyMustInclude": ["https://labels.example.com/rma-11111.pdf"]
+  }
+}

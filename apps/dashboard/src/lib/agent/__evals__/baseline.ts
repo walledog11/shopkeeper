@@ -15,6 +15,8 @@ const CATEGORY_PREFIXES = [
   "brand-voice",
   "cancel",
   "escalate",
+  "exchange",
+  "gift-card",
   "kb",
   "memory",
   "multi-step",
@@ -24,7 +26,9 @@ const CATEGORY_PREFIXES = [
   "prompt-injection",
   "quick-reply",
   "refund",
+  "return-label",
   "sample-reply",
+  "store-credit",
   "tier",
 ]
 const BASELINE_PATH = join(__dirname, "baseline.json")

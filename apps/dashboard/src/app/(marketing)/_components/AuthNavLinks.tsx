@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const quietLinkClass =
-  "inline-flex items-center whitespace-nowrap px-2 py-2 text-sm font-medium text-[#2b2118] transition-colors hover:text-stone-600 sm:text-[15px]";
+  "inline-flex items-center whitespace-nowrap px-2 py-2 text-sm font-medium text-[#2b2118] transition-colors hover:text-[var(--m-quill)] sm:text-[15px]";
 
 const primaryLinkClass =
   "m-glass-btn m-glass-btn-primary whitespace-nowrap px-4 py-2 text-sm sm:px-5 sm:py-2.5";

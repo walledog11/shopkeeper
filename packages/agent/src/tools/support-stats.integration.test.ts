@@ -140,9 +140,10 @@ describe("getSupportStats", () => {
     });
 
     const stats = await getSupportStats(org.id, 7);
+    const afterQuery = Date.now();
 
     expect(new Date(stats.to).getTime()).toBeGreaterThanOrEqual(now.getTime());
-    expect(new Date(stats.from).getTime()).toBeLessThanOrEqual(now.getTime() - 7 * 86_400_000 + 1000);
+    expect(new Date(stats.from).getTime()).toBeLessThanOrEqual(afterQuery - 7 * 86_400_000);
     expect(stats.tickets).toMatchObject({
       total: 2,
       byTag: expect.arrayContaining([

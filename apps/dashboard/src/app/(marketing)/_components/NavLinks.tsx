@@ -60,19 +60,34 @@ const resourceItems: NavItem[] = [
   },
 ];
 
-function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+/* Menu keyboard behavior shared by the desktop dropdowns and the mobile menu:
+   outside-click / Escape to close (Escape hands focus back to the trigger),
+   ArrowDown on the trigger opens and focuses the first item, ArrowUp/ArrowDown
+   cycle through the items. */
+function useMenuKeyboard(
+  open: boolean,
+  setOpen: (value: boolean) => void,
+  rootRef: React.RefObject<HTMLDivElement | null>,
+  triggerRef: React.RefObject<HTMLButtonElement | null>,
+) {
+  const focusFirstOnOpen = useRef(false);
 
   useEffect(() => {
     if (!open) return;
+
+    if (focusFirstOnOpen.current) {
+      focusFirstOnOpen.current = false;
+      rootRef.current?.querySelector<HTMLElement>("[role=menuitem]")?.focus();
+    }
 
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      if (rootRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+      setOpen(false);
     }
 
     document.addEventListener("mousedown", onPointerDown);
@@ -81,7 +96,34 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [open]);
+  }, [open, setOpen, rootRef, triggerRef]);
+
+  return function onArrowKeys(event: React.KeyboardEvent) {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) {
+      focusFirstOnOpen.current = true;
+      setOpen(true);
+      return;
+    }
+    const items = Array.from(
+      rootRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? [],
+    );
+    if (items.length === 0) return;
+    const index = items.indexOf(document.activeElement as HTMLElement);
+    const next =
+      event.key === "ArrowDown"
+        ? items[(index + 1) % items.length]
+        : items[index <= 0 ? items.length - 1 : index - 1];
+    next.focus();
+  };
+}
+
+function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef);
 
   return (
     <div
@@ -89,8 +131,10 @@ function NavDropdown({ label, items }: { label: string; items: NavItem[] }) {
       className="relative"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
+      onKeyDown={onArrowKeys}
     >
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
@@ -150,31 +194,15 @@ export function NavLinks() {
 export function MobileNav() {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onPointerDown(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const onArrowKeys = useMenuKeyboard(open, setOpen, rootRef, triggerRef);
 
   const Icon = open ? X : Menu;
 
   return (
-    <div ref={rootRef} className="relative md:hidden">
+    <div ref={rootRef} className="relative md:hidden" onKeyDown={onArrowKeys}>
       <button
+        ref={triggerRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"

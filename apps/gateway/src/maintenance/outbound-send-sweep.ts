@@ -27,10 +27,10 @@ const SWEEP_ERROR = 'Send did not complete — message was queued but never sent
 export async function runOutboundSendSweep(): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_PENDING_MS);
 
-  const { count } = await db.message.updateMany({
+  const { count } = await retryAfterDbReconnect(() => db.message.updateMany({
     where: { sendStatus: 'pending', sentAt: { lt: cutoff } },
     data: { sendStatus: 'failed', sendError: SWEEP_ERROR },
-  });
+  }));
 
   if (count > 0) {
     logger.error(
@@ -51,3 +51,35 @@ export const registerOutboundSendSweepMaintenanceJob: MaintenanceJobRegistration
 
   return { workers: [worker], queues: [queue] };
 };
+
+async function retryAfterDbReconnect<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    if (!isDbConnectionClosedError(error)) {
+      throw error;
+    }
+
+    logger.warn(
+      { err: error instanceof Error ? error.message : String(error) },
+      '[OutboundSendSweep] DB connection was closed; reconnecting and retrying once',
+    );
+    await db.$disconnect().catch(() => {});
+    return operation();
+  }
+}
+
+function isDbConnectionClosedError(error: unknown): boolean {
+  const message = error instanceof Error
+    ? `${error.name}\n${error.message}\n${error.stack ?? ''}`
+    : String(error);
+
+  return [
+    'Server has closed the connection',
+    'Error in PostgreSQL connection',
+    'kind: Closed',
+    'P1017',
+  ].some((needle) => message.includes(needle))
+    || /connection (?:was )?(?:closed|terminated)/i.test(message)
+    || /closed (?:the )?connection/i.test(message);
+}
