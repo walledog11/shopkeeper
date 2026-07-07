@@ -26,7 +26,6 @@ import {
   type PlannerUsageTotals,
 } from "./planner-model.js";
 import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
-import { enforceSpendCap } from "./spend.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 
@@ -45,7 +44,6 @@ interface TerminalDraftInput {
 }
 
 async function draftRequiredTerminalTool(input: TerminalDraftInput): Promise<RawToolCall[]> {
-  await enforceSpendCap(input.ctx.orgId, input.resolvedSettings);
   const model = pickModel("reply_draft");
   const messages = appendPendingToolResults(input.messages);
   messages.push({ role: "user", content: input.prompt });

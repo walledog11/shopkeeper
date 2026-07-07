@@ -136,13 +136,30 @@ export function makeTikTokShopJob(
 
 export function classifierResponse(
   classification: 'genuine' | 'questionable' | 'filtered',
-  opts: { summary?: string; tag?: string; reason?: string } = {},
+  opts: {
+    summary?: string;
+    tag?: string;
+    reason?: string;
+    language?: string;
+    intents?: Partial<Record<string, boolean>>;
+  } = {},
 ) {
   const payload = {
     summary: opts.summary ?? 'Customer asked about their order.',
     tag: opts.tag ?? 'Order Status',
     classification,
     reason: opts.reason ?? `Looks ${classification}.`,
+    language: opts.language ?? 'en',
+    intents: {
+      mutative_request: false,
+      policy_question: false,
+      order_status: false,
+      fraud_signals: false,
+      contradiction: false,
+      out_of_scope_commercial: false,
+      forwarded_injection: false,
+      ...opts.intents,
+    },
   };
   return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
 }

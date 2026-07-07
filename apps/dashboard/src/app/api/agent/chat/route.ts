@@ -180,7 +180,7 @@ export const POST = withOrgRoute(
       await clearDashboardPendingApproval(resolvedSessionId);
     }
 
-    if (shouldPlanBeforeExecuting(instruction, settings)) {
+    if (shouldPlanBeforeExecuting(instruction)) {
       const planned = await planDashboardApproval({
         orgId: org.id,
         threadId: resolvedSessionId,

@@ -8,6 +8,7 @@ import { derivePlanPath } from "./plan-path.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { runInitialPlanningPhase } from "./planner-initial-phase.js";
 import { appendPendingToolResults, runMutativeReplan } from "./planner-replan.js";
+import { logRoutingShadow } from "./planner-routing.js";
 import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
 import { shouldForceMutativeReplan } from "./planner-safety/index.js";
 import { finalizePlanTools } from "./planner-terminal.js";
@@ -171,6 +172,20 @@ export async function planAgent(
     warningCount: initial.warnings.length,
     instructionHash,
   }, "[agent:plan] complete");
+
+  // Phase 2 shadow: compare the classifier routing to the live regex guards on
+  // the finalized plan. Observability only — must never break planning.
+  if (!operatorMode) {
+    try {
+      logRoutingShadow({ ctx, instruction, rawToolCalls, instructionHash });
+    } catch (error) {
+      logger.warn({
+        orgId: ctx.orgId,
+        threadId: ctx.thread.id,
+        err: error,
+      }, "[agent:plan:shadow] failed");
+    }
+  }
 
   const readResults = initial.readResultsMap.size > 0
     ? Object.fromEntries(initial.readResultsMap)

@@ -1,7 +1,7 @@
 import type { Request, Response, Router } from 'express';
 import { randomUUID } from 'crypto';
 import type { Content, Message, Space, WebhookRawResult } from 'spectrum-ts';
-import { getPlatformSpectrumApp, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
+import { getPlatformSpectrumApp, sendImessageOnSpace, SpectrumIntegrationConfigError } from '../clients/spectrum.js';
 import logger from '../logger.js';
 import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
 import { stripMarkdown } from '../message-handlers/strip-markdown.js';
@@ -159,7 +159,7 @@ async function dispatchInboundImessageMessage(
   }
 
   const reply: OperatorReply = async (replyText) => {
-    await space.send(stripMarkdown(replyText));
+    await sendImessageOnSpace(space, stripMarkdown(replyText));
   };
 
   // Sender carries no display name inbound (User = { id }); binding label stays null.

@@ -97,6 +97,50 @@ describe('handleImessageOperatorMessage', () => {
     expect(await findOrgMemberBindToken(token)).toBeNull();
   });
 
+  it('rejects an expired connect token with connect instructions', async () => {
+    const { token } = await createOrgMemberBindToken({ organizationId: org.id, clerkUserId });
+    await db.orgMemberBindToken.update({
+      where: { token },
+      data: { expiresAt: new Date(Date.now() - 60_000) },
+    });
+
+    const reply = vi.fn<OperatorReply>();
+    await handleImessageOperatorMessage({
+      senderId: SENDER,
+      spaceId: 'space_expired',
+      body: token,
+      displayName: null,
+      reply,
+    });
+
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply.mock.calls[0]?.[0]).toContain('Integrations → iMessage');
+    expect(await db.orgMemberImessageBinding.findUnique({ where: { senderId: SENDER } })).toBeNull();
+  });
+
+  it('re-binds after unlink when the sender texts a fresh connect token', async () => {
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: SENDER, spaceId: 'space_old' },
+    });
+    await db.orgMemberImessageBinding.delete({ where: { senderId: SENDER } });
+
+    const { token } = await createOrgMemberBindToken({ organizationId: org.id, clerkUserId });
+    const reply = vi.fn<OperatorReply>();
+
+    await handleImessageOperatorMessage({
+      senderId: SENDER,
+      spaceId: 'space_new',
+      body: token,
+      displayName: null,
+      reply,
+    });
+
+    const binding = await db.orgMemberImessageBinding.findUnique({ where: { senderId: SENDER } });
+    expect(binding?.orgMemberId).toBe(member.id);
+    expect(binding?.spaceId).toBe('space_new');
+    expect(reply).toHaveBeenCalledTimes(1);
+  });
+
   it('dispatches commands for a bound sender (HELP)', async () => {
     await db.orgMemberImessageBinding.create({
       data: {

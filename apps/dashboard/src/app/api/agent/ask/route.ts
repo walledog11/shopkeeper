@@ -37,7 +37,9 @@ export const POST = withOrgRoute(
     }, "[agent:ask] POST");
 
     const settings = resolveAgentSettings(org.settings as Partial<OrgSettings> | null);
-    const ctx = await buildContext(threadId, org.id);
+    // Read-only composer-ask uses only the last few messages (runAgent slices to
+    // 4 for readOnly), so cap the fetch instead of loading 50 rows.
+    const ctx = await buildContext(threadId, org.id, { messageWindow: 4 });
     const turnId = randomUUID();
     const result = await runAgent(ctx, instruction, undefined, settings, { readOnly: true, turnId });
 

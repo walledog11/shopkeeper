@@ -124,6 +124,12 @@ export function planningIntentTexts(ctx: AgentContext, instruction: string): str
   return texts;
 }
 
+export function customerMessageTexts(ctx: AgentContext): string[] {
+  return ctx.recentMessages
+    .filter((message) => message.senderType === "customer" && message.contentText?.trim())
+    .map((message) => message.contentText as string);
+}
+
 const CONTRADICTION_PIVOT_RE = /\b(actually|wait|scratch|never mind|nevermind|on second thought)\b/i;
 
 export function hasSuspectedFraudRefundSignals(...texts: string[]): boolean {
@@ -253,7 +259,7 @@ export function selectToolNamesForInstruction(
   return [...allowed];
 }
 
-const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [
+export const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [
   /\b(do you|can you|will you|are you)\b[^.?!]{0,48}\b(ship|deliver|send)\b/,
   /\bship(?:ping|s)?\s+(?:to|internationally|worldwide|globally|outside|overseas)\b/,
   /\b(international|worldwide|global|overseas)\b[^.?!]{0,40}\b(ship|deliver|order|shopping|sales)\b/,
@@ -261,7 +267,7 @@ const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [
   /\bship\s+to\s+[a-z]{3,}/i,
 ];
 
-const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
+export const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
   /\b(student|military|first.?time|loyalty|bulk|volume)\s+discount\b/i,
   /\boffer\s+(any|a)\s+(student|bulk|volume)\s+discount\b/i,
 ];

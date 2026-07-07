@@ -9,6 +9,7 @@ import type { InboundJobData, ShopifyOrderPayload } from '../types.js';
 import { uploadInboundAttachment } from '../storage/blob.js';
 import {
   classifyAndSummarizeNewEmail,
+  emptyIntents,
   stripQuotedReply,
   type ClassificationResult,
 } from './email-classification.js';
@@ -161,6 +162,9 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
             tag: 'General',
             filterStatus: 'genuine',
             filterReason: 'Existing customer with prior genuine thread',
+            // Classifier is skipped on this fast path — no intent signals to record.
+            intents: emptyIntents(),
+            language: '',
           }
         : await classifyAndSummarizeNewEmail(organizationId, subject!, body!);
     }

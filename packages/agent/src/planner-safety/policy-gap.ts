@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { AgentContext } from "../agent-context.js"
-import { hasMerchantPolicyGapIntent } from "../intent.js"
+import { customerMessageTexts, hasMerchantPolicyGapIntent } from "../intent.js"
 import { kbArticlesCoverQuery } from "../planner-read-skip.js"
 import type { RawToolCall } from "../types.js"
 
@@ -21,12 +21,6 @@ const MANAGED_CHANNEL_DEFLECTION_RES: readonly RegExp[] = [
 const SHIPPING_KB_SIGNAL_RES =
   /\b(international|worldwide|global|countries|regions|ship(?:ping)?|deliver)\b/i
 const RETURN_KB_SIGNAL_RES = /\b(return|refund|exchange|restock)\b/i
-
-function customerMessageTexts(ctx: AgentContext): string[] {
-  return ctx.recentMessages
-    .filter(message => message.senderType === "customer" && message.contentText?.trim())
-    .map(message => message.contentText as string)
-}
 
 function sendReplyText(toolCall: RawToolCall): string | null {
   if (toolCall.name !== "send_reply") return null

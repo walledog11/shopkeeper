@@ -38,6 +38,7 @@ const CONTRACTS = {
       'GOOGLE_CLIENT_SECRET',
       'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
+      'IMESSAGE_LINE_HANDLE',
     ],
     absoluteUrlVars: [
       'APP_URL',
@@ -71,6 +72,9 @@ const CONTRACTS = {
       'GMAIL_PUBSUB_TOPIC',
       'GMAIL_PUBSUB_AUDIENCE',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT',
+      'SPECTRUM_PROJECT_ID',
+      'SPECTRUM_PROJECT_SECRET',
+      'SPECTRUM_WEBHOOK_SECRET',
     ],
     absoluteUrlVars: ['DASHBOARD_URL', 'TWILIO_WEBHOOK_URL', 'POSTHOG_HOST'],
     expectedPathSuffixes: {

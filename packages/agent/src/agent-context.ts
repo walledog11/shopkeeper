@@ -1,3 +1,4 @@
+import type { ClassifierSignals } from "./classifier-signals.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -92,6 +93,10 @@ export interface SupportContext extends BaseAgentContext {
   recentOrders: ShopifyOrderSummary[];
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
+  // Structured classifier signals persisted on the thread (Phase 1). Optional:
+  // present only for classified inbound threads. Routing (Phase 2) reads it;
+  // absent/null means fall back to the regex path.
+  classifierSignals?: ClassifierSignals | null;
 }
 
 export type AgentContext = SupportContext;

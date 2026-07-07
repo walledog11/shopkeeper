@@ -20,7 +20,6 @@ import {
   REPLAN_INCLUDE_REPLY_PROMPT,
   selectPolicyGapReplanTools,
 } from "./planner-tools.js";
-import { enforceSpendCap } from "./spend.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
@@ -102,7 +101,6 @@ export async function runInitialPlanningPhase(input: {
         skippedReads: readPartition.skipped.map(block => block.name),
       }, "[agent:plan] all reads context-redundant — retrying initial call with full tool set");
 
-      await enforceSpendCap(input.ctx.orgId, input.resolvedSettings);
       const retry = await runPlannerModelCall({
         ctx: input.ctx,
         usageTotals: input.usageTotals,

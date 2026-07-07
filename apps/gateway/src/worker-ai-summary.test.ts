@@ -11,7 +11,9 @@ import {
 
 describe('AI Summary worker — filter gating', () => {
   it('skips plan precompute and operator notification when filterStatus is questionable', async () => {
-    getMockAnthropicCreate().mockResolvedValueOnce(classifierResponse('questionable'));
+    getMockAnthropicCreate().mockResolvedValueOnce(
+      classifierResponse('questionable', { language: 'es', intents: { order_status: true } }),
+    );
 
     const fetchUrls: string[] = [];
     getMockFetch().mockImplementation((url: string) => {
@@ -47,6 +49,19 @@ describe('AI Summary worker — filter gating', () => {
 
     const updated = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updated?.filterStatus).toBe('questionable');
+    expect(updated?.classifierSignals).toEqual({
+      version: 2,
+      language: 'es',
+      intents: {
+        mutative_request: false,
+        policy_question: false,
+        order_status: true,
+        fraud_signals: false,
+        contradiction: false,
+        out_of_scope_commercial: false,
+        forwarded_injection: false,
+      },
+    });
   });
 
   it('skips plan precompute and operator notification when filterStatus is filtered', async () => {

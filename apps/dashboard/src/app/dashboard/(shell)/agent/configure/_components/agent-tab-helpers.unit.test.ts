@@ -125,7 +125,6 @@ describe("agent tab helpers", () => {
       makeSettings({
         autonomyTier: "guarded",
         maxRefundAmount: 50,
-        requireApprovalForActions: true,
         toolsEnabled: { action: true, communication: true, internal: true, read: true },
       }),
       "trusted",
@@ -134,7 +133,6 @@ describe("agent tab helpers", () => {
 
     expect(next.autonomyTier).toBe("trusted");
     expect(next.maxRefundAmount).toBe(100);
-    expect(next.requireApprovalForActions).toBe(false);
     expect(next.toolsEnabled).toEqual({
       action: true,
       communication: true,
@@ -148,7 +146,6 @@ describe("agent tab helpers", () => {
       makeSettings({
         autonomyTier: "guarded",
         maxRefundAmount: 75,
-        requireApprovalForActions: true,
       }),
       "trusted",
       ["maxRefundAmount"],
@@ -156,7 +153,6 @@ describe("agent tab helpers", () => {
 
     expect(next.autonomyTier).toBe("trusted");
     expect(next.maxRefundAmount).toBe(75);
-    expect(next.requireApprovalForActions).toBe(false);
   });
 
   it("resets an override to the current tier default", () => {
@@ -173,7 +169,6 @@ describe("agent tab helpers", () => {
       makeSettings({
         autonomyTier: "trusted",
         maxRefundAmount: 150,
-        requireApprovalForActions: false,
         toolsEnabled: {
           action: true,
           communication: true,
@@ -185,9 +180,7 @@ describe("agent tab helpers", () => {
     );
 
     expect(patch.settings.maxRefundAmount).toBe(150);
-    expect(patch.settings.requireApprovalForActions).toBeUndefined();
     expect(patch.settings.toolsEnabled).toEqual({ action: true });
-    expect(patch.settingsUnset).toContain("requireApprovalForActions");
     expect(patch.settingsUnset).toContain("toolsEnabled.communication");
     expect(patch.settingsUnset).not.toContain("maxRefundAmount");
   });

@@ -190,7 +190,42 @@ async function verifyGateway(baseUrl) {
   assertCheck(data, 'checks.redis.status', 'ok');
   assertCheck(data, 'checks.worker.status', 'ok');
   assertCheck(data, 'checks.queues.status', 'ok');
+
+  if (optionalEnv('VERIFY_IMESSAGE') !== 'false' && data?.checks?.imessage) {
+    if (data.checks.imessage.configured !== true) {
+      throw new Error('[verify-production] Gateway iMessage is not configured (checks.imessage.configured !== true)');
+    }
+    console.log('[verify-production] Gateway iMessage configured');
+  }
+
   console.log(`[verify-production] Gateway deep health OK: ${url}`);
+}
+
+async function verifyPhotonWebhookInfrastructure(baseUrl) {
+  if (optionalEnv('VERIFY_IMESSAGE') === 'false') {
+    console.log('[verify-production] Skipping Photon webhook check: VERIFY_IMESSAGE=false');
+    return;
+  }
+
+  const url = buildUrl(baseUrl, '/webhooks/photon');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'user-agent': 'shopkeeper-production-verify/1.0',
+    },
+    body: JSON.stringify({}),
+  });
+
+  if (response.status === 503) {
+    throw new Error(
+      '[verify-production] Photon webhook returned 503 — set SPECTRUM_PROJECT_ID, SPECTRUM_PROJECT_SECRET, and SPECTRUM_WEBHOOK_SECRET on the gateway',
+    );
+  }
+
+  console.log(
+    `[verify-production] Photon webhook route reachable (status ${response.status}; 503 means iMessage is not configured): ${url}`,
+  );
 }
 
 async function verifyGatewayQueues(baseUrl) {
@@ -262,6 +297,7 @@ async function main() {
   await verifyDashboardHopBackRoutes(dashboardUrl);
   await verifyGateway(gatewayUrl);
   await verifyGatewayQueues(gatewayUrl);
+  await verifyPhotonWebhookInfrastructure(gatewayUrl);
   await verifyInboundEmailWebhook(gatewayUrl);
 
   console.log('[verify-production] Production verification passed');

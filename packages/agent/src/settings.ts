@@ -28,7 +28,6 @@ export type BusinessHoursSettings = Pick<
 >;
 
 export const AUTONOMY_OVERRIDE_PATHS = [
-  "requireApprovalForActions",
   "maxRefundAmount",
   "maxDiscountPercent",
   "blockCancellations",
@@ -48,7 +47,6 @@ export const AGENT_SETTINGS_DEFAULTS: OrgSettings = {
   agentName: "Shopkeeper",
   autoPlanOnOpen: true,
   defaultInstruction: "",
-  requireApprovalForActions: true,
   toolsEnabled: {
     action: true,
     communication: true,
@@ -83,7 +81,6 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   watch: {
     maxRefundAmount: 0,
     maxDiscountPercent: 0,
-    requireApprovalForActions: true,
     toolsEnabled: {
       action: false,
       communication: false,
@@ -94,22 +91,18 @@ export const TIER_DEFAULTS: Record<AutonomyTier, Partial<OrgSettings>> = {
   guarded: {
     maxRefundAmount: 50,
     maxDiscountPercent: 15,
-    requireApprovalForActions: true,
   },
   trusted: {
     maxRefundAmount: 100,
     maxDiscountPercent: 20,
-    requireApprovalForActions: false,
   },
   broad: {
     maxRefundAmount: 250,
     maxDiscountPercent: 30,
-    requireApprovalForActions: false,
   },
   full: {
     maxRefundAmount: 1000,
     maxDiscountPercent: 50,
-    requireApprovalForActions: false,
   },
 };
 

@@ -8,7 +8,7 @@ import { getQueueDiagnostics, readWorkerHeartbeat } from './health.js';
 import logger from './logger.js';
 import { closeGatewayBullMqQueues } from './clients/gateway-queues.js';
 import { closeGatewayRedisConnections, getGatewayRedis } from './clients/redis-client.js';
-import { stopAllSpectrumApps } from './clients/spectrum.js';
+import { isImessageConfigured, stopAllSpectrumApps } from './clients/spectrum.js';
 import { mountRealtime } from './realtime/sse.js';
 import { runGatewayEntry } from './bootstrap.js';
 import {
@@ -93,6 +93,10 @@ export async function startGatewayServer() {
       ok = false;
       logger.error({ err }, '[Health] Queue diagnostics failed');
     }
+
+    checks.imessage = {
+      configured: isImessageConfigured(),
+    };
 
     res.status(ok ? 200 : 503).json({ status: ok ? 'ok' : 'degraded', checks });
   });

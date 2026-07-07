@@ -30,7 +30,6 @@ interface ImessageBindingState {
   confirmingDeleteAll: boolean
   copied: boolean
   error: string | null
-  justLinked: string | null
   minting: boolean
   token: string | null
   unlinking: string | "all" | null
@@ -40,7 +39,6 @@ const INITIAL_STATE: ImessageBindingState = {
   confirmingDeleteAll: false,
   copied: false,
   error: null,
-  justLinked: null,
   minting: false,
   token: null,
   unlinking: null,
@@ -82,14 +80,13 @@ function formatHandleLabel(label: string): string {
 // `handle` is the fixed line to text, surfaced so the merchant knows where to send it.
 export function ImessageBindingSection({ handle }: { handle: string | null }) {
   const { data, mutate } = useSWR<ImessageBindStatus>('/api/integrations/imessage/bind', fetcher)
-  const [{ confirmingDeleteAll, copied, error, justLinked, minting, token, unlinking }, updateState] =
+  const [{ confirmingDeleteAll, copied, error, minting, token, unlinking }, updateState] =
     useReducer(mergeState, INITIAL_STATE)
   const handleCountAtMintRef = useRef(0)
 
   const handles = data?.handles ?? []
   const isConnected = handles.length > 0
   const deepLink = token && handle ? buildSmsDeepLink(handle, token) : null
-  const newestHandleLabel = handles.length > 0 ? handles[handles.length - 1].displayLabel : null
 
   // While a connect code is showing, poll so a freshly linked handle appears, and
   // clear the code once the merchant has texted it in (handle count grows).
@@ -99,15 +96,11 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
     return () => clearInterval(id)
   }, [token, mutate])
 
-  // When the texted code lands, the handle list grows: clear the code and surface a
-  // brief "linked" confirmation so the merchant knows it worked (the code vanishing
-  // alone reads as ambiguous).
+  // When the texted code lands, the handle list grows — dismiss the QR/code UI.
   useEffect(() => {
     if (!token || handles.length <= handleCountAtMintRef.current) return
-    updateState({ justLinked: newestHandleLabel ?? "iPhone", token: null })
-    const id = setTimeout(() => updateState({ justLinked: null }), 6000)
-    return () => clearTimeout(id)
-  }, [token, handles.length, newestHandleLabel])
+    updateState({ token: null })
+  }, [token, handles.length])
 
   async function mint() {
     updateState({ minting: true, error: null })
@@ -210,13 +203,6 @@ export function ImessageBindingSection({ handle }: { handle: string | null }) {
   return (
     <div className="space-y-5">
       {error && <p className="text-xs text-red-400">{error}</p>}
-
-      {justLinked && (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/[0.06] px-3 py-2 text-xs font-medium text-emerald-300">
-          <Check className="size-3.5 shrink-0" />
-          {justLinked} linked
-        </div>
-      )}
 
       {isConnected ? (
         <>

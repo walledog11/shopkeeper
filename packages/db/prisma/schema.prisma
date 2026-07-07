@@ -208,6 +208,7 @@ model Thread {
   filterReason          String?              @map("filter_reason") @db.Text
   filterDecidedAt       DateTime?            @map("filter_decided_at") @db.Timestamptz
   filterFeedback        ThreadFilterFeedback @default(none) @map("filter_feedback")
+  classifierSignals     Json?                @map("classifier_signals") @db.JsonB
 
   organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   customer        Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)

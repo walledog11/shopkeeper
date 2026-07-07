@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
 import type { ToolStatus } from "./tools/result.js";
+import { planningIntentTexts } from "./intent.js";
 import {
   findOrderByName,
 } from "./order-reference.js";
@@ -22,18 +23,6 @@ const ORDER_REFRESH_PHRASES = [
 export function impliesOrderRefresh(...texts: string[]): boolean {
   const combined = texts.join(" ").toLowerCase();
   return ORDER_REFRESH_PHRASES.some((phrase) => combined.includes(phrase));
-}
-
-function planningIntentTexts(ctx: AgentContext, instruction: string): string[] {
-  const texts = [instruction];
-  for (let index = ctx.recentMessages.length - 1; index >= 0; index -= 1) {
-    const message = ctx.recentMessages[index];
-    if (message.senderType === "customer" && message.contentText?.trim()) {
-      texts.push(message.contentText);
-      break;
-    }
-  }
-  return texts;
 }
 
 function kbQueryWords(query: string): string[] {

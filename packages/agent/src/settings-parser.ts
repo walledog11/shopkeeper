@@ -35,7 +35,6 @@ const SETTINGS_KEYS = [
   "autoPlanOnOpen",
   "autoExecuteMode",
   "defaultInstruction",
-  "requireApprovalForActions",
   "toolsEnabled",
   "maxRefundAmount",
   "dailyRefundCap",
@@ -67,7 +66,6 @@ const SETTINGS_KEYS = [
 
 const BOOLEAN_FIELDS = [
   "autoPlanOnOpen",
-  "requireApprovalForActions",
   "blockCancellations",
   "blockCustomLineItems",
   "digestEnabled",

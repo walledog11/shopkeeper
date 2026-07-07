@@ -38,7 +38,8 @@
     "configure:gmail-pubsub": "bash scripts/configure-gmail-pubsub.sh",
     "verify:production:env": "node ./scripts/check-production-env.mjs all",
     "verify:production": "node ./scripts/verify-production.mjs",
-    "verify:production:alerts": "node ./scripts/verify-production-alerts.mjs"
+    "verify:production:alerts": "node ./scripts/verify-production-alerts.mjs",
+    "verify:imessage:phase1-preflight": "node ./scripts/test-bootstrap.mjs && npm run test:integration -w apps/gateway -- --run src/routes/imessage/message-handler.test.ts src/routes/webhooks-meta-photon.test.ts src/operator-notify.test.ts src/operator-escalation.test.ts src/message-handlers/planning-notifications.test.ts && npm run test:integration -w apps/dashboard -- --run src/app/api/integrations/imessage/bind/route.test.ts"
   },
   "devDependencies": {
     "@clerk/testing": "^2.0.22",

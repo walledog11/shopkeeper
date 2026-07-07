@@ -263,6 +263,48 @@ describe('POST /webhooks/photon', () => {
     expect(spectrumWebhookSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
+
+  it('skips duplicate webhook deliveries for the same provider message id', async () => {
+    const sendSpy = vi.fn().mockResolvedValue(undefined);
+    const messageId = 'imsg_dedupe_001';
+    let dispatchCount = 0;
+
+    spectrumWebhookSpy.mockImplementation(async (_requestInput, handler) => {
+      dispatchCount += 1;
+      await handler(
+        { id: 'any;-;+15551234567', __platform: 'iMessage', send: sendSpy },
+        {
+          id: messageId,
+          direction: 'inbound',
+          platform: 'iMessage',
+          sender: { id: '+15551234567', __platform: 'iMessage' },
+          space: { id: 'any;-;+15551234567', __platform: 'iMessage' },
+          timestamp: new Date('2026-06-17T12:00:00.000Z'),
+          content: { type: 'text', text: 'Hello from iMessage' },
+        },
+      );
+      return { status: 200, headers: {}, body: Buffer.from('OK') };
+    });
+
+    const body = JSON.stringify({ event: 'message' });
+    const post = () => request(app)
+      .post('/webhooks/photon')
+      .set('Content-Type', 'application/json')
+      .set('x-spectrum-signature', 'v0=test')
+      .send(body);
+
+    const first = await post();
+    const second = await post();
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(dispatchCount).toBe(2);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ messageId, senderId: '+15551234567' }),
+      '[Webhook] iMessage duplicate delivery skipped',
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

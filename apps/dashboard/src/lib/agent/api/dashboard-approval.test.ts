@@ -47,9 +47,7 @@ import {
   type DashboardPendingApproval,
 } from "@/lib/agent/api/dashboard-approval";
 
-const settings = {
-  requireApprovalForActions: true,
-} as OrgSettings;
+const settings = {} as OrgSettings;
 
 const createOrderPlan: AgentPlan = {
   instruction: "Create an order",
@@ -143,18 +141,10 @@ describe("dashboard approval helpers", () => {
     expect(getDashboardApprovalReplyKind("change the address first")).toBe("revise");
   });
 
-  it("only plans before execution when approval is enabled and the instruction asks for an action", () => {
-    expect(shouldPlanBeforeExecuting("Create the order", settings)).toBe(true);
-    expect(shouldPlanBeforeExecuting("What is the order status?", settings)).toBe(false);
-    expect(shouldPlanBeforeExecuting("Create the order", {
-      ...settings,
-      requireApprovalForActions: false,
-    })).toBe(false);
-    expect(shouldPlanBeforeExecuting("Refund the order", {
-      ...settings,
-      autonomyTier: "trusted",
-      requireApprovalForActions: false,
-    })).toBe(true);
+  it("plans before execution only when the instruction asks for an action", () => {
+    expect(shouldPlanBeforeExecuting("Create the order")).toBe(true);
+    expect(shouldPlanBeforeExecuting("Refund the order")).toBe(true);
+    expect(shouldPlanBeforeExecuting("What is the order status?")).toBe(false);
   });
 
   it("filters dashboard approval actions to action-category planned tool calls", () => {
@@ -234,7 +224,7 @@ describe("dashboard approval helpers", () => {
     if (!planned || !("approval" in planned)) throw new Error("expected an approval result");
     expect(planned.approval.instructionHash).toBe("hash_planned");
     expect(planned.approval.summary).toContain("Reply yes to create it");
-    expect(mockBuildContext).toHaveBeenCalledWith(thread.id, org.id);
+    expect(mockBuildContext).toHaveBeenCalledWith(thread.id, org.id, { messageWindow: 4 });
     expect(mockPlanAgent).toHaveBeenCalledWith({ messages: [] }, "Create an order", settings);
 
     const refreshed = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
@@ -295,7 +285,6 @@ describe("dashboard approval helpers", () => {
         ...settings,
         autonomyTier: "trusted",
         autoExecuteMode: "live",
-        requireApprovalForActions: false,
         maxRefundAmount: 100,
       },
     });

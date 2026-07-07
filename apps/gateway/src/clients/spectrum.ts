@@ -2,10 +2,16 @@ import { createHash } from 'node:crypto';
 import { Spectrum, type SpectrumInstance } from 'spectrum-ts';
 import { imessage } from 'spectrum-ts/providers/imessage';
 import { getSpectrumConfig, type SpectrumConfig } from '../config/runtime-config.js';
+import logger from '../logger.js';
 
 type ImessageProviderConfig = ReturnType<typeof imessage.config>;
 
 export type ImessageSpectrumApp = SpectrumInstance<[ImessageProviderConfig]>;
+
+export interface ImessageSendTarget {
+  id: string;
+  send: (text: string) => Promise<unknown>;
+}
 
 interface CachedSpectrumApp {
   credHash: string;
@@ -18,6 +24,37 @@ export class SpectrumIntegrationConfigError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'SpectrumIntegrationConfigError';
+  }
+}
+
+function isSpectrumTransportError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === 'ConnectionError') return true;
+  const message = error.message;
+  return message.includes('ECONNRESET') || message.includes('UNAVAILABLE');
+}
+
+async function loadImessageSpace(spaceId: string): Promise<ImessageSendTarget> {
+  const app = await getPlatformSpectrumApp();
+  return imessage(app).space.get(spaceId);
+}
+
+// Photon inbound webhooks can arrive on a stale gRPC channel (ECONNRESET on the
+// first reply). Reconnect the cached Spectrum app once before surfacing failure.
+export async function sendImessageOnSpace(space: ImessageSendTarget, text: string): Promise<void> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await space.send(text);
+      return;
+    } catch (error) {
+      if (attempt === 0 && isSpectrumTransportError(error)) {
+        logger.warn({ err: error, spaceId: space.id }, '[Spectrum] Send failed — reconnecting and retrying once');
+        await stopAllSpectrumApps();
+        space = await loadImessageSpace(space.id);
+        continue;
+      }
+      throw error;
+    }
   }
 }
 
@@ -76,9 +113,8 @@ export function isImessageConfigured(): boolean {
 // Proactive operator send: reach a space persisted from an earlier inbound
 // event (`OrgMemberImessageBinding.spaceId`) without a webhook reply in hand.
 export async function sendImessageToSpace(spaceId: string, text: string): Promise<void> {
-  const app = await getPlatformSpectrumApp();
-  const space = await imessage(app).space.get(spaceId);
-  await space.send(text);
+  const space = await loadImessageSpace(spaceId);
+  await sendImessageOnSpace(space, text);
 }
 
 // Graceful shutdown: stop the cached Spectrum app so its connection is torn down

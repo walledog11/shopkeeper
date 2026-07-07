@@ -7,6 +7,7 @@ import { readModelUsage } from '@shopkeeper/agent/usage';
 import { anthropic } from '@shopkeeper/agent/ai';
 import {
   CLASSIFIER_SYSTEM_PROMPT,
+  classifierSignals,
   parseClassifierJson,
 } from './email-classification.js';
 
@@ -38,7 +39,7 @@ export async function generateThreadIntelligence(
 
     const aiResponse = await anthropic.messages.create({
       model: MODEL.CLAUDE,
-      max_tokens: 256,
+      max_tokens: 400,
       system: CLASSIFIER_SYSTEM_PROMPT,
       messages: [{ role: 'user', content: conversationText }],
     });
@@ -61,6 +62,7 @@ export async function generateThreadIntelligence(
         aiTitle: aiData.title,
         aiSummary: aiData.summary,
         tag: aiData.tag,
+        classifierSignals: classifierSignals(aiData),
         ...(shouldSetFilter && {
           filterStatus: aiData.filterStatus,
           filterReason: aiData.filterReason,

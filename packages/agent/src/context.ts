@@ -1,4 +1,5 @@
 import { db } from "@shopkeeper/db";
+import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
 import type { ToolResult } from "./tools/result.js";
@@ -70,6 +71,9 @@ type RawShopifyOrder = {
 export interface BuildContextOptions {
   agentActionMode?: AgentActionMode;
   pinKbArticles?: readonly { title: string; body: string }[];
+  // Operator/read-only callers only use the last few messages, so they can cap
+  // the fetch here instead of loading 50 rows and slicing after. Defaults to 50.
+  messageWindow?: number;
 }
 
 function mergePinnedKbArticles(
@@ -114,7 +118,7 @@ export async function buildContext(
             platformId: true,
           },
         },
-        messages: { orderBy: { sentAt: "desc" }, take: 50 },
+        messages: { orderBy: { sentAt: "desc" }, take: options?.messageWindow ?? 50 },
       },
     }),
     db.organization.findUnique({ where: { id: orgId } }),
@@ -311,5 +315,6 @@ export async function buildContext(
     recentOrders,
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
+    classifierSignals: parseClassifierSignals(thread.classifierSignals),
   };
 }

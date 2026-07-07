@@ -4,7 +4,6 @@ import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runn
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
 import { isAutoExecuteEnabled } from "@/lib/agent/api/plan-execution";
-import { resolveAgentSettings, TIERS_THAT_AUTO_EXECUTE } from "@shopkeeper/agent/settings";
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
@@ -33,10 +32,12 @@ export interface DashboardPendingApproval {
 
 export type DashboardApprovalReplyKind = "approve" | "dismiss" | "revise";
 
-export function shouldPlanBeforeExecuting(instruction: string, settings: OrgSettings): boolean {
-  if (!APPROVAL_INTENT_RE.test(instruction)) return false;
-  const resolved = resolveAgentSettings(settings);
-  return resolved.requireApprovalForActions || TIERS_THAT_AUTO_EXECUTE.has(resolved.autonomyTier ?? "guarded");
+// Every autonomy tier plans an action instruction before executing: watch/guarded
+// hold for approval, and the auto-execute tiers still route through planning (the
+// classifier + autoExecuteMode gate decide whether to fire). So this reduces to
+// "does the instruction ask for an action" — no per-tier branch is meaningful.
+export function shouldPlanBeforeExecuting(instruction: string): boolean {
+  return APPROVAL_INTENT_RE.test(instruction);
 }
 
 function normalizeApprovalReply(instruction: string): string {
@@ -273,7 +274,9 @@ export async function planDashboardApproval(params: {
   | null
 > {
   const generationStartedAt = Date.now();
-  const ctx = await buildContext(params.threadId, params.orgId);
+  // Concierge is an operator channel; planAgent slices operator history to the
+  // last 4 messages, so cap the fetch instead of loading 50 rows.
+  const ctx = await buildContext(params.threadId, params.orgId, { messageWindow: 4 });
   const plan = await planAgent(ctx, params.instruction, params.settings);
   const planId = randomUUID();
   if (plan.steps.length > 0) {

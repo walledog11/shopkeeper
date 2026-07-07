@@ -32,9 +32,6 @@ export interface OrgSettings {
   autoExecuteMode?: 'off' | 'shadow' | 'live'; // off = approval-only; shadow = record counterfactuals, still approval-only; live = auto-fire
   defaultInstruction: string;
 
-  // Approval workflow
-  requireApprovalForActions: boolean;
-
   // Tool permissions
   toolsEnabled: AgentToolPermissions;
 

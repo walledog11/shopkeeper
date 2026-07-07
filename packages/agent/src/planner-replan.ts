@@ -1,7 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
-import { enforceSpendCap } from "./spend.js";
 import { resolveAgentSettings } from "./settings.js";
 import type { RawToolCall } from "./types.js";
 import type { PlannerUsageTotals } from "./planner-model.js";
@@ -64,7 +63,6 @@ export async function runMutativeReplan(input: {
 }> {
   const {
     ctx,
-    resolvedSettings,
     systemPromptBlocks,
     tools,
     operatorMode,
@@ -74,7 +72,6 @@ export async function runMutativeReplan(input: {
   let planMessages = input.planMessages;
   const activeRawToolCalls = input.phase1RawToolCalls;
 
-  await enforceSpendCap(ctx.orgId, resolvedSettings);
   const replanModel = pickModel("plan_replan");
   const sendReplyTool = tools.find((tool) => tool.name === "send_reply");
   const runReplan = async (
@@ -117,7 +114,6 @@ export async function runMutativeReplan(input: {
         ],
       },
     ];
-    await enforceSpendCap(ctx.orgId, resolvedSettings);
     const retryTools = selectReplanRetryTools(tools, replanBlocks);
     ({ response: replanResponse, toolBlocks: replanBlocks } = await runReplan(
       planMessages,

@@ -15,7 +15,10 @@ import {
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
 // We spy on Queue.add to confirm the right job was enqueued.
+const redisDedupeStore = vi.hoisted(() => new Map<string, string>());
+
 const {
+  clearRedisDedupeStore,
   googleTokenVerifySpy,
   mockLogger,
   queueAddSpy,
@@ -24,6 +27,7 @@ const {
   uploadInboundAttachmentSpy,
   SpectrumConfigError,
 } = vi.hoisted(() => ({
+  clearRedisDedupeStore: () => redisDedupeStore.clear(),
   googleTokenVerifySpy: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
@@ -46,7 +50,13 @@ vi.mock('ioredis', () => ({
     this.status = 'ready';
     this.incr = vi.fn().mockResolvedValue(1);
     this.expire = vi.fn().mockResolvedValue(1);
-    this.set = vi.fn().mockResolvedValue('OK');
+    this.set = vi.fn().mockImplementation(async (key: string, value: string, ...args: unknown[]) => {
+      if (args.includes('NX') && redisDedupeStore.has(key)) {
+        return null;
+      }
+      redisDedupeStore.set(key, value);
+      return 'OK';
+    });
   }),
 }));
 
@@ -95,6 +105,7 @@ export const app = createWebhookRouterApp(webhookRoutes, { urlencoded: true });
 export const webhookFixture = {
   SpectrumConfigError,
   app,
+  clearRedisDedupeStore,
   getPlatformSpectrumAppSpy,
   googleTokenVerifySpy,
   mockLogger,
@@ -109,6 +120,7 @@ export const webhookFixture = {
 beforeEach(async () => {
   process.env.GMAIL_PUBSUB_AUDIENCE = GMAIL_PUBSUB_AUDIENCE;
   process.env.GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT = GMAIL_PUSH_SERVICE_ACCOUNT;
+  clearRedisDedupeStore();
   org = await createTestOrg();
   queueAddSpy.mockClear();
   getPlatformSpectrumAppSpy.mockReset();

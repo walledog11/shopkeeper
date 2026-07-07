@@ -9,14 +9,12 @@ import {
 describe("resolveAgentSettings", () => {
   it("defaults new orgs to guarded tier", () => {
     expect(AGENT_SETTINGS_DEFAULTS.autonomyTier).toBe("guarded");
-    expect(AGENT_SETTINGS_DEFAULTS.requireApprovalForActions).toBe(true);
   });
 
   it("returns guarded-tier defaults when settings are null", () => {
     const resolved = resolveAgentSettings(null);
     expect(resolved.autonomyTier).toBe("guarded");
     expect(resolved.maxRefundAmount).toBe(TIER_DEFAULTS.guarded.maxRefundAmount);
-    expect(resolved.requireApprovalForActions).toBe(true);
   });
 
   it("returns guarded-tier defaults when settings are undefined", () => {
@@ -32,20 +30,19 @@ describe("resolveAgentSettings", () => {
   });
 
   describe("per-tier defaults", () => {
-    const cases: Array<{ tier: AutonomyTier; maxRefund: number; requireApproval: boolean }> = [
-      { tier: "watch",   maxRefund: 0,    requireApproval: true  },
-      { tier: "guarded", maxRefund: 50,   requireApproval: true  },
-      { tier: "trusted", maxRefund: 100,  requireApproval: false },
-      { tier: "broad",   maxRefund: 250,  requireApproval: false },
-      { tier: "full",    maxRefund: 1000, requireApproval: false },
+    const cases: Array<{ tier: AutonomyTier; maxRefund: number }> = [
+      { tier: "watch",   maxRefund: 0    },
+      { tier: "guarded", maxRefund: 50   },
+      { tier: "trusted", maxRefund: 100  },
+      { tier: "broad",   maxRefund: 250  },
+      { tier: "full",    maxRefund: 1000 },
     ];
 
-    for (const { tier, maxRefund, requireApproval } of cases) {
+    for (const { tier, maxRefund } of cases) {
       it(`applies ${tier}-tier defaults`, () => {
         const resolved = resolveAgentSettings({ autonomyTier: tier });
         expect(resolved.autonomyTier).toBe(tier);
         expect(resolved.maxRefundAmount).toBe(maxRefund);
-        expect(resolved.requireApprovalForActions).toBe(requireApproval);
       });
     }
   });
@@ -70,8 +67,6 @@ describe("resolveAgentSettings", () => {
     expect(resolved.autonomyTier).toBe("watch");
     // Override wins over watch-tier default of 0.
     expect(resolved.maxRefundAmount).toBe(100);
-    // Other watch-tier defaults still apply.
-    expect(resolved.requireApprovalForActions).toBe(true);
   });
 
   it("lets explicit toolsEnabled override tier-level toolsEnabled", () => {

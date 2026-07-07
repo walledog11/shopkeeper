@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { AgentContext } from "../agent-context.js"
 import {
+  customerMessageTexts,
   hasActionableMutativeIntent,
   hasContradictoryInstructionSignals,
   hasForwardedInjectionRefundSignal,
@@ -52,12 +53,6 @@ export function hasAmbiguousCustomerSearchResult(
     }
   }
   return false
-}
-
-function customerMessageTexts(ctx: AgentContext): string[] {
-  return ctx.recentMessages
-    .filter(message => message.senderType === "customer" && message.contentText?.trim())
-    .map(message => message.contentText as string)
 }
 
 export function shouldForcePlanningEscalation(input: {

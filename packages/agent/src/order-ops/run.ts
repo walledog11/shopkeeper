@@ -142,8 +142,6 @@ export async function runOrderOps(
       return finish("Reached maximum steps without a decision.", "max_iterations");
     }
 
-    await enforceSpendCap(ctx.orgId, s);
-
     const response = await anthropic.messages.create({
       model,
       max_tokens: 1024,
@@ -188,5 +186,8 @@ export async function runOrderOps(
     return runIteration(i + 1);
   };
 
+  // Spend cap backstop — check once before the model loop. Orders with no risk
+  // signals return above with zero model calls and stay ungated.
+  await enforceSpendCap(ctx.orgId, s);
   return runIteration(0);
 }

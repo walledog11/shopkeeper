@@ -113,6 +113,9 @@ Rules:
   Controlled-rollout switch. Defaults to `false`; use the same value in the dashboard and
   gateway. When disabled, Gmail OAuth remains available for sending and the dashboard directs
   merchants to the forwarding fallback.
+- `IMESSAGE_LINE_HANDLE`
+  The fixed iMessage handle merchants text to reach the operator agent. Presence makes iMessage
+  available in Integrations and onboarding; it is not a secret.
 
 Optional:
 
@@ -157,6 +160,11 @@ Rules:
   Explicit controlled-rollout switch. Set `false` until Pub/Sub provisioning is verified, and
   keep its value in sync with the dashboard. When disabled, Gmail pushes are acknowledged
   without queueing, sync jobs no-op, and watch renewal skips Gmail integrations.
+- `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET`
+  Platform-wide Photon Spectrum credentials for the operator iMessage line (one project for all orgs).
+  `SPECTRUM_WEBHOOK_SECRET` is the per-endpoint secret shown when registering
+  `https://<gateway>/webhooks/photon` in [app.photon.codes](https://app.photon.codes) → Webhooks.
+  Rotates if that endpoint is recreated.
 
 Optional:
 
@@ -317,6 +325,57 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 4. Confirm a Telegram plan notification reaches bound org members for a new ticket.
 5. Reply `yes` / `no` / freeform and confirm the agent acts (or skips) accordingly.
 
+### iMessage Operator Channel (Phase 0 infra)
+
+One platform-wide Photon Spectrum line serves all orgs. Merchants bind their iPhone by texting a
+connect code; customers never use this channel.
+
+**One-time Photon setup**
+
+1. Confirm or create a Spectrum project with an iMessage line (shared pool is fine for beta).
+   Use `photon login` then `photon projects show` and `photon spectrum lines list`, or the
+   [Photon dashboard](https://app.photon.codes).
+2. Register the inbound webhook in app.photon.codes → **Webhooks**:
+   - URL: `https://<gateway>/webhooks/photon`
+   - Copy the endpoint signing secret into gateway `SPECTRUM_WEBHOOK_SECRET` on Railway (both
+     `shopkeeper` and `Gateway Worker` services if split).
+3. Set env vars:
+
+   | Service | Variables |
+   |---------|-----------|
+   | **Gateway (Railway)** | `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` |
+   | **Dashboard (Vercel)** | `IMESSAGE_LINE_HANDLE` — must match the handle merchants text |
+
+4. Apply migration `20260624000000_add_org_member_imessage_bindings` (and later iMessage migrations)
+   if not already deployed: `npm run db:migrate:deploy`.
+5. Confirm `GATEWAY_RUNTIME_ROLE` includes `server` (default `all` on a single Railway service).
+   Spectrum inbound webhooks need the public gateway process.
+
+**Phase 0 verification**
+
+```bash
+# Webhook route must not return 503 (missing Spectrum creds)
+curl -sS -o /dev/null -w "%{http_code}\n" -X POST \
+  https://<gateway>/webhooks/photon \
+  -H "Content-Type: application/json" -d '{}'
+
+# After gateway deploy with imessage health check:
+curl -sS https://<gateway>/health/deep | jq '.checks.imessage'
+
+DASHBOARD_URL='https://<dashboard>' \
+GATEWAY_URL='https://<gateway>' \
+npm run verify:production
+```
+
+Pass criteria:
+
+- Photon webhook POST returns anything except `503` (signature errors `400`/`401` are fine pre-test).
+- Gateway logs `[Webhook] Photon delivery processed` with `status: 200` on a signed test inbound.
+- Dashboard Integrations shows iMessage Connect enabled (not disabled) when `IMESSAGE_LINE_HANDLE` is set.
+
+Full merchant flows (bind, plan push, approve) are Phase 1 in
+[`imessage-production-readiness-plan.md`](../imessage-production-readiness-plan.md).
+
 ### Shopify
 
 1. Complete a live Shopify OAuth connect flow from the production dashboard.
@@ -339,6 +398,7 @@ The dashboard webhook proxy routes are for local development convenience. In pro
 
 - Meta -> `https://<gateway>/webhooks/meta`
 - Telegram -> `https://<gateway>/webhooks/telegram`
+- Photon Spectrum (iMessage operator) -> `https://<gateway>/webhooks/photon`
 - Postmark inbound -> `https://<gateway>/webhooks/email/inbound`
 - Shopify -> `https://<gateway>/webhooks/shopify`
 

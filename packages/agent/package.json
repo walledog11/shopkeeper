@@ -50,6 +50,10 @@
       "types": "./dist/intent.d.ts",
       "default": "./dist/intent.js"
     },
+    "./classifier-signals": {
+      "types": "./dist/classifier-signals.d.ts",
+      "default": "./dist/classifier-signals.js"
+    },
     "./prompt": {
       "types": "./dist/prompt.d.ts",
       "default": "./dist/prompt.js"

@@ -10,7 +10,7 @@ import logger from '../logger.js';
 import { JOB, STATUS } from '../constants.js';
 import { captureInboundMessageProcessed } from '../product-analytics.js';
 import { publishThreadEvent } from '../realtime/publish.js';
-import type { ClassificationResult } from './email-classification.js';
+import { classifierSignals, type ClassificationResult } from './email-classification.js';
 
 const MAX_INPUT_LENGTH = 4000;
 
@@ -128,6 +128,7 @@ export async function processInboundMessage(
             filterStatus: precomputed.filterStatus,
             filterReason: precomputed.filterReason,
             filterDecidedAt: new Date(),
+            classifierSignals: classifierSignals(precomputed),
           }),
           ...(!precomputed && lockAsGenuine && {
             filterReason: 'Spam filter disabled',

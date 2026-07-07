@@ -51,7 +51,12 @@ describe('Message worker — email branch', () => {
 
   it('persists genuine email with filterStatus + filterDecidedAt set inline', async () => {
     getMockAnthropicCreate().mockResolvedValueOnce(
-      classifierResponse('genuine', { summary: 'Customer needs shipping help.', tag: 'Shipping' }),
+      classifierResponse('genuine', {
+        summary: 'Customer needs shipping help.',
+        tag: 'Shipping',
+        language: 'fr',
+        intents: { policy_question: true },
+      }),
     );
 
     const handler = getCapturedHandlers().get('inbound-messages');
@@ -71,6 +76,19 @@ describe('Message worker — email branch', () => {
     expect(thread?.filterDecidedAt).not.toBeNull();
     expect(thread?.aiSummary).toBe('Customer needs shipping help.');
     expect(thread?.tag).toBe('Shipping');
+    expect(thread?.classifierSignals).toEqual({
+      version: 2,
+      language: 'fr',
+      intents: {
+        mutative_request: false,
+        policy_question: true,
+        order_status: false,
+        fraud_signals: false,
+        contradiction: false,
+        out_of_scope_commercial: false,
+        forwarded_injection: false,
+      },
+    });
   });
 
   it('persists spam as filtered', async () => {

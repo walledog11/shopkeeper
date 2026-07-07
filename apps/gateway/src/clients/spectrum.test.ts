@@ -9,8 +9,10 @@ import {
 
 const mocks = vi.hoisted(() => ({
   spectrum: vi.fn(),
+  imessage: vi.fn(),
   imessageConfig: vi.fn(),
   getSpectrumConfig: vi.fn(),
+  spaceGet: vi.fn(),
 }));
 
 vi.mock('spectrum-ts', () => ({
@@ -18,13 +20,20 @@ vi.mock('spectrum-ts', () => ({
 }));
 
 vi.mock('spectrum-ts/providers/imessage', () => ({
-  imessage: {
-    config: mocks.imessageConfig,
-  },
+  imessage: Object.assign(mocks.imessage, { config: mocks.imessageConfig }),
 }));
 
 vi.mock('../config/runtime-config.js', () => ({
   getSpectrumConfig: mocks.getSpectrumConfig,
+}));
+
+vi.mock('../logger.js', () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
 }));
 
 const CREDS = {

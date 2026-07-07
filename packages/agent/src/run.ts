@@ -185,8 +185,6 @@ export async function runAgent(
 
     logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
 
-    await enforceSpendCap(ctx.orgId, s);
-
     const response = await anthropic.messages.create({
       model: iterationModel,
       max_tokens: readOnly ? 2048 : 4096,
@@ -253,5 +251,9 @@ export async function runAgent(
     return runModelIteration(i + 1);
   };
 
+  // Spend cap is a backstop, not a per-call meter — check once before the model
+  // loop. The approved-execution and fast paths above return with zero model
+  // calls and stay ungated.
+  await enforceSpendCap(ctx.orgId, s);
   return runModelIteration(0);
 }

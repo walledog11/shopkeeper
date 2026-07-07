@@ -1,13 +1,6 @@
 import { db } from "@shopkeeper/db";
 import { AGENT_LEARNED_KB_TAG, buildMerchantAnswerKbTags } from "./kb-learned.js";
-
-const SHIPPING_COVERAGE_QUESTION_RES: readonly RegExp[] = [
-  /\b(do you|can you|will you|are you)\b[^.?!]{0,48}\b(ship|deliver|send)\b/,
-  /\bship(?:ping|s)?\s+(?:to|internationally|worldwide|globally|outside|overseas)\b/,
-  /\b(international|worldwide|global|overseas)\b[^.?!]{0,40}\b(ship|deliver|order|shopping|sales)\b/,
-  /\bshopping\s+globally\b/,
-  /\bship\s+to\s+[a-z]{3,}/i,
-];
+import { DISCOUNT_POLICY_QUESTION_RES, SHIPPING_COVERAGE_QUESTION_RES } from "./intent.js";
 
 const RETURN_POLICY_QUESTION_RES: readonly RegExp[] = [
   /\breturn\s+policy\b/,
@@ -16,9 +9,11 @@ const RETURN_POLICY_QUESTION_RES: readonly RegExp[] = [
   /\bhow\s+(do|can)\s+i\s+return\b/,
 ];
 
-const DISCOUNT_POLICY_QUESTION_RES: readonly RegExp[] = [
-  /\b(student|military|first.?time|loyalty|bulk|volume)\s+discount\b/i,
-  /\boffer\s+(any|a)\s+(student|bulk|volume)\s+discount\b/i,
+// The answer-side discount check adds a broader "do you offer discounts" catch on
+// top of the shared question regexes (which intent.ts uses for the tighter
+// policy-gap routing decision).
+const DISCOUNT_POLICY_ANSWER_RES: readonly RegExp[] = [
+  ...DISCOUNT_POLICY_QUESTION_RES,
   /\bdo\s+you\s+offer\s+(any|a)?\s*discounts?\b/i,
 ];
 
@@ -72,7 +67,7 @@ export function deriveMerchantAnswerTopicTags(question: string | null, answer: s
   const tags: string[] = [];
   if (SHIPPING_COVERAGE_QUESTION_RES.some((re) => re.test(text))) tags.push("shipping");
   if (RETURN_POLICY_QUESTION_RES.some((re) => re.test(text))) tags.push("returns");
-  if (DISCOUNT_POLICY_QUESTION_RES.some((re) => re.test(text))) tags.push("discounts");
+  if (DISCOUNT_POLICY_ANSWER_RES.some((re) => re.test(text))) tags.push("discounts");
   if (WHOLESALE_QUESTION_RES.some((re) => re.test(text))) tags.push("wholesale");
   return tags;
 }
@@ -81,7 +76,7 @@ export function deriveMerchantAnswerKbTitle(question: string | null, answer: str
   const text = policyText(question, answer);
   if (SHIPPING_COVERAGE_QUESTION_RES.some((re) => re.test(text))) return "International shipping";
   if (RETURN_POLICY_QUESTION_RES.some((re) => re.test(text))) return "Return policy";
-  if (DISCOUNT_POLICY_QUESTION_RES.some((re) => re.test(text))) return "Discount policy";
+  if (DISCOUNT_POLICY_ANSWER_RES.some((re) => re.test(text))) return "Discount policy";
   if (WHOLESALE_QUESTION_RES.some((re) => re.test(text))) return "Wholesale inquiries";
 
   const raw = (question ?? answer).trim();
