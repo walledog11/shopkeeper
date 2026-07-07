@@ -34,6 +34,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     GOOGLE_CLIENT_SECRET: 'google-client-secret',
     GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
+    IMESSAGE_LINE_HANDLE: '+15551234567',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
@@ -59,6 +60,9 @@ function createGatewayLaunchEnv(overrides = {}) {
     GMAIL_PUBSUB_AUDIENCE: 'https://gateway.example.com/webhooks/gmail/push',
     GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT:
       'shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',
+    SPECTRUM_PROJECT_ID: 'project_1',
+    SPECTRUM_PROJECT_SECRET: 'project_secret_1',
+    SPECTRUM_WEBHOOK_SECRET: 'webhook_secret_1',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     ...overrides,
   };
@@ -358,6 +362,9 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'GMAIL_PUBSUB_TOPIC=projects/shopkeeper-prod/topics/gmail-inbound',
       'GMAIL_PUBSUB_AUDIENCE=https://gateway.example.com/webhooks/gmail/push',
       'GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT=shopkeeper-gmail-push@shopkeeper-prod.iam.gserviceaccount.com',
+      'SPECTRUM_PROJECT_ID=project_1',
+      'SPECTRUM_PROJECT_SECRET=project_secret_1',
+      'SPECTRUM_WEBHOOK_SECRET=webhook_secret_1',
       'PRODUCT_ANALYTICS_ENABLED=false',
       '',
     ].join('\n')
