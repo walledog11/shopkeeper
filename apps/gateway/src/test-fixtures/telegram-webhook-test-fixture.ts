@@ -24,6 +24,7 @@ const {
   sendChatActionSpy,
   setMessageReactionSpy,
   executeOperatorAgentTurnSpy,
+  refreshSkippedPlanTerminalSendSpy,
 } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
@@ -41,6 +42,12 @@ const {
     threadId: '00000000-0000-4000-8000-000000000001',
     actionsPerformed: [],
   }),
+  refreshSkippedPlanTerminalSendSpy: vi.fn(async (
+    _organizationId: string,
+    _threadId: string,
+    _instruction: string,
+    approvedToolCalls: Array<{ id: string; name: string; input?: unknown }>,
+  ) => approvedToolCalls),
 }));
 
 vi.mock('ioredis', () => ({
@@ -98,6 +105,10 @@ vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
   executeOperatorAgentTurn: executeOperatorAgentTurnSpy,
 }));
 
+vi.mock('../message-handlers/skipped-plan-terminal-send.js', () => ({
+  refreshSkippedPlanTerminalSend: refreshSkippedPlanTerminalSendSpy,
+}));
+
 import { registerTelegramWebhookRoutes } from '../routes/webhooks-telegram.js';
 
 export const SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!;
@@ -106,6 +117,7 @@ export const app = createRegisteredWebhookRouterApp(registerTelegramWebhookRoute
 export const telegramFixture = {
   app,
   executeOperatorAgentTurnSpy,
+  refreshSkippedPlanTerminalSendSpy,
   incrStore,
   mockLogger,
   sendChatActionSpy,
@@ -157,6 +169,13 @@ beforeEach(async () => {
   sendChatActionSpy.mockClear();
   setMessageReactionSpy.mockClear();
   executeOperatorAgentTurnSpy.mockClear();
+  refreshSkippedPlanTerminalSendSpy.mockClear();
+  refreshSkippedPlanTerminalSendSpy.mockImplementation(async (
+    _organizationId: string,
+    _threadId: string,
+    _instruction: string,
+    approvedToolCalls: Array<{ id: string; name: string; input?: unknown }>,
+  ) => approvedToolCalls);
   executeOperatorAgentTurnSpy.mockResolvedValue({
     summary: 'Done.',
     threadId: '00000000-0000-4000-8000-000000000001',

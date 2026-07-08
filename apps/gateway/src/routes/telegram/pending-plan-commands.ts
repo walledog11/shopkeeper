@@ -8,6 +8,8 @@ import {
   type ToolCall,
 } from '../../operator-context.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
+import { refreshSkippedPlanTerminalSend } from '../../message-handlers/skipped-plan-terminal-send.js';
+import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 
@@ -40,15 +42,26 @@ export async function handlePendingPlanCommand(
   }
 
   let approvedToolCalls: ToolCall[] = rawToolCalls;
+  let skippedActionableTool: ToolCall | undefined;
   if (command.type === 'plan-skip') {
     const actionable = rawToolCalls.filter((toolCall) => !READ_TOOLS.has(toolCall.name));
-    const toSkip = actionable[command.index - 1];
-    approvedToolCalls = toSkip
-      ? rawToolCalls.filter((toolCall) => toolCall.id !== toSkip.id)
+    skippedActionableTool = actionable[command.index - 1];
+    approvedToolCalls = skippedActionableTool
+      ? rawToolCalls.filter((toolCall) => toolCall.id !== skippedActionableTool!.id)
       : rawToolCalls;
   }
 
-  logger.info({ chatId, threadId, toolCallCount: approvedToolCalls.length }, '[Operator] Approving plan');
+  let approvedRawToolCalls = normalizeApprovedToolCalls(approvedToolCalls);
+  if (command.type === 'plan-skip' && skippedActionableTool && findTerminalSendTool(approvedRawToolCalls)) {
+    approvedRawToolCalls = await refreshSkippedPlanTerminalSend(
+      organizationId,
+      threadId,
+      instruction,
+      approvedRawToolCalls,
+    );
+  }
+
+  logger.info({ chatId, threadId, toolCallCount: approvedRawToolCalls.length }, '[Operator] Approving plan');
 
   let summary: string;
   try {
@@ -62,7 +75,7 @@ export async function handlePendingPlanCommand(
         orgId: organizationId,
         threadId,
         instruction,
-        approvedToolCalls: normalizeApprovedToolCalls(approvedToolCalls),
+        approvedToolCalls: approvedRawToolCalls,
         clerkUserId,
       }),
     ));

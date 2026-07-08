@@ -29,7 +29,7 @@ import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 
-interface TerminalDraftInput {
+export interface PlannerTerminalDraftInput {
   ctx: AgentContext;
   usageTotals: PlannerUsageTotals;
   resolvedSettings: OrgSettings;
@@ -43,7 +43,7 @@ interface TerminalDraftInput {
   validate?: (toolCall: RawToolCall) => boolean;
 }
 
-async function draftRequiredTerminalTool(input: TerminalDraftInput): Promise<RawToolCall[]> {
+export async function draftPlannerTerminalTool(input: PlannerTerminalDraftInput): Promise<RawToolCall[]> {
   const model = pickModel("reply_draft");
   const messages = appendPendingToolResults(input.messages);
   messages.push({ role: "user", content: input.prompt });
@@ -138,7 +138,7 @@ export async function finalizePlanTools(
   ) {
     rawToolCalls = stripNonEscalationTerminalTools(rawToolCalls);
     if (!rawToolCalls.some(toolCall => toolCall.name === "escalate_to_human")) {
-      const drafted = await draftRequiredTerminalTool({
+      const drafted = await draftPlannerTerminalTool({
         ctx: input.ctx,
         usageTotals: input.usageTotals,
         resolvedSettings: input.resolvedSettings,
@@ -189,7 +189,7 @@ export async function finalizePlanTools(
         content: synthesizeMutativeReplanContext(input.ctx),
       });
     }
-    const drafted = await draftRequiredTerminalTool({
+    const drafted = await draftPlannerTerminalTool({
       ctx: input.ctx,
       usageTotals: input.usageTotals,
       resolvedSettings: input.resolvedSettings,

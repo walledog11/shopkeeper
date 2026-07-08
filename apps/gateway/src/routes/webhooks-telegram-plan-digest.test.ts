@@ -19,6 +19,7 @@ import {
 const {
   app,
   executeOperatorAgentTurnSpy,
+  refreshSkippedPlanTerminalSendSpy,
   incrStore,
   mockLogger,
   sendChatActionSpy,
@@ -112,6 +113,44 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
     };
     const ids = call.approvedToolCalls.map((tc) => tc.id);
     expect(ids).toEqual(['r1', 'a2']);
+    expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
+  });
+
+  it('"skip 1" re-drafts terminal send when a send_reply is present', async () => {
+    const chatId = '5555004';
+    await bindMember(chatId);
+    const threadId = '00000000-0000-4000-8000-000000000003';
+    await updateContext(org.id, chatId, {
+      pendingPlan: {
+        threadId,
+        instruction: 'update address',
+        rawToolCalls: [
+          { id: 'a1', name: 'edit_shopify_order', input: { quantity: 1 } },
+          { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
+          { id: 's1', name: 'send_reply', input: { text: 'Added item and updated address.' } },
+        ],
+      },
+    });
+
+    refreshSkippedPlanTerminalSendSpy.mockResolvedValueOnce([
+      { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
+      { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
+    ]);
+
+    await request(app)
+      .post('/webhooks/telegram')
+      .set('x-telegram-bot-api-secret-token', SECRET)
+      .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: 'skip 1' } });
+
+    await waitForReplies(1);
+    expect(refreshSkippedPlanTerminalSendSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    expect(executeOperatorAgentTurnSpy.mock.calls[0]?.[0]).toMatchObject({
+      approvedToolCalls: [
+        { id: 'a2', name: 'update_shopify_order_address', input: { address1: '1 Main St' } },
+        { id: 's2', name: 'send_reply', input: { text: 'Your address has been updated.' } },
+      ],
+    });
   });
 
   it('"no" clears pendingPlan without calling the agent', async () => {
