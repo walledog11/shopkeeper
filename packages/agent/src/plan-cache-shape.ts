@@ -6,8 +6,8 @@ export type PlanThreadMessage = {
   senderType: string
 }
 
-export const AGENT_PLAN_CACHE_VERSION = 4
-export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, 3, AGENT_PLAN_CACHE_VERSION]
+export const AGENT_PLAN_CACHE_VERSION = 5
+export const SUPPORTED_AGENT_PLAN_CACHE_VERSIONS = [1, 2, 3, 4, AGENT_PLAN_CACHE_VERSION]
 
 export interface AgentPlanCacheRecordShape {
   version: number
@@ -56,6 +56,13 @@ function isAgentPlan(value: unknown): value is AgentPlan {
   if (!Array.isArray(value.rawToolCalls) || !value.rawToolCalls.every(isRawToolCall)) return false
   if (value.readResults !== undefined && !isStringRecord(value.readResults)) return false
   if (value.warnings !== undefined && (!Array.isArray(value.warnings) || !value.warnings.every(w => typeof w === "string"))) return false
+  if (value.routing !== undefined) {
+    if (!isRecord(value.routing)) return false
+    const { decision, signals, question } = value.routing
+    if (decision !== "auto_execute" && decision !== "needs_review" && decision !== "escalate") return false
+    if (signals !== undefined && (!Array.isArray(signals) || !signals.every(s => typeof s === "string"))) return false
+    if (question !== undefined && question !== null && typeof question !== "string") return false
+  }
   return true
 }
 
@@ -116,7 +123,8 @@ export function extractCachedQuestion(cachedPlan: unknown): string | null {
       return input.question
     }
   }
-  return null
+  const routingQuestion = plan.routing?.question
+  return typeof routingQuestion === "string" && routingQuestion.trim() ? routingQuestion : null
 }
 
 export function getLastConversationMessage(messages: PlanThreadMessage[]): PlanThreadMessage | null {

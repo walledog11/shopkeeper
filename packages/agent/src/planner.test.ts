@@ -423,75 +423,15 @@ describe("planAgent logging", () => {
     });
   });
 
-  it("runs mutative replan when order is in context and phase 1 emits no action tools", async () => {
+  it("keeps a phase-1 mutative action and routes the plan to auto_execute", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
     mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: "I'll help with that." }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_refund", name: "create_refund", input: { order_id: "9000004003", amount: "42.00" } },
-          { type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Refund processed." } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
-
-    const plan = await planAgent(
-      makeCtx({
-        recentMessages: [{
-          senderType: "customer",
-          contentText: "Please refund me for order #4003.",
-        }],
-        recentOrders: [{
-          id: "9000004003",
-          name: "#4003",
-          created_at: "2026-05-15T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "42.00",
-          currency: "USD",
-          items: [],
-          shipping_address: null,
-        }],
-      }),
-      "Reply to the customer and process their refund request.",
-      AGENT_SETTINGS_DEFAULTS,
-    );
-
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "2-call-mutative",
-      modelCalls: 2,
-    });
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
-      "create_refund",
-      "send_reply",
-    ]);
-
-    const replanMessages = mockCreate.mock.calls[1]![0].messages;
-    expect(replanMessages).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        role: "user",
-        content: expect.stringContaining("Customer orders already in context"),
-      }),
-      expect.objectContaining({ role: "user", content: REPLAN_INCLUDE_REPLY_PROMPT }),
-    ]));
-  });
-
-  it("skips reply draft and warns when mutative replan still omits action tools", async () => {
-    installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: "I'll help with that." }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
       .mockResolvedValueOnce(
-        singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_hollow"),
+        singleToolUse("create_refund", { order_id: "9000004003", amount: "42.00" }, "tu_refund"),
+      )
+      .mockResolvedValueOnce(
+        singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"),
       );
 
     const plan = await planAgent(
@@ -516,8 +456,51 @@ describe("planAgent logging", () => {
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.rawToolCalls.some((toolCall) => toolCall.name === "send_reply")).toBe(false);
-    expect(plan.rawToolCalls.some((toolCall) => toolCall.name === "create_refund")).toBe(false);
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
+      "create_refund",
+      "send_reply",
+    ]);
+    expect(plan.routing?.decision).toBe("auto_execute");
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ routingDecision: "auto_execute" });
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+  });
+
+  it("no longer forces a replan; routes mutative-no-action to needs_review with a drafted reply", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate
+      .mockResolvedValueOnce({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: "I'll help with that." }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })
+      .mockResolvedValueOnce(
+        singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_reply"),
+      );
+
+    const plan = await planAgent(
+      makeCtx({
+        recentMessages: [{
+          senderType: "customer",
+          contentText: "Please refund me for order #4003.",
+        }],
+        recentOrders: [{
+          id: "9000004003",
+          name: "#4003",
+          created_at: "2026-05-15T10:00:00-07:00",
+          financial_status: "paid",
+          fulfillment_status: "fulfilled",
+          total_price: "42.00",
+          currency: "USD",
+          items: [],
+          shipping_address: null,
+        }],
+      }),
+      "Reply to the customer and process their refund request.",
+      AGENT_SETTINGS_DEFAULTS,
+    );
+
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
+    expect(plan.routing?.decision).toBe("needs_review");
     expect(plan.warnings).toContain(
       "Customer requested a refund/cancel but no action was planned — review before sending.",
     );

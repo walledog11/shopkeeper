@@ -4,7 +4,9 @@ import {
   buildMerchantAnswerKbTags,
   buildMerchantAnswerPlanningInstruction,
   isAgentLearnedKbArticle,
+  isMerchantAnswerPlanningInstruction,
   kbTagsForDisplay,
+  merchantAnswerReplyDraftPrompt,
 } from "./kb-learned.js";
 
 describe("kb-learned", () => {
@@ -42,20 +44,26 @@ describe("kb-learned", () => {
       question: "Do we ship globally?",
       answer: "Yes — $15 flat rate.",
       saveToKb: true,
-    })).toContain("saved in the knowledge base");
+    })).toContain("draft send_reply to the customer");
+    expect(buildMerchantAnswerPlanningInstruction({
+      baseInstruction: base,
+      question: "Do we ship globally?",
+      answer: "Yes — $15 flat rate.",
+      saveToKb: true,
+    })).toContain("do not call add_internal_note");
 
     expect(buildMerchantAnswerPlanningInstruction({
       baseInstruction: base,
       question: "Should I comp this order?",
       answer: "Yes, comp it.",
       saveToKb: false,
-    })).toContain("Use this to draft the customer reply");
+    })).toContain("draft send_reply to the customer");
     expect(buildMerchantAnswerPlanningInstruction({
       baseInstruction: base,
       question: "Should I comp this order?",
       answer: "Yes, comp it.",
       saveToKb: false,
-    })).not.toContain("knowledge base");
+    })).not.toContain("add_internal_note");
   });
 
   it("buildMerchantAnswerPlanningInstruction adds the attach step for label-URL answers", () => {
@@ -74,5 +82,18 @@ describe("kb-learned", () => {
       answer: "Yes — details at https://example.com/shipping.",
       saveToKb: true,
     })).not.toContain("attach_return_label");
+  });
+
+  it("merchantAnswerReplyDraftPrompt tells the model to send_reply, not note+close", () => {
+    expect(merchantAnswerReplyDraftPrompt()).toContain("send_reply");
+    expect(merchantAnswerReplyDraftPrompt()).toContain("add_internal_note");
+    expect(merchantAnswerReplyDraftPrompt()).toContain("Do NOT close");
+  });
+
+  it("isMerchantAnswerPlanningInstruction detects answer-informed replans", () => {
+    expect(isMerchantAnswerPlanningInstruction(
+      'Handle ticket\n\nThe store owner answered your question "Do we ship?" with: "Yes."',
+    )).toBe(true);
+    expect(isMerchantAnswerPlanningInstruction("Handle ticket")).toBe(false);
   });
 });

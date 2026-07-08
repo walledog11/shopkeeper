@@ -99,8 +99,8 @@ inbound; dashboard Integrations shows Connect enabled (not disabled).
 
 ## Phase 1 — Live verification checklist (blocking)
 
-**Status:** In progress — **1/12** live-verified (2026-07-07). Bound outbound path
-confirmed (`HELP` + welcome after connect). Rows 3–10 still need hands-on pass.
+**Status:** In progress — **6/12** live-verified (2026-07-07). Bind through skip-step
+confirmed. Rows 7–12 still need hands-on pass.
 
 **Goal:** Prove every merchant-critical path on a real iPhone before beta.
 
@@ -125,11 +125,11 @@ Use a dedicated test org/workspace. Record sign-off at the bottom when all rows 
 | # | Flow | Live | Pass criteria | Automated coverage |
 |---|------|------|---------------|-------------------|
 | 1 | Bind | ✅ | QR scan → prefilled message sends → welcome text → binding in Integrations | `message-handler.test`, `bind/route.test` |
-| 2 | Re-bind | ☐ | Unlink + new token works; stale token rejected | `message-handler.test` (stale token) |
-| 3 | Inbound ticket → plan push | ☐ | Customer email/IG → plan cached → iMessage receives plan | `planning-notifications.test` |
-| 4 | Approve | ☐ | Reply `yes` → plan executes → confirmation summary | Manual (shared w/ Telegram) |
-| 5 | Dismiss | ☐ | Reply `no` → plan cleared, no execution | Manual |
-| 6 | Skip step | ☐ | `skip 1` on multi-step plan works | Manual |
+| 2 | Re-bind | ✅ | Unlink + new token works; stale token rejected | `message-handler.test` (stale token) |
+| 3 | Inbound ticket → plan push | ✅ | Customer email/IG → plan cached → iMessage receives plan | `planning-notifications.test` |
+| 4 | Approve | ✅ | Reply `yes` → plan executes → confirmation summary | Manual (shared w/ Telegram) |
+| 5 | Dismiss | ✅ | Reply `no` → plan cleared, no execution | Manual |
+| 6 | Skip step | ✅ | `skip 1` on multi-step plan works | Manual |
 | 7 | Ask operator | ☐ | Agent asks question → merchant free-text answer → re-plan fires | Manual |
 | 8 | Escalation | ☐ | Notification arrives with dashboard link | `operator-escalation.test` |
 | 9 | Digest | ☐ | `SUMMARY` + scheduled morning digest deliver | Manual (`SUMMARY`); scheduled via `digest.ts` |

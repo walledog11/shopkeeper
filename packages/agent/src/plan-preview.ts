@@ -203,6 +203,18 @@ export function classifyHomePlan(
     }
   }
 
+  // Phase 3: a policy-gap `needs_review` no longer injects a synthetic
+  // ask_operator call — the routing decision carries the merchant question.
+  const routingQuestion = plan.routing?.question?.trim()
+  if (routingQuestion) {
+    return {
+      kind: "needs_merchant_input",
+      replyText: null,
+      sendReplyToolCall: null,
+      question: routingQuestion,
+    }
+  }
+
   if ((plan.warnings ?? []).some(warning => warningBlocksQuickReply(warning, plan))) {
     return applyQuestionableSenderPolicy(NEEDS_REVIEW, options?.filterStatus)
   }

@@ -6,27 +6,20 @@ import {
   pendingToolResultsForLastAssistantMessage,
 } from "./planner-replan.js";
 import {
-  applyBrandVoiceOrderStatusGuard,
-  applyMutativeIntentNoActionGuard,
-  applyPolicyGapAskOperatorGuard,
-  ESCALATION_DRAFT_PROMPT,
+  isMerchantAnswerPlanningInstruction,
+  merchantAnswerReplyDraftPrompt,
+} from "./kb-learned.js";
+import {
   replyDraftPrompt,
   sendReplyHasText,
-  shouldForcePlanningEscalation,
-  shouldPreferBrandVoiceOrderStatusReply,
-  shouldSkipReplyDraftForMutativeIntent,
-  shouldSkipReplyDraftForWatchTier,
   stripCreateRefundForAlreadyRefundedOrders,
   stripEmptySendReplyToolCalls,
-  stripNonEscalationTerminalTools,
 } from "./planner-safety/index.js";
 import {
   PLAN_REPLAN_MAX_TOKENS,
   runPlannerModelCall,
   type PlannerUsageTotals,
 } from "./planner-model.js";
-import { synthesizeMutativeReplanContext } from "./planner-read-skip.js";
-import type { ToolStatus } from "./tools/result.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 
 export interface PlannerTerminalDraftInput {
@@ -79,28 +72,26 @@ export async function draftPlannerTerminalTool(input: PlannerTerminalDraftInput)
 export interface FinalizePlanToolsInput {
   ctx: AgentContext;
   instruction: string;
-  settings?: OrgSettings;
   resolvedSettings: OrgSettings;
   operatorMode: boolean;
   tools: Anthropic.Tool[];
   systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
   planMessages: Anthropic.MessageParam[];
-  processedReadBlocks: Anthropic.ToolUseBlock[];
-  planningReadStatusMap: ReadonlyMap<string, ToolStatus>;
-  readResultsMap: ReadonlyMap<string, string>;
-  warnings: string[];
   usageTotals: PlannerUsageTotals;
   rawToolCalls: RawToolCall[];
 }
 
 export interface FinalizePlanToolsResult {
   rawToolCalls: RawToolCall[];
-  ranEscalationDraft: boolean;
   ranReplyDraft: boolean;
   hasAskOperator: boolean;
-  policyGapGuardApplied: boolean;
 }
 
+// Structural cleanup + the terminal reply-draft. Guard routing (escalate /
+// needs_review) is decided afterwards in planAgent by `routePlan`, which never
+// edits tool calls — so this no longer strips replies, injects ask_operator, or
+// forces escalation. The only mutations here are structural: dropping refunds for
+// already-refunded orders and empty send_reply calls.
 export async function finalizePlanTools(
   input: FinalizePlanToolsInput,
 ): Promise<FinalizePlanToolsResult> {
@@ -110,84 +101,25 @@ export async function finalizePlanTools(
     input.rawToolCalls,
   );
   rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
-  rawToolCalls = applyBrandVoiceOrderStatusGuard(
-    input.ctx,
-    input.instruction,
-    input.settings,
-    rawToolCalls,
-  );
 
-  let ranEscalationDraft = false;
-  let ranReplyDraft = false;
-  const escalateTool = input.tools.find(tool => tool.name === "escalate_to_human");
-  const sendReplyTool = input.tools.find(tool => tool.name === "send_reply");
-
-  if (
-    !input.operatorMode
-    && escalateTool
-    && shouldForcePlanningEscalation({
-      ctx: input.ctx,
-      instruction: input.instruction,
-      rawToolCalls,
-      readBlocks: input.processedReadBlocks,
-      readStatusMap: input.planningReadStatusMap,
-      readResultsMap: input.readResultsMap,
-      settings: input.settings,
-      operatorMode: input.operatorMode,
-    })
-  ) {
-    rawToolCalls = stripNonEscalationTerminalTools(rawToolCalls);
-    if (!rawToolCalls.some(toolCall => toolCall.name === "escalate_to_human")) {
-      const drafted = await draftPlannerTerminalTool({
-        ctx: input.ctx,
-        usageTotals: input.usageTotals,
-        resolvedSettings: input.resolvedSettings,
-        systemPromptBlocks: input.systemPromptBlocks,
-        messages: input.planMessages,
-        tool: escalateTool,
-        toolName: "escalate_to_human",
-        prompt: ESCALATION_DRAFT_PROMPT,
-        phase: "escalation_draft",
-      });
-      rawToolCalls.push(...drafted);
-      ranEscalationDraft = drafted.length > 0;
-    }
+  const merchantAnswerReplan = isMerchantAnswerPlanningInstruction(input.instruction);
+  if (merchantAnswerReplan) {
+    rawToolCalls = rawToolCalls.filter(toolCall => toolCall.name !== "ask_operator");
   }
 
-  rawToolCalls = applyMutativeIntentNoActionGuard(input.ctx, rawToolCalls, input.warnings);
-  rawToolCalls = applyPolicyGapAskOperatorGuard({
-    ctx: input.ctx,
-    rawToolCalls,
-    readBlocks: input.processedReadBlocks,
-    readResultsMap: input.readResultsMap,
-    warnings: input.warnings,
-  });
-
-  const hasTerminal = () => rawToolCalls.some(toolCall => (
+  const sendReplyTool = input.tools.find(tool => tool.name === "send_reply");
+  const hasTerminal = rawToolCalls.some(toolCall => (
     toolCall.name === "send_reply"
     || toolCall.name === "escalate_to_human"
-    || toolCall.name === "ask_operator"
+    || (!merchantAnswerReplan && toolCall.name === "ask_operator")
   ));
-  if (
-    !input.operatorMode
-    && !hasTerminal()
-    && sendReplyTool
-    && !shouldSkipReplyDraftForWatchTier(input.resolvedSettings, input.ctx)
-    && !shouldSkipReplyDraftForMutativeIntent(input.ctx, rawToolCalls)
-  ) {
+
+  let ranReplyDraft = false;
+  if (!input.operatorMode && !hasTerminal && sendReplyTool) {
     const pendingToolResults = pendingToolResultsForLastAssistantMessage(input.planMessages);
     const draftMessages = [...input.planMessages];
     if (pendingToolResults.length > 0) {
       draftMessages.push({ role: "user", content: pendingToolResults });
-    } else if (shouldPreferBrandVoiceOrderStatusReply(
-      input.ctx,
-      input.instruction,
-      input.resolvedSettings,
-    )) {
-      draftMessages.push({
-        role: "user",
-        content: synthesizeMutativeReplanContext(input.ctx),
-      });
     }
     const drafted = await draftPlannerTerminalTool({
       ctx: input.ctx,
@@ -197,8 +129,10 @@ export async function finalizePlanTools(
       messages: draftMessages,
       tool: sendReplyTool,
       toolName: "send_reply",
-      prompt: replyDraftPrompt(input.resolvedSettings),
-      phase: "reply_draft",
+      prompt: merchantAnswerReplan
+        ? merchantAnswerReplyDraftPrompt(input.resolvedSettings)
+        : replyDraftPrompt(input.resolvedSettings),
+      phase: merchantAnswerReplan ? "merchant_answer_reply_draft" : "reply_draft",
       attempts: 2,
       validate: sendReplyHasText,
     });
@@ -206,20 +140,7 @@ export async function finalizePlanTools(
     ranReplyDraft = drafted.length > 0;
   }
 
-  rawToolCalls = applyPolicyGapAskOperatorGuard({
-    ctx: input.ctx,
-    rawToolCalls,
-    readBlocks: input.processedReadBlocks,
-    readResultsMap: input.readResultsMap,
-    warnings: input.warnings,
-  });
   const hasAskOperator = rawToolCalls.some(toolCall => toolCall.name === "ask_operator");
 
-  return {
-    rawToolCalls,
-    ranEscalationDraft,
-    ranReplyDraft,
-    hasAskOperator,
-    policyGapGuardApplied: rawToolCalls.some(toolCall => toolCall.id === "tu_policy_gap_ask"),
-  };
+  return { rawToolCalls, ranReplyDraft, hasAskOperator };
 }

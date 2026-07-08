@@ -102,6 +102,8 @@ export interface PlanStep {
   enabled: boolean
 }
 
+export type RoutingDecision = 'auto_execute' | 'needs_review' | 'escalate'
+
 export interface AgentPlan {
   /** Stable internal analytics identifier for this cached plan version. */
   planId?: string
@@ -112,6 +114,16 @@ export interface AgentPlan {
   warnings?: string[]
   /** Templated order-status reply from plan-time fast path — always needs human review. */
   orderStatusFastPath?: boolean
+  /**
+   * Phase 3 routing disposition: how the guards classified this plan without
+   * mutating its tool calls. `classifyHomePlan` consumes this; `question` is the
+   * merchant-facing prompt for a `needs_review` policy gap.
+   */
+  routing?: {
+    decision: RoutingDecision
+    signals?: string[]
+    question?: string | null
+  }
 }
 
 // Agent turn in the notes tab

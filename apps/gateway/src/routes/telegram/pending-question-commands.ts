@@ -8,17 +8,19 @@ import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
-import type { OrgSettings } from '@shopkeeper/agent/types';
+import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
 import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
+import { sendOperatorPlanNotification } from '../../message-handlers/planning-notifications.js';
 import { updateContext, type OperatorContext } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
 
 // The operator answered an `ask_operator` question over Telegram. The reply is the
-// answer: record it, persist it to the knowledge base (always — a Telegram answer is
-// treated as a reusable fact), then re-plan so a normal reply rides the dashboard
-// approval flow. Mirrors the dashboard answer route's ingestion; the saved answer
-// re-enters planning through the KB door. Returns false when no question is pending.
+// answer: record it, persist it to the knowledge base (always — an operator-channel
+// answer is treated as a reusable fact), then re-plan and push the draft reply plan
+// over iMessage/Telegram for yes/no approval. Mirrors the dashboard answer route's
+// ingestion; the saved answer re-enters planning through the KB door. Returns false
+// when no question is pending.
 export async function handlePendingQuestionAnswer(
   organizationId: string,
   message: OperatorMessageContext,
@@ -47,7 +49,6 @@ export async function handlePendingQuestionAnswer(
     }),
   ]);
   const question = extractCachedQuestion(thread.cachedPlan);
-  const customerName = meta?.customer?.name?.split(' ')[0] ?? null;
 
   await createMessage({
     threadId,
@@ -94,14 +95,15 @@ export async function handlePendingQuestionAnswer(
     saveToKb: true,
   });
 
+  let plan: AgentPlan;
   try {
-    await presence(
+    plan = await presence(
       { kind: 'free-form' },
       async () => {
         const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
           pinKbArticles: [{ title: saved.title, body: saved.body }],
         });
-        const plan = await planAgent(ctx, planningInstruction, settings);
+        const replanned = await planAgent(ctx, planningInstruction, settings);
         await db.thread.update({
           where: { id: threadId },
           data: {
@@ -110,23 +112,35 @@ export async function handlePendingQuestionAnswer(
               instruction: baseInstruction,
               lastCustomerMessageId: pendingCustomerMessageId,
               settings,
-              plan,
+              plan: replanned,
             }) as object,
           },
         });
+        return replanned;
       },
     );
   } catch (err) {
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
-    await reply("Saved your answer, but I couldn't draft the reply just now — you can review the ticket on your dashboard.");
+    await reply("Saved your answer, but I couldn't draft the reply just now — please try again in a moment.");
+    return true;
+  }
+
+  try {
+    await sendOperatorPlanNotification(
+      organizationId,
+      threadId,
+      meta?.customer?.name ?? null,
+      meta?.channelType ?? thread.channelType,
+      meta?.aiSummary ?? null,
+      plan,
+      baseInstruction,
+    );
+  } catch (err) {
+    logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer plan notification failed');
+    await reply("Saved your answer and drafted a reply, but I couldn't deliver the plan just now — check your dashboard.");
     return true;
   }
 
   logger.info({ organizationId, threadId }, '[Operator] Answer ingested and re-planned');
-  await reply(
-    customerName
-      ? `Got it — I've drafted a reply for ${customerName}. Review and approve it from your dashboard.`
-      : "Got it — I've drafted a reply. Review and approve it from your dashboard.",
-  );
   return true;
 }

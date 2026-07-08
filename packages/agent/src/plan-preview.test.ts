@@ -226,6 +226,39 @@ describe("classifyHomePlan — ask_operator plans", () => {
   })
 })
 
+describe("classifyHomePlan — Phase 3 routing", () => {
+  it("surfaces a routing question as needs_merchant_input without an ask_operator call", () => {
+    const result = classifyHomePlan(plan({
+      steps: [],
+      rawToolCalls: [],
+      routing: {
+        decision: "needs_review",
+        signals: ["policy_question"],
+        question: 'What should I tell the customer about: "Do you ship to Canada?"?',
+      },
+    }))
+    expect(result.kind).toBe("needs_merchant_input")
+    expect(result.question).toContain("Do you ship to Canada")
+  })
+
+  it("classifies an escalation plan as needs_review", () => {
+    const escalateStep: PlanStep = {
+      id: "esc_1",
+      tool: "escalate_to_human",
+      label: "Escalate to merchant",
+      description: "Wholesale inquiry — out of scope.",
+      category: "internal",
+      enabled: true,
+    }
+    const result = classifyHomePlan(plan({
+      steps: [escalateStep],
+      rawToolCalls: [{ id: "esc_1", name: "escalate_to_human", input: { reason: "Wholesale — out of scope." } }],
+      routing: { decision: "escalate", signals: ["out_of_scope_commercial"] },
+    }))
+    expect(result.kind).toBe("needs_review")
+  })
+})
+
 describe("classifyHomePlan — tier × action matrix", () => {
   describe("watch tier", () => {
     it("downgrades a clean info-only plan to needs_review", () => {

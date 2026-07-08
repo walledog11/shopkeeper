@@ -8,16 +8,6 @@ export const REPLAN_INCLUDE_REPLY_PROMPT =
 export const REPLAN_RETRY_PROMPT =
   "Your plan included action tools but no send_reply. Include send_reply in this response.";
 
-export const POLICY_GAP_REPLAN_PROMPT =
-  "No knowledge base article answers this store-policy question. Call ask_operator with one specific question for the merchant so you can reply to the customer — do not send_reply, do not tell the customer to contact the store on email or Instagram, and do not escalate unless the request is out of scope, fraud, or a safety issue.";
-
-const POLICY_GAP_REPLAN_TOOL_NAMES = new Set([
-  "ask_operator",
-  "escalate_to_human",
-  "search_kb",
-  "add_internal_note",
-]);
-
 const REPLAN_RETRY_SUPPORT_TOOLS = new Set([
   "send_reply",
   "add_internal_note",
@@ -35,14 +25,6 @@ const REPLAN_RETRY_SUPPORT_TOOLS = new Set([
  */
 export function selectInitialPlanningTools(tools: Anthropic.Tool[]): Anthropic.Tool[] {
   return tools.filter((tool) => tool.name !== "send_reply");
-}
-
-/** Replan tools when KB was consulted but no article answers a store-policy question. */
-export function selectPolicyGapReplanTools(tools: Anthropic.Tool[]): Anthropic.Tool[] {
-  return tools.filter((tool) => (
-    POLICY_GAP_REPLAN_TOOL_NAMES.has(tool.name)
-    || TOOL_CATEGORIES[tool.name] === "read"
-  ));
 }
 
 function keepPhase1ToolCall(toolCall: RawToolCall): boolean {

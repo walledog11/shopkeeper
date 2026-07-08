@@ -14,12 +14,7 @@ import {
   partitionPlanningReadBlocks,
 } from "./planner-read-tools.js";
 import { runMutativeReplan } from "./planner-replan.js";
-import { shouldUsePolicyGapReplanPrompt } from "./planner-safety/index.js";
-import {
-  POLICY_GAP_REPLAN_PROMPT,
-  REPLAN_INCLUDE_REPLY_PROMPT,
-  selectPolicyGapReplanTools,
-} from "./planner-tools.js";
+import { REPLAN_INCLUDE_REPLY_PROMPT } from "./planner-tools.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
@@ -35,7 +30,6 @@ export interface InitialPlanningPhaseResult {
   ranReplan: boolean;
   ranReplanRetry: boolean;
   contextSkippedReadIds: Set<string>;
-  usePolicyGapReplan: boolean;
 }
 
 export async function runInitialPlanningPhase(input: {
@@ -79,7 +73,6 @@ export async function runInitialPlanningPhase(input: {
   let ranReplan = false;
   let ranReplanRetry = false;
   let contextSkippedReadIds = new Set<string>();
-  let usePolicyGapReplan = false;
   appendInitialPlanningWarnings({ ctx: input.ctx, operatorMode: input.operatorMode, warnings });
 
   if (readBlocks.length > 0) {
@@ -155,12 +148,6 @@ export async function runInitialPlanningPhase(input: {
         recentOrders: input.ctx.recentOrders,
       });
 
-      usePolicyGapReplan = !input.operatorMode && shouldUsePolicyGapReplanPrompt({
-        ctx: input.ctx,
-        readBlocks: processedReadBlocks,
-        readResultsMap,
-        rawToolCalls: activeRawToolCalls,
-      });
       const nonReadToolResults = activeRawToolCalls
         .filter(toolCall => TOOL_CATEGORIES[toolCall.name] !== "read")
         .map(toolCall => ({
@@ -183,7 +170,7 @@ export async function runInitialPlanningPhase(input: {
         },
         {
           role: "user",
-          content: usePolicyGapReplan ? POLICY_GAP_REPLAN_PROMPT : REPLAN_INCLUDE_REPLY_PROMPT,
+          content: REPLAN_INCLUDE_REPLY_PROMPT,
         },
       ];
 
@@ -193,7 +180,7 @@ export async function runInitialPlanningPhase(input: {
         systemPromptBlocks: input.systemPromptBlocks,
         planMessages,
         phase1RawToolCalls: activeRawToolCalls,
-        tools: usePolicyGapReplan ? selectPolicyGapReplanTools(input.tools) : input.tools,
+        tools: input.tools,
         operatorMode: input.operatorMode,
         usageTotals: input.usageTotals,
         contextSkippedReadIds,
@@ -221,6 +208,5 @@ export async function runInitialPlanningPhase(input: {
     ranReplan,
     ranReplanRetry,
     contextSkippedReadIds,
-    usePolicyGapReplan,
   };
 }

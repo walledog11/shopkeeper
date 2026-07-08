@@ -5,7 +5,7 @@ Bugs discovered during iMessage Phase 1 dogfood (2026-07-07). These affect the
 handlers — not the iMessage transport layer (Spectrum webhook, bind flow, gRPC
 send). Track and fix here before beta.
 
-Last updated: 2026-07-07.
+Last updated: 2026-07-09.
 
 **Related docs:** [imessage-production-readiness-plan.md](imessage-production-readiness-plan.md)
 (iMessage-specific work only), [channel-roles.md](channel-roles.md).
@@ -17,7 +17,8 @@ Last updated: 2026-07-07.
 | # | Bug | Severity | Status |
 |---|-----|----------|--------|
 | 1 | Plan notification retries duplicate Telegram sends | High | Open |
-| 2 | `skip N` drops Shopify action but not `send_reply` copy | High | Fixed 2026-07-07 — `refreshTerminalSendAfterSkip` |
+| 2 | `skip N` customer email copy mentions skipped steps | High | Fixed 2026-07-07 — `refreshTerminalSendAfterSkip` |
+| 8 | `skip N` — Shopify ok, `send_reply` logs success, customer gets no email | High | Resolved 2026-07-09 — Gmail collapsed duplicate sender; email delivered |
 | 3 | Free-form ignores `pendingPlan`; uses stale `lastThreadId` | High | Open |
 | 4 | `lastThreadId` not set when parking `pendingPlan` | Medium | Open |
 | 5 | Natural-language skip not parsed (`skip step 2` → free-form) | Medium | Open |
@@ -69,7 +70,7 @@ customer email opens a ticket.
 
 ---
 
-## 2. `skip N` executes correct Shopify actions but customer email mentions skipped steps
+## 2. `skip N` customer email copy mentions skipped steps
 
 **Severity:** High  
 **Observed:** 2026-07-07 — merchant replied `skip 2` on a multi-step plan; Shopify
@@ -77,57 +78,90 @@ mutation was correct (item **not** added), but the customer email mentioned both
 the address change **and** adding the item.
 
 **Status:** Fixed 2026-07-07 — `skip N` now re-drafts `send_reply` / `send_email`
-via `refreshTerminalSendAfterSkip` before approved execution.
+via `refreshTerminalSendAfterSkip` before approved execution. Re-test confirmed
+redraft works (`[agent:plan] skip reply redrafted`).
 
-### Symptom
+### Symptom (original)
 
-- Operator receives a summary like “sending email to customer” (last tool result).
 - Shopify side reflects only the **remaining** approved actions.
-- Outbound `send_reply` / `send_email` text still describes **skipped** actions.
+- Outbound `send_reply` text still described **skipped** actions.
 
-### Root cause
+### Fix
 
-`handlePendingPlanCommand` removes the skipped **mutative** tool call by id but
-keeps the rest of `rawToolCalls` unchanged, including a pre-drafted terminal
-`send_reply` whose `input.text` was generated for the **full** plan
-([`pending-plan-commands.ts`](../apps/gateway/src/routes/telegram/pending-plan-commands.ts)).
-
-Typical plan shape:
-
-1. `get_shopify_orders` (read — retained on skip)
-2. `add_line_item` / similar (actionable — **removed** by `skip 2`)
-3. `update_shopify_order_address` (actionable — retained)
-4. `send_reply` (actionable — retained with **original** copy covering steps 2 + 3)
-
-Approved execution runs the filtered tool list verbatim
-([`packages/agent/src/run.ts`](../packages/agent/src/run.ts)); there is no
-re-draft of `send_reply` after a skip.
-
-### Impact
-
-Customer receives misleading email content. Merchant trust erodes even when
-backend actions are correct.
-
-### Suggested fix
-
-~~After computing `approvedToolCalls` post-skip:~~ **Implemented:** gateway
-[`skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
+Gateway [`skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
 calls agent [`planner-skip-reply.ts`](../packages/agent/src/planner-skip-reply.ts)
-`refreshTerminalSendAfterSkip` to re-draft terminal send copy for remaining steps.
+`refreshTerminalSendAfterSkip`.
 
 ### Code pointers
 
-- [`apps/gateway/src/routes/telegram/pending-plan-commands.ts`](../apps/gateway/src/routes/telegram/pending-plan-commands.ts) — skip filters `rawToolCalls`
-- [`packages/agent/src/planner-skip-reply.ts`](../packages/agent/src/planner-skip-reply.ts) — skip reply redraft
-- [`apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts) — gateway wrapper
-- [`packages/agent/src/run.ts`](../packages/agent/src/run.ts) — approved tool execution path
+- [`apps/gateway/src/routes/telegram/pending-plan-commands.ts`](../apps/gateway/src/routes/telegram/pending-plan-commands.ts)
+- [`packages/agent/src/planner-skip-reply.ts`](../packages/agent/src/planner-skip-reply.ts)
+- [`apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts`](../apps/gateway/src/message-handlers/skipped-plan-terminal-send.ts)
 
-### Reproduction
+---
 
-1. Trigger a ticket whose cached plan has **2+ actionable mutative steps** plus a
-   terminal `send_reply`.
-2. On operator channel, reply exactly `skip 2` (or appropriate index).
-3. Compare Shopify mutations vs text in the outbound customer message.
+## 8. `skip N` — Shopify succeeds, `send_reply` reports success, customer receives nothing
+
+**Severity:** High  
+**Observed:** 2026-07-07 re-test (post-`e634e48` deploy) — org
+`10c25c34-7a92-4963-b9cd-537ef893f6c0`, thread `8476f160-0580-4082-a610-9454d7c2ba0e`,
+iMessage operator `+19096622741`.
+
+**Status:** Resolved 2026-07-09 — email was delivered; Gmail hid it because two
+emails from the same sender arrived in a short window (Gmail conversation
+collapse / threading behavior). Not a Shopkeeper send failure.
+
+### Symptom (original)
+
+- Plan delivered on **iMessage**; merchant replied `skip 2`.
+- **Shopify** address update completed correctly (skipped step not executed).
+- Gateway logs show **`send_reply` success** and `outcome: "approved_plan_actions"`.
+- **Customer appeared to receive no email reply** (later found in Gmail, collapsed).
+
+### Log evidence
+
+```
+[agent:plan] skip reply redrafted
+  terminalToolName: "send_reply"
+  remainingStepCount: 1
+
+[Operator] Approving plan
+  toolCallCount: 2
+
+[agent] tool call  update_shopify_order_address  → success
+[agent] tool call  send_reply  inputChars: 161  → success, resultChars: 33
+
+[agent] run complete
+  outcome: "approved_plan_actions"
+  executedToolCalls: ["update_shopify_order_address", "send_reply"]
+```
+
+Concurrent (likely unrelated): `[Webhook] Shopify signature mismatch — rejecting.`
+×2 during the `send_reply` window.
+
+### Resolution
+
+- **Email was sent** — provider delivery succeeded on the sync path.
+- **NULL `send_status`** on the agent message row is expected when
+  `OUTBOUND_EMAIL_ASYNC` is off (sync send); dashboard shows timestamp only, not
+  a delivery failure.
+- **Gmail app** hid the second outbound because two emails from the same sender
+  arrived close together — merchant/customer had to expand the thread to see it.
+- **No code change required** for this incident; skip redraft (#2) and approved
+  execution behaved correctly.
+
+### Follow-up (optional product hardening)
+
+- Surface `pending` / `failed` send status when async outbound is enabled.
+- Integration test: `skip N` → execute → assert outbound message row exists with
+  redrafted copy (not just `toolOk` with 33-char ack).
+
+### Code pointers
+
+- [`apps/dashboard/src/lib/agent/tools/thread.ts`](../apps/dashboard/src/lib/agent/tools/thread.ts) — `sendReply`
+- [`apps/dashboard/src/lib/messaging/email-dispatch.ts`](../apps/dashboard/src/lib/messaging/email-dispatch.ts) — async queue
+- [`apps/gateway/src/message-handlers/agent-thread-sink.ts`](../apps/gateway/src/message-handlers/agent-thread-sink.ts) — hop, no delivery verify
+- [`packages/agent/src/order-status-fast-path.ts`](../packages/agent/src/order-status-fast-path.ts) — operator summary = last tool result
 
 ---
 
@@ -303,17 +337,20 @@ Exact strings only unless noted:
 
 ## Suggested fix order
 
-1. ~~**#2** — Skipped-step email copy wrong (customer-facing correctness).~~ Done.
-2. **#1** — Retry duplicate notifications (operator spam + job failure).
-3. **#3 + #4** — Pending-plan / thread routing (wrong-ticket safety).
-4. **#5 + #6** — Parser + copy (operator UX).
-5. **#7** — Investigate dashboard 500 with correlated logs.
+1. **#1** — Retry duplicate notifications (operator spam + job failure).
+2. **#3 + #4** — Pending-plan / thread routing (wrong-ticket safety).
+3. **#5 + #6** — Parser + copy (operator UX).
+4. **#7** — Investigate dashboard 500 / async outbound failures with correlated logs.
+
+~~**#2** copy mismatch — fixed via redraft.~~  
+~~**#8** apparent non-delivery after skip — resolved; Gmail collapsed duplicate sender.~~
 
 ---
 
 ## Test gaps
 
-- No integration test: `skip N` with terminal `send_reply` whose text covers
-  skipped actions (expect re-draft or aligned copy).
+- No integration test: `skip N` end-to-end — redraft copy **and** outbound message
+  reaches `sent` / provider (not just `toolOk` with 33-char ack).
 - No test: multi-binding fan-out partial success / retry idempotency.
 - No test: free-form with active `pendingPlan` + stale `lastThreadId`.
+- No test: async email queue failure after operator `yes` / `skip N` approve.
