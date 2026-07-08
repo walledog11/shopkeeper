@@ -11,6 +11,7 @@ import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
 import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
+import { toGatewayAgentPlan } from '../../message-handlers/agent-plan-adapter.js';
 import { sendOperatorPlanNotification } from '../../message-handlers/planning-notifications.js';
 import { updateContext, type OperatorContext } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
@@ -126,13 +127,17 @@ export async function handlePendingQuestionAnswer(
   }
 
   try {
+    const notifyPlan = toGatewayAgentPlan(plan);
+    if (!notifyPlan) {
+      throw new Error('re-planned plan missing');
+    }
     await sendOperatorPlanNotification(
       organizationId,
       threadId,
       meta?.customer?.name ?? null,
       meta?.channelType ?? thread.channelType,
       meta?.aiSummary ?? null,
-      plan,
+      notifyPlan,
       baseInstruction,
     );
   } catch (err) {

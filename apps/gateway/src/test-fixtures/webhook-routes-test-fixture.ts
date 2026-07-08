@@ -83,6 +83,9 @@ vi.mock('../logger.js', () => ({
 
 vi.mock('../clients/spectrum.js', () => ({
   getPlatformSpectrumApp: getPlatformSpectrumAppSpy,
+  sendImessageOnSpace: vi.fn(async (space: { send: (text: string) => Promise<unknown> }, text: string) => {
+    await space.send(text);
+  }),
   SpectrumIntegrationConfigError: SpectrumConfigError,
 }));
 

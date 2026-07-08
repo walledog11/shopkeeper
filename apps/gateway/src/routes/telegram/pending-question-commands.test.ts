@@ -191,7 +191,16 @@ describe('handlePendingQuestionAnswer', () => {
       'Jane Doe',
       'email',
       'Shipping to Canada',
-      replannedPlan,
+      {
+        steps: [{
+          label: 'Reply to customer',
+          description: '"Yes, we ship to Canada for $15 flat."',
+          category: 'write',
+          tool: 'send_reply',
+          enabled: true,
+        }],
+        rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
+      },
       'Shipping to Canada',
     );
   });
