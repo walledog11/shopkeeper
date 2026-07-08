@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@shopkeeper/db';
 import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 
-const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, updateContextSpy } = vi.hoisted(() => ({
+const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, updateContextSpy, wasDeliveredSpy, markDeliveredSpy } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -12,6 +12,8 @@ const { mockLogger, sendImessageToSpaceSpy, sendMessageSpy, updateContextSpy } =
   sendImessageToSpaceSpy: vi.fn(),
   sendMessageSpy: vi.fn(),
   updateContextSpy: vi.fn(),
+  wasDeliveredSpy: vi.fn(),
+  markDeliveredSpy: vi.fn(),
 }));
 
 vi.mock('./logger.js', () => ({
@@ -32,6 +34,11 @@ vi.mock('./operator-context.js', () => ({
   updateContext: updateContextSpy,
 }));
 
+vi.mock('./operator-notify-idempotency.js', () => ({
+  wasOperatorNotifyDelivered: wasDeliveredSpy,
+  markOperatorNotifyDelivered: markDeliveredSpy,
+}));
+
 import { isImessageConfigured } from './clients/spectrum.js';
 import { isTelegramConfigured } from './clients/telegram-client.js';
 import {
@@ -50,8 +57,11 @@ beforeEach(() => {
   sendMessageSpy.mockReset();
   sendImessageToSpaceSpy.mockReset().mockResolvedValue(undefined);
   updateContextSpy.mockReset().mockResolvedValue(undefined);
+  wasDeliveredSpy.mockReset().mockResolvedValue(false);
+  markDeliveredSpy.mockReset().mockResolvedValue(undefined);
   mockLogger.warn.mockClear();
   mockLogger.error.mockClear();
+  mockLogger.info.mockClear();
 });
 
 describe('notifyOperator (telegram)', () => {
@@ -242,6 +252,41 @@ describe('notifyOperator (imessage)', () => {
 
     expect(result).toBeNull();
     expect(sendImessageToSpaceSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips send but updates context when idempotency key was already delivered', async () => {
+    wasDeliveredSpy.mockResolvedValue(true);
+
+    const result = await notifyOperator(
+      'org_1',
+      IMESSAGE_MEMBER,
+      'Plan push',
+      { pendingPlan: null },
+      { idempotencyKey: 'idem_1', threadId: 'thread_1' },
+    );
+
+    expect(result).toEqual({ channel: 'imessage', chatId: 'sender_1' });
+    expect(sendImessageToSpaceSpy).not.toHaveBeenCalled();
+    expect(markDeliveredSpy).not.toHaveBeenCalled();
+    expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'sender_1', { pendingPlan: null });
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'idem_1', channel: 'imessage' }),
+      '[OperatorNotify] Duplicate delivery skipped',
+    );
+  });
+
+  it('marks idempotency after a successful send', async () => {
+    sendMessageSpy.mockResolvedValue(true);
+
+    await notifyOperator(
+      'org_1',
+      TELEGRAM_MEMBER,
+      'Plan push',
+      { pendingPlan: null },
+      { idempotencyKey: 'idem_2' },
+    );
+
+    expect(markDeliveredSpy).toHaveBeenCalledWith('telegram', 'chat_1', 'idem_2');
   });
 });
 

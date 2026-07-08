@@ -2,7 +2,17 @@ import type { DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
-import { listOperatorBindings, notifyOperator, type OperatorBinding } from '../operator-notify.js';
+import {
+  autoExecutionNotificationIdempotencyKey,
+  planNotificationIdempotencyKey,
+  questionNotificationIdempotencyKey,
+} from '../operator-notify-idempotency.js';
+import {
+  listOperatorBindings,
+  notifyOperator,
+  OperatorNotifyError,
+  type OperatorBinding,
+} from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
 
@@ -13,6 +23,76 @@ export interface OperatorNotificationExclude {
 
 function operatorContextKey(member: OperatorBinding): string {
   return member.channel === 'telegram' ? member.chatId : member.senderId;
+}
+
+function shouldExcludeMember(
+  member: OperatorBinding,
+  exclude: OperatorNotificationExclude | undefined,
+): boolean {
+  if (!exclude || member.channel !== exclude.channel) return false;
+  return operatorContextKey(member) === exclude.contextKey;
+}
+
+// Critical fan-out: continue after per-channel failures so a BullMQ retry does not
+// re-text channels that already succeeded. Fail only when every channel fails.
+async function notifyCriticalToAllOperators(
+  organizationId: string,
+  bindings: OperatorBinding[],
+  notify: (member: OperatorBinding) => Promise<{
+    body: string;
+    contextPatch: Parameters<typeof notifyOperator>[3];
+    idempotencyKey: string;
+  }>,
+  threadId: string,
+  logLabel: string,
+  exclude?: OperatorNotificationExclude,
+): Promise<void> {
+  let delivered = 0;
+  let lastError: unknown;
+
+  for (const member of bindings) {
+    if (shouldExcludeMember(member, exclude)) continue;
+
+    const { body, contextPatch, idempotencyKey } = await notify(member);
+    try {
+      const result = await notifyOperator(organizationId, member, body, contextPatch, {
+        policy: 'critical',
+        threadId,
+        idempotencyKey,
+      });
+      if (result) {
+        delivered += 1;
+        logger.info(
+          { organizationId, threadId, chatId: result.chatId, channel: result.channel },
+          `[Worker] ${logLabel} sent`,
+        );
+      } else {
+        logger.warn(
+          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+          `[Worker] ${logLabel} failed`,
+        );
+      }
+    } catch (error) {
+      lastError = error;
+      logger.error(
+        {
+          err: (error as Error).message,
+          organizationId,
+          threadId,
+          chatId: operatorContextKey(member),
+          channel: member.channel,
+        },
+        `[Worker] ${logLabel} failed`,
+      );
+    }
+  }
+
+  if (delivered === 0) {
+    if (lastError instanceof OperatorNotifyError) {
+      throw lastError;
+    }
+    throw new OperatorNotifyError(`${logLabel} failed on all operator channels`, { cause: lastError });
+  }
 }
 
 export function formatOperatorPlanMessage(
@@ -106,12 +186,18 @@ export async function sendOperatorAutoExecutionNotification(
     const summary = aiSummary || result.instruction;
     const message = formatAutoExecutionMessage(customerName, channelType, summary, result.plan, result);
 
+    const idempotencyKey = autoExecutionNotificationIdempotencyKey(
+      organizationId,
+      threadId,
+      result.instruction,
+    );
+
     for (const member of bindings) {
       try {
         const sent = await notifyOperator(organizationId, member, message, {
           lastThreadId: threadId,
           pendingPlan: null,
-        });
+        }, { idempotencyKey });
         if (sent) {
           logger.info(
             { organizationId, threadId, chatId: sent.chatId, channel: sent.channel },
@@ -183,41 +269,22 @@ export async function sendOperatorQuestionNotification(
 
   const summary = aiSummary || instruction;
   const message = formatQuestionMessage(customerName, channelType, summary, question);
+  const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
 
-  for (const member of bindings) {
-    try {
-      const result = await notifyOperator(organizationId, member, message, {
+  await notifyCriticalToAllOperators(
+    organizationId,
+    bindings,
+    async () => ({
+      body: message,
+      contextPatch: {
         pendingPlan: null,
         pendingQuestion: { threadId, question },
-      }, {
-        policy: 'critical',
-        threadId,
-      });
-      if (result) {
-        logger.info(
-          { organizationId, threadId, chatId: result.chatId, channel: result.channel },
-          '[Worker] Question notification sent',
-        );
-      } else {
-        logger.warn(
-          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
-          '[Worker] Question notification failed',
-        );
-      }
-    } catch (error) {
-      logger.error(
-        {
-          err: (error as Error).message,
-          organizationId,
-          threadId,
-          chatId: operatorContextKey(member),
-          channel: member.channel,
-        },
-        '[Worker] Question notification failed',
-      );
-      throw error;
-    }
-  }
+      },
+      idempotencyKey,
+    }),
+    threadId,
+    'Question notification',
+  );
 }
 
 export async function sendOperatorPlanNotification(
@@ -242,44 +309,25 @@ export async function sendOperatorPlanNotification(
     threadId,
     dashboardUrl: getGatewayDashboardUrl(),
   });
-  const exclude = options?.exclude;
+  const idempotencyKey = planNotificationIdempotencyKey(
+    organizationId,
+    threadId,
+    plan.rawToolCalls,
+    instruction,
+  );
 
-  for (const member of bindings) {
-    if (exclude && member.channel === exclude.channel) {
-      const contextKey = operatorContextKey(member);
-      if (contextKey === exclude.contextKey) continue;
-    }
-
-    try {
-      const result = await notifyOperator(organizationId, member, message, {
+  await notifyCriticalToAllOperators(
+    organizationId,
+    bindings,
+    async () => ({
+      body: message,
+      contextPatch: {
         pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
-      }, {
-        policy: 'critical',
-        threadId,
-      });
-      if (result) {
-        logger.info(
-          { organizationId, threadId, chatId: result.chatId, channel: result.channel },
-          '[Worker] Plan notification sent',
-        );
-      } else {
-        logger.warn(
-          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
-          '[Worker] Plan notification failed',
-        );
-      }
-    } catch (error) {
-      logger.error(
-        {
-          err: (error as Error).message,
-          organizationId,
-          threadId,
-          chatId: operatorContextKey(member),
-          channel: member.channel,
-        },
-        '[Worker] Plan notification failed',
-      );
-      throw error;
-    }
-  }
+      },
+      idempotencyKey,
+    }),
+    threadId,
+    'Plan notification',
+    options?.exclude,
+  );
 }

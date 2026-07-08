@@ -15,7 +15,9 @@ import {
   watchOAuthPopup,
   type OAuthDoneMessage,
 } from "@/lib/integrations/oauth-flow"
-import { filterTelegramPlatformConfigs, shouldShowTelegramIntegration } from "@/lib/integrations/telegram-visibility"
+import { filterOperatorPlatformConfigs } from "@/lib/integrations/operator-channel-visibility"
+import { shouldShowImessageIntegration } from "@/lib/integrations/imessage-visibility"
+import { shouldShowTelegramIntegration } from "@/lib/integrations/telegram-visibility"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
 import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
@@ -96,6 +98,7 @@ function IntegrationsPageContent({
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
   const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
+  const { data: imessageStatus } = useSWR<{ connected: boolean }>('/api/integrations/imessage/bind', fetcher)
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(null)
@@ -240,6 +243,7 @@ function IntegrationsPageContent({
     [telegramBotUsername, telegramStatus?.botUsername],
   )
   const showTelegram = shouldShowTelegramIntegration(telegramAvailability)
+  const showImessage = shouldShowImessageIntegration({ lineHandle: imessageHandle })
   const runtimePlatformConfig = useMemo(
     () => PLATFORM_CONFIG.map(def => def.id === 'tiktok-shop'
       ? {
@@ -253,8 +257,11 @@ function IntegrationsPageContent({
     [tiktokShopConfigured],
   )
   const visiblePlatformConfig = useMemo(
-    () => filterTelegramPlatformConfigs(runtimePlatformConfig, telegramAvailability),
-    [runtimePlatformConfig, telegramAvailability],
+    () => filterOperatorPlatformConfigs(runtimePlatformConfig, {
+      telegram: telegramAvailability,
+      imessage: { lineHandle: imessageHandle },
+    }),
+    [runtimePlatformConfig, telegramAvailability, imessageHandle],
   )
   const platformConfigsByChannelKind = useMemo(() => ({
     support: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'support'),
@@ -264,6 +271,7 @@ function IntegrationsPageContent({
     { id: 'shopify', label: 'Connect your Shopify store', detail: 'So Shopkeeper can look up orders and customers for you.', done: hasShopify },
     { id: 'email', label: 'Connect your support email', detail: 'Customer emails become tickets you can answer in one place.', done: hasEmail },
     showTelegram ? { id: 'telegram', label: 'Link Telegram on your phone', detail: 'Approve replies and get updates wherever you are.', done: telegramStatus?.connected ?? false } : null,
+    showImessage ? { id: 'imessage', label: 'Link iMessage on your iPhone', detail: 'Approve replies and get your morning briefing by text.', done: imessageStatus?.connected ?? false } : null,
   ].filter((step): step is { id: string; label: string; detail: string; done: boolean } => step !== null)
   const showSetup = loaded && (!hasShopify || !hasEmail)
   const nextStepIndex = setupSteps.findIndex(s => !s.done)

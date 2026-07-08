@@ -23,8 +23,9 @@ export interface ImessageBindingParams {
 // The merchant texts a single-use bind token to the iMessage line. iMessage has
 // no Telegram-style `/start` deep link, so the raw token is the message body.
 // Mirrors handleStartBinding: validate the token, resolve the OrgMember, upsert
-// the binding, then consume the token. Until a sender is bound this way every
-// inbound message is rejected with connect instructions — no ticket, no agent run.
+// Until a sender is bound this way every inbound message is rejected with connect
+// instructions — no ticket, no agent run. Never log connect tokens or raw message
+// bodies at info/warn — only senderId, spaceId, orgId, and outcome metadata.
 export async function handleImessageBinding(params: ImessageBindingParams): Promise<void> {
   const { senderId, spaceId, displayName, reply } = params;
   const token = params.body.trim();

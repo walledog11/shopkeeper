@@ -21,6 +21,10 @@ import { isTelegramConfigured, sendMessage as telegramSend } from './clients/tel
 import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
 import { stripMarkdown } from './message-handlers/strip-markdown.js';
 import { updateContext, type OperatorContext } from './operator-context.js';
+import {
+  markOperatorNotifyDelivered,
+  wasOperatorNotifyDelivered,
+} from './operator-notify-idempotency.js';
 
 export type OperatorNotifyPolicy = 'critical' | 'best-effort';
 
@@ -31,6 +35,8 @@ export type OperatorBinding =
 export interface OperatorNotifyOptions {
   policy?: OperatorNotifyPolicy;
   threadId?: string | null;
+  /** Stable per notification; skips re-send on BullMQ retry when already delivered to this channel. */
+  idempotencyKey?: string | null;
 }
 
 export interface OperatorNotifyResult {
@@ -114,6 +120,22 @@ export async function notifyOperator(
     return null;
   }
 
+  const idempotencyKey = options.idempotencyKey ?? null;
+  if (idempotencyKey && await wasOperatorNotifyDelivered(member.channel, contextKey, idempotencyKey)) {
+    logger.info(
+      {
+        organizationId,
+        channel: member.channel,
+        chatId: contextKey,
+        idempotencyKey,
+        ...(options.threadId ? { threadId: options.threadId } : {}),
+      },
+      '[OperatorNotify] Duplicate delivery skipped',
+    );
+    await updateContext(organizationId, contextKey, contextPatch);
+    return { channel: member.channel, chatId: contextKey };
+  }
+
   try {
     const sent = await sendToBinding(organizationId, member, body, options);
     if (!sent) {
@@ -125,6 +147,10 @@ export async function notifyOperator(
         '[OperatorNotify] Send failed — skipping context update',
       );
       return null;
+    }
+
+    if (idempotencyKey) {
+      await markOperatorNotifyDelivered(member.channel, contextKey, idempotencyKey);
     }
 
     await updateContext(organizationId, contextKey, contextPatch);

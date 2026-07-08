@@ -397,10 +397,15 @@ When merchants report missing plan pushes, bind replies, or digests:
    resume. Gateway logs `[Spectrum] iMessage send failed` or `[Spectrum] iMessage space load failed`
    with `spaceId`; repeated failures emit `category=provider_send`, `provider=imessage`,
    `channel=operator_notify`.
-5. **No delivery receipts** — A successful send means Spectrum `space.send()` resolved, not that the
+5. **Device cap** — Telegram limits each member to 3 bound devices; iMessage has **no device cap**
+   (unlimited iPhones per member). Unlink stale handles from Integrations if a merchant rotates phones.
+6. **Proactive send dedupe** — BullMQ retries use Redis idempotency keys per channel
+   (`[OperatorNotify] Duplicate delivery skipped`) so a partial fan-out failure does not re-text
+   channels that already received the notification. Keys expire after 1 hour.
+7. **No delivery receipts** — A successful send means Spectrum `space.send()` resolved, not that the
    message was read on the iPhone. Check gateway logs for `[Worker] Plan notification sent` with
    `channel: imessage` vs `[Worker] Plan notification failed`.
-6. **Bind path** — Search `[iMessage] Bind succeeded`, `Bind rejected`, or `Bind failed` in gateway
+8. **Bind path** — Search `[iMessage] Bind succeeded`, `Bind rejected`, or `Bind failed` in gateway
    logs. Unbound senders should receive connect instructions, not agent runs or ticket creation.
 
 Controlled validation (gateway iMessage `provider_send`):
@@ -413,6 +418,51 @@ PROVIDER_SEND_ALERT_THRESHOLD=1 OPS_ALERT_WINDOW_SECS=60 \
 
 Expected log tags: `category=provider_send`, `service=gateway`, `provider=imessage`,
 `channel=operator_notify`.
+
+### iMessage bind support playbook
+
+**Binding security (verified in code):**
+
+- Each iPhone handle (`senderId`) binds to **one member globally** — unique index on
+  `org_member_imessage_bindings.sender_id`. Texting a fresh connect code from org B moves the
+  handle to org B; org A stops receiving operator notifications until someone re-binds there.
+- Connect codes are **single-use**, **24h TTL** (`ORG_MEMBER_BIND_TOKEN_TTL_SECONDS`), minted only
+  via `POST /api/integrations/imessage/bind` with `requireBillingWriteAllowed: true`.
+- Gateway bind logs include `senderId`, `spaceId`, `orgId`, and `outcome` only — never the token
+  or inbound message body at info/warn.
+
+**Wrong-org bind**
+
+1. Confirm which org owns the handle: Integrations → iMessage on each workspace, or query
+   `org_member_imessage_bindings` by `sender_id`.
+2. The merchant (or support) unlinks the handle from the **current** org's Integrations page, or
+   mints a code from the **intended** org and texts it — the global upsert moves the binding.
+3. Org that lost the handle sees no plan pushes until a member re-binds from that dashboard.
+
+**Lost operator access (no plan pushes / bind reply fails)**
+
+1. Check gateway `/health/deep` → `checks.imessage` is `ok` and `IMESSAGE_LINE_HANDLE` matches
+   Photon's line on the dashboard.
+2. Merchant: Integrations → iMessage → **Unlink**, mint a new code, text it from the iPhone.
+3. If proactive sends fail but inbound works, ask the merchant to text the line once (refreshes
+   stale `spaceId` — see triage above).
+4. Escalate to engineering if bind succeeds but sends still fail (`provider_send` ops alerts).
+
+**Legacy customer iMessage threads (pre-rewire)**
+
+Pre-GA customer-support threads with `channel_type = imessage` are orphaned — iMessage is
+operator-only and no longer opens inbox tickets. Soft-delete them before GA:
+
+```bash
+# Preview count
+cd apps/gateway
+npx tsx src/scripts/purge-legacy-imessage-threads.ts --dry-run
+
+# Apply (sets deleted_at + status closed)
+npx tsx src/scripts/purge-legacy-imessage-threads.ts
+```
+
+Hard purge of soft-deleted rows follows the normal 90-day retention job in `maintenance/retention.ts`.
 
 ### Shopify
 

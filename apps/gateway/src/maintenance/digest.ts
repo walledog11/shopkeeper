@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 import { JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
+import { digestNotificationIdempotencyKey } from '../operator-notify-idempotency.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -264,8 +265,9 @@ export async function sendScheduledDigests(): Promise<void> {
     }
 
     const bindings = await listOperatorBindings(org.id);
+    const idempotencyKey = digestNotificationIdempotencyKey(org.id, pendingDigest.sentAt);
     for (const member of bindings) {
-      const result = await notifyOperator(org.id, member, message, { pendingDigest });
+      const result = await notifyOperator(org.id, member, message, { pendingDigest }, { idempotencyKey });
       if (result) {
         logger.info(
           { organizationId: org.id, chatId: result.chatId, flagged: flaggedCount, firstBriefing: firstBriefingPending },

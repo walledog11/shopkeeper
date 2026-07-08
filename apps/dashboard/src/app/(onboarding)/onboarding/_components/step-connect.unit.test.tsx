@@ -26,6 +26,16 @@ describe("StepConnect", () => {
     expect(html).not.toContain("Link Telegram")
   })
 
+  it("hides iMessage when only Telegram is configured", () => {
+    const html = renderToStaticMarkup(createElement(StepConnect, {
+      telegramBotUsername: "ShopkeeperBot",
+      imessageHandle: null,
+    }))
+
+    expect(html).toContain("Telegram")
+    expect(html).not.toContain("Link my iPhone")
+  })
+
   it("falls back to a dashboard-only message when no channel is configured", () => {
     const html = renderToStaticMarkup(createElement(StepConnect, {
       telegramBotUsername: null,

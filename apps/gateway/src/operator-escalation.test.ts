@@ -173,7 +173,7 @@ describe('pushOperatorEscalation', () => {
     expect(body).toContain('Order issue');
   });
 
-  it('throws when Telegram send fails for a bound operator', async () => {
+  it('returns 0 when the only bound operator channel fails to send', async () => {
     const customer = await createTestCustomer(org.id, 'send-fail@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
@@ -186,8 +186,32 @@ describe('pushOperatorEscalation', () => {
 
     sendMessageSpy.mockResolvedValueOnce(false);
 
-    await expect(pushOperatorEscalation(org.id, thread.id, 'Order issue')).rejects.toThrow(
-      'Telegram send failed',
-    );
+    const notified = await pushOperatorEscalation(org.id, thread.id, 'Order issue');
+
+    expect(notified).toBe(0);
+    expect(sendMessageSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('notifies iMessage when Telegram send fails for a dual-bound operator', async () => {
+    const customer = await createTestCustomer(org.id, 'partial-fanout@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const member = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-partial` },
+    });
+    await db.orgMemberTelegramChat.create({
+      data: { orgMemberId: member.id, chatId: `chat-${org.id}-partial` },
+    });
+    await db.orgMemberImessageBinding.create({
+      data: { orgMemberId: member.id, senderId: `sender-${org.id}-partial`, spaceId: `space-${org.id}-partial` },
+    });
+
+    sendMessageSpy.mockResolvedValueOnce(false);
+
+    const notified = await pushOperatorEscalation(org.id, thread.id, 'Order issue');
+
+    expect(notified).toBe(1);
+    expect(sendMessageSpy).toHaveBeenCalledTimes(1);
+    expect(sendImessageToSpaceSpy).toHaveBeenCalledTimes(1);
   });
 });

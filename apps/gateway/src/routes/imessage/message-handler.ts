@@ -1,4 +1,4 @@
-import { db } from '@shopkeeper/db';
+import { db, findOrgMemberBindToken } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
@@ -32,8 +32,13 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
     include: { orgMember: true },
   });
 
-  // Unbound sender: the only valid action is to text a connect token.
-  if (!binding) {
+  const trimmedBody = body.trim();
+  const bindToken = trimmedBody && !/\s/.test(trimmedBody) ? trimmedBody : null;
+  const pendingBind = bindToken ? await findOrgMemberBindToken(bindToken) : null;
+
+  // Unbound senders bind via connect code; bound senders re-bind when they text a
+  // fresh valid token (global senderId upsert moves the handle to the minting org).
+  if (!binding || pendingBind) {
     await handleImessageBinding({ senderId, spaceId, body, displayName, reply });
     return;
   }

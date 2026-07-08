@@ -114,6 +114,7 @@ describe('sendOperatorPlanNotification', () => {
     expect(notifyOperatorSpy.mock.calls[0]?.[4]).toEqual({
       policy: 'critical',
       threadId: 'thread_1',
+      idempotencyKey: expect.any(String),
     });
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
@@ -136,6 +137,30 @@ describe('sendOperatorPlanNotification', () => {
         'Handle refund request',
       ),
     ).rejects.toThrow(OperatorNotifyError);
+  });
+
+  it('does not fail the job when at least one channel delivers on partial fan-out failure', async () => {
+    listOperatorBindingsSpy.mockResolvedValue([
+      { channel: 'telegram', chatId: 'chat_1' },
+      { channel: 'imessage', senderId: 'sender_2', spaceId: 'space_2' },
+    ]);
+    notifyOperatorSpy
+      .mockResolvedValueOnce({ channel: 'telegram', chatId: 'chat_1' })
+      .mockRejectedValueOnce(new OperatorNotifyError('iMessage send failed'));
+
+    await expect(
+      sendOperatorPlanNotification(
+        'org_1',
+        'thread_1',
+        null,
+        ChannelType.email,
+        null,
+        plan,
+        'Handle refund request',
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -164,7 +189,11 @@ describe('sendOperatorQuestionNotification', () => {
       pendingPlan: null,
       pendingQuestion: { threadId: 'thread_1', question: 'Do we ship to Canada?' },
     });
-    expect(options).toEqual({ policy: 'critical', threadId: 'thread_1' });
+    expect(options).toEqual({
+      policy: 'critical',
+      threadId: 'thread_1',
+      idempotencyKey: expect.any(String),
+    });
   });
 
   it('no-ops when no operators are bound', async () => {

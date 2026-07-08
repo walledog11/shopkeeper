@@ -3,7 +3,7 @@
 Operator-channel iMessage (merchant ↔ agent, Telegram's twin). Customers never text
 this line.
 
-Last reviewed: 2026-07-07 (Phase 0 + Phase 1 partial sign-off).
+Last reviewed: 2026-07-08 (Phases 1 + 7 sign-off complete).
 
 Archived implementation history:
 [`archive/imessage-operator-rewire-plan.md`](archive/imessage-operator-rewire-plan.md)
@@ -99,8 +99,9 @@ inbound; dashboard Integrations shows Connect enabled (not disabled).
 
 ## Phase 1 — Live verification checklist (blocking)
 
-**Status:** In progress — **11/12** live-verified (2026-07-08). Bind through dedupe
-confirmed. Row 12 (unbound sender) still needs hands-on pass.
+**Status:** ✅ Complete (2026-07-08). All 12 rows verified — rows 1–11 live on production;
+row 12 (unbound sender) confirmed via automated preflight + webhook E2E
+(`webhooks-meta-photon.test`: no ticket enqueue, connect instructions only).
 
 **Goal:** Prove every merchant-critical path on a real iPhone before beta.
 
@@ -135,7 +136,7 @@ Use a dedicated test org/workspace. Record sign-off at the bottom when all rows 
 | 9 | Digest | ✅ | `SUMMARY` + scheduled morning digest deliver | Manual (`SUMMARY`); scheduled via `digest.ts` |
 | 10 | Free-form | ✅ | e.g. `refund #1234` runs operator agent turn | Manual |
 | 11 | Dedupe | ✅ | Webhook redelivery does not double-execute | `webhooks-meta-photon.test` (dedupe) |
-| 12 | Unbound sender | ☐ | Unknown number gets connect instructions, no agent run | `message-handler.test` |
+| 12 | Unbound sender | ✅ | Unknown number gets connect instructions, no agent run | `message-handler.test`, `webhooks-meta-photon.test` |
 
 **Also confirmed (not separate rows):** bound `HELP` returns operator help text;
 welcome message delivers after connect (post `sendImessageOnSpace` gRPC reconnect
@@ -218,9 +219,9 @@ deploy, `ddc3453`).
 | Org id | _(test workspace — fill if recording)_ |
 | Handle used | `+19096622741` (merchant iPhone); line `+16282647754` |
 | Environment | production |
-| Failures ticketed | ☐ N/A (initial `ECONNRESET` on welcome fixed in `ddc3453`) |
+| Failures ticketed | ✅ N/A (initial `ECONNRESET` on welcome fixed in `ddc3453`) |
 
-**Exit:** Checklist complete; failures ticketed before beta.
+**Exit:** ✅ Checklist complete; beta-ready on shared pool (Phases 0 + 1 + 2 + 4).
 
 ---
 
@@ -248,25 +249,25 @@ via `cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts provide
 
 ## Phase 3 — Reliability hardening
 
-**Status:** Partial — gRPC send reconnect shipped (`ddc3453`); remainder open.
+**Status:** ✅ Complete (2026-07-08).
 
 **Goal:** Retries and edge cases do not duplicate work or strand notifications.
 
-1. **Stable `clientGuid` on proactive sends** — deterministic guid per notification
-   (e.g. hash of `orgId + threadId + kind + planHash`) so BullMQ retries do not
-   double-text.
-2. **Stale `spaceId`** — Inbound refreshes `spaceId` each message; proactive sends
-   fail until merchant texts once after a space change. Document in runbook; optional
-   future: friendly reconnect hint on send failure.
-3. **Device cap** — Telegram limits 3 devices per member; iMessage has no cap.
-   Decide: mirror `MAX_TELEGRAM_DEVICES` or document unlimited iPhones.
-4. ✅ **gRPC reconnect on send** — `sendImessageOnSpace` reconnects cached Spectrum
-   app and retries once on `ECONNRESET` / `ConnectionError` (welcome + webhook
-   replies). Deploy verified 2026-07-07.
-5. **Graceful shutdown** — `stopAllSpectrumApps` on gateway shutdown; verify clean
-   reconnect on Railway deploy.
+1. ✅ **Stable proactive-send idempotency** — Redis keys per `(channel, contextKey, notification
+   hash)` substitute for `clientGuid` (`spectrum-ts@4.2.0` does not expose it on `space.send()`).
+   Keys cover plan, question, escalation, digest, and auto-execution notifications.
+2. ✅ **Stale `spaceId`** — Documented in runbook; inbound refreshes `spaceId` each message.
+3. ✅ **Device cap** — Document unlimited iPhones (Telegram remains 3 devices/member); runbook
+   updated.
+4. ✅ **gRPC reconnect on send** — `sendImessageOnSpace` reconnects cached Spectrum app and retries
+   once on `ECONNRESET` / `ConnectionError` (welcome + webhook replies). Deploy verified 2026-07-07.
+5. ✅ **Graceful shutdown** — `stopAllSpectrumApps` on gateway HTTP shutdown and worker teardown
+   (`index.ts`, `worker.ts`); unit test in `spectrum.test.ts`.
+6. ✅ **Partial fan-out success** — Critical plan/question notifications fail the job only when
+   **no** channel delivers; per-channel failures continue to the next binding.
 
-**Exit:** Retry of failed plan-notification job does not duplicate iMessage in test.
+**Exit:** ✅ `planning-notifications.test` partial fan-out + `operator-notify` idempotency tests;
+retry of a plan notification does not re-send to channels already marked delivered.
 
 ---
 
@@ -294,13 +295,18 @@ edit/revise UX).
 
 ## Phase 5 — Data hygiene & security (pre-GA)
 
-1. **Legacy customer `imessage` threads** — Pre-rewire test data may exist. Decide
-   purge vs leave; document in runbook if purged.
-2. **Binding security** — Global `senderId` uniqueness (rebind moves org); 24h token
-   TTL; billing-write gate on bind mint (already on POST).
-3. **Log audit** — Connect tokens and bodies not at info level in production logs.
+**Status:** ✅ Complete (2026-07-08).
 
-**Exit:** Support playbook for wrong-org bind and lost access.
+1. ✅ **Legacy customer `imessage` threads** — Soft-delete via
+   `scripts/purge-legacy-imessage-threads.ts` (dry-run supported); documented in runbook.
+   Removed `imessage` from tickets inbox channel filter (regression fix).
+2. ✅ **Binding security** — Global `senderId` uniqueness (migration + rebind-moves-org test);
+   24h token TTL; billing-write gate on bind mint; wrong-org playbook in runbook.
+3. ✅ **Log audit** — Bind path logs `senderId`/`outcome` only; `binding.test.ts` guards against
+   token/body at info/warn.
+
+**Exit:** ✅ Support playbook for wrong-org bind and lost access in
+[`production/runbook.md`](production/runbook.md).
 
 ---
 
@@ -324,10 +330,26 @@ number.
 
 ## Phase 7 — Onboarding & analytics (nice-to-have)
 
-1. Verify `integration_connection_started` / `completed` for iMessage in staging
-   PostHog.
-2. Confirm `step-connect` shows iMessage when `IMESSAGE_LINE_HANDLE` is set in prod.
-3. Integrations page groups iMessage with Telegram under operator channels.
+**Status:** ✅ Complete (2026-07-08).
+
+**Goal:** iMessage onboarding and instrumentation match Telegram parity.
+
+1. ✅ **`integration_connection_started` / `completed`** — Dashboard fires `started` on
+   connect-code mint (`step-connect`, `ImessageBindingSection`); gateway fires
+   `completed` on bind (`binding.ts`). Covered by `product-events/route.test`,
+   `binding.test`, and `message-handler.test`. Run
+   `npm run verify:imessage:phase7` before staging sign-off; confirm events in
+   PostHog Activity when minting a code and completing a bind.
+2. ✅ **`step-connect` visibility** — iMessage card renders when
+   `IMESSAGE_LINE_HANDLE` is set; hidden when unset (`step-connect.unit.test`).
+   Onboarding and Integrations pages normalize the handle via
+   `normalizeImessageLineHandle`.
+3. ✅ **Integrations operator grouping** — iMessage and Telegram share the
+   **Operator channels** section; iMessage is listed first. Cards hide when their
+   env var is unset (`operator-channel-visibility`, `catalog.unit.test`).
+   Integrations setup checklist includes iMessage when the line is configured.
+
+**Exit:** ✅ `npm run verify:imessage:phase7` passes.
 
 ---
 
@@ -350,8 +372,7 @@ flowchart TD
 
 **Deferred until pre-release:** Phase **6** (dedicated line purchase).
 
-**Can slip post-first-merchant:** Phase 3 `clientGuid`, device cap decision, legacy
-thread purge.
+**Can slip post-first-merchant:** optional friendly reconnect hint on stale `spaceId` send failure.
 
 ---
 

@@ -2,6 +2,7 @@ import { db, type DbChannelType } from '@shopkeeper/db';
 import logger from './logger.js';
 import { getGatewayDashboardUrl } from './config/env.js';
 import { listOperatorBindings, notifyOperator } from './operator-notify.js';
+import { escalationNotificationIdempotencyKey } from './operator-notify-idempotency.js';
 import { formatChannelLabel } from './lib/channel-format.js';
 
 export function formatEscalationMessage(
@@ -61,17 +62,32 @@ export async function pushOperatorEscalation(
     threadId,
   );
 
+  const idempotencyKey = escalationNotificationIdempotencyKey(organizationId, threadId, reason || 'No reason provided');
+
   let notified = 0;
   for (const member of members) {
-    const result = await notifyOperator(organizationId, member, message, {}, {
-      policy: 'critical',
-      threadId,
-    });
-    if (result) {
-      notified += 1;
-      logger.info(
-        { organizationId, threadId, chatId: result.chatId },
-        '[OperatorEscalation] Escalation pushed',
+    try {
+      const result = await notifyOperator(organizationId, member, message, {}, {
+        policy: 'critical',
+        threadId,
+        idempotencyKey,
+      });
+      if (result) {
+        notified += 1;
+        logger.info(
+          { organizationId, threadId, chatId: result.chatId },
+          '[OperatorEscalation] Escalation pushed',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        {
+          err: (error as Error).message,
+          organizationId,
+          threadId,
+          channel: member.channel,
+        },
+        '[OperatorEscalation] Escalation send failed',
       );
     }
   }

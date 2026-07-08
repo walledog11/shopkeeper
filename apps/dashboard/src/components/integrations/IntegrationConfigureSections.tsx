@@ -26,7 +26,7 @@ const DISCONNECT_NOTES: Record<ConnectType, string> = {
   email: "Your past tickets stay. New customer emails will stop arriving.",
   ig: "Your past tickets stay. New Instagram DMs will stop arriving.",
   shopify: "Order lookups and syncing will stop. Your Shopify store itself isn't affected.",
-  imessage: "Your past tickets stay. New iMessages will stop arriving.",
+  imessage: "You'll stop receiving plan approvals and digests on this iPhone. Support tickets are unaffected.",
   tiktok_shop: "Your past tickets stay. New TikTok Shop buyer messages will stop arriving.",
 }
 
