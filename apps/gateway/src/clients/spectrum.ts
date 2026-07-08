@@ -29,9 +29,11 @@ export class SpectrumIntegrationConfigError extends Error {
 
 function isSpectrumTransportError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  if (error.name === 'ConnectionError') return true;
+  if (error.name === 'ConnectionError' || error.name === 'IMessageError') return true;
   const message = error.message;
-  return message.includes('ECONNRESET') || message.includes('UNAVAILABLE');
+  return message.includes('ECONNRESET')
+    || message.includes('UNAVAILABLE')
+    || message.includes('Channel has been shut down');
 }
 
 async function loadImessageSpace(spaceId: string): Promise<ImessageSendTarget> {
@@ -39,8 +41,18 @@ async function loadImessageSpace(spaceId: string): Promise<ImessageSendTarget> {
   return imessage(app).space.get(spaceId);
 }
 
+function invalidatePlatformSpectrumApp(): void {
+  const stale = platformApp;
+  platformApp = null;
+  if (stale) {
+    void stale.app.then((app) => app.stop()).catch(() => {});
+  }
+}
+
 // Photon inbound webhooks can arrive on a stale gRPC channel (ECONNRESET on the
 // first reply). Reconnect the cached Spectrum app once before surfacing failure.
+// Invalidation stops the stale app in the background so an in-flight webhook
+// space is not synchronously torn down before the retry loads a fresh space.
 export async function sendImessageOnSpace(space: ImessageSendTarget, text: string): Promise<void> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -49,7 +61,7 @@ export async function sendImessageOnSpace(space: ImessageSendTarget, text: strin
     } catch (error) {
       if (attempt === 0 && isSpectrumTransportError(error)) {
         logger.warn({ err: error, spaceId: space.id }, '[Spectrum] Send failed — reconnecting and retrying once');
-        await stopAllSpectrumApps();
+        invalidatePlatformSpectrumApp();
         space = await loadImessageSpace(space.id);
         continue;
       }
@@ -102,6 +114,15 @@ export function getPlatformSpectrumApp(): Promise<ImessageSpectrumApp> {
   return appPromise;
 }
 
+// Graceful shutdown: stop the cached Spectrum app so its connection is torn down
+// cleanly on redeploy instead of leaking until the process is killed.
+export async function stopAllSpectrumApps(): Promise<void> {
+  const cached = platformApp;
+  platformApp = null;
+  if (!cached) return;
+  await cached.app.then((app) => app.stop()).catch(() => {});
+}
+
 export function clearSpectrumAppCache(): void {
   platformApp = null;
 }
@@ -115,13 +136,4 @@ export function isImessageConfigured(): boolean {
 export async function sendImessageToSpace(spaceId: string, text: string): Promise<void> {
   const space = await loadImessageSpace(spaceId);
   await sendImessageOnSpace(space, text);
-}
-
-// Graceful shutdown: stop the cached Spectrum app so its connection is torn down
-// cleanly on redeploy instead of leaking until the process is killed.
-export async function stopAllSpectrumApps(): Promise<void> {
-  const cached = platformApp;
-  platformApp = null;
-  if (!cached) return;
-  await cached.app.then((app) => app.stop()).catch(() => {});
 }

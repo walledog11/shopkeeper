@@ -20,9 +20,13 @@ vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: planAgentSpy,
 }));
 
-vi.mock('../../message-handlers/planning-notifications.js', () => ({
-  sendOperatorPlanNotification: sendOperatorPlanNotificationSpy,
-}));
+vi.mock('../../message-handlers/planning-notifications.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../message-handlers/planning-notifications.js')>();
+  return {
+    ...actual,
+    sendOperatorPlanNotification: sendOperatorPlanNotificationSpy,
+  };
+});
 
 import { handlePendingQuestionAnswer } from './pending-question-commands.js';
 import { getContext, updateContext } from '../../operator-context.js';
@@ -183,8 +187,16 @@ describe('handlePendingQuestionAnswer', () => {
     );
 
     expect(handled).toBe(true);
-    expect(reply).not.toHaveBeenCalled();
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(reply.mock.calls[0]?.[0]).toContain('Sound good? Reply yes');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
+
+    const updatedCtx = await getContext(org.id, 'chat_2');
+    expect(updatedCtx.pendingPlan).toMatchObject({
+      threadId: thread.id,
+      instruction: 'Shipping to Canada',
+    });
+
     expect(sendOperatorPlanNotificationSpy).toHaveBeenCalledWith(
       org.id,
       thread.id,
@@ -202,6 +214,7 @@ describe('handlePendingQuestionAnswer', () => {
         rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
       },
       'Shipping to Canada',
+      { exclude: { channel: 'imessage', contextKey: 'chat_2' } },
     );
   });
 });

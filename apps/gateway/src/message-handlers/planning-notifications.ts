@@ -1,11 +1,16 @@
 import type { DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
-import { listOperatorBindings, notifyOperator } from '../operator-notify.js';
+import { listOperatorBindings, notifyOperator, type OperatorBinding } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
 
-function formatPlanMessage(
+export interface OperatorNotificationExclude {
+  channel: OperatorBinding['channel'];
+  contextKey: string;
+}
+
+export function formatOperatorPlanMessage(
   customerName: string | null,
   channelType: DbChannelType,
   summary: string,
@@ -174,6 +179,7 @@ export async function sendOperatorPlanNotification(
   aiSummary: string | null,
   plan: AgentPlan,
   instruction: string,
+  options?: { exclude?: OperatorNotificationExclude },
 ): Promise<void> {
   const bindings = await listOperatorBindings(organizationId);
 
@@ -183,9 +189,15 @@ export async function sendOperatorPlanNotification(
   }
 
   const summary = aiSummary || instruction;
-  const message = formatPlanMessage(customerName, channelType, summary, plan.steps);
+  const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps);
+  const exclude = options?.exclude;
 
   for (const member of bindings) {
+    if (exclude && member.channel === exclude.channel) {
+      const contextKey = member.channel === 'telegram' ? member.chatId : member.senderId;
+      if (contextKey === exclude.contextKey) continue;
+    }
+
     const result = await notifyOperator(organizationId, member, message, {
       pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
     }, {

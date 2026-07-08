@@ -12,9 +12,29 @@ import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
 import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
 import { toGatewayAgentPlan } from '../../message-handlers/agent-plan-adapter.js';
-import { sendOperatorPlanNotification } from '../../message-handlers/planning-notifications.js';
-import { updateContext, type OperatorContext } from '../../operator-context.js';
+import {
+  formatOperatorPlanMessage,
+  sendOperatorPlanNotification,
+  type OperatorNotificationExclude,
+} from '../../message-handlers/planning-notifications.js';
+import { updateContext, type OperatorContext, type ToolCall } from '../../operator-context.js';
 import type { OperatorMessageContext } from '../operator-message.js';
+
+function answeringChannelFromSenderRef(senderRef: string): OperatorNotificationExclude | null {
+  if (senderRef.startsWith('imessage:')) {
+    return { channel: 'imessage', contextKey: senderRef.slice('imessage:'.length) };
+  }
+  if (senderRef.startsWith('telegram:')) {
+    return { channel: 'telegram', contextKey: senderRef.slice('telegram:'.length) };
+  }
+  return null;
+}
+
+function toPendingPlanToolCalls(
+  rawToolCalls: Array<{ id: string; name: string; input?: unknown }>,
+): ToolCall[] {
+  return rawToolCalls.map((toolCall) => ({ ...toolCall }));
+}
 
 // The operator answered an `ask_operator` question over Telegram. The reply is the
 // answer: record it, persist it to the knowledge base (always — an operator-channel
@@ -126,11 +146,44 @@ export async function handlePendingQuestionAnswer(
     return true;
   }
 
-  try {
-    const notifyPlan = toGatewayAgentPlan(plan);
-    if (!notifyPlan) {
-      throw new Error('re-planned plan missing');
+  const notifyPlan = toGatewayAgentPlan(plan);
+  if (!notifyPlan) {
+    logger.error({ organizationId, threadId }, '[Operator] Answer re-plan produced no notify plan');
+    await reply("Saved your answer, but I couldn't draft the reply just now — please try again in a moment.");
+    return true;
+  }
+
+  const exclude = answeringChannelFromSenderRef(message.senderRef);
+  const planMessage = formatOperatorPlanMessage(
+    meta?.customer?.name ?? null,
+    meta?.channelType ?? thread.channelType,
+    meta?.aiSummary ?? baseInstruction,
+    notifyPlan.steps,
+  );
+  const pendingPlan = {
+    threadId,
+    instruction: baseInstruction,
+    rawToolCalls: toPendingPlanToolCalls(notifyPlan.rawToolCalls),
+  };
+
+  let deliveredToAnswerer = false;
+  if (exclude) {
+    try {
+      await updateContext(organizationId, chatId, { pendingPlan });
+      await reply(planMessage);
+      deliveredToAnswerer = true;
+      logger.info(
+        { organizationId, threadId, channel: exclude.channel, chatId },
+        '[Operator] Answer plan delivered to answering operator',
+      );
+    } catch (err) {
+      logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer plan reply failed');
+      await reply("Saved your answer, but I couldn't deliver the plan just now — please try again in a moment.");
+      return true;
     }
+  }
+
+  try {
     await sendOperatorPlanNotification(
       organizationId,
       threadId,
@@ -139,8 +192,16 @@ export async function handlePendingQuestionAnswer(
       meta?.aiSummary ?? null,
       notifyPlan,
       baseInstruction,
+      exclude ? { exclude } : undefined,
     );
   } catch (err) {
+    if (deliveredToAnswerer) {
+      logger.warn(
+        { err: (err as Error).message, organizationId, threadId },
+        '[Operator] Answer plan delivered to answerer; other operator channels failed',
+      );
+      return true;
+    }
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer plan notification failed');
     await reply("Saved your answer and drafted a reply, but I couldn't deliver the plan just now — check your dashboard.");
     return true;
