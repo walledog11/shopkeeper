@@ -188,7 +188,11 @@ describe('handlePendingQuestionAnswer', () => {
 
     expect(handled).toBe(true);
     expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply.mock.calls[0]?.[0]).toContain('Sound good? Reply yes');
+    const planMessage = reply.mock.calls[0]?.[0] as string;
+    expect(planMessage).toContain('Plan (1 step):');
+    expect(planMessage).toContain('1. Email Jane');
+    expect(planMessage).toContain(`/dashboard/tickets/${thread.id}`);
+    expect(planMessage).toContain('yes · no · Open link above');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
     const updatedCtx = await getContext(org.id, 'chat_2');
