@@ -79,31 +79,38 @@ export const integrations: Category = {
       title: "Connecting iMessage",
       body: [
         {
-          text: "Connect a business iMessage line so you can run your store by texting the agent from your iPhone — order lookups, daily digests, and one-tap approvals. iMessage is an operator channel like Telegram; customers never text this line. It runs through a Photon Spectrum project, which provides the line and the credentials you'll paste in.",
+          text: "Link your iPhone to run your store by texting the Shopkeeper operator line — order lookups, daily digests, and one-tap plan approvals. iMessage is an operator channel like Telegram; customers never text this line. Shopkeeper provides the line; you do not need any Photon or Spectrum credentials.",
         },
         {
           heading: "What you'll need",
           steps: [
-            "A Photon Spectrum project with a provisioned iMessage line.",
-            "Your Spectrum project ID, project secret, and webhook secret (found in your Spectrum project settings).",
+            "An iPhone with iMessage enabled.",
+            "Access to your Shopkeeper dashboard (Integrations page).",
           ],
         },
         {
           heading: "How to connect",
           steps: [
-            "Go to the Integrations page.",
-            "Click Connect on the iMessage card.",
-            "Paste your Spectrum project ID, project secret, and webhook secret.",
-            "Click Connect — a webhook URL will appear.",
-            "Copy that webhook URL into your Spectrum project's webhook settings so inbound iMessages reach Shopkeeper.",
-            "On the iMessage card, click Link your iPhone to get a connect code, then text that code from your iPhone to the line. That links your handle so the agent recognizes you.",
+            "Go to Integrations → iMessage.",
+            "Click Link your iPhone — a QR code and connect code appear.",
+            "Scan the QR with your iPhone camera (or tap the text link) and send the prefilled message.",
+            "You'll receive a welcome text within about 30 seconds when the link succeeds.",
+            "Integrations shows your linked handle; you can link additional iPhones from the same page.",
+          ],
+        },
+        {
+          heading: "Troubleshooting",
+          steps: [
+            "Connect codes expire after 24 hours — click Link your iPhone again to mint a fresh code.",
+            "If the line doesn't recognize you, go to Integrations → iMessage → Unlink, then link again with a new code.",
+            "Only handles you link can use the operator line — texting a fresh code re-links that iPhone to whoever minted it.",
           ],
         },
         {
           tips: [
-            "Only handles you link can text the line — customers never reach this number. Texting a fresh connect code re-links it to whoever minted it.",
-            "A dedicated Business line is recommended so your number stays consistent.",
-            "To change credentials later, disconnect and reconnect the iMessage card — there is no OAuth reconnect for this channel.",
+            "Reply yes to approve a plan, no to dismiss, or skip 1 to skip the first step on multi-step plans.",
+            "Text SUMMARY anytime for an open-ticket digest.",
+            "Tap the Open link in plan notifications to review or edit the ticket in the dashboard.",
           ],
         },
       ],

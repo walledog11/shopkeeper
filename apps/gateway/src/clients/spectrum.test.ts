@@ -3,6 +3,8 @@ import type { ImessageSpectrumApp } from './spectrum.js';
 import {
   clearSpectrumAppCache,
   getPlatformSpectrumApp,
+  sendImessageOnSpace,
+  sendImessageToSpace,
   SpectrumIntegrationConfigError,
   stopAllSpectrumApps,
 } from './spectrum.js';
@@ -13,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   imessageConfig: vi.fn(),
   getSpectrumConfig: vi.fn(),
   spaceGet: vi.fn(),
+  recordProviderSendFailureInBackground: vi.fn(),
 }));
 
 vi.mock('spectrum-ts', () => ({
@@ -36,6 +39,10 @@ vi.mock('../logger.js', () => ({
   },
 }));
 
+vi.mock('../provider-send-alerts.js', () => ({
+  recordProviderSendFailureInBackground: mocks.recordProviderSendFailureInBackground,
+}));
+
 const CREDS = {
   projectId: 'project_1',
   projectSecret: 'project_secret_1',
@@ -47,6 +54,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.imessageConfig.mockReturnValue({ provider: 'imessage' });
   mocks.getSpectrumConfig.mockReturnValue({ ...CREDS });
+  mocks.imessage.mockReturnValue({ space: { get: mocks.spaceGet } });
 });
 
 describe('platform Spectrum app', () => {
@@ -121,5 +129,52 @@ describe('platform Spectrum app', () => {
     mocks.getSpectrumConfig.mockReturnValue(null);
     expect(() => getPlatformSpectrumApp()).toThrow(SpectrumIntegrationConfigError);
     expect(mocks.spectrum).not.toHaveBeenCalled();
+  });
+});
+
+describe('iMessage send failures', () => {
+  it('records provider_send when space.send fails', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('space unavailable'));
+    await expect(
+      sendImessageOnSpace({ id: 'space_1', send }, 'hello', {
+        orgId: 'org_1',
+        threadId: 'thread_1',
+      }),
+    ).rejects.toThrow('space unavailable');
+
+    expect(mocks.recordProviderSendFailureInBackground).toHaveBeenCalledWith(
+      'imessage',
+      'operator_notify',
+      'org_1',
+      expect.objectContaining({
+        threadId: 'thread_1',
+        detail: 'space unavailable',
+        extra: { spaceId: 'space_1' },
+      }),
+    );
+  });
+
+  it('records provider_send when proactive space load fails', async () => {
+    const app = { id: 'spectrum_app_1' } as unknown as ImessageSpectrumApp;
+    mocks.spectrum.mockResolvedValue(app);
+    mocks.spaceGet.mockRejectedValue(new Error('grpc down'));
+
+    await expect(
+      sendImessageToSpace('space_2', 'plan push', {
+        orgId: 'org_2',
+        threadId: 'thread_2',
+      }),
+    ).rejects.toThrow('grpc down');
+
+    expect(mocks.recordProviderSendFailureInBackground).toHaveBeenCalledWith(
+      'imessage',
+      'operator_notify',
+      'org_2',
+      expect.objectContaining({
+        threadId: 'thread_2',
+        detail: 'grpc down',
+        extra: { spaceId: 'space_2' },
+      }),
+    );
   });
 });

@@ -376,6 +376,44 @@ Pass criteria:
 Full merchant flows (bind, plan push, approve) are Phase 1 in
 [`imessage-production-readiness-plan.md`](../imessage-production-readiness-plan.md).
 
+### iMessage down triage
+
+When merchants report missing plan pushes, bind replies, or digests:
+
+1. **Configured?** `curl -sS https://<gateway>/health/deep | jq '.checks.imessage'` — `ok` means
+   `isImessageConfigured()` passed (all three `SPECTRUM_*` vars set). `503` on
+   `POST /webhooks/photon` with `[Webhook] Photon webhook received but iMessage is not configured`
+   means missing creds on the gateway.
+2. **Webhook ingress** — Confirm Photon dashboard webhook URL is `https://<gateway>/webhooks/photon`
+   and `SPECTRUM_WEBHOOK_SECRET` matches the endpoint secret shown in
+   [app.photon.codes](https://app.photon.codes) → Webhooks. Signature failures emit
+   `category=webhook_signature`.
+3. **Credential rotation** — After rotating `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, or
+   `SPECTRUM_WEBHOOK_SECRET`, redeploy the gateway and re-run Phase 1 bind smoke. A mismatched
+   webhook secret returns `401` on inbound Photon deliveries.
+4. **Stale `spaceId`** — Proactive sends (plan push, digest, escalation) use
+   `OrgMemberImessageBinding.spaceId`. Inbound refreshes `spaceId` on each merchant message; if
+   Photon re-provisioned the space, ask the merchant to text the line once before proactive sends
+   resume. Gateway logs `[Spectrum] iMessage send failed` or `[Spectrum] iMessage space load failed`
+   with `spaceId`; repeated failures emit `category=provider_send`, `provider=imessage`,
+   `channel=operator_notify`.
+5. **No delivery receipts** — A successful send means Spectrum `space.send()` resolved, not that the
+   message was read on the iPhone. Check gateway logs for `[Worker] Plan notification sent` with
+   `channel: imessage` vs `[Worker] Plan notification failed`.
+6. **Bind path** — Search `[iMessage] Bind succeeded`, `Bind rejected`, or `Bind failed` in gateway
+   logs. Unbound senders should receive connect instructions, not agent runs or ticket creation.
+
+Controlled validation (gateway iMessage `provider_send`):
+
+```bash
+cd apps/gateway
+PROVIDER_SEND_ALERT_THRESHOLD=1 OPS_ALERT_WINDOW_SECS=60 \
+  npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>
+```
+
+Expected log tags: `category=provider_send`, `service=gateway`, `provider=imessage`,
+`channel=operator_notify`.
+
 ### Shopify
 
 1. Complete a live Shopify OAuth connect flow from the production dashboard.
@@ -538,9 +576,16 @@ Run these in a safe production window with test org/user data only.
 
 `provider_send`:
 
-1. Set `PROVIDER_SEND_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the dashboard.
-2. Do not break live provider credentials. Trigger one controlled dashboard-side provider alert using the existing alert helper against production Redis with test metadata: `provider=postmark`, `channel=email`, and `orgId=<test-org-id>`.
-3. Confirm the log drain receives an entry tagged `category=provider_send`, `service=dashboard`, `provider=postmark`, and `channel=email`.
+1. Set `PROVIDER_SEND_ALERT_THRESHOLD=1` and `OPS_ALERT_WINDOW_SECS=60` on the gateway.
+2. Do not break live provider credentials. Trigger one controlled gateway-side provider alert using
+   the existing alert helper with test metadata:
+   `cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>`
+3. Confirm the log drain receives an entry tagged `category=provider_send`, `service=gateway`,
+   `provider=imessage`, and `channel=operator_notify`.
+
+For dashboard email sends, repeat with the dashboard helper:
+`cd apps/dashboard && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>`
+(tags: `service=dashboard`, `provider=postmark`, `channel=email`).
 
 `queue_health`:
 

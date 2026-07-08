@@ -72,6 +72,7 @@ describe('handleImessageOperatorMessage', () => {
     });
     expect(binding?.orgMemberId).toBe(member.id);
     expect(binding?.spaceId).toBe('space_2');
+    expect(binding?.displayName).toBe(SENDER);
 
     // First operator channel for the org — the morning digest and first briefing
     // are armed as part of the bind.

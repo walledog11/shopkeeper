@@ -107,7 +107,7 @@ routing decision next to the live regex guards without changing behavior.
 Exit: disagreement rate understood and each class dispositioned (fix classifier
 prompt, accept, or adjust routing thresholds).
 
-## Phase 3 — Guards route, never author
+## Phase 3 — Guards route, never author [COMPLETED]
 
 Swap in the routing function and delete the plan-mutation machinery.
 

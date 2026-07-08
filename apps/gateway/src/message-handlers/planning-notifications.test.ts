@@ -24,7 +24,12 @@ vi.mock('../operator-notify.js', () => ({
   },
 }));
 
+vi.mock('../config/env.js', () => ({
+  getGatewayDashboardUrl: () => 'https://dashboard.example.com',
+}));
+
 import {
+  formatOperatorPlanMessage,
   sendOperatorAutoExecutionNotification,
   sendOperatorPlanNotification,
   sendOperatorQuestionNotification,
@@ -52,6 +57,41 @@ beforeEach(() => {
   mockLogger.error.mockClear();
 });
 
+describe('formatOperatorPlanMessage', () => {
+  it('includes dashboard deep link and SMS-friendly footer for multi-step plans', () => {
+    const message = formatOperatorPlanMessage(
+      'Jane Doe',
+      ChannelType.email,
+      'Needs a refund',
+      [
+        { category: 'write', tool: 'send_email', description: 'Reply to customer', label: 'Reply', enabled: true },
+        { category: 'write', tool: 'issue_refund', description: 'Issue full refund', label: 'Refund', enabled: true },
+      ],
+      { threadId: 'thread_1', dashboardUrl: 'https://dashboard.example.com' },
+    );
+
+    expect(message).toContain('Plan (2 steps):');
+    expect(message).toContain('1. Email Jane');
+    expect(message).toContain('2. Refund');
+    expect(message).toContain('Open: https://dashboard.example.com/dashboard/tickets/thread_1');
+    expect(message).toContain('yes · no · skip 1 · Open link above');
+    expect(message).not.toContain('Sound good?');
+  });
+
+  it('omits skip hint for single-step plans', () => {
+    const message = formatOperatorPlanMessage(
+      null,
+      ChannelType.email,
+      'Quick reply',
+      plan.steps,
+      { threadId: 'thread_2', dashboardUrl: 'https://dashboard.example.com' },
+    );
+
+    expect(message).toContain('yes · no · Open link above');
+    expect(message).not.toContain('skip 1');
+  });
+});
+
 describe('sendOperatorPlanNotification', () => {
   it('uses critical notification policy for each bound operator', async () => {
     listOperatorBindingsSpy.mockResolvedValue([
@@ -75,6 +115,10 @@ describe('sendOperatorPlanNotification', () => {
       policy: 'critical',
       threadId: 'thread_1',
     });
+
+    const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
+    expect(body).toContain('Open: https://dashboard.example.com/dashboard/tickets/thread_1');
+    expect(body).toContain('yes · no · Open link above');
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {
@@ -181,8 +225,14 @@ describe('sendOperatorAutoExecutionNotification', () => {
     ).resolves.toBeUndefined();
 
     expect(mockLogger.error).toHaveBeenCalledWith(
-      { err: 'network down', threadId: 'thread_1' },
-      '[Worker] sendOperatorAutoExecutionNotification error',
+      {
+        err: 'network down',
+        organizationId: 'org_1',
+        threadId: 'thread_1',
+        chatId: 'chat_1',
+        channel: 'telegram',
+      },
+      '[Worker] Auto-execution notification failed',
     );
   });
 });

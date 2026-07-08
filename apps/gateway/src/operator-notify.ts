@@ -10,7 +10,7 @@
  * Notification policy:
  * - **critical** — plan approval prompts and escalations. Send failures throw
  *   `OperatorNotifyError` so BullMQ jobs retry; `provider_send` ops alerts are
- *   emitted from `telegram-client` on each failed attempt.
+ *   emitted from `telegram-client` and `spectrum` on each failed attempt.
  * - **best-effort** — digests, auto-execution summaries, webhook replies, and
  *   auto-ack. Failures are logged and the caller continues without throwing.
  */
@@ -88,7 +88,11 @@ async function sendToBinding(
       threadId: options.threadId ?? null,
     });
   }
-  await sendImessageToSpace(member.spaceId, stripMarkdown(body));
+  await sendImessageToSpace(member.spaceId, stripMarkdown(body), {
+    orgId: organizationId,
+    threadId: options.threadId ?? null,
+    spaceId: member.spaceId,
+  });
   return true;
 }
 

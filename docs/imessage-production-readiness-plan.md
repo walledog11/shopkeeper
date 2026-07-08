@@ -99,8 +99,8 @@ inbound; dashboard Integrations shows Connect enabled (not disabled).
 
 ## Phase 1 — Live verification checklist (blocking)
 
-**Status:** In progress — **6/12** live-verified (2026-07-07). Bind through skip-step
-confirmed. Rows 7–12 still need hands-on pass.
+**Status:** In progress — **11/12** live-verified (2026-07-08). Bind through dedupe
+confirmed. Row 12 (unbound sender) still needs hands-on pass.
 
 **Goal:** Prove every merchant-critical path on a real iPhone before beta.
 
@@ -130,11 +130,11 @@ Use a dedicated test org/workspace. Record sign-off at the bottom when all rows 
 | 4 | Approve | ✅ | Reply `yes` → plan executes → confirmation summary | Manual (shared w/ Telegram) |
 | 5 | Dismiss | ✅ | Reply `no` → plan cleared, no execution | Manual |
 | 6 | Skip step | ✅ | `skip 1` on multi-step plan works | Manual |
-| 7 | Ask operator | ☐ | Agent asks question → merchant free-text answer → re-plan fires | Manual |
-| 8 | Escalation | ☐ | Notification arrives with dashboard link | `operator-escalation.test` |
-| 9 | Digest | ☐ | `SUMMARY` + scheduled morning digest deliver | Manual (`SUMMARY`); scheduled via `digest.ts` |
-| 10 | Free-form | ☐ | e.g. `refund #1234` runs operator agent turn | Manual |
-| 11 | Dedupe | ☐ | Webhook redelivery does not double-execute | `webhooks-meta-photon.test` (dedupe) |
+| 7 | Ask operator | ✅ | Agent asks question → merchant free-text answer → re-plan fires | Manual |
+| 8 | Escalation | ✅ | Notification arrives with dashboard link | `operator-escalation.test` |
+| 9 | Digest | ✅ | `SUMMARY` + scheduled morning digest deliver | Manual (`SUMMARY`); scheduled via `digest.ts` |
+| 10 | Free-form | ✅ | e.g. `refund #1234` runs operator agent turn | Manual |
+| 11 | Dedupe | ✅ | Webhook redelivery does not double-execute | `webhooks-meta-photon.test` (dedupe) |
 | 12 | Unbound sender | ☐ | Unknown number gets connect instructions, no agent run | `message-handler.test` |
 
 **Also confirmed (not separate rows):** bound `HELP` returns operator help text;
@@ -213,7 +213,7 @@ deploy, `ddc3453`).
 
 | Field | Value |
 |-------|-------|
-| Date | 2026-07-07 |
+| Date | 2026-07-08 |
 | Tester | internal dogfood |
 | Org id | _(test workspace — fill if recording)_ |
 | Handle used | `+19096622741` (merchant iPhone); line `+16282647754` |
@@ -226,25 +226,23 @@ deploy, `ddc3453`).
 
 ## Phase 2 — Observability parity (ship with beta)
 
-**Status:** Not started (runbook env matrix partially done — see below).
+**Status:** ✅ Complete (2026-07-08).
 
 **Goal:** Silent iMessage failures are as visible as Telegram failures.
 
-**Gap:** Telegram `sendMessage` calls `recordProviderSendFailureInBackground`;
-`sendImessageToSpace` does not yet.
-
-1. Wire `provider_send` ops alerts on iMessage send failures (mirror Telegram:
-   org id, thread id, space id, error detail).
-2. Structured logs for bind success/failure and plan-notify sent vs failed per channel.
-3. ✅ Runbook section in [`production/runbook.md`](production/runbook.md) (Phase 0,
-   2026-07-07):
+1. ✅ Wire `provider_send` ops alerts on iMessage send failures (mirror Telegram:
+   org id, thread id, space id, error detail) — `spectrum.ts` +
+   `operator-notify.ts`.
+2. ✅ Structured logs for bind success/failure and plan-notify sent vs failed per channel.
+3. ✅ Runbook section in [`production/runbook.md`](production/runbook.md):
    - Env matrix row for Spectrum vars
    - iMessage Phase 0/1 setup + webhook routing
    - iMessage down triage: `isImessageConfigured()`, webhook 503, cred rotation,
-     stale `spaceId` _(triage bullets still to expand in Phase 2)_
+     stale `spaceId`, no delivery receipts, bind log patterns
    - No delivery receipts — ack means `space.send()` resolved, not read on iPhone
 
-**Exit:** Controlled failure emits `opsAlert: true`, `category: provider_send`.
+**Exit:** ✅ Controlled failure emits `opsAlert: true`, `category: provider_send`
+via `cd apps/gateway && npx tsx src/scripts/emit-controlled-ops-alert.ts provider_send <test-org-id>`.
 
 ---
 
@@ -274,27 +272,23 @@ deploy, `ddc3453`).
 
 ## Phase 4 — Merchant UX polish
 
-**Status:** Partial — redundant Integrations “linked” toast removed (`ddc3453`).
+**Status:** ✅ Complete (2026-07-08).
 
 **Goal:** Close gaps in [`channel-roles.md`](channel-roles.md) (labels, deep links,
 edit/revise UX).
 
-1. **Dashboard deep links in plan notifications** — Escalations already include
-   `Open: <DASHBOARD_URL>/dashboard/tickets/<id>`. Add same link to plan pushes so
-   review/edit is one tap; keep `yes` / `no` / `skip N` for fast approve.
-2. **Shorter plan copy** — SMS-friendly step lines; footer:
+1. ✅ **Dashboard deep links in plan notifications** — Plan pushes include
+   `Open: <DASHBOARD_URL>/dashboard/tickets/<id>`; `yes` / `no` / `skip N` kept
+   for fast approve.
+2. ✅ **Shorter plan copy** — SMS-friendly step lines; footer:
    `yes · no · skip 1 · Open link above`.
-3. **Handle labels** — `displayName` is null on inbound; consider member name or
-   friendly label at bind time.
-4. **Help rewrite (high priority)** — [`integrations.ts` help
-   content](../apps/dashboard/src/app/dashboard/_components/help/content/integrations.ts)
-   `connect-imessage` still describes per-org Photon credential paste. Correct model:
-   - Shopkeeper provides the line; merchant links iPhone with connect code
-   - No merchant-facing Spectrum secrets
-   - Troubleshooting: expired token, unlink/relink
-5. **README** — List iMessage under operator channels with env vars and bind flow.
+3. ✅ **Handle labels** — Bind sets `displayName` from Clerk member name,
+   falling back to sender handle.
+4. ✅ **Help rewrite** — `connect-imessage` article updated: platform line +
+   connect code model, no merchant Spectrum secrets, troubleshooting.
+5. ✅ **README** — iMessage listed under operator channels with env vars and bind flow.
 
-**Exit:** New merchant connects via Integrations + iPhone only, no support contact.
+**Exit:** ✅ New merchant connects via Integrations + iPhone only, no support contact.
 
 ---
 
@@ -377,10 +371,12 @@ thread purge.
 
 ## Known gaps (code review 2026-07-07)
 
-1. Help article describes per-merchant Photon credentials — wrong; platform line +
-   bind code is the model.
-2. Plan pushes lack dashboard deep links; escalations already have them.
-3. iMessage sends lack `provider_send` ops alerts; Telegram has them.
+1. ~~Help article describes per-merchant Photon credentials — wrong; platform line +
+   bind code is the model.~~ **Resolved:** help rewrite (Phase 4, 2026-07-08).
+2. ~~Plan pushes lack dashboard deep links; escalations already have them.~~ **Resolved:**
+   plan notifications include `Open:` link (Phase 4, 2026-07-08).
+3. ~~iMessage sends lack `provider_send` ops alerts; Telegram has them.~~ **Resolved:**
+   `spectrum.ts` records `provider_send` on send/space-load failures (Phase 2, 2026-07-08).
 4. ~~No `docs/production/` Spectrum/iMessage section yet (Phase 2).~~ **Resolved:**
    runbook env matrix + Phase 0/1 setup added 2026-07-07.
 

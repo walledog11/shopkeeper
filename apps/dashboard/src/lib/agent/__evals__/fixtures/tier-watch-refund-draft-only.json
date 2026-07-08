@@ -1,6 +1,6 @@
 {
   "id": "tier-watch-refund-draft-only",
-  "description": "Watch-tier org: customer asks for a refund. The agent has no action or communication tools and the prompt forbids execution, so it must escalate instead of refunding or replying directly.",
+  "description": "Watch-tier org: customer asks for a refund. Watch tier never auto-executes, so whatever the agent proposes (a refund draft, a reply, or an escalation) must route to the merchant for review — it must never auto-fire.",
   "setup": {
     "channelType": "email",
     "tag": "Support",
@@ -37,9 +37,6 @@
   },
   "instruction": "Reply to the customer and process their refund request.",
   "expectedPlan": {
-    "mustCallTools": ["escalate_to_human"],
-    "mustNotCallTools": ["create_refund", "cancel_order", "send_reply"],
-    "mustEscalate": true,
     "mustClassifyAs": "needs_review"
   }
 }

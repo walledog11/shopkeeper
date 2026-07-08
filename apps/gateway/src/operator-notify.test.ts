@@ -175,7 +175,11 @@ describe('notifyOperator (imessage)', () => {
     );
 
     expect(result).toEqual({ channel: 'imessage', chatId: 'sender_1' });
-    expect(sendImessageToSpaceSpy).toHaveBeenCalledWith('space_1', 'Proposed plan (2 steps):');
+    expect(sendImessageToSpaceSpy).toHaveBeenCalledWith('space_1', 'Proposed plan (2 steps):', {
+      orgId: 'org_1',
+      threadId: null,
+      spaceId: 'space_1',
+    });
     expect(updateContextSpy).toHaveBeenCalledWith('org_1', 'sender_1', { pendingPlan: null });
   });
 

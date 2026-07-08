@@ -3,6 +3,7 @@ import { Spectrum, type SpectrumInstance } from 'spectrum-ts';
 import { imessage } from 'spectrum-ts/providers/imessage';
 import { getSpectrumConfig, type SpectrumConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
+import { recordProviderSendFailureInBackground } from '../provider-send-alerts.js';
 
 type ImessageProviderConfig = ReturnType<typeof imessage.config>;
 
@@ -11,6 +12,12 @@ export type ImessageSpectrumApp = SpectrumInstance<[ImessageProviderConfig]>;
 export interface ImessageSendTarget {
   id: string;
   send: (text: string) => Promise<unknown>;
+}
+
+export interface ImessageSendAlertContext {
+  orgId?: string | null;
+  threadId?: string | null;
+  spaceId?: string | null;
 }
 
 interface CachedSpectrumApp {
@@ -53,7 +60,24 @@ function invalidatePlatformSpectrumApp(): void {
 // first reply). Reconnect the cached Spectrum app once before surfacing failure.
 // Invalidation stops the stale app in the background so an in-flight webhook
 // space is not synchronously torn down before the retry loads a fresh space.
-export async function sendImessageOnSpace(space: ImessageSendTarget, text: string): Promise<void> {
+function recordImessageSendFailure(error: unknown, alertContext?: ImessageSendAlertContext): void {
+  recordProviderSendFailureInBackground('imessage', 'operator_notify', alertContext?.orgId ?? null, {
+    threadId: alertContext?.threadId ?? null,
+    detail: error instanceof Error ? error.message : String(error),
+    extra: { spaceId: alertContext?.spaceId ?? null },
+  });
+}
+
+export async function sendImessageOnSpace(
+  space: ImessageSendTarget,
+  text: string,
+  alertContext?: ImessageSendAlertContext,
+): Promise<void> {
+  const contextWithSpace: ImessageSendAlertContext = {
+    ...alertContext,
+    spaceId: alertContext?.spaceId ?? space.id,
+  };
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       await space.send(text);
@@ -65,6 +89,15 @@ export async function sendImessageOnSpace(space: ImessageSendTarget, text: strin
         space = await loadImessageSpace(space.id);
         continue;
       }
+      logger.warn(
+        {
+          err: error,
+          spaceId: space.id,
+          ...(alertContext?.orgId ? { organizationId: alertContext.orgId } : {}),
+        },
+        '[Spectrum] iMessage send failed',
+      );
+      recordImessageSendFailure(error, contextWithSpace);
       throw error;
     }
   }
@@ -133,7 +166,26 @@ export function isImessageConfigured(): boolean {
 
 // Proactive operator send: reach a space persisted from an earlier inbound
 // event (`OrgMemberImessageBinding.spaceId`) without a webhook reply in hand.
-export async function sendImessageToSpace(spaceId: string, text: string): Promise<void> {
-  const space = await loadImessageSpace(spaceId);
-  await sendImessageOnSpace(space, text);
+export async function sendImessageToSpace(
+  spaceId: string,
+  text: string,
+  alertContext?: ImessageSendAlertContext,
+): Promise<void> {
+  const contextWithSpace: ImessageSendAlertContext = { ...alertContext, spaceId };
+  let space: ImessageSendTarget;
+  try {
+    space = await loadImessageSpace(spaceId);
+  } catch (error) {
+    logger.warn(
+      {
+        err: error,
+        spaceId,
+        ...(alertContext?.orgId ? { organizationId: alertContext.orgId } : {}),
+      },
+      '[Spectrum] iMessage space load failed',
+    );
+    recordImessageSendFailure(error, contextWithSpace);
+    throw error;
+  }
+  await sendImessageOnSpace(space, text, contextWithSpace);
 }

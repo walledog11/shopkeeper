@@ -43,7 +43,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 2. Gateway verifies signature (HMAC/Meta), resolves org, enqueues job to BullMQ
 3. Worker upserts customer/thread/message, sanitizes input (prompt injection protection), deduplicates by `externalMessageId`
 4. Worker enqueues AI summary job → Claude generates 1-sentence summary + tag (Shipping/Returns/Order Status/Product Inquiry/General)
-5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends a Telegram notification to all bound org members
+5. After summarizing, the worker generates the agent plan in-process (`@shopkeeper/agent` planner) and caches it on the thread, then sends a Telegram or iMessage notification to all bound org members
 6. Dashboard polls `/api/threads?status=open` via SWR every 3s and shows the new thread
 7. Agent opens the ticket → auto-plan is shown → agent approves → `POST /api/agent` executes
 
@@ -56,6 +56,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 - **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`; Outlook remains forwarding-only. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API, Graph, or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail/Outlook refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
 - **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
+- **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
 - **TikTok** — not started (type stubs and UI placeholder only)
 
@@ -93,6 +94,7 @@ Triggered from the tickets page. When a ticket is opened:
 Direct interface for the merchant/team. No customer in context — the agent takes instructions and acts on Shopify directly.
 - **Dashboard**: `/dashboard/agent` page has a persistent chat interface (session-based, one `dashboard_agent` thread per session).
 - **Telegram**: new ticket notification sent to all bound org members. Reply `yes` to execute the plan, `no` to skip, or type freeform instructions.
+- **iMessage**: same operator flows as Telegram — plan pushes include a dashboard deep link; reply `yes` / `no` / `skip N` or freeform from a linked iPhone.
 
 ### Agent Tools
 Tool registry and execution live in the extracted core under `packages/agent/src/tools/` (`@shopkeeper/agent`).
@@ -178,12 +180,12 @@ Configurable per org via Settings → Agent tab:
 
 ### Team
 - Org member management via Clerk.com
-- Bound Telegram chats per org member for agent notifications
+- Bound Telegram chats and iMessage handles per org member for operator notifications
 
 ### Settings
 - Workspace tab: org name, branding
 - Agent tab: all agent settings (see above)
-- Integrations tab: connect/disconnect Instagram, Shopify, Telegram, email
+- Integrations tab: connect/disconnect Instagram, Shopify, Telegram, iMessage, email
 - Account tab: personal settings
 - Billing tab: Stripe portal
 - Audit log tab
@@ -258,6 +260,7 @@ Optional dashboard variables:
 - `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` — Instagram OAuth and webhook setup
 - `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` — Outlook OAuth
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
+- `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
 
 ### Gateway (Railway)
@@ -286,6 +289,7 @@ Optional gateway variables:
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` — Instagram webhook setup
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
+- `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` — platform-wide Photon Spectrum credentials for the iMessage operator line (gateway)
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
 - `LOG_LEVEL`, `LOG_PRETTY` — gateway logging controls
 

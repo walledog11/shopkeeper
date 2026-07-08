@@ -3,6 +3,7 @@ import {
   captureProductEvent,
   productEventInsertId,
 } from '@shopkeeper/analytics';
+import { resolveClerkUserApprover } from '../../clients/clerk-approver.js';
 import logger from '../../logger.js';
 import { finalizeOperatorBind } from '../../operator-onboarding.js';
 import type { OperatorReply } from '../operator-message.js';
@@ -31,6 +32,10 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
   // Only a single opaque token is a binding attempt; anything else is a stranger.
   const payload = token && !/\s/.test(token) ? await findOrgMemberBindToken(token) : null;
   if (!payload) {
+    logger.info(
+      { senderId, spaceId, outcome: 'rejected_unbound' },
+      '[iMessage] Bind rejected — sender not linked',
+    );
     await reply(CONNECT_INSTRUCTIONS);
     return;
   }
@@ -46,12 +51,16 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
 
   if (!member) {
     logger.warn(
-      { orgId: payload.organizationId, clerkUserId: payload.clerkUserId },
-      '[iMessage] Bind target OrgMember not found',
+      { orgId: payload.organizationId, clerkUserId: payload.clerkUserId, senderId, outcome: 'failed_member_missing' },
+      '[iMessage] Bind failed — OrgMember not found',
     );
     await reply('Could not link this number — your workspace membership is missing. Open the Shopkeeper dashboard and try again.');
     return;
   }
+
+  // Spectrum inbound carries no display name; use Clerk member name when available.
+  const clerkLabel = (await resolveClerkUserApprover(payload.clerkUserId))?.displayName ?? null;
+  const bindingLabel = displayName ?? clerkLabel ?? senderId;
 
   // A sender handle binds to one member globally; texting a fresh token moves
   // the binding to whoever minted it.
@@ -61,12 +70,12 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
       orgMemberId: member.id,
       senderId,
       spaceId,
-      displayName,
+      displayName: bindingLabel,
     },
     update: {
       orgMemberId: member.id,
       spaceId,
-      displayName,
+      displayName: bindingLabel,
     },
   });
 
@@ -78,6 +87,11 @@ export async function handleImessageBinding(params: ImessageBindingParams): Prom
     platform: 'imessage',
     insertId: productEventInsertId.integrationConnectionCompleted(binding.id),
   });
+
+  logger.info(
+    { orgId: payload.organizationId, senderId, spaceId, bindingId: binding.id, outcome: 'success' },
+    '[iMessage] Bind succeeded',
+  );
 
   const welcome = await finalizeOperatorBind(payload.organizationId);
   await reply(welcome);

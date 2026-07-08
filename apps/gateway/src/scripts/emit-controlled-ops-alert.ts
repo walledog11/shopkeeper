@@ -2,20 +2,29 @@ import { loadGatewayEnv } from '../config/load-env.js';
 import { getGatewayOpsAlertConfig } from '../config/runtime-config.js';
 import { getOpsAlertCounterClient } from '../ops-alert-counter.js';
 import { emitOpsAlert } from '../ops-alerts.js';
+import { recordProviderSendFailure } from '../provider-send-alerts.js';
 import { recordWebhookSignatureFailure } from '../routes/webhooks-signature-alerts.js';
 import { closeGatewayRedisConnections } from '../clients/redis-client.js';
 
 loadGatewayEnv();
 
-const VALID_CATEGORIES = ['queue_health', 'webhook_signature'] as const;
+const VALID_CATEGORIES = ['queue_health', 'webhook_signature', 'provider_send'] as const;
 type ControlledCategory = typeof VALID_CATEGORIES[number];
 
 function parseCategory(raw: string | undefined): ControlledCategory {
   const value = raw?.trim();
   if (!value || !VALID_CATEGORIES.includes(value as ControlledCategory)) {
-    throw new Error(`Usage: npx tsx src/scripts/emit-controlled-ops-alert.ts <${VALID_CATEGORIES.join('|')}>`);
+    throw new Error(`Usage: npx tsx src/scripts/emit-controlled-ops-alert.ts <${VALID_CATEGORIES.join('|')}> [test-org-id]`);
   }
   return value as ControlledCategory;
+}
+
+function parseOrgId(raw: string | undefined): string {
+  const value = raw?.trim();
+  if (!value) {
+    throw new Error('[emit-controlled-ops-alert] test org id is required for provider_send');
+  }
+  return value;
 }
 
 function validationConfig() {
@@ -27,6 +36,7 @@ function validationConfig() {
     webhookSignatureThreshold: 1,
     queueFailedThreshold: 1,
     queueWaitingThreshold: 1,
+    providerSendThreshold: 1,
   };
 }
 
@@ -71,12 +81,31 @@ async function emitWebhookSignatureAlert(): Promise<void> {
   console.log(JSON.stringify({ category: 'webhook_signature', emitted: result.emitted, window: result.window }, null, 2));
 }
 
+async function emitProviderSendAlert(orgId: string): Promise<void> {
+  const config = validationConfig();
+  const counterClient = getOpsAlertCounterClient();
+  const result = await recordProviderSendFailure('imessage', 'operator_notify', orgId, {
+    counterClient,
+    config,
+    threadId: null,
+    detail: 'controlled-validation',
+    extra: { spaceId: 'controlled-validation-space', validation: true },
+  });
+
+  console.log(JSON.stringify({ category: 'provider_send', emitted: result.emitted, window: result.window }, null, 2));
+}
+
 async function main(): Promise<void> {
   const category = parseCategory(process.argv[2]);
 
   try {
     if (category === 'queue_health') {
       await emitQueueHealthAlert();
+      return;
+    }
+
+    if (category === 'provider_send') {
+      await emitProviderSendAlert(parseOrgId(process.argv[3] ?? process.env.VERIFY_ALERT_ORG_ID));
       return;
     }
 

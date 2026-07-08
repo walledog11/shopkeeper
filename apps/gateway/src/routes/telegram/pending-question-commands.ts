@@ -10,6 +10,7 @@ import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import logger from '../../logger.js';
+import { getGatewayDashboardUrl } from '../../config/env.js';
 import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
 import { toGatewayAgentPlan } from '../../message-handlers/agent-plan-adapter.js';
 import {
@@ -159,6 +160,7 @@ export async function handlePendingQuestionAnswer(
     meta?.channelType ?? thread.channelType,
     meta?.aiSummary ?? baseInstruction,
     notifyPlan.steps,
+    { threadId, dashboardUrl: getGatewayDashboardUrl() },
   );
   const pendingPlan = {
     threadId,

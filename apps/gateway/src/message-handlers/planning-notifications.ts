@@ -1,5 +1,6 @@
 import type { DbChannelType } from '@shopkeeper/db';
 import logger from '../logger.js';
+import { getGatewayDashboardUrl } from '../config/env.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
 import { listOperatorBindings, notifyOperator, type OperatorBinding } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
@@ -10,23 +11,26 @@ export interface OperatorNotificationExclude {
   contextKey: string;
 }
 
+function operatorContextKey(member: OperatorBinding): string {
+  return member.channel === 'telegram' ? member.chatId : member.senderId;
+}
+
 export function formatOperatorPlanMessage(
   customerName: string | null,
   channelType: DbChannelType,
   summary: string,
   steps: PlanStep[],
+  options?: { threadId?: string; dashboardUrl?: string },
 ): string {
   const channel = formatChannelLabel(channelType);
   const actionableSteps = steps.filter((step) => step.category !== 'read');
 
   const stepLines = actionableSteps.map((step, index) => {
-    let text: string;
     if (step.tool === 'send_reply' || step.tool === 'send_email') {
       const firstName = customerName ? customerName.split(' ')[0] : 'the customer';
-      text = `Email ${firstName} and let them know.`;
-    } else {
-      text = step.description || step.label;
+      return `${index + 1}. Email ${firstName}`;
     }
+    const text = step.label || step.description;
     return `${index + 1}. ${text}`;
   });
 
@@ -35,11 +39,19 @@ export function formatOperatorPlanMessage(
     customerName ? `From: ${customerName}` : null,
     `"${summary}"`,
     '',
-    `Proposed plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
+    `Plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
     ...stepLines,
-    '',
-    'Sound good? Reply yes to go ahead or no to skip.',
   ];
+
+  if (options?.threadId && options.dashboardUrl) {
+    lines.push('', `Open: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
+  }
+
+  const actions = actionableSteps.length > 1 ? ['yes', 'no', 'skip 1'] : ['yes', 'no'];
+  if (options?.threadId && options.dashboardUrl) {
+    actions.push('Open link above');
+  }
+  lines.push('', actions.join(' · '));
 
   return lines.filter((line): line is string => line !== null).join('\n');
 }
@@ -95,14 +107,32 @@ export async function sendOperatorAutoExecutionNotification(
     const message = formatAutoExecutionMessage(customerName, channelType, summary, result.plan, result);
 
     for (const member of bindings) {
-      const sent = await notifyOperator(organizationId, member, message, {
-        lastThreadId: threadId,
-        pendingPlan: null,
-      });
-      if (sent) {
-        logger.info(
-          { organizationId, threadId, chatId: sent.chatId },
-          '[Worker] Auto-execution notification sent',
+      try {
+        const sent = await notifyOperator(organizationId, member, message, {
+          lastThreadId: threadId,
+          pendingPlan: null,
+        });
+        if (sent) {
+          logger.info(
+            { organizationId, threadId, chatId: sent.chatId, channel: sent.channel },
+            '[Worker] Auto-execution notification sent',
+          );
+        } else {
+          logger.warn(
+            { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+            '[Worker] Auto-execution notification failed',
+          );
+        }
+      } catch (error) {
+        logger.error(
+          {
+            err: (error as Error).message,
+            organizationId,
+            threadId,
+            chatId: operatorContextKey(member),
+            channel: member.channel,
+          },
+          '[Worker] Auto-execution notification failed',
         );
       }
     }
@@ -155,18 +185,37 @@ export async function sendOperatorQuestionNotification(
   const message = formatQuestionMessage(customerName, channelType, summary, question);
 
   for (const member of bindings) {
-    const result = await notifyOperator(organizationId, member, message, {
-      pendingPlan: null,
-      pendingQuestion: { threadId, question },
-    }, {
-      policy: 'critical',
-      threadId,
-    });
-    if (result) {
-      logger.info(
-        { organizationId, threadId, chatId: result.chatId },
-        '[Worker] Question notification sent',
+    try {
+      const result = await notifyOperator(organizationId, member, message, {
+        pendingPlan: null,
+        pendingQuestion: { threadId, question },
+      }, {
+        policy: 'critical',
+        threadId,
+      });
+      if (result) {
+        logger.info(
+          { organizationId, threadId, chatId: result.chatId, channel: result.channel },
+          '[Worker] Question notification sent',
+        );
+      } else {
+        logger.warn(
+          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+          '[Worker] Question notification failed',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        {
+          err: (error as Error).message,
+          organizationId,
+          threadId,
+          chatId: operatorContextKey(member),
+          channel: member.channel,
+        },
+        '[Worker] Question notification failed',
       );
+      throw error;
     }
   }
 }
@@ -189,26 +238,48 @@ export async function sendOperatorPlanNotification(
   }
 
   const summary = aiSummary || instruction;
-  const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps);
+  const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
+    threadId,
+    dashboardUrl: getGatewayDashboardUrl(),
+  });
   const exclude = options?.exclude;
 
   for (const member of bindings) {
     if (exclude && member.channel === exclude.channel) {
-      const contextKey = member.channel === 'telegram' ? member.chatId : member.senderId;
+      const contextKey = operatorContextKey(member);
       if (contextKey === exclude.contextKey) continue;
     }
 
-    const result = await notifyOperator(organizationId, member, message, {
-      pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
-    }, {
-      policy: 'critical',
-      threadId,
-    });
-    if (result) {
-      logger.info(
-        { organizationId, threadId, chatId: result.chatId },
-        '[Worker] Plan notification sent',
+    try {
+      const result = await notifyOperator(organizationId, member, message, {
+        pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
+      }, {
+        policy: 'critical',
+        threadId,
+      });
+      if (result) {
+        logger.info(
+          { organizationId, threadId, chatId: result.chatId, channel: result.channel },
+          '[Worker] Plan notification sent',
+        );
+      } else {
+        logger.warn(
+          { organizationId, threadId, chatId: operatorContextKey(member), channel: member.channel },
+          '[Worker] Plan notification failed',
+        );
+      }
+    } catch (error) {
+      logger.error(
+        {
+          err: (error as Error).message,
+          organizationId,
+          threadId,
+          chatId: operatorContextKey(member),
+          channel: member.channel,
+        },
+        '[Worker] Plan notification failed',
       );
+      throw error;
     }
   }
 }

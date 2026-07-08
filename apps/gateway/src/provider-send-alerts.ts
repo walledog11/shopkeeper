@@ -7,7 +7,7 @@ import {
   type OpsAlertCounterClient,
 } from './ops-alerts.js';
 
-export type ProviderSendAlertProvider = 'telegram';
+export type ProviderSendAlertProvider = 'telegram' | 'imessage';
 export type ProviderSendAlertChannel = 'operator_notify';
 
 export interface ProviderSendAlertDependencies {
