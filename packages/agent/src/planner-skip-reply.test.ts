@@ -96,13 +96,6 @@ describe("refreshTerminalSendAfterSkip", () => {
       }] satisfies Anthropic.ToolUseBlock[],
     });
 
-    const approvedToolCalls: RawToolCall[] = [
-      { id: "r0", name: "get_shopify_orders", input: { customer_id: "1" } },
-      { id: "a1", name: "edit_shopify_order", input: { quantity: 1, variant_id: "v1" } },
-      { id: "a2", name: "update_shopify_order_address", input: { address1: "1 Main St", city: "LA", province: "CA", zip: "90001", country: "US" } },
-      { id: "s1", name: "send_reply", input: { text: "Added the item and updated your address." } },
-    ];
-
     const result = await refreshTerminalSendAfterSkip({
       ctx: makeCtx(),
       instruction: "Handle address change",
