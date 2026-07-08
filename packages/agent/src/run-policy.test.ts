@@ -236,18 +236,14 @@ describe("runAgent policy enforcement", () => {
     );
   });
 
-  it("records fast-path Error: tool results through the injected recorder", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ errors: "Shopify unavailable" }), {
-        status: 503,
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("records failed tool results through the injected recorder", async () => {
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("get_shopify_orders", { customer_id: "999" }))
+      .mockResolvedValueOnce(endTurn());
 
     await runAgent(
-      makeCtx(),
-      "What is the status on John's order?",
+      makeCtx({ shopify: null }),
+      "Look up the customer's orders",
       undefined,
       AGENT_SETTINGS_DEFAULTS,
       { recordToolFailure: mockRecordToolFailure },
@@ -255,8 +251,8 @@ describe("runAgent policy enforcement", () => {
 
     expect(mockRecordToolFailure).toHaveBeenCalledWith(
       "tool_result",
-      "search_shopify_customers",
-      expect.stringContaining("Shopify unavailable"),
+      "get_shopify_orders",
+      expect.stringContaining("no Shopify integration connected"),
     );
   });
 

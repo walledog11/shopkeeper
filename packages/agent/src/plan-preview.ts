@@ -129,16 +129,6 @@ const NEEDS_REVIEW: HomePlanClassification = {
 }
 
 function detectQuickReply(plan: AgentPlan): HomePlanClassification {
-  if (plan.orderStatusFastPath) {
-    const sendReplyToolCall = plan.rawToolCalls.find((toolCall) => toolCall.name === "send_reply") ?? null;
-    return {
-      kind: "needs_review",
-      replyText: replyTextFromToolCall(sendReplyToolCall),
-      sendReplyToolCall,
-      question: null,
-    };
-  }
-
   if (plan.steps.length !== 1 || plan.steps[0].tool !== "send_reply") {
     return NEEDS_REVIEW
   }

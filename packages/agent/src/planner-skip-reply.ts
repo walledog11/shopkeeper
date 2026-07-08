@@ -1,9 +1,14 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
+import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
 import { buildMessageHistory } from "./message-history.js";
 import { isOperatorChannel } from "./intent.js";
-import { draftPlannerTerminalTool } from "./planner-terminal.js";
+import {
+  PLAN_REPLAN_MAX_TOKENS,
+  runPlannerModelCall,
+  type PlannerUsageTotals,
+} from "./planner-model.js";
 import { buildPlanSteps } from "./planner-steps.js";
 import { replyDraftPrompt, sendReplyHasText } from "./planner-safety/index.js";
 import { buildSystemPromptParts } from "./prompt.js";
@@ -14,7 +19,92 @@ import type { OrgSettings, RawToolCall } from "./types.js";
 import { createModelUsageMetrics } from "./usage.js";
 import logger from "./logger.js";
 
+// The terminal send tools whose bodies the skip flow re-drafts. `send_reply` /
+// `send_email` are the only tools whose copy describes the plan's actions and so
+// must be regenerated when the merchant skips a step.
 const TERMINAL_SEND_TOOLS = new Set(["send_reply", "send_email"]);
+
+// Pending tool_result blocks for the last assistant message's tool_use calls.
+// The skip re-draft replays the (unapproved) proposed calls as an assistant turn,
+// so the model needs matching tool_result blocks before the draft prompt.
+function pendingToolResultsForLastAssistantMessage(
+  planMessages: Anthropic.MessageParam[],
+  content = "Not executed during planning.",
+): Anthropic.ToolResultBlockParam[] {
+  const lastMessage = planMessages[planMessages.length - 1];
+  const pendingToolUse = lastMessage?.role === "assistant" && Array.isArray(lastMessage.content)
+    ? (lastMessage.content as Anthropic.ContentBlock[]).filter(
+        (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+      )
+    : [];
+
+  return pendingToolUse.map((block) => ({
+    type: "tool_result" as const,
+    tool_use_id: block.id,
+    content,
+  }));
+}
+
+function appendPendingToolResults(
+  planMessages: Anthropic.MessageParam[],
+  content = "Not executed during planning.",
+): Anthropic.MessageParam[] {
+  const pendingToolResults = pendingToolResultsForLastAssistantMessage(planMessages, content);
+  if (pendingToolResults.length === 0) return [...planMessages];
+  return [
+    ...planMessages,
+    { role: "user", content: pendingToolResults },
+  ];
+}
+
+interface PlannerTerminalDraftInput {
+  ctx: AgentContext;
+  usageTotals: PlannerUsageTotals;
+  resolvedSettings: OrgSettings;
+  systemPromptBlocks: Anthropic.Messages.MessageCreateParams["system"];
+  messages: Anthropic.MessageParam[];
+  tool: Anthropic.Tool;
+  toolName: string;
+  prompt: string;
+  phase: string;
+  attempts?: number;
+  validate?: (toolCall: RawToolCall) => boolean;
+}
+
+// Forces a single terminal send tool via tool_choice and returns the drafted
+// call(s). Retries up to `attempts` times until a call passes `validate`.
+async function draftPlannerTerminalTool(input: PlannerTerminalDraftInput): Promise<RawToolCall[]> {
+  const model = pickModel("agent_run");
+  const messages = appendPendingToolResults(input.messages);
+  messages.push({ role: "user", content: input.prompt });
+  const attempts = input.attempts ?? 1;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const { toolBlocks } = await runPlannerModelCall({
+      ctx: input.ctx,
+      usageTotals: input.usageTotals,
+      model,
+      maxTokens: PLAN_REPLAN_MAX_TOKENS,
+      systemPromptBlocks: input.systemPromptBlocks,
+      messages,
+      tools: [input.tool],
+      toolChoice: { type: "tool", name: input.toolName },
+      phase: input.phase,
+      ...(attempts > 1 ? { attempt } : {}),
+      selectLoggedToolBlocks: blocks => blocks.filter(block => {
+        if (block.name !== input.toolName) return false;
+        const toolCall = { id: block.id, name: block.name, input: block.input };
+        return input.validate?.(toolCall) ?? true;
+      }),
+    });
+    const calls = toolBlocks
+      .filter(block => block.name === input.toolName)
+      .map(block => ({ id: block.id, name: block.name, input: block.input }))
+      .filter(toolCall => input.validate?.(toolCall) ?? true);
+    if (calls.length > 0) return calls;
+  }
+  return [];
+}
 
 export function stripTerminalSendTools(toolCalls: RawToolCall[]): RawToolCall[] {
   return toolCalls.filter((toolCall) => !TERMINAL_SEND_TOOLS.has(toolCall.name));

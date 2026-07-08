@@ -1,17 +1,15 @@
-import type Anthropic from "@anthropic-ai/sdk";
-import { anthropic, buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
+import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
-import logger from "./logger.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 import { selectAgentTools } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
-import { selectToolNamesForInstruction, isOperatorChannel } from "./intent.js";
+import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
-import { summarizeApprovedDashboardActions, tryRunOperatorOrderStatusFastPath } from "./order-status-fast-path.js";
+import { runAgentLoop } from "./agent-loop.js";
 import type { ActionEntry, BaseAgentContext, AgentResult } from "./agent-context.js";
 import type { PersistedAgentAction } from "./agent-actions.js";
-import { createModelUsageMetrics, hashInstructionForLog, recordModelUsage } from "./usage.js";
-import { enforceSpendCap, recordSpend } from "./spend.js";
+import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
+import { enforceSpendCap } from "./spend.js";
 import {
   READ_TOOL_NAMES,
   TOKEN_BUDGET,
@@ -21,6 +19,7 @@ import {
 import {
   approvedActionsCompleteOutcome,
   selectExecutableApprovedToolCalls,
+  summarizeApprovedDashboardActions,
 } from "./run-approved-actions.js";
 import {
   createAgentFailureRecorder,
@@ -110,20 +109,6 @@ export async function runAgent(
       },
     });
 
-  if (!readOnly && !approvedToolCalls?.length && isSupportContext(ctx)) {
-    const fastResult = await tryRunOperatorOrderStatusFastPath(ctx, instruction, settings, actionsPerformed);
-    if (fastResult) {
-      for (const action of fastResult.actionsPerformed) {
-        if (action.status === "error") {
-          recordAgentFailureSafely("tool_result", action.tool, action.result);
-        }
-      }
-      logger.info({ actionCount: fastResult.actionsPerformed.length }, "[agent] fast order-status result");
-      executedToolCalls.push(...fastResult.actionsPerformed.map(action => action.tool));
-      return finish(fastResult, "fast_order_status");
-    }
-  }
-
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
     const executableToolCalls = selectExecutableApprovedToolCalls(supportThread, approvedToolCalls);
 
@@ -161,7 +146,7 @@ export async function runAgent(
   }
   const tools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)
-    : selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
+    : selectAgentTools(settings);
   let systemPromptBlocks;
   if (readOnly) {
     systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));
@@ -173,87 +158,58 @@ export async function runAgent(
   // (operator + end-to-end runs) is a judgment/mutative path, so it runs on Sonnet.
   const iterationModel = pickModel(readOnly ? "composer_ask" : "agent_run");
 
-  const runModelIteration = async (i: number): Promise<AgentResult> => {
-    if (i >= maxIterations) {
+  // Spend cap is a backstop, not a per-call meter — check once before the model
+  // loop. The approved-execution path above returns with zero model calls and
+  // stays ungated.
+  await enforceSpendCap(ctx.orgId, s);
+
+  const loop = await runAgentLoop({
+    ctx,
+    mode: readOnly ? "read_only" : "execute",
+    messages,
+    systemPromptBlocks,
+    tools,
+    model: iterationModel,
+    maxIterations,
+    maxTokensPerCall: readOnly ? 2048 : 4096,
+    settings,
+    usageTotals,
+    runTools: executeToolCalls,
+    getEscalationReason: () => escalationReason,
+    ...(readOnly ? {} : { tokenBudget: TOKEN_BUDGET }),
+  });
+
+  switch (loop.stop) {
+    case "escalated":
+      return finish({
+        summary: `Escalated to merchant: ${escalationReason}`,
+        actionsPerformed,
+      }, "escalated");
+    case "max_iterations":
       return finish({
         summary: readOnly
           ? "I could not finish answering that. Try asking a narrower question."
           : "Reached maximum steps without completing the task.",
         actionsPerformed,
       }, "max_iterations");
-    }
-
-    logger.info({ iteration: i, messageCount: messages.length, readOnly }, "[agent] iteration start");
-
-    const response = await anthropic.messages.create({
-      model: iterationModel,
-      max_tokens: readOnly ? 2048 : 4096,
-      system: systemPromptBlocks,
-      messages,
-      tools,
-    });
-
-    const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
-    );
-    const usage = recordModelUsage(usageTotals, response);
-    await recordSpend(ctx.orgId, usage, iterationModel);
-    logger.info({
-      iteration: i,
-      model: iterationModel,
-      stopReason: response.stop_reason,
-      tools: toolUseBlocks.map(b => b.name),
-      usage,
-      totalTokens: usageTotals.totalTokens,
-    }, "[agent] iteration end");
-
-    messages.push({ role: "assistant", content: response.content });
-
-    if (response.stop_reason === "max_tokens") {
+    case "max_tokens":
       return finish({
         summary: readOnly
           ? "The answer was cut off because the request was too large. Try asking a more specific question."
           : "Agent response was cut off - the request may be too complex. Try breaking it into smaller steps.",
         actionsPerformed,
       }, "max_tokens");
-    }
-
-    if (!readOnly && usageTotals.totalTokens >= TOKEN_BUDGET) {
-      return finish({ summary: "Agent stopped - this request required too many steps. Please try a more specific instruction.", actionsPerformed }, "token_budget");
-    }
-
-    if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
-      let textBlock: Anthropic.TextBlock | undefined;
-      for (const block of response.content) {
-        if (block.type === "text") {
-          textBlock = block;
-          break;
-        }
-      }
+    case "token_budget":
+      return finish({
+        summary: "Agent stopped - this request required too many steps. Please try a more specific instruction.",
+        actionsPerformed,
+      }, "token_budget");
+    default:
       return finish({
         summary: readOnly
-          ? (textBlock?.text?.trim() || "I do not have enough information to answer that.")
-          : (textBlock?.text ?? "Done."),
+          ? (loop.finalText?.trim() || "I do not have enough information to answer that.")
+          : (loop.finalText ?? "Done."),
         actionsPerformed,
       }, "end_turn");
-    }
-
-    const toolResults = await executeToolCalls(toolUseBlocks);
-    messages.push({ role: "user", content: toolResults });
-
-    if (escalationReason) {
-      return finish({
-        summary: `Escalated to merchant: ${escalationReason}`,
-        actionsPerformed,
-      }, "escalated");
-    }
-
-    return runModelIteration(i + 1);
-  };
-
-  // Spend cap is a backstop, not a per-call meter — check once before the model
-  // loop. The approved-execution and fast paths above return with zero model
-  // calls and stay ungated.
-  await enforceSpendCap(ctx.orgId, s);
-  return runModelIteration(0);
+  }
 }

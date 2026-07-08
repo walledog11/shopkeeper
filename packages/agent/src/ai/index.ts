@@ -8,10 +8,9 @@ import { resolveAgentSettings } from "../settings.js";
 import { readModelUsage } from "../usage.js";
 
 // Model tiers for the dashboard. Two models, one place that maps a call's
-// purpose to one of them. Judgment/mutative calls (the planner's re-plan
-// decision and the mutative agent-run loop) run on Sonnet; everything else —
-// reads, composer-ask, summaries, classification —
-// stays on Haiku.
+// purpose to one of them. The judgment/mutative agent loop (end-to-end runs and
+// capture-mode planning) runs on Sonnet; everything else — composer-ask,
+// summaries, classification — stays on Haiku.
 export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 export const SONNET_MODEL = "claude-sonnet-4-6";
 
@@ -22,14 +21,10 @@ export const AI_MODEL = HAIKU_MODEL;
 // A call's purpose, not its channel. Enumerated in full so each call site is
 // explicit about its tier even when it resolves to Haiku.
 export type ModelTask =
-  | "plan_initial"  // planner first pass: read-tool selection / escalation
-  | "plan_replan"   // planner re-plan: the refund/cancel/edit/escalate decision
-  | "reply_draft"   // planner terminal phase: force a customer-facing send_reply
-  | "agent_run"     // run.ts mutative agent loop (operator + end-to-end)
+  | "agent_run"     // the shared agent loop: end-to-end runs + capture-mode planning
   | "composer_ask"; // run.ts read-only Q&A
 
 const SONNET_TASKS: ReadonlySet<ModelTask> = new Set<ModelTask>([
-  "plan_replan",
   "agent_run",
 ]);
 

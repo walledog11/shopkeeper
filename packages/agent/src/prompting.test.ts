@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentContext } from './agent-context.js';
-import { selectToolNamesForInstruction } from './intent.js';
 import { buildComposerAskPrompt, buildSystemPrompt } from './prompt.js';
 import { buildMessageHistory } from './message-history.js';
 import { AGENT_TOOLS, TOOL_GROUPS, toolNamesForGroups } from './tools/index.js';
@@ -202,113 +201,6 @@ describe('untrusted content handling', () => {
     );
 
     expect(messages[0].content).toBe("Cancel Scooby's order");
-  });
-});
-
-describe('selectToolNamesForInstruction', () => {
-  it('prunes operator order-status lookups to the minimal Shopify read tools', () => {
-    const tools = selectToolNamesForInstruction(
-      makeCtx({
-        thread: {
-          id: 'thread_test',
-          status: 'open',
-          channelType: 'dashboard_agent',
-          tag: 'Support',
-          aiSummary: null,
-          shopifyCustomerId: null,
-        },
-      }),
-      "What's the status of Scooby's order?"
-    );
-
-    expect(tools).toEqual([
-      'search_shopify_customers',
-      'get_shopify_orders',
-      'get_order_tracking',
-    ]);
-  });
-
-  it('uses order lookup tools when an operator gives an explicit order number', () => {
-    const tools = selectToolNamesForInstruction(
-      makeCtx({
-        thread: {
-          id: 'thread_test',
-          status: 'open',
-          channelType: 'dashboard_agent',
-          tag: 'Support',
-          aiSummary: null,
-          shopifyCustomerId: null,
-        },
-      }),
-      'Track order #PG1006'
-    );
-
-    expect(tools).toEqual([
-      'get_order_by_name',
-      'get_order_tracking',
-    ]);
-  });
-
-  it('prunes operator create-order requests with explicit customer info to product lookup and order creation', () => {
-    const tools = selectToolNamesForInstruction(
-      makeCtx({
-        thread: {
-          id: 'thread_test',
-          status: 'open',
-          channelType: 'dashboard_agent',
-          tag: 'Support',
-          aiSummary: null,
-          shopifyCustomerId: null,
-        },
-      }),
-      'Create an order for 1 Pencil Half Zip XL for scooby@example.com'
-    );
-
-    expect(tools).toEqual([
-      'search_shopify_products',
-      'create_shopify_order',
-    ]);
-  });
-
-  it('allows customer lookup for create-order requests without explicit customer info', () => {
-    const tools = selectToolNamesForInstruction(
-      makeCtx({
-        thread: {
-          id: 'thread_test',
-          status: 'open',
-          channelType: 'dashboard_agent',
-          tag: 'Support',
-          aiSummary: null,
-          shopifyCustomerId: null,
-        },
-      }),
-      'Create an order for 1 Pencil Half Zip XL for Scooby'
-    );
-
-    expect(tools).toEqual([
-      'search_shopify_products',
-      'search_shopify_customers',
-      'get_shopify_customer',
-      'create_shopify_order',
-    ]);
-  });
-
-  it('does not prune action-oriented operator requests', () => {
-    const tools = selectToolNamesForInstruction(
-      makeCtx({
-        thread: {
-          id: 'thread_test',
-          status: 'open',
-          channelType: 'dashboard_agent',
-          tag: 'Support',
-          aiSummary: null,
-          shopifyCustomerId: null,
-        },
-      }),
-      "Cancel Scooby's order"
-    );
-
-    expect(tools).toBeNull();
   });
 });
 

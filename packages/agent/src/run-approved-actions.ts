@@ -1,6 +1,12 @@
-import type { SupportContext } from "./agent-context.js";
+import type { ActionEntry, SupportContext } from "./agent-context.js";
 import type { RawToolCall } from "./types.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
+
+export function summarizeApprovedDashboardActions(actions: ActionEntry[]): string {
+  const visibleActions = actions.filter((action) => TOOL_CATEGORIES[action.tool] !== "read");
+  const lastAction = visibleActions.at(-1) ?? actions.at(-1);
+  return lastAction?.result ?? "Approved plan executed.";
+}
 
 export function selectExecutableApprovedToolCalls(
   supportThread: SupportContext["thread"] | null,

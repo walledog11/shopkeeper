@@ -4,16 +4,7 @@ import type { OrgSettings } from "./types.js";
 import { executeToolStructured } from "./tools/executor.js";
 import type { ToolStatus } from "./tools/result.js";
 import type { AgentContext, ShopifyOrderSummary } from "./agent-context.js";
-import {
-  applySkippedPlanningReadResults,
-} from "./planner-read-skip.js";
 import { normalizeOrderName } from "./order-reference.js";
-
-export {
-  partitionPlanningReadBlocks,
-  shouldSkipPlanningRead,
-  synthesizeSkippedPlanningReadResult,
-} from "./planner-read-skip.js";
 
 type PlanningReadToolResult = {
   readToolCalls: string[];
@@ -53,27 +44,11 @@ export async function executePlanningReadTools(input: {
   ctx: AgentContext;
   settings?: OrgSettings;
   readBlocks: Anthropic.ToolUseBlock[];
-  skippedBlocks?: Anthropic.ToolUseBlock[];
 }): Promise<PlanningReadToolResult> {
-  const { ctx, settings, readBlocks, skippedBlocks = [] } = input;
+  const { ctx, settings, readBlocks } = input;
   const readToolCalls: string[] = [];
   const readResultsMap = new Map<string, string>();
   const readStatusMap = new Map<string, ToolStatus>();
-
-  applySkippedPlanningReadResults({
-    skippedBlocks,
-    ctx,
-    readResultsMap,
-    readStatusMap,
-  });
-
-  if (skippedBlocks.length > 0) {
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      skippedReads: skippedBlocks.map((block) => block.name),
-    }, "[agent:plan] skipped context-redundant read tools");
-  }
 
   await Promise.all(
     readBlocks.map(async (b) => {

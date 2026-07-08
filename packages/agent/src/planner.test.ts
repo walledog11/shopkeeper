@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
 import { planAgent } from "./planner.js";
-import { REPLAN_INCLUDE_REPLY_PROMPT } from "./planner-tools.js";
 import type { AgentContext } from "./agent-context.js";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 
@@ -29,6 +28,8 @@ vi.mock("./spend.js", () => ({
   getDailySpendNano: vi.fn().mockResolvedValue(0),
 }));
 
+// Reads execute for real in capture mode; stub the read executor so tests never
+// hit Shopify/DB while the warning + routing pipeline stays real.
 vi.mock("./planner-read-tools.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./planner-read-tools.js")>();
   return {
@@ -86,16 +87,42 @@ function singleToolUse(name: string, input: Record<string, unknown>, id = "tu_1"
   };
 }
 
+function endTurn(text = "Working on it.") {
+  return {
+    stop_reason: "end_turn",
+    content: [{ type: "text", text }],
+    usage: { input_tokens: 10, output_tokens: 5 },
+  };
+}
+
 function completeLogPayload(logger: AgentLogger) {
   const call = logger.info.mock.calls.find(([, message]) => message === "[agent:plan] complete");
   expect(call).toBeDefined();
   return call![0] as {
-    planPath: string;
+    iterations: number;
+    reprompted: boolean;
     modelCalls: number;
-    replanRetried?: boolean;
-    replyDrafted?: boolean;
+    rawToolCallCount: number;
+    visibleStepCount: number;
+    routingDecision: string | null;
   };
 }
+
+function toolNamesForCall(index: number): string[] {
+  return mockCreate.mock.calls[index]![0].tools.map((tool: { name: string }) => tool.name);
+}
+
+const FULFILLED_ORDER_4003 = {
+  id: "9000004003",
+  name: "#4003",
+  created_at: "2026-05-15T10:00:00-07:00",
+  financial_status: "paid",
+  fulfillment_status: "fulfilled",
+  total_price: "42.00",
+  currency: "USD",
+  items: [],
+  shipping_address: null,
+};
 
 beforeEach(() => {
   mockCreate.mockReset();
@@ -113,15 +140,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("planAgent logging", () => {
+describe("planAgent capture loop", () => {
   it("uses the injected logger for planner lifecycle logs", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
-    mockCreate.mockResolvedValueOnce({
-      stop_reason: "end_turn",
-      content: [{ type: "text", text: "No action needed." }],
-      usage: { input_tokens: 10, output_tokens: 5 },
-    });
+    mockCreate.mockResolvedValueOnce(endTurn("No action needed."));
 
     await planAgent(makeCtx({ thread: { ...makeCtx().thread, channelType: "dashboard_agent" } }), "Check this thread");
 
@@ -135,92 +158,49 @@ describe("planAgent logging", () => {
       "[agent:plan] start",
     );
     expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "1-call",
+      iterations: 1,
       modelCalls: 1,
       rawToolCallCount: 0,
       visibleStepCount: 0,
+      reprompted: false,
     });
   });
 
-  it("logs planPath 1-call when initial returns escalate_to_human", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate.mockResolvedValueOnce(
-      singleToolUse("escalate_to_human", { reason: "Out of scope request." }),
-    );
-
-    await planAgent(makeCtx(), "Can you wholesale price 10,000 units?");
-
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "1-call",
-      modelCalls: 1,
-    });
-  });
-
-  it("offers every tool except send_reply on the phase-1 model call", async () => {
+  it("offers the full enabled registry, including send_reply, on the planning call", async () => {
     installAgentLogger(makeLogger());
-    mockCreate.mockResolvedValueOnce(
-      singleToolUse("escalate_to_human", { reason: "Out of scope." }, "tu_1"),
-    );
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
 
     await planAgent(makeCtx(), "Where is my order?");
 
-    const firstCallTools = mockCreate.mock.calls[0]![0].tools.map((tool: { name: string }) => tool.name);
+    const firstCallTools = toolNamesForCall(0);
     expect(firstCallTools).toContain("search_kb");
-    expect(firstCallTools).toContain("escalate_to_human");
     expect(firstCallTools).toContain("create_refund");
-    expect(firstCallTools).not.toContain("send_reply");
+    expect(firstCallTools).toContain("send_reply");
   });
 
-  it("uses a tighter max_tokens budget on phase-1 model calls", async () => {
+  it("uses a 4096 max_tokens budget on planning calls", async () => {
     installAgentLogger(makeLogger());
-    mockCreate.mockResolvedValueOnce(
-      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
-    );
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
 
     await planAgent(makeCtx(), "Where is my order?");
 
-    expect(mockCreate.mock.calls[0]![0].max_tokens).toBe(1024);
+    expect(mockCreate.mock.calls[0]![0].max_tokens).toBe(4096);
   });
 
-  it("logs planPath 1-call when initial returns send_reply directly", async () => {
+  it("captures a single send_reply as the plan and stops", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
-    mockCreate.mockResolvedValueOnce(
-      singleToolUse("send_reply", { text: "Your order is on the way." }, "tu_1"),
-    );
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order is on the way." }));
 
-    await planAgent(makeCtx(), "Where is my order?");
+    const plan = await planAgent(makeCtx(), "Where is my order?");
 
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "1-call",
-      modelCalls: 1,
-    });
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
+    expect(plan.steps.map((step) => step.tool)).toEqual(["send_reply"]);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ iterations: 1, reprompted: false });
   });
 
-  it("logs planPath 2-call-mutative when replan includes send_reply", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_refund", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
-          { type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Refund processed." } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
-
-    await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
-
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "2-call-mutative",
-      modelCalls: 2,
-    });
-  });
-
-  it("includes replan send_reply nudge after read results", async () => {
+  it("executes reads for real, then captures the mutative action and reply", async () => {
     installAgentLogger(makeLogger());
     mockCreate
       .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
@@ -233,267 +213,98 @@ describe("planAgent logging", () => {
         usage: { input_tokens: 10, output_tokens: 5 },
       });
 
-    await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
-
-    const replanMessages = mockCreate.mock.calls[1]![0].messages;
-    expect(replanMessages).toEqual(expect.arrayContaining([
-      expect.objectContaining({ role: "user", content: REPLAN_INCLUDE_REPLY_PROMPT }),
-    ]));
-  });
-
-  it("retries replan with narrowed tools when action tools omit send_reply", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
-      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_refund_retry", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
-          { type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Refund processed." } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
-
     const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
-
-    const retryTools = mockCreate.mock.calls[2]![0].tools.map((tool: { name: string }) => tool.name);
-    expect(retryTools).toEqual(expect.arrayContaining([
-      "create_refund",
-      "send_reply",
-      "add_internal_note",
-      "update_thread_status",
-    ]));
-    expect(retryTools).not.toContain("search_kb");
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "2-call-mutative",
-      modelCalls: 3,
-      replanRetried: true,
-    });
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
-      "search_kb",
-      "create_refund",
-      "send_reply",
-    ]);
-  });
-
-  it("forces a reply draft when replan retry still omits send_reply", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("search_kb", { query: "refund policy" }, "tu_read"))
-      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund"))
-      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "123", amount: "10.00" }, "tu_refund_retry"))
-      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_draft"));
-
-    const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
-
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "2-call-mutative",
-      modelCalls: 4,
-      replanRetried: true,
-      replyDrafted: true,
-    });
-    const draftCall = mockCreate.mock.calls[3]![0];
-    expect(draftCall.tool_choice).toEqual({ type: "tool", name: "send_reply" });
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
-      "search_kb",
-      "create_refund",
-      "send_reply",
-    ]);
-  });
-
-  it("dedupes mutative phase-1 tool calls when replan runs", async () => {
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_read", name: "search_kb", input: { query: "refund" } },
-          { type: "tool_use", id: "tu_refund_1", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_refund_2", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
-          { type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Refund processed." } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
-
-    const plan = await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
-
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
-      "search_kb",
-      "create_refund",
-      "send_reply",
-    ]);
-    expect(plan.rawToolCalls.filter((toolCall) => toolCall.name === "create_refund")).toHaveLength(1);
-    expect(plan.rawToolCalls.find((toolCall) => toolCall.name === "create_refund")?.id).toBe("tu_refund_2");
-  });
-
-  it("skips context-redundant read tools before executing live Shopify lookups", async () => {
-    installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_order_read", name: "get_order_by_name", input: { order_name: "#1001" } },
-          { type: "tool_use", id: "tu_kb_read", name: "search_kb", input: { query: "warranty policy" } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce({
-        stop_reason: "tool_use",
-        content: [
-          { type: "tool_use", id: "tu_refund", name: "create_refund", input: { order_id: "9000000001", amount: "10.00" } },
-          { type: "tool_use", id: "tu_reply", name: "send_reply", input: { text: "Refund processed." } },
-        ],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      });
-
-    const plan = await planAgent(
-      makeCtx({
-        recentOrders: [{
-          id: "9000000001",
-          name: "#1001",
-          created_at: "2026-05-18T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "59.00",
-          currency: "USD",
-          items: [],
-          shipping_address: null,
-        }],
-        kbArticles: [],
-      }),
-      "Please refund order #1001",
-      AGENT_SETTINGS_DEFAULTS,
-    );
 
     expect(mockExecutePlanningReadTools).toHaveBeenCalledWith(expect.objectContaining({
       readBlocks: [expect.objectContaining({ name: "search_kb" })],
-      skippedBlocks: [expect.objectContaining({ name: "get_order_by_name" })],
     }));
     expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
       "search_kb",
       "create_refund",
       "send_reply",
     ]);
+    expect(plan.steps.map((step) => step.tool)).toEqual(["create_refund", "send_reply"]);
+    expect(plan.readResults).toEqual({ tu_read: "Read result" });
+    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it("logs planPath fast-path when order status fast path short-circuits planning", async () => {
-    const injectedLogger = makeLogger();
-    installAgentLogger(injectedLogger);
-
-    const plan = await planAgent(
-      makeCtx({
-        recentOrders: [{
-          id: "9000000001",
-          name: "#1001",
-          created_at: "2026-05-18T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "59.00",
-          currency: "USD",
-          items: [{
-            line_item_id: "lineitem_1",
-            title: "Cotton Tee",
-            quantity: 1,
-            variant_id: "variant_1",
-            fulfillable_quantity: 0,
-            current_quantity: 1,
-            fulfillment_status: "fulfilled",
-          }],
-          shipping_address: null,
-        }],
-        recentMessages: [{ senderType: "customer", contentText: "Hi, where is my order #1001?" }],
-      }),
-      "Reply to the customer about their order.",
-    );
-
-    expect(mockCreate).not.toHaveBeenCalled();
-    expect(plan.orderStatusFastPath).toBe(true);
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
-    expect(completeLogPayload(injectedLogger)).toMatchObject({
-      planPath: "fast-path",
-      modelCalls: 0,
-    });
-  });
-
-  it("keeps a phase-1 mutative action and routes the plan to auto_execute", async () => {
+  it("re-prompts once for a terminal tool when a support turn stalls", async () => {
     const injectedLogger = makeLogger();
     installAgentLogger(injectedLogger);
     mockCreate
-      .mockResolvedValueOnce(
-        singleToolUse("create_refund", { order_id: "9000004003", amount: "42.00" }, "tu_refund"),
-      )
-      .mockResolvedValueOnce(
-        singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"),
-      );
+      .mockResolvedValueOnce(endTurn("I'll take a look."))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your order shipped." }, "tu_reply"));
+
+    const plan = await planAgent(makeCtx(), "Where is my order?");
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    const secondCallMessages = mockCreate.mock.calls[1]![0].messages as Array<{ role: string; content: unknown }>;
+    expect(secondCallMessages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        role: "user",
+        content: expect.stringContaining("send_reply"),
+      }),
+    ]));
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["send_reply"]);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ iterations: 2, reprompted: true });
+  });
+
+  it("does not re-prompt operator planning turns", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate.mockResolvedValueOnce(endTurn("Reviewed — nothing to do."));
+
+    await planAgent(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "dashboard_agent" } }),
+      "Look into this",
+    );
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(completeLogPayload(injectedLogger)).toMatchObject({ reprompted: false });
+  });
+
+  it("drops ask_operator from the tool set for a merchant-answer replan", async () => {
+    installAgentLogger(makeLogger());
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Yes, we ship to Canada." }));
+
+    await planAgent(makeCtx(), "The store owner answered your question: we ship to Canada.");
+
+    const firstCallTools = toolNamesForCall(0);
+    expect(firstCallTools).not.toContain("ask_operator");
+    expect(firstCallTools).toContain("send_reply");
+  });
+});
+
+describe("planAgent routing", () => {
+  it("keeps a mutative action and routes the plan to auto_execute", async () => {
+    const injectedLogger = makeLogger();
+    installAgentLogger(injectedLogger);
+    mockCreate
+      .mockResolvedValueOnce(singleToolUse("create_refund", { order_id: "9000004003", amount: "42.00" }, "tu_refund"))
+      .mockResolvedValueOnce(singleToolUse("send_reply", { text: "Refund processed." }, "tu_reply"));
 
     const plan = await planAgent(
       makeCtx({
-        recentMessages: [{
-          senderType: "customer",
-          contentText: "Please refund me for order #4003.",
-        }],
-        recentOrders: [{
-          id: "9000004003",
-          name: "#4003",
-          created_at: "2026-05-15T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "42.00",
-          currency: "USD",
-          items: [],
-          shipping_address: null,
-        }],
+        recentMessages: [{ senderType: "customer", contentText: "Please refund me for order #4003." }],
+        recentOrders: [FULFILLED_ORDER_4003],
       }),
       "Reply to the customer and process their refund request.",
       AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual([
-      "create_refund",
-      "send_reply",
-    ]);
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["create_refund", "send_reply"]);
     expect(plan.routing?.decision).toBe("auto_execute");
     expect(completeLogPayload(injectedLogger)).toMatchObject({ routingDecision: "auto_execute" });
-    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it("no longer forces a replan; routes mutative-no-action to needs_review with a drafted reply", async () => {
+  it("routes a mutative request with no action to needs_review", async () => {
     installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce({
-        stop_reason: "end_turn",
-        content: [{ type: "text", text: "I'll help with that." }],
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValueOnce(
-        singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_reply"),
-      );
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Your refund is on the way." }, "tu_reply"));
 
     const plan = await planAgent(
       makeCtx({
-        recentMessages: [{
-          senderType: "customer",
-          contentText: "Please refund me for order #4003.",
-        }],
-        recentOrders: [{
-          id: "9000004003",
-          name: "#4003",
-          created_at: "2026-05-15T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "42.00",
-          currency: "USD",
-          items: [],
-          shipping_address: null,
-        }],
+        recentMessages: [{ senderType: "customer", contentText: "Please refund me for order #4003." }],
+        recentOrders: [FULFILLED_ORDER_4003],
       }),
       "Reply to the customer and process their refund request.",
       AGENT_SETTINGS_DEFAULTS,
@@ -504,46 +315,32 @@ describe("planAgent logging", () => {
     expect(plan.warnings).toContain(
       "Customer requested a refund/cancel but no action was planned — review before sending.",
     );
-    expect(mockCreate).toHaveBeenCalledTimes(2);
   });
 
-  it("skips the order status fast path when brand voice is configured", async () => {
+  it("materializes a deterministic escalation for out-of-scope commercial requests", async () => {
     installAgentLogger(makeLogger());
-    mockCreate.mockResolvedValueOnce(
-      singleToolUse("send_reply", { text: "Your order #1001 shipped — cheers!" }, "tu_reply"),
-    );
+    mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Sure!" }, "tu_reply"));
 
     const plan = await planAgent(
       makeCtx({
-        recentOrders: [{
-          id: "9000000001",
-          name: "#1001",
-          created_at: "2026-05-18T10:00:00-07:00",
-          financial_status: "paid",
-          fulfillment_status: "fulfilled",
-          total_price: "59.00",
-          currency: "USD",
-          items: [],
-          shipping_address: null,
-        }],
-        recentMessages: [{ senderType: "customer", contentText: "Hi, where is my order #1001?" }],
+        recentMessages: [{ senderType: "customer", contentText: "Can you give me wholesale pricing on 10,000 units?" }],
       }),
-      "Reply to the customer about their order.",
-      { ...AGENT_SETTINGS_DEFAULTS, brandVoice: "Always sign off with 'cheers'." },
+      "Handle this ticket.",
+      AGENT_SETTINGS_DEFAULTS,
     );
 
-    expect(mockCreate).toHaveBeenCalled();
-    expect(plan.orderStatusFastPath).toBeUndefined();
+    expect(plan.routing?.decision).toBe("escalate");
+    expect(plan.rawToolCalls.map((toolCall) => toolCall.name)).toEqual(["escalate_to_human"]);
   });
-
 });
 
 describe("planAgent transcript integrity", () => {
   // Every model call must ship a tool_result for each prior tool_use, or the
-  // Anthropic API rejects it with `400 tool_use without tool_result`.
-  function expectValidToolPairing() {
-    for (const [callIndex, call] of mockCreate.mock.calls.entries()) {
-      const messages = (call[0]!.messages ?? []) as Array<{ role: string; content: unknown }>;
+  // Anthropic API rejects it with `400 tool_use without tool_result`. The loop
+  // mutates the message array in place, so snapshot each call's messages at send
+  // time rather than inspecting the (final) shared reference afterwards.
+  function expectValidToolPairing(snapshots: Array<Array<{ role: string; content: unknown }>>) {
+    for (const [callIndex, messages] of snapshots.entries()) {
       const toolResultIds = new Set<string>();
       for (const message of messages) {
         if (!Array.isArray(message.content)) continue;
@@ -565,36 +362,28 @@ describe("planAgent transcript integrity", () => {
     }
   }
 
-  it("pairs a non-read tool_use emitted alongside a read before replanning", async () => {
+  it("pairs a read and a non-read emitted together before the next iteration", async () => {
     installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce({
+    const snapshots: Array<Array<{ role: string; content: unknown }>> = [];
+    const responses = [
+      {
         stop_reason: "tool_use",
         content: [
           { type: "tool_use", id: "tu_read", name: "search_kb", input: { query: "refund policy" } },
           { type: "tool_use", id: "tu_refund", name: "create_refund", input: { order_id: "123", amount: "10.00" } },
         ],
         usage: { input_tokens: 10, output_tokens: 5 },
-      })
-      .mockResolvedValue(singleToolUse("send_reply", { text: "Done." }, "tu_reply"));
+      },
+      singleToolUse("send_reply", { text: "Done." }, "tu_reply"),
+    ];
+    let callIndex = 0;
+    mockCreate.mockImplementation(async (params: { messages: Array<{ role: string; content: unknown }> }) => {
+      snapshots.push(structuredClone(params.messages));
+      return responses[Math.min(callIndex++, responses.length - 1)];
+    });
 
     await planAgent(makeCtx(), "Please refund my order", AGENT_SETTINGS_DEFAULTS);
 
-    expectValidToolPairing();
-  });
-
-  it("pairs the initial tool_use before the mutative-intent context replan", async () => {
-    installAgentLogger(makeLogger());
-    mockCreate
-      .mockResolvedValueOnce(singleToolUse("ask_operator", { question: "Should I refund this?" }, "tu_ask"))
-      .mockResolvedValue(singleToolUse("send_reply", { text: "Done." }, "tu_reply"));
-
-    await planAgent(
-      makeCtx({ recentMessages: [{ senderType: "customer", contentText: "Please refund my order" }] }),
-      "Please refund my order",
-      AGENT_SETTINGS_DEFAULTS,
-    );
-
-    expectValidToolPairing();
+    expectValidToolPairing(snapshots);
   });
 });

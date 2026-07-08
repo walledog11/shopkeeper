@@ -1,24 +1,33 @@
 import { buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
+import { pickModel } from "./ai/index.js";
 import type { AgentContext } from "./agent-context.js";
-import { isOperatorChannel, selectToolNamesForInstruction } from "./intent.js";
+import { runAgentLoop } from "./agent-loop.js";
+import { isOperatorChannel } from "./intent.js";
+import { isMerchantAnswerPlanningInstruction } from "./kb-learned.js";
 import logger from "./logger.js";
 import { buildMessageHistory } from "./message-history.js";
-import { tryPlanOrderStatusFastPath } from "./order-status-fast-path.js";
-import { derivePlanPath } from "./plan-path.js";
-import { buildPlanSteps } from "./planner-steps.js";
-import { runInitialPlanningPhase } from "./planner-initial-phase.js";
+import {
+  appendInitialPlanningWarnings,
+  appendPlanningReadWarnings,
+} from "./planner-read-tools.js";
 import { applyEscalationRouting, logRoutingShadow, routePlan } from "./planner-routing.js";
-import { finalizePlanTools } from "./planner-terminal.js";
-import { selectInitialPlanningTools } from "./planner-tools.js";
+import {
+  stripCreateRefundForAlreadyRefundedOrders,
+  stripEmptySendReplyToolCalls,
+} from "./planner-safety/index.js";
+import { buildPlanSteps } from "./planner-steps.js";
 import { buildSystemPromptParts } from "./prompt.js";
+import { DEFAULT_MAX_ITERATIONS } from "./run-policy.js";
 import { resolveAgentSettings } from "./settings.js";
 import { enforceSpendCap } from "./spend.js";
 import { selectAgentTools } from "./tools/registry/index.js";
 import type { AgentPlan, OrgSettings } from "./types.js";
 import { createModelUsageMetrics, hashInstructionForLog } from "./usage.js";
 
-export { PLAN_INITIAL_MAX_TOKENS, PLAN_REPLAN_MAX_TOKENS } from "./planner-model.js";
-
+// Planning is a capture-mode run: one loop on the judgment tier, reads execute
+// for real, mutative + terminal tools are recorded instead of executed, and the
+// loop ends when the model proposes a terminal tool. No side effects. Phase 3
+// routing classifies the finalized plan afterwards without editing its tool calls.
 export async function planAgent(
   ctx: AgentContext,
   instruction: string,
@@ -34,30 +43,17 @@ export async function planAgent(
   });
   const { stable, volatile } = buildSystemPromptParts(ctx, settings);
   const systemPromptBlocks = buildSplitCachedSystemPrompt(stable, volatile);
-  const tools = selectAgentTools(settings, selectToolNamesForInstruction(ctx, instruction));
-  const initialTools = selectInitialPlanningTools(tools);
   const resolvedSettings = resolveAgentSettings(settings);
 
-  await enforceSpendCap(ctx.orgId, resolvedSettings);
-
-  const fastPathPlan = tryPlanOrderStatusFastPath(ctx, instruction, resolvedSettings);
-  if (fastPathPlan) {
-    const planPath = derivePlanPath({ fastPath: true, ranReplan: false });
-    logger.info({
-      orgId: ctx.orgId,
-      threadId: ctx.thread.id,
-      durationMs: Date.now() - startedAt,
-      planPath,
-      modelCalls: 0,
-      rawToolCallCount: fastPathPlan.rawToolCalls.length,
-      rawToolCalls: fastPathPlan.rawToolCalls.map(toolCall => toolCall.name),
-      visibleStepCount: fastPathPlan.steps.length,
-      visibleSteps: fastPathPlan.steps.map(step => step.tool),
-      instructionHash,
-      orderStatusFastPath: true,
-    }, "[agent:plan] complete");
-    return fastPathPlan;
+  // A merchant-answer replan must reply to the customer with the supplied answer,
+  // never re-park the ticket — so drop ask_operator from its tool set.
+  const merchantAnswerReplan = isMerchantAnswerPlanningInstruction(instruction);
+  let tools = selectAgentTools(settings);
+  if (merchantAnswerReplan) {
+    tools = tools.filter(tool => tool.name !== "ask_operator");
   }
+
+  await enforceSpendCap(ctx.orgId, resolvedSettings);
 
   logger.info({
     orgId: ctx.orgId,
@@ -65,67 +61,58 @@ export async function planAgent(
     channelType: ctx.thread.channelType,
     messageCount: baseMessages.length,
     toolCount: tools.length,
-    initialToolCount: initialTools.length,
     tools: tools.map(tool => tool.name),
-    initialTools: initialTools.map(tool => tool.name),
     instructionLength: instruction.length,
     instructionHash,
   }, "[agent:plan] start");
 
-  const initial = await runInitialPlanningPhase({
+  const loop = await runAgentLoop({
     ctx,
-    instruction,
+    mode: "capture",
+    messages: baseMessages,
+    systemPromptBlocks,
+    tools,
+    model: pickModel("agent_run"),
+    maxIterations: resolvedSettings.maxIterations > 0 ? resolvedSettings.maxIterations : DEFAULT_MAX_ITERATIONS,
+    maxTokensPerCall: 4096,
     settings,
-    resolvedSettings,
-    operatorMode,
-    baseMessages,
-    systemPromptBlocks,
-    tools,
-    initialTools,
     usageTotals,
+    captureReprompt: !operatorMode,
   });
-  let rawToolCalls = initial.rawToolCalls;
-  const { planMessages, ranReplan, ranReplanRetry } = initial;
 
-  const finalized = await finalizePlanTools({
-    ctx,
-    instruction,
-    resolvedSettings,
-    operatorMode,
-    tools,
-    systemPromptBlocks,
-    planMessages,
-    usageTotals,
-    rawToolCalls,
+  // Structural cleanup that survives Phase 3 (order-state checks, not prose):
+  // drop refunds for already-refunded orders and empty send_reply calls.
+  let rawToolCalls = stripCreateRefundForAlreadyRefundedOrders(ctx, instruction, loop.rawToolCalls);
+  rawToolCalls = stripEmptySendReplyToolCalls(rawToolCalls);
+
+  const warnings: string[] = [];
+  appendInitialPlanningWarnings({ ctx, operatorMode, warnings });
+  appendPlanningReadWarnings({
+    warnings,
+    readBlocks: loop.readBlocks,
+    readResultsMap: loop.readResults,
+    readStatusMap: loop.readStatus,
+    recentOrders: ctx.recentOrders,
   });
-  rawToolCalls = finalized.rawToolCalls;
-  if (initial.contextSkippedReadIds.size > 0) {
-    rawToolCalls = rawToolCalls.filter(
-      toolCall => !initial.contextSkippedReadIds.has(toolCall.id),
-    );
-  }
 
-  // Phase 3 routing: classify the finalized plan and act on the disposition —
-  // materialize a deterministic escalation, record any warnings, and stamp the
-  // decision the dashboard consumes. Support-path only (operator plans skip it).
+  // Phase 3 routing: classify the plan and act on the disposition — materialize a
+  // deterministic escalation, record warnings, stamp the decision the dashboard
+  // consumes. Support-path only (operator plans skip it).
   let routing: AgentPlan["routing"];
   if (!operatorMode) {
     const outcome = routePlan({
       ctx,
       instruction,
       rawToolCalls,
-      readBlocks: initial.processedReadBlocks,
-      readStatusMap: initial.planningReadStatusMap,
-      readResultsMap: initial.readResultsMap,
+      readBlocks: loop.readBlocks,
+      readStatusMap: loop.readStatus,
+      readResultsMap: loop.readResults,
     });
     if (outcome.decision === "escalate") {
-      rawToolCalls = applyEscalationRouting(
-        rawToolCalls,
-        outcome.escalationReason ?? "Needs human review.",
-      );
+      rawToolCalls = applyEscalationRouting(rawToolCalls, outcome.escalationReason ?? "Needs human review.");
     }
     for (const warning of outcome.warnings) {
-      if (!initial.warnings.includes(warning)) initial.warnings.push(warning);
+      if (!warnings.includes(warning)) warnings.push(warning);
     }
     routing = {
       decision: outcome.decision,
@@ -135,30 +122,28 @@ export async function planAgent(
   }
 
   const steps = buildPlanSteps(rawToolCalls);
-  const planPath = derivePlanPath({ ranReplan });
   logger.info({
     orgId: ctx.orgId,
     threadId: ctx.thread.id,
     durationMs: Date.now() - startedAt,
-    planPath,
-    replanRetried: ranReplanRetry,
-    askOperatorElected: finalized.hasAskOperator,
-    replyDrafted: finalized.ranReplyDraft,
+    iterations: loop.iterations,
+    reprompted: loop.reprompted,
+    loopStop: loop.stop,
     routingDecision: routing?.decision ?? null,
     routingSignals: routing?.signals ?? null,
     modelCalls: usageTotals.modelCalls,
     usageTotals,
-    readToolCalls: initial.readToolCalls,
+    readToolCalls: loop.readBlocks.map(block => block.name),
     rawToolCallCount: rawToolCalls.length,
     rawToolCalls: rawToolCalls.map(toolCall => toolCall.name),
     visibleStepCount: steps.length,
     visibleSteps: steps.map(step => step.tool),
-    warningCount: initial.warnings.length,
+    warningCount: warnings.length,
     instructionHash,
   }, "[agent:plan] complete");
 
-  // Phase 2 shadow: compare the classifier routing to the live regex guards on
-  // the finalized plan. Observability only — must never break planning.
+  // Phase 2 shadow: compare classifier routing to the live regex guards on the
+  // finalized plan. Observability only — must never break planning.
   if (!operatorMode) {
     try {
       logRoutingShadow({ ctx, instruction, rawToolCalls, instructionHash });
@@ -171,15 +156,15 @@ export async function planAgent(
     }
   }
 
-  const readResults = initial.readResultsMap.size > 0
-    ? Object.fromEntries(initial.readResultsMap)
+  const readResults = loop.readResults.size > 0
+    ? Object.fromEntries(loop.readResults)
     : undefined;
   return {
     instruction,
     steps,
     rawToolCalls,
     readResults,
-    warnings: initial.warnings.length > 0 ? initial.warnings : undefined,
+    warnings: warnings.length > 0 ? warnings : undefined,
     routing,
   };
 }

@@ -62,10 +62,6 @@
       "types": "./dist/plan-preview.d.ts",
       "default": "./dist/plan-preview.js"
     },
-    "./order-status-fast-path": {
-      "types": "./dist/order-status-fast-path.d.ts",
-      "default": "./dist/order-status-fast-path.js"
-    },
     "./agent-actions": {
       "types": "./dist/agent-actions.d.ts",
       "default": "./dist/agent-actions.js"

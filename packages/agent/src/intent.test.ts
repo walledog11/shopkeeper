@@ -3,7 +3,6 @@ import {
   hasContradictoryInstructionSignals,
   hasForwardedInjectionRefundSignal,
   hasMerchantPolicyGapIntent,
-  hasMutativePlanningSignals,
   hasMutativeRequestIntent,
   hasOutOfScopeCommercialRequestSignals,
   hasSuspectedFraudRefundSignals,
@@ -23,12 +22,6 @@ describe("hasContradictoryInstructionSignals", () => {
 
   it("ignores a single clear mutative request", () => {
     expect(hasContradictoryInstructionSignals("Please cancel order #1105 before it ships.")).toBe(false);
-  });
-});
-
-describe("hasMutativePlanningSignals", () => {
-  it("treats cancel requests as mutative", () => {
-    expect(hasMutativePlanningSignals("Please cancel order #1105 before it ships.")).toBe(true);
   });
 });
 

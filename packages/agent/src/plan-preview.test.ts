@@ -102,24 +102,6 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
     expect(result.sendReplyToolCall).toEqual(sendReplyCall)
   })
 
-  it("classifies an order-status fast-path plan as needs_review", () => {
-    const result = classifyHomePlan(plan({ orderStatusFastPath: true }))
-
-    expect(result.kind).toBe("needs_review")
-    expect(result.replyText).toBe("Yes, we ship to the UK.")
-    expect(result.sendReplyToolCall?.name).toBe("send_reply")
-  })
-
-  it("keeps order-status fast-path plans in review even on auto-execute tiers", () => {
-    const result = classifyHomePlan(
-      plan({ orderStatusFastPath: true }),
-      settings({ autonomyTier: "full" }),
-    )
-
-    expect(result.kind).toBe("needs_review")
-    expect(result.replyText).toBe("Yes, we ship to the UK.")
-  })
-
   it("allows read tools before send_reply", () => {
     const result = classifyHomePlan(plan({
       rawToolCalls: [
