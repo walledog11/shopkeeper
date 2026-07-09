@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function StickySaveBar({ controller }: { controller: AgentTabController }) {
-  const { isDirty, saved, error, staleVersion, saving, businessHoursInvalid, reset, save } = controller
+  const { isDirty, saved, error, staleVersion, saving, businessHoursInvalid, businessNameInvalid, reset, save } = controller
 
   if (!isDirty && !saved && !error && !staleVersion) return null
 

@@ -95,7 +95,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       state: 'state_123',
     })));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?error=shopify_shop_mismatch');
     expect(mockFetch).toHaveBeenCalledTimes(3);
     expect(mockLogger.error).toHaveBeenCalledWith(
@@ -132,7 +132,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       state: 'state_123',
     })));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify');
     expect(mockLogger.info).toHaveBeenCalledWith(
       {
@@ -172,7 +172,7 @@ describe('POST /api/integrations/shopify/callback', () => {
       state: 'state_123',
     })));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations/oauth/complete?connected=shopify&returnTo=%2Fdashboard%2Fsettings');
 
     const integration = await db.integration.findFirstOrThrow({

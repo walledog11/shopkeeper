@@ -85,7 +85,7 @@ describe('POST /api/integrations/instagram/callback', () => {
 
     const res = await POST(new Request('http://localhost/api/integrations/instagram/callback?code=oauth_code&state=state_123'));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/settings');
 
     const integration = await db.integration.findFirstOrThrow({

@@ -85,7 +85,7 @@ describe('POST /api/integrations/tiktok-shop/callback', () => {
 
     const res = await POST(new Request('http://localhost/api/integrations/tiktok-shop/callback?code=oauth_code&state=state_123'));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations');
 
     const integration = await db.integration.findFirstOrThrow({

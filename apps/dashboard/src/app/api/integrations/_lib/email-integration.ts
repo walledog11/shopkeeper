@@ -43,22 +43,25 @@ function mergeEmailMetadata(
   const existing = isRecord(existingMetadata) && existingMetadata.provider === provider
     ? existingMetadata
     : {};
-  const merged = {
+  const base = {
     ...existing,
     provider,
     ...(inboundMode && { inboundMode }),
     ...(oauthScopes && { oauthScopes: [...oauthScopes] }),
-  } as PrismaTypes.InputJsonObject;
+  };
 
   if (provider === 'gmail' && gmailState) {
     const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
-    merged.gmail = {
-      ...existingGmail,
-      ...gmailState,
+    return {
+      ...base,
+      gmail: {
+        ...existingGmail,
+        ...gmailState,
+      },
     } as PrismaTypes.InputJsonObject;
   }
 
-  return merged;
+  return base as PrismaTypes.InputJsonObject;
 }
 
 export async function upsertExclusiveEmailIntegration(
