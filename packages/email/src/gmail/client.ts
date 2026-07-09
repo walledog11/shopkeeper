@@ -483,7 +483,7 @@ export class GmailApiClient {
     if (!this.integration.refreshToken) {
       throw new EmailNotConfiguredError('Gmail refresh token missing');
     }
-    const client = this.options.oauthClient ?? getEmailOAuthClient('gmail');
+    const client = this.options.oauthClient ?? getEmailOAuthClient();
     if (!client) throw new EmailNotConfiguredError('Gmail OAuth credentials missing');
 
     const result = await this.refreshTokenRequest(this.integration.refreshToken, client);

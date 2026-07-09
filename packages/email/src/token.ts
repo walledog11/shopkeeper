@@ -20,7 +20,7 @@ export type TokenRefreshResult =
   | { ok: true; token: RefreshedToken }
   | { ok: false; status: number | null; transient: boolean; body?: string };
 
-export function getEmailOAuthClient(_provider: EmailOAuthProvider): EmailOAuthClient | null {
+export function getEmailOAuthClient(): EmailOAuthClient | null {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;

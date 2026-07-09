@@ -59,7 +59,7 @@ export class GmailSender implements EmailSender {
   }
 
   private async refresh(): Promise<void> {
-    const client = getEmailOAuthClient('gmail');
+    const client = getEmailOAuthClient();
     if (!client) throw new EmailNotConfiguredError('Gmail OAuth credentials missing');
 
     const result = await requestTokenRefresh('gmail', this.integration.refreshToken!, client);

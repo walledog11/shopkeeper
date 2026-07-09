@@ -35,7 +35,7 @@ describe('getEmailOAuthClient', () => {
     vi.stubEnv('GOOGLE_CLIENT_ID', 'google-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-secret');
 
-    expect(getEmailOAuthClient('gmail')).toEqual({
+    expect(getEmailOAuthClient()).toEqual({
       clientId: 'google-id',
       clientSecret: 'google-secret',
     });
@@ -45,7 +45,7 @@ describe('getEmailOAuthClient', () => {
     vi.stubEnv('GOOGLE_CLIENT_ID', 'google-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', '');
 
-    expect(getEmailOAuthClient('gmail')).toBeNull();
+    expect(getEmailOAuthClient()).toBeNull();
   });
 });
 
