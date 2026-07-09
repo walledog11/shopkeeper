@@ -22,7 +22,7 @@ export const LLM_PRICING: Record<string, LlmTokenPriceNanoUsd> = {
     cacheCreationPerToken: 1250, // $1.25 / MTok
     cacheReadPerToken: 100,      // $0.10 / MTok
   },
-  "claude-sonnet-4-6": {
+  "claude-sonnet-5": {
     inputPerToken: 3000,         // $3.00 / MTok
     outputPerToken: 15000,       // $15.00 / MTok
     cacheCreationPerToken: 3750, // $3.75 / MTok

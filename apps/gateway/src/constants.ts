@@ -4,7 +4,7 @@ export const MODEL = {
   CLAUDE: 'claude-haiku-4-5-20251001',
   // Brand-voice synthesis rewrites a setting that shapes every future reply and
   // is human-approved before taking effect — judgment-grade, low-frequency.
-  VOICE_SYNTHESIS: 'claude-sonnet-4-6',
+  VOICE_SYNTHESIS: 'claude-sonnet-5',
 } as const;
 // Operator digests now route through Telegram, but BullMQ queue/job names below
 // still use the legacy `whatsapp-*` prefix. Renaming live repeatable jobs needs a

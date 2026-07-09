@@ -143,7 +143,7 @@ eval-cost policy). Shadow logging from Phase 2 stays on for one more release
 as the rollback signal; revert = flip back to the regex path, which remains in
 git history.
 
-## Phase 4 — One loop: planner becomes capture-mode run
+## Phase 4 — One loop: planner becomes capture-mode run [IMPLEMENTED — eval gate pending]
 
 Collapse the five-phase planner into the run loop with an execution strategy.
 
@@ -181,6 +181,13 @@ Exit: full eval gate + judge run (sign-off first). Compare per-plan model-call
 counts and token usage in the plan logs before/after; expect fewer calls,
 similar or slightly higher cost per call, no regression in gate score.
 
+Status: items 1–6 implemented and merged to master (`agent-loop.ts` shared
+loop; `planner.ts`/`run.ts` rewritten onto it; both order-status fast paths,
+`selectToolNamesForInstruction`, and the five-phase planner modules deleted).
+Typecheck, lint, and unit tests (agent/dashboard/gateway) are green. The exit
+criterion itself — full eval gate + judge run — has not been run; deferred
+pending sign-off per the eval-cost policy.
+
 ## Phase 5 — Executor capability injection; order-ops rejoins
 
 1. Tool definitions declare required capabilities (`thread-io`, `shopify`,
@@ -200,12 +207,55 @@ Exit: order-ops smoke + unit tests; support eval gate unaffected (support-path
 diff should be executor-internal only — verify with a single-fixture probe
 before deciding whether a full gate run is warranted).
 
+Status: items 1–3 implemented. Tools now declare `capabilities`
+(`registry/types.ts` + `defineTool`); the executor gates on them centrally
+(`unmetToolCapability`, checked after policy so support behavior is byte-identical
+— missing shopify/thread-io returns the same clean errors the per-tool guards
+did) and accepts injected `moduleTools`. `order-ops/run.ts` no longer forks the
+dispatcher or loop: it runs on `runAgentLoop` (execute mode) with
+`selectAgentToolsForContext` (capability-filtered reads) + `flag_order` as a
+`defineTool` module tool, keeping the risk-signal pre-filter, audit batch, and
+result shape. `run.ts`'s Track-3 throw is gone (non-support contexts return
+cleanly; thread-less modules run via `runAgentLoop`). Typecheck + lint green;
+agent (371) / gateway (132) / dashboard (382) unit suites and the order-ops
+thread-less audit integration test pass. The support path is behavior-preserving
+by construction, so the single-fixture eval probe / full gate run is deferred
+pending sign-off per the eval-cost policy.
+
 ## Phase 6 — Model refresh (last, isolated)
 
 Bump `HAIKU_MODEL` / `SONNET_MODEL` pins to the current generation as a
 standalone change after the architecture is stable, so model deltas are never
 confounded with architecture deltas. Requires its own baseline capture
 (sign-off first).
+
+Status: code change landed. `HAIKU_MODEL` was already current
+(`claude-haiku-4-5-20251001`) everywhere (agent `ai/index.ts`, gateway
+`constants.ts`, `llm-spend` pricing), so Haiku was a no-op. Sonnet moved
+`claude-sonnet-4-6` → `claude-sonnet-5` in the three production call paths:
+`SONNET_MODEL` (agent core), gateway `VOICE_SYNTHESIS` (brand-voice synthesis),
+and the `packages/db/llm-spend.ts` pricing key (renamed in lockstep so spend
+tracking doesn't fall to the overcounting fallback). The eval grader
+(`__evals__/judge.ts` `JUDGE_MODEL`) is deliberately held on `claude-sonnet-4-6`
+— the baseline was graded by 4-6, and Phase 6's exit is a baseline *comparison*,
+so bumping the ruler in the same change would confound "better agent" with
+"different grader"; refreshing the judge is its own change with its own
+re-baseline. Pricing numbers kept at 4-6's rates ($3/$15 in/out) — not verified
+against Sonnet 5's actual token price; if it costs more this undercounts and the
+spend backstop bites late. Verify against Anthropic's current price list.
+
+Typecheck + lint clean for the three changed packages (agent/db/gateway); the
+gateway spend/pricing test passes. (The dashboard's pre-existing email-oauth WIP
+in the working tree fails typecheck/lint on its own, unrelated to this change.)
+
+Caveat — unlike Phases 4/5 (behavior-preserving by construction), this is the
+first phase that changes which model runs in production on merge. The code is
+safe to land, but the runtime switch is unverified until the baseline is
+captured: **do not deploy until baseline + sign-off** per the eval-cost policy.
+Note the stacked deferral: Phases 3/4/5 eval gates are all still outstanding, so
+whenever a baseline finally runs it folds architecture and model deltas together
+— the confound the phasing was meant to avoid. Not introduced here, but named so
+it isn't a surprise.
 
 ## Design constraints
 

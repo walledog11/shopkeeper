@@ -12,7 +12,7 @@ import { readModelUsage } from "../usage.js";
 // capture-mode planning) runs on Sonnet; everything else — composer-ask,
 // summaries, classification — stays on Haiku.
 export const HAIKU_MODEL = "claude-haiku-4-5-20251001";
-export const SONNET_MODEL = "claude-sonnet-4-6";
+export const SONNET_MODEL = "claude-sonnet-5";
 
 // Single source of truth for non-agent AI calls (drafts, summaries,
 // classification/tagging). Agent call sites pick their tier via pickModel().
