@@ -20,16 +20,6 @@ const FORWARDING_GUIDES = [
     ],
   },
   {
-    id: "outlook",
-    label: "Outlook 365",
-    steps: [
-      "Outlook on the web → Settings → Mail → Forwarding.",
-      "Enable forwarding and paste the address above.",
-      "Tick \"Keep a copy of forwarded messages\" so your archive stays intact.",
-      "Save.",
-    ],
-  },
-  {
     id: "cpanel",
     label: "cPanel",
     steps: [

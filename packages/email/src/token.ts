@@ -3,7 +3,6 @@ import type { EmailOAuthProvider } from './types.js';
 
 const TOKEN_ENDPOINT: Record<EmailOAuthProvider, string> = {
   gmail: 'https://oauth2.googleapis.com/token',
-  outlook: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
 };
 
 export interface EmailOAuthClient {
@@ -21,9 +20,9 @@ export type TokenRefreshResult =
   | { ok: true; token: RefreshedToken }
   | { ok: false; status: number | null; transient: boolean; body?: string };
 
-export function getEmailOAuthClient(provider: EmailOAuthProvider): EmailOAuthClient | null {
-  const clientId = provider === 'gmail' ? process.env.GOOGLE_CLIENT_ID : process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret = provider === 'gmail' ? process.env.GOOGLE_CLIENT_SECRET : process.env.MICROSOFT_CLIENT_SECRET;
+export function getEmailOAuthClient(_provider: EmailOAuthProvider): EmailOAuthClient | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret };
 }

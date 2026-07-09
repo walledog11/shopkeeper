@@ -13,7 +13,7 @@ After this work:
 1. Connecting Gmail enables inbox sync and replies without Postmark forwarding.
 2. Google Workspace aliases such as `support@merchant.com` work for inbound filtering and outbound sending.
 3. Postmark forwarding remains available for merchants who do not grant mailbox read access.
-4. Gmail, Outlook, and Postmark all feed the existing email ticket pipeline.
+4. Gmail and Postmark both feed the existing email ticket pipeline.
 5. OAuth, watch, sync, and send failures are visible and recoverable.
 
 Out of scope:
@@ -29,7 +29,7 @@ Out of scope:
 
 - `@shopkeeper/email` contains shared senders, token refresh, MIME parsing, inbound normalization, address filtering, and reply-header construction.
 - Gmail outbound uses `gmail.send`, refreshes expired access tokens, and sends raw MIME through the Gmail API.
-- Outlook and Postmark outbound use the same sender interface.
+- Postmark outbound uses the same sender interface as Gmail.
 - The gateway has an async outbound queue with retries, send status, failed-send recovery, and an orphaned-pending sweeper.
 - Email OAuth token health runs daily and marks revoked grants for reconnection.
 - Gmail OAuth requests `gmail.readonly`, stores granted scopes, preserves provider metadata on reconnect, and identifies accounts that need reauthorization.
@@ -60,7 +60,7 @@ flowchart TB
   Handler --> Tickets[Customers, threads, messages, attachments]
 
   Tickets --> SendQ[BullMQ send-email]
-  SendQ --> Providers[Gmail / Outlook / Postmark]
+  SendQ --> Providers[Gmail / Postmark]
 ```
 
 ### Design decisions
@@ -80,7 +80,7 @@ Preserve the top-level `provider` field because existing code depends on it.
 
 ```typescript
 type EmailIntegrationMetadata = {
-  provider: 'gmail' | 'outlook' | 'postmark';
+  provider: 'gmail' | 'postmark';
   oauthScopes?: string[];
   inboundMode?: 'postmark' | 'native' | 'hybrid';
 
@@ -447,15 +447,6 @@ These items are separate from Gmail native inbound and should not delay it.
 - Enable for internal organizations first.
 - Confirm pending, retry, and orphan-sweeper behavior.
 - Populate `providerMessageId` when provider APIs expose it.
-
-### Outlook native inbound
-
-After Gmail is stable:
-
-- Add `Mail.Read`.
-- Use Microsoft Graph change notifications and delta queries.
-- Normalize into the same `process-email` queue.
-- Add subscription renewal and recovery.
 
 ### Outbound parity
 

@@ -9,7 +9,7 @@ vi.mock("@/components/integrations/EmailForwardingDisclosure", () => ({
 }))
 
 describe("StepEmail", () => {
-  it("puts Gmail and Outlook first and marks social channels as coming soon", () => {
+  it("puts Gmail first and marks social channels as coming soon", () => {
     const html = renderToStaticMarkup(createElement(StepEmail, {
       data: DEFAULT_DATA,
       update: vi.fn(),
@@ -26,7 +26,6 @@ describe("StepEmail", () => {
 
     expect(html).toContain("Where do customers reach you?")
     expect(html).toContain("Connect Gmail")
-    expect(html).toContain("Connect Outlook")
     expect(html).toContain("Forward another inbox")
     expect(html).toContain("Instagram")
     expect(html).toContain("TikTok")
@@ -60,6 +59,5 @@ describe("StepEmail", () => {
     expect(html).toContain("Address customers use")
     expect(html).toContain("existing Google Workspace alias")
     expect(html).toContain("Reconnect Gmail")
-    expect(html).toContain("Connect Outlook")
   })
 })

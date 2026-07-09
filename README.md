@@ -53,7 +53,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 - All DB queries are scoped by `organizationId`
 
 ## Channels
-- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`; Outlook remains forwarding-only. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API, Graph, or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail/Outlook refresh tokens and flags "Reconnect" in Integrations on failure.
+- **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
 - **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
 - **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
@@ -258,7 +258,6 @@ Optional dashboard variables:
 - `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
 - `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
 - `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` — Instagram OAuth and webhook setup
-- `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` — Outlook OAuth
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
 - `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup

@@ -1,6 +1,6 @@
-export type EmailProvider = 'gmail' | 'outlook' | 'postmark';
+export type EmailProvider = 'gmail' | 'postmark';
 
-export type EmailOAuthProvider = 'gmail' | 'outlook';
+export type EmailOAuthProvider = 'gmail';
 
 export interface EmailHeader {
   name: string;

@@ -124,12 +124,6 @@ tsx src/scripts/set-telegram-webhook.ts https://<gateway-host>/webhooks/telegram
 - [ ] Authorized redirect URIs if domain changes:
   - `https://<dashboard>/api/integrations/gmail/callback`
 
-### Microsoft (Outlook)
-
-- [ ] App registration display name → Shopkeeper
-- [ ] Redirect URIs if domain changes:
-  - `https://<dashboard>/api/integrations/outlook/callback`
-
 ### Telegram (BotFather)
 
 Production bot migration (`@ClerkBot` → `@ShopkeeperBot`):
@@ -211,7 +205,7 @@ Manual checks:
 - [ ] Railway env updated + Telegram webhook registered
 - [ ] Neon / Stripe renamed
 - [ ] Postmark sender + inbound domain updated
-- [ ] Shopify / Meta / Google / Microsoft OAuth consoles updated
+- [ ] Shopify / Meta / Google OAuth consoles updated
 - [ ] Telegram bot migrated
 - [ ] DNS cutover (if applicable)
 - [ ] Agent prefix migration run (if applicable)

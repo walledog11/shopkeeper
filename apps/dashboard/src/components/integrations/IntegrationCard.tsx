@@ -40,7 +40,7 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
   const isConnected = config.connectType === "shopify"
     ? isShopifyIntegrationLinked(connected[0])
     : connected.length > 0
-  const isOAuthEmail = config.emailProvider === "gmail" || config.emailProvider === "outlook"
+  const isOAuthEmail = config.emailProvider === "gmail"
 
   const health = config.connectType
     ? deriveIntegrationHealth(config.connectType, connected, lastActivity ?? null, gmailNativeInboundEnabled)

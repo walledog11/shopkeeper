@@ -36,12 +36,12 @@ import {
   type StepId,
 } from "../_components/model";
 
-function providerOf(integration: IntegrationRow): "gmail" | "outlook" | "postmark" {
+function providerOf(integration: IntegrationRow): "gmail" | "postmark" {
   const metadata = integration.metadata;
   if (!metadata || typeof metadata !== "object" || !("provider" in metadata)) {
     return "postmark";
   }
-  return metadata.provider === "gmail" || metadata.provider === "outlook"
+  return metadata.provider === "gmail"
     ? metadata.provider
     : "postmark";
 }
@@ -362,7 +362,7 @@ export function useOnboardingFlow() {
     if (!ready) return;
     const platform = url.includes("/shopify/")
       ? "shopify"
-      : url.includes("/gmail/") || url.includes("/outlook/")
+      : url.includes("/gmail/")
         ? "email"
         : null;
     if (platform) {

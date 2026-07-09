@@ -22,20 +22,19 @@ export function getEmailProvider(integration: { metadata?: unknown | null }): Em
   const meta = integration.metadata;
   if (meta && typeof meta === 'object' && 'provider' in meta) {
     const value = (meta as { provider?: unknown }).provider;
-    if (value === 'gmail' || value === 'outlook' || value === 'postmark') return value;
+    if (value === 'gmail' || value === 'postmark') return value;
   }
   return 'postmark';
 }
 
 export function getEmailProviderLabel(integration: { metadata?: unknown | null }): string {
   const provider = getEmailProvider(integration);
-  return provider === 'gmail' ? 'Gmail' : provider === 'outlook' ? 'Outlook' : 'Forwarding';
+  return provider === 'gmail' ? 'Gmail' : 'Forwarding';
 }
 
 export function getEmailReauthorizePath(integration: { metadata?: unknown | null }): string | null {
   const provider = getEmailProvider(integration);
   if (provider === 'gmail') return '/api/integrations/gmail/auth';
-  if (provider === 'outlook') return '/api/integrations/outlook/auth';
   return null;
 }
 
@@ -72,7 +71,7 @@ export function getEmailAuthReauthorizationReason(integration: {
   tokenExpiresAt?: string | Date | null;
 }): EmailAuthReauthorizationReason | null {
   const provider = getEmailProvider(integration);
-  if (provider !== 'gmail' && provider !== 'outlook') return null;
+  if (provider !== 'gmail') return null;
   if (hasExplicitExpiredToken(integration.tokenExpiresAt)) return 'expired_grant';
   if (provider === 'gmail' && !hasOAuthScope(integration.metadata, GMAIL_READONLY_SCOPE)) {
     return 'missing_gmail_read_scope';

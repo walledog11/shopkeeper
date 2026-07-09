@@ -16,11 +16,6 @@ const DEFAULT_PROVIDER_HOSTS = [
     exact: ['graph.facebook.com', 'graph.instagram.com'],
   },
   {
-    provider: 'microsoft',
-    suffixes: ['microsoft.com', 'microsoftonline.com', 'live.com', 'office.com'],
-    exact: ['graph.microsoft.com', 'login.microsoftonline.com'],
-  },
-  {
     provider: 'google',
     suffixes: ['google.com', 'googleapis.com'],
     exact: ['accounts.google.com', 'oauth2.googleapis.com', 'openidconnect.googleapis.com', 'www.googleapis.com'],

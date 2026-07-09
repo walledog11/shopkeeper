@@ -1,5 +1,5 @@
 export type ConnectType = 'email' | 'ig' | 'shopify' | 'imessage' | 'tiktok_shop'
-export type EmailProviderFilter = 'gmail' | 'outlook' | 'postmark'
+export type EmailProviderFilter = 'gmail' | 'postmark'
 export type IntegrationChannelKind = 'operator' | 'support'
 
 export interface PlatformConfig {
@@ -153,22 +153,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     channelKind: 'support',
     permissions: [
       "Send replies from your verified address",
-    ],
-  },
-  {
-    id: "outlook",
-    platform: "email",
-    emailProvider: "outlook",
-    name: "Outlook",
-    logo: "/logos/outlook.svg",
-    fullBleedLogo: true,
-    description: "Route support mail, draft replies, and send responses from your Outlook inbox.",
-    connectType: 'email',
-    channelKind: 'support',
-    permissions: [
-      "Send replies from your Outlook address",
-      "View your name and email address",
-      "Stay signed in with offline access",
     ],
   },
 ]

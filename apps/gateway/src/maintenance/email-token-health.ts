@@ -14,10 +14,9 @@ const EPOCH_SENTINEL = new Date(0);
 
 const TOKEN_ENDPOINT = {
   gmail: 'https://oauth2.googleapis.com/token',
-  outlook: 'https://login.microsoftonline.com/common/oauth2/v2.0/token',
 } as const;
 
-type EmailOAuthProvider = 'gmail' | 'outlook';
+type EmailOAuthProvider = 'gmail';
 
 interface EmailIntegrationRow {
   id: string;
@@ -30,14 +29,14 @@ interface EmailIntegrationRow {
 function readOAuthProvider(metadata: unknown): EmailOAuthProvider | null {
   if (metadata && typeof metadata === 'object' && 'provider' in metadata) {
     const value = (metadata as { provider?: unknown }).provider;
-    if (value === 'gmail' || value === 'outlook') return value;
+    if (value === 'gmail') return value;
   }
   return null;
 }
 
-function oauthClient(provider: EmailOAuthProvider): { clientId: string; clientSecret: string } | null {
-  const clientId = provider === 'gmail' ? process.env.GOOGLE_CLIENT_ID : process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret = provider === 'gmail' ? process.env.GOOGLE_CLIENT_SECRET : process.env.MICROSOFT_CLIENT_SECRET;
+function oauthClient(_provider: EmailOAuthProvider): { clientId: string; clientSecret: string } | null {
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
   return { clientId, clientSecret };
 }
@@ -110,7 +109,7 @@ async function probeIntegration(integration: EmailIntegrationRow, provider: Emai
 }
 
 export async function runEmailTokenHealthCheck(): Promise<void> {
-  logger.info('[EmailTokenHealth] Running daily Gmail/Outlook token check');
+  logger.info('[EmailTokenHealth] Running daily Gmail token check');
 
   const integrations = await db.integration.findMany({
     where: { platform: CHANNEL.EMAIL, refreshToken: { not: null } },

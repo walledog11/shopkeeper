@@ -4,7 +4,7 @@ import { captureIntegrationConnectionCompleted } from '@/lib/server/product-anal
 import { upsertRaceSafeIntegration } from './integration-upsert';
 import { stopGmailWatchIfUnused } from './gmail-watch';
 
-export type EmailIntegrationProvider = 'gmail' | 'outlook' | 'postmark';
+export type EmailIntegrationProvider = 'gmail' | 'postmark';
 
 export type UpsertExclusiveEmailIntegrationArgs = {
   externalAccountId: string;
@@ -16,7 +16,7 @@ export type UpsertExclusiveEmailIntegrationArgs = {
 } & (
   | {
       accessToken: string;
-      provider: 'gmail' | 'outlook';
+      provider: 'gmail';
       refreshToken: string;
       tokenExpiresAt: Date;
     }

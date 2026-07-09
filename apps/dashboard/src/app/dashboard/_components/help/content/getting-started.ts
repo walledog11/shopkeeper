@@ -19,7 +19,7 @@ export const gettingStarted: Category = {
             "Go to the Integrations page from the sidebar.",
             "Connect Shopify with your store domain.",
             "Open the Email card and choose Set up forwarding.",
-            "Copy your Shopkeeper inbound address (orgId@inbound.shopkeeper.app) and add it as a forwarding destination in Gmail, Outlook, cPanel, or Cloudflare.",
+            "Copy your Shopkeeper inbound address (orgId@inbound.shopkeeper.app) and add it as a forwarding destination in Gmail, cPanel, or Cloudflare.",
             "Save your support address (for example support@yourstore.com) so replies go out under the right name.",
             "Send a test email to your support address — it should appear in your inbox within a minute once forwarding is working.",
           ],

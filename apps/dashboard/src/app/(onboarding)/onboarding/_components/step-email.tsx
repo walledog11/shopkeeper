@@ -7,7 +7,7 @@ import { GmailSupportAddressPanel } from "@/components/integrations/GmailSupport
 import { Accent, Headline, Lede } from "./primitives";
 import { RETURN_TO, type IntegrationRow, type OnboardingData } from "./model";
 
-type EmailProvider = "gmail" | "outlook" | "postmark" | null;
+type EmailProvider = "gmail" | "postmark" | null;
 
 export function StepEmail({
   data,
@@ -72,7 +72,7 @@ export function StepEmail({
         </div>
       )}
 
-      <div className="mt-6 grid w-full max-w-[560px] gap-3 text-left md:grid-cols-2">
+      <div className="mt-6 grid w-full max-w-[560px] gap-3 text-left">
         <ChannelCard
           name="Gmail"
           logo="/logos/gmail.png"
@@ -80,14 +80,6 @@ export function StepEmail({
           connected={connectedProvider === "gmail"}
           actionLabel="Connect Gmail"
           onConnect={() => onOAuth(`/api/integrations/gmail/auth?returnTo=${returnTo}`)}
-        />
-        <ChannelCard
-          name="Outlook"
-          logo="/logos/outlook.svg"
-          description="Connect Outlook or Microsoft 365 and reply from your existing address."
-          connected={connectedProvider === "outlook"}
-          actionLabel="Connect Outlook"
-          onConnect={() => onOAuth(`/api/integrations/outlook/auth?returnTo=${returnTo}`)}
         />
       </div>
 
@@ -110,7 +102,7 @@ export function StepEmail({
               )}
             </span>
             <span className="mt-0.5 block text-[12px] leading-snug text-foreground/50">
-              When direct Gmail or Outlook access isn&apos;t an option.
+              When direct Gmail access isn&apos;t an option.
             </span>
           </span>
           <ChevronDown className={cn("size-4 shrink-0 text-foreground/40 transition-transform", forwardingOpen && "rotate-180")} />
@@ -208,7 +200,7 @@ function providerOf(integration: IntegrationRow | undefined): EmailProvider {
     return "postmark";
   }
   const provider = metadata.provider;
-  return provider === "gmail" || provider === "outlook" || provider === "postmark"
+  return provider === "gmail" || provider === "postmark"
     ? provider
     : null;
 }

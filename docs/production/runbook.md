@@ -172,10 +172,6 @@ Optional:
   `hybrid` (default) | `postmark` | `gmail-only`. Selects which inbound rail(s) the gateway
   expects. `gmail-only` lets the gateway boot without Postmark inbound creds (dev / future
   native-only); production stays `hybrid` until the last forwarding merchant migrates.
-- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET`
-  Same values as the dashboard. Used by the daily `email-token-health` maintenance job to probe
-  Outlook refresh tokens and flag "Reconnect" in Integrations when a refresh token dies.
-  If absent, the Outlook probe is skipped and outbound senders still refresh tokens at send time.
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
 - `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` for Instagram DM after v1.
@@ -191,13 +187,12 @@ Email is a **hybrid model** — keep the two concerns separate when debugging:
   expired history checkpoint triggers a bounded seven-day inbox recovery. Keep
   `EMAIL_INBOUND_MODE=hybrid` during rollout so Postmark remains the fallback.
 - **Outbound provider** (how replies are sent): chosen per integration from
-  `Integration.metadata.provider` — `gmail` (Gmail API), `outlook` (Graph), or `postmark`
-  (forwarding fallback). The reply `From` uses `Integration.fromEmail` (falling back to
+  `Integration.metadata.provider` — `gmail` (Gmail API) or `postmark` (forwarding fallback).
+  The reply `From` uses `Integration.fromEmail` (falling back to
   `externalAccountId`); the OAuth account email is the identity used for `replyTo` and token
   refresh.
 
-Gmail native inbound is implemented but remains in controlled rollout. Outlook OAuth remains
-outbound-only and still requires Postmark forwarding for inbound.
+Gmail native inbound is implemented but remains in controlled rollout.
 
 ### Gmail native-inbound rollout
 

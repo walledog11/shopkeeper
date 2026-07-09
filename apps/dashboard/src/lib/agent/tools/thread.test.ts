@@ -211,23 +211,23 @@ describe('sendReply provider failures', () => {
 });
 
 describe('sendEmail outbound recording', () => {
-  it('records a new Outlook email with the Outlook provider', async () => {
-    const emailAddress = `outlook_${org.id.slice(0, 8)}@example.com`;
+  it('records a new Gmail email with the Gmail provider', async () => {
+    const emailAddress = `gmail_send_${org.id.slice(0, 8)}@example.com`;
     await db.integration.create({
       data: {
         organizationId: org.id,
         platform: ChannelType.email,
         externalAccountId: emailAddress,
         fromEmail: emailAddress,
-        accessToken: 'outlook-access-token',
-        refreshToken: 'outlook-refresh-token',
+        accessToken: 'gmail-access-token',
+        refreshToken: 'gmail-refresh-token',
         tokenExpiresAt: new Date(Date.now() + 3600_000),
-        metadata: { provider: 'outlook' },
+        metadata: { provider: 'gmail' },
       },
     });
 
     const result = await sendEmail(
-      { to: 'prospect@example.com', subject: 'Sizing question', body: 'Recorded Outlook email.' },
+      { to: 'prospect@example.com', subject: 'Sizing question', body: 'Recorded Gmail email.' },
       { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
     );
 
@@ -236,18 +236,18 @@ describe('sendEmail outbound recording', () => {
     expect(records).toMatchObject([
       {
         source: 'agent_send_email',
-        provider: 'outlook',
+        provider: 'gmail',
         channel: 'email',
         organizationId: org.id,
         to: 'prospect@example.com',
         from: emailAddress,
         subject: 'Sizing question',
-        text: 'Recorded Outlook email.',
+        text: 'Recorded Gmail email.',
       },
     ]);
 
     const saved = await db.message.findFirst({
-      where: { contentText: 'Recorded Outlook email.', senderType: SenderType.agent },
+      where: { contentText: 'Recorded Gmail email.', senderType: SenderType.agent },
     });
     expect(saved).not.toBeNull();
   });

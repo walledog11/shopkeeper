@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EmailOAuthProvider } from './types';
-
 const dbMocks = vi.hoisted(() => ({
   integrationUpdate: vi.fn(),
 }));
@@ -33,19 +31,13 @@ afterEach(() => {
 });
 
 describe('getEmailOAuthClient', () => {
-  it('returns configured Gmail and Outlook OAuth clients', () => {
+  it('returns the configured Gmail OAuth client', () => {
     vi.stubEnv('GOOGLE_CLIENT_ID', 'google-id');
     vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-secret');
-    vi.stubEnv('MICROSOFT_CLIENT_ID', 'microsoft-id');
-    vi.stubEnv('MICROSOFT_CLIENT_SECRET', 'microsoft-secret');
 
     expect(getEmailOAuthClient('gmail')).toEqual({
       clientId: 'google-id',
       clientSecret: 'google-secret',
-    });
-    expect(getEmailOAuthClient('outlook')).toEqual({
-      clientId: 'microsoft-id',
-      clientSecret: 'microsoft-secret',
     });
   });
 
@@ -58,12 +50,7 @@ describe('getEmailOAuthClient', () => {
 });
 
 describe('requestTokenRefresh', () => {
-  const cases: Array<[EmailOAuthProvider, string]> = [
-    ['gmail', 'https://oauth2.googleapis.com/token'],
-    ['outlook', 'https://login.microsoftonline.com/common/oauth2/v2.0/token'],
-  ];
-
-  it.each(cases)('posts refresh-token grants to the %s endpoint', async (provider, endpoint) => {
+  it('posts refresh-token grants to the Gmail endpoint', async () => {
     mockFetch.mockResolvedValueOnce(new Response(
       JSON.stringify({
         access_token: 'access-token',
@@ -73,7 +60,7 @@ describe('requestTokenRefresh', () => {
       { status: 200, headers: { 'Content-Type': 'application/json' } },
     ));
 
-    const result = await requestTokenRefresh(provider, 'refresh-token', {
+    const result = await requestTokenRefresh('gmail', 'refresh-token', {
       clientId: 'client-id',
       clientSecret: 'client-secret',
     });
@@ -85,7 +72,7 @@ describe('requestTokenRefresh', () => {
     expect(result.token.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    expect(String(mockFetch.mock.calls[0][0])).toBe(endpoint);
+    expect(String(mockFetch.mock.calls[0][0])).toBe('https://oauth2.googleapis.com/token');
     const init = mockFetch.mock.calls[0][1] as RequestInit;
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({ 'Content-Type': 'application/x-www-form-urlencoded' });
@@ -108,7 +95,7 @@ describe('requestTokenRefresh', () => {
   it('marks provider 4xx responses as non-transient refresh failures', async () => {
     mockFetch.mockResolvedValueOnce(new Response('invalid_grant', { status: 400 }));
 
-    await expect(requestTokenRefresh('outlook', 'refresh-token', {
+    await expect(requestTokenRefresh('gmail', 'refresh-token', {
       clientId: 'client-id',
       clientSecret: 'client-secret',
     })).resolves.toEqual({

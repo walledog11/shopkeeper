@@ -116,7 +116,7 @@ export function useIntegrationCardActions({
         ? "ig_dm"
         : path.includes("/tiktok-shop/")
           ? "tiktok"
-          : path.includes("/gmail/") || path.includes("/outlook/")
+          : path.includes("/gmail/")
             ? "email"
             : null
     if (platform) {

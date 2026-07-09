@@ -6,7 +6,7 @@ import {
 } from '@/lib/server/ops-alerts';
 import { getDashboardOpsAlertConfig, type DashboardOpsAlertConfig } from '@/lib/env';
 
-export type ProviderSendAlertProvider = 'meta' | 'postmark' | 'shopify' | 'gmail' | 'outlook' | 'tiktok_shop';
+export type ProviderSendAlertProvider = 'meta' | 'postmark' | 'shopify' | 'gmail' | 'tiktok_shop';
 export type ProviderSendAlertChannel = 'ig_dm' | 'email' | 'tiktok' | 'webhook_registration';
 
 export interface ProviderSendAlertDependencies {

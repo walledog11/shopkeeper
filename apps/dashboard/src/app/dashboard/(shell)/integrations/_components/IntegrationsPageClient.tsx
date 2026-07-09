@@ -122,7 +122,6 @@ function IntegrationsPageContent({
       showToast('success', 'Gmail connected.')
       setOpenId('gmail')
     }
-    else if (connected === 'outlook') showToast('success', 'Outlook connected.')
     else if (connected === 'tiktok-shop') showToast('success', 'TikTok Shop connected.')
     else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
   }, [searchParams, showToast])
@@ -136,8 +135,6 @@ function IntegrationsPageContent({
       showToast('success', 'Shopify store connected.')
     } else if (payload.connected === 'gmail') {
       showToast('success', 'Gmail connected.')
-    } else if (payload.connected === 'outlook') {
-      showToast('success', 'Outlook connected.')
     } else if (payload.connected === 'tiktok-shop') {
       showToast('success', 'TikTok Shop connected.')
     } else if (payload.error) {
@@ -406,7 +403,7 @@ function IntegrationsPageContent({
               section.kind,
               section.title,
               section.description,
-              section.kind === 'support' ? 6 : 3,
+              section.kind === 'support' ? 5 : 3,
             ))}
           </div>
         )}
