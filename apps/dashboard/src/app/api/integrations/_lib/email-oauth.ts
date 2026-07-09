@@ -10,6 +10,7 @@ import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
 import {
   oauthCompleteResponse,
+  oauthPageRedirect,
   resolveOAuthOrganization,
 } from './oauth-callback';
 import {
@@ -86,7 +87,7 @@ export async function createEmailOAuthAuthorizationResponse(
     authorizationUrl.searchParams.set(key, value);
   }
 
-  return NextResponse.redirect(authorizationUrl.toString());
+  return oauthPageRedirect(authorizationUrl.toString());
 }
 
 export async function completeEmailOAuth(

@@ -2,6 +2,9 @@ import crypto from 'node:crypto';
 import { auth } from '@clerk/nextjs/server';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import {
+  oauthPageRedirect,
+} from './oauth-callback';
 import logger from '@/lib/server/logger';
 import { safeReturnTo } from '@/lib/security/safe-return-to';
 import { timingSafeIncludes } from '@/lib/security/timing-safe';
@@ -101,7 +104,7 @@ export async function validateOAuthCallbackSession(options: {
     logger.error(`[${options.logPrefix}] State mismatch — possible CSRF attempt`);
     return {
       ok: false,
-      response: NextResponse.redirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      response: oauthPageRedirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
       analyticsContext: {
         attemptId: savedState,
         clerkOrganizationId: clerkOrgId,
@@ -117,7 +120,7 @@ export async function validateOAuthCallbackSession(options: {
     );
     return {
       ok: false,
-      response: NextResponse.redirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
+      response: oauthPageRedirect(`${options.appUrl}/dashboard/integrations?error=${mismatchError}`),
       analyticsContext: {
         attemptId: savedState,
         clerkOrganizationId: clerkOrgId,

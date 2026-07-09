@@ -31,7 +31,7 @@ describe('POST /api/integrations/gmail/auth', () => {
   it('requests Gmail send and read scopes', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/auth?returnTo=/dashboard/integrations'));
 
-    expect(res.status).toBe(307);
+    expect(res.status).toBe(303);
     const redirectUrl = new URL(res.headers.get('location')!);
     expect(redirectUrl.origin).toBe('https://accounts.google.com');
     expect(redirectUrl.searchParams.get('redirect_uri')).toBe('http://dashboard.test/api/integrations/gmail/callback');

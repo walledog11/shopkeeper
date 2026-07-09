@@ -18,6 +18,7 @@ export const publicRoutePatterns = [
   "/api/webhooks(.*)",
   "/api/integrations/shopify/callback(.*)",
   "/api/integrations/instagram/callback(.*)",
+  "/api/integrations/gmail/callback(.*)",
   "/api/agent/io-send-internal(.*)",
   "/api/messages/auto-ack(.*)",
   "/api/messages/internal(.*)",

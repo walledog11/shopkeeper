@@ -17,15 +17,20 @@ type IntegrationRedirectParams = {
 
 export type OAuthOrganization = NonNullable<Awaited<ReturnType<typeof db.organization.findUnique>>>;
 
+/** After an OAuth callback POST, redirect with GET so App Router pages do not 405. */
+export function oauthPageRedirect(url: string | URL): NextResponse {
+  return NextResponse.redirect(url, 303);
+}
+
 export function oauthCompleteResponse(appUrl: string, params: OAuthCompleteParams): NextResponse {
-  return NextResponse.redirect(buildOAuthCompleteUrl(appUrl, params));
+  return oauthPageRedirect(buildOAuthCompleteUrl(appUrl, params));
 }
 
 export function integrationsResponse(appUrl: string, params: IntegrationRedirectParams): NextResponse {
   const url = new URL('/dashboard/integrations', appUrl);
   if (params.connected) url.searchParams.set('connected', params.connected);
   if (params.error) url.searchParams.set('error', params.error);
-  return NextResponse.redirect(url);
+  return oauthPageRedirect(url);
 }
 
 export function oauthDestinationResponse(
@@ -34,7 +39,7 @@ export function oauthDestinationResponse(
   connected: string,
 ): NextResponse {
   if (returnTo) {
-    return NextResponse.redirect(`${appUrl}${returnTo}`);
+    return oauthPageRedirect(`${appUrl}${returnTo}`);
   }
   return integrationsResponse(appUrl, { connected });
 }
