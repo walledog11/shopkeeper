@@ -66,6 +66,8 @@ vi.mock('@shopkeeper/db', () => ({
       findUnique: vi.fn().mockResolvedValue({ settings: {} }),
     },
   },
+  getDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
+  incrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@shopkeeper/agent/settings', () => ({
