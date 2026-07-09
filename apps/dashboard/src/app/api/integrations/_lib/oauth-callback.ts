@@ -6,6 +6,7 @@ import { buildOAuthCompleteUrl } from './oauth-complete-url';
 type OAuthCompleteParams = {
   connected?: string;
   error?: string;
+  integration?: string;
   returnTo?: string | null;
 };
 

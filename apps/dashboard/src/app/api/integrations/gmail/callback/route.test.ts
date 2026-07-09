@@ -167,7 +167,9 @@ describe('POST /api/integrations/gmail/callback', () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123'));
 
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/settings');
+    expect(new URL(res.headers.get('location')!)).toEqual(new URL(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail&returnTo=%2Fdashboard%2Fsettings',
+    ));
 
     const rows = await db.integration.findMany({
       where: { organizationId: org!.id, platform: ChannelType.email },
@@ -248,7 +250,7 @@ describe('POST /api/integrations/gmail/callback', () => {
 
     expect(res.status).toBe(307);
     expect(res.headers.get('location')).toBe(
-      'http://dashboard.test/dashboard/integrations?connected=gmail',
+      'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail',
     );
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.email },
@@ -348,7 +350,9 @@ describe('POST /api/integrations/gmail/callback', () => {
   it('redirects to access_denied when user cancels', async () => {
     const res = await POST(new Request('http://localhost/api/integrations/gmail/callback?error=access_denied'));
     expect(res.status).toBe(307);
-    expect(res.headers.get('location')).toBe('http://dashboard.test/dashboard/integrations?error=access_denied');
+    expect(res.headers.get('location')).toBe(
+      'http://dashboard.test/dashboard/integrations/oauth/complete?error=access_denied&integration=gmail',
+    );
     expect(mockFetch).not.toHaveBeenCalled();
     expect(mockLogger.warn).toHaveBeenCalledWith(
       { error: 'access_denied' },

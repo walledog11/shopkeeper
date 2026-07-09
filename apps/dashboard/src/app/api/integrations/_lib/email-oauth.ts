@@ -9,8 +9,7 @@ import {
 import { upsertExclusiveEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
 import {
-  integrationsResponse,
-  oauthDestinationResponse,
+  oauthCompleteResponse,
   resolveOAuthOrganization,
 } from './oauth-callback';
 import {
@@ -39,6 +38,21 @@ function callbackPath(config: EmailOAuthProviderConfig): string {
 
 function logPrefix(config: EmailOAuthProviderConfig): string {
   return `${config.displayName} OAuth`;
+}
+
+function emailOAuthCompleteResponse(
+  appUrl: string,
+  config: EmailOAuthProviderConfig,
+  params: {
+    connected?: string;
+    error?: string;
+    returnTo?: string | null;
+  },
+): Response {
+  return oauthCompleteResponse(appUrl, {
+    ...params,
+    integration: config.provider,
+  });
 }
 
 export async function createEmailOAuthAuthorizationResponse(
@@ -95,10 +109,10 @@ export async function completeEmailOAuth(
 
   if (oauthError && !state) {
     logger.warn({ error: oauthError }, `[${prefix}] User denied access`);
-    return integrationsResponse(appUrl, { error: 'access_denied' });
+    return emailOAuthCompleteResponse(appUrl, config, { error: 'access_denied' });
   }
   if ((!code && !oauthError) || !state) {
-    return integrationsResponse(appUrl, { error: 'invalid_callback' });
+    return emailOAuthCompleteResponse(appUrl, config, { error: 'invalid_callback' });
   }
 
   const callbackSession = await validateOAuthCallbackSession({
@@ -118,7 +132,7 @@ export async function completeEmailOAuth(
   const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
 
   const orgResult = await resolveOAuthOrganization(clerkOrgId, prefix);
-  if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
+  if (!orgResult.ok) return emailOAuthCompleteResponse(appUrl, config, { error: orgResult.error, returnTo });
   const organizationId = orgResult.org.id;
 
   if (oauthError) {
@@ -129,7 +143,7 @@ export async function completeEmailOAuth(
       organizationId,
       platform: 'email',
     });
-    return integrationsResponse(appUrl, { error: 'access_denied' });
+    return emailOAuthCompleteResponse(appUrl, config, { error: 'access_denied', returnTo });
   }
   if (!code) {
     await captureIntegrationConnectionFailed({
@@ -138,7 +152,7 @@ export async function completeEmailOAuth(
       organizationId,
       platform: 'email',
     });
-    return integrationsResponse(appUrl, { error: 'invalid_callback' });
+    return emailOAuthCompleteResponse(appUrl, config, { error: 'invalid_callback', returnTo });
   }
 
   try {
@@ -170,7 +184,7 @@ export async function completeEmailOAuth(
         organizationId,
         platform: 'email',
       });
-      return integrationsResponse(appUrl, { error: 'token_exchange_failed' });
+      return emailOAuthCompleteResponse(appUrl, config, { error: 'token_exchange_failed', returnTo });
     }
 
     const userinfoResponse = await fetch(config.userinfoUrl, {
@@ -187,7 +201,7 @@ export async function completeEmailOAuth(
         organizationId,
         platform: 'email',
       });
-      return integrationsResponse(appUrl, { error: 'no_email' });
+      return emailOAuthCompleteResponse(appUrl, config, { error: 'no_email', returnTo });
     }
 
     const integrationId = await upsertExclusiveEmailIntegration({
@@ -205,7 +219,7 @@ export async function completeEmailOAuth(
     }
 
     logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);
-    return oauthDestinationResponse(appUrl, returnTo, config.provider);
+    return emailOAuthCompleteResponse(appUrl, config, { connected: config.provider, returnTo });
   } catch (error) {
     logger.error({ err: error }, `[${prefix}] Unexpected error`);
     await captureIntegrationConnectionFailed({
@@ -214,6 +228,6 @@ export async function completeEmailOAuth(
       organizationId,
       platform: 'email',
     });
-    return integrationsResponse(appUrl, { error: 'server_error' });
+    return emailOAuthCompleteResponse(appUrl, config, { error: 'server_error', returnTo });
   }
 }

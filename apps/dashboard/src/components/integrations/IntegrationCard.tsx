@@ -10,7 +10,6 @@ import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
-import { captureClientProductEvent } from "@/lib/product-events"
 import { CardLogo } from "./IntegrationCardParts"
 import {
   CARD_BUTTON_AMBER,
@@ -65,6 +64,7 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
     email,
     handleConnectClick,
     handleEmailConnect,
+    handleGmailConnect,
     handleKbSync,
     handleReauthorize,
     handleShopifyConnect,
@@ -96,19 +96,14 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
             <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
           ) : !isConnected ? (
             isOAuthEmail ? (
-              <form
-                action={`/api/integrations/${config.emailProvider}/auth`}
-                method="post"
-                className="flex-1 flex"
-                onSubmit={() => {
-                  void captureClientProductEvent({
-                    event: "integration_connection_started",
-                    platform: "email",
-                  })
-                }}
+              <button
+                type="button"
+                onClick={handleGmailConnect}
+                disabled={loading}
+                className={cn(CARD_BUTTON_PRIMARY, "w-full flex-1")}
               >
-                <button type="submit" className={cn(CARD_BUTTON_PRIMARY, "w-full")}>Connect</button>
-              </form>
+                Connect
+              </button>
             ) : (
               <button type="button" onClick={handleConnectClick} className={CARD_BUTTON_PRIMARY}>Connect</button>
             )

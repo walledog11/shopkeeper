@@ -128,6 +128,10 @@ function IntegrationsPageContent({
 
   const handleOAuthResult = useEffectEvent((payload: OAuthDoneMessage) => {
     void mutate()
+    if (payload.error) {
+      showToast('error', OAUTH_ERROR_MESSAGES[payload.error] ?? 'An unexpected error occurred.')
+      return
+    }
     setOpenId(payload.connected === 'gmail' ? 'gmail' : null)
     if (payload.connected === 'instagram') {
       showToast('success', 'Instagram connected.')
@@ -137,8 +141,6 @@ function IntegrationsPageContent({
       showToast('success', 'Gmail connected.')
     } else if (payload.connected === 'tiktok-shop') {
       showToast('success', 'TikTok Shop connected.')
-    } else if (payload.error) {
-      showToast('error', OAUTH_ERROR_MESSAGES[payload.error] ?? 'An unexpected error occurred.')
     }
   })
 
@@ -195,6 +197,7 @@ function IntegrationsPageContent({
       const res = await fetch(`/api/integrations/${integrationId}`, { method: 'DELETE' })
       if (!res.ok) throw new Error()
       await mutate()
+      setOpenId(null)
       showToast('success', 'Disconnected.')
     } catch {
       showToast('error', 'Failed to disconnect. Please try again.')

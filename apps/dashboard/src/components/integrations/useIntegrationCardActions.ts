@@ -139,6 +139,11 @@ export function useIntegrationCardActions({
     launchOAuth("/api/integrations/shopify/auth", { shop: domain }, () => dispatchCardState({ type: "loadingChanged", loading: false }))
   }
 
+  function handleGmailConnect() {
+    dispatchCardState({ type: "loadingChanged", loading: true })
+    launchOAuth("/api/integrations/gmail/auth", {}, () => dispatchCardState({ type: "loadingChanged", loading: false }))
+  }
+
   function handleReauthorize() {
     if (config.connectType === "ig") {
       launchOAuth("/api/integrations/instagram/auth", {})
@@ -149,11 +154,7 @@ export function useIntegrationCardActions({
     } else if (config.connectType === "email" && connected[0]) {
       const path = getEmailReauthorizePath(connected[0])
       if (path) {
-        void captureClientProductEvent({
-          event: "integration_connection_started",
-          platform: "email",
-        })
-        window.location.href = path
+        launchOAuth(path, {})
       }
     }
   }
@@ -191,6 +192,7 @@ export function useIntegrationCardActions({
     email,
     handleConnectClick,
     handleEmailConnect,
+    handleGmailConnect,
     handleKbSync,
     handleReauthorize,
     handleShopifyConnect,

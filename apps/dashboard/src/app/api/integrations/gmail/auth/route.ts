@@ -3,7 +3,7 @@ import { createEmailOAuthAuthorizationResponse } from '@/app/api/integrations/_l
 import { GMAIL_EMAIL_OAUTH } from '@/app/api/integrations/_lib/email-oauth-providers';
 
 export async function GET(request: Request) {
-  return createPostRedirectResponse(request, `Connect ${GMAIL_EMAIL_OAUTH.displayName}`);
+  return createPostRedirectResponse(request, "Connecting Gmail", "gmail");
 }
 
 export async function POST(request: Request) {
