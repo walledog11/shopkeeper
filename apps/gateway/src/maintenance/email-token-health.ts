@@ -34,7 +34,7 @@ function readOAuthProvider(metadata: unknown): EmailOAuthProvider | null {
   return null;
 }
 
-function oauthClient(_provider: EmailOAuthProvider): { clientId: string; clientSecret: string } | null {
+function oauthClient(): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) return null;
@@ -55,7 +55,7 @@ async function probeIntegration(integration: EmailIntegrationRow, provider: Emai
   if (integration.tokenExpiresAt?.getTime() === 0) return;
   if (!integration.refreshToken) return;
 
-  const client = oauthClient(provider);
+  const client = oauthClient();
   if (!client) {
     logger.warn({ provider, organizationId: integration.organizationId }, '[EmailTokenHealth] OAuth client creds missing — skipping probe');
     return;
