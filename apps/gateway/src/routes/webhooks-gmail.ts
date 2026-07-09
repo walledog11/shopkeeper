@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response, Router } from 'express';
 import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { db } from '@shopkeeper/db';
-import { getEmailProvider } from '@shopkeeper/email';
+import { decodeGmailBase64Url, getEmailProvider } from '@shopkeeper/email';
 import {
   getGmailPubSubPushConfig,
   isGmailNativeInboundEnabled,
@@ -41,16 +41,31 @@ function readBearerToken(req: Request): string | null {
   return /^Bearer ([^\s]+)$/i.exec(authorization.trim())?.[1] ?? null;
 }
 
-function decodeBase64Json(data: string): unknown {
-  if (!data || data.length % 4 !== 0 || !BASE64_PATTERN.test(data)) {
-    throw new GmailPushPayloadError('Pub/Sub message data is not valid base64');
+function decodePubSubMessageData(data: string): unknown {
+  let decoded: Buffer;
+  try {
+    // Gmail push notifications use base64url in production.
+    decoded = decodeGmailBase64Url(data);
+  } catch {
+    if (!data || data.length % 4 !== 0 || !BASE64_PATTERN.test(data)) {
+      throw new GmailPushPayloadError('Pub/Sub message data is not valid base64');
+    }
+    decoded = Buffer.from(data, 'base64');
   }
 
   try {
-    return JSON.parse(Buffer.from(data, 'base64').toString('utf8')) as unknown;
+    return JSON.parse(decoded.toString('utf8')) as unknown;
   } catch {
     throw new GmailPushPayloadError('Pub/Sub message data is not valid JSON');
   }
+}
+
+function readGmailHistoryId(value: unknown): string {
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return String(value);
+  }
+  return '';
 }
 
 export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
@@ -61,13 +76,14 @@ export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
     throw new GmailPushPayloadError('Pub/Sub subscription is missing');
   }
 
-  const messageId = body.message.messageId;
+  const rawMessageId = body.message.messageId ?? body.message.message_id;
   const data = body.message.data;
-  if (typeof messageId !== 'string' || messageId.trim().length === 0 || typeof data !== 'string') {
+  const messageId = typeof rawMessageId === 'string' ? rawMessageId.trim() : '';
+  if (!messageId || typeof data !== 'string') {
     throw new GmailPushPayloadError('Pub/Sub message fields are missing');
   }
 
-  const notification = decodeBase64Json(data);
+  const notification = decodePubSubMessageData(data);
   if (!isRecord(notification)) {
     throw new GmailPushPayloadError('Invalid Gmail notification');
   }
@@ -75,9 +91,7 @@ export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
   const emailAddress = typeof notification.emailAddress === 'string'
     ? notification.emailAddress.trim().toLowerCase()
     : '';
-  const historyId = typeof notification.historyId === 'string'
-    ? notification.historyId.trim()
-    : '';
+  const historyId = readGmailHistoryId(notification.historyId);
   if (!EMAIL_ADDRESS_PATTERN.test(emailAddress) || !HISTORY_ID_PATTERN.test(historyId)) {
     throw new GmailPushPayloadError('Invalid Gmail notification fields');
   }

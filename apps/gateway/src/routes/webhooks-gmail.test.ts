@@ -142,6 +142,26 @@ describe('POST /webhooks/gmail/push', () => {
     expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
+  it('accepts base64url payloads and numeric Gmail history IDs', async () => {
+    const mailbox = `native-${org.id.slice(0, 8)}@example.com`;
+    await createGmailIntegration(org.id, mailbox);
+
+    const response = await postPush({
+      message: {
+        data: Buffer.from(JSON.stringify({
+          emailAddress: mailbox,
+          historyId: 987654321,
+        })).toString('base64url'),
+        message_id: 'pubsub-message-3',
+        publish_time: '2026-07-03T12:00:00.000Z',
+      },
+      subscription: 'projects/test-project/subscriptions/gmail-inbound-push',
+    });
+
+    expect(response.status).toBe(204);
+    expect(queueAddSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('acknowledges an unknown mailbox without queueing work', async () => {
     const response = await postPush(pushEnvelope('unknown@example.com'));
 
