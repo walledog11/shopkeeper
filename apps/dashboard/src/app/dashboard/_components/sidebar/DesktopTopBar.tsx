@@ -25,7 +25,7 @@ import {
   topBarDropdownPanelClass,
   topBarNavTriggerClass,
 } from "./sidebar-helpers";
-import { UserMenu } from "./UserMenu";
+import { UserAvatarLink } from "./UserAvatarLink";
 import type { NavAuth } from "./useNavAuth";
 
 function handleNavClick(e: MouseEvent<HTMLAnchorElement>, isActive: boolean) {
@@ -199,7 +199,7 @@ export function DesktopTopBar({
         </button>
 
         <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} variant="topBar" />
-        <UserMenu navAuth={navAuth} variant="topBar" />
+        <UserAvatarLink navAuth={navAuth} variant="topBar" />
       </div>
     </header>
   );

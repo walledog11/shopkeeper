@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import AccountSettingsSection from "./AccountSettingsSection"
 import WorkspaceTab from "./workspace/WorkspaceTab"
 import BillingTab from "./BillingTab"
 import { AGENT_CONFIGURE_PATH } from "@/lib/agent/configure"
@@ -12,6 +13,13 @@ interface Props {
 }
 
 const REVIEW_REDIRECT_TABS = new Set(["activity", "audit"])
+
+function scrollToHash(hash: string) {
+  const id = hash.replace(/^#/, "")
+  if (!id) return
+  const el = document.getElementById(id)
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" })
+}
 
 export default function SettingsPageClient(props: Props) {
   return (
@@ -28,7 +36,7 @@ function SettingsPageContent({ orgName, version }: Props) {
 
   useEffect(() => {
     if (rawTab === "account") {
-      replace("/dashboard/account")
+      replace("/dashboard/settings#account")
       return
     }
     if (rawTab === "agent") {
@@ -45,20 +53,28 @@ function SettingsPageContent({ orgName, version }: Props) {
       return
     }
     if (rawTab === "workspace") {
-      replace("/dashboard/settings")
+      replace("/dashboard/settings#privacy")
     }
   }, [rawTab, replace])
+
+  useEffect(() => {
+    scrollToHash(window.location.hash)
+    const onHashChange = () => scrollToHash(window.location.hash)
+    window.addEventListener("hashchange", onHashChange)
+    return () => window.removeEventListener("hashchange", onHashChange)
+  }, [])
 
   return (
     <div className="flex size-full min-w-0 flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 pb-20 sm:px-6 lg:px-8">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Billing</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">Settings</h1>
             <p className="mt-0.5 text-sm text-faint">
-              Plan, payment method, and invoices for {orgName}.
+              Your account, billing, and workspace for {orgName}.
             </p>
           </div>
+          <AccountSettingsSection />
           <BillingTab />
           <WorkspaceTab orgName={orgName} version={version} />
         </div>

@@ -113,13 +113,15 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
 
 function DataPrivacySection({ state }: { state: WorkspaceTabState }) {
   return (
-    <SettingsDisclosure
-      title="Data & privacy"
-      description="Exports for backups, GDPR requests, and compliance."
-    >
-      <DataExportSection state={state} />
-      <GdprExportSection state={state} />
-    </SettingsDisclosure>
+    <div id="privacy" className="scroll-mt-6">
+      <SettingsDisclosure
+        title="Data & privacy"
+        description="Exports for backups, GDPR requests, and compliance."
+      >
+        <DataExportSection state={state} />
+        <GdprExportSection state={state} />
+      </SettingsDisclosure>
+    </div>
   )
 }
 
@@ -139,7 +141,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
   } = state
 
   return (
-    <div className="rounded-md border border-red-500/20 overflow-hidden">
+    <div id="danger" className="scroll-mt-6 rounded-md border border-red-500/20 overflow-hidden">
       <div className="px-6 py-4 bg-red-500/[0.06] border-b border-red-500/15">
         <h2 className="text-sm font-semibold text-red-400">Danger Zone</h2>
         <p className="text-xs text-faint mt-0.5">These actions are permanent and cannot be undone.</p>
@@ -191,7 +193,11 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
-                  This is your only workspace. Create another workspace first, or use Profile &amp; security from the avatar menu to delete your account.
+                  This is your only workspace. Create another workspace first, or delete your account from{" "}
+                  <a href="#account" className="font-semibold text-muted-foreground hover:text-strong">
+                    account settings
+                  </a>{" "}
+                  above.
                 </p>
               )}
             </div>

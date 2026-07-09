@@ -1,5 +1,5 @@
-import AccountPageClient from "./_components/AccountPageClient"
+import { redirect } from "next/navigation"
 
 export default function AccountPage() {
-  return <AccountPageClient />
+  redirect("/dashboard/settings#account")
 }

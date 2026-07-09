@@ -1,4 +1,4 @@
-import { Inbox, Building2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
+import { Inbox, Settings2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -65,10 +65,10 @@ export const topBarShopItems: NavItem[] = [shopNavItem];
 
 export const topBarSettingsItems: NavItem[] = [
   {
-    name: "Billing",
+    name: "Settings",
     href: "/dashboard/settings",
-    icon: Building2,
-    description: "Plan, payment method, and invoices",
+    icon: Settings2,
+    description: "Account, billing, and workspace admin",
   },
   {
     name: "Integrations",

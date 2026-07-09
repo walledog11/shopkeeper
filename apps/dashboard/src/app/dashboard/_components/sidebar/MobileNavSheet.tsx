@@ -9,7 +9,8 @@ import { mobileNavSections } from "../nav-items";
 import { NavGroupList } from "./NavGroupList";
 import { OrgSwitcher } from "./OrgSwitcher";
 import { dispatchNavProgressStart } from "./sidebar-helpers";
-import { UserMenu } from "./UserMenu";
+import { UserAvatarLink } from "./UserAvatarLink";
+import { LogOutButton } from "./LogOutButton";
 import type { NavAuth } from "./useNavAuth";
 
 export function MobileNavSheet({
@@ -45,7 +46,7 @@ export function MobileNavSheet({
       <SheetContent
         side="right"
         showCloseButton={false}
-        className="w-full gap-0 border-border bg-background p-0 sm:max-w-sm"
+        className="flex w-full flex-col gap-0 border-border bg-background p-0 sm:max-w-sm"
       >
         <SheetTitle className="sr-only">More</SheetTitle>
 
@@ -53,7 +54,7 @@ export function MobileNavSheet({
           <div className="min-w-0 flex-1">
             <OrgSwitcher navAuth={navAuth} onSwitching={onSwitching} onClose={onClose} variant="sheet" />
           </div>
-          <UserMenu navAuth={navAuth} variant="topBar" />
+          <UserAvatarLink navAuth={navAuth} variant="topBar" />
           <button
             type="button"
             onClick={onClose}
@@ -73,6 +74,10 @@ export function MobileNavSheet({
             openCount={openCount}
             onNavigate={handleNavClick}
           />
+        </div>
+
+        <div className="shrink-0 border-t border-border px-4 py-3">
+          <LogOutButton navAuth={navAuth} variant="sheet" onClick={onClose} />
         </div>
       </SheetContent>
     </Sheet>

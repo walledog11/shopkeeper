@@ -68,7 +68,7 @@ export const gettingStarted: Category = {
         },
         {
           heading: "Settings",
-          text: "Billing holds your plan and invoices. Agent settings live under Agent → Settings in the top navigation. Personal account settings are in the avatar menu.",
+          text: "Settings holds your account, billing, and workspace admin. Agent settings live under Agent → Settings in the top navigation.",
         },
       ],
     },

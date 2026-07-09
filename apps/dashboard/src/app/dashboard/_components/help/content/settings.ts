@@ -3,7 +3,7 @@ import type { Category } from "./index"
 export const settings: Category = {
   id: "settings",
   title: "Account & agent settings",
-  description: "Billing, admin controls, and how your AI agent works",
+  description: "Account, billing, workspace admin, and how your AI agent works",
   icon: "⚙️",
   articles: [
     {
@@ -69,16 +69,16 @@ export const settings: Category = {
     },
     {
       id: "account-admin",
-      title: "Billing and workspace admin",
+      title: "Settings",
       body: [
         {
-          text: "Billing holds your plan, payment method, and invoices. Data exports and workspace deletion live at the bottom of the same page.",
+          text: "Settings holds your personal account, billing, data exports, and workspace admin actions.",
         },
         {
           heading: "What lives there",
           steps: [
-            "Open Billing under Workspace in the top navigation.",
-            "Manage your plan, payment method, and invoices.",
+            "Open Settings under Workspace in the top navigation.",
+            "Account settings are at the top — billing follows below.",
             "Expand Data & privacy for backups or GDPR exports.",
             "Use the danger zone at the bottom to clear ticket history or delete the workspace.",
           ],
