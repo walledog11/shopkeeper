@@ -32,7 +32,7 @@ import type {
   KnowledgeBaseToolArticle,
   ToolExecutionDeps,
 } from "./registry/index.js";
-import { formatToolInputValidationError, getToolDefinition } from "./registry/index.js";
+import { formatToolInputValidationError, getToolDefinition, unmetToolCapability } from "./registry/index.js";
 export type { StaticPolicyResult } from "./static-policy.js";
 
 type PreparedToolCall =
@@ -43,8 +43,12 @@ function formatPolicyError(message: string): string {
   return `Error: ${message}`;
 }
 
-function prepareToolCall(name: string, args: unknown): PreparedToolCall {
-  const definition = getToolDefinition(name);
+function prepareToolCall(
+  name: string,
+  args: unknown,
+  moduleTools?: Record<string, AgentToolDefinition>,
+): PreparedToolCall {
+  const definition = moduleTools?.[name] ?? getToolDefinition(name);
   if (!definition) {
     return { ok: false, result: toolError(`Error: unknown tool "${name}".`) };
   }
@@ -141,6 +145,8 @@ export async function executeTool(
 
   const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
   if (policyError) return policyError;
+  const capabilityError = unmetToolCapability(prepared.definition, ctx);
+  if (capabilityError) return capabilityError.message;
   const resolvedSettings = resolveAgentSettings(settings);
   return (await prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS)).message;
 }
@@ -158,6 +164,8 @@ export async function executeToolStructured(
 
   const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
   if (policyError) return toolError(policyError);
+  const capabilityError = unmetToolCapability(prepared.definition, ctx);
+  if (capabilityError) return capabilityError;
   const resolvedSettings = resolveAgentSettings(settings);
   return prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS);
 }
@@ -178,13 +186,19 @@ export async function executeToolWithStatus(
   name: string,
   args: unknown,
   ctx: BaseAgentContext,
-  settings?: OrgSettings
+  settings?: OrgSettings,
+  // Module-supplied tool definitions (e.g. order-ops' flag_order) resolved ahead
+  // of the shared registry, so a module can inject its own terminal tool without
+  // registering it in the support tool set.
+  moduleTools?: Record<string, AgentToolDefinition>,
 ): Promise<ExecuteToolResult> {
-  const prepared = prepareToolCall(name, args);
+  const prepared = prepareToolCall(name, args, moduleTools);
   if (!prepared.ok) return { result: prepared.result.message, status: "error" };
 
   const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
   if (policyError) return { result: policyError, status: "policy_block" };
+  const capabilityError = unmetToolCapability(prepared.definition, ctx);
+  if (capabilityError) return { result: capabilityError.message, status: "error" };
 
   const resolvedSettings = resolveAgentSettings(settings);
   const { status, message } = await prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS);

@@ -12,6 +12,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     },
     category: "communication",
     group: "messaging",
+    capabilities: ["thread-io"],
     label: "Sent reply",
     planStepLabel: "Notify customer",
     execute: async (input: SendReplyInput, ctx) => (
@@ -29,6 +30,7 @@ export const MESSAGING_TOOL_DEFINITIONS = [
     },
     category: "communication",
     group: "messaging",
+    capabilities: ["thread-io"],
     label: "Sent email",
     planStepLabel: "Send email to customer",
     execute: async (input: SendEmailInput, ctx) => (

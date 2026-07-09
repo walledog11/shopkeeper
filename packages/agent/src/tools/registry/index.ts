@@ -1,7 +1,9 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { resolveAgentSettings } from "../../settings.js";
+import type { BaseAgentContext } from "../../agent-context.js";
 import type { OrgSettings } from "../../types.js";
 import { CUSTOMER_TOOL_DEFINITIONS } from "./customer.js";
+import { contextCapabilities } from "./helpers.js";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "./knowledge.js";
 import { MESSAGING_TOOL_DEFINITIONS } from "./messaging.js";
 import { ORDER_TOOL_DEFINITIONS } from "./order.js";
@@ -9,7 +11,7 @@ import { PRODUCT_TOOL_DEFINITIONS } from "./product.js";
 import { ToolInputValidationError } from "./schema.js";
 import { STATS_TOOL_DEFINITIONS } from "./stats.js";
 import { THREAD_TOOL_DEFINITIONS } from "./thread.js";
-import type { AgentToolDefinition, ToolGroup } from "./types.js";
+import type { AgentToolDefinition, ToolCapability, ToolGroup } from "./types.js";
 
 export type {
   AddInternalNoteInput,
@@ -41,6 +43,7 @@ export type {
   SendEmailInput,
   SendReplyInput,
   SupportStatsInput,
+  ToolCapability,
   ToolExecutionDeps,
   ToolGroup,
   ToolParser,
@@ -51,6 +54,7 @@ export type {
   UpdateThreadTagInput,
 } from "./types.js";
 export { ToolInputValidationError } from "./schema.js";
+export { contextCapabilities, unmetToolCapability } from "./helpers.js";
 
 export const TOOL_DEFINITIONS = [
   ...KNOWLEDGE_TOOL_DEFINITIONS,
@@ -72,6 +76,10 @@ const TOOL_GROUP_ORDER = ["knowledge", "product", "customer", "order", "thread",
 
 export const TOOL_CATEGORIES = Object.fromEntries(
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.category])
+);
+
+export const TOOL_CAPABILITIES: Record<string, readonly ToolCapability[]> = Object.fromEntries(
+  TOOL_DEFINITIONS.map((definition) => [definition.name, definition.capabilities])
 );
 
 export const TOOL_GROUPS: Record<ToolGroup, readonly string[]> = TOOL_GROUP_ORDER.reduce(
@@ -135,4 +143,19 @@ export function selectAgentTools(
     if (allowed && !allowed.has(tool.name)) return false;
     return true;
   });
+}
+
+// Capability-aware selection for module loops: on top of the category/allowlist
+// filter, drops any tool whose declared capabilities the context can't satisfy.
+// A thread-less module (order-ops) selects reads + escalation without ever
+// surfacing thread-io tools, so the shared executor never has to reject them.
+export function selectAgentToolsForContext(
+  ctx: BaseAgentContext,
+  settings?: OrgSettings,
+  allowedToolNames?: readonly string[] | null,
+): Anthropic.Tool[] {
+  const provided = contextCapabilities(ctx);
+  return selectAgentTools(settings, allowedToolNames).filter((tool) =>
+    (TOOL_CAPABILITIES[tool.name] ?? []).every((capability) => provided.has(capability))
+  );
 }

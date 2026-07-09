@@ -19,6 +19,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     },
     category: "internal",
     group: "thread",
+    capabilities: ["thread-io"],
     label: "Added internal note",
     planStepLabel: "Add internal note",
     execute: async (input: AddInternalNoteInput, ctx) => (
@@ -33,6 +34,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     },
     category: "internal",
     group: "thread",
+    capabilities: ["thread-io"],
     label: "Updated thread status",
     planStepLabel: "Update ticket status",
     execute: async (input: UpdateThreadStatusInput, ctx) => (
@@ -47,6 +49,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     },
     category: "internal",
     group: "thread",
+    capabilities: ["thread-io"],
     label: "Updated thread tag",
     planStepLabel: "Update ticket tag",
     execute: async (input: UpdateThreadTagInput, ctx) => (
@@ -62,6 +65,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     },
     category: "internal",
     group: "thread",
+    capabilities: [],
     label: "Escalated to merchant",
     planStepLabel: "Escalate to merchant",
     execute: async (input: EscalateToHumanInput, ctx) => {
@@ -79,6 +83,7 @@ export const THREAD_TOOL_DEFINITIONS = [
     },
     category: "internal",
     group: "thread",
+    capabilities: ["thread-io"],
     label: "Asked the merchant",
     planStepLabel: "Ask the merchant",
     execute: async (input: AskOperatorInput, ctx) => {

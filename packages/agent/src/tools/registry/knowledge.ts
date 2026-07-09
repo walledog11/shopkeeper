@@ -13,6 +13,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "knowledge",
+    capabilities: ["kb"],
     label: "Searched knowledge base",
     planStepLabel: "Search knowledge base",
     execute: async (input: SearchKbInput, ctx, _settings, deps) => {

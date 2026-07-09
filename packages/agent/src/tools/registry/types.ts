@@ -189,6 +189,12 @@ export type ToolGroup =
   | "messaging"
   | "insights";
 
+// A capability the executing context must provide for a tool to run: `shopify`
+// (ctx.shopify), `thread-io` (ctx.io), `kb`/`stats` (org-scoped deps, always
+// injected in the shared executor). Tools declare what they need; the executor
+// gates on it and modules select their tool set from what their context offers.
+export type ToolCapability = "shopify" | "thread-io" | "kb" | "stats";
+
 export interface RefundToolResult extends ToolResult {
   refundedCents: number | null;
 }
@@ -257,6 +263,7 @@ export interface AgentToolDefinition<TInput = unknown, TName extends string = st
   parse: ToolParser<TInput>;
   category: ToolCategory;
   group: ToolGroup;
+  capabilities: readonly ToolCapability[];
   labels: {
     executed: string;
     planStep: string;

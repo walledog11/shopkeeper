@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { ToolCategory } from "../../types.js";
-import type { AgentToolDefinition, ToolGroup, ToolParser, ToolPolicyMetadata } from "./types.js";
+import type { AgentToolDefinition, ToolCapability, ToolGroup, ToolParser, ToolPolicyMetadata } from "./types.js";
 
 type FieldDefinition =
   | {
@@ -35,6 +35,7 @@ interface DefineToolOptions<TInput, TName extends string> {
   fields: FieldMap;
   category: ToolCategory;
   group: ToolGroup;
+  capabilities: readonly ToolCapability[];
   label: string;
   planStepLabel: string;
   policy?: Partial<Omit<ToolPolicyMetadata, "categoryPermission">> & {
@@ -189,6 +190,7 @@ export function defineTool<const TName extends string, TInput>(
     parse: objectParser<TInput>(definition.fields),
     category: definition.category,
     group: definition.group,
+    capabilities: definition.capabilities,
     labels: {
       executed: definition.label,
       planStep: definition.planStepLabel,

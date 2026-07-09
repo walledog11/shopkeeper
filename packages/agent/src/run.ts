@@ -139,10 +139,12 @@ export async function runAgent(
     ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
     : instruction;
   const messages = buildMessageHistory(history, messageInstruction, { segregateUntrusted: !operatorMode });
-  // The model loop needs a module-supplied system prompt + tool set. Only support
-  // (tickets + composer-ask) supplies one today; thread-less module loops are Track 3.
+  // runAgent is the support/composer entry: it builds a support-shaped system
+  // prompt and tool set. Thread-less modules (order-ops and later) run through the
+  // shared loop (runAgentLoop) via their own entrypoint, not here — the executor
+  // and loop are thread-optional, so nothing blocks them.
   if (!isSupportContext(ctx)) {
-    throw new Error("runAgent: thread-less module loops are not wired until Track 3");
+    return finish({ summary: "This agent run requires a support context.", actionsPerformed }, "unsupported_context");
   }
   const tools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)

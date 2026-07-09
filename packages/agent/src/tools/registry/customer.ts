@@ -18,6 +18,7 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "customer",
+    capabilities: ["shopify"],
     label: "Searched customers",
     planStepLabel: "Search Shopify customers",
     execute: async (input: SearchShopifyCustomersInput, ctx, _settings, deps) => {
@@ -34,6 +35,7 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "customer",
+    capabilities: ["shopify"],
     label: "Fetched customer",
     planStepLabel: "Fetch customer profile",
     execute: async (input: GetShopifyCustomerInput, ctx, _settings, deps) => {
@@ -54,6 +56,7 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "customer",
+    capabilities: ["shopify"],
     label: "Updated customer info",
     planStepLabel: "Update customer info on Shopify",
     execute: async (input: UpdateShopifyCustomerInfoInput, ctx, _settings, deps) => {
@@ -70,6 +73,7 @@ export const CUSTOMER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "customer",
+    capabilities: ["shopify"],
     label: "Added Shopify note",
     planStepLabel: "Add note to Shopify customer",
     execute: async (input: AddShopifyCustomerNoteInput, ctx, _settings, deps) => {

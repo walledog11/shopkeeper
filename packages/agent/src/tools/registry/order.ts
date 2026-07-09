@@ -27,6 +27,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "order",
+    capabilities: ["shopify"],
     label: "Fetched orders",
     planStepLabel: "Fetch recent orders",
     execute: async (input: GetShopifyOrdersInput, ctx, _settings, deps) => {
@@ -50,6 +51,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Updated shipping address",
     planStepLabel: "Update shipping address on Shopify",
     execute: async (input: UpdateShopifyOrderAddressInput, ctx, _settings, deps) => {
@@ -66,6 +68,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "order",
+    capabilities: ["shopify"],
     label: "Looked up order",
     planStepLabel: "Look up order",
     execute: async (input: GetOrderByNameInput, ctx, _settings, deps) => {
@@ -82,6 +85,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "order",
+    capabilities: ["shopify"],
     label: "Fetched tracking info",
     planStepLabel: "Fetch order tracking",
     execute: async (input: GetOrderTrackingInput, ctx, _settings, deps) => {
@@ -100,6 +104,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Issued refund",
     planStepLabel: "Issue refund",
     policy: {
@@ -128,6 +133,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Cancelled order",
     planStepLabel: "Cancel order",
     policy: {
@@ -166,6 +172,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Created order",
     planStepLabel: "Create Shopify order",
     policy: {
@@ -192,6 +199,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Edited order",
     planStepLabel: "Edit existing order",
     execute: async (input: EditShopifyOrderInput, ctx, _settings, deps) => {
@@ -210,6 +218,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Issued discount code",
     planStepLabel: "Issue discount code",
     policy: {
@@ -231,6 +240,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Opened return",
     planStepLabel: "Open return",
     execute: async (input: CreateReturnInput, ctx, _settings, deps) => {
@@ -251,6 +261,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Set up exchange",
     planStepLabel: "Set up exchange",
     execute: async (input: CreateExchangeInput, ctx, _settings, deps) => {
@@ -269,6 +280,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Issued store credit",
     planStepLabel: "Issue store credit",
     policy: {
@@ -298,6 +310,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Created gift card",
     planStepLabel: "Create gift card",
     policy: {
@@ -326,6 +339,7 @@ export const ORDER_TOOL_DEFINITIONS = [
     },
     category: "action",
     group: "order",
+    capabilities: ["shopify"],
     label: "Attached return label",
     planStepLabel: "Attach return label",
     execute: async (input: AttachReturnLabelInput, ctx, _settings, deps) => {

@@ -13,6 +13,7 @@ export const STATS_TOOL_DEFINITIONS = [
     },
     category: "read",
     group: "insights",
+    capabilities: ["stats"],
     label: "Summarized support activity",
     planStepLabel: "Summarize support activity",
     execute: async (input: SupportStatsInput, ctx, _settings, deps) => {
