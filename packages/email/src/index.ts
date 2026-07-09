@@ -22,7 +22,11 @@ export {
   getEmailReauthorizePath,
   isEmailAuthReauthorizationRequired,
   isGmailNativeInboundEnrolled,
+  isPersonalGmailAddress,
+  resolveGmailAccountType,
+  getGmailAccountType,
   type EmailAuthReauthorizationReason,
+  type GmailAccountType,
   type GmailInboundStatus,
 } from './providers.js';
 

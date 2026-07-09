@@ -6,14 +6,15 @@ export function createPostRedirectResponse(
   request: Request,
   label = "Continue",
   shell: PostRedirectShell = "default",
+  message?: string,
 ): Response {
   const url = new URL(request.url);
   const action = `${url.pathname}${url.search}`;
   const htmlOptions = {
     title: label,
-    message: shell === "gmail"
+    message: message ?? (shell === "gmail"
       ? "Completing your Gmail connection."
-      : "Securely redirecting you to authorize this connection.",
+      : "Securely redirecting you to authorize this connection."),
     footer: shell === "gmail" ? "Just a moment…" : "This window will continue automatically.",
     state: "loading" as const,
     postAction: action,

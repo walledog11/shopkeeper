@@ -13,6 +13,7 @@ export type UpsertExclusiveEmailIntegrationArgs = {
   oauthScopes?: readonly string[];
   organizationId: string;
   provider: EmailIntegrationProvider;
+  gmailMetadata?: Record<string, unknown>;
 } & (
   | {
       accessToken: string;
@@ -37,16 +38,27 @@ function mergeEmailMetadata(
   provider: EmailIntegrationProvider,
   oauthScopes?: readonly string[],
   inboundMode?: 'hybrid' | 'native' | 'postmark',
+  gmailState?: Record<string, unknown>,
 ): PrismaTypes.InputJsonObject {
   const existing = isRecord(existingMetadata) && existingMetadata.provider === provider
     ? existingMetadata
     : {};
-  return {
+  const merged = {
     ...existing,
     provider,
     ...(inboundMode && { inboundMode }),
     ...(oauthScopes && { oauthScopes: [...oauthScopes] }),
   } as PrismaTypes.InputJsonObject;
+
+  if (provider === 'gmail' && gmailState) {
+    const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
+    merged.gmail = {
+      ...existingGmail,
+      ...gmailState,
+    } as PrismaTypes.InputJsonObject;
+  }
+
+  return merged;
 }
 
 export async function upsertExclusiveEmailIntegration(
@@ -79,6 +91,7 @@ export async function upsertExclusiveEmailIntegration(
         args.provider,
         args.oauthScopes,
         args.inboundMode,
+        args.provider === 'gmail' ? args.gmailMetadata : undefined,
       ),
     },
   });

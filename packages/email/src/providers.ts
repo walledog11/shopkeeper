@@ -14,6 +14,10 @@ export type GmailInboundStatus =
   | 'degraded'
   | 'reauthorization_required';
 
+export type GmailAccountType = 'personal' | 'workspace';
+
+const PERSONAL_GMAIL_DOMAINS = new Set(['gmail.com', 'googlemail.com']);
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
@@ -102,4 +106,26 @@ export function isGmailNativeInboundEnrolled(integration: { metadata?: unknown |
   return inboundMode === 'hybrid'
     || inboundMode === 'native'
     || getGmailInboundStatus(integration) !== null;
+}
+
+export function isPersonalGmailAddress(email: string): boolean {
+  const domain = email.split('@')[1]?.trim().toLowerCase();
+  return !!domain && PERSONAL_GMAIL_DOMAINS.has(domain);
+}
+
+export function resolveGmailAccountType(
+  userEmail: string,
+  hostedDomain?: string | null,
+): GmailAccountType {
+  if (hostedDomain) return 'workspace';
+  return isPersonalGmailAddress(userEmail) ? 'personal' : 'workspace';
+}
+
+export function getGmailAccountType(integration: {
+  metadata?: unknown | null;
+  externalAccountId: string;
+}): GmailAccountType {
+  const accountType = getGmailMetadata(integration.metadata)?.accountType;
+  if (accountType === 'personal' || accountType === 'workspace') return accountType;
+  return isPersonalGmailAddress(integration.externalAccountId) ? 'personal' : 'workspace';
 }

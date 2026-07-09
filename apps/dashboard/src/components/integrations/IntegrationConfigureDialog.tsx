@@ -22,6 +22,7 @@ export function IntegrationConfigureDialog({
   statusState,
   statusLine,
   statusNote,
+  preventInitialFocus = false,
   children,
 }: {
   open: boolean
@@ -30,6 +31,7 @@ export function IntegrationConfigureDialog({
   statusState?: PillState
   statusLine?: string | null
   statusNote?: boolean
+  preventInitialFocus?: boolean
   children: ReactNode
 }) {
   const showStatusPill =
@@ -37,7 +39,10 @@ export function IntegrationConfigureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={INTEGRATION_CONFIGURE_DIALOG_CLASS}>
+      <DialogContent
+        className={INTEGRATION_CONFIGURE_DIALOG_CLASS}
+        onOpenAutoFocus={preventInitialFocus ? (event) => event.preventDefault() : undefined}
+      >
         <DialogHeader className="gap-0">
           <div className="flex items-center gap-3 text-left pr-6">
             <CardLogo config={config} />

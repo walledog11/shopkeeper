@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { GmailOAuthPopupShell } from "@/components/integrations/GmailOAuthPopupShell";
 import { OAuthPopupShell } from "@/components/integrations/OAuthPopupShell";
 import { OAUTH_ERROR_MESSAGES } from "@/lib/integrations/catalog";
 import {
@@ -21,6 +20,8 @@ const CONNECTED_LABELS: Record<string, string> = {
   "tiktok-shop": "TikTok Shop",
 };
 
+const OAUTH_COMPLETE_CLOSE_DELAY_MS = 250;
+
 function safeConnected(value: string | null): string | null {
   return value && CONNECTED_VALUES.has(value) ? value : null;
 }
@@ -29,17 +30,11 @@ function safeError(value: string | null): string | null {
   return value && Object.prototype.hasOwnProperty.call(OAUTH_ERROR_MESSAGES, value) ? value : null;
 }
 
-function useGmailOAuthShell(connected: string | null, integration: string | null): boolean {
-  return connected === "gmail" || integration === "gmail";
-}
-
 function OAuthCompleteContent() {
   const searchParams = useSearchParams();
   const connected = safeConnected(searchParams.get("connected"));
-  const integration = searchParams.get("integration");
   const error = safeError(searchParams.get("error"));
   const [closeBlocked, setCloseBlocked] = useState(false);
-  const useGmailShell = useGmailOAuthShell(connected, integration);
 
   useEffect(() => {
     if (isOAuthPopupWindow()) {
@@ -67,7 +62,7 @@ function OAuthCompleteContent() {
       if (connected) nextUrl.searchParams.set("connected", connected);
       if (error) nextUrl.searchParams.set("error", error);
       window.location.replace(`${nextUrl.pathname}${nextUrl.search}`);
-    }, 700);
+    }, OAUTH_COMPLETE_CLOSE_DELAY_MS);
 
     return () => window.clearTimeout(timer);
   }, [connected, error]);
@@ -78,33 +73,18 @@ function OAuthCompleteContent() {
     ? `${integrationLabel} connected`
     : error
       ? "Connection failed"
-      : useGmailShell
-        ? "Connecting Gmail"
-        : "Finishing up";
+      : "Finishing up";
   const message = success
     ? "You're all set. Returning you to Shopkeeper."
     : error
       ? OAUTH_ERROR_MESSAGES[error] ?? "Something went wrong. Returning you to Shopkeeper."
-      : useGmailShell
-        ? "Completing your Gmail connection."
-        : "Completing your connection.";
+      : "Completing your connection.";
   const footer = closeBlocked
     ? "You can close this window and return to Shopkeeper."
     : success || error
       ? "Closing this window…"
       : "Just a moment…";
   const state = success ? "success" : error ? "error" : "loading";
-
-  if (useGmailShell) {
-    return (
-      <GmailOAuthPopupShell
-        title={title}
-        message={message}
-        footer={footer}
-        state={state}
-      />
-    );
-  }
 
   return <OAuthPopupShell title={title} message={message} footer={footer} state={state} />;
 }

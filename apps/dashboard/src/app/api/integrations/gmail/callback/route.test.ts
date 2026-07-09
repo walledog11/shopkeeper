@@ -129,7 +129,7 @@ describe('POST /api/integrations/gmail/callback', () => {
       data: {
         organizationId: org!.id,
         platform: ChannelType.email,
-        externalAccountId: 'merchant@gmail.test',
+        externalAccountId: 'merchant@gmail.com',
         accessToken: 'old-gmail-access-token',
         refreshToken: 'old-gmail-refresh-token',
         tokenExpiresAt: new Date(0),
@@ -158,7 +158,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         expires_in: 3600,
         scope: 'openid email https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
       }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }))
       .mockResolvedValueOnce(jsonResponse({
         historyId: '12345',
         expiration: '1783382400000',
@@ -171,12 +171,16 @@ describe('POST /api/integrations/gmail/callback', () => {
       'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail&returnTo=%2Fdashboard%2Fsettings',
     ));
 
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
     const rows = await db.integration.findMany({
       where: { organizationId: org!.id, platform: ChannelType.email },
     });
     expect(rows).toHaveLength(1);
     const integration = rows[0];
-    expect(integration.externalAccountId).toBe('merchant@gmail.test');
+    expect(integration.externalAccountId).toBe('merchant@gmail.com');
     expect(integration.fromEmail).toBe('support@merchant.test');
     expect(integration.accessToken).toBe('gmail_access_token');
     expect(integration.refreshToken).toBe('gmail_refresh_token');
@@ -191,6 +195,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         'https://www.googleapis.com/auth/gmail.readonly',
       ],
       gmail: {
+        accountType: 'personal',
         inboundStatus: 'active',
         historyId: '12345',
         watchExpiration: '1783382400000',
@@ -238,7 +243,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         expires_in: 3600,
         scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
       }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }))
       .mockResolvedValueOnce(jsonResponse(
         { error: { errors: [{ reason: 'rateLimitExceeded' }] } },
         { status: 429 },
@@ -252,6 +257,11 @@ describe('POST /api/integrations/gmail/callback', () => {
     expect(res.headers.get('location')).toBe(
       'http://dashboard.test/dashboard/integrations/oauth/complete?connected=gmail&integration=gmail',
     );
+
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.email },
     });
@@ -287,7 +297,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         expires_in: 3600,
         scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly',
       }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }));
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }));
 
     const res = await POST(new Request(
       'http://localhost/api/integrations/gmail/callback?code=oauth_code&state=state_123',
@@ -298,8 +308,8 @@ describe('POST /api/integrations/gmail/callback', () => {
       where: { organizationId: org!.id, platform: ChannelType.email },
     });
     expect(integration).toMatchObject({
-      externalAccountId: 'merchant@gmail.test',
-      fromEmail: 'merchant@gmail.test',
+      externalAccountId: 'merchant@gmail.com',
+      fromEmail: 'merchant@gmail.com',
     });
     expect(integration.metadata).toMatchObject({
       provider: 'gmail',
@@ -307,8 +317,10 @@ describe('POST /api/integrations/gmail/callback', () => {
         'https://www.googleapis.com/auth/gmail.send',
         'https://www.googleapis.com/auth/gmail.readonly',
       ],
+      gmail: {
+        accountType: 'personal',
+      },
     });
-    expect(integration.metadata).not.toMatchObject({ gmail: expect.anything() });
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 
@@ -324,7 +336,7 @@ describe('POST /api/integrations/gmail/callback', () => {
         refresh_token: 'gmail_refresh_token',
         expires_in: 3600,
       }))
-      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.test' }))
+      .mockResolvedValueOnce(jsonResponse({ email: 'merchant@gmail.com' }))
       .mockResolvedValueOnce(jsonResponse({
         historyId: '67890',
         expiration: '1783382400000',
@@ -335,6 +347,11 @@ describe('POST /api/integrations/gmail/callback', () => {
     ));
 
     expect(res.status).toBe(303);
+
+    await vi.waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+
     const integration = await db.integration.findFirstOrThrow({
       where: { organizationId: org!.id, platform: ChannelType.email },
     });

@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
 import { isGmailNativeInboundEnabled } from '@/lib/env';
 import { readEnv } from '@/lib/env/helpers';
+import { resolveGmailAccountType } from '@shopkeeper/email/providers';
 import {
   captureIntegrationConnectionFailed,
   captureOAuthIntegrationConnectionFailed,
@@ -54,6 +55,20 @@ function emailOAuthCompleteResponse(
     ...params,
     integration: config.provider,
   });
+}
+
+function scheduleGmailWatchRegistration(integrationId: string, prefix: string): void {
+  const register = () => registerGmailWatch(integrationId);
+
+  try {
+    after(register);
+  } catch (error) {
+    logger.debug(
+      { err: error, integrationId },
+      `[${prefix}] after() unavailable; registering Gmail watch in background`,
+    );
+    void register();
+  }
 }
 
 export async function createEmailOAuthAuthorizationResponse(
@@ -205,6 +220,17 @@ export async function completeEmailOAuth(
       return emailOAuthCompleteResponse(appUrl, config, { error: 'no_email', returnTo });
     }
 
+    const hostedDomain = config.provider === 'gmail'
+      && typeof userinfo === 'object'
+      && userinfo !== null
+      && 'hd' in userinfo
+      && typeof (userinfo as { hd?: unknown }).hd === 'string'
+      ? (userinfo as { hd: string }).hd
+      : null;
+    const gmailAccountType = config.provider === 'gmail'
+      ? resolveGmailAccountType(userEmail, hostedDomain)
+      : undefined;
+
     const integrationId = await upsertExclusiveEmailIntegration({
       organizationId,
       externalAccountId: userEmail,
@@ -214,9 +240,15 @@ export async function completeEmailOAuth(
       provider: config.provider,
       ...(gmailNativeInboundEnabled ? { inboundMode: 'hybrid' as const } : {}),
       oauthScopes: normalizeOAuthScopes(tokenData.scope),
+      ...(gmailAccountType ? {
+        gmailMetadata: {
+          accountType: gmailAccountType,
+          ...(hostedDomain ? { hostedDomain } : {}),
+        },
+      } : {}),
     });
     if (gmailNativeInboundEnabled) {
-      await registerGmailWatch(integrationId);
+      scheduleGmailWatchRegistration(integrationId, prefix);
     }
 
     logger.info({ userEmail, orgId: organizationId }, `[${prefix}] Integration saved`);

@@ -8,7 +8,10 @@ import {
   getEmailProvider,
   getEmailProviderLabel,
   getEmailReauthorizePath,
+  getGmailAccountType,
   isEmailAuthReauthorizationRequired,
+  isPersonalGmailAddress,
+  resolveGmailAccountType,
 } from './providers';
 
 describe('email provider helpers', () => {
@@ -79,5 +82,20 @@ describe('email provider helpers', () => {
       tokenExpiresAt: new Date(0),
     })).toBe(false);
     expect(getEmailReauthorizePath({ metadata: { provider: 'postmark' } })).toBeNull();
+  });
+
+  it('classifies personal and workspace Gmail accounts', () => {
+    expect(isPersonalGmailAddress('merchant@gmail.com')).toBe(true);
+    expect(isPersonalGmailAddress('owner@merchant.test')).toBe(false);
+    expect(resolveGmailAccountType('merchant@gmail.com')).toBe('personal');
+    expect(resolveGmailAccountType('owner@merchant.test', 'merchant.test')).toBe('workspace');
+    expect(getGmailAccountType({
+      externalAccountId: 'merchant@gmail.com',
+      metadata: { provider: 'gmail', gmail: { accountType: 'personal' } },
+    })).toBe('personal');
+    expect(getGmailAccountType({
+      externalAccountId: 'owner@merchant.test',
+      metadata: { provider: 'gmail' },
+    })).toBe('workspace');
   });
 });

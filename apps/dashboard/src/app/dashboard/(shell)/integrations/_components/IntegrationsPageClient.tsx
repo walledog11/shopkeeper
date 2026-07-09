@@ -120,11 +120,13 @@ function IntegrationsPageContent({
     else if (connected === 'shopify') showToast('success', 'Shopify store connected.')
     else if (connected === 'gmail') {
       showToast('success', 'Gmail connected.')
-      setOpenId('gmail')
+      if (!gmailNativeInboundEnabled) {
+        setOpenId('gmail')
+      }
     }
     else if (connected === 'tiktok-shop') showToast('success', 'TikTok Shop connected.')
     else if (error) showToast('error', OAUTH_ERROR_MESSAGES[error] ?? 'An unexpected error occurred.')
-  }, [searchParams, showToast])
+  }, [gmailNativeInboundEnabled, searchParams, showToast])
 
   const handleOAuthResult = useEffectEvent((payload: OAuthDoneMessage) => {
     void mutate()
@@ -132,7 +134,9 @@ function IntegrationsPageContent({
       showToast('error', OAUTH_ERROR_MESSAGES[payload.error] ?? 'An unexpected error occurred.')
       return
     }
-    setOpenId(payload.connected === 'gmail' ? 'gmail' : null)
+    if (payload.connected === 'gmail' && !gmailNativeInboundEnabled) {
+      setOpenId('gmail')
+    }
     if (payload.connected === 'instagram') {
       showToast('success', 'Instagram connected.')
     } else if (payload.connected === 'shopify') {
@@ -169,9 +173,7 @@ function IntegrationsPageContent({
       return
     }
     watchOAuthPopup(popup, () => {
-      void mutate().then(() => {
-        setOpenId(url.includes('/gmail/') ? 'gmail' : null)
-      })
+      void mutate()
       onClosed?.()
     })
   }, [mutate])

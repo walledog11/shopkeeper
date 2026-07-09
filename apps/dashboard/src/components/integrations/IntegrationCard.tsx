@@ -20,6 +20,8 @@ import {
   CARD_SHELL,
   CARD_TITLE,
 } from "./integration-card-styles"
+import { GmailConnectedConfigureBody } from "./GmailConnectedConfigureBody"
+import { gmailConfigureStatusLine, deriveGmailConfigureScene } from "./gmail-configure-state"
 import { useIntegrationCardActions } from "./useIntegrationCardActions"
 
 interface Props {
@@ -47,8 +49,22 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
 
   const threadsThisWeek = isConnected ? connected[0].threadsThisWeek ?? 0 : 0
   const activityLabel = config.connectType === "shopify" ? "Last activity" : "Last message"
+  const isGmail = config.emailProvider === "gmail"
+
   const dialogStatusLine = isConnected
-    ? health.note ?? (
+    ? isGmail
+      ? gmailConfigureStatusLine(
+          deriveGmailConfigureScene(
+            connected[0],
+            lastActivity ?? null,
+            gmailNativeInboundEnabled,
+            health,
+          ),
+          connected[0],
+          lastActivity ?? null,
+          health,
+        )
+      : health.note ?? (
         config.connectType === "email"
           ? null
           : [
@@ -125,8 +141,22 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
         statusState={isConnected ? health.state : undefined}
         statusLine={dialogStatusLine}
         statusNote={!!health.note}
+        preventInitialFocus={isGmail && isConnected}
       >
-        {isConnected && config.connectType && (
+        {isConnected && isGmail ? (
+          <GmailConnectedConfigureBody
+            integration={connected[0]}
+            lastActivity={lastActivity ?? null}
+            gmailNativeInboundEnabled={gmailNativeInboundEnabled}
+            health={health}
+            email={email}
+            setEmail={setEmail}
+            emailLoading={loading}
+            onEmailSave={handleEmailConnect}
+            onReauthorize={handleReauthorize}
+            onDisconnect={onDisconnect}
+          />
+        ) : isConnected && config.connectType ? (
           <>
             <ConnectedAccountRow
               connectType={config.connectType}
@@ -152,7 +182,7 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
               gmailNativeInboundEnabled={gmailNativeInboundEnabled}
             />
           </>
-        )}
+        ) : null}
 
         {!isConnected && config.emailProvider === "postmark" && (
           <>

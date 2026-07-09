@@ -9,26 +9,29 @@ export function GmailSupportAddressPanel({
   loading,
   onSave,
   setEmail,
+  variant = "workspace",
 }: {
   email: string
   loading: boolean
   onSave: () => void
   setEmail: (value: string) => void
+  variant?: "workspace"
 }) {
   return (
     <div className="space-y-3 bg-foreground/[0.02] px-4 py-4 sm:px-5">
       <div>
         <p className="text-[13px] font-semibold text-foreground/80">
-          Address customers use
+          Address customers email
         </p>
         <p className="mt-0.5 text-[12.5px] leading-relaxed text-foreground/50">
-          Use your Google account address or an existing Google Workspace alias.
-          The alias must already be configured as a valid send-as address in Gmail.
+          {variant === "workspace"
+            ? "For example support@yourstore.com. This must already be set up as a send-as address in your Google Workspace Gmail settings."
+            : null}
         </p>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
         <Input
-          aria-label="Address customers use"
+          aria-label="Address customers email"
           type="email"
           placeholder="support@yourstore.com"
           value={email}
