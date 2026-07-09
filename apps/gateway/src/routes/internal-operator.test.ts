@@ -149,7 +149,7 @@ describe('POST /internal/operator/escalate', () => {
     expect(bodyArg).toContain(`/dashboard/tickets/${thread.id}`);
   });
 
-  it('returns 500 when Telegram send fails for a bound operator', async () => {
+  it('does not count a failed send but still returns 200 when Telegram send fails for a bound operator', async () => {
     const customer = await createTestCustomer(org.id, 'send-fail@example.com');
     const thread = await createTestThread(org.id, customer.id, ChannelType.email);
 
@@ -171,7 +171,41 @@ describe('POST /internal/operator/escalate', () => {
         reason: 'Needs human review',
       });
 
-    expect(res.status).toBe(500);
-    expect(res.body).toEqual({ error: 'Internal Server Error' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ notified: 0 });
+    expect(sendMessageSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('still notifies the other bound operators when one send fails', async () => {
+    const customer = await createTestCustomer(org.id, 'partial-fail@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+
+    const failingMember = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-partial-fail` },
+    });
+    const okMember = await db.orgMember.create({
+      data: { organizationId: org.id, clerkUserId: `user-${org.id}-partial-ok` },
+    });
+    await db.orgMemberTelegramChat.createMany({
+      data: [
+        { orgMemberId: failingMember.id, chatId: `chat-${org.id}-partial-fail` },
+        { orgMemberId: okMember.id, chatId: `chat-${org.id}-partial-ok` },
+      ],
+    });
+
+    sendMessageSpy.mockResolvedValueOnce(false);
+
+    const res = await request(app)
+      .post('/internal/operator/escalate')
+      .set('x-internal-secret', SECRET)
+      .send({
+        organizationId: org.id,
+        threadId: thread.id,
+        reason: 'Needs human review',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ notified: 1 });
+    expect(sendMessageSpy).toHaveBeenCalledTimes(2);
   });
 });
