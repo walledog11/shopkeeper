@@ -1,4 +1,4 @@
-import { db, findOrgMemberBindToken } from '@shopkeeper/db';
+import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
@@ -33,14 +33,20 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
   });
 
   const trimmedBody = body.trim();
-  const bindToken = trimmedBody && !/\s/.test(trimmedBody) ? trimmedBody : null;
-  const pendingBind = bindToken ? await findOrgMemberBindToken(bindToken) : null;
+  const candidateToken = trimmedBody && !/\s/.test(trimmedBody) ? trimmedBody : null;
 
-  // Unbound senders bind via connect code; bound senders re-bind when they text a
-  // fresh valid token (global senderId upsert moves the handle to the minting org).
-  if (!binding || pendingBind) {
+  if (!binding) {
     await handleImessageBinding({ senderId, spaceId, body, displayName, reply });
     return;
+  }
+
+  // Re-bind only when the body matches a connect-code shape; skip DB for yes/no/HELP.
+  if (candidateToken && looksLikeOrgMemberBindToken(candidateToken)) {
+    const resolvedPayload = await findOrgMemberBindToken(candidateToken);
+    if (resolvedPayload) {
+      await handleImessageBinding({ senderId, spaceId, body, displayName, reply, resolvedPayload });
+      return;
+    }
   }
 
   // Keep the reply space (and label) current so async digests reach the latest space.

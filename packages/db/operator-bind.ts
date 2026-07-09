@@ -3,6 +3,14 @@ import { db } from './index.js';
 
 export const ORG_MEMBER_BIND_TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
+// 24 random bytes → 32-char base64url (A–Z, a–z, 0–9, -, _). Used to skip DB
+// lookups when inbound operator text is clearly not a connect code (yes, HELP, …).
+const BIND_TOKEN_PATTERN = /^[A-Za-z0-9_-]{32}$/;
+
+export function looksLikeOrgMemberBindToken(token: string): boolean {
+  return BIND_TOKEN_PATTERN.test(token);
+}
+
 export interface OrgMemberBindTokenPayload {
   organizationId: string;
   clerkUserId: string;

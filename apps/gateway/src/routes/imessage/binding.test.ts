@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as shopkeeperDb from '@shopkeeper/db';
 import { createOrgMemberBindToken, db } from '@shopkeeper/db';
 import {
   NoopAnalyticsSink,
@@ -121,5 +122,22 @@ describe('handleImessageBinding log hygiene', () => {
 
     const fields = mockLogger.info.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(fields).not.toHaveProperty('body');
+  });
+
+  it('does not query bind tokens for stranger messages that are not connect codes', async () => {
+    const findTokenSpy = vi.spyOn(shopkeeperDb, 'findOrgMemberBindToken');
+    const reply = vi.fn<OperatorReply>();
+
+    await handleImessageBinding({
+      senderId: '+15550005555',
+      spaceId: 'space_stranger',
+      body: 'hello',
+      displayName: null,
+      reply,
+    });
+
+    expect(findTokenSpy).not.toHaveBeenCalled();
+    findTokenSpy.mockRestore();
+    expect(reply).toHaveBeenCalledTimes(1);
   });
 });

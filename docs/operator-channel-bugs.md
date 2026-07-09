@@ -5,7 +5,7 @@ Bugs discovered during iMessage Phase 1 dogfood (2026-07-07). These affect the
 handlers — not the iMessage transport layer (Spectrum webhook, bind flow, gRPC
 send). Track and fix here before beta.
 
-Last updated: 2026-07-09.
+Last updated: 2026-07-08.
 
 **Related docs:** [imessage-production-readiness-plan.md](imessage-production-readiness-plan.md)
 (iMessage-specific work only), [channel-roles.md](channel-roles.md).
@@ -16,7 +16,7 @@ Last updated: 2026-07-09.
 
 | # | Bug | Severity | Status |
 |---|-----|----------|--------|
-| 1 | Plan notification retries duplicate Telegram sends | High | Open |
+| 1 | Plan notification retries duplicate Telegram sends | High | Fixed 2026-07-08 — partial fan-out + per-channel idempotency (Phase 3) |
 | 2 | `skip N` customer email copy mentions skipped steps | High | Fixed 2026-07-07 — `refreshTerminalSendAfterSkip` |
 | 8 | `skip N` — Shopify ok, `send_reply` logs success, customer gets no email | High | Resolved 2026-07-09 — Gmail collapsed duplicate sender; email delivered |
 | 3 | Free-form ignores `pendingPlan`; uses stale `lastThreadId` | High | Open |
@@ -30,7 +30,8 @@ Last updated: 2026-07-09.
 ## 1. Plan notification retries duplicate Telegram sends
 
 **Severity:** High  
-**Observed:** 2026-07-07 dogfood (org `10c25c34-7a92-4963-b9cd-537ef893f6c0`)
+**Observed:** 2026-07-07 dogfood (org `10c25c34-7a92-4963-b9cd-537ef893f6c0`)  
+**Status:** Fixed 2026-07-08 (iMessage Phase 3 — applies to all operator channels).
 
 ### Symptom
 
@@ -47,25 +48,26 @@ customer email opens a ticket.
 4. `notifyOperator` throws → AISummary job fails → **BullMQ retries** (3 attempts).
 5. Each retry re-sends to Telegram before failing again on iMessage.
 
-### Impact
+### Fix (shipped)
+
+- **`notifyCriticalToAllOperators`** — job fails only when **no** channel delivers;
+  per-channel failures are logged and the loop continues.
+- **Redis idempotency keys** per `(channel, contextKey, planHash)` in
+  [`operator-notify-idempotency.ts`](../apps/gateway/src/operator-notify-idempotency.ts) —
+  BullMQ retries skip channels already marked delivered.
+- Covered by [`planning-notifications.test.ts`](../apps/gateway/src/message-handlers/planning-notifications.test.ts)
+  and [`operator-notify.test.ts`](../apps/gateway/src/operator-notify.test.ts).
+
+### Impact (before fix)
 
 - Operator spam on the channel that succeeded.
 - AISummary job marked failed even though one channel delivered.
 - `pendingPlan` context updated on Telegram; iMessage operator never sees the plan.
 
-### Suggested fix
-
-- **Fan-out partial success:** fail the job only if **no** channel delivered; log
-  per-channel failures.
-- **Idempotent plan notify:** stable `clientGuid` / dedupe key per
-  `(orgId, threadId, planHash)` so retries do not re-text (Phase 3 item in
-  iMessage plan — applies to all operator channels).
-- Optional: unlink secondary channels during single-channel testing.
-
 ### Code pointers
 
 - [`apps/gateway/src/operator-notify.ts`](../apps/gateway/src/operator-notify.ts) — `notifyOperator`, critical policy
-- [`apps/gateway/src/message-handlers/planning-notifications.ts`](../apps/gateway/src/message-handlers/planning-notifications.ts) — `sendOperatorPlanNotification`
+- [`apps/gateway/src/message-handlers/planning-notifications.ts`](../apps/gateway/src/message-handlers/planning-notifications.ts) — `sendOperatorPlanNotification`, `notifyCriticalToAllOperators`
 - [`apps/gateway/src/workers/ai-summary.ts`](../apps/gateway/src/workers/ai-summary.ts) — job retry on throw
 
 ---

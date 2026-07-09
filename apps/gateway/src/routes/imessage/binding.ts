@@ -1,4 +1,5 @@
-import { deleteOrgMemberBindToken, findOrgMemberBindToken, db } from '@shopkeeper/db';
+import { deleteOrgMemberBindToken, findOrgMemberBindToken, looksLikeOrgMemberBindToken, db } from '@shopkeeper/db';
+import type { OrgMemberBindTokenPayload } from '@shopkeeper/db';
 import {
   captureProductEvent,
   productEventInsertId,
@@ -18,20 +19,25 @@ export interface ImessageBindingParams {
   body: string;
   displayName: string | null;
   reply: OperatorReply;
+  /** When the caller already resolved the token, skip a second DB lookup. */
+  resolvedPayload?: OrgMemberBindTokenPayload;
 }
 
 // The merchant texts a single-use bind token to the iMessage line. iMessage has
 // no Telegram-style `/start` deep link, so the raw token is the message body.
 // Mirrors handleStartBinding: validate the token, resolve the OrgMember, upsert
-// Until a sender is bound this way every inbound message is rejected with connect
-// instructions — no ticket, no agent run. Never log connect tokens or raw message
-// bodies at info/warn — only senderId, spaceId, orgId, and outcome metadata.
+// the binding. Until a sender is bound this way every inbound message is rejected
+// with connect instructions — no ticket, no agent run. Never log connect tokens
+// or raw message bodies at info/warn — only senderId, spaceId, orgId, and outcome metadata.
 export async function handleImessageBinding(params: ImessageBindingParams): Promise<void> {
-  const { senderId, spaceId, displayName, reply } = params;
+  const { senderId, spaceId, displayName, reply, resolvedPayload } = params;
   const token = params.body.trim();
 
   // Only a single opaque token is a binding attempt; anything else is a stranger.
-  const payload = token && !/\s/.test(token) ? await findOrgMemberBindToken(token) : null;
+  let payload = resolvedPayload ?? null;
+  if (payload === null && token && looksLikeOrgMemberBindToken(token)) {
+    payload = await findOrgMemberBindToken(token);
+  }
   if (!payload) {
     logger.info(
       { senderId, spaceId, outcome: 'rejected_unbound' },

@@ -12,6 +12,7 @@ import { createOrgMemberBindToken, db } from "@shopkeeper/db";
 import { auth } from "@clerk/nextjs/server";
 import { ApiError, UnauthorizedError } from "@/lib/api/errors";
 import { withOrgRoute } from "@/lib/api/route";
+import { normalizeImessageLineHandle } from "@/lib/integrations/imessage-visibility";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export const dynamic = "force-dynamic";
 // The line is available to every workspace when the gateway's Spectrum handle is
 // configured; the dashboard surfaces that handle for the merchant to text.
 function isImessageLineConfigured(): boolean {
-  return Boolean(process.env.IMESSAGE_LINE_HANDLE?.trim());
+  return normalizeImessageLineHandle(process.env.IMESSAGE_LINE_HANDLE) !== null;
 }
 
 export const GET = withOrgRoute(

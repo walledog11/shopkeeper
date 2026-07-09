@@ -3,6 +3,7 @@ import useSWR from "swr";
 import { Check, Copy, ExternalLink, Loader2, Send, Smartphone } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { fetcher } from "@/lib/api/fetcher";
+import { buildSmsDeepLink, formatHandleLabel } from "@/lib/imessage-connect";
 import { captureClientProductEvent } from "@/lib/product-events";
 import { cn } from "@/lib/ui/cn";
 import { Accent, Headline, Lede } from "./primitives";
@@ -15,25 +16,6 @@ interface TelegramStatus {
 interface ImessageStatus {
   connected: boolean;
   handles: { senderId: string; displayLabel: string }[];
-}
-
-// The line is a phone number, so an `sms:` deep link pre-fills both recipient and
-// connect code; scanned with the iPhone camera, Messages opens ready to send.
-// Body uses `&` (not `?`) per iOS.
-function buildSmsDeepLink(handle: string, token: string): string {
-  const number = handle.replace(/[^\d+]/g, "");
-  return `sms:${number}&body=${encodeURIComponent(token)}`;
-}
-
-function formatHandleLabel(label: string): string {
-  if (/[^\d\s()+\-.]/.test(label)) return label;
-  const digits = label.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) {
-    const n = digits.slice(1);
-    return `+1 (${n.slice(0, 3)}) ${n.slice(3, 6)}-${n.slice(6)}`;
-  }
-  if (digits.length === 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  return label;
 }
 
 export function StepConnect({ telegramBotUsername, imessageHandle }: {

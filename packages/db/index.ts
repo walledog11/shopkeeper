@@ -226,6 +226,7 @@ export {
   createOrgMemberBindToken,
   deleteOrgMemberBindToken,
   findOrgMemberBindToken,
+  looksLikeOrgMemberBindToken,
 } from './operator-bind.js';
 export type { OrgMemberBindTokenPayload } from './operator-bind.js';
 export {

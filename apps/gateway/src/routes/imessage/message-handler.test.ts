@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as shopkeeperDb from '@shopkeeper/db';
 import { db, createOrgMemberBindToken, findOrgMemberBindToken } from '@shopkeeper/db';
 import {
   NoopAnalyticsSink,
@@ -194,6 +195,7 @@ describe('handleImessageOperatorMessage', () => {
       },
     });
     const reply = vi.fn<OperatorReply>();
+    const findTokenSpy = vi.spyOn(shopkeeperDb, 'findOrgMemberBindToken');
 
     await handleImessageOperatorMessage({
       senderId: SENDER,
@@ -203,6 +205,8 @@ describe('handleImessageOperatorMessage', () => {
       reply,
     });
 
+    expect(findTokenSpy).not.toHaveBeenCalled();
+    findTokenSpy.mockRestore();
     expect(reply).toHaveBeenCalledTimes(1);
     expect(reply.mock.calls[0]?.[0]).toBe(HELP_TEXT);
   });
