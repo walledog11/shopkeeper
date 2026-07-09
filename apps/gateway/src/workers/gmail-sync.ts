@@ -1,41 +1,36 @@
-import { randomUUID } from 'node:crypto';
 import { Worker, type Job, type Queue } from 'bullmq';
 import type { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import {
+  buildInboxWatchRequest,
   EmailNotConfiguredError,
   GmailApiClient,
   getEmailProvider,
+  historyIdAtOrAfter,
   isForSupportAddress,
   isGmailApiError,
+  isValidGmailHistoryId,
+  maxGmailHistoryId,
+  metadataWithGmailState,
   normalizeInboundEmail,
   parseMime,
+  readStoredGmailHistoryId,
 } from '@shopkeeper/email';
 import { getEmailInboundMode } from '../config/env.js';
 import { isGmailNativeInboundEnabled } from '../config/runtime-config.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
+import {
+  acquireGmailIntegrationLock,
+  type GmailSyncRedis,
+} from '../lib/gmail-sync-lock.js';
+import { isRecord } from '../lib/typing.js';
 import logger from '../logger.js';
 import type { GmailSyncJobData, InboundJobData } from '../types.js';
 import { registerJobFailureLogging } from './failure.js';
 import type { SharedGatewayWorkerOptions } from './resources.js';
 
-const GMAIL_SYNC_LOCK_TTL_MS = 15 * 60 * 1_000;
 const GMAIL_RECOVERY_MAX_RESULTS = 500;
 const GMAIL_RECOVERY_QUERY = 'newer_than:7d in:inbox';
-const RELEASE_LOCK_SCRIPT =
-  'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
-const HISTORY_ID_PATTERN = /^\d+$/;
-
-export interface GmailSyncRedis {
-  set(
-    key: string,
-    value: string,
-    expiryMode: 'PX',
-    ttlMilliseconds: number,
-    setMode: 'NX',
-  ): Promise<unknown>;
-  eval(script: string, numberOfKeys: number, key: string, token: string): Promise<unknown>;
-}
 
 interface GmailSyncIntegration {
   id: string;
@@ -59,43 +54,15 @@ export interface GmailSyncWorkerRegistrationOptions extends GmailSyncProcessorDe
   workerOptions: SharedGatewayWorkerOptions;
 }
 
-export class GmailSyncLockUnavailableError extends Error {
-  constructor() {
-    super('Gmail integration sync is already in progress');
-    this.name = 'GmailSyncLockUnavailableError';
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function gmailMetadata(metadata: unknown): Record<string, unknown> | null {
-  if (!isRecord(metadata) || !isRecord(metadata.gmail)) return null;
-  return metadata.gmail;
-}
-
 function isNativeGmailInboundEnabled(integration: GmailSyncIntegration): boolean {
   if (!isGmailNativeInboundEnabled()) return false;
   if (getEmailInboundMode() === 'postmark') return false;
   if (getEmailProvider(integration) !== 'gmail' || !isRecord(integration.metadata)) return false;
   if (integration.metadata.inboundMode === 'postmark') return false;
-  return gmailMetadata(integration.metadata)?.inboundStatus === 'active';
-}
-
-function readHistoryId(metadata: unknown): string | null {
-  const historyId = gmailMetadata(metadata)?.historyId;
-  return typeof historyId === 'string' && HISTORY_ID_PATTERN.test(historyId)
-    ? historyId
+  const inboundStatus = isRecord(integration.metadata.gmail)
+    ? integration.metadata.gmail.inboundStatus
     : null;
-}
-
-function historyIdAtOrAfter(left: string, right: string): boolean {
-  return BigInt(left) >= BigInt(right);
-}
-
-function maxHistoryId(left: string, right: string): string {
-  return historyIdAtOrAfter(left, right) ? left : right;
+  return inboundStatus === 'active';
 }
 
 function normalizeAddress(value: string | null | undefined): string | null {
@@ -105,51 +72,6 @@ function normalizeAddress(value: string | null | undefined): string | null {
 
 function providerMessageKey(messageId: string): string {
   return `gmail:${messageId}`;
-}
-
-export async function acquireGmailIntegrationLock(
-  redis: GmailSyncRedis,
-  integrationId: string,
-): Promise<{ release: () => Promise<void> }> {
-  const key = `gmail-sync:lock:${integrationId}`;
-  const token = randomUUID();
-  const acquired = await redis.set(key, token, 'PX', GMAIL_SYNC_LOCK_TTL_MS, 'NX');
-  if (acquired !== 'OK') throw new GmailSyncLockUnavailableError();
-
-  return {
-    release: async () => {
-      try {
-        await redis.eval(RELEASE_LOCK_SCRIPT, 1, key, token);
-      } catch {
-        // The expiry is the final safety net. A release failure must not hide
-        // successful durable enqueueing or the original sync error.
-        logger.warn({ integrationId }, '[Gmail Sync] Failed to release integration lock');
-      }
-    },
-  };
-}
-
-function metadataWithGmailState(
-  metadata: unknown,
-  gmailState: Record<string, unknown>,
-  options: { clearLastError?: boolean } = {},
-): Prisma.InputJsonObject {
-  const existing = isRecord(metadata) ? metadata : {};
-  const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
-  const gmailBase = options.clearLastError
-    ? Object.fromEntries(
-        Object.entries(existingGmail).filter(([key]) => key !== 'lastError'),
-      )
-    : existingGmail;
-
-  return {
-    ...existing,
-    provider: 'gmail',
-    gmail: {
-      ...gmailBase,
-      ...gmailState,
-    },
-  } as Prisma.InputJsonObject;
 }
 
 async function markReauthorizationRequired(integrationId: string): Promise<void> {
@@ -166,7 +88,7 @@ async function markReauthorizationRequired(integrationId: string): Promise<void>
       metadata: metadataWithGmailState(current.metadata, {
         inboundStatus: 'reauthorization_required',
         lastError: 'sync_authentication',
-      }),
+      }) as Prisma.InputJsonObject,
     },
   });
 }
@@ -182,9 +104,9 @@ async function advanceCheckpoint(
   });
   if (!current) return;
 
-  const currentHistoryId = readHistoryId(current.metadata);
+  const currentHistoryId = readStoredGmailHistoryId(current.metadata);
   const historyId = currentHistoryId
-    ? maxHistoryId(currentHistoryId, processedHistoryId)
+    ? maxGmailHistoryId(currentHistoryId, processedHistoryId)
     : processedHistoryId;
 
   await db.integration.update({
@@ -196,7 +118,7 @@ async function advanceCheckpoint(
           historyId,
           lastSyncedAt: now.toISOString(),
         },
-      ),
+      ) as Prisma.InputJsonObject,
     },
   });
 }
@@ -226,7 +148,7 @@ async function establishRecoveredCheckpoint(
           watchLastRenewedAt: now.toISOString(),
         },
         { clearLastError: true },
-      ),
+      ) as Prisma.InputJsonObject,
     },
   });
 }
@@ -340,11 +262,7 @@ async function recoverStaleHistory(
   if (!topicName) {
     throw new EmailNotConfiguredError('Gmail Pub/Sub topic missing during stale-history recovery');
   }
-  const watch = await client.watch({
-    topicName,
-    labelIds: ['INBOX'],
-    labelFilterBehavior: 'include',
-  });
+  const watch = await client.watch(buildInboxWatchRequest(topicName));
 
   // Close the list-to-watch race: anything delivered after the first bounded
   // list but before the new watch baseline is visible in this second list.
@@ -397,7 +315,7 @@ export async function processGmailSyncJob(
       return;
     }
 
-    const storedHistoryId = readHistoryId(integration.metadata);
+    const storedHistoryId = readStoredGmailHistoryId(integration.metadata);
     if (
       !isNativeGmailInboundEnabled(integration)
       || !integration.refreshToken
@@ -411,7 +329,7 @@ export async function processGmailSyncJob(
     }
 
     if (
-      HISTORY_ID_PATTERN.test(jobData.notifiedHistoryId)
+      isValidGmailHistoryId(jobData.notifiedHistoryId)
       && historyIdAtOrAfter(storedHistoryId, jobData.notifiedHistoryId)
     ) {
       logger.info(

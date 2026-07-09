@@ -1,3 +1,15 @@
+import { EmailNotConfiguredError } from '../types.js';
+
+export type GmailWatchErrorCategory =
+  | 'watch_authentication'
+  | 'watch_configuration'
+  | 'watch_invalid_response'
+  | 'watch_quota'
+  | 'watch_request'
+  | 'watch_retryable'
+  | 'watch_stale_history'
+  | 'watch_unknown';
+
 export type GmailApiErrorKind =
   | 'authentication'
   | 'quota'
@@ -34,4 +46,10 @@ export class GmailApiError extends Error {
 
 export function isGmailApiError(error: unknown): error is GmailApiError {
   return error instanceof GmailApiError;
+}
+
+export function classifyWatchError(error: unknown): GmailWatchErrorCategory {
+  if (error instanceof EmailNotConfiguredError) return 'watch_configuration';
+  if (isGmailApiError(error)) return `watch_${error.kind}`;
+  return 'watch_unknown';
 }

@@ -15,10 +15,13 @@ export {
   GMAIL_READONLY_SCOPE,
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
+  getGmailLastSyncedAt,
+  getGmailWatchFailureCount,
   getEmailProvider,
   getEmailProviderLabel,
   getEmailReauthorizePath,
   isEmailAuthReauthorizationRequired,
+  isGmailNativeInboundEnrolled,
   type EmailAuthReauthorizationReason,
   type GmailInboundStatus,
 } from './providers.js';
@@ -27,9 +30,7 @@ export {
   getEmailSender,
   PostmarkSender,
   GmailSender,
-  OutlookSender,
   type GmailIntegration,
-  type OutlookIntegration,
 } from './senders/index.js';
 
 export { buildRawMime, buildMimeBase64 } from './mime-build.js';

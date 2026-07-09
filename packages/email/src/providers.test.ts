@@ -3,6 +3,8 @@ import {
   GMAIL_READONLY_SCOPE,
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
+  getGmailLastSyncedAt,
+  getGmailWatchFailureCount,
   getEmailProvider,
   getEmailProviderLabel,
   getEmailReauthorizePath,
@@ -25,10 +27,10 @@ describe('email provider helpers', () => {
 
   it('requires OAuth reauthorization only for the explicit expired marker', () => {
     expect(isEmailAuthReauthorizationRequired({
-      metadata: { provider: 'outlook' },
+      metadata: { provider: 'gmail', oauthScopes: [GMAIL_READONLY_SCOPE] },
       tokenExpiresAt: new Date(0),
     })).toBe(true);
-    expect(getEmailReauthorizePath({ metadata: { provider: 'outlook' } })).toBe('/api/integrations/outlook/auth');
+    expect(getEmailReauthorizePath({ metadata: { provider: 'gmail' } })).toBe('/api/integrations/gmail/auth');
   });
 
   it('requires Gmail reauthorization when the read scope is missing', () => {
@@ -55,6 +57,13 @@ describe('email provider helpers', () => {
 
     expect(getEmailAuthReauthorizationReason(integration)).toBeNull();
     expect(getGmailInboundStatus(integration)).toBe('pending');
+    expect(getGmailWatchFailureCount(integration)).toBe(0);
+    expect(getGmailLastSyncedAt({
+      metadata: {
+        provider: 'gmail',
+        gmail: { lastSyncedAt: '2026-07-08T12:00:00.000Z' },
+      },
+    })).toBe('2026-07-08T12:00:00.000Z');
   });
 
   it('prioritizes an expired grant over a missing Gmail read scope', () => {

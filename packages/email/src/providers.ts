@@ -1,4 +1,5 @@
 import type { EmailProvider } from './types.js';
+import { getGmailMetadata } from './gmail/metadata.js';
 
 const EXPLICIT_EXPIRED_TOKEN_MS = 0;
 export const GMAIL_READONLY_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
@@ -21,20 +22,19 @@ export function getEmailProvider(integration: { metadata?: unknown | null }): Em
   const meta = integration.metadata;
   if (meta && typeof meta === 'object' && 'provider' in meta) {
     const value = (meta as { provider?: unknown }).provider;
-    if (value === 'gmail' || value === 'outlook' || value === 'postmark') return value;
+    if (value === 'gmail' || value === 'postmark') return value;
   }
   return 'postmark';
 }
 
 export function getEmailProviderLabel(integration: { metadata?: unknown | null }): string {
   const provider = getEmailProvider(integration);
-  return provider === 'gmail' ? 'Gmail' : provider === 'outlook' ? 'Outlook' : 'Forwarding';
+  return provider === 'gmail' ? 'Gmail' : 'Forwarding';
 }
 
 export function getEmailReauthorizePath(integration: { metadata?: unknown | null }): string | null {
   const provider = getEmailProvider(integration);
   if (provider === 'gmail') return '/api/integrations/gmail/auth';
-  if (provider === 'outlook') return '/api/integrations/outlook/auth';
   return null;
 }
 
@@ -71,7 +71,7 @@ export function getEmailAuthReauthorizationReason(integration: {
   tokenExpiresAt?: string | Date | null;
 }): EmailAuthReauthorizationReason | null {
   const provider = getEmailProvider(integration);
-  if (provider !== 'gmail' && provider !== 'outlook') return null;
+  if (provider !== 'gmail') return null;
   if (hasExplicitExpiredToken(integration.tokenExpiresAt)) return 'expired_grant';
   if (provider === 'gmail' && !hasOAuthScope(integration.metadata, GMAIL_READONLY_SCOPE)) {
     return 'missing_gmail_read_scope';
@@ -84,4 +84,22 @@ export function isEmailAuthReauthorizationRequired(integration: {
   tokenExpiresAt?: string | Date | null;
 }): boolean {
   return getEmailAuthReauthorizationReason(integration) !== null;
+}
+
+export function getGmailWatchFailureCount(integration: { metadata?: unknown | null }): number {
+  const count = getGmailMetadata(integration.metadata)?.watchFailureCount;
+  return typeof count === 'number' && Number.isInteger(count) && count > 0 ? count : 0;
+}
+
+export function getGmailLastSyncedAt(integration: { metadata?: unknown | null }): string | null {
+  const value = getGmailMetadata(integration.metadata)?.lastSyncedAt;
+  return typeof value === 'string' && Number.isFinite(Date.parse(value)) ? value : null;
+}
+
+export function isGmailNativeInboundEnrolled(integration: { metadata?: unknown | null }): boolean {
+  if (!isRecord(integration.metadata)) return false;
+  const inboundMode = integration.metadata.inboundMode;
+  return inboundMode === 'hybrid'
+    || inboundMode === 'native'
+    || getGmailInboundStatus(integration) !== null;
 }

@@ -1,10 +1,16 @@
 import type { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import {
+  buildGmailWatchFailureUpdate,
+  buildInboxWatchRequest,
+  classifyWatchError,
   EmailNotConfiguredError,
   GmailApiClient,
   getEmailProvider,
-  isGmailApiError,
+  getGmailMetadata,
+  isValidGmailHistoryId,
+  metadataWithGmailState,
+  type GmailWatchErrorCategory,
 } from '@shopkeeper/email';
 import { getEmailInboundMode } from '../config/env.js';
 import { isGmailNativeInboundEnabled } from '../config/runtime-config.js';
@@ -15,7 +21,8 @@ import {
   acquireGmailIntegrationLock,
   GmailSyncLockUnavailableError,
   type GmailSyncRedis,
-} from '../workers/gmail-sync.js';
+} from '../lib/gmail-sync-lock.js';
+import { isRecord, readString } from '../lib/typing.js';
 import {
   createMaintenanceQueue,
   createMaintenanceWorker,
@@ -29,17 +36,6 @@ const GMAIL_WATCH_RENEWAL_WINDOW_MS = 24 * ONE_HOUR_MS;
 const GMAIL_STALE_SYNC_THRESHOLD_MS = 2 * ONE_HOUR_MS;
 const GMAIL_REPEATED_WATCH_FAILURE_THRESHOLD = 3;
 const EPOCH_SENTINEL = new Date(0);
-const HISTORY_ID_PATTERN = /^\d+$/;
-
-type GmailWatchErrorCategory =
-  | 'watch_authentication'
-  | 'watch_configuration'
-  | 'watch_invalid_response'
-  | 'watch_quota'
-  | 'watch_request'
-  | 'watch_retryable'
-  | 'watch_stale_history'
-  | 'watch_unknown';
 
 interface GmailWatchIntegration {
   id: string;
@@ -69,23 +65,6 @@ export interface GmailWatchMaintenanceResult {
   alerts: number;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function getGmailMetadata(metadata: unknown): Record<string, unknown> | null {
-  if (!isRecord(metadata) || !isRecord(metadata.gmail)) return null;
-  return metadata.gmail;
-}
-
-function readString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function readNonNegativeInteger(value: unknown): number {
-  return Number.isInteger(value) && (value as number) >= 0 ? value as number : 0;
-}
-
 function readTimestamp(value: unknown): number | null {
   if (typeof value !== 'string' || value.length === 0) return null;
   const numeric = Number(value);
@@ -93,33 +72,8 @@ function readTimestamp(value: unknown): number | null {
   return Number.isFinite(timestamp) ? timestamp : null;
 }
 
-function classifyWatchError(error: unknown): GmailWatchErrorCategory {
-  if (error instanceof EmailNotConfiguredError) return 'watch_configuration';
-  if (isGmailApiError(error)) return `watch_${error.kind}`;
-  return 'watch_unknown';
-}
-
-function metadataWithGmailState(
-  metadata: unknown,
-  gmailState: Record<string, unknown>,
-  options: { clearLastError?: boolean } = {},
-): Prisma.InputJsonObject {
-  const existing = isRecord(metadata) ? metadata : {};
-  const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
-  const gmailBase = options.clearLastError
-    ? Object.fromEntries(
-        Object.entries(existingGmail).filter(([key]) => key !== 'lastError'),
-      )
-    : existingGmail;
-
-  return {
-    ...existing,
-    provider: 'gmail',
-    gmail: {
-      ...gmailBase,
-      ...gmailState,
-    },
-  } as Prisma.InputJsonObject;
+function readNonNegativeInteger(value: unknown): number {
+  return Number.isInteger(value) && (value as number) >= 0 ? value as number : 0;
 }
 
 function isNativeGmailIntegration(integration: GmailWatchIntegration): boolean {
@@ -169,7 +123,7 @@ async function markWatchSuccess(
 ): Promise<GmailWatchIntegration> {
   const gmail = getGmailMetadata(integration.metadata);
   const existingHistoryId = readString(gmail?.historyId);
-  const historyId = existingHistoryId && HISTORY_ID_PATTERN.test(existingHistoryId)
+  const historyId = existingHistoryId && isValidGmailHistoryId(existingHistoryId)
     ? existingHistoryId
     : response.historyId;
   const metadata = metadataWithGmailState(
@@ -182,7 +136,7 @@ async function markWatchSuccess(
       watchLastRenewedAt: now.toISOString(),
     },
     { clearLastError: true },
-  );
+  ) as Prisma.InputJsonObject;
 
   await db.integration.update({
     where: { id: integration.id },
@@ -196,27 +150,20 @@ async function markWatchFailure(
   category: GmailWatchErrorCategory,
   now: Date,
 ): Promise<GmailWatchIntegration> {
-  const gmail = getGmailMetadata(integration.metadata);
-  const failureCount = readNonNegativeInteger(gmail?.watchFailureCount) + 1;
-  const authenticationFailure = category === 'watch_authentication';
-  const metadata = metadataWithGmailState(integration.metadata, {
-    inboundStatus: authenticationFailure ? 'reauthorization_required' : 'degraded',
-    lastError: category,
-    watchFailureCount: failureCount,
-    watchLastAttemptAt: now.toISOString(),
-  });
+  const failure = buildGmailWatchFailureUpdate(integration.metadata, category, now);
+  const metadata = failure.metadata as Prisma.InputJsonObject;
 
   await db.integration.update({
     where: { id: integration.id },
     data: {
       metadata,
-      ...(authenticationFailure ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
+      ...(failure.markReauthorization ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
     },
   });
   return {
     ...integration,
     metadata,
-    ...(authenticationFailure ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
+    ...(failure.markReauthorization ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
   };
 }
 
@@ -353,11 +300,7 @@ export async function runGmailWatchMaintenance(
       try {
         if (!topicName) throw new EmailNotConfiguredError('Gmail Pub/Sub topic missing');
         const client = dependencies.createClient?.(integration) ?? new GmailApiClient(integration);
-        const response = await client.watch({
-          topicName,
-          labelIds: ['INBOX'],
-          labelFilterBehavior: 'include',
-        });
+        const response = await client.watch(buildInboxWatchRequest(topicName));
         const updated = await markWatchSuccess(integration, response, now);
         monitored.set(updated.id, updated);
         result.renewed += 1;

@@ -18,7 +18,22 @@ export {
 export { decodeGmailBase64Url } from './base64url.js';
 export {
   GmailApiError,
+  classifyWatchError,
   isGmailApiError,
   type GmailApiErrorKind,
   type GmailApiErrorOptions,
+  type GmailWatchErrorCategory,
 } from './errors.js';
+export {
+  buildGmailWatchFailureUpdate,
+  buildInboxWatchRequest,
+  getGmailMetadata,
+  hasNativeGmailWatch,
+  historyIdAtOrAfter,
+  isValidGmailHistoryId,
+  maxGmailHistoryId,
+  metadataWithGmailState,
+  readGmailHistoryId,
+  readStoredGmailHistoryId,
+  type GmailWatchFailureUpdate,
+} from './metadata.js';

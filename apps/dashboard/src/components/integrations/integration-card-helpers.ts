@@ -1,8 +1,11 @@
 import {
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,
+  getGmailLastSyncedAt,
+  getGmailWatchFailureCount,
   getEmailProvider,
   isEmailAuthReauthorizationRequired,
+  isGmailNativeInboundEnrolled,
 } from "@shopkeeper/email/providers"
 import type { ConnectType } from "@/lib/integrations/catalog"
 import { isEmailIntegrationConfigured } from "@/lib/integrations/onboarding-setup"
@@ -44,33 +47,6 @@ export function isPostmarkEmail(integration: Integration): boolean {
 export interface EmailReceivingDisplay {
   action: string
   description: string
-}
-
-function getGmailWatchFailureCount(integration: Integration): number {
-  const metadata = integration.metadata
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return 0
-  const gmail = "gmail" in metadata ? metadata.gmail : null
-  if (!gmail || typeof gmail !== "object" || Array.isArray(gmail)) return 0
-  const count = "watchFailureCount" in gmail ? gmail.watchFailureCount : null
-  return typeof count === "number" && Number.isInteger(count) && count > 0 ? count : 0
-}
-
-function getGmailLastSyncedAt(integration: Integration): string | null {
-  const metadata = integration.metadata
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null
-  const gmail = "gmail" in metadata ? metadata.gmail : null
-  if (!gmail || typeof gmail !== "object" || Array.isArray(gmail)) return null
-  const value = "lastSyncedAt" in gmail ? gmail.lastSyncedAt : null
-  return typeof value === "string" && Number.isFinite(Date.parse(value)) ? value : null
-}
-
-function isGmailNativeInboundEnrolled(integration: Integration): boolean {
-  const metadata = integration.metadata
-  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false
-  const inboundMode = "inboundMode" in metadata ? metadata.inboundMode : null
-  return inboundMode === "hybrid"
-    || inboundMode === "native"
-    || getGmailInboundStatus(integration) !== null
 }
 
 function withLastSuccessfulSync(description: string, integration: Integration): string {

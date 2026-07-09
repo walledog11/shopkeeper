@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Request, Response, Router } from 'express';
 import { OAuth2Client, type LoginTicket } from 'google-auth-library';
 import { db } from '@shopkeeper/db';
-import { decodeGmailBase64Url, getEmailProvider } from '@shopkeeper/email';
+import { decodeGmailBase64Url, getEmailProvider, isValidGmailHistoryId, readGmailHistoryId } from '@shopkeeper/email';
 import {
   getGmailPubSubPushConfig,
   isGmailNativeInboundEnabled,
@@ -11,11 +11,11 @@ import {
 import { JOB } from '../constants.js';
 import logger from '../logger.js';
 import type { GmailSyncJobData } from '../types.js';
+import { isRecord } from '../lib/typing.js';
 import { getGmailSyncQueue } from './webhooks-shared.js';
 
 const GOOGLE_TOKEN_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 const EMAIL_ADDRESS_PATTERN = /^[^\s@]+@[^\s@]+$/;
-const HISTORY_ID_PATTERN = /^\d+$/;
 const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 type GoogleTokenVerifier = {
@@ -30,10 +30,6 @@ export interface GmailPushNotification {
 
 export class GmailPushPayloadError extends Error {}
 export class GmailPushAuthenticationError extends Error {}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
 
 function readBearerToken(req: Request): string | null {
   const authorization = req.headers.authorization;
@@ -60,14 +56,6 @@ function decodePubSubMessageData(data: string): unknown {
   }
 }
 
-function readGmailHistoryId(value: unknown): string {
-  if (typeof value === 'string') return value.trim();
-  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
-    return String(value);
-  }
-  return '';
-}
-
 export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
   if (!isRecord(body) || !isRecord(body.message)) {
     throw new GmailPushPayloadError('Invalid Pub/Sub envelope');
@@ -92,7 +80,7 @@ export function parseGmailPubSubEnvelope(body: unknown): GmailPushNotification {
     ? notification.emailAddress.trim().toLowerCase()
     : '';
   const historyId = readGmailHistoryId(notification.historyId);
-  if (!EMAIL_ADDRESS_PATTERN.test(emailAddress) || !HISTORY_ID_PATTERN.test(historyId)) {
+  if (!EMAIL_ADDRESS_PATTERN.test(emailAddress) || !isValidGmailHistoryId(historyId)) {
     throw new GmailPushPayloadError('Invalid Gmail notification fields');
   }
 

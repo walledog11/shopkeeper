@@ -1,24 +1,18 @@
 import { db } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import {
+  buildGmailWatchFailureUpdate,
+  buildInboxWatchRequest,
+  classifyWatchError,
   EmailNotConfiguredError,
-  GMAIL_READONLY_SCOPE,
   GmailApiClient,
   getEmailProvider,
-  isGmailApiError,
+  hasNativeGmailWatch,
+  metadataWithGmailState,
+  type GmailWatchErrorCategory,
 } from '@shopkeeper/email';
 import { readEnv } from '@/lib/env/helpers';
 import logger from '@/lib/server/logger';
-
-type GmailWatchErrorCategory =
-  | 'watch_authentication'
-  | 'watch_configuration'
-  | 'watch_invalid_response'
-  | 'watch_quota'
-  | 'watch_request'
-  | 'watch_retryable'
-  | 'watch_stale_history'
-  | 'watch_unknown';
 
 type GmailIntegrationSnapshot = {
   id: string;
@@ -33,55 +27,7 @@ export type GmailWatchRegistrationResult =
   | { ok: true; expiration: string; historyId: string }
   | { ok: false; category: GmailWatchErrorCategory };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-
-function classifyWatchError(error: unknown): GmailWatchErrorCategory {
-  if (error instanceof EmailNotConfiguredError) return 'watch_configuration';
-  if (isGmailApiError(error)) return `watch_${error.kind}`;
-  return 'watch_unknown';
-}
-
-function hasNativeGmailWatch(metadata: unknown): boolean {
-  if (getEmailProvider({ metadata }) !== 'gmail' || !isRecord(metadata)) return false;
-  const gmail = metadata.gmail;
-  if (!isRecord(gmail)) return false;
-  return (
-    typeof gmail.historyId === 'string'
-    || typeof gmail.watchExpiration === 'string'
-    || gmail.inboundStatus === 'active'
-  );
-}
-
-function metadataWithGmailState(
-  metadata: unknown,
-  gmailState: Record<string, unknown>,
-  options: { clearLastError?: boolean; confirmReadScope?: boolean } = {},
-): PrismaTypes.InputJsonObject {
-  const existing = isRecord(metadata) ? metadata : {};
-  const existingGmail = isRecord(existing.gmail) ? existing.gmail : {};
-  const gmailBase = options.clearLastError
-    ? Object.fromEntries(
-        Object.entries(existingGmail).filter(([key]) => key !== 'lastError'),
-      )
-    : existingGmail;
-  const oauthScopes = Array.isArray(existing.oauthScopes)
-    ? existing.oauthScopes.filter((scope): scope is string => typeof scope === 'string')
-    : [];
-
-  return {
-    ...existing,
-    provider: 'gmail',
-    ...(options.confirmReadScope && !oauthScopes.includes(GMAIL_READONLY_SCOPE)
-      ? { oauthScopes: [...oauthScopes, GMAIL_READONLY_SCOPE] }
-      : {}),
-    gmail: {
-      ...gmailBase,
-      ...gmailState,
-    },
-  } as PrismaTypes.InputJsonObject;
-}
+const EPOCH_SENTINEL = new Date(0);
 
 async function updateWatchSuccess(
   integrationId: string,
@@ -91,21 +37,22 @@ async function updateWatchSuccess(
     where: { id: integrationId },
     select: { metadata: true },
   });
-  const metadata = metadataWithGmailState(
-    integration.metadata,
-    {
-      inboundStatus: 'active',
-      historyId: response.historyId,
-      watchFailureCount: 0,
-      watchExpiration: response.expiration,
-      watchLastRenewedAt: new Date().toISOString(),
-    },
-    { clearLastError: true, confirmReadScope: true },
-  );
 
   await db.integration.update({
     where: { id: integrationId },
-    data: { metadata },
+    data: {
+      metadata: metadataWithGmailState(
+        integration.metadata,
+        {
+          inboundStatus: 'active',
+          historyId: response.historyId,
+          watchFailureCount: 0,
+          watchExpiration: response.expiration,
+          watchLastRenewedAt: new Date().toISOString(),
+        },
+        { clearLastError: true, confirmReadScope: true },
+      ) as PrismaTypes.InputJsonObject,
+    },
   });
 }
 
@@ -117,13 +64,12 @@ async function updateWatchFailure(
     where: { id: integrationId },
     select: { metadata: true },
   });
+  const failure = buildGmailWatchFailureUpdate(integration.metadata, category, new Date());
   await db.integration.update({
     where: { id: integrationId },
     data: {
-      metadata: metadataWithGmailState(integration.metadata, {
-        inboundStatus: 'degraded',
-        lastError: category,
-      }),
+      metadata: failure.metadata as PrismaTypes.InputJsonObject,
+      ...(failure.markReauthorization ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
     },
   });
 }
@@ -146,11 +92,7 @@ export async function registerGmailWatch(
     if (!topicName) {
       throw new EmailNotConfiguredError('Gmail Pub/Sub topic missing');
     }
-    const response = await new GmailApiClient(integration).watch({
-      topicName,
-      labelIds: ['INBOX'],
-      labelFilterBehavior: 'include',
-    });
+    const response = await new GmailApiClient(integration).watch(buildInboxWatchRequest(topicName));
     await updateWatchSuccess(integrationId, response);
     logger.info({ integrationId }, '[Gmail Watch] Watch registered');
     return { ok: true, ...response };

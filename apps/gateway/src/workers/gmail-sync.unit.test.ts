@@ -22,6 +22,8 @@ vi.mock('../logger.js', () => ({
 
 import {
   GmailSyncLockUnavailableError,
+} from '../lib/gmail-sync-lock.js';
+import {
   processGmailSyncJob,
 } from './gmail-sync.js';
 
