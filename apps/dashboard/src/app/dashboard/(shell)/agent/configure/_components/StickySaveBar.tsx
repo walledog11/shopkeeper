@@ -40,7 +40,7 @@ export function StickySaveBar({ controller }: { controller: AgentTabController }
           <Button
             size="sm"
             onClick={save}
-            disabled={saving || !isDirty || businessHoursInvalid}
+            disabled={saving || !isDirty || businessHoursInvalid || businessNameInvalid}
             className="h-8 px-4 bg-amber-400 text-black hover:bg-amber-300 text-xs font-semibold disabled:opacity-40 min-w-[90px]"
           >
             {saving ? <Loader2 className="size-3.5 animate-spin" /> : "Save changes"}

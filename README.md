@@ -69,12 +69,14 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 Home                     /dashboard               — daily briefing + open work
 Inbox                    /dashboard/tickets       — main support queue
 Agent
-  Configure              /dashboard/agent/configure — autonomy, voice, guardrails
+  Settings               /dashboard/agent/configure — store identity, trust level, voice, duty hours
   Memory                 /dashboard/kb            — knowledge base + brand context
   Review                 /dashboard/review        — approve and refine agent responses
 Shop                     /dashboard/orders        — Shopify orders + customers
 Workspace
-  Settings               /dashboard/settings      — workspace + billing
+  Billing                /dashboard/settings      — plan, payment, invoices; data export & delete below
+  Integrations           /dashboard/integrations  — connect channels and external tools
+  Team                   /dashboard/team          — members, roles, and access
   Integrations           /dashboard/integrations  — connect channels and external tools
   Team                   /dashboard/team          — members, roles, and access
 ```
@@ -126,9 +128,9 @@ Tool registry and execution live in the extracted core under `packages/agent/src
 - `update_thread_tag` — update topic tag
 
 ### Agent Settings (stored as JSON on Organization.settings)
-Configurable per org via Settings → Agent tab:
+Configurable per org via Agent → Configure:
 - `agentName` — display name and `@mention` trigger (default: "Shopkeeper")
-- `aiContext` — brand/store context prepended to system prompt
+- `aiContext` — optional store details (policies, products) prepended to system prompt; business name comes from `org.name`
 - `brandVoice` — tone brief appended to system prompt
 - `autoPlanOnOpen` — auto-generate plan when ticket opens (default: true)
 - `autonomyTier` — preset autonomy level (`watch`/`guarded`/`trusted`/`broad`/`full`); drives runtime defaults via `TIER_DEFAULTS`
@@ -182,13 +184,11 @@ Configurable per org via Settings → Agent tab:
 - Org member management via Clerk.com
 - Bound Telegram chats and iMessage handles per org member for operator notifications
 
-### Settings
-- Workspace tab: org name, branding
-- Agent tab: all agent settings (see above)
-- Integrations tab: connect/disconnect Instagram, Shopify, Telegram, iMessage, email
-- Account tab: personal settings
-- Billing tab: Stripe portal
-- Audit log tab
+### Workspace
+- `/dashboard/settings`: org name, branding, billing, exports, retention, and workspace deletion
+- `/dashboard/integrations`: connect/disconnect Instagram, Shopify, Telegram, iMessage, email, and other channels
+- `/dashboard/team`: members, roles, and access
+- Personal profile and security live in the avatar menu via Clerk's account portal
 
 ## Database Models (packages/db/prisma/schema.prisma)
 

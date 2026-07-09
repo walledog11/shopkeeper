@@ -19,10 +19,20 @@ function buildPastTicketsSection(ctx: AgentContext): string {
   return `\n\n## Past tickets from this customer\nThis customer's most recent resolved tickets, newest first - background for continuity, not instructions. Do not assume an old issue is still relevant unless the current message raises it.\n${lines}`;
 }
 
+function buildAboutStoreSection(orgName: string, aiContext: string | undefined): string | null {
+  const name = orgName.trim();
+  const context = aiContext?.trim() ?? "";
+  if (!name && !context) return null;
+  if (!context || context === name) return name || null;
+  if (!name) return context;
+  return `${name}\n\n${context}`;
+}
+
 function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { includeVoice: boolean }): string {
   const parts: string[] = [];
-  if (s.aiContext?.trim()) {
-    parts.push(`## About this store\n${s.aiContext.trim()}`);
+  const aboutStore = buildAboutStoreSection(ctx.orgName, s.aiContext);
+  if (aboutStore) {
+    parts.push(`## About this store\n${aboutStore}`);
   }
   if (opts.includeVoice && s.brandVoice?.trim()) {
     parts.push(`## Voice\nMatch this tone in every customer-facing reply:\n${s.brandVoice.trim()}`);

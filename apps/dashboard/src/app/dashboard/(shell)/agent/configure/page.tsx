@@ -15,6 +15,7 @@ export default async function AgentConfigurePage() {
         settings={settings}
         rawSettings={rawSettings}
         version={org.updatedAt.toISOString()}
+        orgName={org.name}
         voiceProposal={parseVoiceProposal(org.voiceProposal)}
       />
     </Suspense>

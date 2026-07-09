@@ -95,7 +95,7 @@ describe('POST /api/billing/portal', () => {
     expect(mockGetOrCreateStripeCustomer).toHaveBeenCalledWith(expect.objectContaining({ id: org!.id }));
     expect(mockPortalCreate).toHaveBeenCalledWith({
       customer: 'cus_portal',
-      return_url: 'http://dashboard.test/dashboard/settings?tab=billing',
+      return_url: 'http://dashboard.test/dashboard/settings#billing',
     });
   });
 

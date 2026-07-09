@@ -57,7 +57,7 @@ export const aiFeatures: Category = {
         {
           heading: "How to get better drafts",
           steps: [
-            "Go to Settings and fill in the AI Context field with your brand name, what you sell, and any key policies (e.g. return window, shipping times).",
+            "Go to Agent → Settings and fill in About your store with what you sell and any key policies (e.g. return window, shipping times). Your business name is on the same page.",
             "Set a Brand Voice to tell Shopkeeper how to write — e.g. 'friendly and concise' or 'professional and formal'.",
             "The more context you provide, the more accurate and on-brand the drafts will be.",
           ],

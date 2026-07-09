@@ -21,12 +21,15 @@ interface UseAgentTabStateProps {
   settings: OrgSettings
   rawSettings: OrgSettingsPatch
   version: string
+  orgName: string
   voiceProposal: VoiceProposal | null
 }
 
-export function useAgentTabState({ settings, rawSettings, version, voiceProposal }: UseAgentTabStateProps) {
+export function useAgentTabState({ settings, rawSettings, version, orgName, voiceProposal }: UseAgentTabStateProps) {
   const { mutate } = useSWRConfig()
   const [settingsState, dispatch] = useReducer(agentSettingsReducer, settings, hydrateSettings)
+  const [businessName, setBusinessName] = useState(orgName)
+  const initialNameRef = useRef(orgName)
   const initialRaw = useMemo(() => rawInputsFor(settings), [settings])
   const [maxRefundInput, setMaxRefundInput] = useState<string>(initialRaw.maxRefund)
   const [maxDiscountInput, setMaxDiscountInput] = useState<string>(initialRaw.maxDiscount)
@@ -83,7 +86,10 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
   const baselineRawRef = useRef<OrgSettingsPatch>(rawSettings)
   const freshBaselineRef = useRef<OrgSettingsPatch | null>(null)
   const explicitOverrideSet = useMemo(() => new Set(explicitOverridePaths), [explicitOverridePaths])
-  const isDirty = serializedPatch !== initialPatchRef.current
+  const trimmedBusinessName = businessName.trim()
+  const nameDirty = trimmedBusinessName !== initialNameRef.current
+  const isDirty = serializedPatch !== initialPatchRef.current || nameDirty
+  const businessNameInvalid = nameDirty && trimmedBusinessName.length === 0
   const autonomyTier = settingsState.autonomyTier ?? "guarded"
   const businessHoursInvalid = payload.businessHoursEnabled
     && !isValidBusinessHoursWindow(payload.businessHoursStart, payload.businessHoursEnd)
@@ -111,6 +117,7 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
     setDigestSecondHourInput(raw.digestSecondHour)
     setBusinessHoursStartInput(raw.bhStart)
     setBusinessHoursEndInput(raw.bhEnd)
+    setBusinessName(initialNameRef.current)
     baselineRawRef.current = target
     initialPatchRef.current = JSON.stringify(buildAgentSettingsPatch(buildSettingsPayload(hydrated, raw), explicit))
   }
@@ -156,37 +163,54 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
     setSaving(true)
     setSaved(false)
     try {
+      const body: {
+        name?: string
+        settings: OrgSettingsPatch
+        settingsUnset: string[]
+        version: string
+      } = {
+        settings: settingsPatch.settings,
+        settingsUnset: settingsPatch.settingsUnset,
+        version: currentVersionRef.current,
+      }
+      if (nameDirty) body.name = trimmedBusinessName
+
       const res = await fetch("/api/org", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          settings: settingsPatch.settings,
-          settingsUnset: settingsPatch.settingsUnset,
-          version: currentVersionRef.current,
-        }),
+        body: JSON.stringify(body),
       })
       if (res.status === 409) {
-        const body = await res.json().catch(() => ({})) as {
-          current?: { version?: string; settings?: OrgSettingsPatch }
+        const conflict = await res.json().catch(() => ({})) as {
+          current?: { version?: string; settings?: OrgSettingsPatch; name?: string }
         }
-        if (body.current?.version) currentVersionRef.current = body.current.version
-        if (body.current?.settings) {
-          // Capture fresh server state so Reset jumps to it instead of the stale prop.
-          freshBaselineRef.current = body.current.settings
+        if (conflict.current?.version) currentVersionRef.current = conflict.current.version
+        if (conflict.current?.settings) {
+          freshBaselineRef.current = conflict.current.settings
         }
+        if (conflict.current?.name) setBusinessName(conflict.current.name)
         setStaleVersion(true)
         return
       }
       if (!res.ok) throw new Error("Failed")
-      const body = await res.json().catch(() => ({})) as { version?: string; settings?: OrgSettingsPatch }
-      if (body.version) currentVersionRef.current = body.version
-      if (body.settings) baselineRawRef.current = body.settings
+      const saved = await res.json().catch(() => ({})) as {
+        version?: string
+        settings?: OrgSettingsPatch
+        name?: string
+      }
+      if (saved.version) currentVersionRef.current = saved.version
+      if (saved.settings) baselineRawRef.current = saved.settings
+      if (saved.name) {
+        initialNameRef.current = saved.name
+        setBusinessName(saved.name)
+      }
       void mutate(
         "/api/org",
-        (current: { settings?: OrgSettingsPatch; version?: string } | undefined) => ({
+        (current: { settings?: OrgSettingsPatch; version?: string; name?: string } | undefined) => ({
           ...(current ?? {}),
-          ...(body.version ? { version: body.version } : {}),
-          ...(body.settings ? { settings: body.settings } : {}),
+          ...(saved.version ? { version: saved.version } : {}),
+          ...(saved.settings ? { settings: saved.settings } : {}),
+          ...(saved.name ? { name: saved.name } : {}),
         }),
         { revalidate: false },
       )
@@ -239,6 +263,9 @@ export function useAgentTabState({ settings, rawSettings, version, voiceProposal
     payload,
     explicitOverrideSet,
     autonomyTier,
+    businessName,
+    setBusinessName,
+    businessNameInvalid,
     maxRefundInput,
     setMaxRefundInput,
     maxDiscountInput,

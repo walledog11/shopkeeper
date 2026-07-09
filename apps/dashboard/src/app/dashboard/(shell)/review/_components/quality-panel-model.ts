@@ -1,8 +1,6 @@
 import { TOOL_CATEGORIES, TOOL_LABELS } from "@shopkeeper/agent/tools"
-import type { ActionLogQueryFilters } from "@/hooks/useActionLogEntries"
 import type { ActionLogEntry } from "@/types"
 
-export type Focus = "attention" | "auto" | "all"
 export type Tone = "reply" | "escalate" | "money" | "error" | "note"
 export type ReviewColumnId = "attention" | "auto" | "store" | "approved"
 export type ReviewItemTone = "attention" | "auto" | "store" | "approved" | "error" | "note"
@@ -30,16 +28,6 @@ export interface ReviewItemChrome {
   icon: ReviewIconKey
   label: string
 }
-
-export const FOCUS_OPTIONS: {
-  id: Focus
-  label: string
-  filters: ActionLogQueryFilters
-}[] = [
-  { id: "attention", label: "Needs your eyes", filters: { attention: true, excludeOperator: true } },
-  { id: "auto", label: "Auto-sent", filters: { modes: ["auto_executed"], excludeOperator: true } },
-  { id: "all", label: "Everything", filters: {} },
-]
 
 export const REVIEW_BOARD_COLUMNS: ReviewColumnConfig[] = [
   {
@@ -112,19 +100,6 @@ const EXTRA_TOOL_LABELS: Record<string, string> = {
 
 export function toolLabel(tool: string): string {
   return TOOL_LABELS[tool] ?? EXTRA_TOOL_LABELS[tool] ?? tool
-}
-
-export function resolveFocus(value: string | null): Focus {
-  if (value === "attention" || value === "auto" || value === "all") return value
-  if (value === "escalations") return "attention"
-  return "all"
-}
-
-export function parseFromParam(value: string | null): string | null {
-  if (!value) return null
-  if (value === "24h") return new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-  const parsed = Date.parse(value)
-  return Number.isNaN(parsed) ? null : new Date(parsed).toISOString()
 }
 
 function field(input: unknown, key: string): string | null {
@@ -209,12 +184,6 @@ export function classifyReviewItem(entry: ActionLogEntry): ReviewColumnId {
   if (isStoreActionEntry(entry)) return "store"
   if (entry.mode === "auto_executed") return "auto"
   return "approved"
-}
-
-export function columnsForFocus(focus: Focus): ReviewColumnId[] {
-  if (focus === "attention") return ["attention"]
-  if (focus === "auto") return ["auto"]
-  return REVIEW_BOARD_COLUMNS.map((column) => column.id)
 }
 
 export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {

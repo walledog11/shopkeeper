@@ -1,367 +1,348 @@
-# Agent Core Simplification Plan
+# Operator Channel: Model-Owned Interpretation Plan
 
-Source: backend/agent audit of 2026-07-07. Governing rule: each concern goes to
-the layer that is good at it — natural-language understanding to a model,
-safety invariants to deterministic checks on structured data (tool calls,
-amounts, order state), behavioral steering to the system prompt, hard limits to
-the executor. Every phase below removes a place where the current code violates
-that rule.
+Source: operator-channel audit of 2026-07-09 (freeform-conversation failures on
+iMessage/Telegram). Governing rule, inherited from the completed simplification
+plan: each concern goes to the layer that is good at it. Natural-language
+understanding belongs to a model; the gateway's job is identity resolution and
+deterministic execution of discrete state transitions. Every phase below removes
+a place where a keyword grammar is doing NLU.
 
-Last reviewed: 2026-07-07.
+This plan replaces the Agent Core Simplification Plan (Phases 0–6, all
+implemented; Phase 6 code landed but not deployed). The full prior text is in
+git history for this file (last version at commit `737c1f1`).
+
+Last reviewed: 2026-07-09.
+
+## Carried-forward state from the superseded plan
+
+Still-live obligations that must not be lost:
+
+- **Phase 6 (sonnet-5 bump) is code-landed but MUST NOT DEPLOY until a full
+  eval baseline is captured with sign-off.** The Phase 4 loop regression was
+  fixed and pushed (`737c1f1`); targeted evals are clean (6/7, 1 known
+  brand-voice flake), but the confirming full gate is still deferred.
+- Eval gates for prior Phases 3/4/5 are stacked into that same deferred
+  baseline. **Capture that baseline before Phase C of this plan lands** —
+  Phase C changes the operator prompt and tool set, and stacking it into the
+  same baseline would confound architecture and model deltas further.
+- Sonnet-5 pricing in `packages/db/llm-spend.ts` was kept at sonnet-4-6 rates;
+  verify against the current price list (undercounted spend bites the cap late).
+- Design constraints from that plan remain in force and are restated at the
+  bottom of this one.
 
 ## Problems being solved
 
-1. ~750 lines of English-only regex heuristics (`intent.ts`, `planner-safety/`,
-   fast paths, `merchant-answer-kb.ts`) do NLU without a model while the same
-   pipeline runs 3+ model calls per message. They silently no-op for non-English
-   customers and duplicate instructions already in the system prompt.
-2. Guards mutate plans (strip `send_reply`, inject synthetic `ask_operator`,
-   forced-`tool_choice` escalation drafts). This breaks the core guarantee that
-   what the merchant approves is what the model actually proposed.
-3. The planner is five phases with retries (`planner-initial-phase`,
-   `planner-read-skip`, `planner-replan`, `planner-terminal`) — one idea
-   ("a complete plan, cheaply, with no side effects") implemented as patches
-   around Haiku's phase-1 behavior.
-4. Four agent-loop implementations: `run.ts` (mutative + read-only variants),
-   the phased planner, and the `order-ops/run.ts` fork forced by the executor's
-   eager thread coupling.
-5. Dead or near-dead surface: `OPENAI_API_KEY` (zero code references),
-   `requireApprovalForActions` (single consumer is a tautology under tier
-   defaults), plan-side order-status fast path (skipped for any org with
-   brandVoice/sampleReplies), duplicated regex sets and helpers.
-6. Minor efficiency: spend-cap DB read before every model call; `buildContext`
-   always loads 50 messages when operator/read-only paths use 4.
+Audit trace: see the conversation of 2026-07-09; all line references verified
+against master at that date.
 
-Out of scope for now: non-English eval fixtures (tracked separately; required
-before the guard swap can be *proven* language-safe, but deliberately excluded
-from this plan).
+1. **Keyword front door.** Every operator text passes through
+   `parseTelegramCommand` (`apps/gateway/src/routes/telegram/command-parser.ts:37-92`),
+   which recognizes only exact strings (`yes`, `no`, `help`, `summary`,
+   anchored `^#(\d+)$|^order[- #]*(\d+)$`, …). "Yes!", "yes please",
+   "sure, send it" all fall through to free-form. The model — the one component
+   that understands language — only sees text after this router has already
+   misassigned it.
+2. **Plan replies have no landing pad.** A plan notification parks
+   `pendingPlan`, which accepts only literal `yes`/`no`/`skip N`
+   (`routes/telegram/pending-plan-commands.ts:27-52`). A freeform answer to the
+   notification ("It's a fixed size") runs as a standalone instruction on
+   `lastThreadId` or a freshly fabricated thread, while the plan stays parked.
+   Only `pendingQuestion` (set when the planner elected `ask_operator`) gets
+   proper answer ingestion (`pending-question-commands.ts` → KB save → replan).
+3. **Thread fragmentation.** `resolveInternalAgentThread`
+   (`packages/agent/src/internal-thread.ts:14-99`) shards the merchant's one
+   iMessage conversation across per-customer/per-order `sms_agent` threads.
+   `OperatorContext.history` is written after every turn and read by nothing.
+   Actual agent memory = last 4 messages of whichever thread was resolved
+   (`packages/agent/src/run.ts:137`).
+4. **Token budget miscounts cache traffic.** `TOKEN_BUDGET = 20_000`
+   (`run-policy.ts:9`) is compared against `usageTotals.totalTokens`, which
+   sums `cache_creation` and `cache_read` tokens at full weight
+   (`usage.ts:40`). An operator turn ships all 28 tools (~6k tokens) plus the
+   operator prompt every iteration, so the budget dies after ~2 model calls.
+   Worse, the check runs **before** the end-turn check
+   (`agent-loop.ts:209` vs `:213`) and the `token_budget` branch in
+   `run.ts:204-208` discards `loop.finalText` — a finished answer is thrown
+   away and replaced with "Agent stopped - this request required too many
+   steps."
+5. **Notifications are invisible to the agent.** Plan/question pushes go out
+   over the channel and into the `OperatorContext` side table; they exist on no
+   thread, so the model can never see what the merchant is replying to.
+6. **Plan notifications hide the draft.** `formatOperatorPlanMessage`
+   (`planning-notifications.ts:98-137`) renders `send_email` as "Email Rajbir"
+   with no body — approval is sight-unseen without opening the dashboard.
+7. **Docs drift.** CLAUDE.md still describes `intent.ts` as "operator-channel
+   intent classification + tool subset selection" (it is customer-prose guard
+   signals only) and still lists `order-status-fast-path.ts` (deleted in
+   `a5884b6`).
 
-## Phase 0 — Mechanical cleanup (no behavior change) [COMPLETED]
-
-No model-facing changes; unit tests only, no eval gate.
-
-1. Deduplicate: `SHIPPING_COVERAGE_QUESTION_RES` / `DISCOUNT_POLICY_QUESTION_RES`
-   (in both `intent.ts` and `merchant-answer-kb.ts`), `planningIntentTexts`
-   (`intent.ts`, `planner-read-skip.ts`), `customerMessageTexts`
-   (`planner-safety/mutative.ts`, `planner-safety/policy-gap.ts`). Single home:
-   `intent.ts` until Phase 3 deletes them.
-2. Remove `OPENAI_API_KEY` from both `.env.example`s and the CLAUDE.md env list
-   ("OpenAI (embeddings)" line — KB search is Prisma `contains`).
-3. Fold `requireApprovalForActions` into the tier system: its one consumer
-   (`dashboard-approval.ts:39`) evaluates true for every tier under defaults.
-   Remove from defaults, `TIER_DEFAULTS`, `AUTONOMY_OVERRIDE_PATHS`,
-   settings-parser, and the migration path. Keep parsing tolerance for stored
-   JSON that still contains the key.
-4. Spend cap: check once per run/plan (entry of `planAgent` / `runAgent` /
-   `runOrderOps`) instead of before every model call. `recordSpend` stays
-   per-call. Consistent with the cap's own documented contract (backstop, not
-   billing meter).
-5. `buildContext`: accept a message-window option so operator/read-only callers
-   fetch 4 messages instead of 50 and slicing after.
-
-Exit: typecheck + unit tests green. No eval run needed.
-
-## Phase 1 — Extend the intelligence classifier (additive) [COMPLETED]
-
-Extend `generateThreadIntelligence` / `email-classification.ts` JSON schema
-with structured intent signals, alongside the existing title/summary/tag/filter:
+## Target architecture
 
 ```
-intents: {
-  mutative_request: boolean,      // asks to cancel/refund/return/exchange/edit
-  policy_question: boolean,       // shipping coverage, returns policy, discounts
-  order_status: boolean,
-  fraud_signals: boolean,         // chargeback, alternate-card refund, urgency+non-receipt
-  contradiction: boolean,         // mutually exclusive asks in one message
-  out_of_scope_commercial: boolean, // wholesale/bulk/B2B
-  forwarded_injection: boolean,   // forwarded "owner authorized refund" pattern
-},
-language: string                  // ISO 639-1 of the customer's message
+inbound operator text
+  → binding resolution (unchanged)
+  → exact fast path: literal "yes" / "no" / "help"  (free, deterministic)
+  → everything else: ONE agent turn on THE operator thread, with
+      • system prompt: operator persona + pending-state ledger
+        (pending plan incl. draft bodies, pending question, digest age)
+      • history: last ~20 messages of the operator thread — which now
+        includes the notifications the system itself sent
+      • tools: full registry + 4 control-plane module tools
+  → control tools effect state transitions deterministically:
+      approve_pending_plan  → executes the STORED rawToolCalls verbatim
+      reject_pending_plan   → clears the pending plan
+      revise_pending_plan   → replans with the merchant's guidance folded in
+      answer_operator_question → existing KB-ingest + replan machinery
 ```
 
-- Persist on `Thread` (new JSON column or inside an existing JSON field) with a
-  `classifierVersion`.
-- Nothing consumes it yet. Prompt-only change to an existing Haiku call;
-  verify with the existing classifier unit tests plus a handful of fixture
-  transcripts run as single-fixture probes (not the full gate).
+The model interprets intent; it can never author the approved action.
+`approve_pending_plan` takes no arguments that shape execution — it fires the
+exact tool calls the human was shown, the same verbatim contract quick-approve
+already has. The keyword grammar survives only as a cache in front of the
+interpreter and can only shrink.
 
-Exit: intents populated on new inbound threads in production; spot-checked.
+## Phase A — Token budget correctness (bug fixes, no architecture)
 
-## Phase 2 — Shadow the guard swap [COMPLETED]
+No prompt or tool changes. Unit tests only; no eval run.
 
-Reuse the `AutonomyShadowDecision` pattern: compute the new classifier-based
-routing decision next to the live regex guards without changing behavior.
+1. `packages/agent/src/usage.ts`: add `budgetTokens` to `ModelUsageMetrics`
+   and to `readModelUsage`/`recordModelUsage`, computed cost-weighted:
+   `inputTokens + outputTokens + 1.25 * cacheCreationInputTokens +
+   0.1 * cacheReadInputTokens` (rounded). Keep `totalTokens` as-is for
+   logging/spend continuity.
+2. `packages/agent/src/agent-loop.ts`: compare `usageTotals.budgetTokens`
+   (not `totalTokens`) against `tokenBudget`, and move the check **after** the
+   `end_turn` / no-tool-use handling — a turn that finished cleanly returns
+   `end_turn` with its `finalText` even if the budget is exhausted. The budget
+   stop only fires when the loop would otherwise continue iterating.
+3. `packages/agent/src/run.ts` `token_budget` branch: return
+   `loop.finalText?.trim() || "<current canned message>"` — never discard a
+   generated answer.
+4. `TOKEN_BUDGET` stays `20_000`: with cost weighting that now affords ~10+
+   cached operator iterations while a genuinely runaway loop still trips.
 
-1. Build the replacement routing function: inputs are classifier intents +
-   plan raw tool calls + order state from context. Output is
-   `auto_execute | needs_review | escalate` plus warning strings. It never
-   adds, removes, or edits tool calls.
-2. At the end of `planAgent`, log (or persist a shadow row for) both decisions:
-   what the regex guards did to the plan vs. what the routing function would
-   have decided. Include which signal fired on each side.
-3. Run on production traffic until disagreements are explained. Expected
-   classes of disagreement: non-English messages (regex misses, classifier
-   catches — the point of the change) and regex false positives on
-   informational questions.
+Tests: extend `usage` unit tests for the weighting; add an `agent-loop` unit
+test asserting (a) end_turn-with-answer over budget → `end_turn`, (b) continued
+tool-looping over budget → `token_budget`.
 
-Exit: disagreement rate understood and each class dispositioned (fix classifier
-prompt, accept, or adjust routing thresholds).
+Exit: typecheck + unit suites green. Behavior change is strictly "an artificial
+stop fires later and no longer eats answers" — no eval gate (per eval-cost
+policy, no prompt/tool-choice surface changed).
 
-## Phase 3 — Guards route, never author [COMPLETED]
+## Phase B — One operator thread per binding (plumbing, no model behavior change)
 
-Swap in the routing function and delete the plan-mutation machinery.
+1. **Schema** (`packages/db/prisma/schema.prisma` + migration): add
+   `operatorKey String? @map("operator_key")` to `Thread` with
+   `@@unique([organizationId, operatorKey])`. The key is the binding ref
+   already used as `senderRef`: `imessage:<senderId>` / `telegram:<chatId>`.
+2. **Resolution**: new `resolveOperatorThread(orgId, operatorKey)` in
+   `packages/agent/src/internal-thread.ts` — upsert a Customer with
+   `platformId = operatorKey` (existing pattern), then find-or-create the
+   single `sms_agent` thread by `(organizationId, operatorKey)`. The thread is
+   never auto-closed by session logic. `channelType` stays `sms_agent` — no
+   enum migration; `isOperatorChannel` already covers it.
+3. **Turn wiring**: `executeOperatorAgentTurn`
+   (`apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`) gains
+   `operatorKey` and uses it for freeform turns. The `threadId` param remains
+   for plan approval, which targets the *ticket* thread. `orderNumber`-based
+   resolution is no longer passed from `executeFreeFormInstruction`
+   (`routes/telegram/agent-execution.ts:66,80-84`) — delete the
+   `extractOrderNumber(body) || context.lastOrderNumber` thread-targeting;
+   the model resolves orders via tools from the instruction text.
+4. **Notifications become thread messages**: after a successful delivery gate
+   in `notifyOperator` (`apps/gateway/src/operator-notify.ts:105`, inside the
+   idempotency-checked path), mirror the sent body to that binding's operator
+   thread as `senderType: "agent"`. Same for direct `reply(...)` sends on the
+   command paths (wrap once where `OperatorMessageContext` is constructed).
+   Freeform turns already persist both sides via
+   `persistUserMessage`/`persistAgentMessage` (`turn.ts:79-112`) — do NOT
+   double-write those; mirror inbound bodies only on non-turn command paths.
+5. **History window**: `run.ts:137` — operator mode moves from
+   `slice(-4)` to `slice(-20)`; `readOnly` stays at 4. Phase A's budget fix
+   plus prompt caching absorbs the cost. (`buildContext` already supports
+   `messageWindow`; the default 50 load is fine.)
+6. `OperatorContext.lastThreadId` / `lastOrderNumber` / `history` stop being
+   *consumed* but the columns stay until Phase D.
 
-1. Structural checks stay (they are the correct kind — tool calls vs. Shopify
-   state, no prose): already-refunded refund strip, fulfilled-order cancel
-   escalation, static policy caps, `stripEmptySendReplyToolCalls`,
-   `classifyHomePlan` and its warning tiers.
-2. Regex-driven guards are replaced by routing outcomes:
-   - mutative intent without action/escalation → `needs_review` + warning
-     (today: strips the reply and forces a replan).
-   - fraud / forwarded-injection / contradiction / out-of-scope → `escalate`,
-     created deterministically by the system with the classifier's reason
-     (today: forced-`tool_choice` model call to author `escalate_to_human`).
-     Escalation is a routing decision, not content generation.
-   - policy gap with no KB coverage → `needs_review` surfaced as a merchant
-     question (today: synthetic `ask_operator` injection with id
-     `tu_policy_gap_ask`).
-   - channel-deflection reply → `needs_review` + warning (today: reply
-     stripped).
-3. Delete: `intent.ts` regex families and their consumers in
-   `planner-safety/mutative.ts` and `planner-safety/policy-gap.ts`,
-   `draftRequiredTerminalTool` + `ESCALATION_DRAFT_PROMPT`,
-   `buildPolicyGapAskOperatorCall`, the brand-voice order-status guard,
-   the KB keyword-coverage checker (`kbArticlesCoverQuery`) where it backs
-   guard decisions. `merchant-answer-kb.ts` topic tagging switches to
-   classifier intents.
-4. Update `plan-preview.ts` / dashboard to render the new warning strings and
-   the `needs_review` reasons; `classifyHomePlan` consumes routing output
-   instead of scanning for the synthetic ask_operator call.
+Tests: gateway integration tests on the real test DB (bootstrap per
+`test-bootstrap.mjs`): two freeform texts from one binding land on one thread;
+a plan notification appears as an agent message on that thread; two bindings
+get two threads. No prompt changes → no eval run.
 
-Exit: full eval gate run (baseline comparison; sign-off before the run per
-eval-cost policy). Shadow logging from Phase 2 stays on for one more release
-as the rollback signal; revert = flip back to the regex path, which remains in
-git history.
+Exit: merchant's chat ≡ one DB thread; notifications visible in its history.
 
-## Phase 4 — One loop: planner becomes capture-mode run [IMPLEMENTED — regression fixed; confirming gate pending]
+## Phase C — State ledger + control-plane tools (the core change)
 
-Collapse the five-phase planner into the run loop with an execution strategy.
+### C1. Control tools (gateway module tools)
 
-1. Add a tool-execution mode to the shared loop:
-   - `execute` — current `runAgent` behavior.
-   - `capture` — read tools execute for real; mutative and terminal tools
-     (`send_reply`, `send_email`, `escalate_to_human`, `ask_operator`,
-     thread-status/tag) are recorded as plan steps, not executed.
-   - `read_only` — existing composer-ask filter, expressed as the same
-     mechanism.
-2. Planning contract is structural: the loop ends when the model emits a
-   terminal tool or hits the iteration cap. If it stops without one, re-prompt
-   once with the terminal-tool contract — this replaces the regex-triggered
-   reply-draft and replan-retry phases.
-3. Planner runs on the judgment tier (`pickModel("agent_run")`) for all
-   iterations; `plan_initial` / `plan_replan` / `reply_draft` task types
-   disappear.
-4. Delete: `planner-initial-phase.ts`, `planner-replan.ts`,
-   `planner-terminal.ts`, `planner-read-skip.ts` (skip partitioning, synthetic
-   read results, all-reads-skipped retry, `synthesizeMutativeReplanContext`),
-   `planner-tools.ts` phase prompts. `planAgent` becomes a thin wrapper:
-   build context → capture-mode loop → Phase 3 routing → plan record
-   (steps, rawToolCalls, readResults, warnings — cache shape unchanged).
-5. Delete both order-status fast paths (`order-status-fast-path.ts`): the
-   plan-side template path is already dead for any org with brand voice or
-   sample replies; the operator-side path (hand-rolled `extractCustomerQuery`
-   parsing and customer-match scoring) is subsumed by one loop iteration.
-   `selectToolNamesForInstruction` operator tool-subsetting goes with it; the
-   full registry rides every call.
-6. `plan-cache`, `plan-execution`, quick-approve, and verbatim approved
-   execution are unchanged — approved plans still execute with zero model
-   calls.
+New file `apps/gateway/src/message-handlers/operator-session-tools.ts`, built
+with `defineTool` and passed as `moduleTools` — the exact pattern
+`order-ops/run.ts` (`FLAG_ORDER_TOOL`, `MODULE_TOOLS`) already proves out.
+`category: "action"`, `policy: { categoryPermission: false }` (a workspace tool
+toggle must not hide approval), empty `capabilities`.
 
-Exit: full eval gate + judge run (sign-off first). Compare per-plan model-call
-counts and token usage in the plan logs before/after; expect fewer calls,
-similar or slightly higher cost per call, no regression in gate score.
+- `approve_pending_plan` — no meaningful args. Executes the pending plan's
+  **stored** `rawToolCalls` verbatim through the existing approved-execution
+  path (`executeOperatorAgentTurn` with `approvedToolCalls`, zero model calls),
+  then clears `pendingPlan`. Tool result: the run summary, so the model can
+  report "Sent — refund issued."
+- `reject_pending_plan` — clears `pendingPlan`; result "Plan dismissed."
+- `revise_pending_plan({ guidance: string })` — replan the pending plan's
+  thread with the merchant's words folded in. Reuse the
+  `handlePendingQuestionAnswer` machinery generalized: persist a merchant note,
+  save the guidance to KB when it is a reusable fact (existing
+  `saveMerchantAnswerToKb` heuristics), replan via `planAgent` with the
+  guidance pinned, update `pendingPlan` + re-push the new plan text. Result:
+  the new draft summary.
+- `answer_operator_question({ answer: string })` — the current
+  `handlePendingQuestionAnswer` body, verbatim, as a tool executor.
 
-Status: items 1–6 implemented and merged to master (`agent-loop.ts` shared
-loop; `planner.ts`/`run.ts` rewritten onto it; both order-status fast paths,
-`selectToolNamesForInstruction`, and the five-phase planner modules deleted).
-Typecheck, lint, and unit tests (agent/dashboard/gateway) are green.
+To thread these into a support-context run: `RunAgentOptions`
+(`packages/agent/src/run.ts:32`) gains optional
+`moduleTools?: Record<string, AgentToolDefinition>`; `runAgent` appends their
+Anthropic definitions to the selected tool list and forwards `moduleTools` to
+`executeAgentToolCalls` → executor (the executor already resolves
+`moduleTools?.[name] ?? getToolDefinition(name)`, `tools/executor.ts:49-51`).
+This is a host-agnostic seam, consistent with the module-tools design.
 
-Update (2026-07-09): the eval gate was run (with sign-off) and came back **RED —
-and it surfaced a Phase 4 regression, not a model one.** Aggregate 87.8% vs
-baseline 95.5% (−7.7pts), 7/74 fixtures failed, run on `sonnet-5` (Phase 6). A
-7-fixture attribution probe on `sonnet-4-6` (Phase 6 reverted, Phase 4/5 kept)
-reproduced 6/7 failures → **the regression is this collapse, not the Phase 6
-model bump; Phase 5 is behavior-preserving.** The baseline (2026-07-07) predates
-this commit, so its 95.5% reflects the old phased planner.
+Re-entrancy note: `approve_pending_plan` acquires the *ticket* thread's lock
+while the operator turn holds the *operator* thread's lock — different
+threadIds, no deadlock. Guard anyway: if the pending plan's threadId equals the
+current thread (cannot happen in practice), return a clean tool error.
 
-- **Regression #1 — behavior (FIXED, not yet committed):** the single Sonnet
-  loop bails to `escalate_to_human`/`ask_operator` with an empty reply on routine
-  order-status/refund requests answerable from context, where the old phased
-  planner structurally guaranteed completion (Haiku initial reads + read-skip
-  synthetic context + a forced `send_reply` terminal, all deleted here). Trigger:
-  the model calls `get_order_tracking` on an in-context order, gets an
-  unhelpful/empty result, and escalates instead of replying. Fix = **(B) a
-  deterministic capture-mode read guard** (`planner-read-tools.ts`: when
-  `get_order_tracking` targets an order already in `ctx.recentOrders`, return a
-  synthetic result carrying its fulfillment state that steers a context reply
-  rather than an escalation; unshipped short-circuits the live call) **plus a
-  targeted prompt line** (`prompt.ts`: never escalate/ask a routine "where is my
-  order?" answerable from `fulfillment_status`; empty tracking ≠ escalate).
-  Validation on the 7 fixtures: 4/7 fully green; the other 3 now produce correct
-  `send_reply`-from-context plans — the escalate/over-fetch/empty-reply bug is
-  gone.
+### C2. Ledger
 
-- **Regression #2 — classification (RESOLVED → accept `quick_reply`, 2026-07-09):**
-  the 3 residual order-status fixtures (`order-status-basic`,
-  `-multiple-orders-pick-recent`, `-not-shipped-yet`) now reply correctly but
-  classified `quick_reply` where they expected `needs_review`. Cause: item 5
-  (delete the order-status fast path) also removed the `if (plan.orderStatusFastPath)
-  → needs_review` branch from `detectQuickReply` in `plan-preview.ts`. Order-status
-  replies were reviewed *because* they came from the fast path; with the fast path
-  gone they fall through to `quick_reply`.
+- `BuildContextOptions` (`packages/agent/src/context.ts:71`) gains
+  `operatorLedger?: string`; `buildContext` copies it onto the context.
+- `prompt.ts` operator branch (`buildSystemPromptParts`, `:202-222`): when
+  `ctx.operatorLedger` is set, insert a `## Pending state` section between the
+  integrations block and the instructions. The core treats the ledger as an
+  opaque host-rendered string — no gateway concepts leak into the package.
+- The gateway renders the ledger from `OperatorContext` before each turn
+  (`executeFreeFormInstruction`): pending plan → ticket id, customer name,
+  one-line summary, actionable steps, and the full `message`/`body` input of
+  any `send_reply`/`send_email` in `rawToolCalls` (truncate at ~600 chars);
+  pending question → the question text; pending digest → age + item count.
+  When nothing is pending: "Nothing is awaiting the merchant's decision."
 
-  Resolution follows the merchant's product rule: a simple, no-mutation question
-  answerable from context (order status/tracking) should just draft a reply — the
-  merchant's only decision is send/no-send, which is exactly what `quick_reply`
-  is (the one-tap send card still shows the drafted reply for a glance).
-  `needs_review` is reserved for when the merchant must decide more than send: a
-  mutation, a contradiction, or missing/ambiguous customer identity. The
-  post-Phase-4 `classifyHomePlan` already routes on that axis (mutation → tier;
-  blocking warning → review; lone clean `send_reply` → `quick_reply`); the deleted
-  fast-path branch was a *blanket* "order-status is always reviewed" override that
-  this rule rejects as over-conservative. So the new `quick_reply` is correct and
-  the 3 fixtures were updated to assert it. The multi-order "picked the most
-  recent" case is `quick_reply` too (uniform): the merchant sees the named order
-  in the draft, and a "multiple-orders → review" signal is not cleanly buildable
-  here — a pure order-count trigger over-flags unambiguous named-order replies, and
-  detecting ambiguity needs regex-over-customer-prose, which Phase 3 deleted by
-  design.
+### C3. Prompt
 
-  The guard's warning-suppression (`planner-read-tools.ts`) stays as-is: it is
-  scoped to orders already in `ctx.recentOrders` (the answerable case); a
-  genuinely unknown order still raises its warning → `needs_review`, preserving
-  the "complex / unanswerable → ask" half.
+Append to `OPERATOR_INSTRUCTIONS` (`prompt.ts:171`):
 
-- **Regression #3 — watch-tier refund routing (RESOLVED → draft-for-review,
-  2026-07-09):** the other tier shift. On a clear refund request (identified
-  order, within cap), the single loop elected `ask_operator` ("should I refund?")
-  → classified `needs_merchant_input`, where `tier-watch-refund-draft-only`
-  expects `needs_review`. Both route to the merchant and neither auto-fires, so
-  the safety spirit held, but a watch-tier refund should be *drafted for one-tap
-  review*, not turned into a question round-trip ("you handle this → propose the
-  action, I approve"). Fix = a prompt clause on the `ask_operator` definition
-  (`prompt.ts`): do not use `ask_operator` to get permission for an action the
-  customer plainly requested and guardrails allow — propose the action tool as the
-  plan step (the autonomy tier holds it for approval when required); reserve
-  `ask_operator` for a missing fact/resource. The refund-cap / fraud / order-state
-  escalation guardrails are untouched.
+- When a pending plan exists and the operator's message clearly approves it
+  (yes / send it / go ahead / looks good), call `approve_pending_plan`. When
+  they clearly decline, call `reject_pending_plan`. When the message supplies
+  facts, corrections, or changes for it, call `revise_pending_plan` with their
+  guidance. When assent is ambiguous ("ok", "hmm fine"), ask one short
+  confirming question instead of calling a tool.
+- When a pending question exists and the message plausibly answers it, call
+  `answer_operator_question` with the answer.
+- A message about something else entirely (an order lookup, a new instruction)
+  is handled normally and MUST NOT touch the pending plan.
+- After a control tool runs, state plainly what happened, quoting the concrete
+  action (e.g. "Sent — Sarah gets the $12 refund.").
 
-  Targeted eval confirmation (`sonnet-5`, with sign-off): the 7 originally-RED
-  fixtures went **0/7 → 5/7 clean** (order-status ×3, `memory-past-tickets`,
-  `tier-trusted-refund` all pass). `brand-voice-cheers-signoff` is a flake (2/3 at
-  repeats=3): behavior is correct (context reply, no escalation), the occasional
-  miss is the model dropping the literal "cheers" sign-off — a sonnet-5 voice
-  softness, not this regression. `tier-watch-refund-draft-only` flipped **0/3 →
-  3/3 `needs_review`** after the Regression #3 clause, and a repeats=3 guard run
-  confirmed three `ask_operator` policy-gap fixtures still classify
-  `needs_merchant_input` (no over-steer).
+### C4. Dispatch collapse
 
-  Status: the full fix — capture-mode read guard (`planner-read-tools.ts`) + two
-  prompt clauses (`prompt.ts`: order-status no-escalate + `ask_operator`
-  no-permission) + the 3 order-status fixture reclassifications — is staged in the
-  working tree, ready to commit. A confirming *full* gate run is deferred pending
-  sign-off per the eval-cost policy; the targeted runs above cover every fixture
-  that was RED plus the over-steer guard set.
+Both handlers (`routes/imessage/message-handler.ts:72-115`,
+`routes/telegram/message-handler.ts`):
 
-(Original exit criterion — full eval gate + judge run — is now satisfied for the
-gate; the judge fired only on fixtures that drafted a non-empty reply.)
+- Extract `approvePendingPlan(...)`/`rejectPendingPlan(...)` helpers from
+  `handlePendingPlanCommand` so the fast path and the control tools share one
+  implementation (including the `skip N` refresh logic, which stays
+  keyword-only for now).
+- Keyword fast path keeps: `help`, `summary`/`status`, the digest arms
+  (`review`, `open N`, `spam N`, `reply N …`), and — against a pending plan —
+  literal `yes`/`run`/`no`/`dismiss`/`skip N` after `body.trim().toLowerCase()`
+  (fixes the untrimmed-match bug in passing).
+- Delete: the anchored `order-lookup` arm + `handleOrderLookup`
+  (`agent-execution.ts:9-57`), and the pre-agent `handlePendingQuestionAnswer`
+  dispatch (its body now lives in the `answer_operator_question` tool).
+- Everything else → the single operator agent turn (ledger + module tools).
 
-## Phase 5 — Executor capability injection; order-ops rejoins
+### C5. Notification copy
 
-1. Tool definitions declare required capabilities (`thread-io`, `shopify`,
-   `kb`, `stats`). `tools/executor.ts` stops eagerly building thread context;
-   it takes injected capability deps and returns a clean error when a required
-   capability is absent from the context.
-2. `order-ops/run.ts` drops its forked dispatcher and loop; the module becomes
-   configuration over the shared loop: `{ system prompt, tool subset
-   (+ flag_order as a module tool), context builder, escalate sink, terminal
-   tools }`. The deterministic risk-signal pre-filter stays in front of the
-   loop.
-3. `run.ts`'s "thread-less module loops are not wired until Track 3" throw is
-   removed; a `BaseAgentContext` with no thread runs any module whose tools
-   don't require `thread-io`.
+`formatOperatorPlanMessage`: include the draft body excerpt under the step
+list, and replace the `yes · no · skip 1` footer with
+`Reply "yes" to send, or tell me what to change.` (keep the dashboard link).
 
-Exit: order-ops smoke + unit tests; support eval gate unaffected (support-path
-diff should be executor-internal only — verify with a single-fixture probe
-before deciding whether a full gate run is warranted).
+### Verification (eval-cost policy applies: sign-off before any run)
 
-Status: items 1–3 implemented. Tools now declare `capabilities`
-(`registry/types.ts` + `defineTool`); the executor gates on them centrally
-(`unmetToolCapability`, checked after policy so support behavior is byte-identical
-— missing shopify/thread-io returns the same clean errors the per-tool guards
-did) and accepts injected `moduleTools`. `order-ops/run.ts` no longer forks the
-dispatcher or loop: it runs on `runAgentLoop` (execute mode) with
-`selectAgentToolsForContext` (capability-filtered reads) + `flag_order` as a
-`defineTool` module tool, keeping the risk-signal pre-filter, audit batch, and
-result shape. `run.ts`'s Track-3 throw is gone (non-support contexts return
-cleanly; thread-less modules run via `runAgentLoop`). Typecheck + lint green;
-agent (371) / gateway (132) / dashboard (382) unit suites and the order-ops
-thread-less audit integration test pass. The support path is behavior-preserving
-by construction, so the single-fixture eval probe / full gate run is deferred
-pending sign-off per the eval-cost policy.
+- Unit/integration (real DB, no model): ledger rendering; each control tool's
+  executor; fast-path/turn dispatch matrix; approve executes stored calls
+  byte-identically (assert the `AgentAction` rows match the parked
+  `rawToolCalls`).
+- New **operator-turn fixture set** (~12 fixtures, deterministic tool-choice
+  assertions — which control tool fired, or none — no prose judging, 1 model
+  call each): assent phrasings ×3 → `approve_pending_plan`; decline ×2 →
+  `reject`; fact-supply ("It's a fixed size") and change-request ("make it
+  friendlier, add 10%") → `revise`; pending-question answer → `answer`;
+  order-status question with a plan parked → order tools only, plan untouched;
+  ambiguous "ok" → no control tool, asks; no-pending freeform → normal turn.
+  Home: `apps/gateway/src/__evals__/operator-turns/`, mirroring the dashboard
+  harness's env-gated runner. Single-fixture probes during development; one
+  full set run at the end.
+- The support-ticket planner path is untouched by C (operator prompt branch,
+  optional moduleTools, notification copy only) — no full support gate needed;
+  justify any extra run against that.
 
-## Phase 6 — Model refresh (last, isolated)
+Exit: fixture set green with sign-off; dispatch matrix covered by unit tests.
+Rollback: revert the dispatch commit — the keyword handlers remain in git
+history; Phases A/B stand alone.
 
-Bump `HAIKU_MODEL` / `SONNET_MODEL` pins to the current generation as a
-standalone change after the architecture is stable, so model deltas are never
-confounded with architecture deltas. Requires its own baseline capture
-(sign-off first).
+## Phase D — Delete the vestiges + docs
 
-Status: code change landed. `HAIKU_MODEL` was already current
-(`claude-haiku-4-5-20251001`) everywhere (agent `ai/index.ts`, gateway
-`constants.ts`, `llm-spend` pricing), so Haiku was a no-op. Sonnet moved
-`claude-sonnet-4-6` → `claude-sonnet-5` in the three production call paths:
-`SONNET_MODEL` (agent core), gateway `VOICE_SYNTHESIS` (brand-voice synthesis),
-and the `packages/db/llm-spend.ts` pricing key (renamed in lockstep so spend
-tracking doesn't fall to the overcounting fallback). The eval grader
-(`__evals__/judge.ts` `JUDGE_MODEL`) is deliberately held on `claude-sonnet-4-6`
-— the baseline was graded by 4-6, and Phase 6's exit is a baseline *comparison*,
-so bumping the ruler in the same change would confound "better agent" with
-"different grader"; refreshing the judge is its own change with its own
-re-baseline. Pricing numbers kept at 4-6's rates ($3/$15 in/out) — not verified
-against Sonnet 5's actual token price; if it costs more this undercounts and the
-spend backstop bites late. Verify against Anthropic's current price list.
+1. Migration: drop `OperatorContext.history`, `lastOrderNumber`,
+   `lastThreadId` (keep `pendingPlan`/`pendingQuestion`/`pendingDigest` as the
+   ledger's backing store). Delete their read/write plumbing
+   (`operator-context.ts`, `agent-execution.ts`).
+2. Delete `resolveInternalAgentThread`'s `orderNumber` Shopify-fabrication
+   branch if the dashboard `agent/internal` route no longer passes it — verify
+   callers first; if still used there, leave with a comment scoping it to that
+   route.
+3. `progress-copy.ts`: drop the order-lookup variant ("Looking into #X…") if
+   its trigger is gone; keep the generic working copy.
+4. CLAUDE.md: fix the `intent.ts` description (customer-prose guard signals
+   only), remove the `order-status-fast-path.ts` line, describe the operator
+   channel as "one durable operator thread per binding; pending approvals are
+   agent state + control tools, keyword fast path for literal yes/no/help",
+   and note `OperatorContext` is now pending-state only.
+5. Re-audit `parseTelegramCommand`: what remains should be `help`, `summary`,
+   digest arms, and pending-plan literals only.
 
-Typecheck + lint clean for the three changed packages (agent/db/gateway); the
-gateway spend/pricing test passes. (The dashboard's pre-existing email-oauth WIP
-in the working tree fails typecheck/lint on its own, unrelated to this change.)
-
-Caveat — unlike Phases 4/5 (behavior-preserving by construction), this is the
-first phase that changes which model runs in production on merge. The code is
-safe to land, but the runtime switch is unverified until the baseline is
-captured: **do not deploy until baseline + sign-off** per the eval-cost policy.
-Note the stacked deferral: Phases 3/4/5 eval gates are all still outstanding, so
-whenever a baseline finally runs it folds architecture and model deltas together
-— the confound the phasing was meant to avoid. Not introduced here, but named so
-it isn't a surprise.
+Exit: typecheck + unit suites green; grep confirms no consumer of the dropped
+columns. No eval run (no model-facing change).
 
 ## Design constraints
 
-- Guards classify and route; they never author or edit tool calls.
-- Deterministic checks operate on structured data only — tool-call inputs,
-  amounts, order state, plan shape. No regex over customer prose survives.
-- Approved plans execute verbatim, with zero model calls, throughout.
-- The executor and loop stay host-agnostic and thread-optional; modules are
-  configuration, not forks.
-- Each phase lands independently and is revertible on its own; eval-gate runs
-  happen at the two model-behavior boundaries (Phase 3, Phase 4) and for the
-  model bump (Phase 6), with sign-off before each run.
-- `settings-parser.ts` stays as-is (works, tested) but must not grow; if it
-  needs new field types, that is the trigger to adopt a schema library.
+- The model interprets intent; deterministic code executes transitions.
+  Approved plans execute verbatim from stored `rawToolCalls`, zero model calls,
+  throughout — control tools cannot pass arguments that alter what runs.
+- The keyword grammar is a fast-path cache in front of the interpreter. It may
+  only shrink; adding a synonym to it is the tell that interpretation is
+  leaking back into regexes.
+- The agent core stays host-agnostic and module-agnostic: the ledger is an
+  opaque string the host renders; control tools are host `moduleTools`; no
+  gateway import enters `packages/agent`.
+- Notifications the system sends are part of the conversation and must be
+  persisted where the agent can see them.
+- Each phase lands independently and is revertible on its own. Eval runs only
+  at the model-behavior boundary (Phase C) with sign-off first, per the
+  eval-cost policy.
 
 ## Explicitly deferred
 
-- Non-English eval fixtures (needed to prove the language-safety win of
-  Phases 2–3; tracked separately, not part of this plan).
-- WhatsApp adapter and other roadmap module work
+- Digest arms (`review`, `open N`, `spam N`, `reply N …`) moving into the
+  model. Keyword digest UX works; fold it into control tools only if merchants
+  demonstrably phrase digest actions naturally and miss.
+- `Message.senderType` for operator-authored texts is stored as `"customer"`
+  on operator threads (legacy). Renaming means an enum migration touching every
+  consumer — out of scope; known wart.
+- Operator-side tool subsetting (28 tools ride every turn). Phase A's budget
+  fix removes the cost pressure; revisit only with data, and never via regex
+  intent classification.
+- The stacked full-gate baseline for prior Phases 3/4/5/6 — tracked in
+  "Carried-forward state" above; a prerequisite ordering constraint on Phase C,
+  not part of this plan's work.
+- Non-English eval fixtures; WhatsApp adapter and module #2 work
   (`core-extraction-and-module-expansion-plan.md`).

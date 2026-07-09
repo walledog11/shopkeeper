@@ -1,5 +1,3 @@
-export const MAX_LOGO_BYTES = 2 * 1024 * 1024
-
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 export interface SaveWorkspaceInput {
@@ -30,12 +28,6 @@ export async function saveWorkspaceName(
 
   const body = await res.json().catch(() => ({})) as { version?: string }
   return { status: "saved", version: body.version }
-}
-
-export function logoValidationError(file: File): string | null {
-  if (!file.type.startsWith("image/")) return "Please choose an image file."
-  if (file.size > MAX_LOGO_BYTES) return "Image must be under 2MB."
-  return null
 }
 
 export function exportFilenameFromDisposition(disposition: string, now = new Date()): string {

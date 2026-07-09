@@ -64,7 +64,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         type: "warning",
         title: `Your free trial ends in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}.`,
         message: "Upgrade to keep your team running smoothly.",
-        action: { label: "Upgrade now", href: "/dashboard/settings?tab=billing" },
+        action: { label: "Upgrade now", href: "/dashboard/settings#billing" },
       });
     }
   }
@@ -76,7 +76,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       type: "warning",
       title: "Your payment failed.",
       message: "Update your billing details to avoid service interruption.",
-      action: { label: "Update billing", href: "/dashboard/settings?tab=billing" },
+      action: { label: "Update billing", href: "/dashboard/settings#billing" },
     });
   }
 
@@ -87,7 +87,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       type: "warning",
       title: "Your subscription is canceled.",
       message: "Reactivate your plan to restore agent actions and sending.",
-      action: { label: "Reactivate", href: "/dashboard/settings?tab=billing" },
+      action: { label: "Reactivate", href: "/dashboard/settings#billing" },
     });
   }
 

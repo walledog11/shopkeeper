@@ -3,6 +3,7 @@
 import useSWR from "swr"
 import { fetcher } from "@/lib/api/fetcher"
 import { Button } from "@/components/ui/button"
+import { SettingsDisclosure } from "@/components/settings-form/shared"
 import { formatUnixDate } from "@/lib/format/date"
 import { CreditCard, Loader2, ExternalLink, CheckCircle2, AlertTriangle, XCircle, Clock } from "lucide-react"
 
@@ -50,7 +51,7 @@ export default function BillingTab() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-24">
+      <div id="billing" className="flex items-center justify-center rounded-xl border border-border bg-card py-16">
         <Loader2 className="size-5 animate-spin text-faint" />
       </div>
     )
@@ -58,7 +59,7 @@ export default function BillingTab() {
 
   if (error || !data) {
     return (
-      <div className="flex items-center gap-2 py-10 text-sm text-red-400">
+      <div id="billing" className="flex items-center gap-2 rounded-xl border border-border bg-card px-5 py-6 text-sm text-red-400 sm:px-6">
         <AlertTriangle className="size-4 shrink-0" />
         Failed to load billing information.
       </div>
@@ -73,14 +74,14 @@ export default function BillingTab() {
     : null
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div id="billing" className="scroll-mt-6 space-y-6">
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
           <div>
-            <h2 className="text-sm font-semibold text-strong">Current plan</h2>
-            <p className="text-xs text-faint mt-1 leading-relaxed">Your active subscription and billing cycle.</p>
+            <h2 className="text-sm font-semibold text-strong">Billing</h2>
+            <p className="text-xs text-faint mt-1 leading-relaxed">Plan, payment method, and invoices for this workspace.</p>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -116,88 +117,82 @@ export default function BillingTab() {
                 {isActive ? 'Manage plan' : 'Upgrade'}
               </Button>
             </div>
+
+            <div className="flex items-center justify-between gap-4 border-t border-foreground/[0.06] pt-4">
+              {data.paymentMethod ? (
+                <div className="flex items-center gap-2.5">
+                  <CreditCard className="size-4 text-faint shrink-0" />
+                  <CardBrandIcon brand={data.paymentMethod.brand} />
+                  <span className="text-sm text-strong">ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span></span>
+                </div>
+              ) : (
+                <p className="text-sm text-faint italic">No payment method on file</p>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openBillingPortal}
+                className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
+              >
+                {data.paymentMethod ? 'Update card' : 'Add card'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-4 sm:gap-8 p-5 sm:p-6">
-          <div>
-            <h2 className="text-sm font-semibold text-strong">Payment method</h2>
-            <p className="text-xs text-faint mt-1 leading-relaxed">The card charged at each renewal.</p>
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            {data.paymentMethod ? (
-              <div className="flex items-center gap-2.5">
-                <CreditCard className="size-4 text-faint shrink-0" />
-                <CardBrandIcon brand={data.paymentMethod.brand} />
-                <span className="text-sm text-strong">ending in <span className="font-semibold text-strong">{data.paymentMethod.last4}</span></span>
-              </div>
-            ) : (
-              <p className="text-sm text-faint italic">No payment method on file</p>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={openBillingPortal}
-              className="h-8 px-3 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08] shrink-0"
-            >
-              {data.paymentMethod ? 'Update' : 'Add card'}
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="p-5 sm:p-6 border-b border-foreground/[0.08]">
-          <h2 className="text-sm font-semibold text-strong">Invoice history</h2>
-        </div>
+      <SettingsDisclosure
+        title="Invoice history"
+        description="Download receipts and past invoice PDFs."
+      >
         {data.invoices.length === 0 ? (
-          <div className="px-6 py-8 text-xs text-muted-foreground text-center">No invoices yet.</div>
+          <div className="py-4 text-center text-xs text-muted-foreground">No invoices yet.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-foreground/[0.08]">
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide">Date</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide">Amount</th>
-                <th className="px-5 sm:px-6 py-3 text-left text-xs font-semibold text-faint uppercase tracking-wide hidden sm:table-cell">Status</th>
-                <th className="px-5 sm:px-6 py-3 text-right text-xs font-semibold text-faint uppercase tracking-wide">PDF</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-foreground/[0.06]">
-              {data.invoices.map(inv => (
-                <tr key={inv.id} className="hover:bg-foreground/[0.02] transition-colors">
-                  <td className="px-5 sm:px-6 py-3.5 text-muted-foreground">{formatUnixDate(inv.date)}</td>
-                  <td className="px-5 sm:px-6 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
-                  <td className="px-5 sm:px-6 py-3.5 hidden sm:table-cell">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                      inv.status === 'paid'
-                        ? 'text-green-400 bg-green-400/10 border-green-400/20'
-                        : 'text-faint bg-foreground/[0.06] border-foreground/[0.10]'
-                    }`}>
-                      {inv.status ?? '—'}
-                    </span>
-                  </td>
-                  <td className="px-5 sm:px-6 py-3.5 text-right">
-                    {inv.pdfUrl ? (
-                      <a
-                        href={inv.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-strong transition-colors"
-                      >
-                        Download <ExternalLink className="size-3" />
-                      </a>
-                    ) : (
-                      <span className="text-xs text-faint">—</span>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-foreground/[0.08]">
+                  <th className="py-3 pr-5 text-left text-xs font-semibold uppercase tracking-wide text-faint">Date</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint">Amount</th>
+                  <th className="hidden px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-faint sm:table-cell">Status</th>
+                  <th className="py-3 pl-5 text-right text-xs font-semibold uppercase tracking-wide text-faint">PDF</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-foreground/[0.06]">
+                {data.invoices.map(inv => (
+                  <tr key={inv.id} className="transition-colors hover:bg-foreground/[0.02]">
+                    <td className="py-3.5 pr-5 text-muted-foreground">{formatUnixDate(inv.date)}</td>
+                    <td className="px-5 py-3.5 font-medium text-strong">{formatAmount(inv.amount)}</td>
+                    <td className="hidden px-5 py-3.5 sm:table-cell">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${
+                        inv.status === 'paid'
+                          ? 'text-green-400 bg-green-400/10 border-green-400/20'
+                          : 'text-faint bg-foreground/[0.06] border-foreground/[0.10]'
+                      }`}>
+                        {inv.status ?? '—'}
+                      </span>
+                    </td>
+                    <td className="py-3.5 pl-5 text-right">
+                      {inv.pdfUrl ? (
+                        <a
+                          href={inv.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-strong"
+                        >
+                          Download <ExternalLink className="size-3" />
+                        </a>
+                      ) : (
+                        <span className="text-xs text-faint">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-      </div>
+      </SettingsDisclosure>
 
     </div>
   )

@@ -5,7 +5,13 @@ import { SpamFilterSection } from "./SpamFilterSection"
 import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
-export function WhenOnDutySection({ controller }: { controller: AgentTabController }) {
+export function WhenOnDutySection({
+  controller,
+  emailConnected = false,
+}: {
+  controller: AgentTabController
+  emailConnected?: boolean
+}) {
   return (
     <SectionCard
       title={`When ${controller.settingsState.agentName} is on duty`}
@@ -14,9 +20,11 @@ export function WhenOnDutySection({ controller }: { controller: AgentTabControll
     >
       <div className="space-y-8">
         <BusinessHoursSection controller={controller} embedded />
-        <div className="border-t border-foreground/[0.08] pt-8">
-          <SpamFilterSection controller={controller} embedded />
-        </div>
+        {emailConnected && (
+          <div className="border-t border-foreground/[0.08] pt-8">
+            <SpamFilterSection controller={controller} embedded />
+          </div>
+        )}
       </div>
     </SectionCard>
   )

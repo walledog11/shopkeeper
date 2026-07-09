@@ -1,6 +1,4 @@
-import Link from "next/link"
-import { Download, Loader2, Trash2, Upload } from "lucide-react"
-import { OrgAvatar } from "@/components/OrgAvatar"
+import { Download, Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -11,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { SaveButton, SectionCard } from "@/components/settings-form/shared"
+import { SettingsDisclosure } from "@/components/settings-form/shared"
 import type { WorkspaceTabProps, WorkspaceTabState } from "./useWorkspaceTabState"
 
 interface WorkspaceTabViewProps extends WorkspaceTabProps {
@@ -21,110 +19,10 @@ interface WorkspaceTabViewProps extends WorkspaceTabProps {
 export function WorkspaceTabView({ orgName, state }: WorkspaceTabViewProps) {
   return (
     <div className="space-y-6">
-      <GeneralSection orgName={orgName} state={state} />
-      <BrandingSection orgName={orgName} state={state} />
-      <DataExportSection state={state} />
-      <GdprExportSection state={state} />
+      <DataPrivacySection state={state} />
       <DangerZone orgName={orgName} state={state} />
       <DeleteWorkspaceDialog orgName={orgName} state={state} />
     </div>
-  )
-}
-
-function GeneralSection({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
-  const {
-    error,
-    save,
-    saved,
-    saving,
-    setWorkspaceName,
-    workspaceName,
-  } = state
-
-  return (
-    <SectionCard title="General" description="How your workspace is identified across the dashboard.">
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <span className="block text-xs font-semibold text-muted-foreground">Workspace name</span>
-          <Input
-            aria-label="Workspace name"
-            value={workspaceName}
-            onChange={e => setWorkspaceName(e.target.value)}
-            placeholder="My Store"
-            className="h-9 text-sm bg-foreground/[0.06] border-foreground/[0.12] text-strong placeholder:text-faint"
-          />
-        </div>
-        <div className="flex items-center justify-end gap-3">
-          {error && <p className="text-xs text-red-400">{error}</p>}
-          <SaveButton
-            saving={saving}
-            saved={saved}
-            onClick={save}
-            disabled={!workspaceName.trim() || workspaceName === orgName}
-          />
-        </div>
-      </div>
-    </SectionCard>
-  )
-}
-
-function BrandingSection({ orgName, state }: { orgName: string; state: WorkspaceTabState }) {
-  const {
-    fileInputRef,
-    logoBusy,
-    logoError,
-    organization,
-    removeLogo,
-    uploadLogo,
-  } = state
-
-  return (
-    <SectionCard title="Branding" description="Logo shown in the sidebar and the org switcher.">
-      <div className="flex items-center gap-4">
-        <OrgAvatar
-          name={organization?.name ?? orgName}
-          imageUrl={organization?.imageUrl}
-          className="size-14 rounded-md bg-foreground/[0.06] border border-foreground/[0.10] text-muted-foreground font-semibold text-sm shrink-0"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              aria-label="Workspace logo"
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => {
-                const file = e.target.files?.[0]
-                if (file) void uploadLogo(file)
-                if (fileInputRef.current) fileInputRef.current.value = ""
-              }}
-            />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={logoBusy || !organization}
-              className="h-8 text-xs font-semibold border-foreground/[0.10] text-muted-foreground hover:bg-foreground/[0.08]"
-            >
-              {logoBusy ? <Loader2 className="size-3 animate-spin" /> : <Upload className="size-3" />}
-              {organization?.imageUrl ? "Replace" : "Upload"}
-            </Button>
-            {organization?.imageUrl && (
-              <button type="button"
-                onClick={removeLogo}
-                disabled={logoBusy}
-                className="text-xs text-faint hover:text-strong transition-colors disabled:opacity-40"
-              >
-                Remove
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-faint mt-1.5">PNG, JPG, or SVG. Up to 2MB.</p>
-          {logoError && <p className="text-xs text-red-400 mt-1">{logoError}</p>}
-        </div>
-      </div>
-    </SectionCard>
   )
 }
 
@@ -136,7 +34,13 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
   } = state
 
   return (
-    <SectionCard title="Data export" description="Download a JSON snapshot of all customers, tickets, messages, and memory.">
+    <div className="space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-strong">Data export</h3>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-faint">
+          Download a JSON snapshot of all customers, tickets, messages, and memory.
+        </p>
+      </div>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <p className="text-xs text-faint max-w-md">
           Useful for backups or migrating off Shopkeeper. Doesn&apos;t include integration tokens, billing data, or audit logs.
@@ -155,7 +59,7 @@ function DataExportSection({ state }: { state: WorkspaceTabState }) {
           </Button>
         </div>
       </div>
-    </SectionCard>
+    </div>
   )
 }
 
@@ -169,7 +73,13 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
   } = state
 
   return (
-    <SectionCard title="Customer data export" description="Download all support tickets and profile data for one customer as JSON. Use this to answer data access requests under GDPR (Art. 15) or CCPA.">
+    <div className="space-y-3 border-t border-foreground/[0.06] pt-5">
+      <div>
+        <h3 className="text-sm font-semibold text-strong">Customer data export</h3>
+        <p className="mt-1 max-w-prose text-xs leading-relaxed text-faint">
+          Download all support tickets and profile data for one customer as JSON.
+        </p>
+      </div>
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <Input
@@ -197,7 +107,19 @@ function GdprExportSection({ state }: { state: WorkspaceTabState }) {
           Message data is retained for 90 days, then archived. Archived threads are purged after another 90 days.
         </p>
       </div>
-    </SectionCard>
+    </div>
+  )
+}
+
+function DataPrivacySection({ state }: { state: WorkspaceTabState }) {
+  return (
+    <SettingsDisclosure
+      title="Data & privacy"
+      description="Exports for backups, GDPR requests, and compliance."
+    >
+      <DataExportSection state={state} />
+      <GdprExportSection state={state} />
+    </SettingsDisclosure>
   )
 }
 
@@ -269,11 +191,7 @@ function DangerZone({ orgName, state }: { orgName: string; state: WorkspaceTabSt
               </p>
               {isOnlyWorkspace && (
                 <p className="text-xs text-amber-400/80 mt-1.5">
-                  This is your only workspace. Create another workspace first, or delete your account from{" "}
-                  <Link href="/dashboard/account" className="font-semibold text-muted-foreground hover:text-strong">
-                    Account settings
-                  </Link>{" "}
-                  to leave Shopkeeper.
+                  This is your only workspace. Create another workspace first, or use Profile &amp; security from the avatar menu to delete your account.
                 </p>
               )}
             </div>

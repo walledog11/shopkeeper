@@ -20,7 +20,7 @@ export type BusinessHoursDay = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | '
 
 export interface OrgSettings {
   // AI draft / summary
-  aiContext: string;   // brand name / context fed into AI drafts
+  aiContext: string;   // optional store details (policies, products) fed into AI drafts; business name comes from org.name
   brandVoice: string;  // tone brief appended to AI system prompt
   sampleReplies?: SampleReply[]; // merchant-supplied example replies the agent should imitate
 

@@ -1,4 +1,4 @@
-import { Inbox, Settings, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
+import { Inbox, Building2, Box, Cable, BrainCircuit, IdCardLanyard, Home, ScanEye, SlidersHorizontal } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -33,11 +33,11 @@ export const inboxNavItem: NavItem = {
 
 export const topBarAgentItems: NavItem[] = [
   {
-    name: "Configure",
+    name: "Settings",
     mobileName: "Agent settings",
     href: "/dashboard/agent/configure",
     icon: SlidersHorizontal,
-    description: "Autonomy, voice, and guardrails",
+    description: "Store identity, trust level, and voice",
   },
   {
     name: "Memory",
@@ -65,10 +65,10 @@ export const topBarShopItems: NavItem[] = [shopNavItem];
 
 export const topBarSettingsItems: NavItem[] = [
   {
-    name: "Settings",
+    name: "Billing",
     href: "/dashboard/settings",
-    icon: Settings,
-    description: "Workspace and billing",
+    icon: Building2,
+    description: "Plan, payment method, and invoices",
   },
   {
     name: "Integrations",
@@ -87,7 +87,7 @@ export const topBarSettingsItems: NavItem[] = [
 export const topBarDropdowns = [
   { label: "Agent", items: topBarAgentItems },
   { label: "Shop", items: topBarShopItems },
-  { label: "Settings", items: topBarSettingsItems },
+  { label: "Workspace", items: topBarSettingsItems },
 ] as const;
 
 /** Mobile sidebar nav sections. */
@@ -113,5 +113,5 @@ export const commandPaletteSections = [
   { heading: "Inbox", items: [inboxNavItem] },
   { heading: "Agent", items: topBarAgentItems },
   { heading: "Shop", items: topBarShopItems },
-  { heading: "Settings", items: topBarSettingsItems },
+  { heading: "Workspace", items: topBarSettingsItems },
 ] as const;

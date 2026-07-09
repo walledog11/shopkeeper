@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useClerk } from "@clerk/nextjs";
 import { LogOut, Settings2 } from "lucide-react";
 import { OrgAvatar } from "@/components/OrgAvatar";
 import {
@@ -14,6 +14,7 @@ import type { NavAuth } from "./useNavAuth";
 
 export function UserMenu({ navAuth, variant }: { navAuth: NavAuth; variant: "topBar" | "sheet" }) {
   const { user, signOut, fullName, roleLabel } = navAuth;
+  const { openUserProfile } = useClerk();
   const isTopBar = variant === "topBar";
 
   return (
@@ -49,11 +50,12 @@ export function UserMenu({ navAuth, variant }: { navAuth: NavAuth; variant: "top
         sideOffset={8}
         className="w-52 bg-popover border-border text-popover-foreground"
       >
-        <DropdownMenuItem asChild className="cursor-pointer gap-2 focus:bg-accent">
-          <Link href="/dashboard/account">
-            <Settings2 className="size-4 shrink-0" />
-            Account
-          </Link>
+        <DropdownMenuItem
+          onClick={() => openUserProfile()}
+          className="cursor-pointer gap-2 focus:bg-accent"
+        >
+          <Settings2 className="size-4 shrink-0" />
+          Profile &amp; security
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => signOut({ redirectUrl: "/login" })}

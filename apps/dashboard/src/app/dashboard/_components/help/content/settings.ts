@@ -2,8 +2,8 @@ import type { Category } from "./index"
 
 export const settings: Category = {
   id: "settings",
-  title: "Settings",
-  description: "Configure your business name, AI context, and brand voice",
+  title: "Account & agent settings",
+  description: "Billing, admin controls, and how your AI agent works",
   icon: "⚙️",
   articles: [
     {
@@ -11,14 +11,13 @@ export const settings: Category = {
       title: "Updating your business name",
       body: [
         {
-          text: "Your business name appears in the top header bar and is used by Shopkeeper's AI when drafting replies.",
+          text: "Your business name is shown as the sender name in support emails and is used by Shopkeeper's AI when drafting replies. You usually set it during onboarding.",
         },
         {
           heading: "How to update it",
           steps: [
-            "Open Settings from the top navigation.",
-            "Select the Workspace tab.",
-            "Find the workspace name field and update it.",
+            "Open Agent → Settings in the top navigation.",
+            "Find the business name field under Your store.",
             "Save your changes.",
           ],
         },
@@ -26,26 +25,27 @@ export const settings: Category = {
     },
     {
       id: "ai-context",
-      title: "AI context and brand voice",
+      title: "Store context and brand voice",
       body: [
         {
-          text: "These two settings are the most important for getting high-quality AI drafts. They tell Shopkeeper who you are and how you communicate.",
+          text: "Agent → Settings is where you configure how Shopkeeper represents your store and writes replies.",
         },
         {
           heading: "Where to find them",
           steps: [
-            "Open Agent → Configure in the top navigation.",
-            "Expand Voice & style for brand voice, sample replies, and reply language.",
-            "Expand Behavior & limits for default instructions and spending caps.",
+            "Open Agent → Settings in the top navigation.",
+            "Under Your store, set your business name, about-your-store details, and brand voice.",
+            "Choose a trust level and whether plans generate automatically when you open tickets.",
+            "Expand Advanced for sample replies, reply language, and refund limit overrides.",
           ],
         },
         {
-          heading: "AI Context",
-          text: "This is a short description of your business that Shopkeeper reads before every draft. Include: what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about.",
+          heading: "About your store",
+          text: "Optional details Shopkeeper reads before every draft. Include what you sell, your return / refund policy, typical shipping times, and any information customers frequently ask about. You do not need to repeat your business name here.",
         },
         {
-          heading: "Example AI Context",
-          text: "\"We are The Case Market, a phone case brand. We ship within 2–3 business days. Returns are accepted within 30 days for unused items. We do not offer exchanges, only refunds.\"",
+          heading: "Example",
+          text: "\"We sell premium phone cases. We ship within 2–3 business days. Returns are accepted within 30 days for unused items. We do not offer exchanges, only refunds.\"",
         },
         {
           heading: "Brand Voice",
@@ -61,8 +61,26 @@ export const settings: Category = {
         },
         {
           tips: [
-            "Even a single sentence of AI context makes a big difference to draft quality.",
-            "Update your AI context whenever your policies change.",
+            "Even a single sentence of store context makes a big difference to draft quality.",
+            "Update your store context whenever your policies change.",
+          ],
+        },
+      ],
+    },
+    {
+      id: "account-admin",
+      title: "Billing and workspace admin",
+      body: [
+        {
+          text: "Billing holds your plan, payment method, and invoices. Data exports and workspace deletion live at the bottom of the same page.",
+        },
+        {
+          heading: "What lives there",
+          steps: [
+            "Open Billing under Workspace in the top navigation.",
+            "Manage your plan, payment method, and invoices.",
+            "Expand Data & privacy for backups or GDPR exports.",
+            "Use the danger zone at the bottom to clear ticket history or delete the workspace.",
           ],
         },
       ],

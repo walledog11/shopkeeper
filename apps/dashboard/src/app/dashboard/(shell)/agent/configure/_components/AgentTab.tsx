@@ -1,72 +1,52 @@
 "use client"
 
-import type { ReactNode } from "react"
+import useSWR from "swr"
 import type { OrgSettings, OrgSettingsPatch, VoiceProposal } from "@/types"
+import { fetcher } from "@/lib/api/fetcher"
 import {
+  AgentAdvancedSection,
   AgentAutonomySection,
   AgentDefaultBehaviorSection,
   AgentIdentitySection,
-  AgentResponseSection,
-  AgentSampleRepliesSection,
   StickySaveBar,
+  WhenOnDutySection,
 } from "./agent-tab-sections"
 import { useAgentTabState } from "./useAgentTabState"
-import { TelegramApproveSection } from "./TelegramApproveSection"
-import { WhenOnDutySection } from "./WhenOnDutySection"
 
 interface Props {
   settings: OrgSettings
   rawSettings: OrgSettingsPatch
   version: string
+  orgName: string
   voiceProposal: VoiceProposal | null
 }
 
-interface ConfigureColumnProps {
-  id: string
-  children: ReactNode
-}
-
-function ConfigureColumn({ id, children }: ConfigureColumnProps) {
-  return (
-    <section id={id} className="scroll-mt-24 mb-9 break-inside-avoid">
-      <div className="space-y-3">
-        {children}
-      </div>
-    </section>
-  )
+interface IntegrationRow {
+  platform: string
 }
 
 export default function AgentTab(props: Props) {
   const controller = useAgentTabState(props)
   const { settingsState } = controller
   const agentName = settingsState.agentName
+  const { data: integrations } = useSWR<IntegrationRow[]>("/api/integrations", fetcher)
+  const emailConnected = integrations?.some(row => row.platform === "email") ?? false
 
   return (
-    <div className="min-w-0 space-y-6">
-      <div className="sr-only">
-        <h1>Configure {agentName}</h1>
-        <p>Trust level, duty hours, voice, and operating limits.</p>
+    <div className="mx-auto w-full max-w-3xl space-y-6 pb-20">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">Agent settings</h1>
+        <p className="mt-0.5 text-sm text-faint">
+          How {agentName} represents your store, how much it can do alone, and when it is on duty.
+        </p>
       </div>
 
-      <div className="columns-1 gap-x-6 lg:columns-2 2xl:columns-3">
-        <ConfigureColumn id="trust">
-          <AgentAutonomySection controller={controller} />
-          <TelegramApproveSection />
-        </ConfigureColumn>
-
-        <ConfigureColumn id="duty">
-          <WhenOnDutySection controller={controller} />
-        </ConfigureColumn>
-
-        <ConfigureColumn id="voice">
-          <AgentIdentitySection controller={controller} />
-          <AgentSampleRepliesSection controller={controller} />
-          <AgentResponseSection controller={controller} />
-        </ConfigureColumn>
-
-        <ConfigureColumn id="behavior">
-          <AgentDefaultBehaviorSection controller={controller} />
-        </ConfigureColumn>
+      <div className="space-y-6">
+        <AgentIdentitySection controller={controller} />
+        <AgentAutonomySection controller={controller} />
+        <AgentDefaultBehaviorSection controller={controller} />
+        <WhenOnDutySection controller={controller} emailConnected={emailConnected} />
+        <AgentAdvancedSection controller={controller} />
       </div>
 
       <StickySaveBar controller={controller} />

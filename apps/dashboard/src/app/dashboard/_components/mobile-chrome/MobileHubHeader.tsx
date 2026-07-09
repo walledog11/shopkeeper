@@ -10,12 +10,13 @@ const ROUTE_TITLES: { prefix: string; title: string }[] = [
   { prefix: "/dashboard/tickets", title: "Inbox" },
   { prefix: "/dashboard/orders", title: "Shop" },
   { prefix: "/dashboard/review", title: "Review" },
-  { prefix: "/dashboard/settings", title: "Settings" },
+  { prefix: "/dashboard/agent/configure", title: "Agent settings" },
+  { prefix: "/dashboard/settings", title: "Billing" },
   { prefix: "/dashboard/integrations", title: "Integrations" },
   { prefix: "/dashboard/team", title: "Team" },
   { prefix: "/dashboard/kb", title: "Memory" },
   { prefix: "/dashboard/agent", title: "Agent" },
-  { prefix: "/dashboard/account", title: "Account" },
+  { prefix: "/dashboard/account", title: "Profile & security" },
 ];
 
 function resolveRouteTitle(pathname: string): string | null {

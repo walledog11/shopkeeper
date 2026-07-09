@@ -6,11 +6,19 @@ import { SectionCard } from "@/components/settings-form/shared"
 import type { AgentTabController } from "./useAgentTabState"
 
 export function AgentIdentitySection({ controller }: { controller: AgentTabController }) {
-  const { settingsState, dispatch, proposal, resolveVoiceProposal, voiceBusy } = controller
+  const { settingsState, dispatch, proposal, resolveVoiceProposal, voiceBusy, businessName, setBusinessName } = controller
 
   return (
-    <SectionCard title="Identity" description="How the agent presents itself and writes replies." variant="board">
+    <SectionCard title="Your store" description="How the agent identifies your business and writes replies." variant="board">
       <div className="space-y-5">
+        <LabeledTextInput
+          label="Business name"
+          hint="shown in support emails and AI drafts"
+          aria-label="Business name"
+          value={businessName}
+          onChange={e => setBusinessName(e.target.value)}
+          placeholder="My Store"
+        />
         <LabeledTextInput
           label="Agent name"
           hint="shown in the notes panel and used as the @mention trigger"
@@ -19,13 +27,15 @@ export function AgentIdentitySection({ controller }: { controller: AgentTabContr
           onChange={e => dispatch({ type: "set", patch: { agentName: e.target.value } })}
           placeholder="Shopkeeper"
         />
-        <LabeledTextInput
-          label="Brand name"
-          hint="used in AI draft prompts"
-          aria-label="Brand name"
+        <CharacterCountTextarea
+          label="About your store"
+          hint="optional · policies, products, shipping"
+          aria-label="About your store"
           value={settingsState.aiContext}
-          onChange={e => dispatch({ type: "set", patch: { aiContext: e.target.value } })}
-          placeholder="e.g. Acme Store"
+          onValueChange={value => dispatch({ type: "set", patch: { aiContext: value } })}
+          placeholder="e.g. We sell phone cases. Ships in 2–3 business days. 30-day returns on unused items."
+          maxLength={2000}
+          rows={4}
         />
         {proposal && (
           <VoiceProposalCard

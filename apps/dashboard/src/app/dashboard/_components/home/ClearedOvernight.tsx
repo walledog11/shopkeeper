@@ -34,7 +34,7 @@ export default function ClearedOvernight({ agentName, totalCount, topics, timeSa
           · Saved you ~{formatHours(timeSavedHours)} · {repliesSent} repl{repliesSent === 1 ? 'y' : 'ies'} sent
         </span>
         <Link
-          href="/dashboard/review?focus=auto&from=24h"
+          href="/dashboard/review"
           className="text-xs font-semibold text-muted-foreground hover:text-strong transition-colors"
         >
           See what was sent

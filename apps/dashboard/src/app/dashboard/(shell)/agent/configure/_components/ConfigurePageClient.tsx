@@ -7,6 +7,7 @@ interface Props {
   settings: OrgSettings
   rawSettings: OrgSettingsPatch
   version: string
+  orgName: string
   voiceProposal: VoiceProposal | null
 }
 
@@ -18,6 +19,7 @@ export default function ConfigurePageClient(props: Props) {
           settings={props.settings}
           rawSettings={props.rawSettings}
           version={props.version}
+          orgName={props.orgName}
           voiceProposal={props.voiceProposal}
         />
       </div>

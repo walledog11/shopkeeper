@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { useOrganization, useOrganizationList } from "@clerk/nextjs"
 import {
   clearWorkspaceTicketsRequest,
@@ -8,8 +8,6 @@ import {
   downloadBlob,
   fetchCustomerGdprExport,
   fetchWorkspaceExport,
-  logoValidationError,
-  saveWorkspaceName,
 } from "./workspace-requests"
 
 export interface WorkspaceTabProps {
@@ -17,99 +15,7 @@ export interface WorkspaceTabProps {
   version: string
 }
 
-type Organization = ReturnType<typeof useOrganization>["organization"]
 type SetActive = ReturnType<typeof useOrganizationList>["setActive"]
-
-function useWorkspaceSaveFlow({ orgName, version }: WorkspaceTabProps) {
-  const [workspaceName, setWorkspaceName] = useState(orgName)
-  const currentVersionRef = useRef(version)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function save() {
-    setSaving(true)
-    setSaved(false)
-    setError(null)
-    try {
-      const result = await saveWorkspaceName({
-        name: workspaceName,
-        version: currentVersionRef.current,
-      })
-
-      if (result.status === "conflict") {
-        if (result.current?.name) setWorkspaceName(result.current.name)
-        if (result.current?.version) currentVersionRef.current = result.current.version
-        setError("Workspace was updated in another tab. The latest name has been loaded.")
-        return
-      }
-
-      if (result.version) currentVersionRef.current = result.version
-      setSaved(true)
-      setTimeout(() => setSaved(false), 2500)
-    } catch {
-      setError("Failed to save. Please try again.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return {
-    error,
-    save,
-    saved,
-    saving,
-    setWorkspaceName,
-    workspaceName,
-  }
-}
-
-function useWorkspaceLogoFlow(organization: Organization) {
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [logoBusy, setLogoBusy] = useState(false)
-  const [logoError, setLogoError] = useState<string | null>(null)
-
-  async function uploadLogo(file: File) {
-    if (!organization) return
-
-    const validationError = logoValidationError(file)
-    if (validationError) {
-      setLogoError(validationError)
-      return
-    }
-
-    setLogoBusy(true)
-    setLogoError(null)
-    try {
-      await organization.setLogo({ file })
-    } catch {
-      setLogoError("Failed to upload. Please try again.")
-    } finally {
-      setLogoBusy(false)
-    }
-  }
-
-  async function removeLogo() {
-    if (!organization) return
-    setLogoBusy(true)
-    setLogoError(null)
-    try {
-      await organization.setLogo({ file: null })
-    } catch {
-      setLogoError("Failed to remove. Please try again.")
-    } finally {
-      setLogoBusy(false)
-    }
-  }
-
-  return {
-    fileInputRef,
-    logoBusy,
-    logoError,
-    removeLogo,
-    uploadLogo,
-  }
-}
 
 function useWorkspaceExportFlow() {
   const [exporting, setExporting] = useState(false)
@@ -250,11 +156,8 @@ export function useWorkspaceTabState(props: WorkspaceTabProps) {
     ...useDeleteWorkspaceFlow({ nextOrgId, orgName, setActive }),
     ...useGdprExportFlow(),
     ...useWorkspaceExportFlow(),
-    ...useWorkspaceLogoFlow(organization),
-    ...useWorkspaceSaveFlow(props),
     isAdmin,
     isOnlyWorkspace,
-    organization,
   }
 }
 

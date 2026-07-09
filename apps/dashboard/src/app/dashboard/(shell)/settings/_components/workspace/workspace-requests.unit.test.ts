@@ -3,7 +3,6 @@ import {
   clearWorkspaceTicketsRequest,
   deleteWorkspaceRequest,
   exportFilenameFromDisposition,
-  logoValidationError,
   saveWorkspaceName,
 } from "./workspace-requests"
 
@@ -27,14 +26,6 @@ describe("saveWorkspaceName", () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ error: "Nope" }, { status: 500 }))
 
     await expect(saveWorkspaceName({ name: "Store", version: "v1" }, fetchImpl)).rejects.toThrow("Failed")
-  })
-})
-
-describe("logoValidationError", () => {
-  it("rejects non-image files and oversized images", () => {
-    expect(logoValidationError({ type: "text/plain", size: 10 } as File)).toBe("Please choose an image file.")
-    expect(logoValidationError({ type: "image/png", size: 2 * 1024 * 1024 + 1 } as File)).toBe("Image must be under 2MB.")
-    expect(logoValidationError({ type: "image/png", size: 2 * 1024 * 1024 } as File)).toBeNull()
   })
 })
 

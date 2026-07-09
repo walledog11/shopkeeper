@@ -56,7 +56,7 @@ export function StepPlan({
 
       <p className="mt-5 max-w-[440px] text-center text-[12.5px] leading-relaxed text-foreground/45">
         You start in approval mode: every reply, refund, and cancellation waits for you, refunds stay capped at $50,
-        and everything is recorded. Change any of it in Settings.
+        and everything is recorded. Change any of it in Agent → Settings.
       </p>
 
       <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-center">

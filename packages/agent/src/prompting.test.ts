@@ -117,6 +117,27 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toMatch(/do we ship globally/i);
     expect(prompt).toMatch(/Never tell a customer to email support/i);
   });
+
+  it('includes the business name in About this store even without aiContext', () => {
+    const prompt = buildSystemPrompt(makeCtx());
+
+    expect(prompt).toContain('## About this store\nTest Store');
+  });
+
+  it('appends aiContext after the business name in About this store', () => {
+    const prompt = buildSystemPrompt(makeCtx(), {
+      aiContext: 'Ships in 2-3 business days. 30-day returns.',
+    });
+
+    expect(prompt).toContain('## About this store\nTest Store\n\nShips in 2-3 business days. 30-day returns.');
+  });
+
+  it('does not duplicate the business name when aiContext matches orgName', () => {
+    const prompt = buildSystemPrompt(makeCtx(), { aiContext: 'Test Store' });
+
+    expect(prompt).toContain('## About this store\nTest Store');
+    expect(prompt).not.toContain('## About this store\nTest Store\n\nTest Store');
+  });
 });
 
 describe('buildComposerAskPrompt', () => {
