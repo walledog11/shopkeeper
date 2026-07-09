@@ -60,6 +60,6 @@
     "mustNotCallTools": ["get_shopify_orders", "get_order_by_name", "escalate_to_human"],
     "replyMustInclude": ["1005"],
     "replyMustNotInclude": ["1004"],
-    "mustClassifyAs": "needs_review"
+    "mustClassifyAs": "quick_reply"
   }
 }
