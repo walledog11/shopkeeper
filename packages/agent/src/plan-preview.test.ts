@@ -33,6 +33,11 @@ const refundCall: RawToolCall = {
   input: { order_id: "9000", amount: "20.00", reason: "wrong size" },
 }
 
+// Emitted by the planner whenever search_kb returns nothing (common for KB-light
+// stores). It is a reply-grounding note, not an action-risk signal.
+const KB_NOT_FOUND_WARNING =
+  "No relevant KB articles found - the reply is based only on the conversation, not your documentation."
+
 function plan(overrides: Partial<AgentPlan> = {}): AgentPlan {
   return {
     instruction: "Handle this",
@@ -137,6 +142,10 @@ describe("classifyHomePlan — info-only plans (existing behavior, default tier)
 
   it("requires review when blocking warnings are present", () => {
     expect(classifyHomePlan(plan({ warnings: ["Policy conflict"] })).kind).toBe("needs_review")
+  })
+
+  it("allows a missing-KB warning — a reply-grounding note, not a blocker", () => {
+    expect(classifyHomePlan(plan({ warnings: [KB_NOT_FOUND_WARNING] })).kind).toBe("quick_reply")
   })
 
   it("allows a missing Shopify customer warning when the reply does not depend on customer or order context", () => {
@@ -286,6 +295,14 @@ describe("classifyHomePlan — tier × action matrix", () => {
       expect(result.kind).toBe("auto_execute")
       expect(result.replyText).toBe("Yes, we ship to the UK.")
       expect(result.sendReplyToolCall).toEqual(sendReplyCall)
+    })
+
+    it("keeps a refund under cap as auto_execute despite a benign missing-KB warning", () => {
+      const result = classifyHomePlan(
+        { ...refundPlan({ input: { order_id: "9000", amount: "20.00", reason: "x" } }), warnings: [KB_NOT_FOUND_WARNING] },
+        settings({ autonomyTier: "trusted", maxRefundAmount: 100 }),
+      )
+      expect(result.kind).toBe("auto_execute")
     })
 
     it("classifies a reply-only refund plan as needs_review, not auto_execute", () => {

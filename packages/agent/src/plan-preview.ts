@@ -99,6 +99,13 @@ function warningBlocksQuickReply(warning: string, plan: AgentPlan): boolean {
     return usesCustomerOrOrderContext(plan)
   }
 
+  // A missing-KB match is a reply-grounding note, not an action-risk signal — it
+  // fires whenever the store has no matching article (common for KB-light stores)
+  // and must not force an otherwise-clean auto_execute / quick_reply plan to review.
+  if (lower.includes("no relevant kb articles found")) {
+    return false
+  }
+
   return true
 }
 
