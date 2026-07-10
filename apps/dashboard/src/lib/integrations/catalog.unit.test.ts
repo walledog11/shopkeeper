@@ -18,6 +18,7 @@ describe("integration catalog", () => {
       .map((def) => def.id);
     expect(operatorIds).toContain("imessage");
     expect(operatorIds).toContain("telegram");
+    expect(operatorIds).toContain("whatsapp");
   });
 
   it("orders operator channels with iMessage before Telegram", () => {
@@ -27,7 +28,7 @@ describe("integration catalog", () => {
     });
     const operator = sortPlatformConfigsByChannelKind(visible, "operator").map((def) => def.id);
 
-    expect(operator).toEqual(["imessage", "telegram", "shopify"]);
+    expect(operator).toEqual(["imessage", "telegram", "shopify", "whatsapp"]);
   });
 
   it("hides operator messaging cards when neither channel is configured", () => {
@@ -37,7 +38,7 @@ describe("integration catalog", () => {
     });
     const operator = sortPlatformConfigsByChannelKind(visible, "operator").map((def) => def.id);
 
-    expect(operator).toEqual(["shopify"]);
+    expect(operator).toEqual(["shopify", "whatsapp"]);
     expect(operator).not.toContain("imessage");
     expect(operator).not.toContain("telegram");
   });

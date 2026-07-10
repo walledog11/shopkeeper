@@ -4,6 +4,7 @@ import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
 const {
   mockExecuteAgentTurn,
   mockResolveInternalAgentThread,
+  mockResolveOperatorThread,
   mockAssertBillingWriteAllowedForOrgId,
   mockResolveClerkUserApprover,
 } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ const {
     actionsPerformed: [{ tool: 'get_shopify_orders', result: 'ok' }],
   }),
   mockResolveInternalAgentThread: vi.fn().mockResolvedValue({ id: 'thread_1', channelType: 'sms_agent' }),
+  mockResolveOperatorThread: vi.fn().mockResolvedValue({ id: 'op_thread_1', channelType: 'sms_agent' }),
   mockAssertBillingWriteAllowedForOrgId: vi.fn().mockResolvedValue(undefined),
   mockResolveClerkUserApprover: vi.fn().mockResolvedValue({ clerkUserId: 'usr_1', displayName: 'Alex' }),
 }));
@@ -22,6 +24,7 @@ vi.mock('@shopkeeper/agent/turn', () => ({
 
 vi.mock('@shopkeeper/agent/internal-thread', () => ({
   resolveInternalAgentThread: mockResolveInternalAgentThread,
+  resolveOperatorThread: mockResolveOperatorThread,
 }));
 
 vi.mock('../billing/write-gate.js', () => ({
@@ -50,27 +53,23 @@ afterEach(async () => {
 });
 
 describe('executeOperatorAgentTurn', () => {
-  it('mirrors the internal route for free-form operator turns', async () => {
+  it('resolves the durable operator thread for free-form turns', async () => {
     const result = await executeOperatorAgentTurn({
       orgId: org.id,
       instruction: 'check order #1001',
+      operatorKey: 'telegram:123',
       senderPhone: 'telegram:123',
       clerkUserId: 'usr_1',
-      orderNumber: '#1001',
     });
 
     expect(mockAssertBillingWriteAllowedForOrgId).toHaveBeenCalledWith(org.id);
-    expect(mockResolveInternalAgentThread).toHaveBeenCalledWith({
-      orgId: org.id,
-      threadId: undefined,
-      orderNumber: '#1001',
-      senderPhone: 'telegram:123',
-    });
+    expect(mockResolveOperatorThread).toHaveBeenCalledWith(org.id, 'telegram:123');
+    expect(mockResolveInternalAgentThread).not.toHaveBeenCalled();
     expect(mockResolveClerkUserApprover).not.toHaveBeenCalled();
     expect(mockExecuteAgentTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         orgId: org.id,
-        threadId: 'thread_1',
+        threadId: 'op_thread_1',
         instruction: 'check order #1001',
         failureRoute: 'gateway:operator-turn',
         persistUserMessage: true,
@@ -85,12 +84,12 @@ describe('executeOperatorAgentTurn', () => {
     );
     expect(result).toEqual({
       summary: 'Done.',
-      threadId: 'thread_1',
+      threadId: 'op_thread_1',
       actionsPerformed: [{ tool: 'get_shopify_orders', result: 'ok' }],
     });
   });
 
-  it('records human approval metadata for pre-approved plan runs', async () => {
+  it('records human approval metadata for pre-approved plan runs on the ticket thread', async () => {
     mockResolveInternalAgentThread.mockResolvedValueOnce({ id: 'thread_2', channelType: 'sms_agent' });
     mockResolveClerkUserApprover.mockResolvedValueOnce({ clerkUserId: 'usr_2', displayName: 'Alex' });
 
@@ -102,6 +101,8 @@ describe('executeOperatorAgentTurn', () => {
       approvedToolCalls: [{ id: 'tc1', name: 'refund_order', input: undefined }],
     });
 
+    expect(mockResolveInternalAgentThread).toHaveBeenCalledWith({ orgId: org.id, threadId: 'thread_2' });
+    expect(mockResolveOperatorThread).not.toHaveBeenCalled();
     expect(mockResolveClerkUserApprover).toHaveBeenCalledWith('usr_2');
     const [turnParams] = mockExecuteAgentTurn.mock.calls[0] as [Record<string, unknown>, unknown];
     expect(turnParams).toMatchObject({

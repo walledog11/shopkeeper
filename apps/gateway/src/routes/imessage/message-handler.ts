@@ -9,6 +9,7 @@ import { HELP_TEXT } from '../telegram/format.js';
 import { handlePendingPlanCommand } from '../telegram/pending-plan-commands.js';
 import { handlePendingQuestionAnswer } from '../telegram/pending-question-commands.js';
 import { progressOnlyPresence, type OperatorMessageContext, type OperatorReply } from '../operator-message.js';
+import { buildMirroredReply } from '../../operator-thread-mirror.js';
 import { handleImessageBinding } from './binding.js';
 
 export interface ImessageOperatorInbound {
@@ -59,58 +60,64 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
   const organizationId = binding.orgMember.organizationId;
   const clerkUserId = binding.orgMember.clerkUserId;
   const chatId = senderId;
+  const operatorKey = `imessage:${senderId}`;
   const context = await getContext(organizationId, chatId);
 
-  const operatorMessage: OperatorMessageContext = {
+  // Freeform turns persist their own thread messages, so they keep the raw reply.
+  // Command paths reply through a wrapper that mirrors the exchange (inbound once,
+  // then each reply) onto the merchant's durable operator thread.
+  const baseMessage: OperatorMessageContext = {
     chatId,
     body,
     reply,
-    senderRef: `imessage:${senderId}`,
+    senderRef: operatorKey,
     presence: progressOnlyPresence(reply),
   };
+  const mirroredReply = buildMirroredReply(organizationId, operatorKey, body, reply);
+  const commandMessage: OperatorMessageContext = { ...baseMessage, reply: mirroredReply };
 
   const command = parseTelegramCommand(body);
 
   if (command.type === 'help') {
-    await reply(HELP_TEXT);
+    await mirroredReply(HELP_TEXT);
     return;
   }
 
   if (command.type === 'summary') {
     const digest = await buildOrgDigest(organizationId, new Date());
     if (!digest) {
-      await reply('Your support inbox is empty — no open tickets.');
+      await mirroredReply('Your support inbox is empty — no open tickets.');
       return;
     }
     await updateContext(organizationId, chatId, { pendingDigest: digest.pendingDigest });
-    await reply(digest.message);
+    await mirroredReply(digest.message);
     return;
   }
 
-  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, operatorMessage)) {
+  if (isDigestCommand(command) && await handleDigestCommand(organizationId, command, context, commandMessage)) {
     return;
   }
 
   if (
     isPendingPlanCommand(command)
-    && await handlePendingPlanCommand(organizationId, clerkUserId, operatorMessage, command, context)
+    && await handlePendingPlanCommand(organizationId, clerkUserId, commandMessage, command, context)
   ) {
     return;
   }
 
   if (
     command.type === 'order-lookup'
-    && await handleOrderLookup(organizationId, chatId, command.orderNumber, reply)
+    && await handleOrderLookup(organizationId, chatId, command.orderNumber, mirroredReply)
   ) {
     return;
   }
 
   if (
     command.type === 'free-form'
-    && await handlePendingQuestionAnswer(organizationId, operatorMessage, context)
+    && await handlePendingQuestionAnswer(organizationId, commandMessage, context)
   ) {
     return;
   }
 
-  await executeFreeFormInstruction(organizationId, clerkUserId, operatorMessage, context);
+  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
 }

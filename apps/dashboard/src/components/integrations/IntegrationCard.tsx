@@ -10,15 +10,15 @@ import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { InstagramConnectBody, ShopifyConnectBody } from "./connect-bodies"
 import { isShopifyIntegrationLinked } from "@/lib/integrations/shopify-connection"
 import { deriveIntegrationHealth } from "./integration-card-helpers"
-import { CardLogo } from "./IntegrationCardParts"
+import { IntegrationCardHeader } from "./IntegrationCardParts"
 import {
+  CARD_ACTIONS,
   CARD_BUTTON_AMBER,
   CARD_BUTTON_DISABLED,
   CARD_BUTTON_PRIMARY,
   CARD_BUTTON_SECONDARY,
   CARD_DESCRIPTION,
   CARD_SHELL,
-  CARD_TITLE,
 } from "./integration-card-styles"
 import { GmailConnectedConfigureBody } from "./GmailConnectedConfigureBody"
 import { gmailConfigureStatusLine, deriveGmailConfigureScene } from "./gmail-configure-state"
@@ -102,12 +102,10 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
   return (
     <>
       <div id={config.id} className={CARD_SHELL}>
-        <CardLogo config={config} />
+        <IntegrationCardHeader config={config} />
+        <p className={CARD_DESCRIPTION}>{config.description}</p>
 
-        <p className={cn("mt-4", CARD_TITLE)}>{config.name}</p>
-        <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
-
-        <div className="mt-4 flex gap-2">
+        <div className={CARD_ACTIONS}>
           {config.comingSoon ? (
             <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
           ) : !isConnected ? (

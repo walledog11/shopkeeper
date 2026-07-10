@@ -101,7 +101,7 @@ exact tool calls the human was shown, the same verbatim contract quick-approve
 already has. The keyword grammar survives only as a cache in front of the
 interpreter and can only shrink.
 
-## Phase A — Token budget correctness (bug fixes, no architecture)
+## Phase A — Token budget correctness (bug fixes, no architecture) [COMPLETED]
 
 No prompt or tool changes. Unit tests only; no eval run.
 
@@ -129,7 +129,7 @@ Exit: typecheck + unit suites green. Behavior change is strictly "an artificial
 stop fires later and no longer eats answers" — no eval gate (per eval-cost
 policy, no prompt/tool-choice surface changed).
 
-## Phase B — One operator thread per binding (plumbing, no model behavior change)
+## Phase B — One operator thread per binding (plumbing, no model behavior change) [COMPLETED]
 
 1. **Schema** (`packages/db/prisma/schema.prisma` + migration): add
    `operatorKey String? @map("operator_key")` to `Thread` with

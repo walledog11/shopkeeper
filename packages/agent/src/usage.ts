@@ -5,6 +5,11 @@ export interface ModelUsageMetrics {
   cacheCreationInputTokens: number;
   cacheReadInputTokens: number;
   totalTokens: number;
+  // Cost-weighted token count for the loop's iteration budget. Cache reads are
+  // ~10x cheaper and cache writes ~1.25x an input token, so summing them at full
+  // weight (as totalTokens does) makes a cached operator turn look far heavier
+  // than it costs. totalTokens stays raw for logging/spend continuity.
+  budgetTokens: number;
 }
 
 type AnthropicUsageLike = {
@@ -22,6 +27,7 @@ export function createModelUsageMetrics(): ModelUsageMetrics {
     cacheCreationInputTokens: 0,
     cacheReadInputTokens: 0,
     totalTokens: 0,
+    budgetTokens: 0,
   };
 }
 
@@ -38,6 +44,9 @@ export function readModelUsage(response: { usage?: unknown }) {
     cacheCreationInputTokens,
     cacheReadInputTokens,
     totalTokens: inputTokens + outputTokens + cacheCreationInputTokens + cacheReadInputTokens,
+    budgetTokens: Math.round(
+      inputTokens + outputTokens + 1.25 * cacheCreationInputTokens + 0.1 * cacheReadInputTokens,
+    ),
   };
 }
 
@@ -49,6 +58,7 @@ export function recordModelUsage(metrics: ModelUsageMetrics, response: { usage?:
   metrics.cacheCreationInputTokens += usage.cacheCreationInputTokens;
   metrics.cacheReadInputTokens += usage.cacheReadInputTokens;
   metrics.totalTokens += usage.totalTokens;
+  metrics.budgetTokens += usage.budgetTokens;
   return usage;
 }
 

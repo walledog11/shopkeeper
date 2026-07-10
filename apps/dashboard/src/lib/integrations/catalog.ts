@@ -8,9 +8,6 @@ export interface PlatformConfig {
   emailProvider?: EmailProviderFilter
   name: string
   logo: string | null
-  logoSize?: number
-  fullBleedLogo?: boolean
-  tileClass?: string
   description: string
   connectType: ConnectType | null
   channelKind: IntegrationChannelKind
@@ -35,7 +32,7 @@ export const INTEGRATION_CHANNEL_SECTIONS: {
   },
 ]
 
-const OPERATOR_CHANNEL_ORDER = ['imessage', 'telegram', 'shopify'] as const
+const OPERATOR_CHANNEL_ORDER = ['imessage', 'telegram', 'shopify', 'whatsapp'] as const
 
 export function sortPlatformConfigsByChannelKind(
   configs: PlatformConfig[],
@@ -54,7 +51,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: "shopify",
     name: "Shopify",
     logo: "/logos/shopify.svg",
-    logoSize: 44,
     description: "Manage orders, customers, and refunds with live store data.",
     connectType: 'shopify',
     channelKind: 'operator',
@@ -65,7 +61,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     emailProvider: "gmail",
     name: "Gmail",
     logo: "/logos/gmail.png",
-    fullBleedLogo: true,
     description: "Route support mail, draft replies, and send responses from your Gmail inbox.",
     connectType: 'email',
     channelKind: 'support',
@@ -80,10 +75,9 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: null,
     name: "WhatsApp",
     logo: "/logos/whatsapp-logo.png",
-    fullBleedLogo: true,
     description: "Get customer reply approvals and daily ticket summaries in WhatsApp chats.",
     connectType: null,
-    channelKind: 'support',
+    channelKind: 'operator',
     comingSoon: true,
   },
   {
@@ -91,7 +85,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: "ig_dm",
     name: "Instagram",
     logo: "/logos/instagram-logo.png",
-    fullBleedLogo: true,
     description: "Manage direct messages with customer memory, cross-channel ticket linking, and business account replies.",
     connectType: 'ig',
     channelKind: 'support',
@@ -106,7 +99,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: "tiktok",
     name: "TikTok Shop",
     logo: "/logos/tiktok-logo.png",
-    fullBleedLogo: true,
     description: "Manage TikTok Shop buyer messages and send support replies from your connected seller account.",
     connectType: 'tiktok_shop',
     channelKind: 'support',
@@ -121,7 +113,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: "imessage",
     name: "iMessage",
     logo: "/logos/sms.svg",
-    logoSize: 30,
     description: "Text your store's agent from iMessage — order lookups, daily digests, and one-tap approvals.",
     connectType: 'imessage',
     channelKind: 'operator',
@@ -135,8 +126,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: null,
     name: "Telegram",
     logo: "/logos/telegram.svg",
-    fullBleedLogo: true,
-    tileClass: "bg-[#229ED9]",
     description: "Approve agent replies and receive ticket digests via the Shopkeeper Telegram bot.",
     connectType: null,
     channelKind: 'operator',
@@ -147,7 +136,6 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     emailProvider: "postmark",
     name: "Email",
     logo: null,
-    tileClass: "bg-gradient-to-b from-[#5AB1F5] to-[#1D77EF]",
     description: "Route custom-domain support mail, forward incoming threads, and send replies from your verified address.",
     connectType: 'email',
     channelKind: 'support',

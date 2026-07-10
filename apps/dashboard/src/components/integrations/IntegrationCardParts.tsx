@@ -4,7 +4,9 @@ import Image from "next/image"
 import { Mail } from "lucide-react"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import { cn } from "@/lib/ui/cn"
-import { LOGO_IMAGE, LOGO_SOFTEN, LOGO_TILE } from "./integration-card-styles"
+import { CARD_TITLE, LOGO_IMAGE, LOGO_INLINE } from "./integration-card-styles"
+
+const INLINE_LOGO_SIZE = 32
 
 const FALLBACK_ICONS: Record<string, typeof Mail> = {
   email: Mail,
@@ -12,45 +14,35 @@ const FALLBACK_ICONS: Record<string, typeof Mail> = {
 
 export function CardLogo({ config }: { config: PlatformConfig }) {
   const Icon = FALLBACK_ICONS[config.id]
-  const tileClass = cn(LOGO_TILE, config.tileClass)
 
   if (!config.logo) {
+    if (!Icon) return null
     return (
-      <div className={tileClass}>
-        {Icon ? (
-          <Icon className="size-7 text-card-foreground opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100" />
-        ) : null}
-      </div>
-    )
-  }
-
-  if (config.fullBleedLogo) {
-    const image = (
-      <Image
-        src={config.logo}
-        alt={`${config.name} logo`}
-        width={56}
-        height={56}
+      <Icon
         className={cn(
-          "size-full",
-          config.tileClass ? "object-cover" : "object-contain",
-          LOGO_SOFTEN,
+          LOGO_INLINE,
+          "text-card-foreground opacity-[0.88] transition-opacity duration-200 group-hover:opacity-100",
         )}
       />
     )
-    return <div className={cn(tileClass, config.tileClass && "p-0")}>{image}</div>
   }
 
-  const logoSize = config.logoSize ?? 40
   return (
-    <div className={tileClass}>
-      <Image
-        src={config.logo}
-        alt={`${config.name} logo`}
-        width={logoSize}
-        height={logoSize}
-        className={LOGO_IMAGE}
-      />
+    <Image
+      src={config.logo}
+      alt={`${config.name} logo`}
+      width={INLINE_LOGO_SIZE}
+      height={INLINE_LOGO_SIZE}
+      className={LOGO_IMAGE}
+    />
+  )
+}
+
+export function IntegrationCardHeader({ config }: { config: PlatformConfig }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      <CardLogo config={config} />
+      <p className={cn("min-w-0", CARD_TITLE)}>{config.name}</p>
     </div>
   )
 }

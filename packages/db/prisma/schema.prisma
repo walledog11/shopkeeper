@@ -199,6 +199,7 @@ model Thread {
   subject               String?
   tag                   String?              @default("Support")
   shopifyCustomerId     String?              @map("shopify_customer_id") @db.VarChar(255)
+  operatorKey           String?              @map("operator_key")
   externalSpaceId       String?              @map("external_space_id")
   cachedPlanMessageId   String?              @map("cached_plan_message_id") @db.Uuid
   cachedPlan            Json?                @map("cached_plan") @db.JsonB
@@ -217,6 +218,7 @@ model Thread {
   agentActions    AgentAction[]
   shadowDecisions AutonomyShadowDecision[]
 
+  @@unique([organizationId, operatorKey])
   @@index([organizationId, status])
   @@index([organizationId, updatedAt])
   @@index([organizationId, status, lastMessageAt(sort: Desc)])

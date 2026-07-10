@@ -1,5 +1,5 @@
 import { executeAgentTurn } from '@shopkeeper/agent/turn';
-import { resolveInternalAgentThread } from '@shopkeeper/agent/internal-thread';
+import { resolveInternalAgentThread, resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
 import { formatApproverId } from '@shopkeeper/agent/plan-execution';
 import { hashInstruction } from '@shopkeeper/agent/agent-actions';
 import { isOperatorChannel } from '@shopkeeper/agent/thread-constants';
@@ -11,12 +11,21 @@ import { buildGatewayTurnDeps } from './agent-turn-deps.js';
 
 const FAILURE_ROUTE = 'gateway:operator-turn';
 
+function requireOperatorKey(params: ExecuteOperatorAgentTurnParams): string {
+  if (!params.operatorKey) {
+    throw new Error('executeOperatorAgentTurn requires operatorKey or threadId');
+  }
+  return params.operatorKey;
+}
+
 export interface ExecuteOperatorAgentTurnParams {
   orgId: string;
   instruction: string;
-  orderNumber?: string;
   senderPhone?: string;
   clerkUserId?: string;
+  // Freeform turns resolve the merchant's single durable operator thread from this
+  // binding key. Plan approval instead targets the ticket thread via `threadId`.
+  operatorKey?: string;
   threadId?: string;
   approvedToolCalls?: RawToolCall[];
 }
@@ -34,12 +43,11 @@ export async function executeOperatorAgentTurn(
 ): Promise<ExecuteOperatorAgentTurnResult> {
   await assertBillingWriteAllowedForOrgId(params.orgId);
 
-  const resolvedThread = await resolveInternalAgentThread({
-    orgId: params.orgId,
-    threadId: params.threadId,
-    orderNumber: params.orderNumber,
-    senderPhone: params.senderPhone,
-  });
+  // Plan approval runs on the ticket thread it was drafted against; a freeform
+  // turn runs on the merchant's durable operator thread for this binding.
+  const resolvedThread = params.threadId
+    ? await resolveInternalAgentThread({ orgId: params.orgId, threadId: params.threadId })
+    : await resolveOperatorThread(params.orgId, requireOperatorKey(params));
 
   const approver = params.approvedToolCalls?.length
     ? await resolveClerkUserApprover(params.clerkUserId)

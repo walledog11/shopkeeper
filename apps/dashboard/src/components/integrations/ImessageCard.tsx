@@ -6,14 +6,14 @@ import { cn } from "@/lib/ui/cn"
 import { fetcher } from "@/lib/api/fetcher"
 import type { PlatformConfig } from "@/lib/integrations/catalog"
 import {
+  CARD_ACTIONS,
   CARD_BUTTON_DISABLED,
   CARD_BUTTON_PRIMARY,
   CARD_BUTTON_SECONDARY,
   CARD_DESCRIPTION,
   CARD_SHELL,
-  CARD_TITLE,
 } from "./integration-card-styles"
-import { CardLogo } from "./IntegrationCardParts"
+import { IntegrationCardHeader } from "./IntegrationCardParts"
 import { IntegrationConfigureDialog } from "./IntegrationConfigureDialog"
 import { ImessageBindingSection } from "./connect-bodies"
 
@@ -51,12 +51,10 @@ export default function ImessageCard({
   return (
     <>
       <div id={config.id} className={CARD_SHELL}>
-        <CardLogo config={config} />
+        <IntegrationCardHeader config={config} />
+        <p className={CARD_DESCRIPTION}>{config.description}</p>
 
-        <p className={cn("mt-4", CARD_TITLE)}>{config.name}</p>
-        <p className={cn("mt-2 flex-1", CARD_DESCRIPTION)}>{config.description}</p>
-
-        <div className="mt-4 flex gap-2">
+        <div className={CARD_ACTIONS}>
           {!isConnected ? (
             isAvailable ? (
               <button type="button" onClick={() => setOpen(true)} className={CARD_BUTTON_PRIMARY}>Connect</button>

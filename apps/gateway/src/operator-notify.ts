@@ -21,6 +21,7 @@ import { isTelegramConfigured, sendMessage as telegramSend } from './clients/tel
 import { isImessageConfigured, sendImessageToSpace } from './clients/spectrum.js';
 import { stripMarkdown } from './message-handlers/strip-markdown.js';
 import { updateContext, type OperatorContext } from './operator-context.js';
+import { mirrorOperatorMessage } from './operator-thread-mirror.js';
 import {
   markOperatorNotifyDelivered,
   wasOperatorNotifyDelivered,
@@ -152,6 +153,11 @@ export async function notifyOperator(
     if (idempotencyKey) {
       await markOperatorNotifyDelivered(member.channel, contextKey, idempotencyKey);
     }
+
+    // The push is part of the merchant's conversation — mirror it onto their
+    // operator thread so the agent can see what a later reply refers to. The
+    // duplicate-delivery branch above already mirrored on the original send.
+    await mirrorOperatorMessage(organizationId, `${member.channel}:${contextKey}`, 'agent', body);
 
     await updateContext(organizationId, contextKey, contextPatch);
     return { channel: member.channel, chatId: contextKey };

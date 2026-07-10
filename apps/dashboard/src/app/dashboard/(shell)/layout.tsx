@@ -14,6 +14,7 @@ import { getOrCreateOrg } from "@/lib/server/org";
 import { getIncompleteOnboardingRedirect } from "@/lib/server/onboarding-guard";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { getChannelInfo } from "@/lib/messaging/channels";
+import { isEmailAuthReauthorizationRequired } from "@shopkeeper/email/providers";
 import { db } from "@shopkeeper/db";
 import type { OrgSettings } from "@/types";
 
@@ -32,17 +33,25 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // WorkflowSetupBanner — the single source of truth. The top bar carries only
   // time-sensitive alerts below.
 
-  // Integration token expired or expiring within 7 days
-  const expiringIntegrations = await db.integration.findMany({
-    where: {
-      organizationId: org.id,
-      tokenExpiresAt: { not: null, lt: new Date(Date.now() + SEVEN_DAYS_MS) },
-    },
-    select: { platform: true, tokenExpiresAt: true },
+  // Integration token expired or expiring within 7 days.
+  // Gmail access tokens refresh automatically — only flag email when OAuth reauth is required.
+  const integrations = await db.integration.findMany({
+    where: { organizationId: org.id },
+    select: { platform: true, tokenExpiresAt: true, metadata: true },
+  });
+  const expiringIntegrations = integrations.filter((integration) => {
+    if (integration.platform === "email") {
+      return isEmailAuthReauthorizationRequired(integration);
+    }
+    if (!integration.tokenExpiresAt) return false;
+    return integration.tokenExpiresAt.getTime() <= Date.now() + SEVEN_DAYS_MS;
   });
   if (expiringIntegrations.length > 0) {
     const now = Date.now();
-    const expired = expiringIntegrations.some((i) => i.tokenExpiresAt!.getTime() <= now);
+    const expired = expiringIntegrations.some((integration) => {
+      if (integration.platform === "email") return true;
+      return integration.tokenExpiresAt!.getTime() <= now;
+    });
     const names = [...new Set(expiringIntegrations.map((i) => getChannelInfo(i.platform).name))].join(", ");
     notifications.push({
       id: "integration-expiry",

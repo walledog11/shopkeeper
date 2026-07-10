@@ -1,7 +1,7 @@
 import { db } from '@shopkeeper/db';
 import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
-import { extractOrderNumber, updateContext, type OperatorContext } from '../../operator-context.js';
+import { updateContext } from '../../operator-context.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
 import { relativeAge } from './format.js';
 import type { OperatorMessageContext, OperatorReply } from '../operator-message.js';
@@ -60,26 +60,22 @@ export async function executeFreeFormInstruction(
   organizationId: string,
   clerkUserId: string,
   message: OperatorMessageContext,
-  context: OperatorContext,
 ): Promise<void> {
   const { chatId, body, reply, presence, senderRef } = message;
-  const orderNumber = extractOrderNumber(body) || context.lastOrderNumber;
-  logger.info({ chatId, organizationId, orderNumber: orderNumber || null }, '[Operator] Free-form agent instruction');
+  logger.info({ chatId, organizationId }, '[Operator] Free-form agent instruction');
 
+  // The turn runs on the merchant's durable operator thread (resolved from the
+  // binding key) and resolves any order references via tools from the text — no
+  // more per-order thread targeting. It persists both sides of the exchange, so
+  // this delivery reply must stay raw (unmirrored).
   let summary: string;
-  let threadId: string;
   try {
-    ({ summary, threadId } = await presence(
-      {
-        kind: 'free-form',
-        orderNumber,
-        instruction: body,
-      },
+    ({ summary } = await presence(
+      { kind: 'free-form', instruction: body },
       () => executeOperatorAgentTurn({
         orgId: organizationId,
         instruction: body,
-        ...(orderNumber ? { orderNumber } : {}),
-        ...(context.lastThreadId ? { threadId: context.lastThreadId } : {}),
+        operatorKey: senderRef,
         senderPhone: senderRef,
         clerkUserId,
       }),
@@ -89,14 +85,5 @@ export async function executeFreeFormInstruction(
     await reply('Something went wrong running the agent. Please try again.');
     return;
   }
-  await updateContext(organizationId, chatId, {
-    ...(orderNumber ? { lastOrderNumber: orderNumber } : {}),
-    lastThreadId: threadId,
-    history: [
-      ...context.history,
-      { role: 'user', content: body },
-      { role: 'assistant', content: summary },
-    ],
-  });
   await reply(summary || 'Done.');
 }

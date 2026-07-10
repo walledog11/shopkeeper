@@ -129,7 +129,7 @@ describe('POST /webhooks/telegram — order lookup', () => {
 
 // ── Free-form instruction ────────────────────────────────────────────────────
 describe('POST /webhooks/telegram — free-form instruction', () => {
-  it('runs arbitrary text in-process and updates history', async () => {
+  it('runs arbitrary text in-process on the durable operator thread', async () => {
     const chatId = '8000001';
     const member = await db.orgMember.create({
       data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
@@ -153,18 +153,22 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
     expect(setMessageReactionSpy).toHaveBeenCalledWith(chatId, 1, '👀');
     expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
+    // The freeform turn now targets the merchant's durable operator thread via the
+    // binding key; it no longer threads an order number or a prior thread id.
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
       orgId: org.id,
       instruction: 'how many orders today?',
+      operatorKey: `telegram:${chatId}`,
       senderPhone: `telegram:${chatId}`,
       clerkUserId: `usr_${chatId}`,
     });
     expect(lastReplyText()).toBe('Looked it up.');
 
+    // The transcript now lives on the operator thread, not in OperatorContext —
+    // the freeform path no longer writes the deprecated history/lastThreadId fields.
     const ctx = await getContext(org.id, chatId);
-    expect(ctx.lastThreadId).toBe(newThreadId);
-    expect(ctx.history.map((m) => m.content)).toContain('how many orders today?');
-    expect(ctx.history.map((m) => m.content)).toContain('Looked it up.');
+    expect(ctx.lastThreadId).toBeNull();
+    expect(ctx.history).toEqual([]);
   });
 });
 

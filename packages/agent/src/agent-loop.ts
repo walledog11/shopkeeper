@@ -206,9 +206,6 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     }
 
     if (response.stop_reason === "max_tokens") return done("max_tokens", finalText, i + 1);
-    if (tokenBudget !== undefined && usageTotals.totalTokens >= tokenBudget) {
-      return done("token_budget", finalText, i + 1);
-    }
 
     if (response.stop_reason === "end_turn" || toolUseBlocks.length === 0) {
       if (mode === "capture" && params.captureReprompt && !reprompted) {
@@ -217,6 +214,13 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         return iterate(i + 1);
       }
       return done("end_turn", finalText, i + 1);
+    }
+
+    // Budget stop fires only when the loop would otherwise keep iterating: a turn
+    // that finished cleanly returns end_turn above with its finalText even if the
+    // budget is exhausted. Weighted so cache traffic doesn't count at full price.
+    if (tokenBudget !== undefined && usageTotals.budgetTokens >= tokenBudget) {
+      return done("token_budget", finalText, i + 1);
     }
 
     if (mode === "capture") {

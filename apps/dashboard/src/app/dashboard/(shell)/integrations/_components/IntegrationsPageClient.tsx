@@ -16,15 +16,12 @@ import {
   type OAuthDoneMessage,
 } from "@/lib/integrations/oauth-flow"
 import { filterOperatorPlatformConfigs } from "@/lib/integrations/operator-channel-visibility"
-import { shouldShowImessageIntegration } from "@/lib/integrations/imessage-visibility"
-import { shouldShowTelegramIntegration } from "@/lib/integrations/telegram-visibility"
 import IntegrationCard from "@/components/integrations/IntegrationCard"
-import { CARD_SHELL } from "@/components/integrations/integration-card-styles"
+import { CARD_ACTIONS, CARD_DESCRIPTION, CARD_SHELL } from "@/components/integrations/integration-card-styles"
 import TelegramCard from "@/components/integrations/TelegramCard"
 import ImessageCard from "@/components/integrations/ImessageCard"
 import {
   getShopifyDisconnectMessage,
-  isShopifyIntegrationActive,
   resolveShopifyConnectionState,
 } from "@/lib/integrations/shopify-connection"
 import { hasIntegrationTokenAlert } from "@/components/integrations/integration-card-helpers"
@@ -33,7 +30,7 @@ import type { Integration } from "@/types"
 
 // ── Page ───────────────────────────────────────────────────────────────────────
 
-const INTEGRATION_CARD_GRID = "grid gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
+const INTEGRATION_CARD_GRID = "grid items-stretch gap-4 grid-cols-[repeat(auto-fill,minmax(340px,1fr))]"
 
 function renderIntegrationSkeletonSection(
   sectionKind: IntegrationChannelKind,
@@ -49,11 +46,21 @@ function renderIntegrationSkeletonSection(
       </div>
       <div className={cn(INTEGRATION_CARD_GRID, "w-fit max-w-full")}>
         {Array.from({ length: count }).map((_, i) => (
-          <div key={i} className={cn(CARD_SHELL, "space-y-4")}>
-            <Skeleton className="size-14 rounded-2xl" />
-            <Skeleton className="h-5 w-28" />
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-10 w-full rounded-[10px]" />
+          <div key={i} className={CARD_SHELL}>
+            <div className="flex items-center gap-3">
+              <Skeleton className="size-8 rounded-lg shrink-0" />
+              <Skeleton className="h-5 w-28" />
+            </div>
+            <div className={CARD_DESCRIPTION}>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-4/5" />
+                <Skeleton className="h-3 w-3/5" />
+              </div>
+            </div>
+            <div className={CARD_ACTIONS}>
+              <Skeleton className="h-10 w-full rounded-[10px]" />
+            </div>
           </div>
         ))}
       </div>
@@ -98,7 +105,6 @@ function IntegrationsPageContent({
   const searchParams = useSearchParams()
   const { data, mutate } = useIntegrations()
   const { data: telegramStatus } = useSWR<{ connected: boolean; botUsername: string | null }>('/api/integrations/telegram', fetcher)
-  const { data: imessageStatus } = useSWR<{ connected: boolean }>('/api/integrations/imessage/bind', fetcher)
   const integrations = useMemo(() => data ?? [], [data])
   const loaded = data !== undefined
   const [openId, setOpenId] = useState<string | null>(null)
@@ -238,14 +244,10 @@ function IntegrationsPageContent({
 
   const alertCount = integrations.filter(hasIntegrationTokenAlert).length
 
-  const hasShopify = integrations.some(i => i.platform === 'shopify' && isShopifyIntegrationActive(i))
-  const hasEmail = integrations.some(i => i.platform === 'email')
   const telegramAvailability = useMemo(
     () => ({ botUsername: telegramBotUsername ?? telegramStatus?.botUsername ?? null }),
     [telegramBotUsername, telegramStatus?.botUsername],
   )
-  const showTelegram = shouldShowTelegramIntegration(telegramAvailability)
-  const showImessage = shouldShowImessageIntegration({ lineHandle: imessageHandle })
   const runtimePlatformConfig = useMemo(
     () => PLATFORM_CONFIG.map(def => def.id === 'tiktok-shop'
       ? {
@@ -269,24 +271,6 @@ function IntegrationsPageContent({
     support: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'support'),
     operator: sortPlatformConfigsByChannelKind(visiblePlatformConfig, 'operator'),
   }), [visiblePlatformConfig])
-  const setupSteps = [
-    { id: 'shopify', label: 'Connect your Shopify store', detail: 'So Shopkeeper can look up orders and customers for you.', done: hasShopify },
-    { id: 'email', label: 'Connect your support email', detail: 'Customer emails become tickets you can answer in one place.', done: hasEmail },
-    showTelegram ? { id: 'telegram', label: 'Link Telegram on your phone', detail: 'Approve replies and get updates wherever you are.', done: telegramStatus?.connected ?? false } : null,
-    showImessage ? { id: 'imessage', label: 'Link iMessage on your iPhone', detail: 'Approve replies and get your morning briefing by text.', done: imessageStatus?.connected ?? false } : null,
-  ].filter((step): step is { id: string; label: string; detail: string; done: boolean } => step !== null)
-  const showSetup = loaded && (!hasShopify || !hasEmail)
-  const nextStepIndex = setupSteps.findIndex(s => !s.done)
-  const setupDoneCount = setupSteps.filter(s => s.done).length
-
-  function goToStep(stepId: string) {
-    if (stepId === 'shopify') {
-      setOpenId('shopify')
-      return
-    }
-    const targetId = stepId === 'email' ? 'gmail' : stepId
-    document.getElementById(targetId)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }
 
   function renderIntegrationCard(def: PlatformConfig) {
     if (def.id === 'telegram') {
@@ -350,48 +334,6 @@ function IntegrationsPageContent({
           </div>
         )}
 
-        {/* Setup progress — until Shopify and email are connected */}
-        {showSetup && (
-          <div className="rounded-xl border border-foreground/[0.08] bg-foreground/[0.02] px-5 py-4">
-            <div className="flex items-baseline justify-between gap-3">
-              <p className="text-sm font-semibold text-strong">Connect your channels</p>
-              <p className="text-xs text-faint">{setupDoneCount} of {setupSteps.length} connected</p>
-            </div>
-            <ol className="mt-3 space-y-2.5">
-              {setupSteps.map((step, i) => (
-                <li key={step.id} className="flex items-start gap-3">
-                  {step.done ? (
-                    <CheckCircle2 className="size-4 mt-0.5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <span className={cn(
-                      "size-4 mt-0.5 rounded-full border text-[10px] font-semibold flex items-center justify-center shrink-0",
-                      i === nextStepIndex ? "border-foreground/40 text-strong" : "border-foreground/[0.15] text-faint",
-                    )}>
-                      {i + 1}
-                    </span>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className={cn("text-xs font-medium", step.done ? "text-faint" : "text-strong")}>
-                      {step.label}
-                    </p>
-                    {!step.done && i === nextStepIndex && (
-                      <p className="text-xs text-faint mt-0.5">{step.detail}</p>
-                    )}
-                  </div>
-                  {!step.done && i === nextStepIndex && (
-                    <button type="button"
-                      onClick={() => goToStep(step.id)}
-                      className="text-xs font-semibold text-strong bg-foreground/[0.08] hover:bg-foreground/[0.14] border border-foreground/[0.15] rounded-md px-3 py-1.5 transition-colors shrink-0"
-                    >
-                      Connect
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-
         {/* Integrations */}
         {loaded ? (
           <div className="grid gap-8 lg:grid-cols-2 items-start">
@@ -408,7 +350,7 @@ function IntegrationsPageContent({
               section.kind,
               section.title,
               section.description,
-              section.kind === 'support' ? 5 : 3,
+              4,
             ))}
           </div>
         )}

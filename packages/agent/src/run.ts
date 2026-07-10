@@ -134,7 +134,14 @@ export async function runAgent(
     }, approvedActionsCompleteOutcome(supportThread));
   }
 
-  const history = operatorMode || readOnly ? ctx.recentMessages.slice(-4) : ctx.recentMessages;
+  // The operator channel is now one durable thread per binding, so its history is
+  // the merchant's real conversation — widen the window from the legacy 4. Composer
+  // read-only stays narrow.
+  const history = operatorMode
+    ? ctx.recentMessages.slice(-20)
+    : readOnly
+      ? ctx.recentMessages.slice(-4)
+      : ctx.recentMessages;
   const messageInstruction = readOnly
     ? `Private question from the support operator. Do not contact the customer.\n\n${instruction}`
     : instruction;
@@ -203,7 +210,8 @@ export async function runAgent(
       }, "max_tokens");
     case "token_budget":
       return finish({
-        summary: "Agent stopped - this request required too many steps. Please try a more specific instruction.",
+        summary: loop.finalText?.trim()
+          || "Agent stopped - this request required too many steps. Please try a more specific instruction.",
         actionsPerformed,
       }, "token_budget");
     default:
