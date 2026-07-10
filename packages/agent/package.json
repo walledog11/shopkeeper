@@ -158,6 +158,10 @@
       "types": "./dist/kb-learned.d.ts",
       "default": "./dist/kb-learned.js"
     },
+    "./kb-memory": {
+      "types": "./dist/kb-memory.d.ts",
+      "default": "./dist/kb-memory.js"
+    },
     "./merchant-answer-kb": {
       "types": "./dist/merchant-answer-kb.d.ts",
       "default": "./dist/merchant-answer-kb.js"

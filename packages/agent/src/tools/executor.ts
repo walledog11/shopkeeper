@@ -33,6 +33,7 @@ import type {
   ToolExecutionDeps,
 } from "./registry/index.js";
 import { formatToolInputValidationError, getToolDefinition, unmetToolCapability } from "./registry/index.js";
+import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetId, resolveEffectiveMemoryArticles } from "../kb-memory.js";
 export type { StaticPolicyResult } from "./static-policy.js";
 
 type PreparedToolCall =
@@ -115,12 +116,26 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
       { body: { contains: word, mode: "insensitive" as const } },
     ]);
 
-    return db.kbArticle.findMany({
-      where: { organizationId: orgId, OR: wordConditions },
-      take: 5,
-      orderBy: { updatedAt: "desc" },
-      select: { id: true, title: true, body: true, tags: true },
+    const [articles, corrections] = await Promise.all([
+      db.kbArticle.findMany({
+        where: { organizationId: orgId, OR: wordConditions },
+        take: 10,
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, title: true, body: true, tags: true },
+      }),
+      db.kbArticle.findMany({
+        where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
+        take: 50,
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, title: true, body: true, tags: true },
+      }),
+    ]);
+    const candidateIds = new Set(articles.map(article => article.id));
+    const relevantCorrections = corrections.filter(correction => {
+      const targetId = memoryOverrideTargetId(correction.tags);
+      return Boolean(targetId && candidateIds.has(targetId));
     });
+    return resolveEffectiveMemoryArticles([...articles, ...relevantCorrections]).slice(0, 5);
   },
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown> {
     return db.kbCitation.createMany({

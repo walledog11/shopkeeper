@@ -39,6 +39,18 @@ export function createArticle(knowledgeBaseId: string, input: ArticleInput) {
   )
 }
 
+export function createContext(content: string, category: string, correctionTargetId?: string) {
+  return requestJson<{ article: KbArticle }>(
+    "/api/kb/context",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, category, correctionTargetId }),
+    },
+    "Failed to add context.",
+  )
+}
+
 export function updateArticle(id: string, input: ArticleInput) {
   return requestJson<{ article: KbArticle }>(
     `/api/kb/${id}`,

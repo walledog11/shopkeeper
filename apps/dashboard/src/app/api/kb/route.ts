@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { db } from '@shopkeeper/db';
+import { db, parseVoiceProposal } from '@shopkeeper/db';
+import { normalizeStoredOrgSettings } from '@shopkeeper/agent/settings';
 import { withOrgRoute } from '@/lib/api/route';
 
 export const GET = withOrgRoute(
@@ -39,6 +40,16 @@ export const GET = withOrgRoute(
       })),
     }));
 
-    return NextResponse.json({ knowledgeBases: enriched });
+    const settings = normalizeStoredOrgSettings(org.settings);
+    return NextResponse.json({
+      knowledgeBases: enriched,
+      storeProfile: {
+        name: org.name,
+        aiContext: settings.aiContext ?? '',
+        brandVoice: settings.brandVoice ?? '',
+        sampleReplies: settings.sampleReplies ?? [],
+        voiceProposal: parseVoiceProposal(org.voiceProposal),
+      },
+    });
   },
 );

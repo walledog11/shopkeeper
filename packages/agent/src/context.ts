@@ -2,6 +2,7 @@ import { db } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
+import { resolveEffectiveMemoryArticles } from "./kb-memory.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -126,8 +127,8 @@ export async function buildContext(
     db.kbArticle.findMany({
       where: { organizationId: orgId },
       orderBy: { updatedAt: "desc" },
-      take: 3,
-      select: { title: true, body: true, tags: true },
+      take: 6,
+      select: { id: true, title: true, body: true, tags: true },
     }),
   ]);
 
@@ -253,11 +254,12 @@ export async function buildContext(
 
   const [openThreadCount, pastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
 
+  const effectiveKbArticles = resolveEffectiveMemoryArticles(allKbArticles).slice(0, 3);
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
-    ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
-    : allKbArticles;
-  const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
+    ? effectiveKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
+    : effectiveKbArticles;
+  const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : effectiveKbArticles;
   const kbArticles = options?.pinKbArticles?.length
     ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
     : loadedKbArticles;

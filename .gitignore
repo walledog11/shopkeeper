@@ -14,6 +14,7 @@ apps/dashboard/.next-dev/
 apps/dashboard/.next-dev-*/
 apps/dashboard/.next-e2e/
 apps/dashboard/.next-preview/
+apps/dashboard/.next-memory/
 next-env.d.ts
 
 # Common build output
