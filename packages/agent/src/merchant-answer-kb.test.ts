@@ -47,7 +47,8 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockFindFirst.mockResolvedValue({ id: "kb-base-1" });
+  mockFindFirst.mockResolvedValue(null);
+  mockCreateKb.mockResolvedValue({ id: "kb-shipping" });
   mockFindMany.mockResolvedValue([]);
   mockCreateArticle.mockResolvedValue({
     id: "article-new",
@@ -76,7 +77,7 @@ describe("merchant answer kb content", () => {
     expect(content.body).toContain("Q: Do we ship globally?");
     expect(content.body).toContain("A: Yes — $15 flat rate to Canada and UK.");
     expect(content.body).toContain("Context: Customer asked via Email, thread about global availability.");
-    expect(content.tags).toEqual([AGENT_LEARNED_KB_TAG, "shipping", "Support"]);
+    expect(content.tags).toEqual([AGENT_LEARNED_KB_TAG, "shipping"]);
   });
 
   it("buildMerchantAnswerContextLine falls back to channel-only context", () => {
@@ -125,11 +126,19 @@ describe("saveMerchantAnswerToKb", () => {
 
     expect(result.created).toBe(true);
     expect(result.updated).toBe(false);
+    expect(mockCreateKb).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        organizationId: "org-1",
+        name: "Shipping",
+        source: "user",
+      }),
+    }));
     expect(mockCreateArticle).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({
         organizationId: "org-1",
+        knowledgeBaseId: "kb-shipping",
         title: "International shipping",
-        tags: expect.arrayContaining([AGENT_LEARNED_KB_TAG, "shipping", "Support"]),
+        tags: expect.arrayContaining([AGENT_LEARNED_KB_TAG, "shipping"]),
       }),
     }));
     expect(mockCreateCitation).toHaveBeenCalledWith({

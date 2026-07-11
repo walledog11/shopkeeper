@@ -41,10 +41,9 @@ export const topBarAgentItems: NavItem[] = [
   },
   {
     name: "Memory",
-    mobileName: "Knowledge",
     href: "/dashboard/kb",
     icon: BrainCircuit,
-    description: "Knowledge base and brand context",
+    description: "Facts, policies, and learned answers",
   },
   {
     name: "Review",

@@ -14,7 +14,7 @@ interface Props {
 export function ArticleEditDetail({ editDraft, editError, isSaving, onCancelEdit, onEditDraftChange, onSaveEdit }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-border px-5 py-5 pr-12 sm:px-6"><p className="text-xs font-semibold uppercase text-faint">Your notes</p><h2 className="mt-1 text-lg font-semibold text-foreground">Edit memory</h2></div>
+      <div className="shrink-0 border-b border-border px-5 py-5 pr-12 sm:px-6"><h2 className="text-lg font-semibold text-foreground">Edit note</h2></div>
       <div className="custom-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
         <div><label htmlFor="memory-note-title" className="mb-2 block text-xs font-semibold text-muted-foreground">Title</label><input id="memory-note-title" value={editDraft.title} onChange={event => onEditDraftChange(draft => ({ ...draft, title: event.target.value }))} className={`${inputCls} font-semibold`} /></div>
         <div><label htmlFor="memory-note-body" className="mb-2 block text-xs font-semibold text-muted-foreground">Context</label><textarea id="memory-note-body" value={editDraft.body} onChange={event => onEditDraftChange(draft => ({ ...draft, body: event.target.value }))} rows={14} className={`${inputCls} resize-none`} /></div>

@@ -1,19 +1,12 @@
 export const AGENT_LEARNED_KB_TAG = "agent-learned" as const;
 
-export function buildMerchantAnswerKbTags(
-  threadTag: string | null | undefined,
-  topicTags: readonly string[] = [],
-): string[] {
+export function buildMerchantAnswerKbTags(topicTags: readonly string[] = []): string[] {
   const tags: string[] = [AGENT_LEARNED_KB_TAG];
   for (const tag of topicTags) {
     const trimmed = tag.trim();
     if (trimmed && !tags.some((existing) => existing.toLowerCase() === trimmed.toLowerCase())) {
       tags.push(trimmed);
     }
-  }
-  const trimmedThreadTag = threadTag?.trim();
-  if (trimmedThreadTag && !tags.some((existing) => existing.toLowerCase() === trimmedThreadTag.toLowerCase())) {
-    tags.push(trimmedThreadTag);
   }
   return tags;
 }

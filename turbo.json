@@ -37,7 +37,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "dependsOn": ["@shopkeeper/db#db:generate"]
     },
     "db:generate": {
       "cache": false

@@ -10,13 +10,11 @@ import {
 } from "./kb-learned.js";
 
 describe("kb-learned", () => {
-  it("buildMerchantAnswerKbTags includes agent-learned, topic tags, and thread tag", () => {
-    expect(buildMerchantAnswerKbTags("Support")).toEqual([AGENT_LEARNED_KB_TAG, "Support"]);
-    expect(buildMerchantAnswerKbTags(null)).toEqual([AGENT_LEARNED_KB_TAG]);
-    expect(buildMerchantAnswerKbTags("Support", ["shipping"])).toEqual([
+  it("buildMerchantAnswerKbTags includes agent-learned and topic tags only", () => {
+    expect(buildMerchantAnswerKbTags()).toEqual([AGENT_LEARNED_KB_TAG]);
+    expect(buildMerchantAnswerKbTags(["shipping"])).toEqual([
       AGENT_LEARNED_KB_TAG,
       "shipping",
-      "Support",
     ]);
   });
 

@@ -15,8 +15,8 @@ import {
   type MemoryTopicFilter,
 } from "./memory-page-utils"
 import { type ArticleWithBase, type SortKey } from "./kb-page-utils"
+import { buildMemoryBooks, filterMemoryBooks } from "./memory-books"
 
-const STORE_PROFILE_ID = "store-profile"
 const emptyArticleDraft = (): { body: string; category: ContextCategory } => ({ body: "", category: "auto" })
 const emptyEditDraft = () => ({ title: "", body: "" })
 
@@ -34,10 +34,13 @@ interface KbApiResponse {
 export function useKbPageState() {
   const { data, isLoading, mutate } = useSWR<KbApiResponse>("/api/kb", fetcher)
   const knowledgeBases = useMemo(() => data?.knowledgeBases ?? [], [data])
-  const storeProfile = data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", sampleReplies: [], voiceProposal: null }
+  const storeProfile = useMemo(
+    () => data?.storeProfile ?? { name: "", aiContext: "", brandVoice: "", sampleReplies: [], voiceProposal: null },
+    [data?.storeProfile],
+  )
   const hasShopifyConnection = knowledgeBases.some(kb => kb.source === "shopify")
 
-  const [profileOpen, setProfileOpen] = useState(false)
+  const [selectedBookId, setSelectedBookId] = useState<string | null>(null)
   const [expandedArticleId, setExpandedArticleId] = useState<string | null>(null)
   const [editingArticleId, setEditingArticleId] = useState<string | null>(null)
   const [sort, setSort] = useState<SortKey>("recent")
@@ -54,13 +57,16 @@ export function useKbPageState() {
   const [editError, setEditError] = useState<string | null>(null)
   const [isArticleDeleting, setIsArticleDeleting] = useState(false)
   const [articleDeleteError, setArticleDeleteError] = useState<string | null>(null)
-  const [voiceProposalBusy, setVoiceProposalBusy] = useState<null | "approve" | "dismiss">(null)
-  const [voiceProposalError, setVoiceProposalError] = useState<string | null>(null)
 
   const rawArticles: ArticleWithBase[] = useMemo(() => knowledgeBases.flatMap(kb =>
     kb.articles.map(article => ({ ...article, baseName: kb.name, baseSource: kb.source })),
   ), [knowledgeBases])
   const allArticles = useMemo(() => resolveEffectiveMemoryArticles(rawArticles), [rawArticles])
+  const memoryBooks = useMemo(
+    () => buildMemoryBooks(knowledgeBases, allArticles, storeProfile),
+    [allArticles, knowledgeBases, storeProfile],
+  )
+  const visibleBooks = useMemo(() => filterMemoryBooks(memoryBooks, search), [memoryBooks, search])
   const visibleArticles = useMemo(() => {
     const sorted = [...filterMemoryArticles(allArticles, sourceFilter, topicFilter, search)]
     if (sort === "recent") sorted.sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))
@@ -80,14 +86,10 @@ export function useKbPageState() {
   }
   const expandArticle = (id: string) => {
     closeArticleOverlay()
-    setProfileOpen(false)
     setExpandedArticleId(id)
   }
-  const selectStoreProfile = () => {
-    closeArticleOverlay()
-    setProfileOpen(true)
-  }
-  const closeStoreProfile = () => setProfileOpen(false)
+  const selectBook = (id: string) => setSelectedBookId(id)
+  const closeBook = () => setSelectedBookId(null)
   const beginAddContext = () => {
     setCorrectionTargetId(null)
     setArticleDraft(emptyArticleDraft())
@@ -116,7 +118,7 @@ export function useKbPageState() {
       await mutate()
       closeContextComposer()
     } catch (error) {
-      setArticleCreateError(errorMessageFromUnknown(error, "Failed to add context."))
+      setArticleCreateError(errorMessageFromUnknown(error, "Failed to add note."))
     } finally {
       setIsArticleSaving(false)
     }
@@ -157,34 +159,14 @@ export function useKbPageState() {
       setIsArticleDeleting(false)
     }
   }
-  const handleSaveStoreProfile = async (input: { aiContext: string; brandVoice: string; sampleReplies: SampleReply[] }) => {
-    const response = await fetch("/api/org", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ settings: input }) })
-    if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "Failed to save store profile.")
-    await mutate()
-  }
-  const handleResolveVoiceProposal = async (action: "approve" | "dismiss") => {
-    setVoiceProposalBusy(action)
-    setVoiceProposalError(null)
-    try {
-      const response = await fetch("/api/agent/voice", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }) })
-      if (!response.ok) throw new Error("Failed to update reply style suggestion.")
-      await mutate()
-    } catch (error) {
-      setVoiceProposalError(errorMessageFromUnknown(error, "Failed to update reply style suggestion."))
-    } finally {
-      setVoiceProposalBusy(null)
-    }
-  }
-
   return {
     articleCreateError, articleDeleteError, articleDraft, beginAddContext, beginCorrection,
-    closeArticleOverlay, closeContextComposer, closeStoreProfile, correctionTarget, editDraft, editError,
-    expandedArticle, expandArticle, handleCreateArticle, handleDeleteArticle, handleSaveStoreProfile,
-    handleResolveVoiceProposal, handleUpdateArticle, hasShopifyConnection, isArticleDeleting,
-    isArticleSaving, isCreatingArticle, isEditSaving, isLoading, isStoreProfileOpen: profileOpen,
-    search, selectStoreProfile, selectedArticle, setArticleDraft, setEditDraft, setSearch, setSort,
-    setSourceFilter, setTopicFilter, sort, sourceFilter, startEdit, storeProfile, topicFilter,
-    topicFilters, visibleArticles, voiceProposalBusy, voiceProposalError,
+    closeArticleOverlay, closeContextComposer, correctionTarget, editDraft, editError,
+    expandedArticle, expandArticle, handleCreateArticle, handleDeleteArticle, handleUpdateArticle,
+    hasShopifyConnection, isArticleDeleting, isArticleSaving, isCreatingArticle, isEditSaving,
+    isLoading, search, selectedArticle, setArticleDraft, setEditDraft, setSearch, setSort,
+    setSourceFilter, setTopicFilter, sort, sourceFilter, startEdit, topicFilter, topicFilters,
+    visibleArticles, visibleBooks, selectedBookId, selectBook, closeBook,
   }
 }
 

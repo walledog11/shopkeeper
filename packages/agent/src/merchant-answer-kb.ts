@@ -1,5 +1,6 @@
 import { db } from "@shopkeeper/db";
 import { AGENT_LEARNED_KB_TAG, buildMerchantAnswerKbTags } from "./kb-learned.js";
+import { NOTES_KB_FOLDER, resolveTopicFolderName } from "./kb-memory.js";
 import { DISCOUNT_POLICY_QUESTION_RES, SHIPPING_COVERAGE_QUESTION_RES } from "./intent.js";
 
 const RETURN_POLICY_QUESTION_RES: readonly RegExp[] = [
@@ -81,10 +82,9 @@ export function deriveMerchantAnswerKbTitle(question: string | null, answer: str
 
   const raw = (question ?? answer).trim();
   if (!raw) return "Store policy";
-  if (raw.length <= 80) {
-    return raw.charAt(0).toUpperCase() + raw.slice(1);
-  }
-  return `${raw.slice(0, 77).trim()}…`;
+  const normalized = raw.charAt(0).toUpperCase() + raw.slice(1);
+  if (normalized.length <= 255) return normalized;
+  return `${normalized.slice(0, 252).trim()}…`;
 }
 
 export function formatMerchantAnswerChannelLabel(channelType: string): string {
@@ -143,7 +143,7 @@ export function buildMerchantAnswerKbArticleContent(input: {
       answer: input.answer,
       contextLine,
     }),
-    tags: buildMerchantAnswerKbTags(input.threadTag, topicTags),
+    tags: buildMerchantAnswerKbTags(topicTags),
   };
 }
 
@@ -164,19 +164,46 @@ export function pickSimilarAgentLearnedArticle<T extends { id: string; title: st
   )) ?? null;
 }
 
-export async function resolveUserKnowledgeBaseId(organizationId: string): Promise<string> {
+export async function resolveKnowledgeBaseIdByName(
+  organizationId: string,
+  name: string,
+): Promise<string> {
   const existing = await db.knowledgeBase.findFirst({
-    where: { organizationId, source: "user" },
-    orderBy: { createdAt: "asc" },
+    where: {
+      organizationId,
+      source: "user",
+      name: { equals: name, mode: "insensitive" },
+    },
     select: { id: true },
   });
   if (existing) return existing.id;
 
   const created = await db.knowledgeBase.create({
-    data: { organizationId, name: "Support", source: "user" },
+    data: { organizationId, name, source: "user" },
     select: { id: true },
   });
   return created.id;
+}
+
+export async function resolveUserKnowledgeBaseId(organizationId: string): Promise<string> {
+  const notesKb = await db.knowledgeBase.findFirst({
+    where: {
+      organizationId,
+      source: "user",
+      name: { equals: NOTES_KB_FOLDER, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (notesKb) return notesKb.id;
+
+  const legacy = await db.knowledgeBase.findFirst({
+    where: { organizationId, source: "user" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (legacy) return legacy.id;
+
+  return resolveKnowledgeBaseIdByName(organizationId, NOTES_KB_FOLDER);
 }
 
 export async function saveMerchantAnswerToKb(
@@ -184,7 +211,8 @@ export async function saveMerchantAnswerToKb(
 ): Promise<SaveMerchantAnswerToKbResult> {
   const content = buildMerchantAnswerKbArticleContent(input);
   const topicTags = deriveMerchantAnswerTopicTags(input.question, input.answer);
-  const knowledgeBaseId = await resolveUserKnowledgeBaseId(input.organizationId);
+  const folderName = resolveTopicFolderName(topicTags);
+  const knowledgeBaseId = await resolveKnowledgeBaseIdByName(input.organizationId, folderName);
 
   const candidates = await db.kbArticle.findMany({
     where: {

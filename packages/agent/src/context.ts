@@ -2,7 +2,7 @@ import { db } from "@shopkeeper/db";
 import { parseClassifierSignals } from "./classifier-signals.js";
 import { shopifyRestJson, type ShopifyContext } from "./shopify/client.js";
 import { isOperatorChannel } from "./thread-constants.js";
-import { resolveEffectiveMemoryArticles } from "./kb-memory.js";
+import { MEMORY_OVERRIDE_TAG, memoryOverrideTargetIds } from "./kb-memory.js";
 import type { ToolResult } from "./tools/result.js";
 import type {
   AddInternalNoteInput,
@@ -111,6 +111,23 @@ export async function buildContext(
   sink: ThreadSink,
   options?: BuildContextOptions,
 ): Promise<AgentContext> {
+  const effectiveKbArticlesPromise = (async () => {
+    const overrides = await db.kbArticle.findMany({
+      where: { organizationId: orgId, tags: { has: MEMORY_OVERRIDE_TAG } },
+      select: { tags: true },
+    });
+    const overriddenIds = memoryOverrideTargetIds(overrides);
+    return db.kbArticle.findMany({
+      where: {
+        organizationId: orgId,
+        ...(overriddenIds.length > 0 ? { id: { notIn: overriddenIds } } : {}),
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 3,
+      select: { title: true, body: true, tags: true },
+    });
+  })();
+
   const [thread, org, shopifyIntegration, allKbArticles] = await Promise.all([
     db.thread.findUnique({
       where: { id: threadId },
@@ -127,12 +144,7 @@ export async function buildContext(
     }),
     db.organization.findUnique({ where: { id: orgId } }),
     db.integration.findFirst({ where: { organizationId: orgId, platform: "shopify" } }),
-    db.kbArticle.findMany({
-      where: { organizationId: orgId },
-      orderBy: { updatedAt: "desc" },
-      take: 6,
-      select: { id: true, title: true, body: true, tags: true },
-    }),
+    effectiveKbArticlesPromise,
   ]);
 
   if (!thread || thread.organizationId !== orgId) {
@@ -257,12 +269,11 @@ export async function buildContext(
 
   const [openThreadCount, pastTickets] = await Promise.all([openThreadCountPromise, pastTicketsPromise]);
 
-  const effectiveKbArticles = resolveEffectiveMemoryArticles(allKbArticles).slice(0, 3);
   const threadTag = thread.tag?.toLowerCase();
   const matchingKbArticles = threadTag
-    ? effectiveKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
-    : effectiveKbArticles;
-  const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : effectiveKbArticles;
+    ? allKbArticles.filter(a => a.tags.some(t => t.toLowerCase() === threadTag))
+    : allKbArticles;
+  const loadedKbArticles = matchingKbArticles.length > 0 ? matchingKbArticles : allKbArticles;
   const kbArticles = options?.pinKbArticles?.length
     ? mergePinnedKbArticles(options.pinKbArticles, loadedKbArticles)
     : loadedKbArticles;
