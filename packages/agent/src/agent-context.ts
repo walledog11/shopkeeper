@@ -93,6 +93,11 @@ export interface SupportContext extends BaseAgentContext {
   recentOrders: ShopifyOrderSummary[];
   linkedShopifyCustomerName: string | null;
   kbArticles: { title: string; body: string }[];
+  // Operator channel only: a host-rendered, opaque snapshot of what is awaiting the
+  // merchant's decision (pending plan incl. draft bodies, pending question, digest
+  // age). The core treats it as a string and drops it into the operator prompt's
+  // `## Pending state` section; no gateway concept leaks into the package.
+  operatorLedger?: string;
   // Structured classifier signals persisted on the thread (Phase 1). Optional:
   // present only for classified inbound threads. Routing (Phase 2) reads it;
   // absent/null means fall back to the regex path.

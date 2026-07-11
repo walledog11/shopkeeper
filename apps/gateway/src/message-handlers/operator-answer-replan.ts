@@ -9,17 +9,15 @@ import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
-import logger from '../../logger.js';
-import { getGatewayDashboardUrl } from '../../config/env.js';
-import { gatewayThreadSink } from '../../message-handlers/agent-thread-sink.js';
-import { toGatewayAgentPlan } from '../../message-handlers/agent-plan-adapter.js';
+import logger from '../logger.js';
+import { gatewayThreadSink } from './agent-thread-sink.js';
+import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import {
-  formatOperatorPlanMessage,
+  formatOperatorDraftSummary,
   sendOperatorPlanNotification,
   type OperatorNotificationExclude,
-} from '../../message-handlers/planning-notifications.js';
-import { updateContext, type OperatorContext, type ToolCall } from '../../operator-context.js';
-import type { OperatorMessageContext } from '../operator-message.js';
+} from './planning-notifications.js';
+import { updateContext, type ToolCall } from '../operator-context.js';
 
 function answeringChannelFromSenderRef(senderRef: string): OperatorNotificationExclude | null {
   if (senderRef.startsWith('imessage:')) {
@@ -37,25 +35,28 @@ function toPendingPlanToolCalls(
   return rawToolCalls.map((toolCall) => ({ ...toolCall }));
 }
 
-// The operator answered an `ask_operator` question over Telegram. The reply is the
-// answer: record it, persist it to the knowledge base (always — an operator-channel
-// answer is treated as a reusable fact), then re-plan and push the draft reply plan
-// over iMessage/Telegram for yes/no approval. Mirrors the dashboard answer route's
-// ingestion; the saved answer re-enters planning through the KB door. Returns false
-// when no question is pending.
-export async function handlePendingQuestionAnswer(
-  organizationId: string,
-  message: OperatorMessageContext,
-  context: OperatorContext,
-): Promise<boolean> {
-  if (!context.pendingQuestion) return false;
-  const { chatId, body, reply, presence } = message;
-  const { threadId } = context.pendingQuestion;
-  const answer = body.trim();
+export interface OperatorAnswerReplanParams {
+  organizationId: string;
+  chatId: string;
+  threadId: string;
+  // The merchant's freeform text: an answer to a pending question, or revision
+  // guidance for a pending plan. Recorded as a note, saved to the KB as a
+  // reusable fact, and folded into the re-plan.
+  answer: string;
+  senderRef: string;
+}
 
-  // The question is being answered now — clear it up front so a re-plan failure
-  // can't leave the operator stuck re-answering (and re-writing the KB article).
-  await updateContext(organizationId, chatId, { pendingQuestion: null });
+// Ingests a merchant's answer/guidance for a thread and re-drafts its plan:
+// record a note, persist the fact to the knowledge base, re-plan with the fact
+// pinned, update the pending plan, and notify the *other* operator channels.
+// Returns a model-facing draft summary; the answer/revise control tools return it
+// as their tool result and the model relays it. Never throws — a failure resolves
+// to an apologetic status string.
+export async function applyOperatorAnswerReplan(
+  params: OperatorAnswerReplanParams,
+): Promise<string> {
+  const { organizationId, chatId, threadId, senderRef } = params;
+  const answer = params.answer.trim();
 
   const [thread, latestConversation, meta] = await Promise.all([
     requireOrgThread(threadId, organizationId),
@@ -100,8 +101,7 @@ export async function handlePendingQuestionAnswer(
       await clearThreadPlanCache({ orgId: organizationId, threadId });
     }
     logger.info({ organizationId, threadId, reason: 'thread_already_answered' }, '[Operator] Answer recorded, skipped re-plan');
-    await reply('Got it — saved that for next time. This ticket was already handled.');
-    return true;
+    return 'Got it — saved that for next time. This ticket was already handled.';
   }
 
   const org = await db.organization.findUnique({
@@ -117,74 +117,53 @@ export async function handlePendingQuestionAnswer(
     saveToKb: true,
   });
 
+  const doReplan = async (): Promise<AgentPlan> => {
+    const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
+      pinKbArticles: [{ title: saved.title, body: saved.body }],
+    });
+    const replanned = await planAgent(ctx, planningInstruction, settings);
+    await db.thread.update({
+      where: { id: threadId },
+      data: {
+        cachedPlanMessageId: pendingCustomerMessageId,
+        cachedPlan: buildAgentPlanCacheRecord({
+          instruction: baseInstruction,
+          lastCustomerMessageId: pendingCustomerMessageId,
+          settings,
+          plan: replanned,
+        }) as object,
+      },
+    });
+    return replanned;
+  };
+
   let plan: AgentPlan;
   try {
-    plan = await presence(
-      { kind: 'free-form' },
-      async () => {
-        const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
-          pinKbArticles: [{ title: saved.title, body: saved.body }],
-        });
-        const replanned = await planAgent(ctx, planningInstruction, settings);
-        await db.thread.update({
-          where: { id: threadId },
-          data: {
-            cachedPlanMessageId: pendingCustomerMessageId,
-            cachedPlan: buildAgentPlanCacheRecord({
-              instruction: baseInstruction,
-              lastCustomerMessageId: pendingCustomerMessageId,
-              settings,
-              plan: replanned,
-            }) as object,
-          },
-        });
-        return replanned;
-      },
-    );
+    plan = await doReplan();
   } catch (err) {
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
-    await reply("Saved your answer, but I couldn't draft the reply just now — please try again in a moment.");
-    return true;
+    return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
   }
 
   const notifyPlan = toGatewayAgentPlan(plan);
   if (!notifyPlan) {
     logger.error({ organizationId, threadId }, '[Operator] Answer re-plan produced no notify plan');
-    await reply("Saved your answer, but I couldn't draft the reply just now — please try again in a moment.");
-    return true;
+    return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
   }
 
-  const exclude = answeringChannelFromSenderRef(message.senderRef);
-  const planMessage = formatOperatorPlanMessage(
-    meta?.customer?.name ?? null,
-    meta?.channelType ?? thread.channelType,
-    meta?.aiSummary ?? baseInstruction,
-    notifyPlan.steps,
-    { threadId, dashboardUrl: getGatewayDashboardUrl() },
-  );
+  const exclude = answeringChannelFromSenderRef(senderRef);
+  const draftSummary = formatOperatorDraftSummary(meta?.customer?.name ?? null, notifyPlan);
   const pendingPlan = {
     threadId,
     instruction: baseInstruction,
     rawToolCalls: toPendingPlanToolCalls(notifyPlan.rawToolCalls),
   };
 
-  let deliveredToAnswerer = false;
-  if (exclude) {
-    try {
-      await updateContext(organizationId, chatId, { pendingPlan });
-      await reply(planMessage);
-      deliveredToAnswerer = true;
-      logger.info(
-        { organizationId, threadId, channel: exclude.channel, chatId },
-        '[Operator] Answer plan delivered to answering operator',
-      );
-    } catch (err) {
-      logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer plan reply failed');
-      await reply("Saved your answer, but I couldn't deliver the plan just now — please try again in a moment.");
-      return true;
-    }
-  }
+  await updateContext(organizationId, chatId, { pendingPlan });
 
+  // The answering operator gets the draft summary as this call's return value (the
+  // control tool relays it through the model); here we only fan the operator card
+  // out to the *other* bound operator channels.
   try {
     await sendOperatorPlanNotification(
       organizationId,
@@ -197,18 +176,12 @@ export async function handlePendingQuestionAnswer(
       exclude ? { exclude } : undefined,
     );
   } catch (err) {
-    if (deliveredToAnswerer) {
-      logger.warn(
-        { err: (err as Error).message, organizationId, threadId },
-        '[Operator] Answer plan delivered to answerer; other operator channels failed',
-      );
-      return true;
-    }
-    logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer plan notification failed');
-    await reply("Saved your answer and drafted a reply, but I couldn't deliver the plan just now — check your dashboard.");
-    return true;
+    logger.warn(
+      { err: (err as Error).message, organizationId, threadId },
+      '[Operator] Answer plan delivered to answerer; other operator channels failed',
+    );
   }
 
   logger.info({ organizationId, threadId }, '[Operator] Answer ingested and re-planned');
-  return true;
+  return draftSummary;
 }

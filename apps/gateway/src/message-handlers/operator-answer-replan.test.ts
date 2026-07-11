@@ -9,7 +9,6 @@ import {
 } from '@shopkeeper/db/test-helpers';
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
-import type { OperatorPresence, OperatorReply } from '../operator-message.js';
 
 const { planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   planAgentSpy: vi.fn(),
@@ -20,19 +19,18 @@ vi.mock('@shopkeeper/agent/planner', () => ({
   planAgent: planAgentSpy,
 }));
 
-vi.mock('../../message-handlers/planning-notifications.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../message-handlers/planning-notifications.js')>();
+vi.mock('./planning-notifications.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./planning-notifications.js')>();
   return {
     ...actual,
     sendOperatorPlanNotification: sendOperatorPlanNotificationSpy,
   };
 });
 
-import { handlePendingQuestionAnswer } from './pending-question-commands.js';
-import { getContext, updateContext } from '../../operator-context.js';
+import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
+import { getContext, updateContext } from '../operator-context.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
-const passthroughPresence: OperatorPresence = (_progress, work) => work();
 
 beforeEach(async () => {
   org = await createTestOrg();
@@ -46,21 +44,7 @@ afterEach(async () => {
   await cleanupTestData(org?.id);
 });
 
-describe('handlePendingQuestionAnswer', () => {
-  it('returns false and does nothing when no question is pending', async () => {
-    const reply = vi.fn<OperatorReply>();
-    const ctx = await getContext(org.id, 'chat_none');
-
-    const handled = await handlePendingQuestionAnswer(
-      org.id,
-      { chatId: 'chat_none', body: 'random text', reply, senderRef: 'telegram:chat_none', presence: passthroughPresence },
-      ctx,
-    );
-
-    expect(handled).toBe(false);
-    expect(reply).not.toHaveBeenCalled();
-  });
-
+describe('applyOperatorAnswerReplan', () => {
   it('records the answer + KB article and clears state when the ticket was already handled', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
@@ -92,24 +76,18 @@ describe('handlePendingQuestionAnswer', () => {
       data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id },
     });
 
-    await updateContext(org.id, 'chat_1', {
-      pendingQuestion: { threadId: thread.id, question: 'Do we ship to Canada?' },
+    const message = await applyOperatorAnswerReplan({
+      organizationId: org.id,
+      chatId: 'chat_1',
+      threadId: thread.id,
+      answer: 'Yes, $15 flat to Canada.',
+      senderRef: 'telegram:chat_1',
     });
-    const ctx = await getContext(org.id, 'chat_1');
 
-    const reply = vi.fn<OperatorReply>();
-    const handled = await handlePendingQuestionAnswer(
-      org.id,
-      { chatId: 'chat_1', body: 'Yes, $15 flat to Canada.', reply, senderRef: 'telegram:chat_1', presence: passthroughPresence },
-      ctx,
-    );
+    expect(message).toContain('already handled');
+    expect(planAgentSpy).not.toHaveBeenCalled();
 
-    expect(handled).toBe(true);
-    expect(reply).toHaveBeenCalledTimes(1);
-    expect(reply.mock.calls[0]?.[0]).toContain('already handled');
-
-    // pendingQuestion cleared, and the stale plan cache cleared.
-    expect((await getContext(org.id, 'chat_1')).pendingQuestion).toBeNull();
+    // The stale plan cache is cleared.
     const refreshed = await db.thread.findUnique({
       where: { id: thread.id },
       select: { cachedPlan: true, cachedPlanMessageId: true },
@@ -128,10 +106,10 @@ describe('handlePendingQuestionAnswer', () => {
     expect(article?.title).toBe('International shipping');
     expect(article?.body).toContain('Q: Do we ship to Canada?');
     expect(article?.body).toContain('A: Yes, $15 flat to Canada.');
-    expect(article?.tags).toEqual(['agent-learned', 'shipping', 'Support']);
+    expect(article?.tags).toEqual(['agent-learned', 'shipping']);
   });
 
-  it('re-plans and pushes the draft reply plan over the operator channel', async () => {
+  it('re-plans, parks the draft, and fans the card out to the other operator channels', async () => {
     const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
     const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
     const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
@@ -159,11 +137,6 @@ describe('handlePendingQuestionAnswer', () => {
       data: { cachedPlan: cacheRecord as object, cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada' },
     });
 
-    await updateContext(org.id, 'chat_2', {
-      pendingQuestion: { threadId: thread.id, question: 'Do we ship to Canada?' },
-    });
-    const ctx = await getContext(org.id, 'chat_2');
-
     const replannedPlan = {
       instruction: 'Shipping to Canada',
       steps: [{
@@ -179,20 +152,19 @@ describe('handlePendingQuestionAnswer', () => {
     };
     planAgentSpy.mockResolvedValue(replannedPlan);
 
-    const reply = vi.fn<OperatorReply>();
-    const handled = await handlePendingQuestionAnswer(
-      org.id,
-      { chatId: 'chat_2', body: 'Yes, $15 flat to Canada.', reply, senderRef: 'imessage:chat_2', presence: passthroughPresence },
-      ctx,
-    );
+    const message = await applyOperatorAnswerReplan({
+      organizationId: org.id,
+      chatId: 'chat_2',
+      threadId: thread.id,
+      answer: 'Yes, $15 flat to Canada.',
+      senderRef: 'imessage:chat_2',
+    });
 
-    expect(handled).toBe(true);
-    expect(reply).toHaveBeenCalledTimes(1);
-    const planMessage = reply.mock.calls[0]?.[0] as string;
-    expect(planMessage).toContain('Plan (1 step):');
-    expect(planMessage).toContain('1. Email Jane');
-    expect(planMessage).toContain(`/dashboard/tickets/${thread.id}`);
-    expect(planMessage).toContain('yes · no · Open link above');
+    // The return is a model-facing draft summary carrying the concrete draft, not
+    // the operator yes/no card.
+    expect(message).toContain('Re-drafted');
+    expect(message).toContain('Yes, we ship to Canada for $15 flat.');
+    expect(message).not.toContain('Reply "yes" to send');
     expect(planAgentSpy).toHaveBeenCalledTimes(1);
 
     const updatedCtx = await getContext(org.id, 'chat_2');
@@ -201,24 +173,42 @@ describe('handlePendingQuestionAnswer', () => {
       instruction: 'Shipping to Canada',
     });
 
+    // The operator card still fans out to the merchant's other bound channels.
     expect(sendOperatorPlanNotificationSpy).toHaveBeenCalledWith(
       org.id,
       thread.id,
       'Jane Doe',
       'email',
       'Shipping to Canada',
-      {
-        steps: [{
-          label: 'Reply to customer',
-          description: '"Yes, we ship to Canada for $15 flat."',
-          category: 'write',
-          tool: 'send_reply',
-          enabled: true,
-        }],
+      expect.objectContaining({
         rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
-      },
+      }),
       'Shipping to Canada',
       { exclude: { channel: 'imessage', contextKey: 'chat_2' } },
     );
+  });
+
+  it('does nothing destructive and returns an apologetic string when re-plan throws', async () => {
+    const customer = await createTestCustomer(org.id, 'cust@example.com', { name: 'Jane Doe' });
+    const thread = await createTestThread(org.id, customer.id, 'email', { tag: 'Support' });
+    const custMsg = await createTestMessage(thread.id, 'Do you ship to Canada?', SenderType.customer);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { cachedPlanMessageId: custMsg.id, aiSummary: 'Shipping to Canada' },
+    });
+    await updateContext(org.id, 'chat_3', { pendingQuestion: { threadId: thread.id, question: 'Ship to Canada?' } });
+
+    planAgentSpy.mockRejectedValue(new Error('boom'));
+
+    const message = await applyOperatorAnswerReplan({
+      organizationId: org.id,
+      chatId: 'chat_3',
+      threadId: thread.id,
+      answer: 'Yes, $15 flat.',
+      senderRef: 'telegram:chat_3',
+    });
+
+    expect(message).toContain("couldn't draft the reply");
+    expect(sendOperatorPlanNotificationSpy).not.toHaveBeenCalled();
   });
 });

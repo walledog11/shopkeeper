@@ -15,7 +15,6 @@ export type TelegramCommand =
   | { type: 'summary' }
   | DigestCommand
   | PendingPlanCommand
-  | { type: 'order-lookup'; orderNumber: string }
   | { type: 'free-form'; instruction: string };
 
 const DIGEST_COMMAND_TYPES = new Set(['digest-review', 'digest-open', 'digest-spam', 'digest-reply']);
@@ -35,7 +34,7 @@ function parseIndex(value: string): number | null {
 }
 
 export function parseTelegramCommand(body: string): TelegramCommand {
-  const normalized = body.toLowerCase();
+  const normalized = body.trim().toLowerCase();
 
   if (normalized.startsWith('/start')) {
     const startMatch = body.match(/^\/start\s+(\S+)/i);
@@ -83,10 +82,7 @@ export function parseTelegramCommand(body: string): TelegramCommand {
     if (index !== null) return { type: 'plan-skip', index };
   }
 
-  const lookupMatch = body.match(/^#(\d+)$|^order[- #]*(\d+)$/i);
-  if (lookupMatch) {
-    return { type: 'order-lookup', orderNumber: `#${lookupMatch[1] ?? lookupMatch[2]}` };
-  }
-
+  // An order reference (`#1234`, `order 1234`) is no longer a deterministic
+  // command — it flows to the agent, which resolves the order via tools.
   return { type: 'free-form', instruction: body };
 }

@@ -15,6 +15,7 @@ import {
 } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
 import type { PrecomputedPlanResult } from './planning-types.js';
+import { firstDraftExcerpt } from './operator-ledger.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -100,7 +101,7 @@ export function formatOperatorPlanMessage(
   channelType: DbChannelType,
   summary: string,
   steps: PlanStep[],
-  options?: { threadId?: string; dashboardUrl?: string },
+  options?: { threadId?: string; dashboardUrl?: string; rawToolCalls?: readonly { name: string; input?: unknown }[] },
 ): string {
   const channel = formatChannelLabel(channelType);
   const actionableSteps = steps.filter((step) => step.category !== 'read');
@@ -114,6 +115,9 @@ export function formatOperatorPlanMessage(
     return `${index + 1}. ${text}`;
   });
 
+  // The actual draft the merchant is approving, so approval is not sight-unseen.
+  const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
+
   const lines: (string | null)[] = [
     `New ticket — ${channel}`,
     customerName ? `From: ${customerName}` : null,
@@ -121,19 +125,34 @@ export function formatOperatorPlanMessage(
     '',
     `Plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
     ...stepLines,
+    ...(draftBody ? ['', `Draft: "${draftBody}"`] : []),
   ];
 
   if (options?.threadId && options.dashboardUrl) {
     lines.push('', `Open: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
   }
 
-  const actions = actionableSteps.length > 1 ? ['yes', 'no', 'skip 1'] : ['yes', 'no'];
-  if (options?.threadId && options.dashboardUrl) {
-    actions.push('Open link above');
-  }
-  lines.push('', actions.join(' · '));
+  lines.push('', 'Reply "yes" to send, or tell me what to change.');
 
   return lines.filter((line): line is string => line !== null).join('\n');
+}
+
+// The tool-result a revise/answer control tool returns to the model after re-drafting
+// a plan. Unlike formatOperatorPlanMessage (the operator-facing card fanned out to
+// the merchant's other channels), this is read by the model, which relays it in its
+// own words — so it carries the concrete draft, not the yes/no card footer.
+export function formatOperatorDraftSummary(customerName: string | null, plan: AgentPlan): string {
+  const name = customerName ? customerName.split(' ')[0] : 'the customer';
+  const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
+  const stepList = actionableSteps.map((step) => step.label || step.description).join('; ');
+  const draftBody = firstDraftExcerpt(plan.rawToolCalls);
+
+  const parts = [
+    `Re-drafted the plan for ${name} (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}: ${stepList}).`,
+  ];
+  if (draftBody) parts.push(`Draft: "${draftBody}"`);
+  parts.push("It's parked for the merchant's approval — they can reply yes to send it or ask for more changes.");
+  return parts.join(' ');
 }
 
 function formatAutoExecutionMessage(
@@ -195,7 +214,6 @@ export async function sendOperatorAutoExecutionNotification(
     for (const member of bindings) {
       try {
         const sent = await notifyOperator(organizationId, member, message, {
-          lastThreadId: threadId,
           pendingPlan: null,
         }, { idempotencyKey });
         if (sent) {
@@ -308,6 +326,7 @@ export async function sendOperatorPlanNotification(
   const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
     threadId,
     dashboardUrl: getGatewayDashboardUrl(),
+    rawToolCalls: plan.rawToolCalls,
   });
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,

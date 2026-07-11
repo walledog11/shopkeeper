@@ -266,9 +266,6 @@ model OperatorContext {
   id              String   @id @default(uuid()) @db.Uuid
   organizationId  String   @map("organization_id") @db.Uuid
   chatId          String   @map("chat_id") @db.VarChar(64)
-  lastOrderNumber String?  @map("last_order_number") @db.VarChar(50)
-  lastThreadId    String?  @map("last_thread_id") @db.Uuid
-  history         Json     @default("[]") @db.JsonB
   pendingPlan     Json?    @map("pending_plan") @db.JsonB
   pendingDigest   Json?    @map("pending_digest") @db.JsonB
   pendingQuestion Json?    @map("pending_question") @db.JsonB

@@ -6,6 +6,7 @@ import { ConflictError } from "./errors.js";
 import type { LockProvider } from "./lock/index.js";
 import type { AgentContext, AgentActionMode, AgentResult } from "./agent-context.js";
 import type { AgentActionApproval } from "./agent-actions.js";
+import type { AgentToolDefinition } from "./tools/registry/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
 
 // Options executeAgentTurn forwards to the injected runAgent. The host's runAgent
@@ -16,6 +17,10 @@ export interface ExecuteTurnRunOptions {
   turnId?: string;
   mode?: AgentActionMode;
   approval?: AgentActionApproval;
+  // Host-injected control tools for this turn (e.g. the gateway's operator
+  // control tools). Forwarded to runAgent; ignored on the approved-execution and
+  // read-only paths. Keeps host-specific tools out of the shared registry.
+  moduleTools?: Record<string, AgentToolDefinition>;
 }
 
 export type ExecuteTurnRunAgent = (
@@ -35,6 +40,7 @@ export interface ExecuteAgentTurnDeps {
     threadId: string,
     orgId: string,
     mode?: AgentActionMode,
+    operatorLedger?: string,
   ) => Promise<AgentContext>;
   runAgent: ExecuteTurnRunAgent;
 }
@@ -52,6 +58,10 @@ export interface ExecuteAgentTurnParams {
   persistAuditNoteWhenNoActions?: boolean;
   auditMode?: "human_approved" | "auto_executed" | "read_only";
   approval?: AgentActionApproval;
+  // Operator freeform turns only: the host-rendered pending-state ledger passed
+  // into buildContext, and the operator control tools passed into runAgent.
+  operatorLedger?: string;
+  moduleTools?: Record<string, AgentToolDefinition>;
   auditMetadata?: {
     senderPhone?: string | null;
     clerkUserId?: string | null;
@@ -89,6 +99,7 @@ export async function executeAgentTurn(
       params.threadId,
       params.orgId,
       params.auditMode,
+      params.operatorLedger,
     );
     const result = await deps.runAgent(
       ctx,
@@ -100,6 +111,7 @@ export async function executeAgentTurn(
         turnId,
         ...(params.auditMode ? { mode: params.auditMode } : {}),
         ...(params.approval ? { approval: params.approval } : {}),
+        ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }
     );
 

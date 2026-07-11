@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AGENT_SETTINGS_DEFAULTS } from "./settings.js";
 import { installAgentLogger, resetAgentLoggerForTests, type AgentLogger } from "./logger.js";
 import { runAgent } from "./run.js";
+import { defineTool, stringArg } from "./tools/registry/schema.js";
 import type { AgentContext } from "./agent-context.js";
 
 const {
@@ -246,5 +247,70 @@ describe("runAgent loop behavior", () => {
 
     expect(result.summary).toBe("Reached maximum steps without completing the task.");
     expect(result.actionsPerformed).toHaveLength(2);
+  });
+});
+
+describe("runAgent moduleTools seam", () => {
+  function makeModuleTool(execute: ReturnType<typeof vi.fn>) {
+    return defineTool({
+      name: "test_control_tool",
+      description: "A host-injected control tool.",
+      fields: { guidance: stringArg("Guidance.", { required: true }) },
+      category: "action",
+      group: "thread",
+      capabilities: [],
+      label: "Ran control tool",
+      planStepLabel: "Run control tool",
+      policy: { categoryPermission: false },
+      execute,
+    });
+  }
+
+  it("appends module tool definitions to the tool set sent to the model", async () => {
+    mockCreate.mockResolvedValueOnce(endTurn("Done."));
+    const controlTool = makeModuleTool(vi.fn().mockResolvedValue({ status: "ok", message: "ok" }));
+
+    await runAgent(makeCtx(), "hello", undefined, undefined, {
+      moduleTools: { test_control_tool: controlTool },
+    });
+
+    const toolsArg = mockCreate.mock.calls[0]?.[0]?.tools as { name: string }[];
+    expect(toolsArg.map((tool) => tool.name)).toContain("test_control_tool");
+  });
+
+  it("dispatches a module tool call through its definition and records the definition's category", async () => {
+    const moduleExecute = vi.fn().mockResolvedValue({ status: "ok", message: "control effected." });
+    const controlTool = makeModuleTool(moduleExecute);
+    mockCreate
+      .mockResolvedValueOnce(toolUse("test_control_tool", { guidance: "send it" }))
+      .mockResolvedValueOnce(endTurn("All set."));
+
+    const result = await runAgent(makeCtx(), "approve it", undefined, undefined, {
+      moduleTools: { test_control_tool: controlTool },
+    });
+
+    expect(moduleExecute).toHaveBeenCalledTimes(1);
+    expect(moduleExecute.mock.calls[0]?.[0]).toEqual({ guidance: "send it" });
+    // Category resolves from the module definition, not TOOL_CATEGORIES (which
+    // knows nothing of it) — otherwise the audit row gets a null category.
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "test_control_tool",
+      category: "action",
+      status: "success",
+      result: "control effected.",
+    });
+  });
+
+  it("does not offer module tools in read-only mode", async () => {
+    mockCreate.mockResolvedValueOnce(endTurn("Answered."));
+    const controlTool = makeModuleTool(vi.fn());
+
+    await runAgent(makeCtx(), "just a question", undefined, undefined, {
+      readOnly: true,
+      moduleTools: { test_control_tool: controlTool },
+    });
+
+    const toolsArg = mockCreate.mock.calls[0]?.[0]?.tools as { name: string }[];
+    expect(toolsArg.map((tool) => tool.name)).not.toContain("test_control_tool");
   });
 });

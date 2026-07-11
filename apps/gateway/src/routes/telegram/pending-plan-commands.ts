@@ -1,28 +1,16 @@
-import type { RawToolCall } from '@shopkeeper/agent/types';
 import { READ_TOOLS } from '../../constants.js';
 import logger from '../../logger.js';
 import {
   extractOrderNumber,
-  updateContext,
+  normalizeApprovedToolCalls,
   type OperatorContext,
   type ToolCall,
 } from '../../operator-context.js';
-import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
+import { runApprovedPendingPlan, clearPendingPlan } from '../../message-handlers/pending-plan-actions.js';
 import { refreshSkippedPlanTerminalSend } from '../../message-handlers/skipped-plan-terminal-send.js';
 import { findTerminalSendTool } from '@shopkeeper/agent/planner-skip-reply';
 import type { PendingPlanCommand } from './command-parser.js';
 import type { OperatorMessageContext } from '../operator-message.js';
-
-function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
-  return toolCalls.map((toolCall) => {
-    const { id, name, input, ...rest } = toolCall;
-    return {
-      id,
-      name,
-      input: input !== undefined ? input : (Object.keys(rest).length > 0 ? rest : undefined),
-    };
-  });
-}
 
 export async function handlePendingPlanCommand(
   organizationId: string,
@@ -31,12 +19,12 @@ export async function handlePendingPlanCommand(
   command: PendingPlanCommand,
   context: OperatorContext,
 ): Promise<boolean> {
-  const { chatId, body, reply, presence } = message;
+  const { chatId, reply, presence } = message;
   if (!context.pendingPlan) return false;
 
   const { threadId, instruction, rawToolCalls } = context.pendingPlan;
   if (command.type === 'plan-dismiss') {
-    await updateContext(organizationId, chatId, { pendingPlan: null });
+    await clearPendingPlan(organizationId, chatId);
     await reply('Plan dismissed.');
     return true;
   }
@@ -65,35 +53,27 @@ export async function handlePendingPlanCommand(
 
   let summary: string;
   try {
-    ({ summary } = await presence(
+    summary = await presence(
       {
         kind: 'plan-run',
         orderNumber: extractOrderNumber(instruction),
         instruction,
       },
-      () => executeOperatorAgentTurn({
-        orgId: organizationId,
+      () => runApprovedPendingPlan({
+        organizationId,
+        chatId,
+        clerkUserId,
         threadId,
         instruction,
         approvedToolCalls: approvedRawToolCalls,
-        clerkUserId,
       }),
-    ));
+    );
   } catch (err) {
     logger.error({ err }, '[Operator] Operator agent turn failed (plan approval)');
     await reply('Something went wrong running the plan. Please try again.');
     return true;
   }
-  await updateContext(organizationId, chatId, {
-    pendingPlan: null,
-    lastThreadId: threadId,
-    history: [
-      ...context.history,
-      { role: 'user', content: body },
-      { role: 'assistant', content: summary },
-    ],
-  });
 
-  await reply(summary || 'Done.');
+  await reply(summary);
   return true;
 }

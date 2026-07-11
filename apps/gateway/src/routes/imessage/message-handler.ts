@@ -2,12 +2,11 @@ import { db, findOrgMemberBindToken, looksLikeOrgMemberBindToken } from '@shopke
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
-import { executeFreeFormInstruction, handleOrderLookup } from '../telegram/agent-execution.js';
+import { executeFreeFormInstruction } from '../telegram/agent-execution.js';
 import { isDigestCommand, isPendingPlanCommand, parseTelegramCommand } from '../telegram/command-parser.js';
 import { handleDigestCommand } from '../telegram/digest-commands.js';
 import { HELP_TEXT } from '../telegram/format.js';
 import { handlePendingPlanCommand } from '../telegram/pending-plan-commands.js';
-import { handlePendingQuestionAnswer } from '../telegram/pending-question-commands.js';
 import { progressOnlyPresence, type OperatorMessageContext, type OperatorReply } from '../operator-message.js';
 import { buildMirroredReply } from '../../operator-thread-mirror.js';
 import { handleImessageBinding } from './binding.js';
@@ -105,19 +104,8 @@ export async function handleImessageOperatorMessage(message: ImessageOperatorInb
     return;
   }
 
-  if (
-    command.type === 'order-lookup'
-    && await handleOrderLookup(organizationId, chatId, command.orderNumber, mirroredReply)
-  ) {
-    return;
-  }
-
-  if (
-    command.type === 'free-form'
-    && await handlePendingQuestionAnswer(organizationId, commandMessage, context)
-  ) {
-    return;
-  }
-
-  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
+  // Everything past the keyword fast path is one agent turn: the model reads the
+  // pending-state ledger and drives approve/reject/revise/answer via control tools,
+  // or handles a fresh instruction normally.
+  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
 }

@@ -97,9 +97,9 @@ describe('POST /webhooks/telegram — help & summary', () => {
   });
 });
 
-// ── Order lookup #1234 ───────────────────────────────────────────────────────
-describe('POST /webhooks/telegram — order lookup', () => {
-  it('replies with thread context when #N matches an open thread', async () => {
+// ── Order references now flow to the agent as free-form ──────────────────────
+describe('POST /webhooks/telegram — order reference', () => {
+  it('dispatches a bare #N order reference to the agent as a free-form turn', async () => {
     const chatId = '7000001';
     const member = await db.orgMember.create({
       data: { organizationId: org.id, clerkUserId: `usr_${chatId}` },
@@ -107,9 +107,11 @@ describe('POST /webhooks/telegram — order lookup', () => {
     await db.orgMemberTelegramChat.create({
       data: { orgMemberId: member.id, chatId },
     });
-    const customer = await createTestCustomer(org.id, `cust_${chatId}@test.com`, { name: 'Carol' });
-    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
-    await createTestMessage(thread.id, 'Where is order #4242?');
+    executeOperatorAgentTurnSpy.mockResolvedValueOnce({
+      summary: 'Order #4242 shipped yesterday.',
+      threadId: '00000000-0000-4000-8000-000000000042',
+      actionsPerformed: [],
+    });
 
     await request(app)
       .post('/webhooks/telegram')
@@ -117,13 +119,11 @@ describe('POST /webhooks/telegram — order lookup', () => {
       .send({ message: { message_id: 1, chat: { id: Number(chatId), type: 'private' }, text: '#4242' } });
 
     await waitForReplies(1);
-    const text = lastReplyText();
-    expect(text).toMatch(/#4242/);
-    expect(text).toMatch(/Carol/);
-
-    const ctx = await getContext(org.id, chatId);
-    expect(ctx.lastOrderNumber).toBe('#4242');
-    expect(ctx.lastThreadId).toBe(thread.id);
+    // The keyword order-lookup command is gone — the agent resolves the order.
+    expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ instruction: '#4242', operatorKey: `telegram:${chatId}` }),
+    );
+    expect(lastReplyText()).toBe('Order #4242 shipped yesterday.');
   });
 });
 
@@ -154,21 +154,18 @@ describe('POST /webhooks/telegram — free-form instruction', () => {
     expect(sendChatActionSpy).toHaveBeenCalledWith(chatId, 'typing');
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledOnce();
     // The freeform turn now targets the merchant's durable operator thread via the
-    // binding key; it no longer threads an order number or a prior thread id.
+    // binding key; it no longer threads an order number or a prior thread id, and it
+    // now carries the pending-state ledger and the operator control tools.
     expect(executeOperatorAgentTurnSpy).toHaveBeenCalledWith({
       orgId: org.id,
       instruction: 'how many orders today?',
       operatorKey: `telegram:${chatId}`,
       senderPhone: `telegram:${chatId}`,
       clerkUserId: `usr_${chatId}`,
+      operatorLedger: expect.any(String),
+      moduleTools: expect.any(Object),
     });
     expect(lastReplyText()).toBe('Looked it up.');
-
-    // The transcript now lives on the operator thread, not in OperatorContext —
-    // the freeform path no longer writes the deprecated history/lastThreadId fields.
-    const ctx = await getContext(org.id, chatId);
-    expect(ctx.lastThreadId).toBeNull();
-    expect(ctx.history).toEqual([]);
   });
 });
 

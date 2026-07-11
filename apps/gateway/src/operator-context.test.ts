@@ -25,9 +25,6 @@ describe('getContext', () => {
   it('returns default empty shape when no row exists', async () => {
     const ctx = await getContext(org.id, '12345');
     expect(ctx).toEqual({
-      lastOrderNumber: null,
-      lastThreadId: null,
-      history: [],
       pendingPlan: null,
       pendingDigest: null,
       pendingQuestion: null,
@@ -36,7 +33,7 @@ describe('getContext', () => {
 });
 
 describe('updateContext + getContext round-trip', () => {
-  it('persists all fields', async () => {
+  it('persists pendingPlan', async () => {
     const threadId = '00000000-0000-4000-8000-000000000010';
     const plan: PendingPlan = {
       threadId,
@@ -44,17 +41,9 @@ describe('updateContext + getContext round-trip', () => {
       rawToolCalls: [{ id: 'tc1', name: 'refundOrder' }],
     };
 
-    await updateContext(org.id, '7000001', {
-      lastOrderNumber: '#1001',
-      lastThreadId: threadId,
-      history: [{ role: 'user', content: 'hi' }],
-      pendingPlan: plan,
-    });
+    await updateContext(org.id, '7000001', { pendingPlan: plan });
 
     const ctx = await getContext(org.id, '7000001');
-    expect(ctx.lastOrderNumber).toBe('#1001');
-    expect(ctx.lastThreadId).toBe(threadId);
-    expect(ctx.history).toEqual([{ role: 'user', content: 'hi' }]);
     expect(ctx.pendingPlan).toEqual(plan);
     expect(ctx.pendingDigest).toBeNull();
   });
@@ -97,7 +86,6 @@ describe('updateContext + getContext round-trip', () => {
       data: {
         organizationId: org.id,
         chatId: 'malformed',
-        history: [{ role: 'user', content: 'valid' }, { role: 'assistant' }],
         pendingPlan: {
           threadId: 'thread_1',
           instruction: 'check status',
@@ -112,7 +100,6 @@ describe('updateContext + getContext round-trip', () => {
 
     const ctx = await getContext(org.id, 'malformed');
 
-    expect(ctx.history).toEqual([{ role: 'user', content: 'valid' }]);
     expect(ctx.pendingPlan).toEqual({
       threadId: 'thread_1',
       instruction: 'check status',
@@ -122,16 +109,6 @@ describe('updateContext + getContext round-trip', () => {
       threadIds: ['thread_1'],
       sentAt: '2026-06-03T00:00:00.000Z',
     });
-  });
-
-  it('truncates history to the last 20 turns', async () => {
-    const history = Array.from({ length: 25 }, (_, i) => ({ role: 'user', content: `m${i}` }));
-    await updateContext(org.id, '42', { history });
-
-    const ctx = await getContext(org.id, '42');
-    expect(ctx.history).toHaveLength(20);
-    expect(ctx.history[0].content).toBe('m5');
-    expect(ctx.history[19].content).toBe('m24');
   });
 
   it('clears pendingPlan when set to null', async () => {

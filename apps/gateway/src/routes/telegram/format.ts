@@ -1,10 +1,9 @@
 export const HELP_TEXT = [
   'Shopkeeper commands:',
   'SUMMARY — your current support inbox',
-  '#1234 — look up a ticket by its order number',
   'After a summary, act on a flagged ticket:',
   '  OPEN <n> · SPAM <n> · REPLY <n> <text> · REVIEW to re-list',
-  "Or just send an instruction like 'refund #1234'.",
+  "Or just send an instruction like 'refund #1234' or 'where is #1234?'.",
 ].join('\n');
 
 export function relativeAge(ms: number | null): string {

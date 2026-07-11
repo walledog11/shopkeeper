@@ -75,6 +75,9 @@ export interface BuildContextOptions {
   // Operator/read-only callers only use the last few messages, so they can cap
   // the fetch here instead of loading 50 rows and slicing after. Defaults to 50.
   messageWindow?: number;
+  // Operator channel only: host-rendered pending-state ledger. Copied verbatim
+  // onto the context and surfaced in the operator prompt; opaque to the core.
+  operatorLedger?: string;
 }
 
 function mergePinnedKbArticles(
@@ -318,5 +321,6 @@ export async function buildContext(
     linkedShopifyCustomerName: isOperator ? shopifyCustomerName : null,
     kbArticles: kbArticles.map(a => ({ title: a.title, body: a.body })),
     classifierSignals: parseClassifierSignals(thread.classifierSignals),
+    ...(options?.operatorLedger ? { operatorLedger: options.operatorLedger } : {}),
   };
 }

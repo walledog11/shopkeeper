@@ -4,6 +4,7 @@ import { formatApproverId } from '@shopkeeper/agent/plan-execution';
 import { hashInstruction } from '@shopkeeper/agent/agent-actions';
 import { isOperatorChannel } from '@shopkeeper/agent/thread-constants';
 import type { RawToolCall } from '@shopkeeper/agent/types';
+import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
 import type { AgentActionResult } from './planning-types.js';
 import { assertBillingWriteAllowedForOrgId } from '../billing/write-gate.js';
 import { resolveClerkUserApprover } from '../clients/clerk-approver.js';
@@ -28,6 +29,10 @@ export interface ExecuteOperatorAgentTurnParams {
   operatorKey?: string;
   threadId?: string;
   approvedToolCalls?: RawToolCall[];
+  // Freeform turns only: the pending-state ledger surfaced in the operator prompt
+  // and the operator control tools. Absent on the approved-execution path.
+  operatorLedger?: string;
+  moduleTools?: Record<string, AgentToolDefinition>;
 }
 
 export interface ExecuteOperatorAgentTurnResult {
@@ -62,6 +67,8 @@ export async function executeOperatorAgentTurn(
     instruction: params.instruction,
     failureRoute: FAILURE_ROUTE,
     approvedToolCalls: params.approvedToolCalls,
+    ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
+    ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
     ...(persistOperatorExchange ? { persistUserMessage: true, persistAgentMessage: true } : {}),
     persistAuditNote: true,
     ...(params.approvedToolCalls?.length ? { auditMode: 'human_approved' as const } : {}),

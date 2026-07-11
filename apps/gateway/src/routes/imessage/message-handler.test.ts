@@ -15,7 +15,6 @@ const executeFreeFormInstructionSpy = vi.hoisted(() => vi.fn().mockResolvedValue
 
 vi.mock('../telegram/agent-execution.js', () => ({
   executeFreeFormInstruction: executeFreeFormInstructionSpy,
-  handleOrderLookup: vi.fn().mockResolvedValue(false),
 }));
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;

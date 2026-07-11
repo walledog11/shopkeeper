@@ -28,23 +28,22 @@ function buildAboutStoreSection(orgName: string, aiContext: string | undefined):
   return `${name}\n\n${context}`;
 }
 
-function buildBrandContextSections(s: OrgSettings, ctx: AgentContext, opts: { includeVoice: boolean }): string {
+function buildStoreProfileSection(orgName: string, aiContext: string | undefined): string {
+  const aboutStore = buildAboutStoreSection(orgName, aiContext);
+  return aboutStore ? `\n\n## About this store\n${aboutStore}` : "";
+}
+
+function buildVoiceSection(s: OrgSettings, ctx: AgentContext): string {
   const parts: string[] = [];
-  const aboutStore = buildAboutStoreSection(ctx.orgName, s.aiContext);
-  if (aboutStore) {
-    parts.push(`## About this store\n${aboutStore}`);
-  }
-  if (opts.includeVoice && s.brandVoice?.trim()) {
+  if (s.brandVoice?.trim()) {
     parts.push(`## Voice\nMatch this tone in every customer-facing reply:\n${s.brandVoice.trim()}`);
   }
-  if (opts.includeVoice) {
-    const samples = pickSampleReplies(s.sampleReplies ?? [], ctx.thread.tag, 3);
-    if (samples.length > 0) {
-      const rendered = samples
-        .map((r, i) => `Example ${i + 1}${r.context ? ` (${r.context})` : ""}:\n${r.body}`)
-        .join("\n\n");
-      parts.push(`## Sample replies (match this style)\n${rendered}`);
-    }
+  const samples = pickSampleReplies(s.sampleReplies ?? [], ctx.thread.tag, 3);
+  if (samples.length > 0) {
+    const rendered = samples
+      .map((r, i) => `Example ${i + 1}${r.context ? ` (${r.context})` : ""}:\n${r.body}`)
+      .join("\n\n");
+    parts.push(`## Sample replies (match this style)\n${rendered}`);
   }
   return parts.length > 0 ? "\n\n" + parts.join("\n\n") : "";
 }
@@ -184,6 +183,19 @@ const OPERATOR_INSTRUCTIONS = `- Take action only when you are confident. When y
 - After all tools finish, you MUST respond with a text summary of what you found or did. Include the actual data (e.g. address, order total, customer name) - never just say "Done".
 - Be conversational and friendly, like a helpful teammate. Avoid technical jargon. No bullet lists, no markdown. Keep it to 1-2 sentences.`;
 
+// Appended only when a pending-state ledger and the operator control tools are in
+// play (gateway operator turns). The "## Pending state" section tells you what, if
+// anything, is awaiting the merchant's decision; these tools effect the decision.
+const OPERATOR_CONTROL_TOOL_INSTRUCTIONS = `- When a plan is awaiting the merchant's decision (see "## Pending state") and their message is about that plan:
+  - If they clearly approve it (yes / send it / go ahead / looks good), call approve_pending_plan. It runs exactly the drafted actions - you cannot change what it sends.
+  - If they clearly decline it (no / don't / cancel / drop it), call reject_pending_plan.
+  - If they supply a fact, correction, or change for it ("it's a fixed size", "make it friendlier and add 10%"), call revise_pending_plan with their guidance in their words.
+  - If their assent is ambiguous ("ok", "hmm fine", "sure I guess"), do NOT call a tool - ask one short confirming question instead.
+- When a question is awaiting the merchant's answer (see "## Pending state") and their message plausibly answers it, call answer_operator_question with the answer.
+- Call at most ONE of approve_pending_plan / reject_pending_plan / revise_pending_plan / answer_operator_question per turn. After you revise a plan, the merchant must see the new draft before approving it - do NOT revise and then approve in the same turn; stop after revising and let them approve on their next message.
+- A message about something else entirely (an order lookup, a brand-new instruction) is handled normally with your other tools and MUST NOT touch the pending plan or question.
+- After a control tool runs, state plainly what happened, quoting the concrete action (e.g. "Sent - Sarah gets the $12 refund." or "Re-drafted it warmer with 10% off - reply yes when you're happy.").`;
+
 // Generic, settings-free support identity + the static instruction scaffolding.
 // Identical for every support thread of every org, so it forms a cacheable prefix
 // shared across requests. The per-store identity/context lives in the volatile half.
@@ -220,12 +232,22 @@ export function buildSystemPromptParts(ctx: AgentContext, settings?: Partial<Org
       ? `\n\n## Customer's recent orders (use these IDs directly — no need to re-fetch unless the operator asks)\n${JSON.stringify(ctx.recentOrders)}`
       : "";
 
+    // The ledger is present only on gateway operator turns, which also carry the
+    // control tools. So the "## Pending state" section and the control-tool
+    // instructions travel together — the dashboard Concierge has neither.
+    const pendingStateSection = ctx.operatorLedger
+      ? `\n\n## Pending state\n${ctx.operatorLedger}`
+      : "";
+    const instructions = ctx.operatorLedger
+      ? `${OPERATOR_INSTRUCTIONS}\n${OPERATOR_CONTROL_TOOL_INSTRUCTIONS}`
+      : OPERATOR_INSTRUCTIONS;
+
     return {
       stable: "",
       volatile: composeSystemPrompt({
         identity: `You are ${s.agentName}, an AI action assistant for ${ctx.orgName}. You are receiving instructions from a team member via ${channel}.`,
-        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildBrandContextSections(s, ctx, { includeVoice: false })}`,
-        instructions: OPERATOR_INSTRUCTIONS,
+        context: `## Integrations\n${shopifyNote}\n${shopifyCustomerNote}\n${OPERATOR_INTEGRATION_GUIDANCE}${linkedCustomerSection}${ordersSection}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${pendingStateSection}`,
+        instructions,
         trailer: `${UNTRUSTED_CONTENT_GUIDANCE}${buildGuardrailSection(s)}${buildLanguageSection(s, "operator")}`,
       }),
     };
@@ -257,7 +279,7 @@ ${ordersJson}${buildPastTicketsSection(ctx)}
 
 ## Integrations
 ${shopifyNote}
-${shopifyCustomerNote}${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildBrandContextSections(s, ctx, { includeVoice: true })}${kbSection}`;
+${shopifyCustomerNote}${buildGuardrailSection(s)}${buildLanguageSection(s, "support")}${buildAutonomySection(s)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${kbSection}${buildVoiceSection(s, ctx)}`;
 
   return { stable: SUPPORT_STABLE_PREFIX, volatile };
 }
@@ -289,7 +311,7 @@ export function buildComposerAskPrompt(ctx: AgentContext, settings?: Partial<Org
 - Customer email/handle: ${ctx.customer.platformId}
 
 ## Customer's recent orders
-${ordersJson}${buildPastTicketsSection(ctx)}${buildBrandContextSections(s, ctx, { includeVoice: true })}
+${ordersJson}${buildPastTicketsSection(ctx)}${buildStoreProfileSection(ctx.orgName, s.aiContext)}${buildVoiceSection(s, ctx)}
 
 ## Knowledge base
 ${kbSection}

@@ -14,15 +14,12 @@ describe('buildProgressCopy', () => {
     expect(buildProgressCopy({ kind: 'plan-run' })).toBe('Running the approved plan…');
   });
 
-  it('describes free-form work with an order number', () => {
+  it('describes free-form work generically, ignoring any order number', () => {
+    expect(buildProgressCopy({ kind: 'free-form' })).toBe('Working on that…');
     expect(buildProgressCopy({
       kind: 'free-form',
       orderNumber: '#5678',
-    })).toBe('Looking into #5678…');
-  });
-
-  it('describes free-form work without an order number', () => {
-    expect(buildProgressCopy({ kind: 'free-form' })).toBe('Working on that…');
+    })).toBe('Working on that…');
   });
 
   it('describes digest replies with a ticket index', () => {

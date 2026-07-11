@@ -54,6 +54,7 @@ export type {
   UpdateThreadTagInput,
 } from "./types.js";
 export { ToolInputValidationError } from "./schema.js";
+export { defineTool, stringArg } from "./schema.js";
 export { contextCapabilities, unmetToolCapability } from "./helpers.js";
 
 export const TOOL_DEFINITIONS = [

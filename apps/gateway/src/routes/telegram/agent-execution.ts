@@ -1,73 +1,33 @@
-import { db } from '@shopkeeper/db';
-import { STATUS } from '../../constants.js';
 import logger from '../../logger.js';
-import { updateContext } from '../../operator-context.js';
+import { renderOperatorLedger } from '../../message-handlers/operator-ledger.js';
+import { buildOperatorSessionTools } from '../../message-handlers/operator-session-tools.js';
 import { executeOperatorAgentTurn } from '../../message-handlers/execute-operator-agent-turn.js';
-import { relativeAge } from './format.js';
-import type { OperatorMessageContext, OperatorReply } from '../operator-message.js';
-
-export async function handleOrderLookup(
-  organizationId: string,
-  chatId: string,
-  orderNumber: string,
-  reply: OperatorReply,
-): Promise<boolean> {
-  const thread = await db.thread.findFirst({
-    where: {
-      organizationId,
-      status: STATUS.OPEN,
-      deletedAt: null,
-      messages: { some: { contentText: { contains: orderNumber }, deletedAt: null } },
-    },
-    orderBy: { updatedAt: 'desc' },
-    select: {
-      id: true,
-      aiSummary: true,
-      tag: true,
-      customer: { select: { name: true } },
-      messages: {
-        where: { senderType: { not: 'note' }, deletedAt: null },
-        orderBy: { sentAt: 'desc' },
-        take: 1,
-        select: { sentAt: true, contentText: true },
-      },
-    },
-  });
-  if (!thread) return false;
-
-  const lastMessage = thread.messages[0];
-  const age = relativeAge(lastMessage ? Date.now() - new Date(lastMessage.sentAt).getTime() : null);
-  const lines = [
-    `${orderNumber} — ${thread.customer.name ?? 'Unknown customer'}`,
-    thread.aiSummary ? `"${thread.aiSummary}"` : null,
-    `Tag: ${thread.tag ?? 'Untagged'} · Open`,
-    lastMessage
-      ? `Last message${age ? ` (${age})` : ''}: "${(lastMessage.contentText ?? '').slice(0, 120)}"`
-      : null,
-    '',
-    'Reply yes to execute the last plan, or type an instruction.',
-  ].filter((line): line is string => line !== null);
-
-  await updateContext(organizationId, chatId, {
-    lastOrderNumber: orderNumber,
-    lastThreadId: thread.id,
-  });
-  await reply(lines.join('\n'));
-  return true;
-}
+import type { OperatorContext } from '../../operator-context.js';
+import type { OperatorMessageContext } from '../operator-message.js';
 
 export async function executeFreeFormInstruction(
   organizationId: string,
   clerkUserId: string,
   message: OperatorMessageContext,
+  context: OperatorContext,
 ): Promise<void> {
   const { chatId, body, reply, presence, senderRef } = message;
   logger.info({ chatId, organizationId }, '[Operator] Free-form agent instruction');
 
-  // The turn runs on the merchant's durable operator thread (resolved from the
-  // binding key) and resolves any order references via tools from the text — no
-  // more per-order thread targeting. It persists both sides of the exchange, so
-  // this delivery reply must stay raw (unmirrored).
+  // The model interprets the merchant's message against the pending-state ledger
+  // and drives any state transition through the control tools (approve/reject/
+  // revise/answer). The turn runs on the merchant's durable operator thread and
+  // resolves order references via tools from the text. It persists both sides of
+  // the exchange, so this delivery reply must stay raw (unmirrored).
+  const operatorLedger = await renderOperatorLedger(organizationId, context);
+  const moduleTools = buildOperatorSessionTools({
+    organizationId,
+    clerkUserId,
+    chatId,
+    senderRef,
+    context,
+  });
+
   let summary: string;
   try {
     ({ summary } = await presence(
@@ -78,6 +38,8 @@ export async function executeFreeFormInstruction(
         operatorKey: senderRef,
         senderPhone: senderRef,
         clerkUserId,
+        operatorLedger,
+        moduleTools,
       }),
     ));
   } catch (err) {

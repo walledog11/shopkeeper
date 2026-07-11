@@ -7,9 +7,8 @@
 
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
+import type { RawToolCall } from '@shopkeeper/agent/types';
 import { isRecord } from './lib/typing.js';
-
-const MAX_HISTORY_TURNS = 20;
 
 export interface ToolCall {
   id: string;
@@ -34,34 +33,16 @@ export interface PendingQuestion {
 }
 
 export interface OperatorContext {
-  lastOrderNumber: string | null;
-  lastThreadId: string | null;
-  history: { role: string; content: string }[];
   pendingPlan: PendingPlan | null;
   pendingDigest: PendingDigest | null;
   pendingQuestion: PendingQuestion | null;
 }
 
 const EMPTY: OperatorContext = {
-  lastOrderNumber: null,
-  lastThreadId: null,
-  history: [],
   pendingPlan: null,
   pendingDigest: null,
   pendingQuestion: null,
 };
-
-function readHistory(value: unknown): OperatorContext['history'] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => {
-      if (!isRecord(item) || typeof item.role !== 'string' || typeof item.content !== 'string') {
-        return null;
-      }
-      return { role: item.role, content: item.content };
-    })
-    .filter((item): item is OperatorContext['history'][number] => item !== null);
-}
 
 function readToolCall(value: unknown): ToolCall | null {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string') {
@@ -129,9 +110,6 @@ export async function getContext(organizationId: string, chatId: string): Promis
   });
   if (!row) return { ...EMPTY };
   return {
-    lastOrderNumber: row.lastOrderNumber ?? null,
-    lastThreadId: row.lastThreadId ?? null,
-    history: readHistory(row.history),
     pendingPlan: readPendingPlan(row.pendingPlan),
     pendingDigest: readPendingDigest(row.pendingDigest),
     pendingQuestion: readPendingQuestion(row.pendingQuestion),
@@ -146,14 +124,7 @@ export async function updateContext(
   const current = await getContext(organizationId, chatId);
   const next = { ...current, ...updates };
 
-  if (next.history.length > MAX_HISTORY_TURNS) {
-    next.history = next.history.slice(-MAX_HISTORY_TURNS);
-  }
-
   const data = {
-    lastOrderNumber: next.lastOrderNumber ?? null,
-    lastThreadId: next.lastThreadId ?? null,
-    history: next.history,
     pendingPlan: next.pendingPlan ? toJsonObject(next.pendingPlan) : Prisma.DbNull,
     pendingDigest: next.pendingDigest ? toJsonObject(next.pendingDigest) : Prisma.DbNull,
     pendingQuestion: next.pendingQuestion ? toJsonObject(next.pendingQuestion) : Prisma.DbNull,
@@ -163,6 +134,21 @@ export async function updateContext(
     where: { organizationId_chatId: { organizationId, chatId } },
     update: data,
     create: { organizationId, chatId, ...data },
+  });
+}
+
+// Normalize a stored pending-plan's tool calls into the RawToolCall shape the
+// approved-execution path expects. Legacy rows stored the input inline as sibling
+// keys rather than under `input`; fold those back so approval fires the exact
+// tool calls the merchant was shown.
+export function normalizeApprovedToolCalls(toolCalls: ToolCall[]): RawToolCall[] {
+  return toolCalls.map((toolCall) => {
+    const { id, name, input, ...rest } = toolCall;
+    return {
+      id,
+      name,
+      input: input !== undefined ? input : (Object.keys(rest).length > 0 ? rest : undefined),
+    };
   });
 }
 

@@ -81,7 +81,6 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
 
     const ctx = await getContext(org.id, chatId);
     expect(ctx.pendingPlan).toBeNull();
-    expect(ctx.lastThreadId).toBe(threadId);
   });
 
   it('"skip 1" drops the first actionable tool call', async () => {

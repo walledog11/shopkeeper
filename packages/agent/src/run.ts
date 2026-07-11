@@ -1,7 +1,7 @@
 import { buildCachedSystemPrompt, buildSplitCachedSystemPrompt } from "./ai/anthropic.js";
 import { pickModel } from "./ai/index.js";
 import type { OrgSettings, RawToolCall } from "./types.js";
-import { selectAgentTools } from "./tools/registry/index.js";
+import { selectAgentTools, type AgentToolDefinition } from "./tools/registry/index.js";
 import { buildSystemPromptParts, buildComposerAskPrompt } from "./prompt.js";
 import { isOperatorChannel } from "./intent.js";
 import { buildMessageHistory } from "./message-history.js";
@@ -38,6 +38,11 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // and join AgentAction rows back to the note when rendering inline.
   turnId?: string;
   onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
+  // Host-injected module tools appended to the selected tool set for this run
+  // (e.g. the gateway's operator control tools). Resolved ahead of the shared
+  // registry by the executor. Ignored in read-only mode. Keeping them injected
+  // keeps host-specific tools out of the shared registry.
+  moduleTools?: Record<string, AgentToolDefinition>;
 }
 
 export async function runAgent(
@@ -107,6 +112,7 @@ export async function runAgent(
       setEscalationReason: reason => {
         escalationReason = reason;
       },
+      ...(options?.moduleTools ? { moduleTools: options.moduleTools } : {}),
     });
 
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
@@ -155,7 +161,14 @@ export async function runAgent(
   }
   const tools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)
-    : selectAgentTools(settings);
+    : [
+        ...selectAgentTools(settings),
+        ...Object.values(options?.moduleTools ?? {}).map((def) => ({
+          name: def.name,
+          description: def.description,
+          input_schema: def.inputSchema,
+        })),
+      ];
   let systemPromptBlocks;
   if (readOnly) {
     systemPromptBlocks = buildCachedSystemPrompt(buildComposerAskPrompt(ctx, settings));

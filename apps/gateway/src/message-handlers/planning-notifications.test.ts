@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe('formatOperatorPlanMessage', () => {
-  it('includes dashboard deep link and SMS-friendly footer for multi-step plans', () => {
+  it('includes the deep link, draft excerpt, and reply-or-change footer for multi-step plans', () => {
     const message = formatOperatorPlanMessage(
       'Jane Doe',
       ChannelType.email,
@@ -67,18 +67,26 @@ describe('formatOperatorPlanMessage', () => {
         { category: 'write', tool: 'send_email', description: 'Reply to customer', label: 'Reply', enabled: true },
         { category: 'write', tool: 'issue_refund', description: 'Issue full refund', label: 'Refund', enabled: true },
       ],
-      { threadId: 'thread_1', dashboardUrl: 'https://dashboard.example.com' },
+      {
+        threadId: 'thread_1',
+        dashboardUrl: 'https://dashboard.example.com',
+        rawToolCalls: [
+          { name: 'send_email', input: { to: 'jane@x.com', subject: 'Your refund', body: 'Your refund is on its way!' } },
+          { name: 'issue_refund', input: {} },
+        ],
+      },
     );
 
     expect(message).toContain('Plan (2 steps):');
     expect(message).toContain('1. Email Jane');
     expect(message).toContain('2. Refund');
+    expect(message).toContain('Draft: "Your refund is on its way!"');
     expect(message).toContain('Open: https://dashboard.example.com/dashboard/tickets/thread_1');
-    expect(message).toContain('yes · no · skip 1 · Open link above');
-    expect(message).not.toContain('Sound good?');
+    expect(message).toContain('Reply "yes" to send, or tell me what to change.');
+    expect(message).not.toContain('skip 1');
   });
 
-  it('omits skip hint for single-step plans', () => {
+  it('renders the reply-or-change footer for single-step plans', () => {
     const message = formatOperatorPlanMessage(
       null,
       ChannelType.email,
@@ -87,7 +95,7 @@ describe('formatOperatorPlanMessage', () => {
       { threadId: 'thread_2', dashboardUrl: 'https://dashboard.example.com' },
     );
 
-    expect(message).toContain('yes · no · Open link above');
+    expect(message).toContain('Reply "yes" to send, or tell me what to change.');
     expect(message).not.toContain('skip 1');
   });
 });
@@ -119,7 +127,7 @@ describe('sendOperatorPlanNotification', () => {
 
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain('Open: https://dashboard.example.com/dashboard/tickets/thread_1');
-    expect(body).toContain('yes · no · Open link above');
+    expect(body).toContain('Reply "yes" to send, or tell me what to change.');
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {

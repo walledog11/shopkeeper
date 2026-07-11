@@ -32,7 +32,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `Message` — `senderType`: customer/agent/ai/note. Agent turn transcripts in threads are `note` rows prefixed `__shopkeeper_agent__`; the audit trail is `AgentAction`, not note-row parsing.
 - `AgentAction` — first-class audit record per agent tool call (tool, category, status, mode, approver); backs `/api/agent/actions` and the Review page
 - `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
-- `OperatorContext` — Telegram operator state per (org, chatId): history, pendingPlan, pendingDigest, lastOrderNumber. **DB-backed, not Redis.**
+- `OperatorContext` — per (org, chatId) operator pending-state only: `pendingPlan`, `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
 - `OrgMember` — extends Clerk org membership; Telegram chats bound via `OrgMemberTelegramChat`
 - `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering) / `KbCitation` (per-thread article citation events)
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief
@@ -48,8 +48,7 @@ Canonical location for all agent logic; both apps import it via subpath exports.
 - `planner.ts` — `planAgent()` (generates plan with no side effects, caches in `Thread.cachedPlan`)
 - `run.ts` — `runAgent()` (executes approved plan or runs an instruction end-to-end)
 - `prompt.ts` — system prompt builder
-- `intent.ts` — operator-channel intent classification + tool subset selection
-- `order-status-fast-path.ts` — bypasses LLM for "where is X's order?" in operator channels
+- `intent.ts` — customer-prose guard signals (mutative-intent detection over message text)
 - `plan-preview.ts` — classifies plans as `quick_reply` vs `needs_review` for the dashboard home
 - `tools/registry/` — all tool definitions (Anthropic format), `TOOL_CATEGORIES`, `PLAN_STEP_LABELS`, `TOOL_LABELS`, input types
 - `tools/executor.ts` — tool dispatch + policy enforcement (`maxRefundAmount`, `blockCancellations`, etc.)
@@ -67,7 +66,7 @@ Not a copy of the core — these inject dashboard infrastructure into it:
 
 Modes:
 - **Support** — ticket threads. Auto-plan on open if last message is from the customer; plan cached in `Thread.cachedPlan`. `ActionPlanCard` → approve → `POST /api/agent`. Manual invoke via `@{agentName}` in Internal tab.
-- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram via `sms_agent`.
+- **Operator** — `/dashboard/agent` (Concierge: each session opens a new `dashboard_agent` thread and closes the previous), and Telegram/iMessage via `sms_agent`: one durable operator thread per binding; pending approvals are agent state + control tools (approve/reject/revise/answer the pending plan), with a keyword fast path for literal yes/no/help.
 - **Composer-ask** — read-only Q&A inside the support composer (`POST /api/agent/ask`). Calls `runAgent(..., { readOnly: true })`, which filters tools to `read` category and never mutates anything.
 
 Read tool list and exact behavior from `packages/agent/src/tools/registry/` — do not infer.

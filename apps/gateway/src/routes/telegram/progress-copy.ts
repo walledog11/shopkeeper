@@ -14,9 +14,7 @@ export function buildProgressCopy(progress: ProgressContext): string {
         ? `Running the approved plan for ${progress.orderNumber}…`
         : 'Running the approved plan…';
     case 'free-form':
-      return progress.orderNumber
-        ? `Looking into ${progress.orderNumber}…`
-        : 'Working on that…';
+      return 'Working on that…';
     case 'digest-reply':
       return progress.ticketIndex != null
         ? `Sending your reply on ticket ${progress.ticketIndex}…`

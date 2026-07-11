@@ -1,6 +1,6 @@
 import logger from "./logger.js";
 import type { OrgSettings } from "./types.js";
-import { TOOL_CATEGORIES } from "./tools/registry/index.js";
+import { TOOL_CATEGORIES, type AgentToolDefinition } from "./tools/registry/index.js";
 import { executeToolWithStatus } from "./tools/executor.js";
 import type {
   ActionEntry,
@@ -181,6 +181,11 @@ export async function executeAgentToolCall(
     executedToolCalls: string[];
     recordAgentFailure: RecordAgentFailure;
     setEscalationReason: (reason: string) => void;
+    // Host-injected module tools (e.g. the operator control tools). Resolved
+    // ahead of the shared registry in the executor, so their category is taken
+    // from the definition rather than TOOL_CATEGORIES (which knows nothing of
+    // them).
+    moduleTools?: Record<string, AgentToolDefinition>;
   },
 ) {
   const {
@@ -192,7 +197,9 @@ export async function executeAgentToolCall(
     executedToolCalls,
     recordAgentFailure,
     setEscalationReason,
+    moduleTools,
   } = input;
+  const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
 
   logger.info({
     orgId: ctx.orgId,
@@ -208,7 +215,7 @@ export async function executeAgentToolCall(
   let errorDetail: string | undefined;
   let threw = false;
 
-  if (readOnly && TOOL_CATEGORIES[toolCall.name] !== "read") {
+  if (readOnly && category !== "read") {
     result = `Error: ${toolCall.name} is not available in private ask mode.`;
     status = "error";
     errorDetail = result;
@@ -218,7 +225,7 @@ export async function executeAgentToolCall(
     errorDetail = result;
   } else {
     try {
-      const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings);
+      const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings, moduleTools);
       result = executed.result;
       status = executed.status;
       if (status !== "success") errorDetail = result;
@@ -237,7 +244,7 @@ export async function executeAgentToolCall(
   // daily cap, custom line items) is not something the model should retry or talk its
   // way around. Route it to a human deterministically instead of feeding the error back
   // into the loop - the safe outcome no longer depends on the model choosing to escalate.
-  if (!threw && status === "policy_block" && TOOL_CATEGORIES[toolCall.name] === "action") {
+  if (!threw && status === "policy_block" && category === "action") {
     const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
     await ctx.escalate(reason);
     result = reason;
@@ -271,7 +278,7 @@ export async function executeAgentToolCall(
     input: toolCall.input,
     durationMs,
     status,
-    category: TOOL_CATEGORIES[toolCall.name],
+    category,
     ...(errorDetail ? { errorDetail } : {}),
   });
   return {

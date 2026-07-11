@@ -24,6 +24,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
     mode: options.mode,
     approval: options.approval,
     onActionsPersisted: captureAgentActionsCompleted,
+    ...(options.moduleTools ? { moduleTools: options.moduleTools } : {}),
   });
 
 const noopShadow: ShadowRecorder = {
@@ -38,12 +39,15 @@ export function buildGatewayTurnDeps(): ExecuteAgentTurnDeps {
       threadId: string,
       orgId: string,
       mode,
+      operatorLedger,
     ): Promise<AgentContext> =>
       buildContext(
         threadId,
         orgId,
         gatewayThreadSink,
-        mode ? { agentActionMode: mode } : undefined,
+        mode || operatorLedger
+          ? { ...(mode ? { agentActionMode: mode } : {}), ...(operatorLedger ? { operatorLedger } : {}) }
+          : undefined,
       ),
     runAgent: gatewayRunAgent,
   };

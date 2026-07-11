@@ -2,7 +2,7 @@ import { db } from '@shopkeeper/db';
 import logger from '../../logger.js';
 import { buildOrgDigest } from '../../maintenance/digest.js';
 import { getContext, updateContext } from '../../operator-context.js';
-import { executeFreeFormInstruction, handleOrderLookup } from './agent-execution.js';
+import { executeFreeFormInstruction } from './agent-execution.js';
 import {
   isDigestCommand,
   isPendingPlanCommand,
@@ -11,7 +11,6 @@ import {
 import { handleDigestCommand } from './digest-commands.js';
 import { HELP_TEXT } from './format.js';
 import { handlePendingPlanCommand } from './pending-plan-commands.js';
-import { handlePendingQuestionAnswer } from './pending-question-commands.js';
 import { handleStartBinding } from './start-binding.js';
 import { withOperatorPresence } from './presence.js';
 import { buildMirroredReply } from '../../operator-thread-mirror.js';
@@ -86,19 +85,8 @@ export async function handleTelegramMessage(
     return;
   }
 
-  if (
-    command.type === 'order-lookup'
-    && await handleOrderLookup(organizationId, chatId, command.orderNumber, mirroredReply)
-  ) {
-    return;
-  }
-
-  if (
-    command.type === 'free-form'
-    && await handlePendingQuestionAnswer(organizationId, commandMessage, context)
-  ) {
-    return;
-  }
-
-  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage);
+  // Everything past the keyword fast path is one agent turn: the model reads the
+  // pending-state ledger and drives approve/reject/revise/answer via control tools,
+  // or handles a fresh instruction normally.
+  await executeFreeFormInstruction(organizationId, clerkUserId, baseMessage, context);
 }

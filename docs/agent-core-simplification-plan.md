@@ -17,16 +17,21 @@ Last reviewed: 2026-07-09.
 
 Still-live obligations that must not be lost:
 
-- **Phase 6 (sonnet-5 bump) is code-landed but MUST NOT DEPLOY until a full
-  eval baseline is captured with sign-off.** The Phase 4 loop regression was
-  fixed and pushed (`737c1f1`); targeted evals are clean (6/7, 1 known
-  brand-voice flake), but the confirming full gate is still deferred.
-- Eval gates for prior Phases 3/4/5 are stacked into that same deferred
-  baseline. **Capture that baseline before Phase C of this plan lands** —
-  Phase C changes the operator prompt and tool set, and stacking it into the
-  same baseline would confound architecture and model deltas further.
-- Sonnet-5 pricing in `packages/db/llm-spend.ts` was kept at sonnet-4-6 rates;
-  verify against the current price list (undercounted spend bites the cap late).
+- **Phase 6 (sonnet-5 bump) deploy gate CLEARED [DONE 2026-07-10].** The
+  confirming full gate ran with sign-off on clean master: aggregate **72/74
+  (97.3%) ≥ 95.5% baseline**, no regression. It surfaced one safe-direction
+  issue — sonnet-5 searches the KB more, and the benign "No relevant KB articles
+  found" warning was over-blocking `auto_execute`/`quick_reply` in
+  `classifyHomePlan`. Fixed (`plan-preview.ts` exempts that warning) and
+  committed with a refreshed baseline (`716156a`). `brand-voice-cheers-signoff`
+  confirmed a flake, not a regression.
+- Eval gates for prior Phases 3/4/5 stacked baseline **CAPTURED [DONE
+  2026-07-10]** before Phase C landed — new baseline is sonnet-5 + fix at 97.3%
+  (up from pre-sonnet-5 95.5%), committed in `716156a`. Phase C remains
+  uncommitted working-tree WIP, so the baseline is uncontaminated by it.
+- Sonnet-5 pricing in `packages/db/llm-spend.ts` **VERIFIED CORRECT [DONE
+  2026-07-10]** — already pinned at standard $3/$15 (cache $3.75/$0.30), not
+  sonnet-4-6 rates; no undercount, no action needed.
 - Design constraints from that plan remain in force and are restated at the
   bottom of this one.
 
@@ -173,7 +178,28 @@ Exit: merchant's chat ≡ one DB thread; notifications visible in its history.
 
 ## Phase C — State ledger + control-plane tools (the core change)
 
-### C1. Control tools (gateway module tools)
+### C1. Control tools (gateway module tools) [COMPLETED — wired in C4]
+
+Landed: the `RunAgentOptions.moduleTools` core seam (`run.ts` appends the defs
+non-readOnly + forwards them to the executor; `run-execution.ts` resolves a
+module tool's category from its definition, not `TOOL_CATEGORIES`), the four
+control tools in `operator-session-tools.ts` (a per-turn factory closing over the
+live message/context), and the shared `applyOperatorAnswerReplan` helper extracted
+from `handlePendingQuestionAnswer` (the keyword path now wraps it). Unit/integration
+coverage: `packages/agent/src/run.test.ts` (seam), `operator-session-tools.test.ts`
+(each executor, incl. byte-identical approve + re-entrancy guard). As of C4 the tools
+are passed through the operator turn from `executeFreeFormInstruction`
+(`moduleTools` threaded via `ExecuteAgentTurnParams` → gateway turn deps → `runAgent`).
+
+Both C1 seams are now resolved by the later sub-phases:
+- **revise/answer returned `formatOperatorPlanMessage` verbatim.** RESOLVED in C5:
+  `applyOperatorAnswerReplan` now returns `formatOperatorDraftSummary` — a clean,
+  model-facing draft summary (concrete draft, no yes/no card footer). The operator
+  card still fans out to the *other* channels via `sendOperatorPlanNotification`.
+- **the control tools read the turn-start `context` snapshot.** RESOLVED in C3:
+  `OPERATOR_CONTROL_TOOL_INSTRUCTIONS` mandates at most one control action per turn
+  and forbids a same-turn `revise`-then-`approve` (the merchant must see the new
+  draft before approving), so the stale-snapshot approve cannot occur.
 
 New file `apps/gateway/src/message-handlers/operator-session-tools.ts`, built
 with `defineTool` and passed as `moduleTools` — the exact pattern
@@ -210,7 +236,7 @@ while the operator turn holds the *operator* thread's lock — different
 threadIds, no deadlock. Guard anyway: if the pending plan's threadId equals the
 current thread (cannot happen in practice), return a clean tool error.
 
-### C2. Ledger
+### C2. Ledger [COMPLETED]
 
 - `BuildContextOptions` (`packages/agent/src/context.ts:71`) gains
   `operatorLedger?: string`; `buildContext` copies it onto the context.
@@ -225,9 +251,12 @@ current thread (cannot happen in practice), return a clean tool error.
   pending question → the question text; pending digest → age + item count.
   When nothing is pending: "Nothing is awaiting the merchant's decision."
 
-### C3. Prompt
+### C3. Prompt [COMPLETED]
 
-Append to `OPERATOR_INSTRUCTIONS` (`prompt.ts:171`):
+Landed as `OPERATOR_CONTROL_TOOL_INSTRUCTIONS`, appended to `OPERATOR_INSTRUCTIONS`
+only when `ctx.operatorLedger` is set (gateway operator turns) so the dashboard
+Concierge — which shares `OPERATOR_INSTRUCTIONS` but has neither the ledger nor the
+control tools — is unaffected. Content:
 
 - When a pending plan exists and the operator's message clearly approves it
   (yes / send it / go ahead / looks good), call `approve_pending_plan`. When
@@ -242,9 +271,9 @@ Append to `OPERATOR_INSTRUCTIONS` (`prompt.ts:171`):
 - After a control tool runs, state plainly what happened, quoting the concrete
   action (e.g. "Sent — Sarah gets the $12 refund.").
 
-### C4. Dispatch collapse
+### C4. Dispatch collapse [COMPLETED]
 
-Both handlers (`routes/imessage/message-handler.ts:72-115`,
+Both handlers (`routes/imessage/message-handler.ts`,
 `routes/telegram/message-handler.ts`):
 
 - Extract `approvePendingPlan(...)`/`rejectPendingPlan(...)` helpers from
@@ -260,58 +289,121 @@ Both handlers (`routes/imessage/message-handler.ts:72-115`,
   dispatch (its body now lives in the `answer_operator_question` tool).
 - Everything else → the single operator agent turn (ledger + module tools).
 
-### C5. Notification copy
+### C5. Notification copy [COMPLETED]
 
-`formatOperatorPlanMessage`: include the draft body excerpt under the step
-list, and replace the `yes · no · skip 1` footer with
-`Reply "yes" to send, or tell me what to change.` (keep the dashboard link).
+`formatOperatorPlanMessage`: now includes the draft body excerpt under the step
+list (via the shared `firstDraftExcerpt`, fed `plan.rawToolCalls`) and its footer
+is `Reply "yes" to send, or tell me what to change.` (dashboard link kept). New
+`formatOperatorDraftSummary` provides the model-facing draft summary the revise/
+answer control tools return (see C1 seam resolution).
 
 ### Verification (eval-cost policy applies: sign-off before any run)
 
-- Unit/integration (real DB, no model): ledger rendering; each control tool's
-  executor; fast-path/turn dispatch matrix; approve executes stored calls
-  byte-identically (assert the `AgentAction` rows match the parked
-  `rawToolCalls`).
-- New **operator-turn fixture set** (~12 fixtures, deterministic tool-choice
-  assertions — which control tool fired, or none — no prose judging, 1 model
-  call each): assent phrasings ×3 → `approve_pending_plan`; decline ×2 →
-  `reject`; fact-supply ("It's a fixed size") and change-request ("make it
-  friendlier, add 10%") → `revise`; pending-question answer → `answer`;
-  order-status question with a plan parked → order tools only, plan untouched;
-  ambiguous "ok" → no control tool, asks; no-pending freeform → normal turn.
-  Home: `apps/gateway/src/__evals__/operator-turns/`, mirroring the dashboard
-  harness's env-gated runner. Single-fixture probes during development; one
-  full set run at the end.
-- The support-ticket planner path is untouched by C (operator prompt branch,
-  optional moduleTools, notification copy only) — no full support gate needed;
-  justify any extra run against that.
+Landed (unit/integration, real DB, no model — free tier, all green):
+- `operator-ledger.test.ts` — ledger rendering (plan/question/digest/none).
+- `operator-session-tools.test.ts` — each control tool's executor incl.
+  byte-identical approve + re-entrancy guard (C1).
+- `operator-answer-replan.test.ts` — re-plan/KB-save/fan-out + draft-summary return.
+- `command-parser.unit.test.ts` — trim fix; order references now free-form.
+- `planning-notifications.test.ts` — draft excerpt + new footer.
+- `webhooks-telegram-*.test.ts` + `imessage/message-handler.test.ts` — dispatch
+  collapse (order-lookup gone, freeform carries ledger + moduleTools).
 
-Exit: fixture set green with sign-off; dispatch matrix covered by unit tests.
+**Operator-turn interpretation gate — WAIVED for live verification [2026-07-10].**
+The **operator-turn model-fixture set** (~12 fixtures at
+`apps/gateway/src/__evals__/operator-turns/`) was the planned gate for the model's
+interpretation (yes→approve, correction→revise, question-reply→answer, unrelated
+lookup untouched). It was never built. The merchant elected to verify interpretation
+**live on a real phone** (per the Telegram/iMessage round-trip recipes) instead of
+building + running the billed fixture set. So this set stays unbuilt by decision, not
+by block; if a regression surfaces live, build it then (change-request fixture must
+assert *only* `revise` fired — the one-action-per-turn invariant, C3).
+- The support-ticket planner path is untouched by C (operator prompt branch,
+  optional moduleTools, notification copy only) — **confirmed by the 2026-07-10
+  full gate: 97.3%, no support regression from C**.
+
+Exit: unit/integration green (done); stacked baseline + sign-off **DONE
+(2026-07-10)**; model-fixture gate **WAIVED for live verification (2026-07-10)**.
 Rollback: revert the dispatch commit — the keyword handlers remain in git
 history; Phases A/B stand alone.
 
-## Phase D — Delete the vestiges + docs
+**Landing checklist.** Baseline prerequisite now **DONE (2026-07-10)** — Phase C
+is still uncommitted working-tree WIP awaiting only the model-fixture set. The
+working tree also carries the KB/memory work, which **diverged this session**: the
+merchant committed `19e0886 "Redesign agent memory workspace"` (a NEW memory API,
+`resolveEffectiveMemoryArticles`), while Phase C's `answer_operator_question` flow is
+coupled to the OLD API (`merchant-answer-kb.ts`/`kb-learned.ts` →
+`NOTES_KB_FOLDER`/`resolveTopicFolderName`/`buildMerchantAnswerKbTags(topicTags)` in
+`kb-memory.ts`). The working tree currently carries the OLD-API stack (restored so the
+65-test Phase C set stays green); reconciling Phase C's KB-save onto the new memory API
+is open work before landing. Commit **only** the Phase C paths, not `git add -A`:
+- Core: `packages/agent/src/{agent-context,context,prompt,turn}.ts`.
+- Gateway new: `message-handlers/{operator-ledger,operator-ledger.test,
+  pending-plan-actions}.ts`, `message-handlers/operator-answer-replan.test.ts`.
+- Gateway modified: `message-handlers/{agent-turn-deps,execute-operator-agent-turn,
+  planning-notifications,operator-answer-replan,operator-session-tools}.ts` (+ their
+  `.test.ts`); `routes/telegram/{agent-execution,command-parser,message-handler,
+  pending-plan-commands}.ts` (+ `command-parser.unit.test.ts`); `routes/imessage/
+  message-handler.ts` (+ `.test.ts`); `routes/webhooks-telegram-*.test.ts`.
+- Gateway deleted: `routes/telegram/pending-question-commands.ts` (+ `.test.ts`).
+- This plan doc.
+Note the C1 seam files (`operator-session-tools.ts`, `operator-answer-replan.ts`,
+`run.ts`, `run-execution.ts`, `run.test.ts`, `tools/registry/index.ts`) predate this
+pass but are part of Phase C and belong in the same landing.
 
-1. Migration: drop `OperatorContext.history`, `lastOrderNumber`,
-   `lastThreadId` (keep `pendingPlan`/`pendingQuestion`/`pendingDigest` as the
-   ledger's backing store). Delete their read/write plumbing
-   (`operator-context.ts`, `agent-execution.ts`).
-2. Delete `resolveInternalAgentThread`'s `orderNumber` Shopify-fabrication
-   branch if the dashboard `agent/internal` route no longer passes it — verify
-   callers first; if still used there, leave with a comment scoping it to that
-   route.
-3. `progress-copy.ts`: drop the order-lookup variant ("Looking into #X…") if
-   its trigger is gone; keep the generic working copy.
-4. CLAUDE.md: fix the `intent.ts` description (customer-prose guard signals
-   only), remove the `order-status-fast-path.ts` line, describe the operator
-   channel as "one durable operator thread per binding; pending approvals are
-   agent state + control tools, keyword fast path for literal yes/no/help",
-   and note `OperatorContext` is now pending-state only.
-5. Re-audit `parseTelegramCommand`: what remains should be `help`, `summary`,
-   digest arms, and pending-plan literals only.
+**What is verified vs not.** The deterministic tests prove the *plumbing* (tools
+attached, ledger rendered, dispatch routed, approve byte-identical). They do NOT
+prove *interpretation* — that the model maps "yes send it"→approve, "add 10%"→revise,
+a question reply→answer, and leaves an unrelated lookup untouched. That is precisely
+what the deferred fixture set gates. Note also that deleting the keyword
+pending-question ingestion removes the deterministic fallback: answer ingestion now
+depends on the model firing `answer_operator_question` (the parked question survives
+to the next turn, so it is recoverable). Treat Phase C as "plumbing done,
+interpretation unverified" until the eval gate clears.
 
-Exit: typecheck + unit suites green; grep confirms no consumer of the dropped
-columns. No eval run (no model-facing change).
+## Phase D — Delete the vestiges + docs [COMPLETED 2026-07-10]
+
+1. Migration `20260710000000_drop_operator_context_vestiges`: dropped
+   `OperatorContext.history`, `lastOrderNumber`, `lastThreadId` (kept
+   `pendingPlan`/`pendingQuestion`/`pendingDigest` as the ledger's backing
+   store). Read/write plumbing gone from `operator-context.ts` (interface,
+   `EMPTY`, `getContext`, `updateContext`, `readHistory`, `MAX_HISTORY_TURNS`)
+   and the sole write-site `planning-notifications.ts` (auto-execution patch).
+   `agent-execution.ts` already carried no reference (B/C4 cleaned it).
+2. Verified `resolveInternalAgentThread`'s only caller
+   (`execute-operator-agent-turn.ts`) always passes `threadId` and never
+   `orderNumber`; the dashboard `agent/internal` route no longer exists. The
+   whole post-`threadId` fallback (orderNumber Shopify-fabrication +
+   senderPhone customer/thread fabrication) was therefore dead — reduced the
+   function to the `threadId` path and dropped the now-unused
+   `shopifyRestJson`/`BadRequestError`/`logger` imports. (Dashboard vestige left
+   in place, out of scope: `parseAgentInternalBody` still declares `orderNumber`
+   but has no production caller.)
+3. `progress-copy.ts`: dropped the dead `free-form` "Looking into #X…" branch
+   (the freeform presence call stopped passing `orderNumber` in B/C4); `plan-run`
+   still uses `orderNumber`, so the field stays.
+4. CLAUDE.md: fixed the `intent.ts` description (customer-prose guard signals),
+   removed the `order-status-fast-path.ts` line, described the operator channel
+   as one durable thread per binding + control tools + keyword fast path, and
+   noted `OperatorContext` is pending-state only.
+5. Re-audited `parseTelegramCommand`: already exactly `help`, `summary`, digest
+   arms, and pending-plan literals (order-lookup arm removed in C4) — no change
+   needed.
+
+Exit **MET**: gateway typecheck + agent typecheck clean; gateway unit 132,
+gateway integration 371, agent unit 389 green; gateway + agent lint clean; grep
+confirms no source consumer of the dropped columns. No eval run (no model-facing
+change).
+
+**Deploy ordering (expand/contract).** This migration *contracts* — it drops
+columns. Phase B is what stopped consuming them, and A/B/C/D are all still
+uncommitted, so **currently-live prod runs pre-B code that still SELECTs
+`history`/`last_thread_id`/`last_order_number`**. If `migrate deploy` runs before
+the A–D code is live, any old pod's `operatorContext.findUnique` will error on the
+missing columns during the rollout window. Either accept the brief overlap (the
+operator path is low-traffic; seconds of window) or split this migration into a
+follow-up deploy *after* the A–D code ships. Decision belongs to whoever cuts the
+release.
 
 ## Design constraints
 

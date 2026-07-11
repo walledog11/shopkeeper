@@ -28,11 +28,18 @@ describe('parseTelegramCommand', () => {
     expect(parseTelegramCommand('reply 1   ')).toEqual({ type: 'free-form', instruction: 'reply 1   ' });
   });
 
-  it('parses order lookups and preserves arbitrary free-form instructions', () => {
-    expect(parseTelegramCommand('ORDER #4242')).toEqual({ type: 'order-lookup', orderNumber: '#4242' });
+  it('treats order references and arbitrary text as free-form for the agent', () => {
+    // Order lookups are no longer a deterministic command — they flow to the agent.
+    expect(parseTelegramCommand('ORDER #4242')).toEqual({ type: 'free-form', instruction: 'ORDER #4242' });
+    expect(parseTelegramCommand('#4242')).toEqual({ type: 'free-form', instruction: '#4242' });
     expect(parseTelegramCommand('refund #4242')).toEqual({
       type: 'free-form',
       instruction: 'refund #4242',
     });
+  });
+
+  it('trims surrounding whitespace before matching keyword literals', () => {
+    expect(parseTelegramCommand('  yes  ')).toEqual({ type: 'plan-run' });
+    expect(parseTelegramCommand(' NO ')).toEqual({ type: 'plan-dismiss' });
   });
 });
