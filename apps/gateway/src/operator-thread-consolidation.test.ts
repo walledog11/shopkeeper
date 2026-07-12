@@ -70,6 +70,34 @@ describe('operator thread consolidation (Phase B)', () => {
     expect(threads[0].channelType).toBe('sms_agent');
   });
 
+  it('adopts a pre-Phase-B operator thread (null operatorKey) instead of creating a second', async () => {
+    const operatorKey = 'imessage:+15550002222';
+    // Precondition: the merchant already has a legacy open sms_agent thread on
+    // the operator customer, created before operatorKey existed (so it is null).
+    // The one-open-thread-per-customer-per-channel index would reject a second.
+    const customer = await db.customer.create({
+      data: { organizationId: org.id, platformId: operatorKey },
+    });
+    const legacy = await db.thread.create({
+      data: {
+        organizationId: org.id,
+        customerId: customer.id,
+        channelType: 'sms_agent',
+        status: 'open',
+        operatorKey: null,
+      },
+    });
+
+    const resolved = await resolveOperatorThread(org.id, operatorKey);
+
+    expect(resolved.id).toBe(legacy.id);
+    const threads = await db.thread.findMany({
+      where: { organizationId: org.id, channelType: 'sms_agent' },
+    });
+    expect(threads).toHaveLength(1);
+    expect(threads[0].operatorKey).toBe(operatorKey);
+  });
+
   it('gives two bindings two separate threads', async () => {
     const a = await executeOperatorAgentTurn({
       orgId: org.id,

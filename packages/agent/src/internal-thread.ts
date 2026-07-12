@@ -33,6 +33,25 @@ export async function resolveOperatorThread(
   });
   if (existing) return { id: existing.id, channelType: existing.channelType };
 
+  // Adopt a pre-Phase-B operator thread for this binding: before operatorKey
+  // existed, the merchant's operator conversation was a plain open sms_agent
+  // thread on this same (operator) customer. Reuse it — creating a second open
+  // thread would violate the one-open-thread-per-customer-per-channel index.
+  const legacy = await db.thread.findFirst({
+    where: {
+      organizationId: orgId,
+      customerId: customer.id,
+      channelType: "sms_agent",
+      status: "open",
+      operatorKey: null,
+    },
+    select: { id: true, channelType: true },
+  });
+  if (legacy) {
+    await db.thread.update({ where: { id: legacy.id }, data: { operatorKey } });
+    return { id: legacy.id, channelType: legacy.channelType };
+  }
+
   try {
     const created = await db.thread.create({
       data: {
@@ -45,12 +64,15 @@ export async function resolveOperatorThread(
       select: { id: true, channelType: true },
     });
     return { id: created.id, channelType: created.channelType };
-  } catch {
-    // Unique (organizationId, operatorKey) race: a concurrent turn created it first.
-    const raced = await db.thread.findFirstOrThrow({
+  } catch (err) {
+    // Unique (organizationId, operatorKey) race: a concurrent turn created it
+    // first. Re-read by operatorKey; if that too finds nothing the create failed
+    // for another reason — surface it rather than masking as "record not found".
+    const raced = await db.thread.findFirst({
       where: { organizationId: orgId, operatorKey },
       select: { id: true, channelType: true },
     });
-    return { id: raced.id, channelType: raced.channelType };
+    if (raced) return { id: raced.id, channelType: raced.channelType };
+    throw err;
   }
 }
