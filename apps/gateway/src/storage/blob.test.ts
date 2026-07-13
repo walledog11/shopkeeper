@@ -89,8 +89,8 @@ describe('uploadInboundAttachment', () => {
       Buffer.from('hello').toString('base64'),
     );
     const [key] = putSpy.mock.calls[0];
-    expect(key).not.toContain(' ');
-    expect(key).not.toContain('/04');
-    expect(key).not.toContain('(');
+    // Assert on the filename segment only; the full key contains a random UUID
+    // segment that can itself start with "04" and trip a whole-key substring check.
+    expect(key.split('/').pop()).toBe('invoice_2026_04_final_.pdf');
   });
 });
