@@ -3,7 +3,19 @@ import { createMessage, db, Prisma } from "@shopkeeper/db";
 import { buildContext, hashInstructionForLog, planAgent } from "@/lib/agent/runner";
 import { executeAgentTurn } from "@/lib/agent/api/execution";
 import { classifyHomePlan } from "@shopkeeper/agent/plan-preview";
-import { isAutoExecuteEnabled } from "@/lib/agent/api/plan-execution";
+import {
+  isAutoExecuteEnabled,
+} from "@/lib/agent/api/plan-execution";
+import { resolvePlanExecutionLedgerMode } from "@shopkeeper/agent/plan-execution";
+import {
+  claimPlanExecution,
+  claimStoredPlanExecution,
+  completePlanExecution,
+  observePlanExecution,
+  type PlanExecutionIdentity,
+} from "@shopkeeper/agent/execution-ledger";
+import { hashInstruction, hashPlan } from "@shopkeeper/agent/agent-actions";
+import { ConflictError } from "@shopkeeper/agent/errors";
 import { TOOL_CATEGORIES } from "@shopkeeper/agent/tools";
 import logger from "@/lib/server/logger";
 import type { AgentPlan, OrgSettings, RawToolCall } from "@/types";
@@ -229,9 +241,14 @@ async function storeDashboardPendingApproval(threadId: string, approval: Dashboa
   });
 }
 
-export async function clearDashboardPendingApproval(threadId: string) {
-  await db.thread.update({
-    where: { id: threadId },
+export async function clearDashboardPendingApproval(threadId: string, expectedPlanId?: string) {
+  await db.thread.updateMany({
+    where: {
+      id: threadId,
+      ...(expectedPlanId
+        ? { cachedPlan: { path: ["planId"], equals: expectedPlanId } }
+        : {}),
+    },
     data: {
       cachedPlanMessageId: null,
       cachedPlan: Prisma.DbNull,
@@ -252,14 +269,162 @@ async function persistDashboardExchange(threadId: string, userText: string, agen
   });
 }
 
-export async function dismissDashboardPendingApproval(threadId: string, instruction: string): Promise<string> {
-  await clearDashboardPendingApproval(threadId);
+export async function dismissDashboardPendingApproval(
+  threadId: string,
+  instruction: string,
+  expectedPlanId?: string,
+): Promise<string> {
+  await clearDashboardPendingApproval(threadId, expectedPlanId);
   await persistDashboardExchange(threadId, instruction, DASHBOARD_APPROVAL_DISMISS_SUMMARY);
   return DASHBOARD_APPROVAL_DISMISS_SUMMARY;
 }
 
 export function buildRevisedDashboardInstruction(pendingApproval: DashboardPendingApproval, instruction: string): string {
   return `Original request: ${pendingApproval.instruction}\nRequested changes before approval: ${instruction}`;
+}
+
+function terminalStatus(result: AgentResult): "committed" | "failed" | "unknown" {
+  if (result.actionsPerformed.some((action) => action.status === "unknown")) {
+    return "unknown";
+  }
+  return result.actionsPerformed.some((action) => (
+    action.status === "error" || action.status === "policy_block"
+  )) ? "failed" : "committed";
+}
+
+function resultError(result: AgentResult): string | null {
+  return result.actionsPerformed.find((action) => (
+    action.status === "error" || action.status === "policy_block" || action.status === "unknown"
+  ))?.result ?? null;
+}
+
+async function executeDashboardPlannedActions(params: {
+  orgId: string;
+  threadId: string;
+  planId: string;
+  plan: AgentPlan;
+  identityInstruction: string;
+  turnInstruction: string;
+  settings: OrgSettings;
+  actionCalls: RawToolCall[];
+  mode: "human_approved" | "auto_executed";
+  approverId?: string;
+  requireStoredPlan: boolean;
+}): Promise<AgentResult> {
+  const approvedAt = params.mode === "human_approved" ? new Date() : undefined;
+  const identity: PlanExecutionIdentity = {
+    orgId: params.orgId,
+    planId: params.planId,
+    threadId: params.threadId,
+    planHash: hashPlan(params.plan),
+    instructionHash: hashInstruction(params.identityInstruction),
+    mode: params.mode,
+    approverId: params.approverId,
+    approvedAt,
+  };
+  const ledgerMode = resolvePlanExecutionLedgerMode();
+  let executionId: string | undefined;
+  let claimToken: string | undefined;
+
+  if (ledgerMode === "enforce") {
+    const claim = params.requireStoredPlan
+      ? await claimStoredPlanExecution(identity)
+      : await claimPlanExecution(identity);
+    if (!claim.claimed || !claim.claimToken) {
+      throw new ConflictError("This plan has already been approved or is currently running.");
+    }
+    executionId = claim.execution.id;
+    claimToken = claim.claimToken;
+  } else if (ledgerMode === "shadow") {
+    try {
+      const observed = await observePlanExecution(identity);
+      executionId = observed.id;
+      if (observed.observationCount > 1) {
+        logger.warn({
+          orgId: params.orgId,
+          threadId: params.threadId,
+          planId: params.planId,
+          observationCount: observed.observationCount,
+        }, "[agent/chat] shadow observed repeated execution of one plan");
+      }
+    } catch (error) {
+      logger.error({ err: error, orgId: params.orgId, threadId: params.threadId }, "[agent/chat] shadow observation failed");
+    }
+  }
+
+  try {
+    const result = await executeAgentTurn({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      instruction: params.turnInstruction,
+      failureRoute: "/api/agent/chat",
+      orgSettings: params.settings,
+      approvedToolCalls: params.actionCalls,
+      persistUserMessage: true,
+      persistAgentMessage: true,
+      persistAuditNote: true,
+      persistAuditNoteWhenNoActions: false,
+      auditMode: params.mode,
+      ...(executionId ? { executionId } : {}),
+      ...(approvedAt && params.approverId ? {
+        approval: {
+          approverId: params.approverId,
+          approvedAt,
+          approvedPlanHash: identity.planHash,
+          instructionHash: identity.instructionHash,
+        },
+      } : {}),
+    });
+    if (executionId && claimToken) {
+      await completePlanExecution({
+        executionId,
+        claimToken,
+        status: terminalStatus(result),
+        error: resultError(result),
+      });
+    }
+    return result;
+  } catch (error) {
+    if (executionId && claimToken) {
+      await completePlanExecution({
+        executionId,
+        claimToken,
+        status: "unknown",
+        error: error instanceof Error ? error.message : String(error),
+      }).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    if (params.requireStoredPlan && claimToken) {
+      await clearDashboardPendingApproval(params.threadId, params.planId);
+    }
+  }
+}
+
+export async function executeDashboardPendingApproval(params: {
+  orgId: string;
+  threadId: string;
+  approval: DashboardPendingApproval;
+  turnInstruction: string;
+  settings: OrgSettings;
+  approverId: string;
+}): Promise<AgentResult> {
+  if (!params.approval.planId) {
+    throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
+  }
+  return executeDashboardPlannedActions({
+    orgId: params.orgId,
+    threadId: params.threadId,
+    planId: params.approval.planId,
+    plan: params.approval.plan,
+    identityInstruction: params.approval.instruction,
+    turnInstruction: params.turnInstruction,
+    settings: params.settings,
+    actionCalls: getDashboardActionCalls(params.approval.plan),
+    mode: "human_approved",
+    approverId: params.approverId,
+    requireStoredPlan: true,
+  });
 }
 
 export async function planDashboardApproval(params: {
@@ -310,18 +475,17 @@ export async function planDashboardApproval(params: {
   if (isAutoExecuteEnabled(params.settings)) {
     const classification = classifyHomePlan(plan, params.settings);
     if (classification.kind === "auto_execute") {
-      const result = await executeAgentTurn({
+      const result = await executeDashboardPlannedActions({
         orgId: params.orgId,
         threadId: params.threadId,
-        instruction: params.displayInstruction ?? params.instruction,
-        failureRoute: "/api/agent/chat",
-        orgSettings: params.settings,
-        approvedToolCalls: actionCalls,
-        persistUserMessage: true,
-        persistAgentMessage: true,
-        persistAuditNote: true,
-        persistAuditNoteWhenNoActions: false,
-        auditMode: "auto_executed",
+        planId,
+        plan,
+        identityInstruction: params.instruction,
+        turnInstruction: params.displayInstruction ?? params.instruction,
+        settings: params.settings,
+        actionCalls,
+        mode: "auto_executed",
+        requireStoredPlan: false,
       });
 
       return {

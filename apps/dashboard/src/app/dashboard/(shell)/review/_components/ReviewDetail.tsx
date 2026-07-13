@@ -49,7 +49,7 @@ function OutputBlockView({ block }: { block: OutputBlock }) {
 function statusClassName(status: ActionLogEntry["actions"][number]["status"]): string {
   if (status === "success") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
   if (status === "escalated") return "border-amber-500/20 bg-amber-500/10 text-amber-200"
-  if (status === "error" || status === "policy_block") return "border-red-500/20 bg-red-500/10 text-red-200"
+  if (status === "error" || status === "policy_block" || status === "unknown") return "border-red-500/20 bg-red-500/10 text-red-200"
   return "border-foreground/[0.08] bg-foreground/[0.04] text-muted-foreground"
 }
 

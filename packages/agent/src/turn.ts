@@ -17,6 +17,7 @@ export interface ExecuteTurnRunOptions {
   turnId?: string;
   mode?: AgentActionMode;
   approval?: AgentActionApproval;
+  executionId?: string;
   // Host-injected control tools for this turn (e.g. the gateway's operator
   // control tools). Forwarded to runAgent; ignored on the approved-execution and
   // read-only paths. Keeps host-specific tools out of the shared registry.
@@ -58,6 +59,7 @@ export interface ExecuteAgentTurnParams {
   persistAuditNoteWhenNoActions?: boolean;
   auditMode?: "human_approved" | "auto_executed" | "read_only";
   approval?: AgentActionApproval;
+  executionId?: string;
   // Operator freeform turns only: the host-rendered pending-state ledger passed
   // into buildContext, and the operator control tools passed into runAgent.
   operatorLedger?: string;
@@ -111,6 +113,7 @@ export async function executeAgentTurn(
         turnId,
         ...(params.auditMode ? { mode: params.auditMode } : {}),
         ...(params.approval ? { approval: params.approval } : {}),
+        ...(params.executionId ? { executionId: params.executionId } : {}),
         ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
       }
     );

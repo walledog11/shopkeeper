@@ -150,6 +150,14 @@
       "types": "./dist/plan-execution.d.ts",
       "default": "./dist/plan-execution.js"
     },
+    "./execution-ledger": {
+      "types": "./dist/execution-ledger.d.ts",
+      "default": "./dist/execution-ledger.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/failure-harness.d.ts",
+      "default": "./dist/testing/failure-harness.js"
+    },
     "./sender-trust": {
       "types": "./dist/sender-trust.d.ts",
       "default": "./dist/sender-trust.js"

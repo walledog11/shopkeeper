@@ -54,6 +54,10 @@ function shouldSkipAfterFailedReply(toolName: string, actionsPerformed: ActionEn
   ));
 }
 
+function hasUnknownProviderOutcome(actionsPerformed: ActionEntry[]): boolean {
+  return actionsPerformed.some((action) => action.status === "unknown");
+}
+
 // A context carries a support thread iff it has a `thread`. Thread-less modules
 // (order-ops, Track 3) supply a BaseAgentContext with no thread/customer.
 export function isSupportContext(ctx: BaseAgentContext): ctx is SupportContext {
@@ -102,6 +106,7 @@ export async function finishAgentRun(input: {
   instructionHash: string;
   turnId?: string;
   approval?: AgentActionApproval;
+  executionId?: string;
   onActionsPersisted?: (actions: PersistedAgentAction[]) => void;
 }): Promise<AgentResult> {
   const {
@@ -139,6 +144,7 @@ export async function finishAgentRun(input: {
         summary: result.summary,
         ...(turnId ? { turnId } : {}),
         ...(approval ? { approval } : {}),
+        ...(input.executionId ? { executionId: input.executionId } : {}),
       });
       input.onActionsPersisted?.(persistedActions);
     } catch (err) {
@@ -186,6 +192,7 @@ export async function executeAgentToolCall(
     // from the definition rather than TOOL_CATEGORIES (which knows nothing of
     // them).
     moduleTools?: Record<string, AgentToolDefinition>;
+    operationScopeId?: string;
   },
 ) {
   const {
@@ -198,6 +205,7 @@ export async function executeAgentToolCall(
     recordAgentFailure,
     setEscalationReason,
     moduleTools,
+    operationScopeId,
   } = input;
   const category = moduleTools?.[toolCall.name]?.category ?? TOOL_CATEGORIES[toolCall.name];
 
@@ -219,13 +227,26 @@ export async function executeAgentToolCall(
     result = `Error: ${toolCall.name} is not available in private ask mode.`;
     status = "error";
     errorDetail = result;
+  } else if (hasUnknownProviderOutcome(actionsPerformed)) {
+    result = `Unknown: skipped ${toolCall.name} because an earlier action may have committed at its provider.`;
+    status = "unknown";
+    errorDetail = result;
   } else if (shouldSkipAfterFailedReply(toolCall.name, actionsPerformed)) {
     result = "Error: skipped status update because send_reply failed.";
     status = "error";
     errorDetail = result;
   } else {
     try {
-      const executed = await executeToolWithStatus(toolCall.name, toolCall.input, ctx, settings, moduleTools);
+      const toolContext = operationScopeId && ctx.shopify
+        ? {
+            ...ctx,
+            shopify: {
+              ...ctx.shopify,
+              operationId: `${operationScopeId}:${toolCall.id}`,
+            },
+          }
+        : ctx;
+      const executed = await executeToolWithStatus(toolCall.name, toolCall.input, toolContext, settings, moduleTools);
       result = executed.result;
       status = executed.status;
       if (status !== "success") errorDetail = result;
@@ -244,14 +265,17 @@ export async function executeAgentToolCall(
   // daily cap, custom line items) is not something the model should retry or talk its
   // way around. Route it to a human deterministically instead of feeding the error back
   // into the loop - the safe outcome no longer depends on the model choosing to escalate.
-  if (!threw && status === "policy_block" && category === "action") {
+  const operatorPolicyBlock = status === "policy_block"
+    && supportThread != null
+    && supportThread.channelType === "sms_agent";
+  if (!threw && status === "policy_block" && category === "action" && !operatorPolicyBlock) {
     const reason = result.replace(/^Error:\s*/, "").trim() || "Action blocked by policy.";
     await ctx.escalate(reason);
     result = reason;
     status = "escalated";
   }
 
-  if (!threw && status === "error") {
+  if (!threw && (status === "error" || status === "unknown")) {
     recordAgentFailure("tool_result", toolCall.name, result);
   }
 
@@ -267,7 +291,7 @@ export async function executeAgentToolCall(
     threadId: supportThread?.id ?? null,
     tool: toolCall.name,
     resultChars: result.length,
-    isError: status === "error" || status === "policy_block",
+    isError: status === "error" || status === "policy_block" || status === "unknown",
     status,
     durationMs,
   }, "[agent] tool result");

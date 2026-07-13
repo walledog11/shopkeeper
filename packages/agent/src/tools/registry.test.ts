@@ -8,6 +8,7 @@ import {
   TOOL_DEFINITIONS,
   TOOL_GROUPS,
   TOOL_LABELS,
+  READ_TOOL_NAMES,
   ToolInputValidationError,
   getToolDefinition,
   toolNamesForGroups,
@@ -157,7 +158,6 @@ function makeDeps(): ToolExecutionDeps {
     issueStoreCredit: vi.fn().mockResolvedValue({ ...toolOk("issueStoreCredit"), spentCents: 2500 }),
     createGiftCard: vi.fn().mockResolvedValue({ ...toolOk("createGiftCard"), spentCents: 2500 }),
     attachReturnLabel: vi.fn().mockResolvedValue(toolOk("attachReturnLabel")),
-    incrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
     searchKnowledgeBaseArticles: vi.fn().mockResolvedValue([{
       id: "kb_1",
       title: "Returns policy",
@@ -237,6 +237,15 @@ describe("agent tool registry", () => {
 });
 
 describe("agent tool execution routing", () => {
+  it("derives the complete read-tool list from registry categories", () => {
+    expect([...READ_TOOL_NAMES].sort()).toEqual(
+      TOOL_DEFINITIONS
+        .filter((definition) => definition.category === "read")
+        .map((definition) => definition.name)
+        .sort(),
+    );
+  });
+
   it("covers every registered tool with a routing assertion", () => {
     const routedNames = [
       "search_kb",
@@ -262,9 +271,6 @@ describe("agent tool execution routing", () => {
 
     expect(result.message).toBe(depName);
     expect(deps[depName]).toHaveBeenCalledTimes(1);
-    if (name === "create_refund") {
-      expect(deps.incrementDailyRefundSpendCents).toHaveBeenCalledWith("org_1", 1234);
-    }
   });
 
   it("routes get_support_stats through the stats dependency with clamped days", async () => {

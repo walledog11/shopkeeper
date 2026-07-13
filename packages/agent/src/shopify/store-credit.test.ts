@@ -39,8 +39,12 @@ describe("issueStoreCredit", () => {
         data: {
           storeCreditAccountCredit: {
             storeCreditAccountTransaction: {
+              id: "gid://shopify/StoreCreditAccountCreditTransaction/9001",
               amount: { amount: "25.00", currencyCode: "USD" },
-              account: { balance: { amount: "40.00", currencyCode: "USD" } },
+              account: {
+                id: "gid://shopify/StoreCreditAccount/8001",
+                balance: { amount: "40.00", currencyCode: "USD" },
+              },
             },
             userErrors: [],
           },
@@ -69,7 +73,11 @@ describe("issueStoreCredit", () => {
       .mockResolvedValueOnce(jsonResponse({
         data: {
           storeCreditAccountCredit: {
-            storeCreditAccountTransaction: { amount: { amount: "10.00", currencyCode: "USD" } },
+            storeCreditAccountTransaction: {
+              id: "gid://shopify/StoreCreditAccountCreditTransaction/9002",
+              amount: { amount: "10.00", currencyCode: "USD" },
+              account: { id: "gid://shopify/StoreCreditAccount/8001" },
+            },
             userErrors: [],
           },
         },
@@ -103,5 +111,56 @@ describe("issueStoreCredit", () => {
     expect(result.spentCents).toBeNull();
     expect(result.message).toContain("Store credit is not enabled.");
     expect(result.message).toContain("use create_gift_card");
+  });
+
+  it.each([429, 503])("returns unknown without retry or fallback after an ambiguous HTTP %i", async (status) => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(shopCurrencyResponse())
+      .mockResolvedValueOnce(jsonResponse({ errors: "response lost" }, status));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.spentCents).toBeNull();
+    expect(result.message).toContain("Do not issue a gift-card fallback");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns unknown after a connection loss instead of replaying the credit", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(shopCurrencyResponse())
+      .mockRejectedValueOnce(new TypeError("socket closed after request write"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.spentCents).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns unknown when Shopify reports a mismatched committed amount", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(shopCurrencyResponse())
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          storeCreditAccountCredit: {
+            storeCreditAccountTransaction: {
+              id: "gid://shopify/StoreCreditAccountCreditTransaction/9003",
+              amount: { amount: "20.00", currencyCode: "USD" },
+              account: { id: "gid://shopify/StoreCreditAccount/8001" },
+            },
+            userErrors: [],
+          },
+        },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await issueStoreCredit({ customer_id: "1001", amount: "25.00" }, ctx);
+
+    expect(result.status).toBe("unknown");
+    expect(result.spentCents).toBeNull();
+    expect(result.message).toContain("incomplete or mismatched");
   });
 });

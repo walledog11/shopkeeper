@@ -40,5 +40,12 @@ describe("tool action display", () => {
 
   it("styles errors distinctly", () => {
     expect(getToolChipVariant(action({ result: "Error: order not found", status: "error" }))).toBe("error");
+    expect(getToolChipVariant(action({
+      tool: "create_refund",
+      category: "action",
+      mode: "human_approved",
+      result: "Unknown: refund status is pending",
+      status: "unknown",
+    }))).toBe("error");
   });
 });

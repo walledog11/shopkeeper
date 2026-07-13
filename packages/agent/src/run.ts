@@ -43,7 +43,15 @@ export interface RunAgentOptions extends RunAgentPolicyOptions {
   // registry by the executor. Ignored in read-only mode. Keeping them injected
   // keeps host-specific tools out of the shared registry.
   moduleTools?: Record<string, AgentToolDefinition>;
+  // Shadow/enforced durable plan execution row that owns this run's actions.
+  executionId?: string;
 }
+
+const OPERATOR_HIDDEN_TOOL_NAMES = new Set([
+  "escalate_to_human",
+  "send_reply",
+  "add_internal_note",
+]);
 
 export async function runAgent(
   ctx: BaseAgentContext,
@@ -70,6 +78,7 @@ export async function runAgent(
   const supportThread = isSupportContext(ctx) ? ctx.thread : null;
   const supportCustomer = isSupportContext(ctx) ? ctx.customer : null;
   const operatorMode = supportThread != null && isOperatorChannel(supportThread.channelType);
+  const gatewayOperatorMode = supportThread?.channelType === "sms_agent";
   const failureAlertPromises: Promise<unknown>[] = [];
   let escalationReason: string | null = null;
   const finish = (result: AgentResult, outcome: string) => finishAgentRun({
@@ -89,6 +98,7 @@ export async function runAgent(
     instructionHash,
     ...(options?.turnId ? { turnId: options.turnId } : {}),
     ...(approval ? { approval } : {}),
+    ...(options?.executionId ? { executionId: options.executionId } : {}),
     ...(options?.onActionsPersisted
       ? { onActionsPersisted: options.onActionsPersisted }
       : {}),
@@ -113,6 +123,9 @@ export async function runAgent(
         escalationReason = reason;
       },
       ...(options?.moduleTools ? { moduleTools: options.moduleTools } : {}),
+      ...((options?.executionId ?? options?.turnId)
+        ? { operationScopeId: options?.executionId ?? options?.turnId }
+        : {}),
     });
 
   if (!readOnly && approvedToolCalls && approvedToolCalls.length > 0) {
@@ -159,10 +172,15 @@ export async function runAgent(
   if (!isSupportContext(ctx)) {
     return finish({ summary: "This agent run requires a support context.", actionsPerformed }, "unsupported_context");
   }
-  const tools = readOnly
+  const selectedCoreTools = readOnly
     ? selectAgentTools(settings, READ_TOOL_NAMES)
+    : selectAgentTools(settings).filter((tool) => (
+        !gatewayOperatorMode || !OPERATOR_HIDDEN_TOOL_NAMES.has(tool.name)
+      ));
+  const tools = readOnly
+    ? selectedCoreTools
     : [
-        ...selectAgentTools(settings),
+        ...selectedCoreTools,
         ...Object.values(options?.moduleTools ?? {}).map((def) => ({
           name: def.name,
           description: def.description,

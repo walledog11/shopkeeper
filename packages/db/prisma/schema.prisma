@@ -48,6 +48,21 @@ enum ThreadFilterFeedback {
   confirmed_spam
 }
 
+enum PlanExecutionStatus {
+  pending
+  claimed
+  committed
+  failed
+  unknown
+}
+
+enum RefundSpendReservationStatus {
+  reserved
+  committed
+  released
+  unknown
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -69,21 +84,23 @@ model Organization {
   stripeStatus         String?   @map("stripe_status") @db.VarChar(50)
   trialEndsAt          DateTime? @map("trial_ends_at") @db.Timestamptz
 
-  customers        Customer[]
-  threads          Thread[]
-  integrations     Integration[]
-  members          OrgMember[]
-  operatorContexts OperatorContext[]
-  bindTokens       OrgMemberBindToken[]
-  knowledgeBases   KnowledgeBase[]
-  kbArticles       KbArticle[]
-  kbCitations      KbCitation[]
-  agentActions     AgentAction[]
-  voiceEdits       VoiceEdit[]
-  llmDailySpend    LlmDailySpend[]
-  refundDailySpend RefundDailySpend[]
-  shadowDecisions  AutonomyShadowDecision[]
-  messages         Message[]
+  customers               Customer[]
+  threads                 Thread[]
+  integrations            Integration[]
+  members                 OrgMember[]
+  operatorContexts        OperatorContext[]
+  bindTokens              OrgMemberBindToken[]
+  knowledgeBases          KnowledgeBase[]
+  kbArticles              KbArticle[]
+  kbCitations             KbCitation[]
+  agentActions            AgentAction[]
+  voiceEdits              VoiceEdit[]
+  llmDailySpend           LlmDailySpend[]
+  refundDailySpend        RefundDailySpend[]
+  refundSpendReservations RefundSpendReservation[]
+  shadowDecisions         AutonomyShadowDecision[]
+  planExecutions          PlanExecution[]
+  messages                Message[]
 
   @@index([clerkOrgId])
   @@map("organizations")
@@ -122,6 +139,33 @@ model RefundDailySpend {
 
   @@unique([organizationId, day])
   @@map("refund_daily_spend")
+}
+
+// One durable budget claim per goodwill-spend tool intent. Reservations count
+// against the daily cap before the provider call; committed rows move their
+// verified amount into RefundDailySpend, released rows free the capacity, and
+// unknown rows keep capacity reserved until reconciliation proves an outcome.
+model RefundSpendReservation {
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @map("organization_id") @db.Uuid
+  day            String                       @db.VarChar(10)
+  operationKey   String                       @map("operation_key") @db.VarChar(255)
+  tool           String                       @db.VarChar(64)
+  input          Json                         @db.JsonB
+  reservedCents  Int                          @map("reserved_cents")
+  committedCents Int?                         @map("committed_cents")
+  status         RefundSpendReservationStatus @default(reserved)
+  lastError      String?                      @map("last_error") @db.Text
+  resolvedAt     DateTime?                    @map("resolved_at") @db.Timestamptz
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime                     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, day, operationKey])
+  @@index([organizationId, day, status])
+  @@index([status, updatedAt])
+  @@map("refund_spend_reservations")
 }
 
 // Corpus for the brand-voice learning loop: each row is one case where the
@@ -217,6 +261,7 @@ model Thread {
   kbCitations     KbCitation[]
   agentActions    AgentAction[]
   shadowDecisions AutonomyShadowDecision[]
+  planExecutions  PlanExecution[]
 
   @@unique([organizationId, operatorKey])
   @@index([organizationId, status])
@@ -245,16 +290,21 @@ model Message {
   // where external_message_id is not null.
   externalMessageId String?    @map("external_message_id") @db.Text
   sendStatus        String?    @map("send_status") @db.Text
+  sendClaimToken    String?    @map("send_claim_token") @db.Uuid
+  sendClaimedAt     DateTime?  @map("send_claimed_at") @db.Timestamptz
+  sendAttemptedAt   DateTime?  @map("send_attempted_at") @db.Timestamptz
   providerMessageId String?    @map("provider_message_id") @db.Text
   sendError         String?    @map("send_error") @db.Text
   sentAt            DateTime   @default(now()) @map("sent_at") @db.Timestamptz
   deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz
 
-  thread       Thread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread               Thread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  organization         Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sourcePlanExecutions PlanExecution[] @relation("PlanExecutionSourceMessage")
 
   @@index([threadId])
   @@index([organizationId])
+  @@index([sendStatus, sendClaimedAt])
   @@index([sentAt])
   @@index([deletedAt])
   @@map("messages")
@@ -402,7 +452,7 @@ model KbCitation {
 
 // First-class audit record for every agent tool call. Replaces the
 // __clerk_agent__ note-row parsing in lib/agent/api/action-log.ts.
-//   status:   success | error | policy_block | escalated
+//   status:   success | error | policy_block | escalated | unknown
 //   mode:     human_approved | auto_executed | read_only
 //   category: mirrors TOOL_CATEGORIES from lib/agent/tools/registry.ts
 model AgentAction {
@@ -411,6 +461,7 @@ model AgentAction {
   organizationId   String    @map("organization_id") @db.Uuid
   threadId         String?   @map("thread_id") @db.Uuid
   customerId       String?   @map("customer_id") @db.Uuid
+  executionId      String?   @map("execution_id") @db.Uuid
   tool             String    @db.VarChar(64)
   category         String    @db.VarChar(32)
   input            Json      @db.JsonB
@@ -428,15 +479,54 @@ model AgentAction {
   executedAt       DateTime  @default(now()) @map("executed_at") @db.Timestamptz
   durationMs       Int       @map("duration_ms")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  thread       Thread?      @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread       Thread?        @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  execution    PlanExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, executedAt(sort: Desc)])
   @@index([organizationId, threadId])
   @@index([organizationId, tool, executedAt])
   @@index([organizationId, status])
   @@index([turnId])
+  @@index([executionId])
   @@map("agent_actions")
+}
+
+// Durable, cross-runtime identity and claim state for one reviewed agent plan.
+// P1-01 adds this ledger additively; P1-02 makes every reviewed-plan entry point
+// claim it before side effects. `observationCount` supports shadow rollout
+// without treating timing locks as the correctness boundary.
+model PlanExecution {
+  id               String              @id @default(uuid()) @db.Uuid
+  planId           String              @map("plan_id") @db.Uuid
+  organizationId   String              @map("organization_id") @db.Uuid
+  threadId         String?             @map("thread_id") @db.Uuid
+  sourceMessageId  String?             @map("source_message_id") @db.Uuid
+  planHash         String              @map("plan_hash") @db.VarChar(64)
+  instructionHash  String              @map("instruction_hash") @db.VarChar(64)
+  status           PlanExecutionStatus @default(pending)
+  claimToken       String?             @map("claim_token") @db.Uuid
+  claimedAt        DateTime?           @map("claimed_at") @db.Timestamptz
+  completedAt      DateTime?           @map("completed_at") @db.Timestamptz
+  approverId       String?             @map("approver_id") @db.VarChar(255)
+  approvedAt       DateTime?           @map("approved_at") @db.Timestamptz
+  mode             String?             @db.VarChar(32)
+  lastError        String?             @map("last_error") @db.Text
+  observationCount Int                 @default(0) @map("observation_count")
+  lastObservedAt   DateTime?           @map("last_observed_at") @db.Timestamptz
+  createdAt        DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  thread        Thread?       @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  sourceMessage Message?      @relation("PlanExecutionSourceMessage", fields: [sourceMessageId], references: [id], onDelete: SetNull)
+  actions       AgentAction[]
+
+  @@unique([organizationId, planId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, threadId, createdAt])
+  @@index([sourceMessageId])
+  @@map("plan_executions")
 }
 
 // Shadow/canary record for the autonomy raise. One row per plan ("turn") that

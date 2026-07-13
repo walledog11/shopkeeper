@@ -5,7 +5,8 @@ import { planAgent } from '@shopkeeper/agent/planner';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import { buildMerchantAnswerPlanningInstruction } from '@shopkeeper/agent/kb-learned';
 import { saveMerchantAnswerToKb } from '@shopkeeper/agent/merchant-answer-kb';
-import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { buildAgentPlanCacheRecord, commitThreadPlanCacheIfCurrent } from '@shopkeeper/agent/plan-cache';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import { extractCachedQuestion, getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
 import type { AgentPlan, OrgSettings } from '@shopkeeper/agent/types';
@@ -117,29 +118,31 @@ export async function applyOperatorAnswerReplan(
     saveToKb: true,
   });
 
-  const doReplan = async (): Promise<AgentPlan> => {
+  const doReplan = async (): Promise<{ plan: AgentPlan; cacheRecord: ReturnType<typeof buildAgentPlanCacheRecord> }> => {
     const ctx = await buildContext(threadId, organizationId, gatewayThreadSink, {
       pinKbArticles: [{ title: saved.title, body: saved.body }],
     });
     const replanned = await planAgent(ctx, planningInstruction, settings);
-    await db.thread.update({
-      where: { id: threadId },
-      data: {
-        cachedPlanMessageId: pendingCustomerMessageId,
-        cachedPlan: buildAgentPlanCacheRecord({
-          instruction: baseInstruction,
-          lastCustomerMessageId: pendingCustomerMessageId,
-          settings,
-          plan: replanned,
-        }) as object,
-      },
+    const cacheRecord = buildAgentPlanCacheRecord({
+      instruction: baseInstruction,
+      lastCustomerMessageId: pendingCustomerMessageId,
+      settings,
+      plan: replanned,
     });
-    return replanned;
+    const committed = await commitThreadPlanCacheIfCurrent({
+      orgId: organizationId,
+      threadId,
+      sourceMessageId: pendingCustomerMessageId,
+      cache: cacheRecord,
+    });
+    if (!committed) throw new Error('Customer message changed while re-planning');
+    return { plan: replanned, cacheRecord };
   };
 
   let plan: AgentPlan;
+  let cacheRecord: ReturnType<typeof buildAgentPlanCacheRecord>;
   try {
-    plan = await doReplan();
+    ({ plan, cacheRecord } = await doReplan());
   } catch (err) {
     logger.error({ err: (err as Error).message, organizationId, threadId }, '[Operator] Answer re-plan failed');
     return "Saved your answer, but I couldn't draft the reply just now — please try again in a moment.";
@@ -157,6 +160,12 @@ export async function applyOperatorAnswerReplan(
     threadId,
     instruction: baseInstruction,
     rawToolCalls: toPendingPlanToolCalls(notifyPlan.rawToolCalls),
+    ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
+      planId: cacheRecord.planId,
+      sourceMessageId: cacheRecord.lastCustomerMessageId,
+      planHash: hashPlan(plan),
+      instructionHash: hashInstruction(baseInstruction),
+    } : {}),
   };
 
   await updateContext(organizationId, chatId, { pendingPlan });
@@ -173,7 +182,17 @@ export async function applyOperatorAnswerReplan(
       meta?.aiSummary ?? null,
       notifyPlan,
       baseInstruction,
-      exclude ? { exclude } : undefined,
+      {
+        ...(exclude ? { exclude } : {}),
+        ...(cacheRecord.planId && cacheRecord.lastCustomerMessageId ? {
+          identity: {
+            planId: cacheRecord.planId,
+            sourceMessageId: cacheRecord.lastCustomerMessageId,
+            planHash: hashPlan(plan),
+            instructionHash: hashInstruction(baseInstruction),
+          },
+        } : {}),
+      },
     );
   } catch (err) {
     logger.warn(

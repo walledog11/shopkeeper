@@ -2,21 +2,16 @@ import { NextResponse } from "next/server";
 import { BadRequestError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
-import { requireOrgThread, getLatestConversationMessage } from "@shopkeeper/agent/thread-auth";
-import { executeAgentTurn } from "@/lib/agent/api/execution";
-import { isAgentPlanCacheHit, readAgentPlanCache } from "@shopkeeper/agent/plan-cache";
-import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
+import { requireOrgThread } from "@shopkeeper/agent/thread-auth";
 import { parseAgentRouteBody } from "@/lib/agent/api/validation";
 import { hashInstructionForLog } from "@/lib/agent/runner";
 import { resolveAgentSettings } from "@shopkeeper/agent/settings";
 import { rateLimit, tooManyRequests } from "@/lib/server/rate-limit";
 import { recordAgentRouteFailure } from "@/lib/server/agent-failure-alerts";
 import { getRedis } from "@/lib/server/redis";
-import { hashInstruction, hashPlan } from "@shopkeeper/agent/agent-actions";
-import { resolveShadowDecisionOnApproval } from "@/lib/agent/api/autonomy-shadow";
+import { hashInstruction } from "@shopkeeper/agent/agent-actions";
 import {
-  consumeThreadCachedPlan,
-  formatApproverId,
+  executeCurrentCachedHomePlan,
   getExecutablePlanToolCalls,
 } from "@/lib/agent/api/plan-execution";
 import { resolveSessionApprover } from "@/lib/agent/api/approver";
@@ -63,33 +58,6 @@ export const POST = withOrgRoute(
       throw new BadRequestError("Agent execution requires an approved plan");
     }
 
-    const cachedPlan = readAgentPlanCache(thread.cachedPlan);
-    const latestConversation = await getLatestConversationMessage(threadId);
-    const pendingCustomerMessageId = latestConversation
-      ? getPendingCustomerMessageId([latestConversation])
-      : null;
-    const currentPlan = pendingCustomerMessageId && isAgentPlanCacheHit({
-      cache: cachedPlan,
-      instruction,
-      lastCustomerMessageId: pendingCustomerMessageId,
-      settings,
-    }) ? cachedPlan?.plan : null;
-    const plannedToolCallsById = new Map(
-      currentPlan?.rawToolCalls.map((toolCall) => [toolCall.id, toolCall]) ?? []
-    );
-    const approvedCallsMatchPlan = approvedToolCalls.every((approved) => {
-      const planned = plannedToolCallsById.get(approved.id);
-      return Boolean(
-        planned &&
-        planned.name === approved.name &&
-        serializeToolInput(planned.input) === serializeToolInput(approved.input)
-      );
-    });
-
-    if (!currentPlan || !approvedCallsMatchPlan) {
-      throw new BadRequestError("Approved tool calls must come from the current reviewed plan");
-    }
-
     logger.info({
       orgId: org.id,
       threadId,
@@ -99,35 +67,19 @@ export const POST = withOrgRoute(
     }, "[agent] POST");
 
     const approver = await resolveSessionApprover();
-    const result = await executeAgentTurn({
+    const executed = await executeCurrentCachedHomePlan({
       orgId: org.id,
       threadId,
-      instruction,
+      settings,
+      allowedKinds: ["quick_reply", "needs_review", "auto_execute"],
       failureRoute: "/api/agent",
-      orgSettings: settings,
       approvedToolCalls,
-      persistAuditNote: true,
-      auditMode: "human_approved",
-      ...(approver ? {
-        approval: {
-          approverId: formatApproverId(approver),
-          approvedAt: new Date(),
-          approvedPlanHash: hashPlan(currentPlan),
-          instructionHash: hashInstruction(instruction),
-        },
-      } : {}),
-    }).finally(() => consumeThreadCachedPlan({
-      orgId: org.id,
-      threadId,
-      lastCustomerMessageId: pendingCustomerMessageId,
-    }));
-    await resolveShadowDecisionOnApproval({
-      orgId: org.id,
-      threadId,
-      approvedToolCalls,
+      expectedIdentity: { instructionHash: hashInstruction(instruction) },
+      ...(approver ? { approver } : {}),
     });
-    if (cachedPlan?.planId) {
-      const executablePlanCalls = getExecutablePlanToolCalls(currentPlan);
+    const result = executed.result;
+    if (executed.planId) {
+      const executablePlanCalls = getExecutablePlanToolCalls(executed.plan);
       const changed = executablePlanCalls.length !== approvedToolCalls.length
         || executablePlanCalls.some((planned, index) => {
           const approved = approvedToolCalls[index];
@@ -141,7 +93,7 @@ export const POST = withOrgRoute(
         channel: thread.channelType,
         decision: 'approved',
         organizationId: org.id,
-        planId: cachedPlan.planId,
+        planId: executed.planId,
       });
     }
 

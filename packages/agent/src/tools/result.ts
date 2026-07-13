@@ -1,7 +1,7 @@
 // Structured result every tool implementation returns. The executor and planner
 // branch on `status`; `message` is the only text the model ever sees, so wording
 // can change without touching control flow.
-export type ToolStatus = "ok" | "error" | "not_found" | "escalated";
+export type ToolStatus = "ok" | "error" | "not_found" | "escalated" | "unknown";
 
 export interface ToolResult {
   status: ToolStatus;
@@ -19,6 +19,10 @@ export function toolEscalated(reason: string): ToolResult {
 
 export function toolError(message: string): ToolResult {
   return { status: "error", message };
+}
+
+export function toolUnknown(message: string): ToolResult {
+  return { status: "unknown", message };
 }
 
 export function toolNotFound(message: string): ToolResult {

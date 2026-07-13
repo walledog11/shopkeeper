@@ -93,6 +93,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
         instruction: 'do things',
         rawToolCalls: [
           { id: 'r1', name: 'get_shopify_orders' }, // read, retained
+          { id: 'r2', name: 'get_order_tracking' }, // canonical read, retained
           { id: 'a1', name: 'refund_order' }, // actionable[0] → skipped
           { id: 'a2', name: 'cancel_order' }, // actionable[1] → retained
         ],
@@ -111,7 +112,7 @@ describe('POST /webhooks/telegram — pending plan commands', () => {
       approvedToolCalls: Array<{ id: string }>;
     };
     const ids = call.approvedToolCalls.map((tc) => tc.id);
-    expect(ids).toEqual(['r1', 'a2']);
+    expect(ids).toEqual(['r1', 'r2', 'a2']);
     expect(refreshSkippedPlanTerminalSendSpy).not.toHaveBeenCalled();
   });
 

@@ -116,6 +116,14 @@ describe('sendOperatorPlanNotification', () => {
       'Needs a refund',
       plan,
       'Handle refund request',
+      {
+        identity: {
+          planId: '00000000-0000-4000-8000-000000000001',
+          sourceMessageId: '00000000-0000-4000-8000-000000000002',
+          planHash: 'a'.repeat(64),
+          instructionHash: 'b'.repeat(64),
+        },
+      },
     );
 
     expect(notifyOperatorSpy).toHaveBeenCalledTimes(2);
@@ -128,6 +136,14 @@ describe('sendOperatorPlanNotification', () => {
     const [, , body] = notifyOperatorSpy.mock.calls[0] ?? [];
     expect(body).toContain('Open: https://dashboard.example.com/dashboard/tickets/thread_1');
     expect(body).toContain('Reply "yes" to send, or tell me what to change.');
+    expect(notifyOperatorSpy.mock.calls[0]?.[3]).toMatchObject({
+      pendingPlan: {
+        planId: '00000000-0000-4000-8000-000000000001',
+        sourceMessageId: '00000000-0000-4000-8000-000000000002',
+        planHash: 'a'.repeat(64),
+        instructionHash: 'b'.repeat(64),
+      },
+    });
   });
 
   it('propagates critical notification failures so the worker job can retry', async () => {

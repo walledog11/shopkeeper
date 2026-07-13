@@ -1,17 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { executeToolWithStatus } from "./executor.js";
 import type { BaseAgentContext } from "../agent-context.js";
+import { defineTool, numberArg } from "./registry/index.js";
 
 const {
   mockFindKbArticles,
   mockCreateKbCitations,
-  mockGetDailyRefundSpendCents,
-  mockIncrementDailyRefundSpendCents,
+  mockReserveDailyRefundSpend,
+  mockCommitDailyRefundSpendReservation,
+  mockReleaseDailyRefundSpendReservation,
+  mockMarkDailyRefundSpendReservationUnknown,
 } = vi.hoisted(() => ({
   mockFindKbArticles: vi.fn(),
   mockCreateKbCitations: vi.fn(),
-  mockGetDailyRefundSpendCents: vi.fn(),
-  mockIncrementDailyRefundSpendCents: vi.fn(),
+  mockReserveDailyRefundSpend: vi.fn(),
+  mockCommitDailyRefundSpendReservation: vi.fn(),
+  mockReleaseDailyRefundSpendReservation: vi.fn(),
+  mockMarkDailyRefundSpendReservationUnknown: vi.fn(),
 }));
 
 vi.mock("@shopkeeper/db", () => ({
@@ -19,8 +24,10 @@ vi.mock("@shopkeeper/db", () => ({
     kbArticle: { findMany: mockFindKbArticles },
     kbCitation: { createMany: mockCreateKbCitations },
   },
-  getDailyRefundSpendCents: mockGetDailyRefundSpendCents,
-  incrementDailyRefundSpendCents: mockIncrementDailyRefundSpendCents,
+  reserveDailyRefundSpend: mockReserveDailyRefundSpend,
+  commitDailyRefundSpendReservation: mockCommitDailyRefundSpendReservation,
+  releaseDailyRefundSpendReservation: mockReleaseDailyRefundSpendReservation,
+  markDailyRefundSpendReservationUnknown: mockMarkDailyRefundSpendReservationUnknown,
 }));
 
 function threadlessCtx(escalate: (reason: string) => Promise<void>): BaseAgentContext {
@@ -33,15 +40,39 @@ function threadlessCtx(escalate: (reason: string) => Promise<void>): BaseAgentCo
   };
 }
 
+const goodwillSpendTool = defineTool({
+  name: "test_goodwill_spend",
+  description: "Test-only goodwill spend tool.",
+  fields: { amount: numberArg("Amount in dollars.", { required: true }) },
+  category: "action",
+  group: "order",
+  capabilities: [],
+  label: "Test goodwill spend",
+  planStepLabel: "Test goodwill spend",
+  policy: { dailyRefundSpendLimit: true },
+  execute: async (input: { amount: number }) => ({
+    status: "ok" as const,
+    message: "Goodwill issued.",
+    spentCents: Math.round(input.amount * 100),
+  }),
+});
+
 beforeEach(() => {
   mockFindKbArticles.mockReset();
   mockCreateKbCitations.mockReset();
-  mockGetDailyRefundSpendCents.mockReset();
-  mockIncrementDailyRefundSpendCents.mockReset();
+  mockReserveDailyRefundSpend.mockReset();
+  mockCommitDailyRefundSpendReservation.mockReset();
+  mockReleaseDailyRefundSpendReservation.mockReset();
+  mockMarkDailyRefundSpendReservationUnknown.mockReset();
   mockFindKbArticles.mockResolvedValue([]);
   mockCreateKbCitations.mockResolvedValue({ count: 0 });
-  mockGetDailyRefundSpendCents.mockResolvedValue(0);
-  mockIncrementDailyRefundSpendCents.mockResolvedValue(undefined);
+  mockReserveDailyRefundSpend.mockResolvedValue({
+    kind: "reserved",
+    reservation: { id: "reservation_1", status: "reserved" },
+  });
+  mockCommitDailyRefundSpendReservation.mockResolvedValue(undefined);
+  mockReleaseDailyRefundSpendReservation.mockResolvedValue(undefined);
+  mockMarkDailyRefundSpendReservationUnknown.mockResolvedValue(undefined);
 });
 
 describe("executeToolWithStatus on a thread-less BaseAgentContext", () => {
@@ -124,5 +155,38 @@ describe("executeToolWithStatus on a thread-less BaseAgentContext", () => {
 
     expect(result.status).toBe("escalated");
     expect(escalate).toHaveBeenCalledWith("Suspected fraudulent order.");
+  });
+});
+
+describe("goodwill spend reservation finalization", () => {
+  it("returns unknown and preserves the reservation when budget finalization fails after provider success", async () => {
+    mockCommitDailyRefundSpendReservation.mockRejectedValueOnce(new Error("database unavailable"));
+    const ctx: BaseAgentContext = {
+      ...threadlessCtx(vi.fn()),
+      shopify: {
+        shop: "test.myshopify.com",
+        accessToken: "token",
+        operationId: "execution_1:goodwill_1",
+      },
+    };
+
+    const result = await executeToolWithStatus(
+      goodwillSpendTool.name,
+      { amount: 6 },
+      ctx,
+      undefined,
+      { [goodwillSpendTool.name]: goodwillSpendTool },
+    );
+
+    expect(result).toEqual({
+      status: "unknown",
+      result: "Unknown: the provider action completed but its goodwill budget record could not be finalized.",
+    });
+    expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 600);
+    expect(mockMarkDailyRefundSpendReservationUnknown).toHaveBeenCalledWith(
+      "reservation_1",
+      "Unknown: the provider action completed but its goodwill budget record could not be finalized.",
+    );
+    expect(mockReleaseDailyRefundSpendReservation).not.toHaveBeenCalled();
   });
 });

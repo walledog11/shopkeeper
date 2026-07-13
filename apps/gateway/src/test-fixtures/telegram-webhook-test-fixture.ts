@@ -103,6 +103,7 @@ vi.mock('../logger.js', () => ({
 
 vi.mock('../message-handlers/execute-operator-agent-turn.js', () => ({
   executeOperatorAgentTurn: executeOperatorAgentTurnSpy,
+  executeOperatorApprovedCachedPlan: executeOperatorAgentTurnSpy,
 }));
 
 vi.mock('../message-handlers/skipped-plan-terminal-send.js', () => ({

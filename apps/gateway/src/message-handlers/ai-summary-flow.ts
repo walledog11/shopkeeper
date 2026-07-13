@@ -1,5 +1,10 @@
 import { db } from '@shopkeeper/db';
-import { getLatestCustomerMessageText } from '@shopkeeper/agent/thread-auth';
+import {
+  getLatestConversationMessage,
+  getLatestCustomerMessageText,
+  requireOrgThread,
+} from '@shopkeeper/agent/thread-auth';
+import { readAgentPlanCache } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings, isWithinBusinessHours } from '@shopkeeper/agent/settings';
 import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
@@ -30,8 +35,25 @@ export function resolveParallelPlanInstruction(latestCustomerMessageText: string
   return latestCustomerMessageText?.trim() || DEFAULT_PLAN_INSTRUCTION;
 }
 
+async function isPlanStillCurrent(
+  organizationId: string,
+  threadId: string,
+  identity: { planId: string; sourceMessageId: string } | undefined,
+): Promise<boolean> {
+  if (!identity) return true;
+  const [thread, latest] = await Promise.all([
+    requireOrgThread(threadId, organizationId),
+    getLatestConversationMessage(threadId),
+  ]);
+  const cached = readAgentPlanCache(thread.cachedPlan);
+  return latest?.senderType === 'customer'
+    && latest.id === identity.sourceMessageId
+    && thread.cachedPlanMessageId === identity.sourceMessageId
+    && cached?.planId === identity.planId;
+}
+
 export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void> {
-  const { threadId, organizationId, customerName, channelType, traceId, skipSummary } = data;
+  const { threadId, organizationId, sourceMessageId, customerName, channelType, traceId, skipSummary } = data;
   logger.info({ threadId, organizationId, traceId }, '[AISummary] Processing job');
 
   const threadSnapshot = await db.thread.findUnique({
@@ -82,6 +104,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     ? precomputeThreadPlan(organizationId, threadId, settings, {
         allowAutoExecute: withinBusinessHours,
         instruction: parallelInstruction,
+        sourceMessageId,
       })
     : null;
 
@@ -103,7 +126,10 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     await Promise.all([
       parallelPlan
         ? planPromise!
-        : precomputeThreadPlan(organizationId, threadId, settings, { allowAutoExecute: false }),
+        : precomputeThreadPlan(organizationId, threadId, settings, {
+            allowAutoExecute: false,
+            sourceMessageId,
+          }),
       sendAutoAck(organizationId, threadId),
     ]);
     return;
@@ -113,6 +139,7 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     ? await planPromise
     : await precomputeThreadPlan(organizationId, threadId, settings, {
         allowAutoExecute: true,
+        sourceMessageId,
       });
 
   if (!planResult) {
@@ -129,6 +156,11 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
       updatedThread?.aiSummary ?? null,
       planResult,
     );
+    return;
+  }
+
+  if (!await isPlanStillCurrent(organizationId, threadId, planResult.identity)) {
+    logger.info({ organizationId, threadId, sourceMessageId }, '[AISummary] Plan was superseded before notification');
     return;
   }
 
@@ -153,5 +185,6 @@ export async function processAiSummaryJob(data: AiSummaryJobData): Promise<void>
     updatedThread?.aiSummary ?? null,
     planResult.plan,
     planResult.instruction,
+    planResult.identity ? { identity: planResult.identity } : undefined,
   );
 }

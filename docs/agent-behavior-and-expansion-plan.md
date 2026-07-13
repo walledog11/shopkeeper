@@ -6,6 +6,9 @@ to the systems-safety audit in [codebase-audit.md](codebase-audit.md) — the
 AUD-xxx concurrency/idempotency findings are tracked there, not here, except
 where a phase below explicitly interacts with one.
 
+Safety alignment amended: 2026-07-12, after revalidation against the current
+durable operator-thread and model-owned control-tool structure.
+
 Two tracks:
 
 - **Track A — make the operator channel conversational.** The Phases A–D work
@@ -29,12 +32,48 @@ Two tracks:
   phone round-trip (the waiver precedent from Phases A–D), not evals.
 - **Justify every eval run**; single-fixture probes for diagnosis. Track B
   phases that eventually need fixtures (B6) say so explicitly.
-- **Ticket text is untrusted.** Any new tool that returns customer prose into
-  an operator turn must wrap it in `<customer_message>` tags (the
-  `wrapUntrusted` machinery in `packages/agent/src/message-history.ts`).
+- **Ticket text is untrusted.** Any customer-derived prose placed into an
+  operator turn must be explicitly marked as data using `<customer_message>`
+  tags (the `wrapUntrusted` machinery in
+  `packages/agent/src/message-history.ts`). This includes tool results,
+  `aiSummary` values, digest/briefing blurbs, and pending-state ledger text —
+  not only raw message bodies.
 - Deterministic keyword fast paths (`yes`/`no`/`OPEN n`/…) stay. They're a
   latency win and muscle memory; the fix is making the model path capable and
   the fast-path copy warmer, not removing the fast path.
+
+## Systems-safety gates
+
+The tracks below describe product behavior, but they must not bypass the
+correctness work in [codebase-cleanup-plan.md](codebase-cleanup-plan.md). These
+are shipping dependencies, not suggestions:
+
+| Behavior work | Required cleanup work before broad rollout |
+| --- | --- |
+| Pending-plan approval, dismissal, revision, or a future queue | P1-01 through P1-03; P2-01 for stale-plan rejection |
+| Natural-language ticket sends from the operator channel | P4-03 durable operator events; P5-01 tenant ownership; P4-01 for asynchronous email delivery |
+| Briefing claims about completed actions | P1/P3 committed execution outcomes; P1-03 stable plan identity for deduplication |
+| New mutative/proactive modules (B3–B6) | P1 execution claims, applicable P3 mutation/cap work, P4 delivery durability, and P6-02 queue monitoring |
+| Any behavior that depends on `open` versus `pending` | P5-04 active-thread/escalation state decision |
+
+Until a required gate lands, a phase may ship only the read-only or copy-only
+portion that does not widen the unsafe action surface.
+
+**Cleanup gate status (2026-07-13):** P1-01 through P1-03 and P2-01 are
+implementation-complete. Reviewed plans now have durable one-winner claims,
+stable cross-device identity/resolution, and stale-plan rejection. Their
+migration-first shadow/canary rollout and live multi-device/queue verification
+remain release checks. P3-01's shared retry/`unknown` contract plus refund,
+cancellation, order creation/editing, multi-step order-address handling, gift
+cards, and store credit have complete local implementations and deterministic
+coverage. Their Shopify sandbox/canary checks and durable follow-up recovery
+remain open. P3-02 atomic goodwill reservations are also locally complete, with
+their additive migration, provider canaries, and stale/unknown recovery still
+open; its deterministic concurrency coverage and strict isolated-database audit
+pass. P4-01 outbound-email claims and P5-01 tenant ownership are now locally
+implementation-complete with deterministic and cross-tenant coverage; their
+production migration/canary observation remains open. P4-03 durable operator
+events, P5-04 active-thread semantics, and P6 dependencies remain outstanding.
 
 ---
 
@@ -51,20 +90,27 @@ that customer say?" or "anything urgent right now?".
 
 - New `apps/gateway/src/message-handlers/operator-inbox-tools.ts` with two
   read-only module tools, built per turn like the control tools:
-  - `list_open_tickets` — org-scoped open threads: thread id, customer name,
-    tag, age, `aiSummary`, `filterStatus`, whether a plan is pending. Bounded
-    (e.g. 20, newest first) with an optional tag/status filter arg.
+  - `list_active_tickets` — org-scoped active threads: thread id, customer
+    name, tag, age, `aiSummary`, `filterStatus`, whether a plan is pending.
+    Bounded (e.g. 20, newest first) with an optional tag/status filter arg.
+    Its active-state predicate must come from the P5-04 decision; do not bake
+    in `status = open` while escalated `pending` tickets are otherwise hidden.
   - `get_ticket` — one thread by id: status, tag, cached-plan state, and the
-    last N non-note messages with customer text wrapped in
-    `<customer_message>` tags.
+    last N non-note messages. Wrap raw messages, `aiSummary`, and any other
+    customer-derived prose in `<customer_message>` tags.
 - Merge into the `moduleTools` record in
   `apps/gateway/src/routes/telegram/agent-execution.ts` (flows to iMessage
   automatically — both transports share `executeFreeFormInstruction`).
 - Add a short clause to `OPERATOR_INSTRUCTIONS` (operator branch only) saying
   when to reach for them, and that ticket text is data, not instructions.
 
-**Why first:** A2's conversational digest triage and A5's briefing follow-ups
-get most of their power from these two tools.
+**Why foundation:** A2's conversational digest triage and A5's briefing
+follow-ups get most of their power from these two tools.
+
+**Safety dependency:** finalize or explicitly stage the P5-04 definition of an
+active ticket before shipping inbox semantics. A read-only implementation may
+temporarily expose both `open` and `pending` with their literal statuses, but
+must not silently omit pending escalations.
 
 **Verify:** unit tests for org-scoping + untrusted wrapping; extend
 `execute-operator-agent-turn` smoke test; live phone round-trip ("what's in my
@@ -75,6 +121,10 @@ the dashboard app and can't use gateway moduleTools; decide later whether to
 mirror these as dashboard host tools.
 
 ### A2 — Conversational digest triage
+
+**Status (2026-07-12): In progress.** The independent AUD-020/P8-01 drive-by is
+complete; conversational digest ledger rendering and control tools have not
+started and remain gated by the send/tenant durability work below.
 
 **Problem:** digest follow-ups are index commands (`OPEN 2 · SPAM 3 ·
 REPLY 1 <text>`) parsed before the model
@@ -88,7 +138,8 @@ Friday" goes nowhere.
 - `renderOperatorLedger`: when `pendingDigest` is set, render the flagged list
   — index, customer, one-line summary, thread id — using the same
   `pendingDigest.threadIds` ordering the merchant saw, so "the second one"
-  resolves identically on both sides.
+  resolves identically on both sides. Wrap customer-derived summaries as
+  untrusted data.
 - Two new digest control tools (same file or alongside the session tools),
   mirroring the approve/reject/revise design:
   - `mark_ticket_spam` (thread id) — the `digest-spam` transition.
@@ -102,12 +153,31 @@ Friday" goes nowhere.
 - Keyword fast path stays untouched.
 - **Drive-by (AUD-020):** while in `operator-ledger.ts`, replace the gateway's
   hard-coded `READ_TOOLS` with the canonical read-category predicate from the
-  registry so ledger/skip numbering can't drift from real actions.
+  registry so ledger/skip numbering can't drift from real actions. This is
+  cleanup P8-01 and may ship independently before A2.
+
+**Safety dependencies:** both new tools must re-load the target through an
+organization-scoped predicate at execution time rather than trusting a thread
+id parked in JSON. `send_ticket_reply` must use the P5-01-hardened internal send
+boundary and participate in P4-03 durable operator-event processing; email
+delivery inherits P4-01. Do not broaden natural-language sending before those
+boundaries are in place. Spam updates must likewise include organization
+ownership in the write predicate.
 
 **Verify:** unit tests for ledger rendering + tool transitions; live phone:
 digest → "the one from Sarah is spam", "reply to the second: we ship Friday".
 
 ### A3 — Operator escalation fix + prompt polish
+
+**Status (2026-07-12): Implementation complete; live-channel verification
+pending.** Gateway `sms_agent` turns now hide
+`escalate_to_human`, `send_reply`, and `add_internal_note`; deterministic
+policy blocks return to the model for a direct merchant explanation; the
+context has a defensive no-side-effect escalation sink; operator guardrails,
+channel copy, and response-length guidance are corrected. Dashboard Concierge
+keeps its existing escalation semantics. Unit and database-backed operator
+smoke coverage pass. The required real Telegram/iMessage phone round-trip has
+not been performed, so release completion remains open.
 
 **Problem:** `OPERATOR_INSTRUCTIONS` tell the model to `escalate_to_human`
 when the operator's request is ambiguous — but the human is the person
@@ -115,13 +185,22 @@ talking, and executing it on the durable operator thread parks *that thread*
 to pending, tags it `needs_human`, and pushes an escalation notification back
 to the same merchant (`agent-thread-sink.ts:131-150`). Circular.
 
-**Build (all inside the operator branch of `prompt.ts` + gateway turn deps):**
+**Build (operator prompt + tool selection + operator-safe execution deps):**
 
 - Replace the escalate-on-ambiguity clause: when unsure, **ask the merchant
   directly in the reply**; when out of scope, say so plainly and why. Remove
   `escalate_to_human` from operator-turn tool selection (allowlist filter in
   the gateway turn deps) as belt-and-braces so a stray call can't self-park
   the operator thread.
+- Give operator turns an escalation sink that returns a plain explanation or
+  clarification request without changing the durable operator thread to
+  `pending`, tagging it `needs_human`, or pushing an escalation notification.
+  This is required because deterministic policy-block handling calls
+  `ctx.escalate()` directly even when the `escalate_to_human` tool is hidden.
+- Make shared guardrail clauses operator-aware: on a blocked refund,
+  cancellation, discount, or other policy limit, tell the merchant why it was
+  blocked and ask what they want to do. Do not leave operator prompt text
+  instructing a hidden escalation tool.
 - Fix the stale channel label at `prompt.ts:225` — `sms_agent` renders as
   "WhatsApp/SMS"; say "text message (Telegram/iMessage)" or derive from the
   binding.
@@ -130,8 +209,12 @@ to the same merchant (`agent-thread-sink.ts:131-150`). Circular.
   markdown."
 
 **Verify:** live phone round-trip (ambiguous instruction → clarifying question,
-not an escalation note); operator smoke tests; confirm support prompt bytes
-are unchanged (no eval needed).
+not an escalation note); policy-blocked refund/cancellation → explanation with
+the operator thread still open and no self-notification; operator smoke tests;
+confirm support prompt bytes are unchanged (no eval needed).
+
+**Safety dependency:** coordinate the durable operator-thread exception with
+P5-04 so support-ticket escalation semantics can still be decided separately.
 
 ### A4 — Fast-path and canned copy
 
@@ -146,6 +229,9 @@ fast path wasn't.
   `PLAN_STEP_LABELS`) inside `pendingPlan` at notification time
   (`planning-notifications.ts` contextPatch) so the fast path can say
   "Dismissed — I won't send Sarah the refund reply." without an extra query.
+  Treat these as optional display fields: readers must remain compatible with
+  legacy JSON, and preserve the stable plan ID, source-message ID, and hashes
+  now supplied by P1-03.
 - `digest-commands.ts`: include the customer name in spam/reply confirmations
   ("Marked Jake's message as spam.", "Replied to Sarah — 'we ship Friday.'").
 - `agent-execution.ts` `'Done.'` fallback → something with a pulse ("All set —
@@ -155,7 +241,8 @@ fast path wasn't.
   Sarah say?'. Reply yes/no to anything I propose." Keep the command hints as
   a trailing line, not the headline.
 
-**Verify:** unit tests on the copy builders; screenshots/phone once.
+**Verify:** unit tests on the copy builders and old/new pending-plan JSON
+shapes; screenshots/phone once.
 
 ### A5 — Morning briefing v2
 
@@ -167,22 +254,41 @@ plans. This is the flagship surface (magic moment = next-morning briefing).
 
 **Build (stay deterministic — assembled from DB, no LLM cost per digest):**
 
-- **"Handled" section:** roll up `AgentAction` rows since the last digest
-  `sentAt` — counts by category plus the notable ones spelled out (refund
-  amounts, replies sent, auto vs approved).
+- **"Handled" section:** the P1 committed execution outcome model now exists;
+  after the applicable P3 provider reconciliation lands, roll up committed
+  execution/tool outcomes since one organization-level last-successful-digest
+  cursor — counts by category plus the notable ones spelled out (refund
+  amounts, replies sent, auto vs approved). `AgentAction` is currently a
+  best-effort post-action audit trail and must not be presented as authoritative
+  completion truth. A pre-ledger prototype may show explicitly labeled
+  best-effort activity, but not claim an action definitely completed.
 - **"Waiting on you" section:** the org's parked approvals — pending plans
   from `OperatorContext` and threads whose `cachedPlan` is
   `needs_review`/`needs_merchant_input` older than a few hours — each with
   customer + one-phrase action ("Sarah's $12 refund — still waiting on your
-  OK"). This doubles as the stale-plan nudge from A6.
+  OK"). Deduplicate the same fan-out plan across devices by P1-03's stable plan
+  identity, exclude resolved/stale claims, and never infer uniqueness from
+  thread id alone. This doubles as the stale-plan nudge from A6.
 - Footer: natural-language invitation first, command hints demoted to one
   trailing line (consistent with A4's HELP_TEXT).
 - Keep the weekly stats line and first-night flow as-is.
 - Defer: a model-written narrative digest (nice, but recurring LLM cost for
   every org every morning — revisit once merchants exist).
 
-**Verify:** extend the existing digest unit tests (bucketing/format); one live
-scheduled-digest run against the test DB.
+**Safety dependencies:** P1-01 through P1-03 committed outcomes and stable plan
+identity are implementation-complete. P3-01 refund, cancellation, order creation
+and editing, order-address reconciliation, gift cards, and store credit are
+locally complete but still require their Shopify sandbox/canary checks and a
+durable recovery owner before the briefing can claim ambiguous actions were
+handled. Store a single
+org-level digest cursor or use a fixed,
+documented reporting window — do not choose an arbitrary device context's
+`pendingDigest.sentAt`.
+
+**Verify:** extend the existing digest unit tests (bucketing/format), including
+per-device duplicate plans, stale/resolved plans, failed/partial/unknown
+executions, and digest-cursor behavior; one live scheduled-digest run against
+the test DB.
 
 ### A6 — Pending-plan overwrite honesty + queue (last, safety-coupled)
 
@@ -193,23 +299,34 @@ ignored plan.
 
 **Build in two steps:**
 
-1. **Cheap and honest (now):** when a plan notification would overwrite a
+1. **Cheap and honest (copy can ship now):** when a plan notification would overwrite a
    different thread's pending plan, append one line to the outgoing card:
    "(This replaces the earlier plan for <customer> — that one's still on your
    dashboard.)" Plus the A5 "Waiting on you" digest section for follow-ups.
+   This is disclosure, not a concurrency fix. P1-03 now supplies stable identity
+   and conditional all-device resolution, so the accompanying context update
+   must retain those exact-plan predicates and cannot regress to an unconditional
+   clear that erases a newer notification.
 2. **Real queue (later, deliberately):** `pendingPlans[]` with model-side
-   selection ("approve the refund one"). **Do not build this before the
-   AUD-001 execution-claim work** — a multi-plan ledger multiplies the
-   stale/double-approval surface the codebase audit flagged. Design them
-   together.
+   selection ("approve the refund one"). P1-01/P1-02 execution claims, P1-03
+   all-device resolution, and P2-01 stale-plan rejection are now
+   implementation-complete. Start the queue only after their rollout checks;
+   it remains a separate data-model phase with its own selection, claim,
+   resolution, and recovery design.
 
-**Verify:** unit test the overwrite line; queue step gets its own plan.
+**Verify:** unit test the overwrite line. With P1-03, also test the race where
+plan B arrives while a model turn still holds a snapshot of plan A; approving,
+rejecting, or revising A must not erase or execute B. The queue step gets its
+own plan.
 
 ### Suggested Track A order
 
-A1 → A2 → A3 → A4 → A5 → A6-step-1. A3 and A4 are independent of A1/A2 and can
-interleave. Each phase is a shippable slice with its own live verification;
-nothing requires an eval run.
+A3 should ship first because it stops operator-thread self-escalation. P8-01
+may also ship immediately as a standalone quick win. Subject to the safety
+gates above, the remaining behavior order is A1 → A2 → A4 → A6-step-1 → A5.
+A5's deduplicated "Waiting on you" foundation now has P1 identity support; its
+authoritative "Handled" section still waits for P3. Each operator-only phase has its own live verification; none needs
+an eval run unless it changes the support-planner surface.
 
 ---
 
@@ -221,6 +338,13 @@ where it acts, goes through the existing plan-approval loop. Bias per the
 product rubric: escalate/ask over confident wrong action; nothing auto-sends
 customer-facing text at launch.
 
+Every new sweep must use a stable job/event identity, be safe to replay, have
+an explicit external-call deadline, and be included in P6-02 queue health and
+failed-job recovery. "Uses the existing approval loop" is not a safety waiver:
+P1 execution claims are implementation-complete but require rollout verification;
+mutative phases still wait for the applicable P3 provider outcome/cap work,
+while customer delivery waits for P4 durability.
+
 ### B1 — Daily sales pulse line in the briefing (small)
 
 One line in the digest: orders + revenue since yesterday (vs. same day last
@@ -228,7 +352,8 @@ week if cheap). Mirror the weekly-stats pattern — computed at digest build,
 failure-tolerant garnish that can never sink the digest. Needs one small
 org-wide Shopify orders read (current order fetches are per-customer).
 Deliberately a digest line, not an analytics surface — reports were already
-cut once by design.
+cut once by design. Use the P4-06 deadline/timeout conventions for the new
+org-wide read and the same org-level digest reporting window chosen in A5.
 
 ### B2 — Inventory awareness (read-only)
 
@@ -238,16 +363,23 @@ cut once by design.
   operator channel and lets support answer restock questions honestly.
 - Digest low-stock line behind a threshold (settings JSON key, default off).
 - **Caution:** serializer changes feed the support planner's context → run the
-  eval gate before shipping the serializer piece (cheap fixture probe first).
+  eval gate before shipping the serializer piece (cheap fixture probe first),
+  and account for the added fields in P2-02's hard context/token budget.
 
 ### B3 — Return-lifecycle completion
 
 The agent opens returns/exchanges today, then goes blind. Sweep open returns;
 when the reverse shipment shows delivered, push through the plan-approval
-loop: "Sarah's return arrived back — approve the $42 refund?" Uses
-`create_refund` + existing approval/caps as-is; attaches to the ticket thread
-that opened the return. Closes the loop merchants forget, and it's the
-highest-trust-building candidate of the six.
+loop: "Sarah's return arrived back — approve the $42 refund?" Attach it through
+a durable return/action-to-ticket association rather than inferring from
+best-effort audit text. The eventual refund uses `create_refund`. P1-01/P1-02
+single-use execution is implementation-complete. P3-01 refund reconciliation is
+locally complete but still waits for Shopify sandbox/canary verification; this
+phase also waits for P1 rollout verification and P3-02's migration/canary
+rollout of the locally complete atomic cap reservation.
+The sweep also needs stable delivery-event
+deduplication and P6-02 monitoring. This closes the loop merchants forget, and
+it's the highest-trust-building candidate of the six.
 
 ### B4 — Delivery-exception watch
 
@@ -255,14 +387,23 @@ Sweep fulfilled orders' tracking (existing USPS client, rate-limited); on a
 stalled shipment or delivery exception, notify the operator and offer a
 drafted proactive customer heads-up (via the create-thread-from-Shopify path,
 `needs_review` — never auto-send). Prevents the biggest ticket class (WISMO)
-instead of answering it. Flag-gated like the order-risk monitor.
+instead of answering it. Flag-gated like the order-risk monitor. Require
+P4-06 deadlines/rate-limit classification for tracking, P5-04 active-thread
+correlation so the proactive draft cannot split an escalated conversation.
+P1/P2 single-use and stale-plan protection is implementation-complete but still
+needs rollout verification before approval; P4 delivery
+durability before customer send, and P6-02 monitoring/replay ownership.
 
 ### B5 — Post-resolution follow-up
 
 N days after a closed ticket that involved a refund/exchange/replacement,
 draft a short check-in ("did the replacement fit?") through the approval loop.
 Cheap sweep + plan generation; pure brand-voice/trust play. Ship after B3/B4
-so the merchant isn't flooded with new proactive pushes at once.
+so the merchant isn't flooded with new proactive pushes at once. Key the
+follow-up durably to the source ticket/action and follow-up window so retries
+cannot create duplicate drafts. P1/P2 approval freshness is
+implementation-complete but needs rollout verification; P4 operator/customer
+delivery durability, P5-04 thread correlation, and P6-02 queue monitoring remain.
 
 ### B6 — Order-ops autonomy (module #2, largest, last)
 
@@ -271,12 +412,19 @@ flag-and-notify only. Per the to-do list: write order-ops eval fixtures first,
 then decide how flagged orders enter the approval loop ("hold fulfillment?")
 and whether/how the module earns autonomy tiers. This is the roadmap's module
 #2 and the template for every future module — don't rush it in as a sweep.
+Keep it flag-and-notify-only until the completed P1 claim implementation is
+rollout-verified, the applicable P3 mutation outcome model/cap enforcement,
+P4-03 durable operator instructions, and P6-02 monitored
+replay are proven. Any actionable autonomy gets a separate plan, fixtures, and
+staged rollout; enabling the existing monitor does not authorize actions.
 
 ### Suggested Track B order
 
 B1 → B2 → B3 → B4 → B5 → B6. B1/B2 are digest garnish shippable alongside A5.
-B3–B5 each want one new maintenance worker + settings flag. B6 is gated on
-eval fixtures and its own plan.
+B3–B5 each want one new maintenance worker + settings flag and do not start
+broad rollout until their cleanup dependencies above are satisfied. B6 is
+gated on eval fixtures, the safety program, and its own actionable-autonomy
+plan.
 
 ---
 
@@ -290,5 +438,9 @@ eval fixtures and its own plan.
 3. B2/B1 settings surface: new `Organization.settings` keys
    (`lowStockThreshold`, `salesPulseEnabled`?) — dashboard settings UI or
    settings-JSON-only at first?
-4. A6 step 2 (pending-plan queue) explicitly waits on AUD-001 — confirm that
-   sequencing when the cleanup plan is scheduled.
+4. A5 reporting boundary: persist one organization-level last-successful-
+   digest cursor, or use a fixed rolling window? (Recommend the durable cursor
+   so retries and delayed digests do not overlap or omit activity.)
+5. P5-04 active-ticket semantics: should `pending` remain an active inbox state,
+   or should escalation become orthogonal to thread status? A1 must expose the
+   literal state safely until that decision is implemented.

@@ -1,7 +1,12 @@
 import { getEmailLogger } from '../logger.js';
 import { buildRawMime } from '../mime-build.js';
 import { getEmailOAuthClient, persistRefreshedToken, requestTokenRefresh } from '../token.js';
-import { EmailNotConfiguredError, type EmailSender, type OutboundEmail } from '../types.js';
+import {
+  EmailNotConfiguredError,
+  type EmailSender,
+  type EmailSendResult,
+  type OutboundEmail,
+} from '../types.js';
 
 const SEND_URL = 'https://gmail.googleapis.com/gmail/v1/users/me/messages/send';
 const REFRESH_LEEWAY_MS = 60_000;
@@ -22,7 +27,7 @@ export class GmailSender implements EmailSender {
     this.tokenExpiresAt = integration.tokenExpiresAt;
   }
 
-  async send(email: OutboundEmail): Promise<void> {
+  async send(email: OutboundEmail): Promise<EmailSendResult> {
     if (!this.integration.refreshToken) throw new EmailNotConfiguredError('Gmail refresh token missing');
 
     if (this.shouldRefreshProactively()) await this.refresh();
@@ -40,6 +45,12 @@ export class GmailSender implements EmailSender {
       const body = await res.text().catch(() => '');
       throw new Error(`Gmail send failed: ${res.status} ${body}`);
     }
+
+    const payload = await res.json().catch(() => null) as { id?: unknown } | null;
+    if (!payload || typeof payload.id !== 'string' || payload.id.length === 0) {
+      throw new Error('Gmail accepted the send but returned no message id');
+    }
+    return { providerMessageId: payload.id };
   }
 
   private shouldRefreshProactively(): boolean {

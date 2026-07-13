@@ -1,6 +1,5 @@
 import { db } from '@shopkeeper/db';
-import { PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
-import { READ_TOOLS } from '../constants.js';
+import { isReadToolName, PLAN_STEP_LABELS } from '@shopkeeper/agent/tools';
 import { relativeAge } from '../routes/telegram/format.js';
 import type { OperatorContext, ToolCall } from '../operator-context.js';
 
@@ -30,7 +29,7 @@ function truncate(text: string, limit: number): string {
 
 function planStepLines(rawToolCalls: ToolCall[]): string[] {
   return rawToolCalls
-    .filter((toolCall) => !READ_TOOLS.has(toolCall.name))
+    .filter((toolCall) => !isReadToolName(toolCall.name))
     .map((toolCall) => `  - ${PLAN_STEP_LABELS[toolCall.name] ?? toolCall.name}`);
 }
 

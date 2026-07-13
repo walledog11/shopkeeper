@@ -1,4 +1,11 @@
-import { db, getDailyRefundSpendCents, incrementDailyRefundSpendCents } from "@shopkeeper/db";
+import { randomUUID } from "node:crypto";
+import {
+  commitDailyRefundSpendReservation,
+  db,
+  markDailyRefundSpendReservationUnknown,
+  releaseDailyRefundSpendReservation,
+  reserveDailyRefundSpend,
+} from "@shopkeeper/db";
 import type { OrgSettings } from "../types.js";
 import { resolveAgentSettings } from "../settings.js";
 import {
@@ -24,11 +31,10 @@ import {
 } from "./shopify.js";
 import { checkParsedStaticToolPolicy } from "./static-policy.js";
 import { getSupportStats } from "./support-stats.js";
-import { toolError, type ToolResult, type ToolStatus } from "./result.js";
+import { toolError, toolUnknown, type ToolResult, type ToolStatus } from "./result.js";
 import type { BaseAgentContext } from "../agent-context.js";
 import type {
   AgentToolDefinition,
-  CreateRefundInput,
   KnowledgeBaseToolArticle,
   ToolExecutionDeps,
 } from "./registry/index.js";
@@ -64,27 +70,11 @@ function prepareToolCall(
 async function enforceToolPolicy(
   definition: AgentToolDefinition,
   input: unknown,
-  orgId: string,
   settings?: OrgSettings,
 ): Promise<string | null> {
   const s = resolveAgentSettings(settings);
   const staticResult = checkParsedStaticToolPolicy(definition, input, s);
   if (staticResult.blocked) return formatPolicyError(staticResult.reason);
-
-  if (definition.policy.dailyRefundSpendLimit) {
-    const refundInput = input as CreateRefundInput;
-    const hasDailyCap = s.dailyRefundCap !== null && s.dailyRefundCap > 0;
-    if (hasDailyCap) {
-      const amount = Number(refundInput.amount);
-      const capCents = Math.round((s.dailyRefundCap as number) * 100);
-      const requestedCents = Math.round(amount * 100);
-      const spentCents = await getDailyRefundSpendCents(orgId);
-      if (spentCents + requestedCents > capCents) {
-        const remaining = Math.max(0, capCents - spentCents) / 100;
-        return formatPolicyError(`daily goodwill cap of $${s.dailyRefundCap} reached (shared across refunds, store credit, and gift cards); $${remaining.toFixed(2)} remaining today.`);
-      }
-    }
-  }
 
   return null;
 }
@@ -109,7 +99,6 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   issueStoreCredit,
   createGiftCard,
   attachReturnLabel,
-  incrementDailyRefundSpendCents,
   async searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]> {
     const wordConditions = words.flatMap((word) => [
       { title: { contains: word, mode: "insensitive" as const } },
@@ -149,6 +138,127 @@ const TOOL_EXECUTION_DEPS: ToolExecutionDeps = {
   getSupportStats,
 };
 
+type ReservationInput = Parameters<typeof reserveDailyRefundSpend>[0]["input"];
+
+interface PreparedExecutionResult {
+  result: ToolResult;
+  policyBlocked: boolean;
+}
+
+function reservationJson(value: unknown): ReservationInput {
+  const serialized = JSON.stringify(value);
+  return (serialized === undefined ? null : JSON.parse(serialized)) as ReservationInput;
+}
+
+function committedSpendCents(result: ToolResult): number | null {
+  const candidate = "refundedCents" in result
+    ? (result as ToolResult & { refundedCents?: unknown }).refundedCents
+    : (result as ToolResult & { spentCents?: unknown }).spentCents;
+  if (typeof candidate !== "number" || !Number.isFinite(candidate) || candidate <= 0) {
+    return null;
+  }
+  return Math.round(candidate);
+}
+
+function duplicateReservationResult(status: string): ToolResult {
+  if (status === "released") {
+    return toolError("Error: this goodwill action was already attempted and released without a provider charge.");
+  }
+  return toolUnknown(`Unknown: this goodwill action already has a ${status} budget record and will not be sent to the provider again.`);
+}
+
+async function executePreparedTool(
+  definition: AgentToolDefinition,
+  input: unknown,
+  ctx: BaseAgentContext,
+  settings?: OrgSettings,
+): Promise<PreparedExecutionResult> {
+  const resolvedSettings = resolveAgentSettings(settings);
+  if (!definition.policy.dailyRefundSpendLimit) {
+    return {
+      result: await definition.execute(input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS),
+      policyBlocked: false,
+    };
+  }
+
+  const amount = Number((input as { amount?: unknown }).amount);
+  const requestedCents = Math.round(amount * 100);
+  if (!Number.isSafeInteger(requestedCents) || requestedCents <= 0) {
+    return {
+      result: toolError("Error: goodwill amount must be a positive currency amount."),
+      policyBlocked: true,
+    };
+  }
+
+  const operationKey = ctx.shopify?.operationId ?? `unscoped:${randomUUID()}`;
+  const executionCtx = ctx.shopify?.operationId || !ctx.shopify
+    ? ctx
+    : {
+        ...ctx,
+        shopify: { ...ctx.shopify, operationId: operationKey },
+      };
+  const capCents = resolvedSettings.dailyRefundCap !== null
+    && resolvedSettings.dailyRefundCap > 0
+    ? Math.round(resolvedSettings.dailyRefundCap * 100)
+    : null;
+  const reservation = await reserveDailyRefundSpend({
+    orgId: ctx.orgId,
+    operationKey,
+    tool: definition.name,
+    input: reservationJson(input),
+    requestedCents,
+    capCents,
+  });
+  if (reservation.kind === "blocked") {
+    const cap = resolvedSettings.dailyRefundCap;
+    return {
+      result: toolError(formatPolicyError(
+        `daily goodwill cap of $${cap} reached (shared across refunds, store credit, and gift cards); $${(reservation.remainingCents / 100).toFixed(2)} remaining today.`,
+      )),
+      policyBlocked: true,
+    };
+  }
+  if (reservation.kind === "duplicate") {
+    return {
+      result: duplicateReservationResult(reservation.reservation.status),
+      policyBlocked: false,
+    };
+  }
+
+  let result: ToolResult;
+  try {
+    result = await definition.execute(input, executionCtx, resolvedSettings, TOOL_EXECUTION_DEPS);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, reason).catch(() => undefined);
+    throw error;
+  }
+
+  if (result.status === "unknown") {
+    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, result.message);
+    return { result, policyBlocked: false };
+  }
+  if (result.status !== "ok") {
+    await releaseDailyRefundSpendReservation(reservation.reservation.id, result.message);
+    return { result, policyBlocked: false };
+  }
+
+  const committedCents = committedSpendCents(result);
+  if (committedCents === null) {
+    const message = "Unknown: provider reported success but the committed goodwill amount could not be verified.";
+    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message);
+    return { result: toolUnknown(message), policyBlocked: false };
+  }
+  try {
+    await commitDailyRefundSpendReservation(reservation.reservation.id, committedCents);
+    return { result, policyBlocked: false };
+  } catch {
+    const message = "Unknown: the provider action completed but its goodwill budget record could not be finalized.";
+    await markDailyRefundSpendReservationUnknown(reservation.reservation.id, message).catch(() => undefined);
+    return { result: toolUnknown(message), policyBlocked: false };
+  }
+}
+
 export async function executeTool(
   name: string,
   args: unknown,
@@ -158,12 +268,11 @@ export async function executeTool(
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result.message;
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
   if (policyError) return policyError;
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return capabilityError.message;
-  const resolvedSettings = resolveAgentSettings(settings);
-  return (await prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS)).message;
+  return (await executePreparedTool(prepared.definition, prepared.input, ctx, settings)).result.message;
 }
 
 // Structured variant used by the planner, which derives plan warnings from the
@@ -177,17 +286,16 @@ export async function executeToolStructured(
   const prepared = prepareToolCall(name, args);
   if (!prepared.ok) return prepared.result;
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
   if (policyError) return toolError(policyError);
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return capabilityError;
-  const resolvedSettings = resolveAgentSettings(settings);
-  return prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS);
+  return (await executePreparedTool(prepared.definition, prepared.input, ctx, settings)).result;
 }
 
 export interface ExecuteToolResult {
   result: string;
-  status: "success" | "error" | "policy_block" | "escalated";
+  status: "success" | "error" | "policy_block" | "escalated" | "unknown";
 }
 
 const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["status"]> = {
@@ -195,6 +303,7 @@ const TOOL_STATUS_TO_EXECUTE_STATUS: Record<ToolStatus, ExecuteToolResult["statu
   not_found: "success",
   error: "error",
   escalated: "escalated",
+  unknown: "unknown",
 };
 
 export async function executeToolWithStatus(
@@ -210,12 +319,17 @@ export async function executeToolWithStatus(
   const prepared = prepareToolCall(name, args, moduleTools);
   if (!prepared.ok) return { result: prepared.result.message, status: "error" };
 
-  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, ctx.orgId, settings);
+  const policyError = await enforceToolPolicy(prepared.definition, prepared.input, settings);
   if (policyError) return { result: policyError, status: "policy_block" };
   const capabilityError = unmetToolCapability(prepared.definition, ctx);
   if (capabilityError) return { result: capabilityError.message, status: "error" };
 
-  const resolvedSettings = resolveAgentSettings(settings);
-  const { status, message } = await prepared.definition.execute(prepared.input, ctx, resolvedSettings, TOOL_EXECUTION_DEPS);
-  return { result: message, status: TOOL_STATUS_TO_EXECUTE_STATUS[status] };
+  const executed = await executePreparedTool(prepared.definition, prepared.input, ctx, settings);
+  if (executed.policyBlocked) {
+    return { result: executed.result.message, status: "policy_block" };
+  }
+  return {
+    result: executed.result.message,
+    status: TOOL_STATUS_TO_EXECUTE_STATUS[executed.result.status],
+  };
 }

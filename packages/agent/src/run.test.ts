@@ -111,6 +111,56 @@ afterEach(() => {
 });
 
 describe("runAgent tool execution", () => {
+  it("hides support-only escalation, reply, and note tools in operator mode", async () => {
+    mockCreate.mockResolvedValueOnce(endTurn("Ready."));
+    const ctx = makeCtx({
+      thread: {
+        id: "operator_thread",
+        status: "open",
+        channelType: "sms_agent",
+        tag: "Support",
+        aiSummary: null,
+        shopifyCustomerId: null,
+      },
+    });
+
+    await runAgent(ctx, "What needs attention?");
+
+    const request = mockCreate.mock.calls[0]?.[0] as { tools?: Array<{ name: string }> };
+    const names = request.tools?.map((tool) => tool.name) ?? [];
+    expect(names).not.toContain("escalate_to_human");
+    expect(names).not.toContain("send_reply");
+    expect(names).not.toContain("add_internal_note");
+    expect(names).toContain("send_email");
+  });
+
+  it("returns an operator policy block to the model without invoking escalation", async () => {
+    mockCreate
+      .mockResolvedValueOnce(toolUse("create_refund", { order_id: "123", amount: "200.00" }))
+      .mockResolvedValueOnce(endTurn("That refund is above the workspace cap. How would you like to proceed?"));
+    const escalate = vi.fn().mockResolvedValue(undefined);
+    const ctx = makeCtx({
+      escalate,
+      thread: {
+        id: "operator_thread",
+        status: "open",
+        channelType: "sms_agent",
+        tag: "Support",
+        aiSummary: null,
+        shopifyCustomerId: null,
+      },
+    });
+
+    const result = await runAgent(ctx, "Refund $200");
+
+    expect(escalate).not.toHaveBeenCalled();
+    expect(result.actionsPerformed[0]).toMatchObject({
+      tool: "create_refund",
+      status: "policy_block",
+    });
+    expect(result.summary).toMatch(/workspace cap/i);
+  });
+
   it("routes add_internal_note through the injected I/O sink", async () => {
     mockCreate
       .mockResolvedValueOnce(toolUse("add_internal_note", { text: "Customer is VIP" }))

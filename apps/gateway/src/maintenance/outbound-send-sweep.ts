@@ -8,34 +8,49 @@ import {
   type MaintenanceJobRegistration,
 } from './registration.js';
 
-// Channel-agnostic reconciler for stale `pending` outbound rows. Async outbound
-// (email and iMessage) pre-creates a `pending` Message, then a gateway worker
-// flips it `sent`/`failed` within seconds (the queue's retry window is ~15s).
-// Neither channel has a per-message delivery webhook to reconcile against, so
-// anything still `pending` past this window is orphaned: the row was created but
-// the enqueue or its job never completed (enqueue-after-row-create is not
-// atomic). Mark it `failed` so the composer's retry affordance can re-send it —
-// recovery without reconstructing integration/source state or risking a
-// double-send against a still-live job. The query intentionally has no channel
-// filter so every async outbound channel is covered by this one job.
+// Channel-agnostic reconciler for stale outbound rows. An unclaimed `pending`
+// row or a `processing` claim that died before a provider attempt is a known
+// no-send failure and may be retried. Once `sendAttemptedAt` is present, provider
+// acceptance is ambiguous; mark the row `unknown` so the UI and operators do
+// not trigger a potentially duplicate send.
 const STALE_PENDING_MS = 10 * 60 * 1000;
 // Kept well above the DB's autosuspend window so the compute can scale to zero
 // between runs; this is a backstop, not the primary send path.
 const SWEEP_INTERVAL_MS = 15 * 60 * 1000;
 const SWEEP_ERROR = 'Send did not complete — message was queued but never sent. Retry to resend.';
+const UNKNOWN_SWEEP_ERROR = 'Delivery could not be confirmed after the provider attempt. Do not retry until the provider activity is reconciled.';
 
 export async function runOutboundSendSweep(): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_PENDING_MS);
 
-  const { count } = await retryAfterDbReconnect(() => db.message.updateMany({
-    where: { sendStatus: 'pending', sentAt: { lt: cutoff } },
-    data: { sendStatus: 'failed', sendError: SWEEP_ERROR },
-  }));
+  const [pending, unattempted, attempted] = await retryAfterDbReconnect(() => db.$transaction([
+    db.message.updateMany({
+      where: { sendStatus: 'pending', sentAt: { lt: cutoff } },
+      data: { sendStatus: 'failed', sendClaimToken: null, sendError: SWEEP_ERROR },
+    }),
+    db.message.updateMany({
+      where: {
+        sendStatus: 'processing',
+        sendClaimedAt: { lt: cutoff },
+        sendAttemptedAt: null,
+      },
+      data: { sendStatus: 'failed', sendClaimToken: null, sendError: SWEEP_ERROR },
+    }),
+    db.message.updateMany({
+      where: {
+        sendStatus: 'processing',
+        sendClaimedAt: { lt: cutoff },
+        sendAttemptedAt: { not: null },
+      },
+      data: { sendStatus: 'unknown', sendClaimToken: null, sendError: UNKNOWN_SWEEP_ERROR },
+    }),
+  ]));
 
-  if (count > 0) {
+  const failedCount = pending.count + unattempted.count;
+  if (failedCount > 0 || attempted.count > 0) {
     logger.error(
-      { opsAlert: true, count },
-      '[OutboundSendSweep] Marked orphaned pending sends as failed',
+      { opsAlert: true, failedCount, unknownCount: attempted.count },
+      '[OutboundSendSweep] Reconciled orphaned outbound send claims',
     );
   }
 }

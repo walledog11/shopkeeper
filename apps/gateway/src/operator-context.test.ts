@@ -3,6 +3,7 @@ import { db } from '@shopkeeper/db';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import {
   getContext,
+  resolvePendingPlanContexts,
   updateContext,
   extractOrderNumber,
   type PendingPlan,
@@ -118,6 +119,47 @@ describe('updateContext + getContext round-trip', () => {
 
     await updateContext(org.id, '7', { pendingPlan: null });
     expect((await getContext(org.id, '7')).pendingPlan).toBeNull();
+  });
+
+  it('resolves the same stable plan on every device without clearing a newer plan', async () => {
+    const shared: PendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000020',
+      instruction: 'refund',
+      rawToolCalls: [],
+      planId: '00000000-0000-4000-8000-000000000021',
+      sourceMessageId: '00000000-0000-4000-8000-000000000022',
+      planHash: 'a'.repeat(64),
+      instructionHash: 'b'.repeat(64),
+    };
+    await updateContext(org.id, 'device_a', { pendingPlan: shared });
+    await updateContext(org.id, 'device_b', { pendingPlan: shared });
+    await updateContext(org.id, 'device_new', {
+      pendingPlan: { ...shared, planId: '00000000-0000-4000-8000-000000000023' },
+    });
+
+    await resolvePendingPlanContexts(org.id, 'device_a', shared);
+
+    expect((await getContext(org.id, 'device_a')).pendingPlan).toBeNull();
+    expect((await getContext(org.id, 'device_b')).pendingPlan).toBeNull();
+    expect((await getContext(org.id, 'device_new')).pendingPlan?.planId)
+      .toBe('00000000-0000-4000-8000-000000000023');
+  });
+
+  it('conditionally resolves a legacy plan only on the acting device', async () => {
+    const legacy: PendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000024',
+      instruction: 'reply',
+      rawToolCalls: [],
+    };
+    await updateContext(org.id, 'legacy_a', { pendingPlan: legacy });
+    await updateContext(org.id, 'legacy_b', { pendingPlan: legacy });
+    const newer = { ...legacy, instruction: 'new reply' };
+    await updateContext(org.id, 'legacy_a', { pendingPlan: newer });
+
+    await resolvePendingPlanContexts(org.id, 'legacy_a', legacy);
+
+    expect((await getContext(org.id, 'legacy_a')).pendingPlan).toEqual(newer);
+    expect((await getContext(org.id, 'legacy_b')).pendingPlan).toEqual(legacy);
   });
 });
 

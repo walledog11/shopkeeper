@@ -25,6 +25,7 @@ interface CommonRecordParams {
   instruction?: string | null;
   summary?: string | null;
   turnId?: string;
+  executionId?: string | null;
 }
 
 export interface RecordAgentActionsBatchParams extends CommonRecordParams {
@@ -43,15 +44,29 @@ function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
 
+function canonicalizeJson(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeJson);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+        .map(([key, entry]) => [key, canonicalizeJson(entry)]),
+    );
+  }
+  return value;
+}
+
 // Hashes the executable shape of a plan. Mirrors what an approver actually
 // agreed to (instruction + tool calls), so a backend change to readResults
 // or warnings between approval and execution does not invalidate the hash.
 export function hashPlan(plan: AgentPlan): string {
-  return sha256Hex(JSON.stringify({
+  return sha256Hex(JSON.stringify(canonicalizeJson({
     instruction: plan.instruction,
     steps: plan.steps,
     rawToolCalls: plan.rawToolCalls,
-  }));
+  })));
 }
 
 export function hashInstruction(instruction: string): string {
@@ -64,7 +79,7 @@ function deriveStatus(entry: ActionEntry): AgentActionStatus {
 
 function deriveErrorDetail(entry: ActionEntry, status: AgentActionStatus): string | null {
   if (entry.errorDetail) return entry.errorDetail;
-  if (status === "error" || status === "policy_block") return entry.result;
+  if (status === "error" || status === "policy_block" || status === "unknown") return entry.result;
   return null;
 }
 
@@ -89,6 +104,7 @@ function entryToRow(params: CommonRecordParams & {
     organizationId: params.orgId,
     threadId: params.threadId ?? null,
     customerId: params.customerId ?? null,
+    executionId: params.executionId ?? null,
     tool: params.entry.tool,
     category: deriveCategory(params.entry),
     input: toJsonInput(params.entry.input),

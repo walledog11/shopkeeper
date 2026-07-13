@@ -26,7 +26,12 @@ describe('runOutboundSendSweep', () => {
     await cleanupTestData(org?.id);
   });
 
-  async function createMessage(threadIdArg: string, sendStatus: string | null, sentAt: Date) {
+  async function createMessage(
+    threadIdArg: string,
+    sendStatus: string | null,
+    sentAt: Date,
+    claim: { claimedAt?: Date; attemptedAt?: Date | null } = {},
+  ) {
     return db.message.create({
       data: {
         threadId: threadIdArg,
@@ -34,6 +39,11 @@ describe('runOutboundSendSweep', () => {
         senderType: SenderType.agent,
         contentText: 'Hi',
         sendStatus,
+        ...(claim.claimedAt && {
+          sendClaimToken: crypto.randomUUID(),
+          sendClaimedAt: claim.claimedAt,
+          sendAttemptedAt: claim.attemptedAt ?? null,
+        }),
         sentAt,
       },
     });
@@ -57,6 +67,46 @@ describe('runOutboundSendSweep', () => {
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('pending');
     expect(after?.sendError).toBeNull();
+  });
+
+  it('marks a stale pre-provider claim failed so it can be retried safely', async () => {
+    const message = await createMessage(threadId, 'processing', ELEVEN_MINUTES_AGO(), {
+      claimedAt: ELEVEN_MINUTES_AGO(),
+      attemptedAt: null,
+    });
+
+    await runOutboundSendSweep();
+
+    const after = await db.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(after.sendStatus).toBe('failed');
+    expect(after.sendClaimToken).toBeNull();
+    expect(after.sendError).toContain('Retry to resend');
+  });
+
+  it('marks a stale post-provider claim unknown without offering an unsafe retry', async () => {
+    const message = await createMessage(threadId, 'processing', ELEVEN_MINUTES_AGO(), {
+      claimedAt: ELEVEN_MINUTES_AGO(),
+      attemptedAt: ELEVEN_MINUTES_AGO(),
+    });
+
+    await runOutboundSendSweep();
+
+    const after = await db.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(after.sendStatus).toBe('unknown');
+    expect(after.sendClaimToken).toBeNull();
+    expect(after.sendError).toContain('Do not retry');
+  });
+
+  it('leaves a recent processing claim alone', async () => {
+    const message = await createMessage(threadId, 'processing', ONE_MINUTE_AGO(), {
+      claimedAt: ONE_MINUTE_AGO(),
+      attemptedAt: ONE_MINUTE_AGO(),
+    });
+
+    await runOutboundSendSweep();
+
+    const after = await db.message.findUniqueOrThrow({ where: { id: message.id } });
+    expect(after.sendStatus).toBe('processing');
   });
 
   it('does not touch sent, failed, or non-async messages', async () => {

@@ -1,36 +1,29 @@
 import { executeAgentTurn } from '@shopkeeper/agent/turn';
-import { resolveInternalAgentThread, resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
-import { formatApproverId } from '@shopkeeper/agent/plan-execution';
-import { hashInstruction } from '@shopkeeper/agent/agent-actions';
-import { isOperatorChannel } from '@shopkeeper/agent/thread-constants';
+import { resolveOperatorThread } from '@shopkeeper/agent/internal-thread';
+import {
+  executeCurrentCachedHomePlan,
+  type ExpectedPlanIdentity,
+} from '@shopkeeper/agent/plan-execution';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { RawToolCall } from '@shopkeeper/agent/types';
 import type { AgentToolDefinition } from '@shopkeeper/agent/tools';
+import { db } from '@shopkeeper/db';
 import type { AgentActionResult } from './planning-types.js';
 import { assertBillingWriteAllowedForOrgId } from '../billing/write-gate.js';
 import { resolveClerkUserApprover } from '../clients/clerk-approver.js';
-import { buildGatewayTurnDeps } from './agent-turn-deps.js';
+import { buildGatewayPlanExecutionDeps, buildGatewayTurnDeps } from './agent-turn-deps.js';
 
 const FAILURE_ROUTE = 'gateway:operator-turn';
-
-function requireOperatorKey(params: ExecuteOperatorAgentTurnParams): string {
-  if (!params.operatorKey) {
-    throw new Error('executeOperatorAgentTurn requires operatorKey or threadId');
-  }
-  return params.operatorKey;
-}
 
 export interface ExecuteOperatorAgentTurnParams {
   orgId: string;
   instruction: string;
   senderPhone?: string;
   clerkUserId?: string;
-  // Freeform turns resolve the merchant's single durable operator thread from this
-  // binding key. Plan approval instead targets the ticket thread via `threadId`.
-  operatorKey?: string;
-  threadId?: string;
-  approvedToolCalls?: RawToolCall[];
-  // Freeform turns only: the pending-state ledger surfaced in the operator prompt
-  // and the operator control tools. Absent on the approved-execution path.
+  // Free-form turns resolve the merchant's single durable operator thread from
+  // this binding key. Reviewed-plan execution must use
+  // executeOperatorApprovedCachedPlan so it cannot bypass the durable claim.
+  operatorKey: string;
   operatorLedger?: string;
   moduleTools?: Record<string, AgentToolDefinition>;
 }
@@ -41,6 +34,40 @@ export interface ExecuteOperatorAgentTurnResult {
   actionsPerformed: AgentActionResult[];
 }
 
+export async function executeOperatorApprovedCachedPlan(params: {
+  orgId: string;
+  threadId: string;
+  instruction: string;
+  clerkUserId?: string;
+  approvedToolCalls: RawToolCall[];
+  expectedIdentity?: ExpectedPlanIdentity;
+}): Promise<ExecuteOperatorAgentTurnResult> {
+  await assertBillingWriteAllowedForOrgId(params.orgId);
+  const [org, approver] = await Promise.all([
+    db.organization.findUnique({
+      where: { id: params.orgId },
+      select: { settings: true },
+    }),
+    resolveClerkUserApprover(params.clerkUserId),
+  ]);
+  const executed = await executeCurrentCachedHomePlan({
+    orgId: params.orgId,
+    threadId: params.threadId,
+    settings: resolveAgentSettings(org?.settings),
+    allowedKinds: ['quick_reply', 'needs_review', 'auto_execute'],
+    failureRoute: FAILURE_ROUTE,
+    approvedToolCalls: params.approvedToolCalls,
+    ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
+    ...(approver ? { approver } : {}),
+  }, buildGatewayPlanExecutionDeps());
+
+  return {
+    summary: executed.result.summary,
+    actionsPerformed: executed.result.actionsPerformed,
+    threadId: params.threadId,
+  };
+}
+
 // In-process operator agent turn: billing gate, thread resolution, then
 // executeAgentTurn with the gateway lock provider and hop-back ThreadSink.
 export async function executeOperatorAgentTurn(
@@ -48,37 +75,18 @@ export async function executeOperatorAgentTurn(
 ): Promise<ExecuteOperatorAgentTurnResult> {
   await assertBillingWriteAllowedForOrgId(params.orgId);
 
-  // Plan approval runs on the ticket thread it was drafted against; a freeform
-  // turn runs on the merchant's durable operator thread for this binding.
-  const resolvedThread = params.threadId
-    ? await resolveInternalAgentThread({ orgId: params.orgId, threadId: params.threadId })
-    : await resolveOperatorThread(params.orgId, requireOperatorKey(params));
-
-  const approver = params.approvedToolCalls?.length
-    ? await resolveClerkUserApprover(params.clerkUserId)
-    : undefined;
-
-  const persistOperatorExchange = isOperatorChannel(resolvedThread.channelType)
-    && !params.approvedToolCalls?.length;
+  const resolvedThread = await resolveOperatorThread(params.orgId, params.operatorKey);
 
   const result = await executeAgentTurn({
     orgId: params.orgId,
     threadId: resolvedThread.id,
     instruction: params.instruction,
     failureRoute: FAILURE_ROUTE,
-    approvedToolCalls: params.approvedToolCalls,
     ...(params.operatorLedger ? { operatorLedger: params.operatorLedger } : {}),
     ...(params.moduleTools ? { moduleTools: params.moduleTools } : {}),
-    ...(persistOperatorExchange ? { persistUserMessage: true, persistAgentMessage: true } : {}),
+    persistUserMessage: true,
+    persistAgentMessage: true,
     persistAuditNote: true,
-    ...(params.approvedToolCalls?.length ? { auditMode: 'human_approved' as const } : {}),
-    ...(approver ? {
-      approval: {
-        approverId: formatApproverId(approver),
-        approvedAt: new Date(),
-        instructionHash: hashInstruction(params.instruction),
-      },
-    } : {}),
     auditMetadata: {
       senderPhone: params.senderPhone,
       clerkUserId: params.clerkUserId,

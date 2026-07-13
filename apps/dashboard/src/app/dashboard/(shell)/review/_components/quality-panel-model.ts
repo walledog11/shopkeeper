@@ -157,7 +157,7 @@ export function outcomeActions(entry: ActionLogEntry): ActionLogEntry["actions"]
 }
 
 export function isErrorStatus(status: string | undefined): boolean {
-  return status === "error" || status === "policy_block"
+  return status === "error" || status === "policy_block" || status === "unknown"
 }
 
 export function outcomeTone(action: ActionLogEntry["actions"][number]): Tone {
@@ -192,7 +192,11 @@ export function reviewItemChrome(entry: ActionLogEntry): ReviewItemChrome {
     return {
       tone: "error",
       icon: "alert",
-      label: errored.status === "policy_block" ? "Policy block" : "Tool error",
+      label: errored.status === "policy_block"
+        ? "Policy block"
+        : errored.status === "unknown"
+          ? "Outcome unknown"
+          : "Tool error",
     }
   }
 

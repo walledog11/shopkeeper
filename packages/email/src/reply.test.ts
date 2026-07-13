@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildOutboundMessageReplyHeaders,
   buildThreadReplyHeaders,
+  createOutboundMessageId,
   createThreadMessageId,
   formatReplySubject,
 } from './reply';
@@ -28,6 +30,20 @@ describe('email reply metadata', () => {
       { name: 'Message-ID', value: messageId },
       { name: 'In-Reply-To', value: messageId },
       { name: 'References', value: messageId },
+    ]);
+  });
+
+  it('uses a stable per-message ID while preserving thread reply references', () => {
+    expect(createOutboundMessageId('message-1', 'mail.test')).toBe('<message-message-1@mail.test>');
+    expect(buildOutboundMessageReplyHeaders(
+      'thread-1',
+      'message-1',
+      '<incoming@example.test>',
+      'mail.test',
+    )).toEqual([
+      { name: 'Message-ID', value: '<message-message-1@mail.test>' },
+      { name: 'In-Reply-To', value: '<incoming@example.test>' },
+      { name: 'References', value: '<incoming@example.test>' },
     ]);
   });
 

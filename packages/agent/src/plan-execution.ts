@@ -1,5 +1,6 @@
 import { Prisma, db, type DbChannelType } from "@shopkeeper/db";
-import { BadRequestError } from "./errors.js";
+import { isDeepStrictEqual } from "node:util";
+import { BadRequestError, ConflictError } from "./errors.js";
 import { executeAgentTurn, type ExecuteAgentTurnDeps } from "./turn.js";
 import { getLatestConversationMessage, requireOrgThread } from "./thread-auth.js";
 import { isAgentPlanCacheHit, readAgentPlanCache } from "./plan-cache.js";
@@ -11,6 +12,13 @@ import { resolveAutoExecuteMode } from "./settings.js";
 import { TOOL_CATEGORIES } from "./tools/registry/index.js";
 import type { AgentResult } from "./agent-context.js";
 import type { AgentPlan, OrgSettings, RawToolCall } from "./types.js";
+import {
+  claimCurrentPlanExecution,
+  completePlanExecution,
+  observePlanExecution,
+  type PlanExecutionIdentity,
+} from "./execution-ledger.js";
+import logger from "./logger.js";
 
 // Host-injected shadow recorder (Track 4.1). The dashboard wires this to the
 // real AutonomyShadowDecision rig; the gateway worker supplies a no-op (the rig
@@ -48,6 +56,21 @@ interface ExecutedCachedPlan extends CurrentCachedPlan {
   result: AgentResult;
 }
 
+export interface ExpectedPlanIdentity {
+  planId?: string | null;
+  sourceMessageId?: string | null;
+  planHash?: string | null;
+  instructionHash?: string | null;
+}
+
+export type PlanExecutionLedgerMode = "off" | "shadow" | "enforce";
+
+export function resolvePlanExecutionLedgerMode(
+  value: string | undefined = process.env.PLAN_EXECUTION_LEDGER_MODE,
+): PlanExecutionLedgerMode {
+  return value === "off" || value === "shadow" ? value : "enforce";
+}
+
 const EXECUTABLE_CATEGORIES = new Set(["action", "communication", "internal"]);
 
 export function isAutoExecuteEnabled(settings: OrgSettings): boolean {
@@ -71,6 +94,54 @@ function toolCallsForClassification(
   // auto_execute (system) and needs_review (human one-tap approve) both run the
   // full executable plan; runtime policy in the executor remains the backstop.
   return getExecutablePlanToolCalls(plan);
+}
+
+function validateApprovedToolCalls(plan: AgentPlan, approvedToolCalls: RawToolCall[]): void {
+  const approvedIds = new Set(approvedToolCalls.map((toolCall) => toolCall.id));
+  if (approvedIds.size !== approvedToolCalls.length) {
+    throw new BadRequestError("Approved tool calls cannot contain duplicate plan steps");
+  }
+  const plannedById = new Map(plan.rawToolCalls.map((toolCall) => [toolCall.id, toolCall]));
+  const allMatch = approvedToolCalls.every((approved) => {
+    const planned = plannedById.get(approved.id);
+    return Boolean(
+      planned
+      && planned.name === approved.name
+      && isDeepStrictEqual(planned.input, approved.input)
+    );
+  });
+  if (!allMatch) {
+    throw new BadRequestError("Approved tool calls must come from the current reviewed plan");
+  }
+}
+
+function validateExpectedIdentity(
+  current: CurrentCachedPlan & { plan: AgentPlan },
+  expected: ExpectedPlanIdentity | undefined,
+): void {
+  if (!expected) return;
+  const currentPlanHash = hashPlan(current.plan);
+  const currentInstructionHash = hashInstruction(current.instruction);
+  const mismatch = (expected.planId && expected.planId !== current.planId)
+    || (expected.sourceMessageId && expected.sourceMessageId !== current.lastCustomerMessageId)
+    || (expected.planHash && expected.planHash !== currentPlanHash)
+    || (expected.instructionHash && expected.instructionHash !== currentInstructionHash);
+  if (mismatch) {
+    throw new ConflictError("This plan is no longer current. Review the latest plan before approving it.");
+  }
+}
+
+function terminalStatusForResult(result: AgentResult): "committed" | "failed" | "unknown" {
+  if (result.actionsPerformed.some((action) => action.status === "unknown")) {
+    return "unknown";
+  }
+  return result.actionsPerformed.some((action) => (
+    action.status === "error" || action.status === "policy_block"
+  )) ? "failed" : "committed";
+}
+
+function executionError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function loadCurrentCachedHomePlan(params: {
@@ -148,6 +219,8 @@ export async function executeCurrentCachedHomePlan(params: {
   allowedKinds: HomePlanKind[];
   failureRoute: string;
   approver?: ApproverIdentity;
+  approvedToolCalls?: RawToolCall[];
+  expectedIdentity?: ExpectedPlanIdentity;
 }, deps: PlanExecutionDeps): Promise<ExecutedCachedPlan> {
   const thread = await requireOrgThread(params.threadId, params.orgId);
   if (shouldBlockTrustedSendActions(thread.filterStatus)) {
@@ -160,12 +233,18 @@ export async function executeCurrentCachedHomePlan(params: {
     throw new BadRequestError("Only current approved plans can be executed from this route");
   }
 
-  const approvedToolCalls = toolCallsForClassification(current.plan, current.classification);
+  validateExpectedIdentity({ ...current, plan: current.plan }, params.expectedIdentity);
+
+  const approvedToolCalls = params.approvedToolCalls
+    ?? toolCallsForClassification(current.plan, current.classification);
+  validateApprovedToolCalls(current.plan, approvedToolCalls);
   if (approvedToolCalls.length === 0) {
     throw new BadRequestError("The current plan has no executable tool calls");
   }
 
-  const auditMode = current.classification.kind === "auto_execute" ? "auto_executed" : "human_approved";
+  const auditMode = current.classification.kind === "auto_execute" && params.approvedToolCalls === undefined
+    ? "auto_executed"
+    : "human_approved";
   const approval: AgentActionApproval | undefined = auditMode === "human_approved" && params.approver
     ? {
         approverId: formatApproverId(params.approver),
@@ -175,21 +254,93 @@ export async function executeCurrentCachedHomePlan(params: {
       }
     : undefined;
 
-  const result = await executeAgentTurn({
+  if (!current.planId || !current.lastCustomerMessageId) {
+    throw new ConflictError("This plan predates durable approvals. Regenerate it before executing.");
+  }
+
+  // The PostgreSQL transition is the correctness boundary across dashboard,
+  // gateway, devices, and Redis instances. No approved tool reaches its
+  // provider until this durable intent exists and this caller owns its token.
+  const identity: PlanExecutionIdentity = {
     orgId: params.orgId,
+    planId: current.planId,
     threadId: params.threadId,
-    instruction: current.instruction,
-    failureRoute: params.failureRoute,
-    orgSettings: params.settings,
-    approvedToolCalls,
-    persistAuditNote: true,
-    auditMode,
-    ...(approval ? { approval } : {}),
-  }, deps).finally(() => consumeThreadCachedPlan({
-    orgId: params.orgId,
-    threadId: params.threadId,
-    lastCustomerMessageId: current.lastCustomerMessageId,
-  }));
+    sourceMessageId: current.lastCustomerMessageId,
+    planHash: hashPlan(current.plan),
+    instructionHash: hashInstruction(current.instruction),
+    mode: auditMode,
+    approverId: approval?.approverId,
+    approvedAt: approval?.approvedAt,
+  };
+  const ledgerMode = resolvePlanExecutionLedgerMode();
+  let executionId: string | undefined;
+  let claimToken: string | undefined;
+  if (ledgerMode === "enforce") {
+    const claim = await claimCurrentPlanExecution(identity);
+    if (!claim.claimed || !claim.claimToken) {
+      throw new ConflictError("This plan has already been approved or is currently running.");
+    }
+    executionId = claim.execution.id;
+    claimToken = claim.claimToken;
+  } else if (ledgerMode === "shadow") {
+    try {
+      const observed = await observePlanExecution(identity);
+      executionId = observed.id;
+      if (observed.observationCount > 1) {
+        logger.warn({
+          orgId: params.orgId,
+          threadId: params.threadId,
+          planId: current.planId,
+          observationCount: observed.observationCount,
+        }, "[plan-execution] shadow observed repeated execution of one plan");
+      }
+    } catch (error) {
+      logger.error({ err: error, orgId: params.orgId, threadId: params.threadId }, "[plan-execution] shadow observation failed");
+    }
+  }
+
+  let result: AgentResult;
+  try {
+    result = await executeAgentTurn({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      instruction: current.instruction,
+      failureRoute: params.failureRoute,
+      orgSettings: params.settings,
+      approvedToolCalls,
+      persistAuditNote: true,
+      auditMode,
+      ...(executionId ? { executionId } : {}),
+      ...(approval ? { approval } : {}),
+    }, deps);
+    if (executionId && claimToken) {
+      await completePlanExecution({
+        executionId,
+        claimToken,
+        status: terminalStatusForResult(result),
+        error: findFailedToolResult(result)?.result ?? null,
+      });
+    }
+  } catch (error) {
+    // A whole-turn throw can occur after a provider accepted a mutation. Until
+    // P3 reconciliation can prove otherwise, preserve the ambiguity as unknown
+    // and never make the reviewed plan claimable again.
+    if (executionId && claimToken) {
+      await completePlanExecution({
+        executionId,
+        claimToken,
+        status: "unknown",
+        error: executionError(error),
+      }).catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    await consumeThreadCachedPlan({
+      orgId: params.orgId,
+      threadId: params.threadId,
+      lastCustomerMessageId: current.lastCustomerMessageId,
+    });
+  }
 
   if (auditMode === "human_approved") {
     await deps.shadow.resolveShadowDecisionOnApproval({
@@ -247,6 +398,6 @@ export async function maybeAutoExecuteCurrentCachedHomePlan(params: {
 
 export function findFailedToolResult(result: AgentResult): { tool: string; result: string } | null {
   return result.actionsPerformed.find((action) => (
-    action.status === "error" || action.status === "policy_block"
+    action.status === "error" || action.status === "policy_block" || action.status === "unknown"
   )) ?? null;
 }

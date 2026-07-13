@@ -8,6 +8,7 @@
 import { db, Prisma } from '@shopkeeper/db';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import type { RawToolCall } from '@shopkeeper/agent/types';
+import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
 import { isRecord } from './lib/typing.js';
 
 export interface ToolCall {
@@ -20,6 +21,13 @@ export interface PendingPlan {
   threadId: string;
   instruction: string;
   rawToolCalls: ToolCall[];
+  // Optional for backward compatibility with operator_context rows written
+  // before durable plan identity shipped. Every newly parked plan includes all
+  // four fields; approval revalidates them against the live thread cache.
+  planId?: string;
+  sourceMessageId?: string;
+  planHash?: string;
+  instructionHash?: string;
 }
 
 export interface PendingDigest {
@@ -36,6 +44,20 @@ export interface OperatorContext {
   pendingPlan: PendingPlan | null;
   pendingDigest: PendingDigest | null;
   pendingQuestion: PendingQuestion | null;
+}
+
+export function expectedPlanIdentity(
+  pendingPlan: PendingPlan,
+): ExpectedPlanIdentity | undefined {
+  if (!pendingPlan.planId && !pendingPlan.sourceMessageId && !pendingPlan.planHash && !pendingPlan.instructionHash) {
+    return undefined;
+  }
+  return {
+    planId: pendingPlan.planId,
+    sourceMessageId: pendingPlan.sourceMessageId,
+    planHash: pendingPlan.planHash,
+    instructionHash: pendingPlan.instructionHash,
+  };
 }
 
 const EMPTY: OperatorContext = {
@@ -64,6 +86,10 @@ function readPendingPlan(value: unknown): PendingPlan | null {
   return {
     threadId: value.threadId,
     instruction: value.instruction,
+    ...(typeof value.planId === 'string' ? { planId: value.planId } : {}),
+    ...(typeof value.sourceMessageId === 'string' ? { sourceMessageId: value.sourceMessageId } : {}),
+    ...(typeof value.planHash === 'string' ? { planHash: value.planHash } : {}),
+    ...(typeof value.instructionHash === 'string' ? { instructionHash: value.instructionHash } : {}),
     rawToolCalls: value.rawToolCalls
       .map(readToolCall)
       .filter((toolCall): toolCall is ToolCall => toolCall !== null),
@@ -134,6 +160,36 @@ export async function updateContext(
     where: { organizationId_chatId: { organizationId, chatId } },
     update: data,
     create: { organizationId, chatId, ...data },
+  });
+}
+
+// Resolve only the exact parked plan that was acted on. New plans are cleared
+// across every bound device by stable planId. Legacy JSON is cleared only on
+// the acting device and only if the full parked value still matches, preserving
+// a newer notification that may have arrived during execution.
+export async function resolvePendingPlanContexts(
+  organizationId: string,
+  chatId: string,
+  expected: PendingPlan,
+): Promise<void> {
+  if (expected.planId) {
+    await db.operatorContext.updateMany({
+      where: {
+        organizationId,
+        pendingPlan: { path: ['planId'], equals: expected.planId },
+      },
+      data: { pendingPlan: Prisma.DbNull },
+    });
+    return;
+  }
+
+  await db.operatorContext.updateMany({
+    where: {
+      organizationId,
+      chatId,
+      pendingPlan: { equals: toJsonObject(expected) },
+    },
+    data: { pendingPlan: Prisma.DbNull },
   });
 }
 

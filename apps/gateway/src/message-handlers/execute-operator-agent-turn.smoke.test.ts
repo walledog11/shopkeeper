@@ -4,20 +4,19 @@ import {
   createTestOrg,
   createTestCustomer,
   createTestThread,
+  createTestMessage,
   createTestIntegration,
   cleanupTestData,
 } from '@shopkeeper/db/test-helpers';
+import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
+import { resolveAgentSettings } from '@shopkeeper/agent/settings';
+import type { AgentPlan } from '@shopkeeper/agent/types';
 
-// A4 gateway-operator smoke test (V1 launch scoping). Runs executeOperatorAgentTurn
-// end-to-end against the real DB and the real agent core (executeAgentTurn ->
-// runAgent -> tool executor -> static policy -> recordAgentActionsBatch), stubbing
-// only the host seams a test cannot reach: the ioredis lock provider, the Clerk
-// approver lookup, the billing write-gate, and Shopify's REST API.
-//
-// Asserts the three properties A4 calls for: (1) the thread lock is acquired and
-// released around the turn, (2) a hard policy block escalates instead of executing
-// (an over-cap refund is routed to a human, and Shopify is never called), and
-// (3) the run writes a correct AgentAction audit row for the escalated action.
+// Reviewed-plan gateway smoke test. Runs the durable cached-plan approval path
+// end-to-end against the real DB and agent core, stubbing only the host seams a
+// test cannot reach: ioredis, Clerk, the billing gate, and Shopify's REST API.
+// It proves policy-blocked approvals still pass through one durable claim and
+// produce linked terminal/audit state without reaching Shopify.
 //
 // Note: the operator path resolves agent settings from defaults, so the enforced
 // refund cap is the guarded-tier default ($50), not the org's configured tier.
@@ -44,7 +43,7 @@ vi.mock('../clients/clerk-approver.js', () => ({
   resolveClerkUserApprover: vi.fn().mockResolvedValue({ clerkUserId: 'usr_op', displayName: 'Owner' }),
 }));
 
-import { executeOperatorAgentTurn } from './execute-operator-agent-turn.js';
+import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 
 let org!: Awaited<ReturnType<typeof createTestOrg>>;
 let threadId!: string;
@@ -58,23 +57,52 @@ beforeEach(async () => {
   const customer = await createTestCustomer(org.id, 'op@test.com', { name: 'Owner' });
   const thread = await createTestThread(org.id, customer.id, ChannelType.sms_agent);
   threadId = thread.id;
+  const message = await createTestMessage(threadId, 'Please refund order #1001');
+  const plan: AgentPlan = {
+    instruction: 'refund order #1001',
+    steps: [{
+      id: 'tc_1',
+      tool: 'create_refund',
+      label: 'Refund order',
+      description: 'Refund $200.00',
+      category: 'action',
+      enabled: true,
+    }],
+    rawToolCalls: [{
+      id: 'tc_1',
+      name: 'create_refund',
+      input: { order_id: '123', amount: '200.00' },
+    }],
+  };
+  const cache = buildAgentPlanCacheRecord({
+    instruction: plan.instruction,
+    lastCustomerMessageId: message.id,
+    settings: resolveAgentSettings(null),
+    plan,
+  });
+  await db.thread.update({
+    where: { id: threadId },
+    data: { cachedPlanMessageId: message.id, cachedPlan: cache as object },
+  });
   await createTestIntegration(org.id, {
     platform: ChannelType.shopify,
     externalAccountId: 'test-store.myshopify.com',
     accessToken: 'shpat_test',
   });
+  vi.stubEnv('PLAN_EXECUTION_LEDGER_MODE', 'enforce');
   vi.stubGlobal('fetch', fetchMock);
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
   await cleanupTestData(org?.id);
 });
 
-describe('executeOperatorAgentTurn (smoke)', () => {
-  it('holds the thread lock and escalates an over-cap refund instead of executing it', async () => {
-    const result = await executeOperatorAgentTurn({
+describe('executeOperatorApprovedCachedPlan (smoke)', () => {
+  it('holds the thread lock and leaves an over-cap refund blocked in the operator conversation', async () => {
+    const result = await executeOperatorApprovedCachedPlan({
       orgId: org.id,
       threadId,
       instruction: 'refund order #1001',
@@ -87,16 +115,16 @@ describe('executeOperatorAgentTurn (smoke)', () => {
     expect(acquireSpy).toHaveBeenCalledWith(threadId, { failClosed: true });
     expect(releaseSpy).toHaveBeenCalledTimes(1);
 
-    // (2) The over-cap refund is escalated, not executed — Shopify is never touched.
+    // (2) The over-cap refund is blocked, not executed — Shopify is never touched.
     expect(result.actionsPerformed).toHaveLength(1);
-    expect(result.actionsPerformed[0]).toMatchObject({ tool: 'create_refund', status: 'escalated' });
+    expect(result.actionsPerformed[0]).toMatchObject({ tool: 'create_refund', status: 'policy_block' });
     expect(result.summary).toContain('exceeds the workspace limit of $50');
     expect(fetchMock).not.toHaveBeenCalled();
 
-    // The escalation sink ran: the thread is routed to a human.
-    const escalatedThread = await db.thread.findUnique({ where: { id: threadId } });
-    expect(escalatedThread?.status).toBe('pending');
-    expect(escalatedThread?.tag).toBe('needs_human');
+    // The merchant is already the human: their operator thread remains active.
+    const operatorThread = await db.thread.findUnique({ where: { id: threadId } });
+    expect(operatorThread?.status).toBe('open');
+    expect(operatorThread?.tag).not.toBe('needs_human');
 
     // (3) A correct AgentAction audit row is persisted for the escalated action.
     const rows = await db.agentAction.findMany({ where: { organizationId: org.id } });
@@ -104,11 +132,18 @@ describe('executeOperatorAgentTurn (smoke)', () => {
     expect(rows[0]).toMatchObject({
       tool: 'create_refund',
       category: 'action',
-      status: 'escalated',
+      status: 'policy_block',
       mode: 'human_approved',
       threadId,
     });
     expect(rows[0].approverId).toContain('usr_op');
+    expect(rows[0].executionId).not.toBeNull();
+
+    const execution = await db.planExecution.findUniqueOrThrow({
+      where: { id: rows[0].executionId! },
+    });
+    expect(execution.status).toBe('failed');
+    expect(execution.lastError).toContain('exceeds the workspace limit of $50');
 
     // Nothing was actually refunded.
     const spend = await db.refundDailySpend.findFirst({ where: { organizationId: org.id } });

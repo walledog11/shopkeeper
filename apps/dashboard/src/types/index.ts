@@ -124,7 +124,7 @@ export interface ActionLogEntry {
     result: string;
     input?: unknown;
     durationMs?: number;
-    status?: 'success' | 'error' | 'policy_block' | 'escalated';
+    status?: 'success' | 'error' | 'policy_block' | 'escalated' | 'unknown';
   }>;
   mode: 'human_approved' | 'auto_executed' | 'read_only' | null;
   approver: { id: string; displayName: string | null } | null;

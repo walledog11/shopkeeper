@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictError, ServiceUnavailableError } from './errors.js';
 import { NOOP_LOCK } from './lock/redis-lock.js';
 import { executeAgentTurn } from './turn.js';
+import { createDeterministicBarrier } from './testing/failure-harness.js';
 
 describe('executeAgentTurn lock policy', () => {
   const deps = {
@@ -66,5 +67,37 @@ describe('executeAgentTurn lock policy', () => {
       threadId: 'thread_1',
       instruction: 'Cancel the order',
     }, deps as never)).rejects.toBeInstanceOf(ConflictError);
+  });
+
+  it('reproduces duplicate execution when two runtimes use independent lock authorities', async () => {
+    const barrier = createDeterministicBarrier(2);
+    let externalMutations = 0;
+    const makeIndependentDeps = () => ({
+      lock: { acquire: vi.fn(async () => NOOP_LOCK) },
+      buildContext: vi.fn(async () => ({ orgId: 'org_1' })),
+      runAgent: vi.fn(async () => {
+        externalMutations += 1;
+        await barrier.arrive();
+        return { summary: 'done', actionsPerformed: [] };
+      }),
+    });
+
+    const first = executeAgentTurn({
+      orgId: 'org_1',
+      threadId: 'thread_1',
+      instruction: 'Refund the order',
+      persistAuditNote: false,
+    }, makeIndependentDeps() as never);
+    const second = executeAgentTurn({
+      orgId: 'org_1',
+      threadId: 'thread_1',
+      instruction: 'Refund the order',
+      persistAuditNote: false,
+    }, makeIndependentDeps() as never);
+
+    await barrier.waitForArrivals();
+    expect(externalMutations).toBe(2);
+    barrier.release();
+    await Promise.all([first, second]);
   });
 });

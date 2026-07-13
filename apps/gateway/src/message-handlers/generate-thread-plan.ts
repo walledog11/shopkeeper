@@ -6,6 +6,7 @@ import { classifyHomePlan } from '@shopkeeper/agent/plan-preview';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import {
   buildAgentPlanCacheRecord,
+  commitThreadPlanCacheIfCurrent,
   isAgentPlanCacheHit,
   readAgentPlanCache,
 } from '@shopkeeper/agent/plan-cache';
@@ -16,12 +17,13 @@ import {
 } from '@shopkeeper/agent/plan-execution';
 import { getPendingCustomerMessageId } from '@shopkeeper/agent/plan-cache-shape';
 import { shouldSkipAutoPlan } from '@shopkeeper/agent/sender-trust';
+import { hashInstruction, hashPlan } from '@shopkeeper/agent/agent-actions';
 import type { AgentPlan as PackageAgentPlan, OrgSettings } from '@shopkeeper/agent/types';
 import type { AgentPlan } from '../types.js';
 import { toGatewayAgentPlan } from './agent-plan-adapter.js';
 import { gatewayThreadSink } from './agent-thread-sink.js';
 import { buildGatewayPlanExecutionDeps } from './agent-turn-deps.js';
-import type { AgentActionResult } from './planning-types.js';
+import type { AgentActionResult, PlanIdentity } from './planning-types.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 import { captureAgentPlanGenerated } from '../product-analytics.js';
 import logger from '../logger.js';
@@ -40,12 +42,28 @@ function merchantQuestionFor(plan: PackageAgentPlan | null, settings: OrgSetting
 export interface GeneratedThreadPlan {
   plan: AgentPlan | null;
   instruction: string;
+  identity?: PlanIdentity;
   merchantQuestion?: string | null;
   autoExecuted?: boolean;
   autoExecutionStatus?: 'success' | 'error';
   autoExecutionSummary?: string;
   autoExecutionActions?: AgentActionResult[];
   autoExecutionError?: string;
+}
+
+function planIdentity(params: {
+  planId: string | null;
+  sourceMessageId: string | null;
+  instruction: string;
+  plan: PackageAgentPlan;
+}): PlanIdentity | undefined {
+  if (!params.planId || !params.sourceMessageId) return undefined;
+  return {
+    planId: params.planId,
+    sourceMessageId: params.sourceMessageId,
+    planHash: hashPlan(params.plan),
+    instructionHash: hashInstruction(params.instruction),
+  };
 }
 
 // In-process auto-plan: resolve thread + settings, serve a warm plan cache or
@@ -55,7 +73,7 @@ export async function generateThreadPlan(
   organizationId: string,
   threadId: string,
   allowAutoExecute: boolean,
-  options: { instruction?: string } = {},
+  options: { instruction?: string; sourceMessageId?: string } = {},
 ): Promise<GeneratedThreadPlan> {
   const generationStartedAt = Date.now();
   const thread = await requireOrgThread(threadId, organizationId);
@@ -78,6 +96,16 @@ export async function generateThreadPlan(
   const pendingCustomerMessageId = latestConversation
     ? getPendingCustomerMessageId([latestConversation])
     : null;
+
+  if (options.sourceMessageId && options.sourceMessageId !== pendingCustomerMessageId) {
+    logger.info({
+      organizationId,
+      threadId,
+      expectedSourceMessageId: options.sourceMessageId,
+      pendingCustomerMessageId,
+    }, '[gateway:auto-plan] Skipping superseded planning job');
+    return { plan: null, instruction };
+  }
 
   if (!pendingCustomerMessageId) {
     if (thread.cachedPlan || thread.cachedPlanMessageId) {
@@ -115,6 +143,12 @@ export async function generateThreadPlan(
     return {
       plan: toGatewayAgentPlan(cached?.plan ?? null),
       instruction,
+      ...(cached?.plan ? { identity: planIdentity({
+        planId: cached.planId,
+        sourceMessageId: cached.lastCustomerMessageId,
+        instruction: cached.instruction,
+        plan: cached.plan,
+      }) } : {}),
       merchantQuestion: merchantQuestionFor(cached?.plan ?? null, settings),
       ...autoExecution,
     };
@@ -129,13 +163,19 @@ export async function generateThreadPlan(
     plan,
   });
 
-  await db.thread.update({
-    where: { id: threadId },
-    data: {
-      cachedPlanMessageId: pendingCustomerMessageId,
-      cachedPlan: cacheRecord as object,
-    },
+  const committed = await commitThreadPlanCacheIfCurrent({
+    orgId: organizationId,
+    threadId,
+    sourceMessageId: pendingCustomerMessageId,
+    cache: cacheRecord,
   });
+  if (!committed) {
+    logger.info(
+      { organizationId, threadId, pendingCustomerMessageId },
+      '[gateway:auto-plan] Discarded stale generated plan',
+    );
+    return { plan: null, instruction };
+  }
 
   // Live inbox: a fresh plan is cached — push so the "Needs you" card appears.
   await publishThreadEvent(organizationId, threadId);
@@ -158,6 +198,12 @@ export async function generateThreadPlan(
   return {
     plan: toGatewayAgentPlan(plan),
     instruction,
+    identity: planIdentity({
+      planId: cacheRecord.planId,
+      sourceMessageId: cacheRecord.lastCustomerMessageId,
+      instruction: cacheRecord.instruction,
+      plan,
+    }),
     merchantQuestion: merchantQuestionFor(plan, settings),
     ...autoExecution,
   };

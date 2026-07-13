@@ -213,6 +213,7 @@ export interface KnowledgeBaseToolArticle {
 export interface ShopifyToolContext {
   shop: string;
   accessToken: string;
+  operationId?: string;
 }
 
 export interface ToolExecutionDeps {
@@ -239,7 +240,6 @@ export interface ToolExecutionDeps {
   issueStoreCredit(input: IssueStoreCreditInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   createGiftCard(input: CreateGiftCardInput, ctx: ShopifyToolContext): Promise<SpendToolResult>;
   attachReturnLabel(input: AttachReturnLabelInput, ctx: ShopifyToolContext): Promise<ToolResult>;
-  incrementDailyRefundSpendCents(orgId: string, cents: number): Promise<unknown>;
   searchKnowledgeBaseArticles(orgId: string, words: readonly string[]): Promise<KnowledgeBaseToolArticle[]>;
   recordKnowledgeBaseCitations(orgId: string, threadId: string, articleIds: readonly string[]): Promise<unknown>;
   getSupportStats(orgId: string, days: number): Promise<SupportStatsSummary>;

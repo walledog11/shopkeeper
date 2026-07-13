@@ -20,12 +20,14 @@ const { mockExecuteAgentTurn } = vi.hoisted(() => ({
   mockExecuteAgentTurn: vi.fn(),
 }));
 
-vi.mock('@/lib/agent/api/execution', () => ({
+vi.mock('@shopkeeper/agent/turn', () => ({
   executeAgentTurn: mockExecuteAgentTurn,
 }));
 
 vi.mock('@/lib/agent/runner', () => ({
   hashInstructionForLog: vi.fn(() => 'test-hash'),
+  buildContext: vi.fn(),
+  runAgent: vi.fn(),
 }));
 
 import { POST } from './route';
@@ -127,7 +129,7 @@ describe('POST /api/agent', () => {
       threadId: thread.id,
       instruction: 'Handle this',
       approvedToolCalls,
-    }));
+    }), expect.anything());
 
     const updatedThread = await db.thread.findUnique({ where: { id: thread.id } });
     expect(updatedThread?.cachedPlan).toBeNull();

@@ -7,6 +7,10 @@ const {
   mockPlanAgent,
   mockIsAgentPlanCacheHit,
   mockReadAgentPlanCache,
+  mockBuildAgentPlanCacheRecord,
+  mockCommitThreadPlanCacheIfCurrent,
+  mockGetLatestConversationMessage,
+  mockThreadUpdate,
 } = vi.hoisted(() => ({
   mockMaybeAutoExecute: vi.fn(),
   mockRequireOrgThread: vi.fn(),
@@ -14,11 +18,15 @@ const {
   mockPlanAgent: vi.fn(),
   mockIsAgentPlanCacheHit: vi.fn(),
   mockReadAgentPlanCache: vi.fn(),
+  mockBuildAgentPlanCacheRecord: vi.fn(),
+  mockCommitThreadPlanCacheIfCurrent: vi.fn(),
+  mockGetLatestConversationMessage: vi.fn(),
+  mockThreadUpdate: vi.fn(),
 }));
 
 vi.mock('@shopkeeper/agent/thread-auth', () => ({
   requireOrgThread: mockRequireOrgThread,
-  getLatestConversationMessage: vi.fn(async () => ({ id: 'msg_1', senderType: 'customer' })),
+  getLatestConversationMessage: mockGetLatestConversationMessage,
 }));
 
 vi.mock('@shopkeeper/agent/build-context', () => ({
@@ -30,7 +38,8 @@ vi.mock('@shopkeeper/agent/planner', () => ({
 }));
 
 vi.mock('@shopkeeper/agent/plan-cache', () => ({
-  buildAgentPlanCacheRecord: vi.fn(() => ({ cached: true })),
+  buildAgentPlanCacheRecord: mockBuildAgentPlanCacheRecord,
+  commitThreadPlanCacheIfCurrent: mockCommitThreadPlanCacheIfCurrent,
   isAgentPlanCacheHit: mockIsAgentPlanCacheHit,
   readAgentPlanCache: mockReadAgentPlanCache,
 }));
@@ -60,7 +69,7 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
       },
       thread: {
         ...actual.db.thread,
-        update: vi.fn(async () => ({})),
+        update: mockThreadUpdate,
       },
     },
   };
@@ -68,6 +77,7 @@ vi.mock('@shopkeeper/db', async (importOriginal) => {
 
 import { generateThreadPlan } from './generate-thread-plan.js';
 import { clearThreadPlanCache } from '@shopkeeper/agent/plan-execution';
+import { createDeterministicBarrier } from '@shopkeeper/agent/testing';
 
 const cachedPlan = {
   steps: [],
@@ -83,6 +93,15 @@ beforeEach(() => {
     cachedPlan: { plan: cachedPlan },
   });
   mockReadAgentPlanCache.mockReturnValue({ plan: cachedPlan });
+  mockGetLatestConversationMessage.mockResolvedValue({ id: 'msg_1', senderType: 'customer' });
+  mockBuildAgentPlanCacheRecord.mockImplementation((input) => ({
+    planId: `plan_${input.lastCustomerMessageId}`,
+    instruction: input.instruction,
+    lastCustomerMessageId: input.lastCustomerMessageId,
+    plan: input.plan,
+  }));
+  mockThreadUpdate.mockResolvedValue({});
+  mockCommitThreadPlanCacheIfCurrent.mockResolvedValue(true);
   mockIsAgentPlanCacheHit.mockReturnValue(true);
   mockMaybeAutoExecute.mockResolvedValue({
     result: { summary: 'Done', actionsPerformed: [] },
@@ -155,5 +174,67 @@ describe('generateThreadPlan auto-execute path', () => {
     expect(mockPlanAgent).not.toHaveBeenCalled();
     expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
     expect(result.plan).toBeNull();
+  });
+
+  it('skips a summary job whose source message has already been superseded', async () => {
+    mockGetLatestConversationMessage.mockResolvedValueOnce({ id: 'msg_new', senderType: 'customer' });
+
+    const result = await generateThreadPlan('org_1', 'thread_1', true, {
+      sourceMessageId: 'msg_old',
+    });
+
+    expect(result.plan).toBeNull();
+    expect(mockBuildContext).not.toHaveBeenCalled();
+    expect(mockPlanAgent).not.toHaveBeenCalled();
+    expect(mockMaybeAutoExecute).not.toHaveBeenCalled();
+  });
+
+  it('discards an older planner after a newer customer message wins the cache commit', async () => {
+    const oldPlannerBarrier = createDeterministicBarrier(1);
+    const oldPlan = {
+      steps: [{ id: 'old_send', tool: 'send_reply' }],
+      rawToolCalls: [{ id: 'old_send', name: 'send_reply', input: { text: 'Old reply' } }],
+    };
+    const newPlan = {
+      steps: [{ id: 'new_send', tool: 'send_reply' }],
+      rawToolCalls: [{ id: 'new_send', name: 'send_reply', input: { text: 'New reply' } }],
+    };
+    mockIsAgentPlanCacheHit.mockReturnValue(false);
+    mockReadAgentPlanCache.mockReturnValue(null);
+    mockRequireOrgThread.mockResolvedValue({
+      id: 'thread_1',
+      aiSummary: 'Customer needs help',
+      filterStatus: 'genuine',
+      cachedPlan: null,
+      cachedPlanMessageId: null,
+    });
+    mockBuildContext.mockResolvedValue({ thread: { id: 'thread_1' } });
+    mockGetLatestConversationMessage
+      .mockResolvedValueOnce({ id: 'msg_old', senderType: 'customer' })
+      .mockResolvedValueOnce({ id: 'msg_new', senderType: 'customer' });
+    mockPlanAgent
+      .mockImplementationOnce(async () => {
+        await oldPlannerBarrier.arrive();
+        return oldPlan;
+      })
+      .mockResolvedValueOnce(newPlan);
+    mockCommitThreadPlanCacheIfCurrent.mockImplementation(async ({ sourceMessageId }) => (
+      sourceMessageId === 'msg_new'
+    ));
+
+    const oldRun = generateThreadPlan('org_1', 'thread_1', false);
+    await oldPlannerBarrier.waitForArrivals();
+    await generateThreadPlan('org_1', 'thread_1', false);
+    oldPlannerBarrier.release();
+    const staleResult = await oldRun;
+
+    expect(mockCommitThreadPlanCacheIfCurrent).toHaveBeenCalledTimes(2);
+    expect(mockCommitThreadPlanCacheIfCurrent.mock.calls[0]?.[0]).toMatchObject({
+      sourceMessageId: 'msg_new',
+    });
+    expect(mockCommitThreadPlanCacheIfCurrent.mock.calls[1]?.[0]).toMatchObject({
+      sourceMessageId: 'msg_old',
+    });
+    expect(staleResult.plan).toBeNull();
   });
 });

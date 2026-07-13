@@ -46,7 +46,7 @@ const EVENTS: ProductEvent[] = [
     event: 'agent_action_completed',
     toolName: 'create_refund',
     toolCategory: 'action',
-    outcome: 'succeeded',
+    outcome: 'unknown',
   },
   {
     ...BASE,

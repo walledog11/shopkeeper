@@ -20,6 +20,7 @@ const CONTRACTS = {
       'UPSTASH_REDIS_REST_URL',
       'UPSTASH_REDIS_REST_TOKEN',
       'PRODUCT_ANALYTICS_ENABLED',
+      'PLAN_EXECUTION_LEDGER_MODE',
     ],
     launchRequired: [
       'GATEWAY_INTERNAL_URL',
@@ -60,6 +61,7 @@ const CONTRACTS = {
       'DASHBOARD_URL',
       'TOKEN_ENCRYPTION_KEY',
       'PRODUCT_ANALYTICS_ENABLED',
+      'PLAN_EXECUTION_LEDGER_MODE',
     ],
     launchRequired: [
       'SHOPIFY_APP_SECRET',
@@ -235,6 +237,14 @@ export function validateProductionEnv(target, options = {}) {
     errors.push(
       'POSTHOG_PROJECT_TOKEN is required when PRODUCT_ANALYTICS_ENABLED=true',
     );
+  }
+
+  const planExecutionLedgerMode = readEnv(env, 'PLAN_EXECUTION_LEDGER_MODE');
+  if (
+    planExecutionLedgerMode
+    && !['off', 'shadow', 'enforce'].includes(planExecutionLedgerMode)
+  ) {
+    errors.push('PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce');
   }
 
   const gmailNativeInbound = readEnv(env, 'GMAIL_NATIVE_INBOUND');

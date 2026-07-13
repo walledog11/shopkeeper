@@ -55,7 +55,13 @@ export interface BaseAgentContext {
   orgId: string;
   orgName: string;
   recentMessages: { senderType: string; contentText: string | null }[];
-  shopify: { shop: string; accessToken: string } | null;
+  shopify: {
+    shop: string;
+    accessToken: string;
+    // Host-generated identity for one tool call. Mutations that support
+    // provider idempotency derive their stable provider key from this value.
+    operationId?: string;
+  } | null;
   // Module-supplied escalation/flag sink. Support routes a thread to a human;
   // a thread-less module records a finding. Every module must declare its path.
   escalate: (reason: string) => Promise<void>;
@@ -106,7 +112,7 @@ export interface SupportContext extends BaseAgentContext {
 
 export type AgentContext = SupportContext;
 
-export type AgentActionStatus = "success" | "error" | "policy_block" | "escalated";
+export type AgentActionStatus = "success" | "error" | "policy_block" | "escalated" | "unknown";
 export type AgentActionMode = "human_approved" | "auto_executed" | "read_only";
 
 export interface ActionEntry {

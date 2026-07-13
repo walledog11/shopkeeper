@@ -48,12 +48,12 @@ function buildTurnGroupWhereSql(orgId: string, filters?: ActionLogFilters): Pris
     clauses.push(PrismaRuntime.sql`a.mode IN (${PrismaRuntime.join(filters.modes)})`);
   }
   if (filters?.errorsOnly) {
-    clauses.push(PrismaRuntime.sql`a.status IN (${PrismaRuntime.join(["error", "policy_block"])})`);
+    clauses.push(PrismaRuntime.sql`a.status IN (${PrismaRuntime.join(["error", "policy_block", "unknown"])})`);
   }
   if (filters?.attention) {
     clauses.push(PrismaRuntime.sql`(
       a.tool IN (${PrismaRuntime.join(["escalate_to_human", "flag_order"])})
-      OR a.status IN (${PrismaRuntime.join(["error", "policy_block"])})
+      OR a.status IN (${PrismaRuntime.join(["error", "policy_block", "unknown"])})
     )`);
   }
   if (filters?.excludeOperator) {
@@ -146,7 +146,7 @@ function isValidMode(value: string): value is NonNullable<ActionLogEntry["mode"]
 }
 
 function isValidActionStatus(value: string): value is NonNullable<ActionLogEntry["actions"][number]["status"]> {
-  return value === "success" || value === "error" || value === "policy_block" || value === "escalated";
+  return value === "success" || value === "error" || value === "policy_block" || value === "escalated" || value === "unknown";
 }
 
 // approverId is denormalized as `<clerkUserId>:<displayName>` (or bare id if

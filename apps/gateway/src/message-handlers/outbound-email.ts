@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type { Job } from 'bullmq';
-import { db, SenderType } from '@shopkeeper/db';
+import { ChannelType, db, SenderType } from '@shopkeeper/db';
 import {
   getEmailSender,
   getEmailProvider,
-  buildThreadReplyHeaders,
+  buildOutboundMessageReplyHeaders,
   formatReplySubject,
   EmailNotConfiguredError,
 } from '@shopkeeper/email';
@@ -11,11 +12,22 @@ import logger from '../logger.js';
 import { captureOutboundReplySent } from '../product-analytics.js';
 import type { OutboundEmailJobData } from '../types.js';
 
-// Phase 1.5: async outbound email send. The message row is pre-created by the
-// caller (dashboard) with sendStatus 'pending'; this worker performs the actual
-// provider send and transitions the row to 'sent' or 'failed'. Idempotent under
-// at-least-once delivery via the sendStatus gate.
-export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Promise<void> {
+// Async outbound email send. The message row is pre-created by the dashboard.
+// A conditional database claim is the cross-worker correctness boundary; once
+// a provider attempt starts, an interrupted claim becomes `unknown` instead of
+// being blindly retried because Postmark/Gmail do not provide a shared request
+// idempotency contract.
+export interface OutboundEmailFailureHooks {
+  afterProviderAccepted?: () => Promise<void> | void;
+}
+
+export async function handleOutboundEmailJob(
+  job: Job<OutboundEmailJobData>,
+  failureHooksOrWorkerToken: OutboundEmailFailureHooks | string = {},
+): Promise<void> {
+  const failureHooks = typeof failureHooksOrWorkerToken === 'string'
+    ? {}
+    : failureHooksOrWorkerToken;
   const {
     messageId,
     integrationId,
@@ -29,31 +41,55 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
       ? 'agent_approved'
       : 'manual');
 
-  const message = await db.message.findUnique({
-    where: { id: messageId },
-    select: {
-      id: true,
-      contentText: true,
-      sendStatus: true,
-      thread: {
-        select: {
-          id: true,
-          subject: true,
-          organization: { select: { name: true } },
-          customer: { select: { platformId: true } },
-          messages: {
-            where: { senderType: SenderType.customer, externalMessageId: { not: null } },
-            orderBy: { sentAt: 'desc' },
-            take: 1,
-            select: { externalMessageId: true },
+  const [message, integration] = await Promise.all([
+    db.message.findFirst({
+      where: {
+        id: messageId,
+        organizationId,
+        threadId: job.data.threadId,
+        thread: { organizationId },
+      },
+      select: {
+        id: true,
+        contentText: true,
+        sendStatus: true,
+        thread: {
+          select: {
+            id: true,
+            subject: true,
+            organization: { select: { name: true } },
+            customer: { select: { platformId: true } },
+            messages: {
+              where: { senderType: SenderType.customer, externalMessageId: { not: null } },
+              orderBy: { sentAt: 'desc' },
+              take: 1,
+              select: { externalMessageId: true },
+            },
           },
         },
       },
-    },
-  });
+    }),
+    db.integration.findFirst({
+      where: {
+        id: integrationId,
+        organizationId,
+        platform: ChannelType.email,
+      },
+    }),
+  ]);
 
-  if (!message) {
-    logger.error({ messageId, traceId }, '[OutboundEmail] Message not found — dropping');
+  if (!message || !integration) {
+    logger.error(
+      {
+        opsAlert: true,
+        messageId,
+        integrationId,
+        organizationId,
+        threadId: job.data.threadId,
+        traceId,
+      },
+      '[OutboundEmail] Resource ownership mismatch — dropping',
+    );
     return;
   }
 
@@ -69,10 +105,27 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
     return;
   }
 
-  const integration = await db.integration.findUnique({ where: { id: integrationId } });
-  if (!integration) {
-    await markFailed(messageId, 'No email integration configured');
-    logger.error({ messageId, integrationId, traceId }, '[OutboundEmail] Integration not found');
+  const claimToken = randomUUID();
+  const claimed = await db.message.updateMany({
+    where: {
+      id: messageId,
+      organizationId,
+      threadId: job.data.threadId,
+      sendStatus: 'pending',
+    },
+    data: {
+      sendStatus: 'processing',
+      sendClaimToken: claimToken,
+      sendClaimedAt: new Date(),
+      sendAttemptedAt: null,
+      sendError: null,
+    },
+  });
+  if (claimed.count !== 1) {
+    logger.info(
+      { messageId, sendStatus: message.sendStatus, traceId },
+      '[OutboundEmail] Message is not claimable — skipping duplicate job',
+    );
     return;
   }
 
@@ -86,10 +139,24 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
   const subject = isNewAgentEmail
     ? message.thread.subject?.trim() || 'Your inquiry'
     : formatReplySubject(message.thread.subject);
-  const headers = buildThreadReplyHeaders(message.thread.id, inReplyTo);
+  const headers = buildOutboundMessageReplyHeaders(message.thread.id, message.id, inReplyTo);
 
+  const attempted = await db.message.updateMany({
+    where: {
+      id: messageId,
+      sendStatus: 'processing',
+      sendClaimToken: claimToken,
+    },
+    data: { sendAttemptedAt: new Date() },
+  });
+  if (attempted.count !== 1) {
+    logger.error({ opsAlert: true, messageId, traceId }, '[OutboundEmail] Delivery claim was lost before provider attempt');
+    return;
+  }
+
+  let providerMessageId: string;
   try {
-    await getEmailSender(integration).send({
+    const sent = await getEmailSender(integration).send({
       to: message.thread.customer.platformId,
       fromAddress: fromEmail,
       fromName: message.thread.organization.name,
@@ -98,33 +165,45 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
       text: message.contentText ?? '',
       headers,
     });
+    providerMessageId = sent.providerMessageId;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
 
-    // Configuration errors are not retryable — fail fast.
+    // Configuration errors are known to occur before a provider request.
     if (err instanceof EmailNotConfiguredError) {
-      await markFailed(messageId, msg);
+      await markClaimFailed(messageId, claimToken, msg);
       logger.error({ messageId, provider, traceId }, '[OutboundEmail] Email not configured');
       return;
     }
 
-    const attempts = job.opts.attempts ?? 1;
-    const isFinalAttempt = job.attemptsMade + 1 >= attempts;
-    if (isFinalAttempt) {
-      await markFailed(messageId, msg);
-      logger.error(
-        { opsAlert: true, err: msg, messageId, provider, source, organizationId, traceId },
-        '[OutboundEmail] Send failed permanently',
-      );
-    }
-    // Rethrow so BullMQ records the attempt and retries while attempts remain.
-    throw err;
+    // Transport and provider errors after the request starts are ambiguous. A
+    // retry could duplicate a message that the provider already accepted.
+    await markClaimUnknown(messageId, claimToken, msg);
+    logger.error(
+      { opsAlert: true, err: msg, messageId, provider, source, organizationId, traceId },
+      '[OutboundEmail] Provider outcome is unknown; automatic retry suppressed',
+    );
+    return;
   }
 
-  await db.message.update({
-    where: { id: messageId },
-    data: { sendStatus: 'sent', sendError: null },
+  await failureHooks.afterProviderAccepted?.();
+
+  const committed = await db.message.updateMany({
+    where: {
+      id: messageId,
+      sendStatus: 'processing',
+      sendClaimToken: claimToken,
+    },
+    data: {
+      sendStatus: 'sent',
+      sendClaimToken: null,
+      providerMessageId,
+      sendError: null,
+    },
   });
+  if (committed.count !== 1) {
+    throw new Error('Outbound email provider accepted the message but its delivery claim could not be committed.');
+  }
 
   void captureOutboundReplySent({
     channel: 'email',
@@ -134,9 +213,24 @@ export async function handleOutboundEmailJob(job: Job<OutboundEmailJobData>): Pr
   });
 }
 
-async function markFailed(messageId: string, error: string): Promise<void> {
-  await db.message.update({
-    where: { id: messageId },
-    data: { sendStatus: 'failed', sendError: error.slice(0, 2000) },
+async function markClaimFailed(messageId: string, claimToken: string, error: string): Promise<void> {
+  await db.message.updateMany({
+    where: { id: messageId, sendStatus: 'processing', sendClaimToken: claimToken },
+    data: {
+      sendStatus: 'failed',
+      sendClaimToken: null,
+      sendError: error.slice(0, 2000),
+    },
+  });
+}
+
+async function markClaimUnknown(messageId: string, claimToken: string, error: string): Promise<void> {
+  await db.message.updateMany({
+    where: { id: messageId, sendStatus: 'processing', sendClaimToken: claimToken },
+    data: {
+      sendStatus: 'unknown',
+      sendClaimToken: null,
+      sendError: error.slice(0, 2000),
+    },
   });
 }

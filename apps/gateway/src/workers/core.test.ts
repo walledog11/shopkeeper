@@ -66,8 +66,13 @@ vi.mock('@shopkeeper/db', () => ({
       findUnique: vi.fn().mockResolvedValue({ settings: {} }),
     },
   },
-  getDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
-  incrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
+  reserveDailyRefundSpend: vi.fn().mockResolvedValue({
+    kind: 'reserved',
+    reservation: { id: 'reservation_1', status: 'reserved' },
+  }),
+  commitDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
+  releaseDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
+  markDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@shopkeeper/agent/settings', () => ({
@@ -195,8 +200,9 @@ describe('createCoreWorkerResources', () => {
       id: 'summary-job',
       attemptsMade: 3,
       data: {
-        threadId: 'thread_1',
-        organizationId: 'org_1',
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      sourceMessageId: 'message_1',
         customerName: 'Customer',
         channelType: 'email',
         traceId: 'trace_2',

@@ -13,12 +13,16 @@ export interface ShopifyProduct {
 
 export interface ShopifyCustomerAddress {
   id?: number | string;
+  first_name?: string | null;
+  last_name?: string | null;
   address1?: string | null;
   address2?: string | null;
   city?: string | null;
   province?: string | null;
+  province_code?: string | null;
   zip?: string | null;
   country?: string | null;
+  country_code?: string | null;
   country_name?: string | null;
 }
 
@@ -50,12 +54,15 @@ export interface ShopifyOrder {
   order_number?: number | string;
   created_at?: string;
   financial_status?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   fulfillment_status?: string | null;
   total_price?: string;
   current_total_price?: string;
   currency?: string;
   line_items?: ShopifyOrderLineItem[];
   shipping_address?: ShopifyCustomerAddress | null;
+  customer?: { id: number | string } | null;
 }
 
 export interface ShopifyTransaction {

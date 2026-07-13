@@ -1,3 +1,5 @@
+import { createHash, randomUUID } from "node:crypto";
+
 export const SHOPIFY_API_VERSION = "2026-04";
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -6,6 +8,7 @@ const DEFAULT_MAX_RETRIES = 1;
 export interface ShopifyContext {
   shop: string;
   accessToken: string;
+  operationId?: string;
 }
 
 export interface ShopifyRequestOptions {
@@ -19,6 +22,7 @@ export interface ShopifyRequestOptions {
 export interface ShopifyGraphqlUserError {
   field?: string[] | string | null;
   message: string;
+  code?: string | null;
 }
 
 export class ShopifyRequestError extends Error {
@@ -215,6 +219,11 @@ export function formatShopifyToolError(action: string, err: unknown): string {
   return `Error: ${action} - ${String(err)}`;
 }
 
+export function isAmbiguousShopifyMutationError(err: unknown): boolean {
+  return err instanceof ShopifyRequestError
+    && (err.status === undefined || err.status === 429 || err.status >= 500);
+}
+
 export interface ShopifyResponse<T> {
   data: T;
   headers: Headers;
@@ -227,8 +236,11 @@ export async function shopifyRest<T>(
 ): Promise<ShopifyResponse<T>> {
   const shop = normalizeShopifyShop(ctx.shop);
   const url = buildShopifyAdminUrl(ctx, path, options.query);
-  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const method = options.method ?? "GET";
+  // A mutation can commit at Shopify even when the response is a timeout/5xx.
+  // Never replay it implicitly. Call sites may opt into a retry only after
+  // establishing provider idempotency or reconciliation for that operation.
+  const maxRetries = options.maxRetries ?? (method === "GET" ? DEFAULT_MAX_RETRIES : 0);
   const init: RequestInit = {
     method,
     cache: "no-store",
@@ -238,7 +250,16 @@ export async function shopifyRest<T>(
 
   async function attemptRequest(attempt: number): Promise<ShopifyResponse<T>> {
     await acquireShopToken(shop);
-    const res = await fetchWithTimeout(url, init, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(url, init, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+    } catch (error) {
+      if (attempt < maxRetries) {
+        await delay(500);
+        return attemptRequest(attempt + 1);
+      }
+      throw error;
+    }
     const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < maxRetries;
 
     if (shouldRetry) {
@@ -279,7 +300,8 @@ export function parseNextPageInfo(headers: Headers): string | null {
 export async function shopifyGraphql<TData>(
   ctx: ShopifyContext,
   query: string,
-  variables: Record<string, unknown>
+  variables: Record<string, unknown>,
+  options: Pick<ShopifyRequestOptions, "maxRetries" | "timeoutMs"> = {},
 ): Promise<TData> {
   const payload = await shopifyRestJson<{
     data?: TData;
@@ -287,6 +309,7 @@ export async function shopifyGraphql<TData>(
   }>(ctx, "graphql.json", {
     method: "POST",
     body: { query, variables },
+    ...options,
   });
 
   if (payload.errors?.length) {
@@ -300,6 +323,16 @@ export async function shopifyGraphql<TData>(
   }
 
   return payload.data;
+}
+
+// Shopify recommends UUIDs for GraphQL @idempotent keys. The execution ledger
+// supplies a stable operation identity for reviewed actions; direct callers get
+// one fresh key that remains stable for every retry within that invocation.
+export function shopifyIdempotencyKey(operationId?: string): string {
+  if (!operationId) return randomUUID();
+  const hex = createHash("sha256").update(operationId).digest("hex");
+  const variant = ((Number.parseInt(hex[16]!, 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
 export function formatUserErrors(errors: ShopifyGraphqlUserError[] | undefined | null): string | null {
