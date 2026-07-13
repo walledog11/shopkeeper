@@ -68,7 +68,7 @@ export type ToolName = (typeof TOOL_NAMES)[number];
 export const TOOL_CATEGORIES = ['action', 'communication', 'internal', 'read'] as const;
 export type ToolCategory = (typeof TOOL_CATEGORIES)[number];
 
-export const ACTION_OUTCOMES = ['succeeded', 'blocked', 'failed'] as const;
+export const ACTION_OUTCOMES = ['succeeded', 'blocked', 'failed', 'unknown'] as const;
 export type ActionOutcome = (typeof ACTION_OUTCOMES)[number];
 
 export const REPLY_SOURCES = ['manual', 'agent_approved', 'agent_automatic'] as const;

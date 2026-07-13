@@ -6,6 +6,16 @@ import { registerInternalQueueRoutes } from './internal-queue.js';
 const removeFailedQueueJob = vi.fn();
 const clearQueueDiagnosticsCache = vi.fn();
 const queueAdd = vi.fn();
+const queueGetJob = vi.fn();
+const findMessage = vi.fn();
+const findIntegration = vi.fn();
+
+vi.mock('@shopkeeper/db', () => ({
+  db: {
+    message: { findFirst: (...args: unknown[]) => findMessage(...args) },
+    integration: { findFirst: (...args: unknown[]) => findIntegration(...args) },
+  },
+}));
 
 vi.mock('../queue-maintenance.js', () => ({
   removeFailedQueueJob: (...args: unknown[]) => removeFailedQueueJob(...args),
@@ -16,7 +26,10 @@ vi.mock('../health.js', () => ({
 }));
 
 vi.mock('../clients/gateway-queues.js', () => ({
-  getGatewayBullMqQueue: () => ({ add: (...args: unknown[]) => queueAdd(...args) }),
+  getGatewayBullMqQueue: () => ({
+    add: (...args: unknown[]) => queueAdd(...args),
+    getJob: (...args: unknown[]) => queueGetJob(...args),
+  }),
 }));
 
 vi.mock('../config/env.js', async (importOriginal) => {
@@ -79,6 +92,14 @@ describe('POST /internal/queue/remove-failed', () => {
 describe('POST /internal/queue/outbound-email', () => {
   beforeEach(() => {
     queueAdd.mockReset();
+    queueGetJob.mockReset().mockResolvedValue(null);
+    findMessage.mockReset().mockResolvedValue({
+      id: 'msg_1',
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      sendStatus: 'pending',
+    });
+    findIntegration.mockReset().mockResolvedValue({ id: 'int_1', organizationId: 'org_1' });
   });
 
   const validBody = {
@@ -108,7 +129,11 @@ describe('POST /internal/queue/outbound-email', () => {
 
     expect(response.status).toBe(202);
     expect(response.body).toEqual({ enqueued: true, jobId: 'job_42' });
-    expect(queueAdd).toHaveBeenCalledWith('send-email', expect.objectContaining(validBody));
+    expect(queueAdd).toHaveBeenCalledWith(
+      'send-email',
+      expect.objectContaining(validBody),
+      { jobId: 'msg_1' },
+    );
   });
 
   it('returns 400 when a required field is missing', async () => {
@@ -129,5 +154,85 @@ describe('POST /internal/queue/outbound-email', () => {
 
     expect(response.status).toBe(400);
     expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['message/thread ownership', findMessage],
+    ['integration ownership', findIntegration],
+  ])('rejects a mismatched %s before enqueue', async (_label, missingLookup) => {
+    missingLookup.mockResolvedValueOnce(null);
+
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(response.status).toBe(404);
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
+  it('scopes every queued object to the supplied organization and thread', async () => {
+    queueAdd.mockResolvedValue({ id: 'job_42' });
+
+    await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(findMessage).toHaveBeenCalledWith({
+      where: {
+        id: 'msg_1',
+        organizationId: 'org_1',
+        threadId: 'thread_1',
+        thread: { organizationId: 'org_1' },
+      },
+      select: { id: true, threadId: true, organizationId: true, sendStatus: true },
+    });
+    expect(findIntegration).toHaveBeenCalledWith({
+      where: { id: 'int_1', organizationId: 'org_1', platform: 'email' },
+      select: { id: true, organizationId: true },
+    });
+  });
+
+  it('deduplicates a message that already has an active queue job', async () => {
+    const existing = {
+      id: 'msg_1',
+      getState: vi.fn().mockResolvedValue('active'),
+      remove: vi.fn(),
+    };
+    queueGetJob.mockResolvedValueOnce(existing);
+
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(response.status).toBe(202);
+    expect(response.body).toEqual({ enqueued: true, jobId: 'msg_1', deduplicated: true });
+    expect(queueAdd).not.toHaveBeenCalled();
+    expect(existing.remove).not.toHaveBeenCalled();
+  });
+
+  it.each(['failed', 'completed'])('replaces a retained %s job for an explicit failed-message retry', async (state) => {
+    const existing = {
+      id: 'msg_1',
+      getState: vi.fn().mockResolvedValue(state),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    queueGetJob.mockResolvedValueOnce(existing);
+    queueAdd.mockResolvedValue({ id: 'msg_1' });
+
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(response.status).toBe(202);
+    expect(existing.remove).toHaveBeenCalledTimes(1);
+    expect(queueAdd).toHaveBeenCalledWith(
+      'send-email',
+      expect.any(Object),
+      { jobId: 'msg_1' },
+    );
   });
 });

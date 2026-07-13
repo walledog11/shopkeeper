@@ -47,6 +47,14 @@ describe("agent-actions writer", () => {
     const planHash = hashPlan(refundPlan);
     expect(planHash).toMatch(/^[0-9a-f]{64}$/);
     expect(hashPlan(refundPlan)).toBe(planHash);
+    expect(hashPlan({
+      ...refundPlan,
+      rawToolCalls: [{
+        id: "refund_1",
+        name: "create_refund",
+        input: { amount: "20.00", order_id: "gid://shopify/Order/1" },
+      }],
+    })).toBe(planHash);
 
     const instructionHash = hashInstruction(refundPlan.instruction);
     expect(instructionHash).toMatch(/^[0-9a-f]{64}$/);

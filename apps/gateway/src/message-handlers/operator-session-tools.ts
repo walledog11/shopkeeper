@@ -1,7 +1,12 @@
 import { defineTool, stringArg, toolError, toolOk, type AgentToolDefinition } from '@shopkeeper/agent/tools';
 import type { SupportContext } from '@shopkeeper/agent/context';
 import logger from '../logger.js';
-import { updateContext, normalizeApprovedToolCalls, type OperatorContext } from '../operator-context.js';
+import {
+  expectedPlanIdentity,
+  updateContext,
+  normalizeApprovedToolCalls,
+  type OperatorContext,
+} from '../operator-context.js';
 import { runApprovedPendingPlan, clearPendingPlan } from './pending-plan-actions.js';
 import { applyOperatorAnswerReplan } from './operator-answer-replan.js';
 
@@ -72,6 +77,8 @@ export function buildOperatorSessionTools(
           threadId: pendingPlan.threadId,
           instruction: pendingPlan.instruction,
           approvedToolCalls: normalizeApprovedToolCalls(pendingPlan.rawToolCalls),
+          ...(expectedPlanIdentity(pendingPlan) ? { expectedIdentity: expectedPlanIdentity(pendingPlan) } : {}),
+          pendingPlan,
         });
       } catch (err) {
         logger.error({ err, organizationId, threadId: pendingPlan.threadId }, '[Operator] approve_pending_plan failed');
@@ -95,7 +102,7 @@ export function buildOperatorSessionTools(
     policy: { categoryPermission: false },
     execute: async () => {
       if (!context.pendingPlan) return toolError(NO_PENDING_PLAN);
-      await clearPendingPlan(organizationId, chatId);
+      await clearPendingPlan(organizationId, chatId, context.pendingPlan);
       return toolOk('Plan dismissed.');
     },
   });

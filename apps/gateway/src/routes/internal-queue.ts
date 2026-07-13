@@ -1,4 +1,5 @@
 import express, { type Request, type Response, type Router } from 'express';
+import { db } from '@shopkeeper/db';
 import logger from '../logger.js';
 import { clearQueueDiagnosticsCache } from '../health.js';
 import { removeFailedQueueJob } from '../queue-maintenance.js';
@@ -47,18 +48,51 @@ export function registerInternalQueueRoutes(router: Router): void {
       return res.status(400).json({ error: 'invalid source' });
     }
 
+    const [message, integration] = await Promise.all([
+      db.message.findFirst({
+        where: {
+          id: messageId,
+          organizationId,
+          threadId,
+          thread: { organizationId },
+        },
+        select: { id: true, threadId: true, organizationId: true, sendStatus: true },
+      }),
+      db.integration.findFirst({
+        where: { id: integrationId, organizationId, platform: 'email' },
+        select: { id: true, organizationId: true },
+      }),
+    ]);
+    if (!message || !integration) {
+      return res.status(404).json({ error: 'Outbound email resources not found' });
+    }
+
     const jobData: OutboundEmailJobData = {
-      organizationId,
-      messageId,
-      threadId,
-      integrationId,
+      organizationId: message.organizationId,
+      messageId: message.id,
+      threadId: message.threadId,
+      integrationId: integration.id,
       source,
       ...(replySource && { replySource }),
       ...(traceId && { traceId }),
     };
 
     try {
-      const job = await getGatewayBullMqQueue(QUEUE.OUTBOUND_EMAIL).add(JOB.SEND_EMAIL, jobData);
+      const queue = getGatewayBullMqQueue(QUEUE.OUTBOUND_EMAIL);
+      const existingJob = await queue.getJob(message.id);
+      if (existingJob) {
+        const state = await existingJob.getState();
+        if (message.sendStatus === 'pending' && (state === 'failed' || state === 'completed')) {
+          await existingJob.remove();
+        } else {
+          logger.info(
+            { messageId, source, jobId: existingJob.id, state },
+            '[InternalQueue] Outbound email already enqueued',
+          );
+          return res.status(202).json({ enqueued: true, jobId: existingJob.id, deduplicated: true });
+        }
+      }
+      const job = await queue.add(JOB.SEND_EMAIL, jobData, { jobId: message.id });
       logger.info({ messageId, source, jobId: job.id }, '[InternalQueue] Enqueued outbound email');
       return res.status(202).json({ enqueued: true, jobId: job.id });
     } catch (err) {

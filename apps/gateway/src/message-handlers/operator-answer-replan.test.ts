@@ -184,7 +184,7 @@ describe('applyOperatorAnswerReplan', () => {
         rawToolCalls: [{ id: 'tc_reply', name: 'send_reply', input: { text: 'Yes, we ship to Canada for $15 flat.' } }],
       }),
       'Shipping to Canada',
-      { exclude: { channel: 'imessage', contextKey: 'chat_2' } },
+      expect.objectContaining({ exclude: { channel: 'imessage', contextKey: 'chat_2' } }),
     );
   });
 

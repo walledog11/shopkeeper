@@ -14,8 +14,9 @@ import {
   type OperatorBinding,
 } from '../operator-notify.js';
 import type { AgentPlan, PlanStep } from '../types.js';
-import type { PrecomputedPlanResult } from './planning-types.js';
+import type { PlanIdentity, PrecomputedPlanResult } from './planning-types.js';
 import { firstDraftExcerpt } from './operator-ledger.js';
+import { resolvePendingPlanContexts } from '../operator-context.js';
 
 export interface OperatorNotificationExclude {
   channel: OperatorBinding['channel'];
@@ -211,11 +212,24 @@ export async function sendOperatorAutoExecutionNotification(
       result.instruction,
     );
 
+    if (result.identity) {
+      await resolvePendingPlanContexts(
+        organizationId,
+        operatorContextKey(bindings[0]!),
+        {
+          threadId,
+          instruction: result.instruction,
+          rawToolCalls: result.plan.rawToolCalls,
+          ...result.identity,
+        },
+      );
+    }
+
     for (const member of bindings) {
       try {
-        const sent = await notifyOperator(organizationId, member, message, {
-          pendingPlan: null,
-        }, { idempotencyKey });
+        // Matching parked state was resolved conditionally above. Do not let a
+        // late auto-execution notice erase an unrelated newer plan.
+        const sent = await notifyOperator(organizationId, member, message, {}, { idempotencyKey });
         if (sent) {
           logger.info(
             { organizationId, threadId, chatId: sent.chatId, channel: sent.channel },
@@ -313,7 +327,7 @@ export async function sendOperatorPlanNotification(
   aiSummary: string | null,
   plan: AgentPlan,
   instruction: string,
-  options?: { exclude?: OperatorNotificationExclude },
+  options?: { exclude?: OperatorNotificationExclude; identity?: PlanIdentity },
 ): Promise<void> {
   const bindings = await listOperatorBindings(organizationId);
 
@@ -341,7 +355,12 @@ export async function sendOperatorPlanNotification(
     async () => ({
       body: message,
       contextPatch: {
-        pendingPlan: { threadId, instruction, rawToolCalls: plan.rawToolCalls },
+        pendingPlan: {
+          threadId,
+          instruction,
+          rawToolCalls: plan.rawToolCalls,
+          ...(options?.identity ?? {}),
+        },
       },
       idempotencyKey,
     }),

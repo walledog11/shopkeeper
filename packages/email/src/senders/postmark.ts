@@ -1,13 +1,18 @@
 import { ServerClient } from 'postmark';
-import { EmailNotConfiguredError, type EmailSender, type OutboundEmail } from '../types.js';
+import {
+  EmailNotConfiguredError,
+  type EmailSender,
+  type EmailSendResult,
+  type OutboundEmail,
+} from '../types.js';
 
 export class PostmarkSender implements EmailSender {
-  async send(email: OutboundEmail): Promise<void> {
+  async send(email: OutboundEmail): Promise<EmailSendResult> {
     const apiKey = process.env.POSTMARK_API_KEY;
     if (!apiKey) throw new EmailNotConfiguredError();
 
     const client = new ServerClient(apiKey);
-    await client.sendEmail({
+    const result = await client.sendEmail({
       From: `${email.fromName} <${email.fromAddress}>`,
       ...(email.replyTo && { ReplyTo: email.replyTo }),
       To: email.to,
@@ -17,5 +22,6 @@ export class PostmarkSender implements EmailSender {
         Headers: email.headers.map((h) => ({ Name: h.name, Value: h.value })),
       }),
     });
+    return { providerMessageId: result.MessageID };
   }
 }

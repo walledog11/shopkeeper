@@ -21,7 +21,7 @@ import {
   buildRevisedDashboardInstruction,
   clearDashboardPendingApproval,
   dismissDashboardPendingApproval,
-  getDashboardActionCalls,
+  executeDashboardPendingApproval,
   getDashboardApprovalReplyKind,
   planDashboardApproval,
   readDashboardPendingApproval,
@@ -103,20 +103,15 @@ export const POST = withOrgRoute(
     if (pendingApproval) {
       const replyKind = getDashboardApprovalReplyKind(instruction);
       if (replyKind === "approve") {
-        const result = await executeAgentTurn({
+        const result = await executeDashboardPendingApproval({
           orgId: org.id,
           threadId: resolvedSessionId,
-          instruction,
-          failureRoute: "/api/agent/chat",
-          orgSettings: settings,
-          approvedToolCalls: getDashboardActionCalls(pendingApproval.plan),
-          persistUserMessage: true,
-          persistAgentMessage: true,
-          persistAuditNote: true,
-          persistAuditNoteWhenNoActions: false,
-          auditMode: "human_approved",
+          approval: pendingApproval,
+          turnInstruction: instruction,
+          settings,
+          approverId: userId,
         });
-        await clearDashboardPendingApproval(resolvedSessionId);
+        await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
         if (pendingApproval.planId) {
           void captureAgentPlanDecided({
             changed: false,
@@ -135,7 +130,11 @@ export const POST = withOrgRoute(
       }
 
       if (replyKind === "dismiss") {
-        const summary = await dismissDashboardPendingApproval(resolvedSessionId, instruction);
+        const summary = await dismissDashboardPendingApproval(
+          resolvedSessionId,
+          instruction,
+          pendingApproval.planId,
+        );
         if (pendingApproval.planId) {
           void captureAgentPlanDecided({
             changed: false,
@@ -171,13 +170,13 @@ export const POST = withOrgRoute(
       });
 
       if (revised && "autoExecuted" in revised) {
-        await clearDashboardPendingApproval(resolvedSessionId);
+        await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
       }
 
       const response = dashboardActionResponse(resolvedSessionId, revised);
       if (response) return response;
 
-      await clearDashboardPendingApproval(resolvedSessionId);
+      await clearDashboardPendingApproval(resolvedSessionId, pendingApproval.planId);
     }
 
     if (shouldPlanBeforeExecuting(instruction)) {

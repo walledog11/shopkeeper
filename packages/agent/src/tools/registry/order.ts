@@ -115,11 +115,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
-      const refund = await deps.createRefund(input, shopify);
-      if (refund.refundedCents !== null && refund.refundedCents > 0) {
-        await deps.incrementDailyRefundSpendCents(ctx.orgId, refund.refundedCents);
-      }
-      return refund;
+      return deps.createRefund(input, shopify);
     },
   }),
   defineTool({
@@ -291,11 +287,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
-      const credit = await deps.issueStoreCredit(input, shopify);
-      if (credit.spentCents !== null && credit.spentCents > 0) {
-        await deps.incrementDailyRefundSpendCents(ctx.orgId, credit.spentCents);
-      }
-      return credit;
+      return deps.issueStoreCredit(input, shopify);
     },
   }),
   defineTool({
@@ -321,11 +313,7 @@ export const ORDER_TOOL_DEFINITIONS = [
       const shopify = requireShopify(ctx);
       if (!shopify) return noShopify;
 
-      const giftCard = await deps.createGiftCard(input, shopify);
-      if (giftCard.spentCents !== null && giftCard.spentCents > 0) {
-        await deps.incrementDailyRefundSpendCents(ctx.orgId, giftCard.spentCents);
-      }
-      return giftCard;
+      return deps.createGiftCard(input, shopify);
     },
   }),
   defineTool({

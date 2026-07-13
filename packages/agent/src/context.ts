@@ -183,6 +183,7 @@ export async function buildContext(
   }
 
   const isOperator = isOperatorChannel(thread.channelType);
+  const isGatewayOperator = thread.channelType === "sms_agent";
 
   // Cross-ticket memory: the customer's most recent resolved tickets. Skipped in
   // operator channels, where the thread's "customer" is the operator/concierge
@@ -298,8 +299,13 @@ export async function buildContext(
       shopifyIntegration?.accessToken
         ? { shop: shopifyIntegration.externalAccountId, accessToken: shopifyIntegration.accessToken }
         : null,
-    escalate: (reason) =>
-      sink.escalateToHuman({ reason }, threadIo).then(() => {}),
+    // The merchant is already the human in an operator conversation. Keep a
+    // defensive no-side-effect sink even though operator turns hide the
+    // escalation tool; this prevents a stray/direct call from parking the
+    // durable operator thread and notifying the same merchant circularly.
+    escalate: isGatewayOperator
+      ? async () => {}
+      : (reason) => sink.escalateToHuman({ reason }, threadIo).then(() => {}),
     askOperator: (question) =>
       sink.askOperator({ question }, threadIo).then(() => {}),
     io: {

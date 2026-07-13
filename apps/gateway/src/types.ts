@@ -53,6 +53,7 @@ export interface InboundJobData {
 export interface AiSummaryJobData {
   threadId: string;
   organizationId: string;
+  sourceMessageId: string;
   customerName: string | null;
   channelType: DbChannelType;
   traceId?: string;

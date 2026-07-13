@@ -23,6 +23,7 @@ const gatewayRunAgent: ExecuteTurnRunAgent = (ctx, instruction, approvedToolCall
     turnId: options.turnId,
     mode: options.mode,
     approval: options.approval,
+    executionId: options.executionId,
     onActionsPersisted: captureAgentActionsCompleted,
     ...(options.moduleTools ? { moduleTools: options.moduleTools } : {}),
   });

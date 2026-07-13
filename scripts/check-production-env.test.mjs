@@ -36,6 +36,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     IMESSAGE_LINE_HANDLE: '+15551234567',
     PRODUCT_ANALYTICS_ENABLED: 'false',
+    PLAN_EXECUTION_LEDGER_MODE: 'shadow',
     ...overrides,
   };
 }
@@ -64,6 +65,7 @@ function createGatewayLaunchEnv(overrides = {}) {
     SPECTRUM_PROJECT_SECRET: 'project_secret_1',
     SPECTRUM_WEBHOOK_SECRET: 'webhook_secret_1',
     PRODUCT_ANALYTICS_ENABLED: 'false',
+    PLAN_EXECUTION_LEDGER_MODE: 'shadow',
     ...overrides,
   };
 }
@@ -315,6 +317,30 @@ test('production contracts require an explicit product analytics setting', () =>
   );
 });
 
+test('production contracts require an explicit plan execution ledger rollout mode', () => {
+  const dashboard = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({ PLAN_EXECUTION_LEDGER_MODE: '' }),
+  });
+  const gateway = validateProductionEnv('gateway', {
+    scope: 'launch',
+    env: createGatewayLaunchEnv({ PLAN_EXECUTION_LEDGER_MODE: 'enforced' }),
+  });
+
+  assert.equal(
+    dashboard.errors.includes(
+      'Missing required environment variable: PLAN_EXECUTION_LEDGER_MODE',
+    ),
+    true,
+  );
+  assert.equal(
+    gateway.errors.includes(
+      'PLAN_EXECUTION_LEDGER_MODE must be one of: off, shadow, enforce',
+    ),
+    true,
+  );
+});
+
 test('enabled product analytics requires a token and HTTPS host', () => {
   const result = validateProductionEnv('gateway', {
     scope: 'launch',
@@ -366,6 +392,7 @@ test('env file parser trims comments and quoted values the same way prod env fil
       'SPECTRUM_PROJECT_SECRET=project_secret_1',
       'SPECTRUM_WEBHOOK_SECRET=webhook_secret_1',
       'PRODUCT_ANALYTICS_ENABLED=false',
+      'PLAN_EXECUTION_LEDGER_MODE=shadow',
       '',
     ].join('\n')
   );

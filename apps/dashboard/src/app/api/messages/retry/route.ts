@@ -36,7 +36,14 @@ export const POST = withOrgRoute(
 
     await db.message.update({
       where: { id: messageId },
-      data: { sendStatus: 'pending', sendError: null },
+      data: {
+        sendStatus: 'pending',
+        sendClaimToken: null,
+        sendClaimedAt: null,
+        sendAttemptedAt: null,
+        providerMessageId: null,
+        sendError: null,
+      },
     });
 
     const enqueued = await enqueueOutboundEmail({
@@ -50,7 +57,11 @@ export const POST = withOrgRoute(
     if (!enqueued) {
       await db.message.update({
         where: { id: messageId },
-        data: { sendStatus: 'failed', sendError: 'Could not queue email send' },
+        data: {
+          sendStatus: 'failed',
+          sendClaimToken: null,
+          sendError: 'Could not queue email send',
+        },
       });
       throw new ApiError('Could not queue email send', 502);
     }

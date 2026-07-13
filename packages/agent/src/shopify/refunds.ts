@@ -1,6 +1,15 @@
 import type { CreateRefundInput } from "../tools/index.js";
-import { formatShopifyToolError, shopifyRestJson, type ShopifyContext } from "./client.js";
-import { toolError, toolOk, type ToolResult } from "../tools/result.js";
+import {
+  formatShopifyToolError,
+  formatUserErrors,
+  isAmbiguousShopifyMutationError,
+  shopifyGraphql,
+  shopifyIdempotencyKey,
+  shopifyRestJson,
+  type ShopifyContext,
+  type ShopifyGraphqlUserError,
+} from "./client.js";
+import { toolError, toolOk, toolUnknown, type ToolResult } from "../tools/result.js";
 import type {
   ShopifyCalculatedRefundLineItem,
   ShopifyOrder,
@@ -19,9 +28,21 @@ interface RefundCalculation {
   };
 }
 
-interface RefundCreateResponse {
-  refund?: {
-    transactions?: { amount: string }[];
+interface RefundCreateData {
+  refundCreate: {
+    refund?: {
+      id: string;
+      totalRefundedSet?: {
+        presentmentMoney?: { amount?: string };
+      };
+      transactions?: {
+        nodes?: Array<{
+          status?: string | null;
+          amountSet?: { presentmentMoney?: { amount?: string } };
+        }>;
+      };
+    } | null;
+    userErrors?: ShopifyGraphqlUserError[];
   };
 }
 
@@ -105,10 +126,41 @@ async function calculateRefund(
   });
 }
 
+function gid(resource: "Order" | "LineItem" | "Location" | "OrderTransaction", id: string | number): string {
+  return `gid://shopify/${resource}/${id}`;
+}
+
+function graphqlRefundLineItems(lineItems: ShopifyCalculatedRefundLineItem[]) {
+  return lineItems.map((lineItem) => {
+    const restockType = lineItem.restock_type.toUpperCase();
+    return {
+      lineItemId: gid("LineItem", lineItem.line_item_id),
+      quantity: lineItem.quantity,
+      restockType,
+      ...(restockType !== "NO_RESTOCK" && lineItem.location_id != null
+        ? { locationId: gid("Location", lineItem.location_id) }
+        : {}),
+    };
+  });
+}
+
+function graphqlRefundTransactions(orderId: string, transactions: ShopifyTransaction[]) {
+  return transactions.map((transaction) => ({
+    orderId: gid("Order", orderId),
+    kind: "REFUND",
+    gateway: transaction.gateway,
+    amount: transaction.amount,
+    ...(transaction.parent_id != null
+      ? { parentId: gid("OrderTransaction", transaction.parent_id) }
+      : {}),
+  }));
+}
+
 export async function createRefund(
   input: CreateRefundInput,
   ctx: ShopifyContext
 ): Promise<RefundResult> {
+  let mutationStarted = false;
   try {
     const orderId = requireNumericId(input.order_id, "order_id");
     const amount = input.amount !== undefined ? requireAmount(input.amount, "amount") : undefined;
@@ -137,36 +189,93 @@ export async function createRefund(
       return { ...toolError("Error: could not create refund - Shopify did not return refundable transactions."), refundedCents: null };
     }
 
-    const data = await shopifyRestJson<RefundCreateResponse>(ctx, `orders/${orderId}/refunds.json`, {
-      method: "POST",
-      body: {
-        refund: {
-          notify: true,
-          note,
-          ...(currency ? { currency } : {}),
-          ...(amount
-            ? {}
-            : {
-                shipping: calculation.refund?.shipping ?? { full_refund: true },
-                refund_line_items: calculation.refund?.refund_line_items ?? refundLineItems,
-              }),
-          transactions,
-        },
-      },
+    const idempotencyKey = shopifyIdempotencyKey(ctx.operationId);
+    const refundInput = {
+      orderId: gid("Order", orderId),
+      notify: true,
+      note,
+      ...(currency ? { currency } : {}),
+      ...(!amount
+        ? {
+            shipping: { fullRefund: true },
+            refundLineItems: graphqlRefundLineItems(
+              calculation.refund?.refund_line_items ?? refundLineItems,
+            ),
+          }
+        : {}),
+      transactions: graphqlRefundTransactions(orderId, transactions),
+    };
+    mutationStarted = true;
+    const data = await shopifyGraphql<RefundCreateData>(ctx, `
+      mutation CreateRefund($input: RefundInput!, $idempotencyKey: String!) {
+        refundCreate(input: $input) @idempotent(key: $idempotencyKey) {
+          refund {
+            id
+            totalRefundedSet {
+              presentmentMoney { amount }
+            }
+            transactions(first: 20) {
+              nodes {
+                status
+                amountSet { presentmentMoney { amount } }
+              }
+            }
+          }
+          userErrors { field message code }
+        }
+      }
+    `, {
+      input: refundInput,
+      idempotencyKey,
+    }, {
+      // This retry is safe because every attempt reuses the exact same input
+      // and Shopify's provider-owned idempotency key.
+      maxRetries: 1,
     });
 
-    if (!data.refund) {
-      return { ...toolError(`Error: failed to create refund - Shopify did not return a refund for order ${orderId}.`), refundedCents: null };
+    const userError = formatUserErrors(data.refundCreate.userErrors);
+    if (userError) {
+      return { ...toolError(`Error: failed to create refund - ${userError}`), refundedCents: null };
     }
 
-    const totalRefunded = (data.refund.transactions ?? [])
-      .reduce((sum, transaction) => sum + moneyToCents(transaction.amount), 0);
+    const refund = data.refundCreate.refund;
+    if (!refund) {
+      return {
+        ...toolUnknown(`Unknown: Shopify accepted the refund request for order ${orderId} but did not return a refund. Do not retry or confirm it to the customer until it is reconciled.`),
+        refundedCents: null,
+      };
+    }
+
+    const transactionStatuses = (refund.transactions?.nodes ?? [])
+      .map((transaction) => transaction.status?.toUpperCase())
+      .filter((status): status is string => Boolean(status));
+    if (transactionStatuses.length === 0 || transactionStatuses.some((status) => status !== "SUCCESS")) {
+      return {
+        ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but its payment status is ${transactionStatuses.join(", ") || "unavailable"}. Do not retry or confirm it to the customer until it is reconciled.`),
+        refundedCents: null,
+      };
+    }
+
+    const refundedAmount = refund.totalRefundedSet?.presentmentMoney?.amount;
+    if (!refundedAmount) {
+      return {
+        ...toolUnknown(`Unknown: Shopify created refund ${refund.id} for order ${orderId}, but did not return the committed amount. Do not retry or confirm it to the customer until it is reconciled.`),
+        refundedCents: null,
+      };
+    }
+    const totalRefunded = moneyToCents(refundedAmount);
 
     return {
       ...toolOk(`Refund of $${centsToMoney(totalRefunded)} issued successfully for order ${orderId}.${note ? ` Reason: ${note}.` : ""}`),
       refundedCents: totalRefunded,
     };
   } catch (err) {
+    if (mutationStarted && isAmbiguousShopifyMutationError(err)) {
+      return {
+        ...toolUnknown(`Unknown: the refund request may have committed at Shopify, but its final state could not be confirmed. Do not retry or confirm it to the customer until it is reconciled. ${formatShopifyToolError("refund reconciliation failed", err)}`),
+        refundedCents: null,
+      };
+    }
     return { ...toolError(formatShopifyToolError("failed to create refund", err)), refundedCents: null };
   }
 }

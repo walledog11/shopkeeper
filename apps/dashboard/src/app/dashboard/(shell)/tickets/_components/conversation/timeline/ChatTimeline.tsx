@@ -53,8 +53,9 @@ export default function ChatTimeline({
     <>
       {messages.map((msg) => {
         const isOutbound = msg.sender === "agent" || msg.sender === "ai"
-        const isPending = isOutbound && msg.sendStatus === "pending"
+        const isPending = isOutbound && (msg.sendStatus === "pending" || msg.sendStatus === "processing")
         const isFailed = isOutbound && msg.sendStatus === "failed"
+        const isUnknown = isOutbound && msg.sendStatus === "unknown"
 
         return (
           <div
@@ -72,6 +73,8 @@ export default function ChatTimeline({
               className={`px-4 py-3 text-[14px] max-w-[80%] leading-relaxed shadow-sm ${
                 isFailed
                   ? "bg-red-500/10 border border-red-500/30 text-strong rounded-2xl rounded-tr-md"
+                  : isUnknown
+                    ? "bg-amber-500/10 border border-amber-500/30 text-strong rounded-2xl rounded-tr-md"
                   : isOutbound
                     ? "bg-foreground/[0.14] text-strong rounded-2xl rounded-tr-md"
                     : "bg-card border border-border text-strong rounded-2xl rounded-tl-md"
@@ -96,6 +99,13 @@ export default function ChatTimeline({
                 >
                   Retry
                 </button>
+              </div>
+            ) : isUnknown ? (
+              <div className="flex items-center gap-1.5 mx-1 max-w-[80%]">
+                <AlertTriangle className="size-3 shrink-0 text-amber-400" />
+                <span className="text-xs text-amber-400">
+                  Delivery unconfirmed — check provider activity before retrying
+                </span>
               </div>
             ) : (
               <span className="text-xs text-faint mx-1">{msg.time}</span>

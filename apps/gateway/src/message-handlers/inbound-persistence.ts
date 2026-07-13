@@ -11,8 +11,28 @@ import { JOB, STATUS } from '../constants.js';
 import { captureInboundMessageProcessed } from '../product-analytics.js';
 import { publishThreadEvent } from '../realtime/publish.js';
 import { classifierSignals, type ClassificationResult } from './email-classification.js';
+import type { AiSummaryJobData } from '../types.js';
 
 const MAX_INPUT_LENGTH = 4000;
+const AI_SUMMARY_DEBOUNCE_MS = 300;
+
+export async function enqueueAiSummaryJob(
+  queue: Pick<Queue<AiSummaryJobData>, 'add'>,
+  data: AiSummaryJobData,
+): Promise<void> {
+  await queue.add(JOB.SUMMARIZE_THREAD, data, {
+    delay: AI_SUMMARY_DEBOUNCE_MS,
+    // BullMQ debounce mode replaces/extends a delayed job for this thread. If
+    // a job is already active, the next message becomes one trailing delayed
+    // job, bounding bursts to the active run plus the newest trailing run.
+    deduplication: {
+      id: `thread:${data.threadId}`,
+      ttl: AI_SUMMARY_DEBOUNCE_MS,
+      extend: true,
+      replace: true,
+    },
+  });
+}
 
 // Injection defense lives at the agent, not here: inbound text is wrapped in
 // <customer_message> boundaries and the system prompt treats it as untrusted
@@ -187,9 +207,10 @@ export async function processInboundMessage(
     });
   }
 
-  await aiSummaryQueue.add(JOB.SUMMARIZE_THREAD, {
+  await enqueueAiSummaryJob(aiSummaryQueue, {
     threadId: thread!.id,
     organizationId,
+    sourceMessageId: message.id,
     customerName: customer.name ?? null,
     channelType,
     traceId: traceId ?? undefined,

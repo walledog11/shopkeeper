@@ -17,8 +17,12 @@ export interface OutboundEmail {
   headers?: EmailHeader[];
 }
 
+export interface EmailSendResult {
+  providerMessageId: string;
+}
+
 export interface EmailSender {
-  send(email: OutboundEmail): Promise<void>;
+  send(email: OutboundEmail): Promise<EmailSendResult>;
 }
 
 export interface EmailIntegrationLike {

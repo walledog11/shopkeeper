@@ -92,7 +92,7 @@ describe('GmailSender.send', () => {
       tokenExpiresAt: new Date(Date.now() + 3600_000),
     });
 
-    await sender.send({
+    const result = await sender.send({
       to: 'customer@example.test',
       fromAddress: 'merchant@gmail.test',
       fromName: 'Merchant',
@@ -101,6 +101,7 @@ describe('GmailSender.send', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ providerMessageId: 'msg_1' });
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
     expect(String(mockFetch.mock.calls[1][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
     expect(tokenMocks.requestTokenRefresh).toHaveBeenCalledWith('gmail', 'refresh_token', {
@@ -129,7 +130,7 @@ describe('GmailSender.send', () => {
       tokenExpiresAt: new Date(Date.now() - 1000),
     });
 
-    await sender.send({
+    const result = await sender.send({
       to: 'c@x.test',
       fromAddress: 'merchant@gmail.test',
       fromName: 'M',
@@ -138,9 +139,31 @@ describe('GmailSender.send', () => {
     });
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ providerMessageId: 'msg' });
     expect(String(mockFetch.mock.calls[0][0])).toBe('https://gmail.googleapis.com/gmail/v1/users/me/messages/send');
     expect(tokenMocks.persistRefreshedToken).toHaveBeenCalledWith('gmail-integration', refreshedToken);
     const init = mockFetch.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer fresh');
+  });
+
+  it('treats a successful response without a provider message id as ambiguous', async () => {
+    mockFetch.mockResolvedValueOnce(new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }));
+    const sender = new GmailSender({
+      id: 'gmail-integration',
+      accessToken: 'token',
+      refreshToken: 'refresh_token',
+      tokenExpiresAt: new Date(Date.now() + 3600_000),
+    });
+
+    await expect(sender.send({
+      to: 'c@x.test',
+      fromAddress: 'merchant@gmail.test',
+      fromName: 'M',
+      subject: 'Hi',
+      text: 'Hi',
+    })).rejects.toThrow('Gmail accepted the send but returned no message id');
   });
 });

@@ -24,6 +24,6 @@ export function createPendingAgentMessage(thread: DispatchThread, text: string) 
 export function markAgentMessageSendFailed(messageId: string, sendError: string) {
   return db.message.update({
     where: { id: messageId },
-    data: { sendStatus: "failed", sendError },
+    data: { sendStatus: "failed", sendClaimToken: null, sendError },
   })
 }

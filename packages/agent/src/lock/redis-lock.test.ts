@@ -84,6 +84,25 @@ describe('createRedisLockProvider', () => {
     expect(second).toBeNull();
   });
 
+  it('reproduces overlapping ownership after the fixed lease expires', async () => {
+    const fake = makeFakeUpstashRedis();
+    const provider = createRedisLockProvider(upstashRedisLockClient(fake));
+
+    const first = await provider.acquire('thread-expiry', { ttlSeconds: 1 });
+    expect(first).not.toBeNull();
+
+    // Deterministically model Redis TTL expiry while the first caller is still
+    // doing provider work. There is no renewal, so another caller can enter.
+    fake.store.delete('agent:lock:thread-expiry');
+    const second = await provider.acquire('thread-expiry', { ttlSeconds: 1 });
+
+    expect(second).not.toBeNull();
+    await first!.release();
+    expect(fake.store.has('agent:lock:thread-expiry')).toBe(true);
+    await second!.release();
+    expect(fake.store.has('agent:lock:thread-expiry')).toBe(false);
+  });
+
   it('fails open when the client source is unavailable', async () => {
     const provider = createRedisLockProvider({
       getClient: () => null,

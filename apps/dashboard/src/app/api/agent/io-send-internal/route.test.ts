@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { sendEmail, sendReply } = vi.hoisted(() => ({
+const { findOwnedThread, sendEmail, sendReply } = vi.hoisted(() => ({
+  findOwnedThread: vi.fn(),
   sendEmail: vi.fn(),
   sendReply: vi.fn(),
 }));
 
 vi.mock('@/lib/agent/tools/thread', () => ({ sendEmail, sendReply }));
+vi.mock('@shopkeeper/db', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@shopkeeper/db')>();
+  return {
+    ...actual,
+    db: {
+      ...actual.db,
+      thread: { findFirst: findOwnedThread },
+    },
+  };
+});
 
 import { POST } from './route';
 
@@ -24,6 +35,7 @@ describe('POST /api/agent/io-send-internal', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubEnv('INTERNAL_API_SECRET', 'internal-secret');
+    findOwnedThread.mockResolvedValue({ organization: { name: 'Acme' } });
     sendReply.mockResolvedValue({ status: 'ok', message: 'Reply sent' });
     sendEmail.mockResolvedValue({ status: 'ok', message: 'Email sent' });
   });
@@ -64,6 +76,26 @@ describe('POST /api/agent/io-send-internal', () => {
     }));
 
     expect(response.status).toBe(400);
+    expect(sendReply).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it('rejects a thread that is not owned by the supplied organization', async () => {
+    findOwnedThread.mockResolvedValueOnce(null);
+
+    const response = await POST(request({
+      orgId: 'org-1',
+      threadId: 'thread-from-another-org',
+      orgName: 'Untrusted name',
+      op: 'send_reply',
+      input: { text: 'Hello' },
+    }));
+
+    expect(response.status).toBe(404);
+    expect(findOwnedThread).toHaveBeenCalledWith({
+      where: { id: 'thread-from-another-org', organizationId: 'org-1' },
+      select: { organization: { select: { name: true } } },
+    });
     expect(sendReply).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });

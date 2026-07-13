@@ -210,6 +210,37 @@ describe('sendReply provider failures', () => {
   });
 });
 
+describe('thread tool tenant ownership', () => {
+  it('does not send, mutate, or escalate a thread owned by another organization', async () => {
+    const otherOrg = await createTestOrg();
+    try {
+      const customer = await createTestCustomer(otherOrg.id, 'other-tenant@example.com');
+      const thread = await createTestThread(otherOrg.id, customer.id, ChannelType.email);
+      const ctx = { threadId: thread.id, orgId: org.id, orgName: org.name };
+
+      await expect(sendReply({ text: 'Cross-tenant reply' }, ctx)).resolves.toEqual({
+        status: 'error',
+        message: 'Error: thread not found.',
+      });
+      await expect(updateThreadStatus({ status: THREAD_STATUS.CLOSED }, ctx)).resolves.toEqual({
+        status: 'error',
+        message: 'Error: thread not found.',
+      });
+      await expect(escalateToHuman({ reason: 'Cross-tenant escalation' }, ctx)).resolves.toEqual({
+        status: 'error',
+        message: 'Error: thread not found.',
+      });
+
+      const unchanged = await db.thread.findUniqueOrThrow({ where: { id: thread.id } });
+      expect(unchanged.status).toBe(THREAD_STATUS.OPEN);
+      await expect(db.message.count({ where: { threadId: thread.id } })).resolves.toBe(0);
+      await expect(readOutboundRecords()).resolves.toEqual([]);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
+  });
+});
+
 describe('sendEmail outbound recording', () => {
   it('records a new Gmail email with the Gmail provider', async () => {
     const emailAddress = `gmail_send_${org.id.slice(0, 8)}@example.com`;

@@ -54,7 +54,7 @@ export type {
   UpdateThreadTagInput,
 } from "./types.js";
 export { ToolInputValidationError } from "./schema.js";
-export { defineTool, stringArg } from "./schema.js";
+export { defineTool, numberArg, stringArg } from "./schema.js";
 export { contextCapabilities, unmetToolCapability } from "./helpers.js";
 
 export const TOOL_DEFINITIONS = [
@@ -78,6 +78,14 @@ const TOOL_GROUP_ORDER = ["knowledge", "product", "customer", "order", "thread",
 export const TOOL_CATEGORIES = Object.fromEntries(
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.category])
 );
+
+export const READ_TOOL_NAMES = TOOL_DEFINITIONS.flatMap((definition) => (
+  definition.category === "read" ? [definition.name] : []
+));
+
+export function isReadToolName(name: string): boolean {
+  return TOOL_CATEGORIES[name] === "read";
+}
 
 export const TOOL_CAPABILITIES: Record<string, readonly ToolCapability[]> = Object.fromEntries(
   TOOL_DEFINITIONS.map((definition) => [definition.name, definition.capabilities])

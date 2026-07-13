@@ -41,6 +41,10 @@ describe('renderOperatorLedger', () => {
         instruction: 'Refund request for a late order',
         rawToolCalls: [
           { id: 'tc1', name: 'get_shopify_orders', input: { customer_id: '1' } },
+          { id: 'tc1b', name: 'search_shopify_products', input: { query: 'shirt' } },
+          { id: 'tc1bb', name: 'search_shopify_customers', input: { query: 'jane' } },
+          { id: 'tc1c', name: 'get_order_tracking', input: { order_id: '1' } },
+          { id: 'tc1d', name: 'get_support_stats', input: {} },
           { id: 'tc2', name: 'create_refund', input: { order_id: '1', amount: 12 } },
           { id: 'tc3', name: 'send_reply', input: { text: 'Refunded $12 for the delay — sorry about that!' } },
         ],
@@ -53,6 +57,10 @@ describe('renderOperatorLedger', () => {
     expect(ledger).toContain('Actions it will take:');
     // Read tools are dropped from the action list.
     expect(ledger).not.toContain('get_shopify_orders');
+    expect(ledger).not.toContain('search_shopify_products');
+    expect(ledger).not.toContain('search_shopify_customers');
+    expect(ledger).not.toContain('get_order_tracking');
+    expect(ledger).not.toContain('get_support_stats');
     expect(ledger).toContain('Draft message the merchant is approving:');
     expect(ledger).toContain('Refunded $12 for the delay');
   });

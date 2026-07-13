@@ -76,8 +76,14 @@ export async function addInternalNote(
   input: AddInternalNoteInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
+  const owned = await db.thread.findFirst({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
+    select: { id: true },
+  });
+  if (!owned) return toolError("Error: thread not found.");
   await createMessage({
     threadId: ctx.threadId,
+    organizationId: ctx.orgId,
     senderType: SenderType.note,
     contentText: `${AGENT_NOTE_PREFIX}${input.text}`,
   });
@@ -90,8 +96,8 @@ export async function sendReply(
   input: SendReplyInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  const thread = await db.thread.findUnique({
-    where: { id: ctx.threadId },
+  const thread = await db.thread.findFirst({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
     include: { customer: true },
   }).catch(() => null);
 
@@ -196,6 +202,7 @@ export async function sendEmail(
     const message = await createMessage(
       {
         threadId: targetThreadId,
+        organizationId: ctx.orgId,
         senderType: SenderType.agent,
         contentText: input.body,
         sendStatus: 'pending',
@@ -213,7 +220,11 @@ export async function sendEmail(
     if (!enqueued) {
       await db.message.update({
         where: { id: message.id },
-        data: { sendStatus: 'failed', sendError: 'Could not queue email send' },
+        data: {
+          sendStatus: 'failed',
+          sendClaimToken: null,
+          sendError: 'Could not queue email send',
+        },
       });
       return toolError('Error: could not queue email send.');
     }
@@ -273,6 +284,7 @@ export async function sendEmail(
   // Send confirmed — persist the message
   const sentMessage = await createMessage({
     threadId: targetThreadId,
+    organizationId: ctx.orgId,
     senderType: SenderType.agent,
     contentText: input.body,
   });
@@ -294,10 +306,11 @@ export async function updateThreadStatus(
   input: UpdateThreadStatusInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  await db.thread.update({
-    where: { id: ctx.threadId },
+  const updated = await db.thread.updateMany({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
     data: { status: input.status },
   });
+  if (updated.count !== 1) return toolError("Error: thread not found.");
   return toolOk(`Thread status updated to "${input.status}".`);
 }
 
@@ -307,10 +320,11 @@ export async function updateThreadTag(
   input: UpdateThreadTagInput,
   ctx: ThreadContext
 ): Promise<ToolResult> {
-  await db.thread.update({
-    where: { id: ctx.threadId },
+  const updated = await db.thread.updateMany({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
     data: { tag: input.tag },
   });
+  if (updated.count !== 1) return toolError("Error: thread not found.");
   return toolOk(`Thread tag updated to "${input.tag}".`);
 }
 
@@ -360,12 +374,14 @@ export async function escalateToHuman(
   ctx: ThreadContext
 ): Promise<ToolResult> {
   const reason = input.reason.trim() || "No reason provided";
-  await db.thread.update({
-    where: { id: ctx.threadId },
+  const updated = await db.thread.updateMany({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
     data: { status: THREAD_STATUS.PENDING, tag: "needs_human" },
   });
+  if (updated.count !== 1) return toolError("Error: thread not found.");
   await createMessage({
     threadId: ctx.threadId,
+    organizationId: ctx.orgId,
     senderType: SenderType.note,
     contentText: `${AGENT_NOTE_PREFIX}Escalated to merchant: ${reason}`,
   });
@@ -390,8 +406,14 @@ export async function askOperator(
   ctx: ThreadContext
 ): Promise<ToolResult> {
   const question = input.question.trim() || "No question provided";
+  const owned = await db.thread.findFirst({
+    where: { id: ctx.threadId, organizationId: ctx.orgId },
+    select: { id: true },
+  });
+  if (!owned) return toolError("Error: thread not found.");
   await createMessage({
     threadId: ctx.threadId,
+    organizationId: ctx.orgId,
     senderType: SenderType.note,
     contentText: `${AGENT_NOTE_PREFIX}Asked the merchant: ${question}`,
   });

@@ -3,6 +3,7 @@ export type {
   EmailOAuthProvider,
   EmailHeader,
   OutboundEmail,
+  EmailSendResult,
   EmailSender,
   EmailIntegrationLike,
   ParsedAttachment,
@@ -41,7 +42,13 @@ export { buildRawMime, buildMimeBase64 } from './mime-build.js';
 export { parseMime } from './mime-parse.js';
 export { normalizeInboundEmail } from './inbound-normalize.js';
 export { isForSupportAddress } from './address-filter.js';
-export { formatReplySubject, createThreadMessageId, buildThreadReplyHeaders } from './reply.js';
+export {
+  formatReplySubject,
+  createThreadMessageId,
+  createOutboundMessageId,
+  buildThreadReplyHeaders,
+  buildOutboundMessageReplyHeaders,
+} from './reply.js';
 
 export {
   getEmailOAuthClient,

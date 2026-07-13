@@ -145,16 +145,16 @@ export type CreateMessageInput = Omit<Prisma.MessageUncheckedCreateInput, 'organ
 async function resolveMessageOrganizationId(
   data: CreateMessageInput,
 ): Promise<Prisma.MessageUncheckedCreateInput> {
-  if (data.organizationId) {
-    return { ...data, organizationId: data.organizationId };
-  }
-
   const thread = await db.thread.findUnique({
     where: { id: data.threadId },
     select: { organizationId: true },
   });
   if (!thread) {
     throw new Error(`Thread not found: ${data.threadId}`);
+  }
+
+  if (data.organizationId && data.organizationId !== thread.organizationId) {
+    throw new Error('Message organization does not match its thread organization.');
   }
 
   return { ...data, organizationId: thread.organizationId };
@@ -220,7 +220,18 @@ export {
 } from './llm-spend.js';
 export type { LlmTokenPriceNanoUsd, LlmUsageTokens } from './llm-spend.js';
 export { getDailyLlmSpendNano, recordDailyLlmSpend } from './spend-store.js';
-export { getDailyRefundSpendCents, incrementDailyRefundSpendCents } from './refund-spend.js';
+export {
+  commitDailyRefundSpendReservation,
+  getDailyRefundSpendCents,
+  incrementDailyRefundSpendCents,
+  markDailyRefundSpendReservationUnknown,
+  releaseDailyRefundSpendReservation,
+  reserveDailyRefundSpend,
+} from './refund-spend.js';
+export type {
+  ReserveDailyRefundSpendParams,
+  ReserveDailyRefundSpendResult,
+} from './refund-spend.js';
 export {
   ORG_MEMBER_BIND_TOKEN_TTL_SECONDS,
   createOrgMemberBindToken,

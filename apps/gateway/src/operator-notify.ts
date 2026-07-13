@@ -113,6 +113,11 @@ export async function notifyOperator(
   const policy = options.policy ?? 'best-effort';
   const label = member.channel === 'telegram' ? 'Telegram' : 'iMessage';
   const contextKey = member.channel === 'telegram' ? member.chatId : member.senderId;
+  const persistContextPatch = async () => {
+    if (Object.keys(contextPatch).length > 0) {
+      await updateContext(organizationId, contextKey, contextPatch);
+    }
+  };
 
   if (!isChannelConfigured(member)) {
     if (policy === 'critical') {
@@ -133,7 +138,7 @@ export async function notifyOperator(
       },
       '[OperatorNotify] Duplicate delivery skipped',
     );
-    await updateContext(organizationId, contextKey, contextPatch);
+    await persistContextPatch();
     return { channel: member.channel, chatId: contextKey };
   }
 
@@ -159,7 +164,7 @@ export async function notifyOperator(
     // duplicate-delivery branch above already mirrored on the original send.
     await mirrorOperatorMessage(organizationId, `${member.channel}:${contextKey}`, 'agent', body);
 
-    await updateContext(organizationId, contextKey, contextPatch);
+    await persistContextPatch();
     return { channel: member.channel, chatId: contextKey };
   } catch (error) {
     if (policy === 'critical') {

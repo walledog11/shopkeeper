@@ -49,6 +49,8 @@ const NOINDEX_PATH_GROUP =
   '(login|signup|select-org|create-org|welcome|plan|connect|dashboard|api)';
 
 const repoRoot = path.resolve(__dirname, '../..');
+const sentryUploadEnabled = Boolean(process.env.SENTRY_AUTH_TOKEN)
+  && process.env.SENTRY_SKIP_UPLOAD !== 'true';
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -103,8 +105,12 @@ module.exports = withSentryConfig(nextConfig, {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: !process.env.CI,
   widenClientFileUpload: true,
+  // Sentry's Turbopack hook performs release and upload work even when source
+  // maps are disabled. Do not install it for local/CI builds without upload
+  // credentials, where the post-compile network work can otherwise hang.
+  useRunAfterProductionCompileHook: sentryUploadEnabled,
   sourcemaps: {
-    disable: process.env.SENTRY_SKIP_UPLOAD === 'true',
+    disable: !sentryUploadEnabled,
   },
   webpack: {
     treeshake: {

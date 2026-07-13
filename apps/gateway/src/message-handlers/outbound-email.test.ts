@@ -27,6 +27,7 @@ vi.mock('../product-analytics.js', () => ({
 }));
 
 import { handleOutboundEmailJob } from './outbound-email.js';
+import { createFailureInjector, InjectedPhaseFailure } from '@shopkeeper/agent/testing';
 
 type OutboundJob = Parameters<typeof handleOutboundEmailJob>[0];
 
@@ -83,7 +84,7 @@ describe('handleOutboundEmailJob', () => {
   });
 
   it('sends and marks the message sent', async () => {
-    sendMock.mockResolvedValueOnce(undefined);
+    sendMock.mockResolvedValueOnce({ providerMessageId: 'provider-message-1' });
     const { message, data } = await seed('pending');
 
     await handleOutboundEmailJob(makeJob(data));
@@ -93,9 +94,16 @@ describe('handleOutboundEmailJob', () => {
       to: 'customer@example.com',
       fromAddress: 'support@store.com',
       text: 'Hello there',
+      headers: expect.arrayContaining([
+        { name: 'Message-ID', value: expect.stringMatching(`^<message-${message.id}@`) },
+      ]),
     });
     const after = await db.message.findUnique({ where: { id: message.id } });
     expect(after?.sendStatus).toBe('sent');
+    expect(after?.providerMessageId).toBe('provider-message-1');
+    expect(after?.sendClaimToken).toBeNull();
+    expect(after?.sendClaimedAt).not.toBeNull();
+    expect(after?.sendAttemptedAt).not.toBeNull();
     expect(after?.sendError).toBeNull();
     expect(captureOutboundReplySent).toHaveBeenCalledWith({
       channel: 'email',
@@ -121,36 +129,75 @@ describe('handleOutboundEmailJob', () => {
     expect(after?.sendStatus).toBe('sent');
   });
 
-  it('rethrows and leaves the message pending on a non-final transient failure', async () => {
-    sendMock.mockRejectedValueOnce(new Error('503 upstream'));
+  it('drops jobs whose message, thread, organization, and integration do not share ownership', async () => {
+    sendMock.mockResolvedValue({ providerMessageId: 'provider-message-1' });
     const { message, data } = await seed('pending');
+    const otherOrg = await createTestOrg();
+    try {
+      const otherIntegration = await createTestIntegration(otherOrg.id, {
+        externalAccountId: 'other@store.com',
+        accessToken: 'other-token',
+        fromEmail: 'other@store.com',
+      });
 
-    await expect(
-      handleOutboundEmailJob(makeJob(data, { attemptsMade: 0, attempts: 3 })),
-    ).rejects.toThrow('503 upstream');
+      await handleOutboundEmailJob(makeJob({ ...data, integrationId: otherIntegration.id }));
+      await handleOutboundEmailJob(makeJob({ ...data, organizationId: otherOrg.id }));
+      await handleOutboundEmailJob(makeJob({ ...data, threadId: crypto.randomUUID() }));
 
-    const after = await db.message.findUnique({ where: { id: message.id } });
-    expect(after?.sendStatus).toBe('pending');
-    expect(after?.sendError).toBeNull();
-    expect(captureOutboundReplySent).not.toHaveBeenCalled();
+      expect(sendMock).not.toHaveBeenCalled();
+      const unchanged = await db.message.findUniqueOrThrow({ where: { id: message.id } });
+      expect(unchanged.sendStatus).toBe('pending');
+      expect(unchanged.sendError).toBeNull();
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
   });
 
-  it('marks the message failed and rethrows on the final transient failure', async () => {
+  it('allows exactly one concurrent worker to claim and send a pending message', async () => {
+    sendMock.mockResolvedValue({ providerMessageId: 'provider-message-1' });
+    const { data } = await seed('pending');
+
+    await Promise.all(Array.from({ length: 6 }, () => handleOutboundEmailJob(makeJob(data))));
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not duplicate a send after provider acceptance and a pre-commit crash', async () => {
+    sendMock.mockResolvedValue({ providerMessageId: 'provider-message-1' });
+    const { message, data } = await seed('pending');
+    const injector = createFailureInjector(['after-provider-accepted']);
+
+    await expect(handleOutboundEmailJob(makeJob(data), {
+      afterProviderAccepted: () => injector.checkpoint('after-provider-accepted'),
+    })).rejects.toBeInstanceOf(InjectedPhaseFailure);
+
+    const afterCrash = await db.message.findUnique({ where: { id: message.id } });
+    expect(afterCrash?.sendStatus).toBe('processing');
+    expect(afterCrash?.sendClaimToken).not.toBeNull();
+    expect(afterCrash?.sendAttemptedAt).not.toBeNull();
+
+    await handleOutboundEmailJob(makeJob(data, { attemptsMade: 1 }));
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks a provider or transport failure unknown and suppresses automatic retry', async () => {
     sendMock.mockRejectedValueOnce(new Error('503 upstream'));
     const { message, data } = await seed('pending');
 
-    await expect(
-      handleOutboundEmailJob(makeJob(data, { attemptsMade: 2, attempts: 3 })),
-    ).rejects.toThrow('503 upstream');
+    await expect(handleOutboundEmailJob(makeJob(data))).resolves.toBeUndefined();
 
     const after = await db.message.findUnique({ where: { id: message.id } });
-    expect(after?.sendStatus).toBe('failed');
+    expect(after?.sendStatus).toBe('unknown');
+    expect(after?.sendClaimToken).toBeNull();
     expect(after?.sendError).toContain('503 upstream');
     expect(captureOutboundReplySent).not.toHaveBeenCalled();
+
+    await handleOutboundEmailJob(makeJob(data, { attemptsMade: 1 }));
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
   it('sends an agent-initiated new-thread email with the subject verbatim (no Re:)', async () => {
-    sendMock.mockResolvedValueOnce(undefined);
+    sendMock.mockResolvedValueOnce({ providerMessageId: 'provider-new-thread' });
     const integration = await createTestIntegration(org.id, {
       externalAccountId: 'support@store.com',
       accessToken: 'token',
@@ -183,7 +230,7 @@ describe('handleOutboundEmailJob', () => {
   });
 
   it('prefixes Re: when agent_send_email replies into a thread with inbound mail', async () => {
-    sendMock.mockResolvedValueOnce(undefined);
+    sendMock.mockResolvedValueOnce({ providerMessageId: 'provider-reply' });
     const integration = await createTestIntegration(org.id, {
       externalAccountId: 'support@store.com',
       accessToken: 'token',

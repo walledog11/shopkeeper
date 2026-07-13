@@ -10,6 +10,7 @@ import {
 import { buildAgentPlanCacheRecord } from '@shopkeeper/agent/plan-cache';
 import { resolveAgentSettings } from '@shopkeeper/agent/settings';
 import type { BaseAgentContext } from '@shopkeeper/agent/context';
+import { ConflictError } from '@shopkeeper/agent/errors';
 
 const { mockExecuteOperatorAgentTurn, planAgentSpy, sendOperatorPlanNotificationSpy } = vi.hoisted(() => ({
   mockExecuteOperatorAgentTurn: vi.fn(),
@@ -19,6 +20,7 @@ const { mockExecuteOperatorAgentTurn, planAgentSpy, sendOperatorPlanNotification
 
 vi.mock('./execute-operator-agent-turn.js', () => ({
   executeOperatorAgentTurn: mockExecuteOperatorAgentTurn,
+  executeOperatorApprovedCachedPlan: mockExecuteOperatorAgentTurn,
 }));
 
 vi.mock('@shopkeeper/agent/planner', () => ({
@@ -118,6 +120,28 @@ describe('approve_pending_plan', () => {
     expect(mockExecuteOperatorAgentTurn).not.toHaveBeenCalled();
     // The plan is left parked — a guard hit is not a dismissal.
     expect((await getContext(org.id, chatId)).pendingPlan).not.toBeNull();
+  });
+
+  it('resolves a stale stable plan on every device after claim rejection', async () => {
+    const pendingPlan = {
+      threadId: '00000000-0000-4000-8000-000000000031',
+      instruction: 'refund order #1001',
+      rawToolCalls: [{ id: 'tc1', name: 'create_refund', input: { amount: 5 } }],
+      planId: '00000000-0000-4000-8000-000000000032',
+      sourceMessageId: '00000000-0000-4000-8000-000000000033',
+      planHash: 'a'.repeat(64),
+      instructionHash: 'b'.repeat(64),
+    };
+    await updateContext(org.id, 'device_a', { pendingPlan });
+    await updateContext(org.id, 'device_b', { pendingPlan });
+    mockExecuteOperatorAgentTurn.mockRejectedValueOnce(new ConflictError('Plan already claimed'));
+    const tools = await buildTools('device_a');
+
+    const result = await tools.approve_pending_plan.execute({}, baseCtx, settings, emptyDeps);
+
+    expect(result.status).toBe('error');
+    expect((await getContext(org.id, 'device_a')).pendingPlan).toBeNull();
+    expect((await getContext(org.id, 'device_b')).pendingPlan).toBeNull();
   });
 
   it('errors and runs nothing when no plan is pending', async () => {
@@ -227,7 +251,7 @@ describe('revise_pending_plan', () => {
       'Discount request',
       expect.anything(),
       'Discount request',
-      { exclude: { channel: 'telegram', contextKey: chatId } },
+      expect.objectContaining({ exclude: { channel: 'telegram', contextKey: chatId } }),
     );
   });
 

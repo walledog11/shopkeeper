@@ -10,6 +10,7 @@
  * Response: ToolResult ({ status, message })
  */
 import { NextResponse } from "next/server";
+import { db } from "@shopkeeper/db";
 import { sendReply, sendEmail } from "@/lib/agent/tools/thread";
 import type { SendReplyInput, SendEmailInput } from "@shopkeeper/agent/tools";
 import type { AgentActionMode } from "@shopkeeper/agent/context";
@@ -23,13 +24,12 @@ interface IoSendBody {
   agentActionMode?: AgentActionMode;
   orgId: string;
   threadId: string;
-  orgName: string;
   op: "send_reply" | "send_email";
   input: unknown;
 }
 
 function parseBody(value: Record<string, unknown>): IoSendBody {
-  const { agentActionMode, orgId, threadId, orgName, op, input } = value;
+  const { agentActionMode, orgId, threadId, op, input } = value;
   if (typeof orgId !== "string" || typeof threadId !== "string") {
     throw new BadRequestError("orgId and threadId are required");
   }
@@ -51,7 +51,6 @@ function parseBody(value: Record<string, unknown>): IoSendBody {
     ...(agentActionMode ? { agentActionMode } : {}),
     orgId,
     threadId,
-    orgName: typeof orgName === "string" ? orgName : "",
     op,
     input,
   };
@@ -63,7 +62,7 @@ export const POST = withInternalRoute(
     errorMessage: "Failed to dispatch agent message",
   },
   async ({ request }) => {
-    const { agentActionMode, orgId, threadId, orgName, op, input } = parseBody(
+    const { agentActionMode, orgId, threadId, op, input } = parseBody(
       await readRequiredJsonObject(request, {
         malformed: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
         empty: { message: "Validation failed", details: [{ code: "invalid_body", message: "Request body must be a JSON object" }] },
@@ -71,10 +70,18 @@ export const POST = withInternalRoute(
       }),
     );
 
+    const ownedThread = await db.thread.findFirst({
+      where: { id: threadId, organizationId: orgId },
+      select: { organization: { select: { name: true } } },
+    });
+    if (!ownedThread) {
+      return NextResponse.json({ error: "Thread not found" }, { status: 404 });
+    }
+
     const ctx = {
       threadId,
       orgId,
-      orgName,
+      orgName: ownedThread.organization.name,
       ...(agentActionMode ? { agentActionMode } : {}),
     };
     const result = op === "send_reply"

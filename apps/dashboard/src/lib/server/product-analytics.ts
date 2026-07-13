@@ -171,9 +171,11 @@ export function captureAgentActionsCompleted(actions: PersistedAgentAction[]): v
 
     const outcome: ActionOutcome = action.status === 'success'
       ? 'succeeded'
-      : action.status === 'error'
-        ? 'failed'
-        : 'blocked';
+      : action.status === 'unknown'
+        ? 'unknown'
+        : action.status === 'error'
+          ? 'failed'
+          : 'blocked';
     void captureDashboardProductEvent({
       event: 'agent_action_completed',
       organizationId: action.organizationId,

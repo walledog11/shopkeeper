@@ -104,14 +104,21 @@ describe('gateway product event boundaries', () => {
       {
         id: '00000000-0000-4000-8000-000000000005',
         organizationId: ORGANIZATION_ID,
+        tool: 'cancel_order',
+        category: 'action',
+        status: 'unknown',
+      },
+      {
+        id: '00000000-0000-4000-8000-000000000006',
+        organizationId: ORGANIZATION_ID,
         tool: 'future_tool',
         category: 'action',
         status: 'success',
       },
     ]);
 
-    expect(captureProductEvent).toHaveBeenCalledTimes(1);
-    expect(captureProductEvent).toHaveBeenCalledWith({
+    expect(captureProductEvent).toHaveBeenCalledTimes(2);
+    expect(captureProductEvent).toHaveBeenNthCalledWith(1, {
       event: 'agent_action_completed',
       organizationId: ORGANIZATION_ID,
       source: 'gateway',
@@ -119,6 +126,15 @@ describe('gateway product event boundaries', () => {
       toolCategory: 'action',
       outcome: 'blocked',
       insertId: 'agent_action_completed:00000000-0000-4000-8000-000000000004',
+    });
+    expect(captureProductEvent).toHaveBeenNthCalledWith(2, {
+      event: 'agent_action_completed',
+      organizationId: ORGANIZATION_ID,
+      source: 'gateway',
+      toolName: 'cancel_order',
+      toolCategory: 'action',
+      outcome: 'unknown',
+      insertId: 'agent_action_completed:00000000-0000-4000-8000-000000000005',
     });
   });
 

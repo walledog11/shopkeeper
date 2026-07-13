@@ -1,7 +1,8 @@
-import { READ_TOOLS } from '../../constants.js';
+import { isReadToolName } from '@shopkeeper/agent/tools';
 import logger from '../../logger.js';
 import {
   extractOrderNumber,
+  expectedPlanIdentity,
   normalizeApprovedToolCalls,
   type OperatorContext,
   type ToolCall,
@@ -20,11 +21,12 @@ export async function handlePendingPlanCommand(
   context: OperatorContext,
 ): Promise<boolean> {
   const { chatId, reply, presence } = message;
-  if (!context.pendingPlan) return false;
+  const pendingPlan = context.pendingPlan;
+  if (!pendingPlan) return false;
 
-  const { threadId, instruction, rawToolCalls } = context.pendingPlan;
+  const { threadId, instruction, rawToolCalls } = pendingPlan;
   if (command.type === 'plan-dismiss') {
-    await clearPendingPlan(organizationId, chatId);
+    await clearPendingPlan(organizationId, chatId, pendingPlan);
     await reply('Plan dismissed.');
     return true;
   }
@@ -32,7 +34,7 @@ export async function handlePendingPlanCommand(
   let approvedToolCalls: ToolCall[] = rawToolCalls;
   let skippedActionableTool: ToolCall | undefined;
   if (command.type === 'plan-skip') {
-    const actionable = rawToolCalls.filter((toolCall) => !READ_TOOLS.has(toolCall.name));
+    const actionable = rawToolCalls.filter((toolCall) => !isReadToolName(toolCall.name));
     skippedActionableTool = actionable[command.index - 1];
     approvedToolCalls = skippedActionableTool
       ? rawToolCalls.filter((toolCall) => toolCall.id !== skippedActionableTool!.id)
@@ -66,6 +68,8 @@ export async function handlePendingPlanCommand(
         threadId,
         instruction,
         approvedToolCalls: approvedRawToolCalls,
+        ...(expectedPlanIdentity(pendingPlan) ? { expectedIdentity: expectedPlanIdentity(pendingPlan) } : {}),
+        pendingPlan,
       }),
     );
   } catch (err) {

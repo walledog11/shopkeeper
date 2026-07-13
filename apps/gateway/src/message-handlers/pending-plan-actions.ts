@@ -1,6 +1,9 @@
 import type { RawToolCall } from '@shopkeeper/agent/types';
-import { updateContext } from '../operator-context.js';
-import { executeOperatorAgentTurn } from './execute-operator-agent-turn.js';
+import { resolvePendingPlanContexts, type PendingPlan } from '../operator-context.js';
+import type { ExpectedPlanIdentity } from '@shopkeeper/agent/plan-execution';
+import { BadRequestError, ConflictError } from '@shopkeeper/agent/errors';
+import { getPlanExecution } from '@shopkeeper/agent/execution-ledger';
+import { executeOperatorApprovedCachedPlan } from './execute-operator-agent-turn.js';
 
 // Runs an approved plan's stored tool calls verbatim on its ticket thread (zero
 // model calls), then clears the parked plan. Shared by the keyword fast path
@@ -14,20 +17,47 @@ export async function runApprovedPendingPlan(params: {
   threadId: string;
   instruction: string;
   approvedToolCalls: RawToolCall[];
+  expectedIdentity?: ExpectedPlanIdentity;
+  pendingPlan: PendingPlan;
 }): Promise<string> {
-  const { summary } = await executeOperatorAgentTurn({
-    orgId: params.organizationId,
-    threadId: params.threadId,
-    instruction: params.instruction,
-    approvedToolCalls: params.approvedToolCalls,
-    clerkUserId: params.clerkUserId,
-  });
-  await updateContext(params.organizationId, params.chatId, { pendingPlan: null });
+  let summary: string;
+  try {
+    ({ summary } = await executeOperatorApprovedCachedPlan({
+      orgId: params.organizationId,
+      threadId: params.threadId,
+      instruction: params.instruction,
+      approvedToolCalls: params.approvedToolCalls,
+      clerkUserId: params.clerkUserId,
+      ...(params.expectedIdentity ? { expectedIdentity: params.expectedIdentity } : {}),
+    }));
+  } catch (error) {
+    // A stable plan that is stale, already claimed, or terminal is no longer
+    // actionable on any device. Unknown pre-claim infrastructure failures leave
+    // it parked so the merchant can retry safely.
+    const planId = params.pendingPlan.planId;
+    const execution = planId
+      ? await getPlanExecution(params.organizationId, planId).catch(() => null)
+      : null;
+    if (
+      planId
+      && (error instanceof ConflictError
+        || error instanceof BadRequestError
+        || (execution && execution.status !== 'pending'))
+    ) {
+      await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
+    }
+    throw error;
+  }
+  await resolvePendingPlanContexts(params.organizationId, params.chatId, params.pendingPlan);
   return summary || 'Done.';
 }
 
 // Dismisses a parked plan without running it. Shared by the keyword `no`/`dismiss`
 // path and the reject_pending_plan control tool.
-export async function clearPendingPlan(organizationId: string, chatId: string): Promise<void> {
-  await updateContext(organizationId, chatId, { pendingPlan: null });
+export async function clearPendingPlan(
+  organizationId: string,
+  chatId: string,
+  expected: PendingPlan,
+): Promise<void> {
+  await resolvePendingPlanContexts(organizationId, chatId, expected);
 }

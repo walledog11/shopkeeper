@@ -8,8 +8,10 @@ const {
   mockSendReply,
   mockUpdateThreadStatus,
   mockRecordToolFailure,
-  mockGetDailyRefundSpendCents,
-  mockIncrementDailyRefundSpendCents,
+  mockReserveDailyRefundSpend,
+  mockCommitDailyRefundSpendReservation,
+  mockReleaseDailyRefundSpendReservation,
+  mockMarkDailyRefundSpendReservationUnknown,
   mockEscalateToHuman,
   mockRecordAgentActionsBatch,
 } = vi.hoisted(() => ({
@@ -17,8 +19,10 @@ const {
   mockSendReply: vi.fn(),
   mockUpdateThreadStatus: vi.fn(),
   mockRecordToolFailure: vi.fn().mockResolvedValue(undefined),
-  mockGetDailyRefundSpendCents: vi.fn().mockResolvedValue(0),
-  mockIncrementDailyRefundSpendCents: vi.fn().mockResolvedValue(undefined),
+  mockReserveDailyRefundSpend: vi.fn(),
+  mockCommitDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
+  mockReleaseDailyRefundSpendReservation: vi.fn().mockResolvedValue(undefined),
+  mockMarkDailyRefundSpendReservationUnknown: vi.fn().mockResolvedValue(undefined),
   mockEscalateToHuman: vi.fn().mockResolvedValue(undefined),
   mockRecordAgentActionsBatch: vi.fn().mockResolvedValue(undefined),
 }));
@@ -30,8 +34,10 @@ vi.mock("@anthropic-ai/sdk", () => ({
 }));
 
 vi.mock("@shopkeeper/db", () => ({
-  getDailyRefundSpendCents: mockGetDailyRefundSpendCents,
-  incrementDailyRefundSpendCents: mockIncrementDailyRefundSpendCents,
+  reserveDailyRefundSpend: mockReserveDailyRefundSpend,
+  commitDailyRefundSpendReservation: mockCommitDailyRefundSpendReservation,
+  releaseDailyRefundSpendReservation: mockReleaseDailyRefundSpendReservation,
+  markDailyRefundSpendReservationUnknown: mockMarkDailyRefundSpendReservationUnknown,
   db: {
     kbArticle: { findMany: vi.fn().mockResolvedValue([]) },
     kbCitation: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -119,16 +125,23 @@ beforeEach(() => {
   mockSendReply.mockReset();
   mockUpdateThreadStatus.mockReset();
   mockRecordToolFailure.mockReset();
-  mockGetDailyRefundSpendCents.mockReset();
-  mockIncrementDailyRefundSpendCents.mockReset();
+  mockReserveDailyRefundSpend.mockReset();
+  mockCommitDailyRefundSpendReservation.mockReset();
+  mockReleaseDailyRefundSpendReservation.mockReset();
+  mockMarkDailyRefundSpendReservationUnknown.mockReset();
   mockEscalateToHuman.mockReset();
   mockRecordAgentActionsBatch.mockReset();
 
   mockSendReply.mockResolvedValue({ status: "ok", message: "Reply sent." });
   mockUpdateThreadStatus.mockResolvedValue({ status: "ok", message: "Status updated." });
   mockRecordToolFailure.mockResolvedValue(undefined);
-  mockGetDailyRefundSpendCents.mockResolvedValue(0);
-  mockIncrementDailyRefundSpendCents.mockResolvedValue(undefined);
+  mockReserveDailyRefundSpend.mockResolvedValue({
+    kind: "reserved",
+    reservation: { id: "reservation_1", status: "reserved" },
+  });
+  mockCommitDailyRefundSpendReservation.mockResolvedValue(undefined);
+  mockReleaseDailyRefundSpendReservation.mockResolvedValue(undefined);
+  mockMarkDailyRefundSpendReservationUnknown.mockResolvedValue(undefined);
   mockEscalateToHuman.mockResolvedValue(undefined);
   mockRecordAgentActionsBatch.mockResolvedValue(undefined);
 });
@@ -257,7 +270,12 @@ describe("runAgent policy enforcement", () => {
   });
 
   it("escalates a refund when the daily cap is already exhausted", async () => {
-    mockGetDailyRefundSpendCents.mockResolvedValueOnce(9000);
+    mockReserveDailyRefundSpend.mockResolvedValueOnce({
+      kind: "blocked",
+      spentCents: 9000,
+      heldCents: 0,
+      remainingCents: 1000,
+    });
 
     const result = await runAgent(
       makeCtx(),
@@ -273,7 +291,7 @@ describe("runAgent policy enforcement", () => {
       status: "escalated",
     });
     expect(result.summary).toBe("Escalated to merchant: daily goodwill cap of $100 reached (shared across refunds, store credit, and gift cards); $10.00 remaining today.");
-    expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
   });
 
   it("escalates an over-cap refund instead of executing it or replying", async () => {
@@ -291,7 +309,7 @@ describe("runAgent policy enforcement", () => {
       status: "escalated",
     });
     expect(result.summary).toBe("Escalated to merchant: refund amount $200.00 exceeds the workspace limit of $50.");
-    expect(mockIncrementDailyRefundSpendCents).not.toHaveBeenCalled();
+    expect(mockReserveDailyRefundSpend).not.toHaveBeenCalled();
   });
 
   it("escalates an over-cap discount instead of issuing it", async () => {
@@ -312,7 +330,6 @@ describe("runAgent policy enforcement", () => {
   });
 
   it("allows a refund under the daily cap", async () => {
-    mockGetDailyRefundSpendCents.mockResolvedValueOnce(2500);
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         order: { id: 123, name: "#1001", currency: "USD", line_items: [], total_price: "50.00" },
@@ -324,7 +341,16 @@ describe("runAgent policy enforcement", () => {
         },
       }), { status: 200, headers: { "Content-Type": "application/json" } }))
       .mockResolvedValueOnce(new Response(JSON.stringify({
-        refund: { transactions: [{ amount: "20.00" }] },
+        data: {
+          refundCreate: {
+            refund: {
+              id: "gid://shopify/Refund/1",
+              totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
+              transactions: { nodes: [{ status: "SUCCESS" }] },
+            },
+            userErrors: [],
+          },
+        },
       }), { status: 200, headers: { "Content-Type": "application/json" } }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -336,7 +362,62 @@ describe("runAgent policy enforcement", () => {
     );
 
     expect(result.actionsPerformed[0]?.result).toContain("Refund of $20.00 issued successfully");
-    expect(mockIncrementDailyRefundSpendCents).toHaveBeenCalledWith("org_1", 2000);
+    expect(mockReserveDailyRefundSpend).toHaveBeenCalledWith(expect.objectContaining({
+      orgId: "org_1",
+      tool: "create_refund",
+      requestedCents: 2000,
+      capCents: 10000,
+    }));
+    expect(mockCommitDailyRefundSpendReservation).toHaveBeenCalledWith("reservation_1", 2000);
+  });
+
+  it("does not send a customer confirmation after an unknown refund outcome", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        order: { id: 123, name: "#1001", currency: "USD", line_items: [], total_price: "50.00" },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        refund: {
+          currency: "USD",
+          transactions: [{ kind: "suggested_refund", gateway: "manual", parent_id: 1, amount: "20.00", maximum_refundable: "50.00" }],
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        data: {
+          refundCreate: {
+            refund: {
+              id: "gid://shopify/Refund/1",
+              totalRefundedSet: { presentmentMoney: { amount: "20.00" } },
+              transactions: { nodes: [{ status: "PENDING" }] },
+            },
+            userErrors: [],
+          },
+        },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await runAgent(
+      makeCtx({ thread: { ...makeCtx().thread, channelType: "email" } }),
+      "Refund the order and tell the customer",
+      [
+        { id: "refund_1", name: "create_refund", input: { order_id: "123", amount: "20.00" } },
+        { id: "reply_1", name: "send_reply", input: { text: "Your refund was issued." } },
+      ],
+      AGENT_SETTINGS_DEFAULTS,
+      { executionId: "0ecfcf1c-2a07-4caf-956f-77cbaa2fb83a" },
+    );
+
+    expect(result.actionsPerformed).toMatchObject([
+      { tool: "create_refund", status: "unknown" },
+      { tool: "send_reply", status: "unknown" },
+    ]);
+    expect(result.actionsPerformed[1]?.result).toContain("skipped send_reply");
+    expect(mockSendReply).not.toHaveBeenCalled();
+    expect(mockCommitDailyRefundSpendReservation).not.toHaveBeenCalled();
+    expect(mockMarkDailyRefundSpendReservationUnknown).toHaveBeenCalledWith(
+      "reservation_1",
+      expect.stringContaining("PENDING"),
+    );
   });
 
   it("halts the run loop after escalate_to_human and surfaces the reason in the summary", async () => {

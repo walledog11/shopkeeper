@@ -165,6 +165,52 @@ describe("POST /api/agent/chat", () => {
     expect(thread.messages.map((message) => message.senderType)).toEqual(["customer", "agent"]);
   });
 
+  it("claims a pending dashboard plan before approved actions execute", async () => {
+    mockResolveAgentSettings.mockReturnValue({ requireApprovalForActions: true });
+    mockPlanAgent.mockResolvedValueOnce({
+      instruction: "Create an order for Jane",
+      steps: [{
+        id: "act_1",
+        tool: "create_shopify_order",
+        label: "Create order",
+        description: "Create a Shopify order",
+        category: "action",
+        enabled: true,
+      }],
+      rawToolCalls: [{
+        id: "act_1",
+        name: "create_shopify_order",
+        input: { email: "jane@example.com", line_items: [] },
+      }],
+    });
+
+    const planned = await POST(jsonReq({ instruction: "Create an order for Jane" }));
+    const plannedBody = await planned.json() as { sessionId: string };
+    mockExecuteAgentTurn.mockResolvedValueOnce({
+      summary: "Order created.",
+      actionsPerformed: [{
+        tool: "create_shopify_order",
+        result: "Created order #1001",
+        status: "success",
+      }],
+    });
+
+    const approved = await POST(jsonReq({ instruction: "yes", sessionId: plannedBody.sessionId }));
+    expect(approved.status).toBe(200);
+    expect(mockExecuteAgentTurn).toHaveBeenLastCalledWith(expect.objectContaining({
+      auditMode: "human_approved",
+      executionId: expect.any(String),
+      approval: expect.objectContaining({ approverId: "usr_test" }),
+    }));
+
+    const execution = await db.planExecution.findFirstOrThrow({
+      where: { organizationId: org.id, threadId: plannedBody.sessionId },
+    });
+    expect(execution.status).toBe("committed");
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: plannedBody.sessionId } });
+    expect(thread.cachedPlan).toBeNull();
+  });
+
   it("auto-executes planned dashboard actions when trusted rollout is enabled", async () => {
     mockResolveAgentSettings.mockReturnValue({
       autonomyTier: "trusted",
@@ -229,6 +275,13 @@ describe("POST /api/agent/chat", () => {
       select: { cachedPlan: true },
     });
     expect(thread.cachedPlan).toBeNull();
+    const execution = await db.planExecution.findFirstOrThrow({
+      where: { organizationId: org.id, threadId: body.sessionId },
+    });
+    expect(execution.status).toBe("committed");
+    expect(mockExecuteAgentTurn).toHaveBeenLastCalledWith(expect.objectContaining({
+      executionId: execution.id,
+    }));
   });
 
   it("maps spend-cap failures to the public 429 response", async () => {

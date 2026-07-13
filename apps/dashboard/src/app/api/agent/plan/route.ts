@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
-import { db } from "@shopkeeper/db";
+import { ConflictError } from "@/lib/api/errors";
 import { readRequiredJsonObject } from "@/lib/api/body";
 import { withOrgRoute } from "@/lib/api/route";
 import { getLatestConversationMessage, requireOrgThread } from "@shopkeeper/agent/thread-auth";
-import { buildAgentPlanCacheRecord, isAgentPlanCacheHit, readAgentPlanCache } from "@shopkeeper/agent/plan-cache";
+import {
+  buildAgentPlanCacheRecord,
+  commitThreadPlanCacheIfCurrent,
+  isAgentPlanCacheHit,
+  readAgentPlanCache,
+} from "@shopkeeper/agent/plan-cache";
 import { getPendingCustomerMessageId } from "@shopkeeper/agent/plan-cache-shape";
 import { clearThreadPlanCache } from "@shopkeeper/agent/plan-execution";
 import { parseAgentPlanBody } from "@/lib/agent/api/validation";
@@ -111,13 +116,15 @@ export const POST = withOrgRoute(
     });
 
     // Persist to DB so future calls (hard reload, other agents) skip the LLM
-    await db.thread.update({
-      where: { id: threadId },
-      data: {
-        cachedPlanMessageId: pendingCustomerMessageId,
-        cachedPlan: cacheRecord as object,
-      },
+    const committed = await commitThreadPlanCacheIfCurrent({
+      orgId: org.id,
+      threadId,
+      sourceMessageId: pendingCustomerMessageId,
+      cache: cacheRecord,
     });
+    if (!committed) {
+      throw new ConflictError("A newer customer message arrived while this plan was being generated. Regenerate the plan.");
+    }
 
     if (cacheRecord.planId && plan.steps.length > 0) {
       void captureAgentPlanGenerated({

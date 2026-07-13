@@ -60,8 +60,6 @@ export const JOB = {
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
 } as const;
-export const READ_TOOLS = new Set(['get_shopify_customer', 'get_shopify_orders', 'get_order_by_name', 'search_kb']);
-
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {
   attempts: 3,
