@@ -1,13 +1,12 @@
 "use client"
 
 import { useRef, type ComponentProps, type ReactNode } from "react"
-import { AlertCircle, CheckCircle2, Loader2, X } from "lucide-react"
+import { AlertCircle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-react"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
 import ThreadList from "./thread-list/ThreadList"
-import { ThreadListHeader } from "./thread-list/ThreadListHeader"
-import { TriageStackBoard } from "./board/TriageStackBoard"
+import { TicketQueue } from "./queue/TicketQueue"
 import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
@@ -126,6 +125,35 @@ function CorrectReplyBanner({
       >
         <X className="size-3.5" />
       </button>
+    </div>
+  )
+}
+
+function QueueHeader({
+  forMeCount,
+  onViewAll,
+}: {
+  forMeCount: number
+  onViewAll: () => void
+}) {
+  return (
+    <div className="shrink-0 px-5 pb-2 pt-5 md:px-6">
+      <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
+          {forMeCount > 0 && (
+            <span className="text-sm tabular-nums text-faint">{forMeCount}</span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onViewAll}
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+        >
+          All conversations
+          <ChevronRight className="size-4" aria-hidden />
+        </button>
+      </div>
     </div>
   )
 }
@@ -250,8 +278,7 @@ export function TicketsPageLayout({
     ? ((activeThread?.status ?? activeThreadPreview?.status) === "closed" ? "closed" : "open")
     : toConversationTab(effectiveActiveView)
 
-  const isBoardView = !flags.isSearchMode
-    && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open" || effectiveActiveView === "closed")
+  const isQueueView = !flags.isSearchMode && effectiveActiveView === "for_me"
 
   const correctReplyBanner = flags.correctReplyVisible
     ? <CorrectReplyBanner agentName={agentName} onDismiss={onCorrectReplyDismiss} />
@@ -297,7 +324,7 @@ export function TicketsPageLayout({
     </div>
   ) : null
 
-  const dialogBody = isBoardView && activeTicketId ? (
+  const dialogBody = isQueueView && activeTicketId ? (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {inlineConversationBody}
     </div>
@@ -306,7 +333,7 @@ export function TicketsPageLayout({
   if (dialogBody) lastDialogBodyRef.current = dialogBody
 
   const ticketDialog = (
-    <Dialog open={Boolean(isBoardView && activeTicketId)} onOpenChange={open => { if (!open) onBack() }}>
+    <Dialog open={Boolean(isQueueView && activeTicketId)} onOpenChange={open => { if (!open) onBack() }}>
       <DialogContent
         showCloseButton={false}
         className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-[86vh] sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
@@ -317,30 +344,12 @@ export function TicketsPageLayout({
     </Dialog>
   )
 
-  if (isBoardView) {
+  if (isQueueView) {
     return (
       <div className="flex size-full flex-col overflow-hidden bg-background relative">
-        <ThreadListHeader
-          activeView={effectiveActiveView}
-          channelFilter={channelFilter}
-          connectedChannels={connectedChannels}
+        <QueueHeader
           forMeCount={forMeCount}
-          spamCount={spamCount}
-          tagFilter={tagFilter}
-          hasSelection={false}
-          isSearchLoading={flags.isSearchLoading}
-          isSearchMode={flags.isSearchMode}
-          searchQuery={searchQuery}
-          selectedCount={0}
-          onBulkArchive={onBulkArchive}
-          onBulkClose={onBulkClose}
-          onBulkTag={onBulkTag}
-          onChannelFilterChange={onChannelFilterChange}
-          onClearSelection={onClearSelection}
-          onSearchChange={onSearchChange}
-          onTagFilterChange={onTagFilterChange}
-          onViewChange={onViewChange}
-          onViewSpam={onViewSpam}
+          onViewAll={() => onViewChange("all_open")}
         />
 
         {flags.listLoading && !activeTicketId ? (
@@ -348,7 +357,7 @@ export function TicketsPageLayout({
             <Loader2 className="size-5 animate-spin text-faint" />
           </div>
         ) : (
-          <TriageStackBoard
+          <TicketQueue
             tickets={filteredTickets}
             activeView={effectiveActiveView}
             agentName={agentName}

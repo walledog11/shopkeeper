@@ -3,15 +3,25 @@
 import { useMemo } from "react"
 import Image from "next/image"
 import { buildTicketListPresentationFromTicket } from "../../_lib/ticket-list-presentation"
-import { getAvatarGradient, getInitials } from "../thread-list/constants"
+import { getAvatarGradient, getInitials, type TicketListView } from "../thread-list/constants"
 import { TicketTagPill } from "../thread-list/ticket-tag-pill"
 import { TicketRowActions } from "../thread-list/TicketRowActions"
 import { hasTicketRowListAction } from "../thread-list/ticket-row-action-visibility"
 import { TicketRowStatusPill } from "../thread-list/ticket-row-status-pill"
-import type { TicketListView } from "../thread-list/constants"
 import type { OrgSettings, Ticket } from "@/types"
 
-interface TicketStackCardProps {
+// The queue section header already names the tier ("Needs review", "Ready to
+// send", …), so a pill that only echoes it is noise. Keep pills that carry
+// extra signal — the refund flag, the untrusted-sender flag, or a tool label.
+const GENERIC_STATUS_LABELS = new Set([
+  "Answer needed",
+  "Needs review",
+  "Ready to send",
+  "Drafting…",
+  "Waiting on customer",
+])
+
+interface TicketQueueCardProps {
   ticket: Ticket
   activeView: TicketListView
   hasShopify: boolean
@@ -24,7 +34,7 @@ interface TicketStackCardProps {
   onReview: () => void
 }
 
-export function TicketStackCard({
+export function TicketQueueCard({
   ticket,
   activeView,
   hasShopify,
@@ -35,7 +45,7 @@ export function TicketStackCard({
   onOpen,
   onSend,
   onReview,
-}: TicketStackCardProps) {
+}: TicketQueueCardProps) {
   const presentation = useMemo(
     () => buildTicketListPresentationFromTicket(ticket, {
       orgSettings,
@@ -49,6 +59,7 @@ export function TicketStackCard({
   const gradient = getAvatarGradient(presentation.customerLabel)
   const initials = getInitials(presentation.customerLabel)
   const showActions = hasTicketRowListAction(presentation)
+  const showStatusPill = !GENERIC_STATUS_LABELS.has(presentation.primaryStatus.label)
   const title = presentation.headline && presentation.headline !== ticket.tag
     ? presentation.headline
     : ticket.subject
@@ -56,7 +67,7 @@ export function TicketStackCard({
 
   return (
     <div
-      className={`flex h-72 flex-col gap-3 rounded-3xl border bg-card px-5 py-5 shadow-sm transition-colors ${
+      className={`flex flex-col gap-3 rounded-3xl border bg-card px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-colors ${
         isActive ? "border-foreground/30" : "border-border"
       }`}
     >
@@ -81,7 +92,7 @@ export function TicketStackCard({
       <button
         type="button"
         onClick={onOpen}
-        className="flex min-w-0 flex-1 flex-col gap-2 border-0 bg-transparent p-0 text-left [font-family:inherit]"
+        className="flex min-w-0 flex-col gap-2 border-0 bg-transparent p-0 text-left [font-family:inherit]"
       >
         <TicketTagPill tag={ticket.tag} className="w-fit" />
         <h3 className="font-sans text-lg font-semibold leading-snug tracking-tight text-foreground line-clamp-2">
@@ -92,18 +103,22 @@ export function TicketStackCard({
         )}
       </button>
 
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <TicketRowStatusPill label={presentation.primaryStatus.label} tone={presentation.primaryStatus.tone} />
-        {showActions && (
-          <TicketRowActions
-            presentation={presentation}
-            isApproving={isApproving}
-            disabled={actionsDisabled}
-            onSend={onSend}
-            onReview={onReview}
-          />
-        )}
-      </div>
+      {(showStatusPill || showActions) && (
+        <div className="mt-1 flex items-center justify-between gap-2">
+          {showStatusPill
+            ? <TicketRowStatusPill label={presentation.primaryStatus.label} tone={presentation.primaryStatus.tone} />
+            : <span aria-hidden />}
+          {showActions && (
+            <TicketRowActions
+              presentation={presentation}
+              isApproving={isApproving}
+              disabled={actionsDisabled}
+              onSend={onSend}
+              onReview={onReview}
+            />
+          )}
+        </div>
+      )}
     </div>
   )
 }

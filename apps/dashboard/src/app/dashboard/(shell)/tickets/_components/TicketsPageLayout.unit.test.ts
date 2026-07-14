@@ -393,22 +393,27 @@ function ticketDialog() {
   return document.body.querySelector('[role="dialog"]')
 }
 
-describe("TicketsPageLayout board ticket dialog", () => {
-  it("uses the board layout for the closed view", () => {
+describe("TicketsPageLayout queue and history", () => {
+  it("renders the closed view as the history list, not the queue", () => {
     const item = ticket({ id: "closed-1", status: "closed" })
     const view = render(React.createElement(LayoutHarness, {
       tickets: [item],
       activeView: "closed",
     }))
 
-    expect(view.querySelector('[data-testid="tickets-list"]')).toBeNull()
+    // Closed conversations have no triage tier — they belong in the flat
+    // history list (sidebar + pane), not the prioritized queue.
+    expect(view.querySelector('[data-testid="tickets-list"]')).not.toBeNull()
     expect(view.querySelector('[data-testid="thread-list-header"]')).not.toBeNull()
-    expect(view.textContent).toContain("Closed")
-    expect(firstCardSummaryButton(view)).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
   })
 
-  it("opens a conversation dialog when a board card is clicked", () => {
-    const item = ticket()
+  it("opens a conversation dialog when a queue card is clicked", () => {
+    const item = ticket({
+      hasPlan: true,
+      cachedPlan: cachedPlan(quickReplyPlan()),
+      cachedPlanMessageId: "msg-1",
+    })
     const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
 
     expect(ticketDialog()).toBeNull()

@@ -46,7 +46,7 @@ export function EmptyState({
               onClick={() => onViewChange("all_open")}
               className="text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
             >
-              Browse all open tickets →
+              Browse all conversations →
             </button>
           }
         />
