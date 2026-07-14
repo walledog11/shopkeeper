@@ -453,7 +453,7 @@ describe("TicketsPageLayout queue and history", () => {
     expect(errorDialog?.textContent).toContain("Unable to load conversation")
   })
 
-  it("does not open the dialog when quick approve is clicked on a collapsed card", () => {
+  it("does not open the dialog when the send action is clicked on a queue card", () => {
     const onQuickApprove = vi.fn()
     const item = ticket({
       hasPlan: true,
@@ -469,6 +469,40 @@ describe("TicketsPageLayout queue and history", () => {
 
     expect(onQuickApprove).toHaveBeenCalledWith(item.id)
     expect(ticketDialog()).toBeNull()
+  })
+
+  it("renders an actionable plan as a 'Ready to send' section card", () => {
+    const item = ticket({
+      hasPlan: true,
+      cachedPlan: cachedPlan(quickReplyPlan()),
+      cachedPlanMessageId: "msg-1",
+    })
+    const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
+
+    const sectionHeadings = Array.from(view.querySelectorAll("h2")).map(node => node.textContent)
+    expect(sectionHeadings).toContain("Ready to send")
+    expect(firstCardSummaryButton(view)).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-row-send"]')).not.toBeNull()
+  })
+
+  it("collapses a non-actionable ticket into an expandable quiet row, not a card", () => {
+    // Default ticket: open, last message from the customer, no plan yet -> the
+    // agent is working on it. That is status, not a decision, so it must not
+    // occupy a full card in the queue.
+    const item = ticket()
+    const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
+
+    const cardButton = Array.from(view.querySelectorAll("button")).find(node => node.querySelector("h3"))
+    expect(cardButton).toBeUndefined()
+    expect(view.querySelector('[data-testid="ticket-row"]')).toBeNull()
+
+    const quietToggle = Array.from(view.querySelectorAll("button"))
+      .find(node => node.textContent?.includes("Agent working"))
+    expect(quietToggle).not.toBeUndefined()
+
+    click(quietToggle as Element)
+
+    expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
   })
 
   it("closes the dialog when the conversation is dismissed", () => {
