@@ -67,6 +67,39 @@ export function getShopifyOAuthCallbackConfig(): ShopifyOAuthCallbackConfig | nu
   };
 }
 
+export interface InstagramOAuthAuthorizeConfig {
+  appUrl: string;
+  appId: string;
+  redirectUri: string;
+}
+
+export interface InstagramOAuthCallbackConfig extends InstagramOAuthAuthorizeConfig {
+  appSecret: string;
+}
+
+export function getInstagramOAuthAuthorizeConfig(): InstagramOAuthAuthorizeConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'INSTAGRAM_APP_ID']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    appId: config.INSTAGRAM_APP_ID,
+    redirectUri: `${appUrl}/api/integrations/instagram/callback`,
+  };
+}
+
+export function getInstagramOAuthCallbackConfig(): InstagramOAuthCallbackConfig | null {
+  const config = readRequiredConfig(['APP_URL', 'INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']);
+  if (!config) return null;
+  const appUrl = normalizeAbsoluteUrl('APP_URL', config.APP_URL);
+  return {
+    appUrl,
+    appId: config.INSTAGRAM_APP_ID,
+    appSecret: config.INSTAGRAM_APP_SECRET,
+    redirectUri: `${appUrl}/api/integrations/instagram/callback`,
+  };
+}
+
 export interface MetaOAuthAuthorizeConfig {
   appUrl: string;
   appId: string;

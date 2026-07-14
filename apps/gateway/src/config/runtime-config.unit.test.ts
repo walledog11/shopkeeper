@@ -4,6 +4,7 @@ import {
   getGatewayRuntimeRole,
   getGatewayOpsAlertConfig,
   getGatewayWorkerRedisConfig,
+  getInstagramWebhookConfig,
   getMetaWebhookConfig,
   getPostmarkWebhookConfig,
   getTelegramConfig,
@@ -166,6 +167,30 @@ describe('isGmailNativeInboundEnabled', () => {
   it('rejects invalid values', () => {
     vi.stubEnv('GMAIL_NATIVE_INBOUND', 'gradual');
     expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
+  });
+});
+
+describe('getInstagramWebhookConfig', () => {
+  it('reads and trims only Instagram-specific webhook credentials', () => {
+    vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '  instagram-verify-token  ');
+    vi.stubEnv('INSTAGRAM_APP_SECRET', ' instagram-app-secret ');
+    vi.stubEnv('META_VERIFY_TOKEN', 'legacy-verify-token');
+    vi.stubEnv('META_APP_SECRET', 'legacy-meta-secret');
+
+    expect(getInstagramWebhookConfig()).toEqual({
+      verifyToken: 'instagram-verify-token',
+      appSecret: 'instagram-app-secret',
+    });
+  });
+
+  it('returns nulls for missing Instagram credentials', () => {
+    vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '');
+    vi.stubEnv('INSTAGRAM_APP_SECRET', '   ');
+
+    expect(getInstagramWebhookConfig()).toEqual({
+      verifyToken: null,
+      appSecret: null,
+    });
   });
 });
 

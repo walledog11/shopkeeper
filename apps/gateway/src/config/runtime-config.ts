@@ -142,6 +142,18 @@ function readOptionalTrimmedEnv(name: string): string | null {
   return trimmedValue.length > 0 ? trimmedValue : null;
 }
 
+export interface InstagramWebhookConfig {
+  verifyToken: string | null;
+  appSecret: string | null;
+}
+
+export function getInstagramWebhookConfig(): InstagramWebhookConfig {
+  return {
+    verifyToken: readOptionalTrimmedEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
+    appSecret: readOptionalTrimmedEnv('INSTAGRAM_APP_SECRET'),
+  };
+}
+
 export interface MetaWebhookConfig {
   verifyToken: string | null;
   appSecret: string | null;

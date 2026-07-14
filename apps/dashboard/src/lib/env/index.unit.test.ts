@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   getDashboardAppUrl,
   getDashboardOpsAlertConfig,
+  getInstagramOAuthAuthorizeConfig,
+  getInstagramOAuthCallbackConfig,
   isGmailNativeInboundEnabled,
   validateDashboardEnv,
 } from './index';
@@ -126,6 +128,37 @@ describe('getDashboardAppUrl', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
 
     expect(getDashboardAppUrl()).toBe('http://localhost:3000');
+  });
+});
+
+describe('Instagram OAuth config', () => {
+  it('reads Instagram-specific credentials and builds the exact callback URI', () => {
+    vi.stubEnv('APP_URL', 'https://dashboard.example.com/');
+    vi.stubEnv('INSTAGRAM_APP_ID', 'instagram-app-id');
+    vi.stubEnv('INSTAGRAM_APP_SECRET', 'instagram-app-secret');
+
+    expect(getInstagramOAuthAuthorizeConfig()).toEqual({
+      appUrl: 'https://dashboard.example.com',
+      appId: 'instagram-app-id',
+      redirectUri: 'https://dashboard.example.com/api/integrations/instagram/callback',
+    });
+    expect(getInstagramOAuthCallbackConfig()).toEqual({
+      appUrl: 'https://dashboard.example.com',
+      appId: 'instagram-app-id',
+      appSecret: 'instagram-app-secret',
+      redirectUri: 'https://dashboard.example.com/api/integrations/instagram/callback',
+    });
+  });
+
+  it('does not fall back to parent Meta app credentials', () => {
+    vi.stubEnv('APP_URL', 'https://dashboard.example.com');
+    vi.stubEnv('INSTAGRAM_APP_ID', '');
+    vi.stubEnv('INSTAGRAM_APP_SECRET', '');
+    vi.stubEnv('META_APP_ID', 'parent-meta-app-id');
+    vi.stubEnv('META_APP_SECRET', 'parent-meta-app-secret');
+
+    expect(getInstagramOAuthAuthorizeConfig()).toBeNull();
+    expect(getInstagramOAuthCallbackConfig()).toBeNull();
   });
 });
 

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getGatewayBaseUrl } from '@/lib/server/gateway-url';
 
 function verifyMetaWebhookSignature(signature: string | null, body: Buffer): boolean {
-  const appSecret = process.env.META_APP_SECRET;
+  const appSecret = process.env.INSTAGRAM_APP_SECRET;
   if (!signature || !appSecret || !signature.startsWith('sha256=')) return false;
   const expected = Buffer.from(`sha256=${createHmac('sha256', appSecret).update(body).digest('hex')}`, 'utf8');
   const received = Buffer.from(signature, 'utf8');
