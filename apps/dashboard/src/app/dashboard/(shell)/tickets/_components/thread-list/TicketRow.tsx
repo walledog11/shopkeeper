@@ -11,7 +11,7 @@ import {
   type TicketListPresentation,
 } from "../../_lib/ticket-list-presentation"
 import { getSlaInfo } from "./sla"
-import { getAvatarGradient, getInitials, isOpenListView, type TicketListView } from "./constants"
+import { getInitials, isOpenListView, type TicketListView } from "./constants"
 import { TicketRowActions } from "./TicketRowActions"
 import { hasTicketRowListAction } from "./ticket-row-action-visibility"
 import { TicketRowDesktopMeta } from "./TicketRowDesktopMeta"
@@ -114,7 +114,6 @@ export function TicketRow({
     onOpen: () => onSelectTicket(ticket.id),
   })
 
-  const gradient = getAvatarGradient(presentation.customerLabel)
   const initials = getInitials(presentation.customerLabel)
   const desktopTime = isSearchMode ? ticket.time : presentation.timeAgo
 
@@ -189,7 +188,7 @@ export function TicketRow({
                 <TicketRowDesktopContent
                   ticket={ticket}
                   presentation={presentation}
-                  avatar={{ gradient, initials }}
+                  avatar={{ initials }}
                   desktopTime={desktopTime}
                   flags={{
                     closed,
@@ -267,7 +266,6 @@ interface TicketRowDesktopContentProps {
   ticket: Ticket
   presentation: TicketListPresentation
   avatar: {
-    gradient: string
     initials: string
   }
   desktopTime: string
@@ -295,11 +293,11 @@ function TicketRowDesktopContent({
   return (
     <>
       <div className="relative size-9 shrink-0">
-        <div className={`size-9 rounded-xl bg-gradient-to-br ${avatar.gradient} flex items-center justify-center text-[#ffffff] text-[14px] font-bold shadow-sm`}>
+        <div className="flex size-9 items-center justify-center rounded-xl border border-border bg-foreground/[0.05] text-[13px] font-semibold text-strong">
           {avatar.initials}
         </div>
-        <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-          <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
+        <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-md border border-border bg-card">
+          <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain opacity-70" />
         </div>
       </div>
 

@@ -18,11 +18,11 @@ vi.mock("next/image", async () => {
   }
 })
 
-vi.mock("./thread-list/ThreadListHeader", async () => {
+vi.mock("./archive/ArchiveHeader", async () => {
   const React = await import("react")
   return {
-    ThreadListHeader: function MockThreadListHeader() {
-      return React.createElement("header", { "data-testid": "thread-list-header" })
+    ArchiveHeader: function MockArchiveHeader() {
+      return React.createElement("header", { "data-testid": "archive-header" })
     },
   }
 })
@@ -394,18 +394,19 @@ function ticketDialog() {
 }
 
 describe("TicketsPageLayout queue and history", () => {
-  it("renders the closed view as the history list, not the queue", () => {
+  it("renders a non-queue view as the conversation archive, not the queue", () => {
     const item = ticket({ id: "closed-1", status: "closed" })
     const view = render(React.createElement(LayoutHarness, {
       tickets: [item],
       activeView: "closed",
     }))
 
-    // Closed conversations have no triage tier — they belong in the flat
-    // history list (sidebar + pane), not the prioritized queue.
+    // Closed conversations belong in the browsable archive column (search +
+    // scope + flat rows), not the prioritized queue with its tier sections.
+    expect(view.querySelector('[data-testid="archive-header"]')).not.toBeNull()
     expect(view.querySelector('[data-testid="tickets-list"]')).not.toBeNull()
-    expect(view.querySelector('[data-testid="thread-list-header"]')).not.toBeNull()
     expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
+    expect(view.querySelector("h2")).toBeNull()
   })
 
   it("opens a conversation dialog when a queue card is clicked", () => {
