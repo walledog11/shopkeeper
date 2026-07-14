@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
-import { getMetaOAuthCallbackConfig } from '@/lib/env';
+import { getInstagramOAuthCallbackConfig } from '@/lib/env';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
 import {
   captureIntegrationConnectionCompleted,
@@ -8,26 +8,95 @@ import {
   captureOAuthIntegrationConnectionFailed,
 } from '@/lib/server/product-analytics';
 import { validateOAuthCallbackSession } from '@/app/api/integrations/_lib/oauth-session';
-import { upsertRaceSafeIntegration } from '@/app/api/integrations/_lib/integration-upsert';
+import {
+  InstagramAccountInUseError,
+  inspectInstagramConnection,
+  persistInstagramConnection,
+} from '@/app/api/integrations/_lib/instagram-connection';
 import {
   integrationsResponse,
   oauthDestinationResponse,
   resolveOAuthOrganization,
 } from '@/app/api/integrations/_lib/oauth-callback';
 import {
-  exchangeLongLivedMetaToken,
-  exchangeMetaOAuthCode,
-  listMetaInstagramPages,
-  subscribeMetaInstagramMessaging,
-} from '@/app/api/integrations/_lib/meta-oauth-client';
+  INSTAGRAM_REQUIRED_SCOPES,
+  exchangeInstagramAuthorizationCode,
+  exchangeInstagramLongLivedToken,
+  fetchInstagramAccount,
+  fetchInstagramMessageSubscription,
+  subscribeInstagramMessages,
+  unsubscribeInstagramMessages,
+  type InstagramProviderError,
+} from '@/lib/integrations/instagram-api-client';
+
+const PROFESSIONAL_ACCOUNT_TYPES = new Set(['BUSINESS', 'CREATOR', 'MEDIA_CREATOR']);
+
+type AnalyticsFailureCategory = Parameters<typeof captureIntegrationConnectionFailed>[0]['failureCategory'];
+type InstagramOAuthError =
+  | 'access_denied'
+  | 'instagram_account_in_use'
+  | 'invalid_callback'
+  | 'long_lived_token_failed'
+  | 'missing_instagram_permissions'
+  | 'not_professional_account'
+  | 'provider_unavailable'
+  | 'server_error'
+  | 'token_exchange_failed'
+  | 'webhook_subscription_failed';
+
+function providerFailureCategory(error: InstagramProviderError): AnalyticsFailureCategory {
+  if (error.category === 'rate_limit') return 'rate_limited';
+  if (error.category === 'transient_provider_failure') return 'provider_unavailable';
+  if (error.category === 'authentication') return 'invalid_credentials';
+  return 'validation_failed';
+}
+
+function logProviderError(step: string, error: InstagramProviderError): void {
+  logger.error(
+    {
+      category: error.category,
+      code: error.code,
+      httpStatus: error.httpStatus,
+      requestId: error.requestId,
+      step,
+      subcode: error.subcode,
+    },
+    `[IG OAuth] ${step} failed`,
+  );
+}
+
+function isProfessionalAccount(accountType: string | null): accountType is string {
+  return accountType !== null && PROFESSIONAL_ACCOUNT_TYPES.has(accountType.toUpperCase());
+}
+
+async function bestEffortUnsubscribe(input: {
+  accessToken: string;
+  accountId: string;
+  reason: 'compensation' | 'replacement';
+}): Promise<void> {
+  const result = await unsubscribeInstagramMessages(input);
+  if (!result.ok) {
+    logger.warn(
+      {
+        accountId: input.accountId,
+        category: result.error.category,
+        code: result.error.code,
+        httpStatus: result.error.httpStatus,
+        reason: input.reason,
+        requestId: result.error.requestId,
+        subcode: result.error.subcode,
+      },
+      '[IG OAuth] Best-effort unsubscribe failed',
+    );
+  }
+}
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Finish Instagram connection');
 }
 
 export async function POST(request: Request) {
-  const oauthConfig = getMetaOAuthCallbackConfig();
-
+  const oauthConfig = getInstagramOAuthCallbackConfig();
   if (!oauthConfig) {
     return NextResponse.json({ error: 'OAuth callback is not configured' }, { status: 500 });
   }
@@ -36,16 +105,7 @@ export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
   const state = searchParams.get('state');
-  const error = searchParams.get('error');
-
-  if (error && !state) {
-    logger.warn({ error }, '[IG OAuth] User denied access');
-    return integrationsResponse(appUrl, { error: 'access_denied' });
-  }
-
-  if ((!code && !error) || !state) {
-    return integrationsResponse(appUrl, { error: 'invalid_callback' });
-  }
+  const providerError = searchParams.get('error');
 
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,
@@ -61,152 +121,187 @@ export async function POST(request: Request) {
     });
     return callbackSession.response;
   }
+
   const { attemptId, clerkOrgId, returnTo } = callbackSession.session;
   const orgResult = await resolveOAuthOrganization(clerkOrgId, 'IG OAuth');
   if (!orgResult.ok) return integrationsResponse(appUrl, { error: orgResult.error });
   const organizationId = orgResult.org.id;
+  const fail = async (
+    error: InstagramOAuthError,
+    failureCategory: AnalyticsFailureCategory,
+  ) => {
+    await captureIntegrationConnectionFailed({
+      attemptId,
+      failureCategory,
+      organizationId,
+      platform: 'ig_dm',
+    });
+    return integrationsResponse(appUrl, { error });
+  };
 
-  if (error) {
-    logger.warn({ error }, '[IG OAuth] User denied access');
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'access_denied',
-      organizationId,
-      platform: 'ig_dm',
-    });
-    return integrationsResponse(appUrl, { error: 'access_denied' });
+  if (providerError) {
+    logger.warn({ providerError }, '[IG OAuth] User denied access');
+    return fail('access_denied', 'access_denied');
   }
-  if (!code) {
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'invalid_callback',
-      organizationId,
-      platform: 'ig_dm',
-    });
-    return integrationsResponse(appUrl, { error: 'invalid_callback' });
-  }
+  if (!code) return fail('invalid_callback', 'invalid_callback');
 
   try {
-    // ---------------------------------------------------------------
-    // Step 1: Exchange code for a short-lived user access token
-    // ---------------------------------------------------------------
-    const tokenResult = await exchangeMetaOAuthCode({
+    const shortTokenResult = await exchangeInstagramAuthorizationCode({
       appId,
       appSecret,
       code,
       redirectUri,
     });
-    if (!tokenResult.accessToken) {
-      logger.error(
-        {
-          status: tokenResult.status,
-          errorType: tokenResult.error.type,
-          errorCode: tokenResult.error.code,
-        },
-        '[IG OAuth] Token exchange failed',
-      );
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory: tokenResult.status === 429
-          ? 'rate_limited'
-          : tokenResult.status >= 500
-            ? 'provider_unavailable'
-            : 'invalid_credentials',
-        organizationId,
-        platform: 'ig_dm',
-      });
-      return integrationsResponse(appUrl, { error: 'token_exchange_failed' });
+    if (!shortTokenResult.ok) {
+      logProviderError('Authorization-code exchange', shortTokenResult.error);
+      return fail('token_exchange_failed', providerFailureCategory(shortTokenResult.error));
     }
-    const shortLivedToken = tokenResult.accessToken;
 
-    // ---------------------------------------------------------------
-    // Step 2: Upgrade to a long-lived user access token (60 days)
-    // ---------------------------------------------------------------
-    const userToken = await exchangeLongLivedMetaToken({
-      appId,
+    const grantedScopes = shortTokenResult.data.permissions;
+    if (
+      grantedScopes.length > 0
+      && INSTAGRAM_REQUIRED_SCOPES.some((scope) => !grantedScopes.includes(scope))
+    ) {
+      logger.error(
+        { grantedScopes },
+        '[IG OAuth] Required Instagram permissions were not granted',
+      );
+      return fail('missing_instagram_permissions', 'validation_failed');
+    }
+
+    const longTokenResult = await exchangeInstagramLongLivedToken({
       appSecret,
-      shortLivedToken,
-    }) ?? shortLivedToken;
+      shortLivedToken: shortTokenResult.data.accessToken,
+    });
+    if (!longTokenResult.ok) {
+      logProviderError('Long-lived token exchange', longTokenResult.error);
+      return fail('long_lived_token_failed', providerFailureCategory(longTokenResult.error));
+    }
+    const accessToken = longTokenResult.data.accessToken;
 
-    // ---------------------------------------------------------------
-    // Step 3: Get pages the user manages with their linked IG accounts
-    // Requires the user to have classic Page admin access (People with
-    // Facebook access), not just Business Portfolio access.
-    // ---------------------------------------------------------------
-    const pages = await listMetaInstagramPages(userToken);
+    const accountResult = await fetchInstagramAccount(accessToken);
+    if (!accountResult.ok) {
+      logProviderError('Account identity lookup', accountResult.error);
+      return fail('provider_unavailable', providerFailureCategory(accountResult.error));
+    }
+    const account = accountResult.data;
+    if (account.userId !== shortTokenResult.data.userId) {
+      logger.error(
+        { accountUserId: account.userId, tokenUserId: shortTokenResult.data.userId },
+        '[IG OAuth] Token and account identity did not match',
+      );
+      return fail('invalid_callback', 'validation_failed');
+    }
+    if (!isProfessionalAccount(account.accountType)) {
+      logger.error(
+        { accountId: account.userId, accountType: account.accountType },
+        '[IG OAuth] Instagram account is not a Professional account',
+      );
+      return fail('not_professional_account', 'validation_failed');
+    }
+
+    let connectionState;
+    try {
+      connectionState = await inspectInstagramConnection(organizationId, account.userId);
+    } catch (error) {
+      if (error instanceof InstagramAccountInUseError) {
+        return fail('instagram_account_in_use', 'validation_failed');
+      }
+      throw error;
+    }
+    const replacingOrCreating = connectionState.existingForOrganization?.externalAccountId
+      !== account.userId;
+
+    const subscriptionResult = await subscribeInstagramMessages({
+      accountId: account.userId,
+      accessToken,
+    });
+    if (!subscriptionResult.ok) {
+      logProviderError('Webhook subscription', subscriptionResult.error);
+      return fail('webhook_subscription_failed', providerFailureCategory(subscriptionResult.error));
+    }
+
+    const verifiedSubscription = await fetchInstagramMessageSubscription({
+      accountId: account.userId,
+      accessToken,
+    });
+    if (!verifiedSubscription.ok || !verifiedSubscription.data.messagesActive) {
+      if (!verifiedSubscription.ok) {
+        logProviderError('Webhook subscription verification', verifiedSubscription.error);
+      } else {
+        logger.error(
+          { accountId: account.userId, fields: verifiedSubscription.data.fields },
+          '[IG OAuth] messages subscription was not active after subscribe',
+        );
+      }
+      if (replacingOrCreating) {
+        await bestEffortUnsubscribe({
+          accountId: account.userId,
+          accessToken,
+          reason: 'compensation',
+        });
+      }
+      return fail('webhook_subscription_failed', 'validation_failed');
+    }
+
+    const subscriptionVerifiedAt = new Date();
+    let persisted;
+    try {
+      persisted = await persistInstagramConnection({
+        accessToken,
+        accountId: account.userId,
+        accountType: account.accountType,
+        expiresAt: new Date(Date.now() + longTokenResult.data.expiresIn * 1000),
+        grantedScopes,
+        organizationId,
+        permissionsVerified: grantedScopes.length > 0,
+        subscriptionVerifiedAt,
+        username: account.username,
+      });
+    } catch (error) {
+      if (replacingOrCreating) {
+        await bestEffortUnsubscribe({
+          accountId: account.userId,
+          accessToken,
+          reason: 'compensation',
+        });
+      }
+      if (error instanceof InstagramAccountInUseError) {
+        return fail('instagram_account_in_use', 'validation_failed');
+      }
+      throw error;
+    }
+
+    await captureIntegrationConnectionCompleted({
+      integrationId: persisted.integration.id,
+      organizationId,
+      platform: 'ig_dm',
+    });
+
     logger.info(
-      { pageCount: pages.length, pageNames: pages.map((page) => page.name) },
-      '[IG OAuth] /me/accounts response',
+      {
+        accountId: account.userId,
+        integrationId: persisted.integration.id,
+        organizationId,
+        username: account.username,
+      },
+      '[IG OAuth] Instagram Login integration is ready',
     );
 
-    const igPage = pages.find((page) => page.instagramBusinessAccount?.id);
-
-    if (!igPage?.instagramBusinessAccount) {
-      logger.error('[IG OAuth] No Instagram Business account found');
-      await captureIntegrationConnectionFailed({
-        attemptId,
-        failureCategory: 'validation_failed',
-        organizationId,
-        platform: 'ig_dm',
+    if (persisted.replacedIntegration?.accessToken) {
+      await bestEffortUnsubscribe({
+        accountId: persisted.replacedIntegration.externalAccountId,
+        accessToken: persisted.replacedIntegration.accessToken,
+        reason: 'replacement',
       });
-      return integrationsResponse(appUrl, { error: 'no_ig_account' });
     }
 
-    const pageToken = igPage.accessToken;
-    const pageId = igPage.id;
-    const igAccountId = igPage.instagramBusinessAccount.id;
-    const igUsername = igPage.instagramBusinessAccount.username || igAccountId;
-    logger.info({ igUsername, igAccountId, pageId }, '[IG OAuth] Found Instagram account');
-
-    // ---------------------------------------------------------------
-    // Step 4: Subscribe to Instagram messaging webhooks
-    // Must use the Facebook Page ID (not the IG account ID) per Meta docs.
-    // ---------------------------------------------------------------
-    const subscription = await subscribeMetaInstagramMessaging({
-      pageId,
-      pageToken,
-    });
-    if (!subscription.success) {
-      logger.warn(
-        { status: subscription.status, success: subscription.success },
-        '[IG OAuth] Webhook subscription failed',
-      );
-    } else {
-      logger.info('[IG OAuth] Webhook subscription succeeded');
-    }
-
-    // ---------------------------------------------------------------
-    // Step 5: Save integration to database
-    // externalAccountId = Instagram Business Account ID
-    //   (matches entry[0].id in Meta webhook payloads)
-    // accessToken = Page Access Token (used for sending messages)
-    // fromEmail   = Instagram @username (displayed in the UI)
-    // ---------------------------------------------------------------
-    const tokenExpiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days
-    const integrationData = { accessToken: pageToken, refreshToken: userToken, fromEmail: igUsername, tokenExpiresAt };
-    const integration = await upsertRaceSafeIntegration({
-      organizationId,
-      platform: 'ig_dm',
-      externalAccountId: igAccountId,
-      data: integrationData,
-    });
-    await captureIntegrationConnectionCompleted({
-      integrationId: integration.id,
-      organizationId,
-      platform: 'ig_dm',
-    });
-
-    logger.info({ igUsername, igAccountId, orgId: organizationId }, '[IG OAuth] Integration saved');
     return oauthDestinationResponse(appUrl, returnTo, 'instagram');
-
-  } catch (err) {
-    logger.error({ err }, '[IG OAuth] Unexpected error');
-    await captureIntegrationConnectionFailed({
-      attemptId,
-      failureCategory: 'unknown',
-      organizationId,
-      platform: 'ig_dm',
-    });
-    return integrationsResponse(appUrl, { error: 'server_error' });
+  } catch (error) {
+    logger.error(
+      { errorClass: error instanceof Error ? error.name : 'UnknownError' },
+      '[IG OAuth] Unexpected error',
+    );
+    return fail('server_error', 'unknown');
   }
 }

@@ -20,6 +20,9 @@ jobs:
       ANTHROPIC_API_KEY: test-anthropic-key
       INTERNAL_API_SECRET: test-internal-secret
       INTERNAL_API_SECRET_PREV: test-internal-secret-prev
+      INSTAGRAM_APP_ID: test-instagram-app-id
+      INSTAGRAM_APP_SECRET: test-instagram-secret
+      INSTAGRAM_WEBHOOK_VERIFY_TOKEN: test-instagram-verify-token
       META_APP_ID: test-meta-app-id
       META_APP_SECRET: test-meta-secret
       META_VERIFY_TOKEN: test-verify-token

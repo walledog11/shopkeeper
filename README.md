@@ -257,7 +257,7 @@ Optional dashboard variables:
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL` — Clerk route overrides
 - `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
 - `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
-- `META_APP_ID`, `META_APP_SECRET`, `META_CONFIG_ID` — Instagram OAuth and webhook setup
+- `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` — Instagram Login OAuth and local webhook signature verification
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
 - `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` — direct USPS tracking lookup
@@ -286,7 +286,7 @@ Optional gateway variables:
 - `PORT` — Railway sets this automatically
 - `DASHBOARD_INTERNAL_URL` — local dashboard URL used only for dev callback forwarding
 - `GATEWAY_RUNTIME_ROLE` — defaults to `all`; use only when splitting server and worker processes
-- `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_APP_ID` — Instagram webhook setup
+- `INSTAGRAM_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` — Instagram webhook setup
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` — Telegram operator channel
 - `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`, `SPECTRUM_WEBHOOK_SECRET` — platform-wide Photon Spectrum credentials for the iMessage operator line (gateway)
 - `POSTMARK_INBOUND_USERNAME`, `POSTMARK_INBOUND_PASSWORD` — required in production for Postmark inbound webhook basic auth; optional in local dev
