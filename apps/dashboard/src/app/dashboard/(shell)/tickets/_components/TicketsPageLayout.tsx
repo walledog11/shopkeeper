@@ -129,22 +129,12 @@ function CorrectReplyBanner({
   )
 }
 
-function QueueHeader({
-  forMeCount,
-  onViewAll,
-}: {
-  forMeCount: number
-  onViewAll: () => void
-}) {
+function QueueHeader({ onViewAll }: { onViewAll: () => void }) {
+  // The nav bar already shows "Inbox" + the open count, so this row carries
+  // only the affordance the nav bar lacks: a jump to the full history list.
   return (
-    <div className="shrink-0 px-5 pb-2 pt-5 md:px-6">
-      <div className="mx-auto flex w-full max-w-2xl items-center justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-lg font-semibold text-foreground">Inbox</h1>
-          {forMeCount > 0 && (
-            <span className="text-sm tabular-nums text-faint">{forMeCount}</span>
-          )}
-        </div>
+    <div className="shrink-0 px-5 pb-1 pt-4 md:px-6">
+      <div className="mx-auto flex w-full max-w-2xl justify-end">
         <button
           type="button"
           onClick={onViewAll}
@@ -347,10 +337,7 @@ export function TicketsPageLayout({
   if (isQueueView) {
     return (
       <div className="flex size-full flex-col overflow-hidden bg-background relative">
-        <QueueHeader
-          forMeCount={forMeCount}
-          onViewAll={() => onViewChange("all_open")}
-        />
+        <QueueHeader onViewAll={() => onViewChange("all_open")} />
 
         {flags.listLoading && !activeTicketId ? (
           <div className="flex flex-1 items-center justify-center">
