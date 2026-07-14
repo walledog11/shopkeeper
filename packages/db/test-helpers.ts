@@ -18,6 +18,7 @@ export async function createTestIntegration(
     externalAccountId?: string;
     accessToken?: string | null;
     fromEmail?: string | null;
+    metadata?: Record<string, unknown>;
   } = {},
 ) {
   const {
@@ -25,9 +26,17 @@ export async function createTestIntegration(
     externalAccountId = `test_${randomUUID()}`,
     accessToken = null,
     fromEmail = null,
+    metadata,
   } = options;
   return db.integration.create({
-    data: { organizationId: orgId, platform, externalAccountId, accessToken, fromEmail },
+    data: {
+      organizationId: orgId,
+      platform,
+      externalAccountId,
+      accessToken,
+      fromEmail,
+      ...(metadata && { metadata }),
+    },
   });
 }
 
