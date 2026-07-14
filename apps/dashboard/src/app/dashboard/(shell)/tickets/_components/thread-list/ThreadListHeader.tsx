@@ -175,7 +175,7 @@ export function ThreadListHeader({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Filter tickets"
+          aria-label="Filter conversations"
           className={`relative shrink-0 h-9 px-3 rounded-full flex items-center justify-center gap-1.5 text-xs font-semibold transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 ${
             hasActiveFilter
               ? "border border-foreground/15 bg-background/55 text-foreground"
@@ -200,7 +200,7 @@ export function ThreadListHeader({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Search and filter tickets"
+          aria-label="Search and filter conversations"
           className={`relative size-9 shrink-0 rounded-full flex items-center justify-center transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.38)] backdrop-blur-md backdrop-saturate-150 ${
             hasActiveFilter
               ? "border border-foreground/15 bg-background/55 text-foreground"
@@ -220,7 +220,7 @@ export function ThreadListHeader({
           className={`w-full h-9 rounded-full text-xs font-semibold text-muted-foreground hover:border-foreground/15 hover:bg-background/45 hover:text-foreground transition-all flex items-center justify-center gap-2 ${GLASS_CONTROL_CLASS}`}
         >
           <Search className="size-3.5" />
-          Search tickets
+          Search conversations
         </button>
         {filtersPanel}
       </PopoverContent>
@@ -232,10 +232,10 @@ export function ThreadListHeader({
       <Search className="size-3.5 text-faint shrink-0" />
       <input
         ref={mobile ? inputRef : undefined}
-        aria-label="Search tickets"
+        aria-label="Search conversations"
         value={searchQuery}
         onChange={event => onSearchChange(event.target.value)}
-        placeholder="Search all tickets…"
+        placeholder="Search all conversations…"
         className="flex-1 bg-transparent text-sm text-strong placeholder:text-faint outline-none min-w-0"
       />
       {isSearchLoading && <Loader2 className="size-3.5 text-faint animate-spin shrink-0" />}

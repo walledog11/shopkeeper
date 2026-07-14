@@ -212,10 +212,10 @@ export function useTicketsPageView({
   }
 
   const listLoading = isLoading && dbThreads.length === 0 && !isSearchMode
-  const isBoardView = !isSearchMode && (effectiveActiveView === "for_me" || effectiveActiveView === "all_open")
+  const isQueueView = !isSearchMode && effectiveActiveView === "for_me"
 
   useEffect(() => {
-    if (!isBoardView || !activeTicketId || queryThreadId || listLoading) return
+    if (!isQueueView || !activeTicketId || queryThreadId || listLoading) return
     if (filteredTickets.some(ticket => ticket.id === activeTicketId)) return
 
     setActiveTicketId(null)
@@ -225,7 +225,7 @@ export function useTicketsPageView({
     activeTicketId,
     dispatchPageState,
     filteredTickets,
-    isBoardView,
+    isQueueView,
     listLoading,
     queryThreadId,
     setActiveTicketId,

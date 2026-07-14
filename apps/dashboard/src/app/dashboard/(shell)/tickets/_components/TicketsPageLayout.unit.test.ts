@@ -393,22 +393,27 @@ function ticketDialog() {
   return document.body.querySelector('[role="dialog"]')
 }
 
-describe("TicketsPageLayout board ticket dialog", () => {
-  it("uses the board layout for the closed view", () => {
+describe("TicketsPageLayout queue and history", () => {
+  it("renders the closed view as the history list, not the queue", () => {
     const item = ticket({ id: "closed-1", status: "closed" })
     const view = render(React.createElement(LayoutHarness, {
       tickets: [item],
       activeView: "closed",
     }))
 
-    expect(view.querySelector('[data-testid="tickets-list"]')).toBeNull()
+    // Closed conversations have no triage tier — they belong in the flat
+    // history list (sidebar + pane), not the prioritized queue.
+    expect(view.querySelector('[data-testid="tickets-list"]')).not.toBeNull()
     expect(view.querySelector('[data-testid="thread-list-header"]')).not.toBeNull()
-    expect(view.textContent).toContain("Closed")
-    expect(firstCardSummaryButton(view)).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
   })
 
-  it("opens a conversation dialog when a board card is clicked", () => {
-    const item = ticket()
+  it("opens a conversation dialog when a queue card is clicked", () => {
+    const item = ticket({
+      hasPlan: true,
+      cachedPlan: cachedPlan(quickReplyPlan()),
+      cachedPlanMessageId: "msg-1",
+    })
     const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
 
     expect(ticketDialog()).toBeNull()
@@ -448,7 +453,7 @@ describe("TicketsPageLayout board ticket dialog", () => {
     expect(errorDialog?.textContent).toContain("Unable to load conversation")
   })
 
-  it("does not open the dialog when quick approve is clicked on a collapsed card", () => {
+  it("does not open the dialog when the send action is clicked on a queue card", () => {
     const onQuickApprove = vi.fn()
     const item = ticket({
       hasPlan: true,
@@ -464,6 +469,40 @@ describe("TicketsPageLayout board ticket dialog", () => {
 
     expect(onQuickApprove).toHaveBeenCalledWith(item.id)
     expect(ticketDialog()).toBeNull()
+  })
+
+  it("renders an actionable plan as a 'Ready to send' section card", () => {
+    const item = ticket({
+      hasPlan: true,
+      cachedPlan: cachedPlan(quickReplyPlan()),
+      cachedPlanMessageId: "msg-1",
+    })
+    const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
+
+    const sectionHeadings = Array.from(view.querySelectorAll("h2")).map(node => node.textContent)
+    expect(sectionHeadings).toContain("Ready to send")
+    expect(firstCardSummaryButton(view)).not.toBeNull()
+    expect(view.querySelector('[data-testid="ticket-row-send"]')).not.toBeNull()
+  })
+
+  it("collapses a non-actionable ticket into an expandable quiet row, not a card", () => {
+    // Default ticket: open, last message from the customer, no plan yet -> the
+    // agent is working on it. That is status, not a decision, so it must not
+    // occupy a full card in the queue.
+    const item = ticket()
+    const view = render(React.createElement(LayoutHarness, { tickets: [item] }))
+
+    const cardButton = Array.from(view.querySelectorAll("button")).find(node => node.querySelector("h3"))
+    expect(cardButton).toBeUndefined()
+    expect(view.querySelector('[data-testid="ticket-row"]')).toBeNull()
+
+    const quietToggle = Array.from(view.querySelectorAll("button"))
+      .find(node => node.textContent?.includes("Agent working"))
+    expect(quietToggle).not.toBeUndefined()
+
+    click(quietToggle as Element)
+
+    expect(view.querySelector('[data-testid="ticket-row"]')).not.toBeNull()
   })
 
   it("closes the dialog when the conversation is dismissed", () => {
