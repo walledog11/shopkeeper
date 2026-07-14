@@ -7,23 +7,12 @@ import {
   groupTicketsByTriageTier,
   type TicketTriageTierGroup,
 } from "../../_lib/group-tickets-by-triage-tier"
-import type { TicketTriageTier } from "../../_lib/ticket-list-presentation"
 import { TicketRow } from "../thread-list/TicketRow"
 import type { TicketListView } from "../thread-list/constants"
 import { TicketQueueCard } from "./TicketQueueCard"
 import type { OrgSettings, Ticket } from "@/types"
 
 const SECTION_PREVIEW_LIMIT = 4
-
-const TIER_DOT: Record<TicketTriageTier, string> = {
-  answer: "bg-rose-500",
-  review: "bg-amber-500",
-  ready: "bg-emerald-500",
-  working: "bg-foreground/25",
-  noise: "bg-foreground/20",
-  waiting_customer: "bg-foreground/20",
-  closed: "bg-foreground/15",
-}
 
 interface TicketQueueProps {
   tickets: Ticket[]
@@ -128,8 +117,7 @@ function QueueSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 px-1">
-        <span className={`size-2 rounded-full ${TIER_DOT[group.tier]}`} aria-hidden />
+      <div className="flex items-baseline gap-2 px-1">
         <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
         <span className="text-sm tabular-nums text-faint">{group.tickets.length}</span>
       </div>
@@ -187,7 +175,6 @@ function QuietTierRow({
         className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-foreground/[0.03]"
       >
         <span className="flex min-w-0 items-center gap-2">
-          <span className={`size-1.5 rounded-full ${TIER_DOT[group.tier]}`} aria-hidden />
           <span className="truncate text-sm font-medium text-muted-foreground">{group.label}</span>
         </span>
         <span className="flex shrink-0 items-center gap-1.5 text-xs tabular-nums text-faint">
