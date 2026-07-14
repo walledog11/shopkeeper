@@ -34,5 +34,8 @@ export async function POST(request: Request) {
     forceReauth: true,
   });
 
-  return NextResponse.redirect(authUrl);
+  // This route is submitted by the popup shell as POST. A 303 is required so
+  // the browser follows the provider redirect with GET instead of preserving
+  // POST (the behavior of NextResponse.redirect's default 307).
+  return NextResponse.redirect(authUrl, 303);
 }

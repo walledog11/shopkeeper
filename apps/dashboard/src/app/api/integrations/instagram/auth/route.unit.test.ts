@@ -32,7 +32,9 @@ describe('POST /api/integrations/instagram/auth', () => {
 
     const response = await POST(request);
 
-    expect(response.status).toBe(307);
+    // The popup starts this route with POST; Instagram's authorize endpoint
+    // must be opened with GET, so the redirect must not preserve the method.
+    expect(response.status).toBe(303);
     const location = new URL(response.headers.get('location')!);
     expect(location.origin + location.pathname).toBe('https://www.instagram.com/oauth/authorize');
     expect(Object.fromEntries(location.searchParams)).toEqual({
