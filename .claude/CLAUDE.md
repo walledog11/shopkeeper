@@ -33,6 +33,7 @@ External webhook → `apps/gateway/src/routes/webhooks.ts` (HMAC verify, enqueue
 - `AgentAction` — first-class audit record per agent tool call (tool, category, status, mode, approver); backs `/api/agent/actions` and the Review page
 - `AutonomyShadowDecision` — per-plan shadow record while `autoExecuteMode: "shadow"`: what the agent would have auto-executed vs. what the human decided
 - `OperatorContext` — per (org, chatId) operator pending-state only: `pendingPlan`, `pendingQuestion`, `pendingDigest` (the approval ledger's backing store). **DB-backed, not Redis.**
+- `OperatorEvent` — durable inbound operator-message record (P4-03): persisted+enqueued before the webhook ack, claimed once by the operator-event worker, unique `(channel, providerMessageId)` for dedupe. Telegram-only so far, behind `OPERATOR_DURABLE_QUEUE_TELEGRAM` (sync webhook path is the fallback).
 - `OrgMember` — extends Clerk org membership; Telegram chats bound via `OrgMemberTelegramChat`
 - `KnowledgeBase` (`source: "user" | "shopify"`) / `KbArticle` (tagged for context filtering) / `KbCitation` (per-thread article citation events)
 - `VoiceEdit` — merchant edits to AI drafts, consumed by gateway voice synthesis to refine the brand-voice brief

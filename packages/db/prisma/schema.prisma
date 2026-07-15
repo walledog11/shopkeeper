@@ -68,6 +68,14 @@ enum RefundSpendReservationStatus {
   unknown
 }
 
+enum OperatorEventStatus {
+  pending
+  claimed
+  committed
+  failed
+  unknown
+}
+
 // --- MODELS ---
 
 // One Organization = one Shopify business using the app.
@@ -96,6 +104,7 @@ model Organization {
   defaultEmailIntegration Integration?             @relation("DefaultEmailIntegration", fields: [defaultEmailIntegrationId], references: [id], onDelete: SetNull)
   members                 OrgMember[]
   operatorContexts        OperatorContext[]
+  operatorEvents          OperatorEvent[]
   bindTokens              OrgMemberBindToken[]
   knowledgeBases          KnowledgeBase[]
   kbArticles              KbArticle[]
@@ -346,6 +355,45 @@ model OperatorContext {
   @@unique([organizationId, chatId])
   @@index([organizationId])
   @@map("operator_contexts")
+}
+
+// Durable ingestion record for one inbound operator-channel message (P4-03). The
+// webhook persists this row and enqueues before acknowledging, so an acknowledged
+// merchant instruction survives a crash and is recoverable. The unique
+// (channel, providerMessageId) absorbs provider redeliveries; the claim
+// (pending -> claimed) makes each message drive at most one control action — the
+// only single-use guard for free-form operator turns, which carry no plan claim.
+// Turn commit (status/processedAt) is tracked separately from reply delivery
+// (replyText/replyDeliveredAt) so a stuck confirmation can be re-sent without
+// re-running the side-effectful turn.
+model OperatorEvent {
+  id                String              @id @default(uuid()) @db.Uuid
+  organizationId    String              @map("organization_id") @db.Uuid
+  channel           String              @db.VarChar(16)
+  providerMessageId String              @map("provider_message_id") @db.VarChar(255)
+  chatId            String              @map("chat_id") @db.VarChar(255)
+  spaceId           String?             @map("space_id") @db.VarChar(255)
+  clerkUserId       String              @map("clerk_user_id") @db.VarChar(255)
+  operatorKey       String              @map("operator_key") @db.VarChar(255)
+  body              String              @db.Text
+  metadata          Json?               @db.JsonB
+  status            OperatorEventStatus @default(pending)
+  claimToken        String?             @map("claim_token") @db.Uuid
+  claimedAt         DateTime?           @map("claimed_at") @db.Timestamptz
+  processedAt       DateTime?           @map("processed_at") @db.Timestamptz
+  replyText         String?             @map("reply_text") @db.Text
+  replyDeliveredAt  DateTime?           @map("reply_delivered_at") @db.Timestamptz
+  attempts          Int                 @default(0)
+  lastError         String?             @map("last_error") @db.Text
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([channel, providerMessageId])
+  @@index([organizationId, status, createdAt])
+  @@index([status, updatedAt])
+  @@map("operator_events")
 }
 
 // Extends Clerk.com org membership with a bound Telegram chat so team members
