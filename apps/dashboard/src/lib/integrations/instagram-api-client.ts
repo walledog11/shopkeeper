@@ -34,7 +34,7 @@ export type InstagramApiResult<T> =
 
 export interface InstagramShortLivedToken {
   accessToken: string;
-  userId: string;
+  userId: string | null;
   permissions: string[];
 }
 
@@ -303,7 +303,7 @@ export function exchangeInstagramAuthorizationCode(input: {
       const record = readFirstDataRecord(payload);
       const accessToken = readString(record?.access_token);
       const userId = readString(record?.user_id);
-      if (!accessToken || !userId) return null;
+      if (!accessToken) return null;
       return {
         accessToken,
         userId,
