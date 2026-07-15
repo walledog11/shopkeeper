@@ -51,6 +51,7 @@ function instagramLoginMetadata(
     ...root,
     instagram: {
       ...instagram,
+      accessTokenIssuedAt: input.subscriptionVerifiedAt.toISOString(),
       accountType: input.accountType,
       authModel: 'instagram_login',
       grantedScopes: input.grantedScopes,

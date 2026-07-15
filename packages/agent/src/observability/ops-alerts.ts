@@ -10,6 +10,7 @@ export const OPS_ALERT_CATEGORIES = [
   'queue_health',
   'webhook_signature',
   'provider_send',
+  'provider_cleanup',
   'agent_failure',
   'gmail_inbound',
 ] as const;

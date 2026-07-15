@@ -109,6 +109,7 @@ describe('POST /api/integrations/instagram/callback', () => {
     expect(integration.tokenExpiresAt?.getTime()).toBeGreaterThanOrEqual(before + 5_183_999_000);
     expect(integration.metadata).toMatchObject({
       instagram: {
+        accessTokenIssuedAt: expect.any(String),
         accountType: 'BUSINESS',
         authModel: 'instagram_login',
         grantedScopes: [

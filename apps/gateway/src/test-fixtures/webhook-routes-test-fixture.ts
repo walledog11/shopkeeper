@@ -99,7 +99,7 @@ vi.mock('../storage/blob.js', () => ({
 // Import the router after mocks are hoisted
 import webhookRoutes from '../routes/webhooks.js';
 
-export const INSTAGRAM_SECRET = process.env.INSTAGRAM_APP_SECRET!;
+export const INSTAGRAM_SECRET = process.env.INSTAGRAM_WEBHOOK_APP_SECRET!;
 export const INSTAGRAM_VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN!;
 export const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
 export const GMAIL_PUBSUB_AUDIENCE = 'https://gateway.example.com/webhooks/gmail/push';

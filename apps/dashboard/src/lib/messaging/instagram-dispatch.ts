@@ -39,6 +39,12 @@ function hasVerifiedMessagingPermission(metadata: Record<string, unknown>): bool
   return INSTAGRAM_REQUIRED_SCOPES.every(scope => grantedScopes.includes(scope))
 }
 
+function reconnectRequiredByHealth(metadata: Record<string, unknown>): "permission" | "connection" | null {
+  if (metadata.healthStatus !== "reconnect_required") return null
+  const lastHealthError = isRecord(metadata.lastHealthError) ? metadata.lastHealthError : null
+  return lastHealthError?.category === "permission" ? "permission" : "connection"
+}
+
 function mapInstagramProviderError(error: InstagramProviderError): {
   detail: string
   error: string
@@ -157,6 +163,20 @@ export async function dispatchInstagramDirect(
       threadId: thread.id,
     })
     return { ok: false, error: LEGACY_CONVERSATION }
+  }
+
+  const healthReconnect = reconnectRequiredByHealth(metadata)
+  if (healthReconnect) {
+    const permissionFailure = healthReconnect === "permission"
+    await recordFailure({
+      detail: permissionFailure
+        ? "Instagram health check found missing messaging access"
+        : "Instagram health check requires reconnect",
+      integrationId: igIntegration.id,
+      organizationId: org.id,
+      threadId: thread.id,
+    })
+    return { ok: false, error: permissionFailure ? MISSING_PERMISSION : EXPIRED_CONNECTION }
   }
 
   if (!hasVerifiedMessagingPermission(metadata)) {

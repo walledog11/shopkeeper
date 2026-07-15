@@ -120,6 +120,8 @@ Rules:
 Optional:
 
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` for Instagram Login OAuth.
+- `INSTAGRAM_WEBHOOK_APP_SECRET` only when the dashboard's local-development webhook proxy is used;
+  set it to the parent Meta app secret that signs webhook deliveries.
 - `TELEGRAM_BOT_USERNAME` for the operator-channel deep link in the dashboard.
 - `USPS_CLIENT_ID`, `USPS_CLIENT_SECRET` if direct USPS tracking is ever reintroduced.
 
@@ -174,7 +176,9 @@ Optional:
   native-only); production stays `hybrid` until the last forwarding merchant migrates.
 - `GATEWAY_RUNTIME_ROLE`
   Defaults to `all`. Only set it if you intentionally split server and worker processes.
-- `INSTAGRAM_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for Instagram DM webhooks.
+- `INSTAGRAM_WEBHOOK_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for Instagram DM webhooks.
+  `INSTAGRAM_WEBHOOK_APP_SECRET` is the parent Meta app secret that owns the webhook subscription,
+  not the separate Instagram Login OAuth secret.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` for the Telegram operator channel.
 
 ### Email architecture: independent Gmail and forwarding integrations

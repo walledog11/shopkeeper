@@ -361,6 +361,41 @@ describe('dispatchMessage', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it('refuses to send when the Instagram health check requires reconnect', async () => {
+    const integration = await createInstagramLoginIntegration();
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: {
+          instagram: {
+            authModel: 'instagram_login',
+            grantedScopes: [
+              'instagram_business_basic',
+              'instagram_business_manage_messages',
+            ],
+            healthStatus: 'reconnect_required',
+            lastHealthError: {
+              category: 'permission',
+              code: 'messages_subscription_missing',
+            },
+            permissionsVerified: true,
+          },
+        },
+      },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_health_reconnect_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Instagram messaging permission is missing — reconnect Instagram',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('keeps legacy Page-token Instagram conversations read-only', async () => {
     const integration = await createTestIntegration(org.id, {
       platform: ChannelType.ig_dm,

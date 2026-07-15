@@ -1,13 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
-import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
+import {
+  cleanupTestData,
+  createTestCustomer,
+  createTestIntegration,
+  createTestOrg,
+  createTestThread,
+} from '@shopkeeper/db/test-helpers';
 
-const { mockFetch } = vi.hoisted(() => ({
+const { mockEmitOpsAlert, mockFetch } = vi.hoisted(() => ({
+  mockEmitOpsAlert: vi.fn(),
   mockFetch: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(),
+}));
+vi.mock('@/lib/server/ops-alerts', () => ({
+  emitOpsAlert: mockEmitOpsAlert,
 }));
 
 vi.stubGlobal('fetch', mockFetch);
@@ -118,6 +128,112 @@ describe('DELETE /api/integrations/[id]', () => {
     await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
       .resolves.toMatchObject({ defaultEmailIntegrationId: gmail.id });
   });
+
+  it('unsubscribes an Instagram Login account before deleting it locally', async () => {
+    const integration = await createInstagramLoginIntegration(org.id);
+    const customer = await createTestCustomer(org.id, 'instagram-disconnect-customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: { replyIntegrationId: integration.id },
+    });
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({ success: true }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 200,
+    }));
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(204);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`https://graph.instagram.com/v25.0/${integration.externalAccountId}/subscribed_apps`);
+    expect(init).toMatchObject({
+      method: 'DELETE',
+      headers: expect.objectContaining({ Authorization: 'Bearer instagram-access-token' }),
+    });
+    expect(String(init.body)).toBe('subscribed_fields=messages');
+    expect(new URL(url).searchParams.has('access_token')).toBe(false);
+    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
+    await expect(db.thread.findUniqueOrThrow({ where: { id: thread.id } }))
+      .resolves.toMatchObject({ replyIntegrationId: null });
+    expect(mockEmitOpsAlert).not.toHaveBeenCalled();
+  });
+
+  it('deletes local Instagram access and emits a cleanup warning when unsubscribe fails', async () => {
+    const integration = await createInstagramLoginIntegration(org.id);
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      error: {
+        code: 2,
+        error_subcode: 99,
+        fbtrace_id: 'trace-cleanup',
+        message: 'Meta temporarily unavailable',
+      },
+    }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 503,
+    }));
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(204);
+    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
+    expect(mockEmitOpsAlert).toHaveBeenCalledWith(expect.objectContaining({
+      category: 'provider_cleanup',
+      level: 'warning',
+      tags: { channel: 'ig_dm', provider: 'meta' },
+      extra: expect.objectContaining({
+        accountId: integration.externalAccountId,
+        category: 'transient_provider_failure',
+        code: 2,
+        httpStatus: 503,
+        integrationId: integration.id,
+        manualCleanupRequired: true,
+        organizationId: org.id,
+        reason: 'provider_unsubscribe_failed',
+        requestId: 'trace-cleanup',
+        subcode: 99,
+      }),
+    }));
+  });
+
+  it('does not expose another organization Instagram token during disconnect', async () => {
+    otherOrg = await createTestOrg();
+    const integration = await createInstagramLoginIntegration(otherOrg.id);
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(404);
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.integration.findUnique({ where: { id: integration.id } }))
+      .resolves.not.toBeNull();
+  });
+
+  it('deletes legacy Page-token rows without sending them to the Instagram Login API', async () => {
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: `legacy-ig-${org.id.slice(0, 8)}`,
+      accessToken: 'legacy-page-token',
+    });
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${integration.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: integration.id }) },
+    );
+
+    expect(response.status).toBe(204);
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.integration.findUnique({ where: { id: integration.id } })).resolves.toBeNull();
+  });
 });
 
 describe('PATCH /api/integrations/[id]', () => {
@@ -196,6 +312,20 @@ async function createActiveGmailIntegration(organizationId: string) {
           historyId: '12345',
           watchExpiration: '1783382400000',
         },
+      },
+    },
+  });
+}
+
+async function createInstagramLoginIntegration(organizationId: string) {
+  return createTestIntegration(organizationId, {
+    platform: ChannelType.ig_dm,
+    externalAccountId: `ig-${organizationId.slice(0, 8)}`,
+    accessToken: 'instagram-access-token',
+    metadata: {
+      instagram: {
+        authModel: 'instagram_login',
+        subscribedFields: ['messages'],
       },
     },
   });

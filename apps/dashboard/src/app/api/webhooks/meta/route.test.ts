@@ -13,7 +13,8 @@ import { GET, POST } from './route';
 
 beforeEach(() => {
   mockFetch.mockReset();
-  vi.stubEnv('INSTAGRAM_APP_SECRET', 'instagram-secret');
+  vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', 'parent-meta-secret');
+  vi.stubEnv('INSTAGRAM_APP_SECRET', 'instagram-oauth-secret');
 });
 
 describe('/api/webhooks/meta forwarding', () => {
@@ -45,7 +46,7 @@ describe('/api/webhooks/meta forwarding', () => {
 
   it('validates and forwards the exact signed body', async () => {
     const body = Buffer.from(JSON.stringify({ object: 'instagram', entry: [] }));
-    const signature = `sha256=${createHmac('sha256', 'instagram-secret').update(body).digest('hex')}`;
+    const signature = `sha256=${createHmac('sha256', 'parent-meta-secret').update(body).digest('hex')}`;
     mockFetch.mockResolvedValue(new Response('EVENT_RECEIVED', { status: 202 }));
     const request = new NextRequest('http://dashboard.test/api/webhooks/meta?source=dashboard', {
       method: 'POST',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { db } from '@shopkeeper/db';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
 import { stopGmailWatchIfUnused } from '@/app/api/integrations/_lib/gmail-watch';
+import { unsubscribeInstagramBeforeDisconnect } from '@/app/api/integrations/_lib/instagram-disconnect';
 import { readRequiredJsonObject } from '@/lib/api/body';
 import { BadRequestError } from '@/lib/api/errors';
 
@@ -70,6 +71,7 @@ export const DELETE = withOrgRoute<{ id: string }>(
     assertEntityInOrg(integration, org.id, 'Integration not found');
 
     await stopGmailWatchIfUnused(integration);
+    await unsubscribeInstagramBeforeDisconnect(integration);
     await db.$transaction(async (tx) => {
       const organization = await tx.organization.findUniqueOrThrow({
         where: { id: org.id },

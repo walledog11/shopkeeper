@@ -118,6 +118,7 @@ jobs:
       INTERNAL_API_SECRET_PREV: test-internal-secret-prev
       INSTAGRAM_APP_ID: test-instagram-app-id
       INSTAGRAM_APP_SECRET: test-instagram-secret
+      INSTAGRAM_WEBHOOK_APP_SECRET: test-instagram-webhook-secret
       INSTAGRAM_WEBHOOK_VERIFY_TOKEN: test-instagram-verify-token
       META_APP_ID: test-meta-app-id
       META_APP_SECRET: test-meta-secret

@@ -150,7 +150,9 @@ export interface InstagramWebhookConfig {
 export function getInstagramWebhookConfig(): InstagramWebhookConfig {
   return {
     verifyToken: readOptionalTrimmedEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN'),
-    appSecret: readOptionalTrimmedEnv('INSTAGRAM_APP_SECRET'),
+    appSecret:
+      readOptionalTrimmedEnv('INSTAGRAM_WEBHOOK_APP_SECRET')
+      ?? readOptionalTrimmedEnv('INSTAGRAM_APP_SECRET'),
   };
 }
 

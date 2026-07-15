@@ -64,6 +64,7 @@ export function getTestEnv(baseEnv = process.env) {
     E2E_TEST_ORG_NAME: baseEnv.E2E_TEST_ORG_NAME || 'E2E Test Store',
     INSTAGRAM_APP_ID: baseEnv.INSTAGRAM_APP_ID || 'test-instagram-app-id',
     INSTAGRAM_APP_SECRET: baseEnv.INSTAGRAM_APP_SECRET || 'test-instagram-secret',
+    INSTAGRAM_WEBHOOK_APP_SECRET: baseEnv.INSTAGRAM_WEBHOOK_APP_SECRET || 'test-instagram-webhook-secret',
     INSTAGRAM_WEBHOOK_VERIFY_TOKEN: baseEnv.INSTAGRAM_WEBHOOK_VERIFY_TOKEN || 'test-instagram-verify-token',
     META_APP_ID: baseEnv.META_APP_ID || 'test-meta-app-id',
     META_APP_SECRET: baseEnv.META_APP_SECRET || 'test-meta-secret',

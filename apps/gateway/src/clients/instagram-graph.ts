@@ -43,6 +43,11 @@ export interface InstagramMessagingUserProfile {
   profilePictureUrl: string | null;
 }
 
+export interface InstagramMessageSubscription {
+  fields: string[];
+  messagesActive: boolean;
+}
+
 interface ProviderErrorDescriptor {
   code: string | number | null;
   message: string | null;
@@ -223,6 +228,28 @@ export function refreshInstagramAccessToken(
       expiresIn,
       tokenType: readString(payload.token_type),
     };
+  });
+}
+
+export function fetchInstagramMessageSubscription(
+  instagramAccountId: string,
+  accessToken: string,
+): Promise<InstagramGraphResult<InstagramMessageSubscription>> {
+  const url = new URL(
+    `${INSTAGRAM_GRAPH_BASE_URL}/${encodeURIComponent(instagramAccountId)}/subscribed_apps`,
+  );
+  return requestInstagramJson(url, {
+    method: 'GET',
+    headers: bearerHeaders(accessToken),
+  }, (payload) => {
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return null;
+    const fields = [...new Set(payload.data.flatMap((item) => {
+      if (!isRecord(item) || !Array.isArray(item.subscribed_fields)) return [];
+      return item.subscribed_fields
+        .map(readString)
+        .filter((field): field is string => field !== null);
+    }))];
+    return { fields, messagesActive: fields.includes('messages') };
   });
 }
 

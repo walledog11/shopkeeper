@@ -32,9 +32,41 @@ export function isTokenExpiringSoon(integration: Integration) {
   return msLeft > 0 && msLeft / 86_400_000 < 10
 }
 
+type InstagramHealthStatus = "healthy" | "degraded" | "reconnect_required"
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function getInstagramHealth(integration: Integration): {
+  errorCategory: string | null
+  errorCode: string | number | null
+  status: InstagramHealthStatus | null
+} {
+  if (!isRecord(integration.metadata) || !isRecord(integration.metadata.instagram)) {
+    return { errorCategory: null, errorCode: null, status: null }
+  }
+  const instagram = integration.metadata.instagram
+  const status = instagram.healthStatus === "healthy"
+    || instagram.healthStatus === "degraded"
+    || instagram.healthStatus === "reconnect_required"
+    ? instagram.healthStatus
+    : null
+  const error = isRecord(instagram.lastHealthError) ? instagram.lastHealthError : null
+  const errorCategory = typeof error?.category === "string" ? error.category : null
+  const errorCode = typeof error?.code === "string" || typeof error?.code === "number"
+    ? error.code
+    : null
+  return { errorCategory, errorCode, status }
+}
+
 export function hasIntegrationTokenAlert(integration: Integration) {
   if (integration.platform === "shopify") {
     return resolveShopifyConnectionState(integration) === "invalid"
+  }
+  if (integration.platform === "ig_dm") {
+    const health = getInstagramHealth(integration)
+    if (health.status === "degraded" || health.status === "reconnect_required") return true
   }
   return isTokenExpired(integration) || isTokenExpiringSoon(integration)
 }
@@ -140,6 +172,27 @@ export function deriveIntegrationHealth(
   gmailNativeInboundEnabled = false,
 ): IntegrationHealth {
   if (!connected.length) return { state: "not-connected", note: null, canFix: false }
+
+  if (connectType === "ig") {
+    const instagramHealth = getInstagramHealth(connected[0])
+    if (instagramHealth.status === "reconnect_required") {
+      const note = instagramHealth.errorCode === "messages_subscription_missing"
+        ? "Instagram is no longer subscribed to DMs — reconnect Instagram."
+        : instagramHealth.errorCode === "account_identity_mismatch"
+          ? "The connected Instagram account changed — reconnect Instagram."
+          : instagramHealth.errorCategory === "permission"
+            ? "Instagram permissions changed — reconnect Instagram to restore DMs."
+            : "Your Instagram connection needs to be renewed — reconnect Instagram."
+      return { state: "needs-attention", note, canFix: true }
+    }
+    if (instagramHealth.status === "degraded") {
+      return {
+        state: "needs-attention",
+        note: "Instagram health could not be confirmed — Shopkeeper will retry automatically.",
+        canFix: false,
+      }
+    }
+  }
 
   if (connectType === "shopify") {
     const shopifyState = resolveShopifyConnectionState(connected[0])

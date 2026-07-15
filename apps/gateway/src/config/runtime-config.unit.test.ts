@@ -171,20 +171,29 @@ describe('isGmailNativeInboundEnabled', () => {
 });
 
 describe('getInstagramWebhookConfig', () => {
-  it('reads and trims only Instagram-specific webhook credentials', () => {
+  it('prefers and trims the dedicated webhook signing secret', () => {
     vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '  instagram-verify-token  ');
+    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', ' parent-meta-app-secret ');
     vi.stubEnv('INSTAGRAM_APP_SECRET', ' instagram-app-secret ');
     vi.stubEnv('META_VERIFY_TOKEN', 'legacy-verify-token');
     vi.stubEnv('META_APP_SECRET', 'legacy-meta-secret');
 
     expect(getInstagramWebhookConfig()).toEqual({
       verifyToken: 'instagram-verify-token',
-      appSecret: 'instagram-app-secret',
+      appSecret: 'parent-meta-app-secret',
     });
+  });
+
+  it('falls back to the previous Instagram app secret variable', () => {
+    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', '');
+    vi.stubEnv('INSTAGRAM_APP_SECRET', ' instagram-app-secret ');
+
+    expect(getInstagramWebhookConfig().appSecret).toBe('instagram-app-secret');
   });
 
   it('returns nulls for missing Instagram credentials', () => {
     vi.stubEnv('INSTAGRAM_WEBHOOK_VERIFY_TOKEN', '');
+    vi.stubEnv('INSTAGRAM_WEBHOOK_APP_SECRET', '   ');
     vi.stubEnv('INSTAGRAM_APP_SECRET', '   ');
 
     expect(getInstagramWebhookConfig()).toEqual({

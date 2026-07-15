@@ -134,7 +134,7 @@ export function registerMetaWebhookRoutes(router: Router): void {
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
     if (!appSecret) {
-      logger.error('[Webhook] INSTAGRAM_APP_SECRET is not configured — rejecting.');
+      logger.error('[Webhook] Instagram webhook signing secret is not configured — rejecting.');
       return res.sendStatus(500);
     }
     if (!signature || !req.rawBody) {

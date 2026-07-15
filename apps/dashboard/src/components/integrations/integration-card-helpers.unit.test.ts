@@ -19,6 +19,62 @@ function gmailIntegration(metadata: Record<string, unknown>): Integration {
   }
 }
 
+function instagramIntegration(
+  healthStatus: "healthy" | "degraded" | "reconnect_required",
+  lastHealthError: Record<string, unknown> | null = null,
+): Integration {
+  return {
+    id: "instagram-integration",
+    organizationId: "org-id",
+    platform: "ig_dm",
+    externalAccountId: "ig-1",
+    fromEmail: "merchant",
+    tokenExpiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    metadata: {
+      instagram: { authModel: "instagram_login", healthStatus, lastHealthError },
+    },
+    createdAt: new Date().toISOString(),
+  }
+}
+
+describe("Instagram integration health", () => {
+  it("shows a transient health failure without asking the merchant to reconnect", () => {
+    const integration = instagramIntegration("degraded", {
+      category: "transient_provider_failure",
+      code: 2,
+    })
+
+    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+      state: "needs-attention",
+      note: "Instagram health could not be confirmed — Shopkeeper will retry automatically.",
+      canFix: false,
+    })
+  })
+
+  it("offers reconnect when the messages subscription is missing", () => {
+    const integration = instagramIntegration("reconnect_required", {
+      category: "permission",
+      code: "messages_subscription_missing",
+    })
+
+    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+      state: "needs-attention",
+      note: "Instagram is no longer subscribed to DMs — reconnect Instagram.",
+      canFix: true,
+    })
+  })
+
+  it("keeps a confirmed healthy connection working", () => {
+    const integration = instagramIntegration("healthy")
+
+    expect(deriveIntegrationHealth("ig", [integration], null)).toEqual({
+      state: "working",
+      note: null,
+      canFix: false,
+    })
+  })
+})
+
 describe("Gmail integration health", () => {
   it("requires reconnection when gmail.readonly was not granted", () => {
     const integration = gmailIntegration({

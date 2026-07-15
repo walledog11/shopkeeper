@@ -1,10 +1,13 @@
+import type { Prisma } from '@prisma/client';
 import { db } from '@shopkeeper/db';
 import {
-  checkInstagramAccountAccess,
-  exchangeFacebookLongLivedToken,
-} from '../clients/meta-graph.js';
+  fetchConnectedInstagramAccount,
+  fetchInstagramMessageSubscription,
+  refreshInstagramAccessToken,
+  type InstagramProviderError,
+} from '../clients/instagram-graph.js';
 import { refreshTikTokShopAccessToken } from '../clients/tiktok-shop.js';
-import { getMetaWebhookConfig, getTikTokShopApiConfig } from '../config/runtime-config.js';
+import { getTikTokShopApiConfig } from '../config/runtime-config.js';
 import { CHANNEL, JOB, QUEUE } from '../constants.js';
 import logger from '../logger.js';
 import {
@@ -16,17 +19,333 @@ import {
 } from './registration.js';
 
 const CONCURRENCY = 5;
+const INSTAGRAM_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
+const INSTAGRAM_MIN_REFRESH_AGE_MS = ONE_DAY_MS;
 const TIKTOK_REFRESH_WINDOW_MS = 7 * ONE_DAY_MS;
 const EPOCH_SENTINEL = new Date(0);
 
+type InstagramHealthStatus = 'healthy' | 'degraded' | 'reconnect_required';
+
+interface InstagramIntegrationRow {
+  accessToken: string | null;
+  createdAt: Date;
+  externalAccountId: string;
+  id: string;
+  metadata: unknown;
+  organizationId: string;
+  tokenExpiresAt: Date | null;
+}
+
+interface InstagramHealthError {
+  category: InstagramProviderError['category'];
+  code: string | number | null;
+  httpStatus: number;
+  requestId: string | null;
+  subcode: number | null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readTimestamp(value: unknown): number | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function instagramMetadata(metadata: unknown): Record<string, unknown> {
+  if (!isRecord(metadata) || !isRecord(metadata.instagram)) return {};
+  return metadata.instagram;
+}
+
+function tokenIssuedAtMs(integration: InstagramIntegrationRow): number {
+  const instagram = instagramMetadata(integration.metadata);
+  return readTimestamp(instagram.accessTokenIssuedAt)
+    ?? readTimestamp(instagram.lastRefreshAt)
+    ?? integration.createdAt.getTime();
+}
+
+function providerHealthError(error: InstagramProviderError): InstagramHealthError {
+  return {
+    category: error.category,
+    code: error.code,
+    httpStatus: error.httpStatus,
+    requestId: error.requestId,
+    subcode: error.subcode,
+  };
+}
+
+function localHealthError(
+  code: string,
+  category: InstagramProviderError['category'] = 'validation',
+): InstagramHealthError {
+  return { category, code, httpStatus: 0, requestId: null, subcode: null };
+}
+
+function mergeInstagramHealthMetadata(
+  metadata: unknown,
+  input: {
+    error: InstagramHealthError | null;
+    now: Date;
+    status: InstagramHealthStatus;
+    subscriptionFields?: string[];
+    successful?: boolean;
+    tokenRefreshed?: boolean;
+  },
+): Prisma.InputJsonObject {
+  const root = isRecord(metadata) ? { ...metadata } : {};
+  const current = instagramMetadata(metadata);
+  const checkedAt = input.now.toISOString();
+  return {
+    ...root,
+    instagram: {
+      ...current,
+      healthStatus: input.status,
+      lastHealthCheckAt: checkedAt,
+      lastHealthError: input.error,
+      ...(input.successful ? { lastSuccessfulHealthCheckAt: checkedAt } : {}),
+      ...(input.subscriptionFields !== undefined
+        ? {
+            lastSubscriptionCheckAt: checkedAt,
+            subscribedFields: input.subscriptionFields,
+            ...(input.subscriptionFields.includes('messages')
+              ? { lastSuccessfulSubscriptionAt: checkedAt }
+              : {}),
+          }
+        : {}),
+      ...(input.tokenRefreshed
+        ? { accessTokenIssuedAt: checkedAt, lastRefreshAt: checkedAt }
+        : {}),
+    },
+  } as Prisma.InputJsonObject;
+}
+
+function isReconnectRequired(error: InstagramProviderError): boolean {
+  return error.category === 'authentication' || error.category === 'permission';
+}
+
+function logInstagramProviderFailure(
+  integration: InstagramIntegrationRow,
+  operation: string,
+  error: InstagramProviderError,
+): void {
+  const log = isReconnectRequired(error) ? logger.error.bind(logger) : logger.warn.bind(logger);
+  log(
+    {
+      accountId: integration.externalAccountId,
+      category: error.category,
+      code: error.code,
+      httpStatus: error.httpStatus,
+      organizationId: integration.organizationId,
+      requestId: error.requestId,
+      subcode: error.subcode,
+    },
+    `[TokenHealth] Instagram ${operation} failed`,
+  );
+}
+
+async function recordInstagramProviderFailure(
+  integration: InstagramIntegrationRow,
+  now: Date,
+  operation: string,
+  error: InstagramProviderError,
+  subscriptionFields?: string[],
+): Promise<void> {
+  logInstagramProviderFailure(integration, operation, error);
+  const reconnectRequired = isReconnectRequired(error);
+  await db.integration.update({
+    where: { id: integration.id },
+    data: {
+      metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        error: providerHealthError(error),
+        now,
+        status: reconnectRequired ? 'reconnect_required' : 'degraded',
+        ...(subscriptionFields ? { subscriptionFields } : {}),
+      }),
+      refreshToken: null,
+      ...(error.category === 'authentication' ? { tokenExpiresAt: EPOCH_SENTINEL } : {}),
+    },
+  });
+}
+
+async function checkInstagramIntegration(
+  integration: InstagramIntegrationRow,
+  now: Date,
+): Promise<void> {
+  if (!integration.accessToken || integration.tokenExpiresAt?.getTime() === 0) return;
+
+  const nowMs = now.getTime();
+  if (integration.tokenExpiresAt && integration.tokenExpiresAt.getTime() <= nowMs) {
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+          error: localHealthError('stored_token_expired', 'authentication'),
+          now,
+          status: 'reconnect_required',
+        }),
+        refreshToken: null,
+        tokenExpiresAt: EPOCH_SENTINEL,
+      },
+    });
+    return;
+  }
+
+  const account = await fetchConnectedInstagramAccount(integration.accessToken);
+  if (!account.ok) {
+    await recordInstagramProviderFailure(integration, now, 'account probe', account.error);
+    return;
+  }
+  if (account.data.userId !== integration.externalAccountId) {
+    logger.error(
+      {
+        accountId: integration.externalAccountId,
+        integrationId: integration.id,
+        organizationId: integration.organizationId,
+        providerAccountId: account.data.userId,
+      },
+      '[TokenHealth] Instagram account identity changed',
+    );
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+          error: localHealthError('account_identity_mismatch'),
+          now,
+          status: 'reconnect_required',
+        }),
+        refreshToken: null,
+      },
+    });
+    return;
+  }
+
+  const subscription = await fetchInstagramMessageSubscription(
+    integration.externalAccountId,
+    integration.accessToken,
+  );
+  if (!subscription.ok) {
+    await recordInstagramProviderFailure(integration, now, 'subscription probe', subscription.error);
+    return;
+  }
+  if (!subscription.data.messagesActive) {
+    logger.error(
+      {
+        accountId: integration.externalAccountId,
+        integrationId: integration.id,
+        organizationId: integration.organizationId,
+        subscribedFields: subscription.data.fields,
+      },
+      '[TokenHealth] Instagram messages subscription is inactive',
+    );
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+          error: localHealthError('messages_subscription_missing', 'permission'),
+          now,
+          status: 'reconnect_required',
+          subscriptionFields: subscription.data.fields,
+        }),
+        refreshToken: null,
+      },
+    });
+    return;
+  }
+
+  if (!integration.tokenExpiresAt) {
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+          error: localHealthError('token_expiry_missing'),
+          now,
+          status: 'degraded',
+          subscriptionFields: subscription.data.fields,
+        }),
+        refreshToken: null,
+      },
+    });
+    return;
+  }
+
+  const shouldRefresh = integration.tokenExpiresAt.getTime() - nowMs <= INSTAGRAM_REFRESH_WINDOW_MS
+    && nowMs - tokenIssuedAtMs(integration) >= INSTAGRAM_MIN_REFRESH_AGE_MS;
+  if (!shouldRefresh) {
+    await db.integration.update({
+      where: { id: integration.id },
+      data: {
+        metadata: mergeInstagramHealthMetadata(integration.metadata, {
+          error: null,
+          now,
+          status: 'healthy',
+          subscriptionFields: subscription.data.fields,
+          successful: true,
+        }),
+        refreshToken: null,
+      },
+    });
+    return;
+  }
+
+  const refreshed = await refreshInstagramAccessToken(integration.accessToken);
+  if (!refreshed.ok) {
+    await recordInstagramProviderFailure(
+      integration,
+      now,
+      'token refresh',
+      refreshed.error,
+      subscription.data.fields,
+    );
+    return;
+  }
+
+  await db.integration.update({
+    where: { id: integration.id },
+    data: {
+      accessToken: refreshed.data.accessToken,
+      metadata: mergeInstagramHealthMetadata(integration.metadata, {
+        error: null,
+        now,
+        status: 'healthy',
+        subscriptionFields: subscription.data.fields,
+        successful: true,
+        tokenRefreshed: true,
+      }),
+      refreshToken: null,
+      tokenExpiresAt: new Date(nowMs + refreshed.data.expiresIn * 1000),
+    },
+  });
+  logger.info(
+    {
+      accountId: integration.externalAccountId,
+      organizationId: integration.organizationId,
+      tokenExpiresAt: new Date(nowMs + refreshed.data.expiresIn * 1000).toISOString(),
+    },
+    '[TokenHealth] Instagram token refreshed',
+  );
+}
+
 export async function runTokenHealthCheck(): Promise<void> {
   logger.info('[TokenHealth] Running daily Instagram token check');
-
-  const { appId, appSecret } = getMetaWebhookConfig();
+  const now = new Date();
 
   const igIntegrations = await db.integration.findMany({
-    where: { platform: CHANNEL.IG_DM, accessToken: { not: null } },
-    select: { id: true, organizationId: true, externalAccountId: true, accessToken: true, refreshToken: true, tokenExpiresAt: true },
+    where: {
+      platform: CHANNEL.IG_DM,
+      accessToken: { not: null },
+      metadata: { path: ['instagram', 'authModel'], equals: 'instagram_login' },
+    },
+    select: {
+      id: true,
+      organizationId: true,
+      externalAccountId: true,
+      accessToken: true,
+      createdAt: true,
+      metadata: true,
+      tokenExpiresAt: true,
+    },
   });
 
   logger.info({ count: igIntegrations.length }, '[TokenHealth] Checking ig_dm integrations');
@@ -34,58 +353,7 @@ export async function runTokenHealthCheck(): Promise<void> {
   for (let i = 0; i < igIntegrations.length; i += CONCURRENCY) {
     await Promise.all(igIntegrations.slice(i, i + CONCURRENCY).map(async (integration) => {
       try {
-        if (!integration.accessToken) return;
-
-        const check = await checkInstagramAccountAccess(
-          integration.externalAccountId,
-          integration.accessToken,
-        );
-
-        if (check.error) {
-          logger.error({ organizationId: integration.organizationId, accountId: integration.externalAccountId, err: check.error.message }, '[TokenHealth] Token invalid - marking as expired');
-          if (integration.tokenExpiresAt?.getTime() !== 0) {
-            await db.integration.update({
-              where: { id: integration.id },
-              data: { tokenExpiresAt: new Date(0) },
-            });
-          }
-          return;
-        }
-
-        const nowMs = Date.now();
-        const updateData: { tokenExpiresAt: Date; refreshToken?: string } = {
-          tokenExpiresAt: new Date(nowMs + 60 * ONE_DAY_MS),
-        };
-
-        if (integration.refreshToken && appId && appSecret) {
-          try {
-            const refresh = await exchangeFacebookLongLivedToken(
-              appId,
-              appSecret,
-              integration.refreshToken,
-            );
-
-            if (refresh.data?.access_token) {
-              updateData.refreshToken = refresh.data.access_token;
-              logger.info({ organizationId: integration.organizationId }, '[TokenHealth] User token refreshed');
-            } else {
-              logger.warn({ organizationId: integration.organizationId, err: refresh.error?.message }, '[TokenHealth] User token refresh failed - page token still valid');
-            }
-          } catch (refreshErr) {
-            logger.warn({ organizationId: integration.organizationId, err: (refreshErr as Error).message }, '[TokenHealth] User token refresh error - page token still valid');
-          }
-        }
-
-        await db.integration.update({
-          where: { id: integration.id },
-          data: updateData,
-        });
-
-        const daysLeft = integration.tokenExpiresAt
-          ? Math.round((integration.tokenExpiresAt.getTime() - nowMs) / ONE_DAY_MS)
-          : 'unknown';
-
-        logger.info({ organizationId: integration.organizationId, daysLeft, refreshed: !!updateData.refreshToken }, '[TokenHealth] Token healthy, reset to 60d');
+        await checkInstagramIntegration(integration, now);
       } catch (err) {
         logger.error({ organizationId: integration.organizationId, err: (err as Error).message }, '[TokenHealth] Failed to check token');
       }

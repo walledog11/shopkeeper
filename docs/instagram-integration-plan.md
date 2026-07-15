@@ -175,11 +175,14 @@ Dashboard:
 
 Gateway:
 
-- `INSTAGRAM_APP_SECRET` for `X-Hub-Signature-256` verification
+- `INSTAGRAM_WEBHOOK_APP_SECRET` for `X-Hub-Signature-256` verification. Use the parent Meta app
+  secret that owns the Instagram webhook subscription, not the Instagram Login OAuth secret.
 - `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for the GET verification handshake
 
-The dashboard also needs `INSTAGRAM_APP_SECRET` when the local-development webhook proxy verifies
-signatures. The gateway does not need the Instagram App ID for token refresh.
+The dashboard also needs `INSTAGRAM_WEBHOOK_APP_SECRET` when the local-development webhook proxy
+verifies signatures. The gateway does not need the Instagram App ID or OAuth secret for token
+refresh. `INSTAGRAM_APP_SECRET` remains a temporary compatibility fallback in the webhook verifier
+while deployments migrate to the dedicated signing-secret variable.
 
 Retire Instagram usage of:
 
@@ -330,7 +333,7 @@ Rewrite the Instagram branch of `apps/gateway/src/routes/webhooks-meta.ts` aroun
 
 1. Keep GET verification but read `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`.
 2. Require the raw request body and verify `X-Hub-Signature-256` using
-   `INSTAGRAM_APP_SECRET` with constant-time comparison.
+   `INSTAGRAM_WEBHOOK_APP_SECRET` with constant-time comparison.
 3. Accept only `object: "instagram"` for this integration.
 4. Reject malformed signatures with 401.
 5. Return 200 for valid deliveries even when an individual event is unsupported or belongs to an
@@ -472,6 +475,13 @@ The UI check is an early guard only; Meta's response remains authoritative.
 
 ## 10. Phase 7 — Token Lifecycle and Connection Health
 
+**Status: Complete (2026-07-14).** The daily job now selects only Instagram Login integrations,
+probes account identity and the `messages` subscription, refreshes eligible long-lived tokens with
+Meta's returned token and expiry, clears legacy refresh tokens, and records healthy, degraded, or
+reconnect-required metadata without expiring connections for transient failures. Dashboard health
+and outbound guards consume the definitive reconnect state. A controlled real-token refresh remains
+part of the Standard Access acceptance pass.
+
 Replace the Facebook/Page-token branch in `token-health.ts` with Instagram long-lived-token logic.
 
 ### Daily health job
@@ -510,6 +520,14 @@ Do not display a fabricated expiry based solely on a successful account probe.
 ---
 
 ## 11. Phase 8 — Disconnect and Replacement Cleanup
+
+**Status: Complete (2026-07-14).** Disconnect now verifies workspace ownership before any provider
+call, unsubscribes Instagram Login accounts from `messages`, and always removes local access even
+when Meta is unavailable. Failed provider cleanup emits a structured operational warning for manual
+follow-up, integration deletion clears related thread reply routes through the database relation, and
+legacy Page tokens are never sent to the Instagram Login endpoint. The current official Instagram
+API collection documents webhook unsubscribe but no separate Instagram Login authorization-
+revocation request.
 
 Before deleting an Instagram integration:
 

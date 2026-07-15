@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fetchConnectedInstagramAccount,
+  fetchInstagramMessageSubscription,
   fetchInstagramMessagingUserProfile,
   INSTAGRAM_GRAPH_VERSION,
   refreshInstagramAccessToken,
@@ -32,6 +33,9 @@ describe('Instagram gateway Graph client', () => {
         name: 'Jane Doe',
         username: 'jane',
         profile_pic: 'https://cdn.example/profile.jpg',
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: [{ subscribed_fields: ['messages', 'comments'] }],
       }));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -46,6 +50,10 @@ describe('Instagram gateway Graph client', () => {
         username: 'jane',
         profilePictureUrl: 'https://cdn.example/profile.jpg',
       },
+    });
+    await expect(fetchInstagramMessageSubscription('ig-1', 'long-token')).resolves.toMatchObject({
+      ok: true,
+      data: { fields: ['messages', 'comments'], messagesActive: true },
     });
 
     for (const [requestUrl, requestInit] of fetchMock.mock.calls) {
