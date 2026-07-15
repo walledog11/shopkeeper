@@ -1,12 +1,11 @@
-import { db } from '@shopkeeper/db';
+import { db, EmailProvider, Prisma } from '@shopkeeper/db';
+import { getEmailProvider } from '@shopkeeper/email/providers';
 import type { Prisma as PrismaTypes } from '@prisma/client';
 import { captureIntegrationConnectionCompleted } from '@/lib/server/product-analytics';
-import { upsertRaceSafeIntegration } from './integration-upsert';
-import { stopGmailWatchIfUnused } from './gmail-watch';
 
 export type EmailIntegrationProvider = 'gmail' | 'postmark';
 
-export type UpsertExclusiveEmailIntegrationArgs = {
+export type UpsertEmailIntegrationArgs = {
   externalAccountId: string;
   fromEmail?: string;
   inboundMode?: 'hybrid' | 'native' | 'postmark';
@@ -64,48 +63,70 @@ function mergeEmailMetadata(
   return base as PrismaTypes.InputJsonObject;
 }
 
-export async function upsertExclusiveEmailIntegration(
-  args: UpsertExclusiveEmailIntegrationArgs,
+export async function upsertEmailIntegration(
+  args: UpsertEmailIntegrationArgs,
 ): Promise<string> {
-  const priorIntegrations = await db.integration.findMany({
+  const provider = args.provider === 'gmail' ? EmailProvider.gmail : EmailProvider.postmark;
+  const emailIntegrations = await db.integration.findMany({
     where: { organizationId: args.organizationId, platform: 'email' },
   });
-  const existing = await db.integration.findUnique({
-    where: {
-      organizationId_platform_externalAccountId: {
-        organizationId: args.organizationId,
-        platform: 'email',
-        externalAccountId: args.externalAccountId,
-      },
-    },
-    select: { fromEmail: true, metadata: true },
-  });
-  const saved = await upsertRaceSafeIntegration({
-    organizationId: args.organizationId,
-    platform: 'email',
-    externalAccountId: args.externalAccountId,
-    data: {
-      accessToken: args.accessToken ?? null,
-      refreshToken: args.refreshToken ?? null,
-      tokenExpiresAt: args.tokenExpiresAt ?? null,
-      fromEmail: args.fromEmail ?? existing?.fromEmail ?? args.externalAccountId,
-      metadata: mergeEmailMetadata(
-        existing?.metadata,
-        args.provider,
-        args.oauthScopes,
-        args.inboundMode,
-        args.provider === 'gmail' ? args.gmailMetadata : undefined,
-      ),
-    },
-  });
+  const existing = emailIntegrations.find((integration) =>
+    integration.emailProvider === provider
+    || (integration.emailProvider === null && getEmailProvider(integration) === args.provider));
+  const data = {
+    accessToken: args.accessToken ?? null,
+    refreshToken: args.refreshToken ?? null,
+    tokenExpiresAt: args.tokenExpiresAt ?? null,
+    fromEmail: args.fromEmail ?? existing?.fromEmail ?? args.externalAccountId,
+    emailProvider: provider,
+    metadata: mergeEmailMetadata(
+      existing?.metadata,
+      args.provider,
+      args.oauthScopes,
+      args.inboundMode,
+      args.provider === 'gmail' ? args.gmailMetadata : undefined,
+    ),
+  } satisfies PrismaTypes.IntegrationUncheckedUpdateInput;
 
-  await Promise.all(
-    priorIntegrations
-      .filter((integration) => integration.id !== saved.id || args.provider !== 'gmail')
-      .map((integration) => stopGmailWatchIfUnused(integration)),
-  );
-  await db.integration.deleteMany({
-    where: { organizationId: args.organizationId, platform: 'email', id: { not: saved.id } },
+  let saved;
+  if (existing) {
+    saved = await db.integration.update({
+      where: { id: existing.id },
+      data: { ...data, externalAccountId: args.externalAccountId },
+    });
+  } else {
+    try {
+      saved = await db.integration.create({
+        data: {
+          organizationId: args.organizationId,
+          platform: 'email',
+          externalAccountId: args.externalAccountId,
+          ...data,
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+        throw error;
+      }
+      const raced = await db.integration.findUnique({
+        where: {
+          organizationId_emailProvider: {
+            organizationId: args.organizationId,
+            emailProvider: provider,
+          },
+        },
+      });
+      if (!raced) throw error;
+      saved = await db.integration.update({
+        where: { id: raced.id },
+        data: { ...data, externalAccountId: args.externalAccountId },
+      });
+    }
+  }
+
+  await db.organization.updateMany({
+    where: { id: args.organizationId, defaultEmailIntegrationId: null },
+    data: { defaultEmailIntegrationId: saved.id },
   });
 
   await captureIntegrationConnectionCompleted({
@@ -121,43 +142,11 @@ export async function saveForwardingEmailIntegration(args: {
   fromEmail: string;
   organizationId: string;
 }) {
-  const priorIntegrations = await db.integration.findMany({
-    where: { organizationId: args.organizationId, platform: 'email' },
-  });
-  const existing = await db.integration.findUnique({
-    where: {
-      organizationId_platform_externalAccountId: {
-        organizationId: args.organizationId,
-        platform: 'email',
-        externalAccountId: args.externalAccountId,
-      },
-    },
-    select: { metadata: true },
-  });
-  const integration = await upsertRaceSafeIntegration({
+  const integrationId = await upsertEmailIntegration({
     organizationId: args.organizationId,
-    platform: 'email',
     externalAccountId: args.externalAccountId,
-    data: {
-      accessToken: null,
-      refreshToken: null,
-      tokenExpiresAt: null,
-      fromEmail: args.fromEmail,
-      metadata: mergeEmailMetadata(existing?.metadata, 'postmark'),
-    },
+    fromEmail: args.fromEmail,
+    provider: 'postmark',
   });
-
-  await Promise.all(
-    priorIntegrations.map((prior) => stopGmailWatchIfUnused(prior)),
-  );
-  await db.integration.deleteMany({
-    where: { organizationId: args.organizationId, platform: 'email', id: { not: integration.id } },
-  });
-
-  await captureIntegrationConnectionCompleted({
-    integrationId: integration.id,
-    organizationId: args.organizationId,
-    platform: 'email',
-  });
-  return integration;
+  return db.integration.findUniqueOrThrow({ where: { id: integrationId } });
 }

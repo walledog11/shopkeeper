@@ -10,16 +10,22 @@ import {
 
 const { app, mockLogger, queueAddSpy } = webhookFixture;
 let org: { id: string };
+let postmarkIntegration: { id: string };
 
-beforeEach(() => {
+beforeEach(async () => {
   org = webhookFixture.org;
+  postmarkIntegration = await createTestIntegration(org.id, {
+    platform: ChannelType.email,
+    externalAccountId: `support-${org.id.slice(0, 8)}@example.com`,
+  });
 });
 
 describe('POST /webhooks/email/inbound', () => {
   it('enqueues an email job when routing by org UUID in recipient address', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.shopkeeper.delivery`,
+      OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
+      To: 'Support Team <support@example.com>',
       Subject: 'Help please',
       TextBody: 'I need assistance.',
     };
@@ -36,21 +42,19 @@ describe('POST /webhooks/email/inbound', () => {
     expect(jobData).toMatchObject({
       platform: 'email',
       organizationId: org.id,
+      integrationId: postmarkIntegration.id,
       senderEmail: 'alice@example.com',
       subject: 'Help please',
     });
   });
 
-  it('enqueues an email job when routing by email integration address', async () => {
+  it('uses OriginalRecipient for tenancy and ignores the visible To header', async () => {
     const emailAddress = `support_${org.id.slice(0, 8)}@acme.com`;
-    await createTestIntegration(org.id, {
-      platform: ChannelType.email,
-      externalAccountId: emailAddress,
-    });
 
     const payload = {
       From: 'Bob <bob@example.com>',
       To: emailAddress,
+      OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
       Subject: 'Order issue',
       TextBody: 'My order is wrong.',
     };
@@ -69,6 +73,7 @@ describe('POST /webhooks/email/inbound', () => {
     const payload = {
       From: 'Spam <x@y.com>',
       To: 'nobody@unknown.com',
+      OriginalRecipient: 'nobody@unknown.com',
       Subject: 'Nope',
       TextBody: 'test',
     };
@@ -92,7 +97,8 @@ describe('POST /webhooks/email/inbound', () => {
   it('forwards Postmark Attachments through to the queued job', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.shopkeeper.delivery`,
+      OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
+      To: 'support@example.com',
       Subject: 'See attached',
       TextBody: 'Here is the photo.',
       Attachments: [
@@ -164,7 +170,8 @@ describe('POST /webhooks/email/inbound', () => {
         .set('Authorization', `Basic ${Buffer.from('postmark:secret').toString('base64')}`)
         .send({
           From: 'Alice <a@x.com>',
-          To: `${org.id}@inbound.shopkeeper.delivery`,
+          OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
+          To: 'support@example.com',
           Subject: 'Hi',
           TextBody: 'hi',
         });
@@ -193,7 +200,8 @@ describe('POST /webhooks/email/inbound', () => {
   it('omits attachments from the queued job when Postmark sends none', async () => {
     const payload = {
       From: 'Alice <alice@example.com>',
-      To: `${org.id}@inbound.shopkeeper.delivery`,
+      OriginalRecipient: `${org.id}@inbound.shopkeeper.delivery`,
+      To: 'support@example.com',
       Subject: 'No attachments',
       TextBody: 'Just text.',
     };
@@ -205,6 +213,32 @@ describe('POST /webhooks/email/inbound', () => {
     expect(res.status).toBe(200);
     const [, jobData] = queueAddSpy.mock.calls[0];
     expect(jobData.attachments).toBeUndefined();
+  });
+
+  it('acknowledges a disconnected forwarding recipient without queueing or logging PII', async () => {
+    const recipient = `${org.id}@inbound.shopkeeper.delivery`;
+    await db.integration.delete({ where: { id: postmarkIntegration.id } });
+
+    const res = await request(app)
+      .post('/webhooks/email/inbound')
+      .send({
+        From: 'Alice <alice@example.com>',
+        OriginalRecipient: recipient,
+        To: 'support@example.com',
+        TextBody: 'Hello',
+      });
+
+    expect(res.status).toBe(200);
+    expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(mockLogger.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'unclaimed_recipient',
+        recipientDomain: 'inbound.shopkeeper.delivery',
+        recipientHash: expect.any(String),
+      }),
+      '[Webhook] Unclaimed Postmark recipient acknowledged',
+    );
+    expect(JSON.stringify(mockLogger.info.mock.calls)).not.toContain(recipient);
   });
 });
 

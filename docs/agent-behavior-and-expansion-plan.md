@@ -62,17 +62,18 @@ portion that does not widen the unsafe action surface.
 **Cleanup gate status (2026-07-13):** P1-01 through P1-03 and P2-01 are
 implementation-complete. Reviewed plans now have durable one-winner claims,
 stable cross-device identity/resolution, and stale-plan rejection. Their
-migration-first shadow/canary rollout and live multi-device/queue verification
-remain release checks. P3-01's shared retry/`unknown` contract plus refund,
+production migration and initial shadow deployment are complete; the first
+strict audit was clean but contained zero executions, so representative traffic,
+live multi-device verification, and staged enforcement remain release checks.
+P3-01's shared retry/`unknown` contract plus refund,
 cancellation, order creation/editing, multi-step order-address handling, gift
 cards, and store credit have complete local implementations and deterministic
 coverage. Their Shopify sandbox/canary checks and durable follow-up recovery
-remain open. P3-02 atomic goodwill reservations are also locally complete, with
-their additive migration, provider canaries, and stale/unknown recovery still
-open; its deterministic concurrency coverage and strict isolated-database audit
-pass. P4-01 outbound-email claims and P5-01 tenant ownership are now locally
-implementation-complete with deterministic and cross-tenant coverage; their
-production migration/canary observation remains open. P4-03 durable operator
+remain open. P3-02 atomic goodwill reservations are also locally complete and
+their additive migration is applied; provider canaries and stale/unknown recovery
+remain open. P4-01 outbound-email claims and P5-01 tenant ownership are deployed
+with their required migration and deterministic/cross-tenant coverage; provider
+canary and production mismatch observation remain open. P4-03 durable operator
 events, P5-04 active-thread semantics, and P6 dependencies remain outstanding.
 
 ---

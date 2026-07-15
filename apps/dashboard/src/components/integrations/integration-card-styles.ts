@@ -21,6 +21,6 @@ export const CARD_BUTTON_AMBER = cn(CARD_BUTTON, "bg-amber-400/10 hover:bg-amber
 export const CARD_BUTTON_DISABLED = cn(CARD_BUTTON, "bg-muted text-muted-foreground cursor-default")
 export const INTEGRATION_CONFIGURE_DIALOG_CLASS = cn(
   "bg-popover border-border rounded-2xl p-6 gap-5 sm:max-w-[420px]",
-  "max-h-[85vh] overflow-y-auto",
+  "max-h-[85vh] overflow-x-hidden overflow-y-auto",
   "[&>button]:text-muted-foreground [&>button]:hover:text-foreground",
 )

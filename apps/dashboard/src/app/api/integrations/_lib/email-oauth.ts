@@ -7,7 +7,7 @@ import {
   captureIntegrationConnectionFailed,
   captureOAuthIntegrationConnectionFailed,
 } from '@/lib/server/product-analytics';
-import { upsertExclusiveEmailIntegration } from './email-integration';
+import { upsertEmailIntegration } from './email-integration';
 import type { EmailOAuthProviderConfig } from './email-oauth-providers';
 import {
   oauthCompleteResponse,
@@ -231,7 +231,7 @@ export async function completeEmailOAuth(
       ? resolveGmailAccountType(userEmail, hostedDomain)
       : undefined;
 
-    const integrationId = await upsertExclusiveEmailIntegration({
+    const integrationId = await upsertEmailIntegration({
       organizationId,
       externalAccountId: userEmail,
       accessToken: tokenData.access_token,

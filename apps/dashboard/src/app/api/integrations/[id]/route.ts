@@ -70,7 +70,31 @@ export const DELETE = withOrgRoute<{ id: string }>(
     assertEntityInOrg(integration, org.id, 'Integration not found');
 
     await stopGmailWatchIfUnused(integration);
-    await db.integration.delete({ where: { id } });
+    await db.$transaction(async (tx) => {
+      const organization = await tx.organization.findUniqueOrThrow({
+        where: { id: org.id },
+        select: { defaultEmailIntegrationId: true },
+      });
+      const remainingEmail = integration.platform === 'email'
+        ? await tx.integration.findFirst({
+            where: {
+              organizationId: org.id,
+              platform: 'email',
+              id: { not: integration.id },
+            },
+            orderBy: { createdAt: 'asc' },
+            select: { id: true },
+          })
+        : null;
+
+      await tx.integration.delete({ where: { id } });
+      if (organization.defaultEmailIntegrationId === integration.id) {
+        await tx.organization.update({
+          where: { id: org.id },
+          data: { defaultEmailIntegrationId: remainingEmail?.id ?? null },
+        });
+      }
+    });
 
     return new NextResponse(null, { status: 204 });
   },

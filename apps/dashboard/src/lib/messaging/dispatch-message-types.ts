@@ -34,4 +34,11 @@ export type DispatchMessageResult =
   | { ok: true; message: Message }
   | DispatchFailure
 
-export type DispatchProviderResult = { ok: true } | DispatchFailure
+export type DispatchProviderResult =
+  | {
+      ok: true
+      integrationId?: string
+      providerMessageId?: string
+      providerRecipientId?: string | null
+    }
+  | DispatchFailure

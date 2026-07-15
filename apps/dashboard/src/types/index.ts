@@ -55,6 +55,7 @@ export interface Integration {
   id: string;
   organizationId: string;
   platform: ChannelType;
+  emailProvider?: 'gmail' | 'postmark' | null;
   externalAccountId: string;
   fromEmail: string | null;
   tokenExpiresAt: string | null;
@@ -63,6 +64,7 @@ export interface Integration {
   createdAt: string;
   lastActivity?: string | null;
   threadsThisWeek?: number;
+  isDefaultEmail?: boolean;
 }
 
 export interface Customer {

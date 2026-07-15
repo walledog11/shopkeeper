@@ -23,7 +23,11 @@ export function ConnectedAccountRow({
     <ConfigureAccountRow
       icon={CONNECTION_ICONS[connectType]}
       title={integration.fromEmail || integration.externalAccountId}
-      action={<PermissionActionLink>Connected</PermissionActionLink>}
+      action={(
+        <PermissionActionLink>
+          {integration.isDefaultEmail ? "Default" : "Connected"}
+        </PermissionActionLink>
+      )}
     />
   )
 }

@@ -14,13 +14,14 @@ import {
 } from './webhook-route-test-helpers.js';
 
 // Mock ioredis and bullmq so the webhook module doesn't open live Redis connections.
-// We spy on Queue.add to confirm the right job was enqueued.
+// We spy on Queue.add/addBulk to confirm the right jobs were enqueued.
 const redisDedupeStore = vi.hoisted(() => new Map<string, string>());
 
 const {
   clearRedisDedupeStore,
   googleTokenVerifySpy,
   mockLogger,
+  queueAddBulkSpy,
   queueAddSpy,
   getPlatformSpectrumAppSpy,
   spectrumWebhookSpy,
@@ -35,6 +36,7 @@ const {
     info: vi.fn(),
     warn: vi.fn(),
   },
+  queueAddBulkSpy: vi.fn().mockResolvedValue([{ id: 'test-bulk-job-id' }]),
   queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
   getPlatformSpectrumAppSpy: vi.fn(),
   spectrumWebhookSpy: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock('ioredis', () => ({
 vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.add = queueAddSpy;
+    this.addBulk = queueAddBulkSpy;
     this.close = vi.fn();
   }),
   Worker: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
@@ -96,8 +99,8 @@ vi.mock('../storage/blob.js', () => ({
 // Import the router after mocks are hoisted
 import webhookRoutes from '../routes/webhooks.js';
 
-export const META_SECRET = process.env.META_APP_SECRET!;
-export const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN!;
+export const INSTAGRAM_SECRET = process.env.INSTAGRAM_APP_SECRET!;
+export const INSTAGRAM_VERIFY_TOKEN = process.env.INSTAGRAM_WEBHOOK_VERIFY_TOKEN!;
 export const SHOPIFY_SECRET = process.env.SHOPIFY_APP_SECRET!;
 export const GMAIL_PUBSUB_AUDIENCE = 'https://gateway.example.com/webhooks/gmail/push';
 export const GMAIL_PUSH_SERVICE_ACCOUNT =
@@ -112,6 +115,7 @@ export const webhookFixture = {
   getPlatformSpectrumAppSpy,
   googleTokenVerifySpy,
   mockLogger,
+  queueAddBulkSpy,
   queueAddSpy,
   spectrumWebhookSpy,
   uploadInboundAttachmentSpy,
@@ -125,6 +129,7 @@ beforeEach(async () => {
   process.env.GMAIL_PUBSUB_PUSH_SERVICE_ACCOUNT = GMAIL_PUSH_SERVICE_ACCOUNT;
   clearRedisDedupeStore();
   org = await createTestOrg();
+  queueAddBulkSpy.mockClear();
   queueAddSpy.mockClear();
   getPlatformSpectrumAppSpy.mockReset();
   googleTokenVerifySpy.mockReset();

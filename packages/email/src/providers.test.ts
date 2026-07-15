@@ -20,6 +20,17 @@ describe('email provider helpers', () => {
     expect(getEmailProviderLabel({ metadata: null })).toBe('Forwarding');
   });
 
+  it('treats the dedicated provider column as authoritative during dual reads', () => {
+    expect(getEmailProvider({
+      emailProvider: 'gmail',
+      metadata: { provider: 'postmark' },
+    })).toBe('gmail');
+    expect(getEmailProvider({
+      emailProvider: 'postmark',
+      metadata: { provider: 'gmail' },
+    })).toBe('postmark');
+  });
+
   it('does not require reauthorization for normal OAuth access-token expiry', () => {
     const recentlyExpired = new Date(Date.now() - 60_000);
     expect(isEmailAuthReauthorizationRequired({

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
 import {
   NoopAnalyticsSink,
   RecordingAnalyticsSink,
@@ -115,11 +115,12 @@ describe('POST /api/integrations/gmail/callback', () => {
     );
   });
 
-  it('persists gmail integration and removes any other email rows for the org', async () => {
+  it('reconnects Gmail in place without modifying forwarding', async () => {
     const staleEmail = await db.integration.create({
       data: {
         organizationId: org!.id,
         platform: ChannelType.email,
+        emailProvider: EmailProvider.postmark,
         externalAccountId: 'support@old-domain.test',
         accessToken: 'postmark-key',
         metadata: { provider: 'postmark' },
@@ -129,6 +130,7 @@ describe('POST /api/integrations/gmail/callback', () => {
       data: {
         organizationId: org!.id,
         platform: ChannelType.email,
+        emailProvider: EmailProvider.gmail,
         externalAccountId: 'merchant@gmail.com',
         accessToken: 'old-gmail-access-token',
         refreshToken: 'old-gmail-refresh-token',
@@ -143,6 +145,10 @@ describe('POST /api/integrations/gmail/callback', () => {
           },
         },
       },
+    });
+    await db.organization.update({
+      where: { id: org!.id },
+      data: { defaultEmailIntegrationId: staleEmail.id },
     });
 
     mockSavedCookies({
@@ -178,8 +184,9 @@ describe('POST /api/integrations/gmail/callback', () => {
     const rows = await db.integration.findMany({
       where: { organizationId: org!.id, platform: ChannelType.email },
     });
-    expect(rows).toHaveLength(1);
-    const integration = rows[0];
+    expect(rows).toHaveLength(2);
+    const integration = rows.find((row) => row.emailProvider === EmailProvider.gmail)!;
+    const forwarding = rows.find((row) => row.emailProvider === EmailProvider.postmark)!;
     expect(integration.externalAccountId).toBe('merchant@gmail.com');
     expect(integration.fromEmail).toBe('support@merchant.test');
     expect(integration.accessToken).toBe('gmail_access_token');
@@ -202,7 +209,10 @@ describe('POST /api/integrations/gmail/callback', () => {
       },
     });
     expect(integration.id).toBe(existingGmail.id);
-    expect(integration.id).not.toBe(staleEmail.id);
+    expect(forwarding.id).toBe(staleEmail.id);
+    expect(forwarding.externalAccountId).toBe('support@old-domain.test');
+    await expect(db.organization.findUniqueOrThrow({ where: { id: org!.id } }))
+      .resolves.toMatchObject({ defaultEmailIntegrationId: staleEmail.id });
     expect(analyticsSink.events).toEqual([
       expect.objectContaining({
         event: 'integration_connection_completed',

@@ -27,6 +27,7 @@ export interface EmailSender {
 
 export interface EmailIntegrationLike {
   id: string;
+  emailProvider?: EmailProvider | null;
   metadata: unknown;
   accessToken: string | null;
   refreshToken: string | null;

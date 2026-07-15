@@ -1,41 +1,140 @@
 import type { Request, Response, Router } from 'express';
 import { createHmac, timingSafeEqual, randomUUID } from 'crypto';
-import { getMetaWebhookConfig } from '../config/runtime-config.js';
+import { getInstagramWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
-import { CHANNEL, JOB } from '../constants.js';
-import { rateLimit, sendTooManyRequests } from '../rate-limit.js';
-import { getMessageQueue, getRateLimitRedis, resolveOrganizationId } from './webhooks-shared.js';
+import { JOB } from '../constants.js';
+import { rateLimit } from '../rate-limit.js';
+import type {
+  InstagramInboundAttachment,
+  InstagramInboundJobData,
+} from '../types.js';
+import { resolveActiveInstagramIntegration } from '../lib/instagram-integration.js';
+import { getMessageQueue, getRateLimitRedis } from './webhooks-shared.js';
 import {
   buildWebhookSignatureRequestMetadata,
   recordWebhookSignatureFailure,
 } from './webhooks-signature-alerts.js';
 
+interface NormalizedInstagramMessage {
+  senderIgsid: string;
+  externalMessageId: string | null;
+  providerSentAt: string;
+  text: string | null;
+  attachments: InstagramInboundAttachment[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readNonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim().length === 0) return null;
+  return value;
+}
+
+function readProviderTimestamp(value: unknown): string | null {
+  let timestampMs: number;
+  if (typeof value === 'number') {
+    timestampMs = value;
+  } else if (typeof value === 'string' && /^\d+$/.test(value)) {
+    timestampMs = Number(value);
+  } else if (typeof value === 'string') {
+    timestampMs = Date.parse(value);
+  } else {
+    return null;
+  }
+
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0) return null;
+  if (timestampMs < 1_000_000_000_000) timestampMs *= 1000;
+  const timestamp = new Date(timestampMs);
+  return Number.isFinite(timestamp.getTime()) ? timestamp.toISOString() : null;
+}
+
+function normalizeAttachment(value: unknown): InstagramInboundAttachment | null {
+  if (!isRecord(value)) return null;
+  const payload = isRecord(value.payload) ? value.payload : null;
+  return {
+    type: readNonEmptyString(value.type) ?? 'unknown',
+    url: readNonEmptyString(payload?.url) ?? readNonEmptyString(value.url),
+  };
+}
+
+function normalizeInstagramMessage(value: unknown): NormalizedInstagramMessage | null {
+  if (!isRecord(value) || !isRecord(value.sender) || !isRecord(value.message)) return null;
+
+  const senderIgsid = readNonEmptyString(value.sender.id);
+  const providerSentAt = readProviderTimestamp(value.timestamp);
+  if (!senderIgsid || !providerSentAt) return null;
+
+  const message = value.message;
+  if (message.is_echo === true || message.is_self === true) return null;
+
+  const attachments = Array.isArray(message.attachments)
+    ? message.attachments
+        .map(normalizeAttachment)
+        .filter((attachment): attachment is InstagramInboundAttachment => attachment !== null)
+    : [];
+
+  if (Array.isArray(message.shares)) {
+    for (const share of message.shares) {
+      if (!isRecord(share)) continue;
+      attachments.push({
+        type: 'share',
+        url: readNonEmptyString(share.link) ?? readNonEmptyString(share.url),
+      });
+    }
+  }
+
+  if (message.is_deleted === true) {
+    attachments.push({ type: 'deleted', url: null });
+  }
+
+  const text = readNonEmptyString(message.text);
+  if (!text && attachments.length === 0) {
+    attachments.push({ type: 'unsupported', url: null });
+  }
+
+  return {
+    senderIgsid,
+    externalMessageId: readNonEmptyString(message.mid),
+    providerSentAt,
+    text,
+    attachments,
+  };
+}
+
+function signatureMatches(rawBody: Buffer, signature: string, appSecret: string): boolean {
+  const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`;
+  const trusted = Buffer.from(expected, 'utf8');
+  const received = Buffer.from(signature, 'utf8');
+  return trusted.length === received.length && timingSafeEqual(trusted, received);
+}
+
 export function registerMetaWebhookRoutes(router: Router): void {
   router.get('/meta', (req: Request, res: Response) => {
-    const { verifyToken: VERIFY_TOKEN } = getMetaWebhookConfig();
+    const { verifyToken } = getInstagramWebhookConfig();
 
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
     if (mode && token) {
-      if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-        logger.info('[Webhook] Meta handshake successful');
+      if (mode === 'subscribe' && token === verifyToken) {
+        logger.info('[Webhook] Instagram handshake successful');
         return res.status(200).send(challenge);
-      } else {
-        logger.warn('[Webhook] Meta handshake failed: token mismatch');
-        return res.sendStatus(403);
       }
+      logger.warn('[Webhook] Instagram handshake failed: token mismatch');
+      return res.sendStatus(403);
     }
     return res.sendStatus(400);
   });
 
   router.post('/meta', async (req: Request, res: Response) => {
-    const { appSecret: APP_SECRET } = getMetaWebhookConfig();
+    const { appSecret } = getInstagramWebhookConfig();
     const signature = req.headers['x-hub-signature-256'] as string | undefined;
 
-    if (!APP_SECRET) {
-      logger.error('[Webhook] META_APP_SECRET is not configured — rejecting.');
+    if (!appSecret) {
+      logger.error('[Webhook] INSTAGRAM_APP_SECRET is not configured — rejecting.');
       return res.sendStatus(500);
     }
     if (!signature || !req.rawBody) {
@@ -48,13 +147,10 @@ export function registerMetaWebhookRoutes(router: Router): void {
           route: '/webhooks/meta',
           request: buildWebhookSignatureRequestMetadata(req),
         },
-      ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
+      ).catch((err) => logger.error({ err }, '[Webhook] Instagram signature alert error'));
       return res.sendStatus(401);
     }
-    const expected = `sha256=${createHmac('sha256', APP_SECRET).update(req.rawBody).digest('hex')}`;
-    const trusted = Buffer.from(expected, 'utf8');
-    const received = Buffer.from(signature, 'utf8');
-    if (trusted.length !== received.length || !timingSafeEqual(trusted, received)) {
+    if (!signatureMatches(req.rawBody, signature, appSecret)) {
       logger.warn('[Webhook] Signature mismatch — rejecting request.');
       recordWebhookSignatureFailure(
         'meta',
@@ -64,65 +160,86 @@ export function registerMetaWebhookRoutes(router: Router): void {
           route: '/webhooks/meta',
           request: buildWebhookSignatureRequestMetadata(req),
         },
-      ).catch((err) => logger.error({ err }, '[Webhook] Meta signature alert error'));
+      ).catch((err) => logger.error({ err }, '[Webhook] Instagram signature alert error'));
       return res.sendStatus(401);
     }
 
-    const payload = req.body as {
-      object?: string;
-      entry?: Array<{
-        id?: string;
-        messaging?: Array<{ message?: unknown }>;
-        changes?: Array<{ value?: { message?: unknown } }>;
-      }>;
-    };
+    const payload = req.body as { object?: unknown; entry?: unknown };
+    if (payload.object !== 'instagram') return res.sendStatus(404);
 
-    if (payload.object === 'page' || payload.object === 'instagram') {
-      try {
-        const recipientPageId = payload.entry?.[0]?.id;
+    try {
+      const jobs: Array<{ name: string; data: InstagramInboundJobData }> = [];
+      const integrationCache = new Map<
+        string,
+        Awaited<ReturnType<typeof resolveActiveInstagramIntegration>>
+      >();
 
-        if (!recipientPageId || recipientPageId === '0') {
-          logger.warn('[Webhook] IG payload missing or placeholder entry[0].id — dropping.');
-          return res.status(200).send('EVENT_RECEIVED');
+      for (const entryValue of Array.isArray(payload.entry) ? payload.entry : []) {
+        if (!isRecord(entryValue)) continue;
+        const instagramAccountId = readNonEmptyString(entryValue.id);
+        if (!instagramAccountId) {
+          logger.warn('[Webhook] Instagram entry is missing an account id — skipping entry');
+          continue;
         }
 
-        const hasRealMessage =
-          payload.entry?.[0]?.messaging?.[0]?.message ||
-          payload.entry?.[0]?.changes?.[0]?.value?.message;
-        if (!hasRealMessage) {
-          logger.info('[Webhook] IG test/echo event — skipping queue.');
-          return res.status(200).send('EVENT_RECEIVED');
+        const messages = (Array.isArray(entryValue.messaging) ? entryValue.messaging : [])
+          .map(normalizeInstagramMessage)
+          .filter((message): message is NormalizedInstagramMessage => message !== null);
+        if (messages.length === 0) continue;
+
+        let integration = integrationCache.get(instagramAccountId);
+        if (integration === undefined) {
+          integration = await resolveActiveInstagramIntegration(instagramAccountId);
+          integrationCache.set(instagramAccountId, integration);
+        }
+        if (!integration) {
+          logger.warn(
+            { instagramAccountId },
+            '[Webhook] No active Instagram Login integration for account — dropping events',
+          );
+          continue;
         }
 
-        const organizationId = await resolveOrganizationId(CHANNEL.IG_DM, recipientPageId);
+        for (const message of messages) {
+          const eventRateLimit = await rateLimit(
+            getRateLimitRedis(),
+            `webhook:ig:${integration.organizationId}`,
+          );
+          if (!eventRateLimit.success) {
+            logger.warn(
+              { organizationId: integration.organizationId },
+              '[Webhook] Instagram event rate limit exceeded — dropping event',
+            );
+            continue;
+          }
 
-        if (!organizationId) {
-          logger.warn({ recipientPageId }, '[Webhook] No integration for IG page id — dropping.');
-          return res.status(200).send('EVENT_RECEIVED');
+          const traceId = randomUUID();
+          jobs.push({
+            name: JOB.IG_DM,
+            data: {
+              platform: 'ig_dm',
+              integrationId: integration.id,
+              organizationId: integration.organizationId,
+              instagramAccountId: integration.instagramAccountId,
+              senderIgsid: message.senderIgsid,
+              externalMessageId: message.externalMessageId,
+              providerSentAt: message.providerSentAt,
+              text: message.text,
+              attachments: message.attachments,
+              traceId,
+            },
+          });
         }
-
-        const igRateLimit = await rateLimit(getRateLimitRedis(), `webhook:ig:${organizationId}`);
-        if (!igRateLimit.success) {
-          logger.warn({ organizationId }, '[Webhook] IG rate limit exceeded');
-          return sendTooManyRequests(res, igRateLimit.reset);
-        }
-
-        const traceId = randomUUID();
-        await getMessageQueue().add(JOB.IG_DM, {
-          platform: CHANNEL.IG_DM,
-          organizationId,
-          rawPayload: payload,
-          traceId,
-        });
-
-        logger.info({ organizationId, traceId }, '[Webhook] IG DM queued');
-        return res.status(200).send('EVENT_RECEIVED');
-      } catch (error) {
-        logger.error({ err: error }, '[Webhook] Failed to add IG job to queue');
-        return res.sendStatus(500);
       }
-    }
 
-    return res.sendStatus(404);
+      if (jobs.length > 0) {
+        await getMessageQueue().addBulk(jobs);
+        logger.info({ count: jobs.length }, '[Webhook] Instagram DM events queued');
+      }
+      return res.status(200).send('EVENT_RECEIVED');
+    } catch (error) {
+      logger.error({ err: error }, '[Webhook] Failed to enqueue Instagram events');
+      return res.sendStatus(500);
+    }
   });
 }

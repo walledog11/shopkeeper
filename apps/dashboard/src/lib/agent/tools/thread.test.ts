@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@shopkeeper/db';
+import { ChannelType, EmailProvider, SenderType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -149,9 +149,41 @@ describe('sendReply provider failures', () => {
       platform: ChannelType.ig_dm,
       externalAccountId: `ig_${org.id.slice(0, 8)}`,
       accessToken: 'test-ig-token',
+      metadata: {
+        instagram: {
+          authModel: 'instagram_login',
+          grantedScopes: [
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+          ],
+          permissionsVerified: true,
+        },
+      },
+    });
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
     });
     const customer = await createTestCustomer(org.id, 'ig-provider-failure');
     const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        replyIntegrationId: integration.id,
+        replyIntegrationUpdatedAt: new Date(),
+      },
+    });
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        integrationId: integration.id,
+        senderType: SenderType.customer,
+        contentText: 'Inbound Instagram message',
+        externalMessageId: `mid-inbound-${thread.id}`,
+        sentAt: new Date(),
+      },
+    });
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(JSON.stringify({ error: { code: 190 } }), { status: 400 }),
     );
@@ -164,17 +196,67 @@ describe('sendReply provider failures', () => {
 
       expect(result).toEqual({
         status: 'error',
-        message: 'Error: Instagram dispatch failed (400).',
+        message: 'Error: Instagram connection expired — reconnect Instagram to reply.',
       });
       expect(mockRecordInstagramSendFailure).toHaveBeenCalledWith({
         organizationId: org.id,
         threadId: thread.id,
         integrationId: integration.id,
-        detail: 'Instagram token expired',
+        detail: 'Instagram token expired or revoked',
       });
     } finally {
       fetchSpy.mockRestore();
     }
+  });
+
+  it('does not let agent mode bypass the Instagram reply window', async () => {
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: `ig_window_${org.id.slice(0, 8)}`,
+      accessToken: 'test-ig-token',
+      metadata: { instagram: { authModel: 'instagram_login' } },
+    });
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+    });
+    const customer = await createTestCustomer(org.id, 'ig-agent-window');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    const providerSentAt = new Date(Date.now() - 24 * 60 * 60 * 1000 - 1);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        replyIntegrationId: integration.id,
+        replyIntegrationUpdatedAt: providerSentAt,
+      },
+    });
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        integrationId: integration.id,
+        senderType: SenderType.customer,
+        contentText: 'Old inbound Instagram message',
+        externalMessageId: `mid-old-${thread.id}`,
+        sentAt: providerSentAt,
+      },
+    });
+
+    const result = await sendReply(
+      { text: 'This must not send.' },
+      {
+        agentActionMode: 'auto_executed',
+        threadId: thread.id,
+        orgId: org.id,
+        orgName: org.name,
+      },
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      message: "Error: Instagram only allows replies within 24 hours of the customer's last message.",
+    });
+    expect(await readOutboundRecords()).toEqual([]);
   });
 
   it('preserves the agent-specific email provider error message', async () => {
@@ -324,6 +406,7 @@ describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
       where: { contentText: 'Queued email.', senderType: SenderType.agent },
     });
     expect(saved?.sendStatus).toBe('pending');
+    expect(saved?.integrationId).toBe(integration.id);
 
     // The new thread stores the subject so the worker can derive the outbound subject.
     const thread = await db.thread.findUnique({ where: { id: saved!.threadId } });
@@ -337,6 +420,56 @@ describe('sendEmail async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
       threadId: saved?.threadId,
       integrationId: integration.id,
       source: 'agent_send_email',
+    });
+  });
+
+  it('uses the proactive default even when the recipient thread last received via another provider', async () => {
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ enqueued: true, jobId: 'j-default' }), { status: 202 }),
+    );
+    const gmail = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.gmail,
+      externalAccountId: `gmail-${org.id}@example.com`,
+      metadata: { provider: 'gmail' },
+    });
+    const postmark = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.postmark,
+      externalAccountId: `postmark-${org.id}@example.com`,
+      metadata: { provider: 'postmark' },
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { defaultEmailIntegrationId: gmail.id },
+    });
+    const customer = await createTestCustomer(org.id, 'existing-prospect@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        replyIntegrationId: postmark.id,
+        replyIntegrationUpdatedAt: new Date(),
+      },
+    });
+
+    const result = await sendEmail(
+      {
+        to: customer.platformId,
+        subject: 'Proactive follow-up',
+        body: 'Checking in.',
+      },
+      { threadId: 'unused-for-send-email', orgId: org.id, orgName: org.name },
+    );
+
+    expect(result.status).toBe('ok');
+    const saved = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, contentText: 'Checking in.' },
+    });
+    expect(saved.integrationId).toBe(gmail.id);
+    const [, init] = mockFetch.mock.calls[0];
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({
+      integrationId: gmail.id,
     });
   });
 

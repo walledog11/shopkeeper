@@ -4,7 +4,7 @@ import { readRequiredJsonObject } from '@/lib/api/body';
 import { ApiError } from '@/lib/api/errors';
 import { requireNonEmptyString } from '@/lib/api/validation';
 import { assertEntityInOrg, withOrgRoute } from '@/lib/api/route';
-import { CHANNEL_TYPE } from '@shopkeeper/agent/thread-constants';
+import { resolveEmailIntegration } from '@shopkeeper/email/integration-resolution';
 import { enqueueOutboundEmail } from '@/lib/messaging/enqueue-outbound-email';
 
 // Re-enqueue a previously failed async outbound email (provider blip or orphaned
@@ -27,12 +27,12 @@ export const POST = withOrgRoute(
       throw new ApiError('Message is not in a failed state', 400);
     }
 
-    const integration = await db.integration.findFirst({
-      where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
+    const integration = await resolveEmailIntegration({
+      organizationId: org.id,
+      purpose: 'reply',
+      threadId: message.threadId,
+      snapshotIntegrationId: message.integrationId,
     });
-    if (!integration) {
-      throw new ApiError('No email integration configured', 502);
-    }
 
     await db.message.update({
       where: { id: messageId },
@@ -43,6 +43,7 @@ export const POST = withOrgRoute(
         sendAttemptedAt: null,
         providerMessageId: null,
         sendError: null,
+        integrationId: integration.id,
       },
     });
 

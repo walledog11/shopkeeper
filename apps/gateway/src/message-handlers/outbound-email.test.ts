@@ -59,6 +59,7 @@ async function seed(sendStatus: string) {
       senderType: SenderType.agent,
       contentText: 'Hello there',
       sendStatus,
+      integrationId: integration.id,
     },
   });
   const data: OutboundEmailJobData = {
@@ -213,6 +214,7 @@ describe('handleOutboundEmailJob', () => {
         senderType: SenderType.agent,
         contentText: 'Check this out',
         sendStatus: 'pending',
+        integrationId: integration.id,
       },
     });
 
@@ -246,6 +248,7 @@ describe('handleOutboundEmailJob', () => {
         senderType: SenderType.customer,
         contentText: 'help',
         externalMessageId: '<inbound@x>',
+        integrationId: integration.id,
       },
     });
     const message = await db.message.create({
@@ -255,6 +258,7 @@ describe('handleOutboundEmailJob', () => {
         senderType: SenderType.agent,
         contentText: 'reply',
         sendStatus: 'pending',
+        integrationId: integration.id,
       },
     });
 

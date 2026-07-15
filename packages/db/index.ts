@@ -12,6 +12,7 @@ const {
   ThreadStatus: ThreadStatusRuntime,
   ThreadFilterStatus: ThreadFilterStatusRuntime,
   ThreadFilterFeedback: ThreadFilterFeedbackRuntime,
+  EmailProvider: EmailProviderRuntime,
 } = prismaClient;
 
 type DbChannelType = (typeof ChannelTypeRuntime)[keyof typeof ChannelTypeRuntime];
@@ -19,6 +20,7 @@ type DbThreadStatus = (typeof ThreadStatusRuntime)[keyof typeof ThreadStatusRunt
 type DbSenderType = (typeof SenderTypeRuntime)[keyof typeof SenderTypeRuntime];
 type DbThreadFilterStatus = (typeof ThreadFilterStatusRuntime)[keyof typeof ThreadFilterStatusRuntime];
 type DbThreadFilterFeedback = (typeof ThreadFilterFeedbackRuntime)[keyof typeof ThreadFilterFeedbackRuntime];
+type DbEmailProvider = (typeof EmailProviderRuntime)[keyof typeof EmailProviderRuntime];
 
 type ClerkDb = ReturnType<typeof createClient>;
 
@@ -192,6 +194,7 @@ export {
   ThreadStatusRuntime as ThreadStatus,
   ThreadFilterStatusRuntime as ThreadFilterStatus,
   ThreadFilterFeedbackRuntime as ThreadFilterFeedback,
+  EmailProviderRuntime as EmailProvider,
 };
 export type {
   PrismaClientType as PrismaClient,
@@ -200,12 +203,14 @@ export type {
   DbSenderType,
   DbThreadFilterStatus,
   DbThreadFilterFeedback,
+  DbEmailProvider,
 };
 export type ChannelType = DbChannelType;
 export type ThreadStatus = DbThreadStatus;
 export type SenderType = DbSenderType;
 export type ThreadFilterStatus = DbThreadFilterStatus;
 export type ThreadFilterFeedback = DbThreadFilterFeedback;
+export type EmailProvider = DbEmailProvider;
 export { encryptToken, decryptToken, isEncrypted } from './crypto.js';
 export {
   DEFAULT_DAILY_LLM_SPEND_CAP_USD,

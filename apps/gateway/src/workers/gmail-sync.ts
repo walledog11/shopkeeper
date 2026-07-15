@@ -36,6 +36,7 @@ interface GmailSyncIntegration {
   id: string;
   accessToken: string | null;
   externalAccountId: string;
+  emailProvider: 'gmail' | 'postmark' | null;
   fromEmail: string | null;
   metadata: unknown;
   organizationId: string;
@@ -160,6 +161,7 @@ async function loadIntegration(integrationId: string): Promise<GmailSyncIntegrat
       id: true,
       accessToken: true,
       externalAccountId: true,
+      emailProvider: true,
       fromEmail: true,
       metadata: true,
       organizationId: true,
@@ -214,11 +216,17 @@ async function enqueueGmailMessages(
     }
 
     const inboundMessageId = normalized.inboundMessageId || providerMessageKey(message.id);
+    const internalDateMs = message.internalDate ? Number(message.internalDate) : Number.NaN;
+    const receivedAt = Number.isFinite(internalDateMs) && internalDateMs >= 0
+      ? new Date(internalDateMs).toISOString()
+      : new Date().toISOString();
     await inboundQueue.add(
       JOB.EMAIL,
       {
         platform: CHANNEL.EMAIL,
         organizationId: integration.organizationId,
+        integrationId: integration.id,
+        receivedAt,
         senderEmail: normalized.senderEmail,
         senderName: normalized.senderName,
         subject: normalized.subject,

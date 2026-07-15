@@ -232,6 +232,21 @@ function IntegrationsPageContent({
     }
   }
 
+  async function handleSetDefaultEmail(integrationId: string): Promise<void> {
+    try {
+      const res = await fetch('/api/integrations/email/default', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integrationId }),
+      })
+      if (!res.ok) throw new Error()
+      await mutate()
+      showToast('success', 'Default email integration updated.')
+    } catch {
+      showToast('error', 'Failed to update the default email integration.')
+    }
+  }
+
   const getConnected = (def: PlatformConfig) => {
     if (!def.platform) return []
     return integrations.filter(i =>
@@ -240,7 +255,7 @@ function IntegrationsPageContent({
     )
   }
   const getLastActivity = (def: PlatformConfig) =>
-    def.platform ? integrations.find(i => i.platform === def.platform)?.lastActivity ?? null : null
+    getConnected(def)[0]?.lastActivity ?? null
 
   const alertCount = integrations.filter(hasIntegrationTokenAlert).length
 
@@ -290,6 +305,7 @@ function IntegrationsPageContent({
         onConnect={handleConnect}
         onUpdateEmailAddress={handleUpdateEmailAddress}
         onDisconnect={handleDisconnect}
+        onSetDefaultEmail={handleSetDefaultEmail}
         onLaunchOAuth={launchOAuth}
         open={openId === def.id}
         onOpenChange={(o) => setOpenId(o ? def.id : null)}

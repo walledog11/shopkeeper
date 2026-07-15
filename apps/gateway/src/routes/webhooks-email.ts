@@ -1,6 +1,6 @@
 import type { Request, Response, Router } from 'express';
-import { randomUUID } from 'crypto';
-import { db } from '@shopkeeper/db';
+import { createHash, randomUUID } from 'crypto';
+import { db, EmailProvider } from '@shopkeeper/db';
 import { getPostmarkWebhookConfig } from '../config/runtime-config.js';
 import logger from '../logger.js';
 import { CHANNEL, JOB } from '../constants.js';
@@ -33,6 +33,32 @@ function hasValidPostmarkAuth(req: Request): boolean {
   return safeEqual(user, expectedUser) && safeEqual(pass, expectedPass);
 }
 
+function normalizeEmailAddress(value: string): string {
+  return value.replace(/.*<(.+)>/, '$1').trim().toLowerCase();
+}
+
+async function recordUnclaimedRecipient(recipient: string): Promise<void> {
+  const normalized = normalizeEmailAddress(recipient);
+  const recipientDomain = normalized.split('@')[1] || 'invalid';
+  const recipientHash = createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+
+  logger.info(
+    { event: 'unclaimed_recipient', recipientDomain, recipientHash },
+    '[Webhook] Unclaimed Postmark recipient acknowledged',
+  );
+  try {
+    const redis = getRateLimitRedis();
+    const key = `metrics:postmark:unclaimed:${recipientDomain}:${recipientHash}`;
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, 86_400);
+  } catch (error) {
+    logger.warn(
+      { err: error, event: 'unclaimed_recipient_counter_failed', recipientDomain, recipientHash },
+      '[Webhook] Failed to count unclaimed Postmark recipient',
+    );
+  }
+}
+
 export function registerEmailWebhookRoutes(router: Router): void {
   router.post('/email/inbound', async (req: Request, res: Response) => {
     if (!hasValidPostmarkAuth(req)) {
@@ -42,7 +68,8 @@ export function registerEmailWebhookRoutes(router: Router): void {
     }
     try {
       const rawFrom: string | undefined = req.body.From || req.body.from;
-      const to: string | undefined = req.body.To || req.body.to;
+      const originalRecipient: string | undefined =
+        req.body.OriginalRecipient || req.body.originalRecipient;
       const subject: string = req.body.Subject || req.body.subject || 'No Subject';
       const text: string | undefined = req.body.TextBody || req.body.text;
       const emailHeaders: Array<{ Name: string; Value: string }> = req.body.Headers || [];
@@ -63,41 +90,37 @@ export function registerEmailWebhookRoutes(router: Router): void {
         return res.sendStatus(400);
       }
 
-      if (!to) {
-        logger.warn('[Webhook] Inbound email missing To address — cannot route to org.');
-        return res.sendStatus(400);
+      if (!originalRecipient) {
+        await recordUnclaimedRecipient('missing@invalid');
+        return res.status(200).send('OK');
       }
 
-      const toAddress = to.replace(/.*<(.+)>/, '$1').trim().toLowerCase();
-      const fromAddress = rawFrom.replace(/.*<(.+)>/, '$1').trim();
+      const recipientAddress = normalizeEmailAddress(originalRecipient);
+      const fromAddress = normalizeEmailAddress(rawFrom);
       const fromName = rawFrom.replace(/<.*>/, '').trim().replace(/"/g, '') || null;
 
-      const localPart = toAddress.split('@')[0];
+      const localPart = recipientAddress.split('@')[0];
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-      let organizationId: string;
-
-      if (uuidRegex.test(localPart)) {
-        const org = await db.organization.findUnique({
-          where: { id: localPart },
-          select: { id: true },
-        });
-        if (!org) {
-          logger.warn({ localPart }, '[Webhook] No organization found for id — dropping.');
-          return res.status(200).send('OK');
-        }
-        organizationId = localPart;
-      } else {
-        const integration = await db.integration.findFirst({
-          where: { platform: CHANNEL.EMAIL, externalAccountId: { equals: toAddress, mode: 'insensitive' } },
-          select: { organizationId: true },
-        });
-        if (!integration) {
-          logger.warn({ toAddress }, '[Webhook] No email integration found for address — dropping.');
-          return res.status(200).send('OK');
-        }
-        organizationId = integration.organizationId;
+      if (!uuidRegex.test(localPart)) {
+        await recordUnclaimedRecipient(recipientAddress);
+        return res.status(200).send('OK');
       }
+
+      const integration = await db.integration.findUnique({
+        where: {
+          organizationId_emailProvider: {
+            organizationId: localPart,
+            emailProvider: EmailProvider.postmark,
+          },
+        },
+        select: { id: true, organizationId: true },
+      });
+      if (!integration) {
+        await recordUnclaimedRecipient(recipientAddress);
+        return res.status(200).send('OK');
+      }
+      const organizationId = integration.organizationId;
 
       const emailRateLimit = await rateLimit(getRateLimitRedis(), `webhook:email:${organizationId}`);
       if (!emailRateLimit.success) {
@@ -109,6 +132,8 @@ export function registerEmailWebhookRoutes(router: Router): void {
       await getMessageQueue().add(JOB.EMAIL, {
         platform: CHANNEL.EMAIL,
         organizationId,
+        integrationId: integration.id,
+        receivedAt: new Date().toISOString(),
         senderEmail: fromAddress,
         senderName: fromName,
         subject,
@@ -118,7 +143,7 @@ export function registerEmailWebhookRoutes(router: Router): void {
         ...(attachments.length > 0 && { attachments }),
       });
 
-      logger.info({ fromAddress, organizationId, traceId }, '[Webhook] Inbound email queued');
+      logger.info({ integrationId: integration.id, organizationId, traceId }, '[Webhook] Inbound email queued');
       return res.status(200).send('OK');
     } catch (error) {
       logger.error({ err: error }, '[Webhook] Failed to queue email');

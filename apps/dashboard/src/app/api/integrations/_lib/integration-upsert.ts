@@ -6,6 +6,7 @@ const INTEGRATION_UNIQUE_DB_TARGET = ['organization_id', 'platform', 'external_a
 const INTEGRATION_UNIQUE_CONSTRAINTS = new Set([
   'Integration_organizationId_platform_externalAccountId_key',
   'integrations_organization_id_platform_external_account_id_key',
+  'integrations_non_email_account_unique',
 ]);
 
 export type IntegrationUpsertData = Omit<
@@ -80,8 +81,8 @@ export async function upsertRaceSafeIntegration(
     platform: args.platform,
     externalAccountId: args.externalAccountId,
   };
-  const where = { organizationId_platform_externalAccountId: key };
-  const existing = await db.integration.findUnique({ where });
+  const where = key;
+  const existing = await db.integration.findFirst({ where });
 
   if (existing) {
     return updateIntegrationById(existing.id, data);
@@ -96,7 +97,7 @@ export async function upsertRaceSafeIntegration(
     });
   } catch (err) {
     if (!isIntegrationUniqueConstraintError(err)) throw err;
-    const race = await db.integration.findUnique({ where });
+    const race = await db.integration.findFirst({ where });
     if (!race) throw err;
     return updateIntegrationById(race.id, data);
   }

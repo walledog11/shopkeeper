@@ -83,17 +83,15 @@ export function getEmailReceivingDisplay(
 
   if (!gmailNativeInboundEnabled) {
     return {
-      action: "Fallback active",
-      description: inboundAddress
-        ? `Forwarding fallback active at ${inboundAddress}`
-        : "Forwarding fallback active",
+      action: "Native inbound unavailable",
+      description: "Native Gmail receiving is disabled during controlled rollout",
     }
   }
 
   if (!isGmailNativeInboundEnrolled(integration)) {
     return {
       action: "Setup pending",
-      description: "Reconnect Gmail to activate native receiving; keep forwarding enabled",
+      description: "Reconnect Gmail to activate native receiving",
     }
   }
 
@@ -109,8 +107,8 @@ export function getEmailReceivingDisplay(
     return {
       action: "Sync degraded",
       description: withLastSuccessfulSync(failureCount > 1
-        ? `Gmail watch renewal has failed ${failureCount} times; keep forwarding enabled`
-        : "Gmail inbox sync needs attention; keep forwarding enabled", integration),
+        ? `Gmail watch renewal has failed ${failureCount} times`
+        : "Gmail inbox sync needs attention", integration),
     }
   }
   if (inboundStatus === "reauthorization_required") {
@@ -121,7 +119,7 @@ export function getEmailReceivingDisplay(
   }
   return {
     action: "Setup pending",
-    description: "Native Gmail receiving is pending; keep forwarding enabled",
+    description: "Native Gmail receiving is pending",
   }
 }
 
@@ -181,7 +179,7 @@ export function deriveIntegrationHealth(
       if (!isGmailNativeInboundEnrolled(gmailIntegration)) {
         return {
           state: "waiting",
-          note: "Reconnect Gmail to activate native receiving. Keep forwarding enabled.",
+          note: "Reconnect Gmail to activate native receiving.",
           canFix: true,
         }
       }
@@ -191,8 +189,8 @@ export function deriveIntegrationHealth(
         return {
           state: "needs-attention",
           note: failureCount > 1
-            ? `Gmail watch renewal has failed ${failureCount} times. Sending still works; keep forwarding enabled.`
-            : "Gmail inbox sync needs attention. Sending still works; keep forwarding enabled.",
+            ? `Gmail watch renewal has failed ${failureCount} times. Sending still works.`
+            : "Gmail inbox sync needs attention. Sending still works.",
           canFix: false,
         }
       }
@@ -206,7 +204,7 @@ export function deriveIntegrationHealth(
       if (inboundStatus !== "active") {
         return {
           state: "waiting",
-          note: "Sending is connected. Native Gmail receiving is pending; keep forwarding enabled.",
+          note: "Sending is connected. Native Gmail receiving is pending.",
           canFix: false,
         }
       }

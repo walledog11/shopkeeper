@@ -52,6 +52,7 @@ export async function handleOutboundEmailJob(
       select: {
         id: true,
         contentText: true,
+        integrationId: true,
         sendStatus: true,
         thread: {
           select: {
@@ -78,7 +79,7 @@ export async function handleOutboundEmailJob(
     }),
   ]);
 
-  if (!message || !integration) {
+  if (!message || !integration || message.integrationId !== integration.id) {
     logger.error(
       {
         opsAlert: true,

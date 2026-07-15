@@ -53,6 +53,8 @@ export interface ProcessMessageOptions {
   initialTag?: string | null;
   subject?: string | null;
   externalMessageId?: string | null;
+  integrationId?: string | null;
+  receivedAt?: Date | null;
   externalSpaceId?: string | null;
   traceId?: string | null;
   attachments?: string[];
@@ -86,6 +88,8 @@ export async function processInboundMessage(
     initialTag = null,
     subject = null,
     externalMessageId = null,
+    integrationId = null,
+    receivedAt = null,
     externalSpaceId = null,
     traceId = null,
     attachments = [],
@@ -97,6 +101,9 @@ export async function processInboundMessage(
   messageText = sanitizeUserInput(messageText);
 
   const providerMessageId = normalizeExternalMessageId(externalMessageId);
+  const providerSentAt = receivedAt && Number.isFinite(receivedAt.getTime())
+    ? receivedAt
+    : null;
 
   if (providerMessageId) {
     const existing = await db.message.findFirst({
@@ -141,6 +148,7 @@ export async function processInboundMessage(
           ...(subject && { subject }),
           ...(externalSpaceId && { externalSpaceId }),
           ...(initialTag && { tag: initialTag }),
+          ...(providerSentAt && { lastMessageAt: providerSentAt }),
           ...(precomputed && {
             aiTitle: precomputed.title,
             aiSummary: precomputed.summary,
@@ -175,19 +183,58 @@ export async function processInboundMessage(
     });
   }
 
+  const routeReceivedAt = integrationId && providerSentAt ? providerSentAt : null;
   let message: Awaited<ReturnType<typeof createMessage>>;
   try {
-    message = await createMessage(
-      {
-        threadId: thread!.id,
-        organizationId,
-        senderType: SenderType.customer,
-        contentText: messageText,
-        ...(providerMessageId && { externalMessageId: providerMessageId }),
-        ...(attachments.length > 0 && { attachments }),
-      },
-      { cachedPlanMessageId: null, cachedPlan: Prisma.DbNull },
-    );
+    message = await db.$transaction(async (tx) => {
+      const created = await tx.message.create({
+        data: {
+          threadId: thread!.id,
+          organizationId,
+          senderType: SenderType.customer,
+          contentText: messageText,
+          ...(providerMessageId && { externalMessageId: providerMessageId }),
+          ...(integrationId && { integrationId }),
+          ...(attachments.length > 0 && { attachments }),
+          ...(providerSentAt && { sentAt: providerSentAt }),
+        },
+      });
+      await tx.thread.update({
+        where: { id: thread!.id },
+        data: {
+          cachedPlanMessageId: null,
+          cachedPlan: Prisma.DbNull,
+        },
+      });
+      await tx.thread.updateMany({
+        where: {
+          id: thread!.id,
+          organizationId,
+          lastMessageAt: { lte: created.sentAt },
+        },
+        data: {
+          lastMessageAt: created.sentAt,
+          lastMessageSenderType: created.senderType,
+        },
+      });
+      if (routeReceivedAt) {
+        await tx.thread.updateMany({
+          where: {
+            id: thread!.id,
+            organizationId,
+            OR: [
+              { replyIntegrationUpdatedAt: null },
+              { replyIntegrationUpdatedAt: { lt: routeReceivedAt } },
+            ],
+          },
+          data: {
+            replyIntegrationId: integrationId,
+            replyIntegrationUpdatedAt: routeReceivedAt,
+          },
+        });
+      }
+      return created;
+    });
   } catch (error) {
     if (providerMessageId && (error as { code?: string }).code === 'P2002') {
       logger.info(

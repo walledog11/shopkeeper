@@ -41,12 +41,12 @@ describe("Gmail integration health", () => {
 
     expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
       state: "waiting",
-      note: "Reconnect Gmail to activate native receiving. Keep forwarding enabled.",
+      note: "Reconnect Gmail to activate native receiving.",
       canFix: true,
     })
     expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
       action: "Setup pending",
-      description: "Reconnect Gmail to activate native receiving; keep forwarding enabled",
+      description: "Reconnect Gmail to activate native receiving",
     })
   })
 
@@ -58,12 +58,12 @@ describe("Gmail integration health", () => {
 
     expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
       state: "waiting",
-      note: "Sending is connected. Native Gmail receiving is pending; keep forwarding enabled.",
+      note: "Sending is connected. Native Gmail receiving is pending.",
       canFix: false,
     })
     expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
       action: "Setup pending",
-      description: "Native Gmail receiving is pending; keep forwarding enabled",
+      description: "Native Gmail receiving is pending",
     })
   })
 
@@ -107,7 +107,7 @@ describe("Gmail integration health", () => {
 
     expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
       state: "needs-attention",
-      note: "Gmail inbox sync needs attention. Sending still works; keep forwarding enabled.",
+      note: "Gmail inbox sync needs attention. Sending still works.",
       canFix: false,
     })
   })
@@ -120,16 +120,16 @@ describe("Gmail integration health", () => {
 
     expect(deriveIntegrationHealth("email", [integration], null, true)).toEqual({
       state: "needs-attention",
-      note: "Gmail watch renewal has failed 3 times. Sending still works; keep forwarding enabled.",
+      note: "Gmail watch renewal has failed 3 times. Sending still works.",
       canFix: false,
     })
     expect(getEmailReceivingDisplay(integration, null, true)).toEqual({
       action: "Sync degraded",
-      description: "Gmail watch renewal has failed 3 times; keep forwarding enabled · Last successful sync: not yet",
+      description: "Gmail watch renewal has failed 3 times · Last successful sync: not yet",
     })
   })
 
-  it("shows the forwarding fallback while native inbound rollout is disabled", () => {
+  it("keeps the disabled native-inbound state scoped to Gmail", () => {
     const integration = gmailIntegration({
       oauthScopes: [GMAIL_READONLY_SCOPE],
       gmail: { inboundStatus: "active" },
@@ -140,8 +140,8 @@ describe("Gmail integration health", () => {
       "org-id@inbound.example.test",
       false,
     )).toEqual({
-      action: "Fallback active",
-      description: "Forwarding fallback active at org-id@inbound.example.test",
+      action: "Native inbound unavailable",
+      description: "Native Gmail receiving is disabled during controlled rollout",
     })
     expect(deriveIntegrationHealth("email", [integration], null, false)).toEqual({
       state: "working",

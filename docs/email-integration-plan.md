@@ -1,10 +1,31 @@
 # Email integration plan
 
-Native Gmail inbound, reliable outbound delivery, and a forwarding fallback.
+Independent Gmail and forwarded-email integrations with deterministic reply routing.
 
 **Status:** shared email infrastructure, async outbound, and implementation for Phases 1–7 of native Gmail inbound are complete. Controlled production rollout remains. Google Cloud resources still need to be provisioned per environment with `npm run configure:gmail-pubsub`.
 
-**Last reviewed:** 2026-07-03
+**Last reviewed:** 2026-07-13
+
+## Independent integration model
+
+Each workspace may connect one Gmail integration and one forwarded Email/Postmark integration at
+the same time. They are peers, not replacements or fallbacks for one another. `Integration.emailProvider`
+is the authoritative provider identity; `metadata.provider` remains only for compatibility during
+rollout. Connecting or disconnecting forwarding never stops a Gmail watch, and reconnecting Gmail
+never removes forwarding.
+
+Both inbound paths merge into the same open email thread for an organization/customer. Every
+inbound and outbound message records `integrationId`. A thread records the source of its newest
+distinct inbound email in `replyIntegrationId`; receipt timestamps prevent delayed queue jobs from
+regressing that source. Replies and auto-acknowledgements use that source when it still exists.
+New proactive email uses `Organization.defaultEmailIntegrationId`. If a workspace has two
+providers and no valid default, sending fails with a configuration error instead of selecting an
+arbitrary row. The selected integration is copied to the outbound message and queue job before
+sending.
+
+Postmark tenancy is derived only from its SMTP envelope recipient (`OriginalRecipient`). The
+generated recipient contains the organization UUID and is claimable only while that organization
+has a Postmark integration row. The visible `To` header is never used for tenancy.
 
 ## Goal
 
@@ -12,7 +33,7 @@ After this work:
 
 1. Connecting Gmail enables inbox sync and replies without Postmark forwarding.
 2. Google Workspace aliases such as `support@merchant.com` work for inbound filtering and outbound sending.
-3. Postmark forwarding remains available for merchants who do not grant mailbox read access.
+3. Postmark forwarding can be connected independently for custom-domain or alternate intake.
 4. Gmail and Postmark both feed the existing email ticket pipeline.
 5. OAuth, watch, sync, and send failures are visible and recoverable.
 
@@ -59,7 +80,9 @@ flowchart TB
   EmailQ --> Handler[handleEmailJob]
   Handler --> Tickets[Customers, threads, messages, attachments]
 
-  Tickets --> SendQ[BullMQ send-email]
+  Tickets --> Resolve[Reply source or workspace default]
+  Resolve --> Snapshot[Message.integrationId + queue integrationId]
+  Snapshot --> SendQ[BullMQ send-email]
   SendQ --> Providers[Gmail / Postmark]
 ```
 
@@ -70,13 +93,14 @@ flowchart TB
 3. Verify Pub/Sub with an OIDC token. Do not use an unauthenticated endpoint or a query-string shared secret.
 4. Serialize sync jobs per integration so concurrent notifications cannot race the history checkpoint.
 5. Normalize Gmail messages into the existing `InboundJobData` shape. Do not create a second ticket-ingestion path.
-6. Store Gmail state in `Integration.metadata` initially. Add dedicated columns only if query volume or update contention justifies a migration.
+6. Store Gmail watch state in `Integration.metadata`; store provider identity in the dedicated `emailProvider` column.
 7. Start from the history ID returned by `users.watch`; do not import existing mail by default.
-8. Keep Postmark and Gmail active together during rollout. Database idempotency makes dual delivery safe.
+8. Keep Postmark and Gmail active together. Database idempotency suppresses a MIME message delivered through both paths.
 
 ## Integration metadata
 
-Preserve the top-level `provider` field because existing code depends on it.
+Preserve the top-level `provider` field for backward-compatible reads, but do not use it as the
+authoritative provider identity for new writes or queries.
 
 ```typescript
 type EmailIntegrationMetadata = {
@@ -338,7 +362,7 @@ UX:
 - Explain that the alias must already exist in Gmail and must be configured as a valid send-as address.
 - Display:
   - Native inbound active
-  - Forwarding fallback active
+  - Forwarded Email connected (on its independent integration card)
   - Setup pending
   - Reconnect required
   - Sync degraded
@@ -376,7 +400,7 @@ The app can be built and tested with OAuth test users before Google verification
 - Pub/Sub envelope decoding and OIDC claim validation.
 - Watch-expiry selection.
 - Support-address and alias matching.
-- Stable fallback deduplication when MIME `Message-ID` is absent.
+- Stable duplicate handling when MIME `Message-ID` is absent.
 
 ### Gateway integration
 
@@ -466,7 +490,9 @@ These items are separate from Gmail native inbound and should not delay it.
 | Notifications arrive out of order | Always sync from the stored checkpoint; never replace it with the notification ID |
 | History checkpoint expires | Bounded recovery followed by a fresh watch |
 | OAuth token is revoked | Shared refresh behavior, daily token health, and reconnect status |
-| Gmail and Postmark both ingest the message | Organization-scoped `externalMessageId` uniqueness |
+| Gmail and Postmark both ingest the message | Organization-scoped `externalMessageId` uniqueness; the first persisted copy retains attribution |
+| Delayed inbound work changes a reply route backwards | Compare captured receipt time before updating `replyIntegrationId` |
+| Both providers exist with no default | Return a configuration error; never use an unordered `findFirst` |
 | Alias receives unrelated mailbox mail | Filter `To`, `Delivered-To`, and `X-Original-To` against `fromEmail` |
 | Restricted data leaks into logs | Log identifiers and error categories only; redact tokens and message content |
 | Gmail API quotas or outages | Retry `429` and `5xx` with backoff; monitor stale sync |

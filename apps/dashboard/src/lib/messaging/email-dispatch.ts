@@ -4,6 +4,7 @@ import { getEmailProvider } from "@shopkeeper/email/providers"
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply"
 import { getEmailSender } from "@shopkeeper/email/senders"
 import { EmailNotConfiguredError } from "@shopkeeper/email/types"
+import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolution"
 import logger from "@/lib/server/logger"
 import { recordOutboundCall } from "@/lib/server/outbound-recorder"
 import { recordEmailSendFailure } from "@/lib/messaging/provider-send-failures"
@@ -31,12 +32,21 @@ export async function dispatchEmailViaGatewayQueue(
   source: DispatchSource,
   replySource?: ReplySource,
 ): Promise<DispatchMessageResult> {
-  const integration = await db.integration.findFirst({
-    where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-  })
-  if (!integration) return { ok: false, error: "No email integration configured" }
+  let integration
+  try {
+    integration = await resolveEmailIntegration({
+      organizationId: org.id,
+      purpose: thread.channelType === CHANNEL_TYPE.EMAIL ? "reply" : "proactive",
+      threadId: thread.channelType === CHANNEL_TYPE.EMAIL ? thread.id : null,
+    })
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      return { ok: false, error: "Email not configured", detail: error.message }
+    }
+    throw error
+  }
 
-  const message = await createPendingAgentMessage(thread, text)
+  const message = await createPendingAgentMessage(thread, text, integration.id)
 
   const enqueued = await enqueueOutboundEmail({
     organizationId: org.id,
@@ -65,10 +75,19 @@ export async function sendEmailSynchronously(
     originalChannel?: string
   },
 ): Promise<DispatchProviderResult> {
-  const integration = await db.integration.findFirst({
-    where: { organizationId: org.id, platform: CHANNEL_TYPE.EMAIL },
-  })
-  if (!integration) return { ok: false, error: "No email integration configured" }
+  let integration
+  try {
+    integration = await resolveEmailIntegration({
+      organizationId: org.id,
+      purpose: thread.channelType === CHANNEL_TYPE.EMAIL ? "reply" : "proactive",
+      threadId: thread.channelType === CHANNEL_TYPE.EMAIL ? thread.id : null,
+    })
+  } catch (error) {
+    if (error instanceof EmailNotConfiguredError) {
+      return { ok: false, error: "Email not configured", detail: error.message }
+    }
+    throw error
+  }
 
   const threadCtx = await db.thread.findUnique({
     where: { id: thread.id },
@@ -104,7 +123,7 @@ export async function sendEmailSynchronously(
       ...(opts.originalChannel && { originalChannel: opts.originalChannel }),
     },
   })
-  if (recorded) return { ok: true }
+  if (recorded) return { ok: true, integrationId: integration.id }
 
   try {
     await getEmailSender(integration).send({
@@ -136,7 +155,7 @@ export async function sendEmailSynchronously(
     return { ok: false, error: "Email dispatch failed", detail: msg }
   }
 
-  return { ok: true }
+  return { ok: true, integrationId: integration.id }
 }
 
 export type { DispatchFailure }

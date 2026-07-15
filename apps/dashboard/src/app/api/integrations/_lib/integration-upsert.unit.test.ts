@@ -20,6 +20,15 @@ describe('isIntegrationUniqueConstraintError', () => {
     expect(isIntegrationUniqueConstraintError(error)).toBe(true);
   });
 
+  it('matches the partial non-email account index', () => {
+    const error = knownRequestError('P2002', {
+      modelName: 'Integration',
+      target: 'integrations_non_email_account_unique',
+    });
+
+    expect(isIntegrationUniqueConstraintError(error)).toBe(true);
+  });
+
   it('does not treat unrelated P2002 errors as integration races', () => {
     const organizationError = knownRequestError('P2002', {
       modelName: 'Organization',

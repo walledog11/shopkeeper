@@ -36,36 +36,30 @@ export function makeEmailJob(organizationId: string, overrides: Record<string, u
 export function makeIgDmJob(
   organizationId: string,
   senderId = 'ig_sender_001',
-  options: { messageMid?: string | null; text?: string } = {},
+  options: {
+    attachments?: Array<{ type: string; url: string | null }>;
+    instagramAccountId: string;
+    integrationId: string;
+    messageMid?: string | null;
+    providerSentAt?: string;
+    text?: string | null;
+  },
 ) {
-  const message: { text: string; mid?: string } = {
-    text: options.text ?? 'Hi, can you help me?',
-  };
-  if (options.messageMid !== null) {
-    message.mid = options.messageMid ?? `mid_ig_${Date.now()}`;
-  }
-
   return {
     id: 'job-ig-test',
     data: {
       platform: 'ig_dm',
+      integrationId: options.integrationId,
       organizationId,
+      instagramAccountId: options.instagramAccountId,
+      senderIgsid: senderId,
+      externalMessageId: options.messageMid === null
+        ? null
+        : (options.messageMid ?? `mid_ig_${Date.now()}`),
+      providerSentAt: options.providerSentAt ?? '2026-07-14T12:00:00.000Z',
+      text: options.text === undefined ? 'Hi, can you help me?' : options.text,
+      attachments: options.attachments ?? [],
       traceId: 'trace-ig-test',
-      rawPayload: {
-        object: 'instagram',
-        entry: [
-          {
-            id: 'page_123',
-            messaging: [
-              {
-                sender: { id: senderId },
-                recipient: { id: 'page_123' },
-                message,
-              },
-            ],
-          },
-        ],
-      },
     },
   };
 }

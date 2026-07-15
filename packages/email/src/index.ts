@@ -13,6 +13,13 @@ export type {
 export { EmailNotConfiguredError } from './types.js';
 
 export {
+  EmailIntegrationConfigurationError,
+  resolveEmailIntegration,
+  type EmailIntegrationPurpose,
+  type ResolveEmailIntegrationInput,
+} from './integration-resolution.js';
+
+export {
   GMAIL_READONLY_SCOPE,
   getEmailAuthReauthorizationReason,
   getGmailInboundStatus,

@@ -34,6 +34,8 @@ export interface ShopifyOrderPayload {
 export interface InboundJobData {
   platform: string;
   organizationId: string;
+  integrationId?: string;
+  receivedAt?: string;
   traceId?: string;
   rawPayload?: unknown;
   topic?: string;
@@ -48,6 +50,24 @@ export interface InboundJobData {
   body?: string;
   inboundMessageId?: string | null;
   attachments?: Array<{ name: string; contentType: string; contentBase64: string }>;
+}
+
+export interface InstagramInboundAttachment {
+  type: string;
+  url: string | null;
+}
+
+export interface InstagramInboundJobData {
+  platform: 'ig_dm';
+  integrationId: string;
+  organizationId: string;
+  instagramAccountId: string;
+  senderIgsid: string;
+  externalMessageId: string | null;
+  providerSentAt: string;
+  text: string | null;
+  attachments: InstagramInboundAttachment[];
+  traceId: string;
 }
 
 export interface AiSummaryJobData {

@@ -86,7 +86,7 @@ separate scope.
 
 ### P1-02 — Revalidate and claim atomically before execution
 
-**Status (2026-07-12): Completed; production rollout review pending.** All
+**Status (2026-07-13): Completed; production shadow observation in progress.** All
 reviewed-plan entry points use the shared claim service, including dashboard
 Concierge approval/auto-execution. The legacy gateway pre-approved execution
 bypass has been removed. Stored-plan claim transactions lock the tenant-owned
@@ -96,9 +96,15 @@ plan hashes and tool-input comparisons are stable across PostgreSQL JSONB key
 ordering; whole-turn ambiguity records `unknown` and cannot be replayed. The
 `PLAN_EXECUTION_LEDGER_MODE=off|shadow|enforce` rollback/canary rail is implemented
 for both runtimes, with production validation requiring an explicit mode.
-The strict rollout audit also passes against the isolated local test database
-with no repeated observations, unknown outcomes, or stale claims; this is a
-tooling check, not a substitute for the production shadow window.
+The production database reports all 52 migrations applied. Commit `92d9333`,
+which contains the ledger implementation, is deployed to the Vercel dashboard
+and both Railway gateway services. `PLAN_EXECUTION_LEDGER_MODE=shadow` is set
+for the dashboard, gateway web service, and separate gateway worker; dashboard,
+database, Redis, worker, and queue health checks pass. The first strict 24-hour
+production audit passed with no repeated observations, unknown outcomes, or
+stale claims, but contained zero executions. Keep the shadow window open until
+real reviewed-plan traffic exercises both hosts; an empty audit is schema and
+deployment evidence, not enforcement evidence.
 
 - **Related findings:** AUD-001, AUD-002, AUD-012.
 - **Files likely to change:** `packages/agent/src/plan-execution.ts`, `turn.ts`; `apps/dashboard/src/app/api/agent/route.ts`, `quick-approve/route.ts`; `apps/gateway/src/message-handlers/execute-operator-agent-turn.ts`, `pending-plan-actions.ts`.
@@ -290,7 +296,7 @@ its rollout complete until both unchecked items above are complete.
 
 ### P3-02 — Reserve goodwill/refund budget atomically
 
-**Status (2026-07-13): Local implementation complete; rollout pending.** An
+**Status (2026-07-13): Production migration applied; canary rollout pending.** An
 additive reservation ledger now claims daily goodwill capacity under a locked
 organization/day row before a refund, store-credit, or gift-card provider call.
 Reservations use the stable execution/tool operation key, retain the tool and
@@ -300,11 +306,13 @@ the provider outcome is `unknown`. Reused operation keys cannot issue a second
 provider call or silently change input. Database-backed coverage proves the
 former concurrent $6 + $6 against a $10 cap race now admits one provider call,
 unknown reservations hold capacity until reconciliation, and repeated commits
-do not double-count spend. Production migration, per-tool canary evidence, and
-operational recovery of stale/unknown reservations remain rollout gates. Run
+do not double-count spend. Per-tool canary evidence and operational recovery of
+stale/unknown reservations remain rollout gates. Run
 `npm run audit:refund-spend-reservations -- --hours=24` during rollout;
 `--strict` fails on any stale reservation or `unknown` outcome. The strict audit
-passes against the isolated local test database.
+passes against the isolated local test database. The first strict 24-hour
+production baseline also passed, but contained zero reservations; it does not
+replace the per-tool canary observation window.
 
 **Completed locally (verified 2026-07-13):**
 
@@ -340,7 +348,7 @@ passes against the isolated local test database.
 
 **Still required for P3-02 rollout completion:**
 
-- [ ] Deploy the additive migration before the application build in production.
+- [x] Deploy the additive migration before the application build in production.
 - [ ] Canary refund, store-credit, and gift-card reservations independently and
   observe cap totals plus duplicate suppression against Shopify development
   stores.
@@ -362,8 +370,8 @@ passes against the isolated local test database.
 
 ### P4-01 — Make outbound email claimable, tenant-validated and recoverable
 
-**Status (2026-07-13): Local implementation complete; production rollout and
-provider-activity reconciliation runbook pending.** Additive message claim
+**Status (2026-07-13): Production migration and application deployment complete;
+provider canaries and reconciliation runbook pending.** Additive message claim
 fields support a conditional `pending -> processing` transition with a claim
 token and separate provider-attempt timestamp. The gateway uses the database
 claim as the cross-worker correctness boundary and `messageId` as the stable
@@ -388,7 +396,7 @@ audit gates pass.
 
 **Still required for P4-01 rollout completion:**
 
-- [ ] Deploy `20260714000000_add_outbound_send_claims` before the application
+- [x] Deploy `20260714000000_add_outbound_send_claims` before the application
   build.
 - [ ] Canary Postmark and Gmail independently with duplicate enqueue,
   crash-after-acceptance, stale processing, provider-ID persistence, and manual
@@ -698,15 +706,14 @@ These can proceed while the durable-execution design is reviewed, provided they 
 
 ## Database migrations required
 
-- Durable plan/action execution ledger (P1-01). **Migration created and applied
-  successfully by the local test bootstrap on 2026-07-12; production deployment
-  remains open.**
-- Goodwill/refund reservations (P3-02). **Migration created and applied
-  successfully by the local test bootstrap on 2026-07-13; production deployment
-  remains open.**
+- Durable plan/action execution ledger (P1-01). **Migration created, locally
+  verified, and confirmed applied in production on 2026-07-13.**
+- Goodwill/refund reservations (P3-02). **Migration created, locally verified,
+  and confirmed applied in production on 2026-07-13.**
 - Outbound send claims (P4-01). **Migration
   `20260714000000_add_outbound_send_claims` was applied successfully to the
-  isolated local test database; production deployment remains open.**
+  isolated local test database and confirmed applied in production on
+  2026-07-13.**
 - Durable Stripe event processing (P4-02).
 - Operator inbox/event persistence if PostgreSQL is chosen (P4-03).
 - Compound tenant constraints after audit/backfill (P5-03).
@@ -730,26 +737,31 @@ All should be additive first. Destructive cleanup belongs in later releases afte
 ## Recommended next implementation phase
 
 **Progress (2026-07-13):** P0-02, P1-01 through P1-03, P2-01, P3-01/P3-02,
-P4-01, and P5-01 have complete local implementations. Production migrations,
-claim/recovery review, provider and queue canary evidence, and live multi-device
-verification remain rollout prerequisites. P4-01 now provides one-winner email
-delivery claims, tenant validation, stable queue/provider identity, explicit
-unknown delivery, and stale-claim recovery; its production migration, provider
-canaries, and provider-activity runbook remain open. P3-01's shared retry/unknown
+P4-01, and P5-01 have complete local implementations. All 52 migrations are
+applied in production, and the cleanup implementation is deployed on commit
+`92d9333`. The Vercel dashboard and both Railway gateway services are explicitly
+in ledger `shadow` mode and healthy. The first strict 24-hour production audit
+passed but contained zero executions, so real-traffic observation, claim/recovery
+review, provider and queue canary evidence, and live multi-device verification
+remain rollout prerequisites. P4-01 now provides one-winner email delivery
+claims, tenant validation, stable queue/provider identity, explicit unknown
+delivery, and stale-claim recovery; provider canaries and the provider-activity
+runbook remain open. P3-01's shared retry/unknown
 outcome contract plus refund, cancellation, order creation/editing, order
 address, gift-card, and store-credit handling are locally complete; provider
 canaries and durable recovery ownership remain. Run
 `npm run audit:plan-executions -- --hours=24` to report repeated shadow
 observations, unknown outcomes, and stale claims; `--strict` makes any such
-finding fail the command. The strict command has been exercised successfully
-against the isolated local test database; the production shadow audit remains
-open.
+finding fail the command. The production shadow observation window remains open
+until the audit includes representative dashboard and gateway executions.
 
 Next:
 
-1. Deploy the additive ledger migration before the enforcing application build.
-2. Set both hosts explicitly to `shadow`, run the rollout audit above, and review
-   repeated observations before enforcing dashboard.
+1. ~~Deploy the additive ledger migration before the enforcing application
+   build.~~ **Completed 2026-07-13.**
+2. Both hosts are explicitly in `shadow` and the initial strict audit is clean.
+   Keep the observation window open until it contains representative executions,
+   then review repeated observations before enforcing dashboard.
 3. Canary gateway enforcement on Telegram, then iMessage/auto-execution; verify one
    multi-device decision and `unknown` recovery visibility.
 4. Canary the AI-summary debounce and confirm newest-message notification plus
@@ -758,14 +770,14 @@ Next:
    order-address, order-editing, gift-card, and store-credit paths, one tool
    family at a time, and define the durable reconciliation owner for outcomes
    that remain `unknown`.
-6. Deploy the additive goodwill-reservation migration before its application
-   build, canary refund/store-credit/gift-card cap enforcement, and monitor
+6. The additive goodwill-reservation migration is deployed. Canary
+   refund/store-credit/gift-card cap enforcement and monitor
    stale or `unknown` reservations with
    `npm run audit:refund-spend-reservations -- --hours=24 --strict` until their
    recovery procedure is proven.
-7. Deploy and canary the P4-01 outbound-send claim migration and state machine,
-   keeping synchronous email as the rollback rail until Postmark/Gmail unknown
-   reconciliation and stale-claim monitoring are proven.
+7. The P4-01 outbound-send claim migration and state machine are deployed.
+   Canary Postmark/Gmail while keeping synchronous email as the rollback rail
+   until unknown reconciliation and stale-claim monitoring are proven.
 8. Implement P4-03 durable operator-event ingestion next, then P6-02 monitoring;
    do not broaden natural-language ticket sends until those gates and P4-01's
    rollout are complete.

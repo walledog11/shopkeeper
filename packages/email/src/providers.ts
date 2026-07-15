@@ -22,7 +22,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-export function getEmailProvider(integration: { metadata?: unknown | null }): EmailProvider {
+export function getEmailProvider(integration: {
+  emailProvider?: EmailProvider | null;
+  metadata?: unknown | null;
+}): EmailProvider {
+  if (integration.emailProvider === 'gmail' || integration.emailProvider === 'postmark') {
+    return integration.emailProvider;
+  }
   const meta = integration.metadata;
   if (meta && typeof meta === 'object' && 'provider' in meta) {
     const value = (meta as { provider?: unknown }).provider;
@@ -31,12 +37,18 @@ export function getEmailProvider(integration: { metadata?: unknown | null }): Em
   return 'postmark';
 }
 
-export function getEmailProviderLabel(integration: { metadata?: unknown | null }): string {
+export function getEmailProviderLabel(integration: {
+  emailProvider?: EmailProvider | null;
+  metadata?: unknown | null;
+}): string {
   const provider = getEmailProvider(integration);
   return provider === 'gmail' ? 'Gmail' : 'Forwarding';
 }
 
-export function getEmailReauthorizePath(integration: { metadata?: unknown | null }): string | null {
+export function getEmailReauthorizePath(integration: {
+  emailProvider?: EmailProvider | null;
+  metadata?: unknown | null;
+}): string | null {
   const provider = getEmailProvider(integration);
   if (provider === 'gmail') return '/api/integrations/gmail/auth';
   return null;

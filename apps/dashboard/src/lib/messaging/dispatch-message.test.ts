@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, SenderType, db } from '@shopkeeper/db';
+import { ChannelType, EmailProvider, SenderType, db } from '@shopkeeper/db';
 import {
   cleanupTestData,
   createTestCustomer,
@@ -92,6 +92,53 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
+async function createInstagramLoginIntegration() {
+  const integration = await createTestIntegration(org.id, {
+    platform: ChannelType.ig_dm,
+    externalAccountId: `ig_${org.id.slice(0, 8)}`,
+    accessToken: 'test-ig-token',
+    metadata: {
+      instagram: {
+        authModel: 'instagram_login',
+        grantedScopes: [
+          'instagram_business_basic',
+          'instagram_business_manage_messages',
+        ],
+        permissionsVerified: true,
+      },
+    },
+  });
+  return db.integration.update({
+    where: { id: integration.id },
+    data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+  });
+}
+
+async function routeInstagramThread(
+  threadId: string,
+  integrationId: string,
+  customerMessageAt = new Date(),
+) {
+  await db.thread.update({
+    where: { id: threadId },
+    data: {
+      replyIntegrationId: integrationId,
+      replyIntegrationUpdatedAt: customerMessageAt,
+    },
+  });
+  await db.message.create({
+    data: {
+      threadId,
+      organizationId: org.id,
+      senderType: SenderType.customer,
+      contentText: 'Inbound Instagram message',
+      externalMessageId: `mid-inbound-${threadId}`,
+      integrationId,
+      sentAt: customerMessageAt,
+    },
+  });
+}
+
 describe('dispatchMessage', () => {
   it('sends an email reply with reply headers and persists the agent message', async () => {
     const emailAddress = `support_${org.id.slice(0, 8)}@example.com`;
@@ -129,6 +176,7 @@ describe('dispatchMessage', () => {
       where: { threadId: thread.id, senderType: SenderType.agent },
     });
     expect(saved?.contentText).toBe('It ships today.');
+    expect(saved?.integrationId).not.toBeNull();
   });
 
   it('records email provider failures without persisting an agent message', async () => {
@@ -167,27 +215,49 @@ describe('dispatchMessage', () => {
   it.each([
     {
       response: { error: { code: 190 } },
-      error: 'Instagram token expired',
-      detail: 'Instagram token expired',
+      error: 'Instagram connection expired — reconnect Instagram to reply',
+      detail: 'Instagram token expired or revoked',
+      status: 400,
     },
     {
       response: { error: { code: 10, error_subcode: 2018278 } },
       error: "Instagram only allows replies within 24 hours of the customer's last message",
       detail: 'Outside Instagram 24-hour messaging window',
+      status: 400,
     },
-  ])('returns and records Instagram provider failures: $detail', async ({ response, error, detail }) => {
-    const integration = await createTestIntegration(org.id, {
-      platform: ChannelType.ig_dm,
-      externalAccountId: `ig_${org.id.slice(0, 8)}`,
-      accessToken: 'test-ig-token',
-    });
+    {
+      response: { error: { code: 10 } },
+      error: 'Instagram messaging permission is missing — reconnect Instagram',
+      detail: 'Instagram messaging permission missing',
+      status: 403,
+    },
+    {
+      response: { error: { code: 4 } },
+      error: 'Instagram is rate limiting replies — try again later',
+      detail: 'Instagram rate limit exceeded',
+      status: 429,
+    },
+    {
+      response: { error: { code: 2 } },
+      error: 'Instagram is temporarily unavailable — try again later',
+      detail: 'Instagram provider temporarily unavailable',
+      status: 503,
+    },
+  ])('returns and records Instagram provider failures: $detail', async ({
+    response,
+    error,
+    detail,
+    status,
+  }) => {
+    const integration = await createInstagramLoginIntegration();
     const customer = await createTestCustomer(org.id, 'ig_customer');
     const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
-    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify(response), { status: 400 }));
+    await routeInstagramThread(thread.id, integration.id);
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify(response), { status }));
 
     const result = await dispatchMessage({ ...thread, customer }, org, 'Instagram reply.');
 
-    expect(result).toEqual({ ok: false, error, providerStatus: 400 });
+    expect(result).toEqual({ ok: false, error, providerStatus: status });
     expect(mockRecordProviderSendFailure).toHaveBeenCalledWith(
       'meta',
       'ig_dm',
@@ -198,6 +268,120 @@ describe('dispatchMessage', () => {
         detail,
       }),
     );
+  });
+
+  it('uses the thread reply integration and persists the Instagram provider message ID', async () => {
+    const integration = await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_exact_route_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+    mockFetch.mockResolvedValueOnce(new Response(JSON.stringify({
+      message_id: 'mid-outbound-1',
+      recipient_id: customer.platformId,
+    }), { status: 200 }));
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Instagram reply.');
+
+    expect(result).toMatchObject({ ok: true });
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(`https://graph.instagram.com/v25.0/${integration.externalAccountId}/messages`);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer test-ig-token' });
+    expect(JSON.parse(String(init.body))).toEqual({
+      recipient: { id: customer.platformId },
+      message: { text: 'Instagram reply.' },
+    });
+    const saved = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(saved.integrationId).toBe(integration.id);
+    expect(saved.providerMessageId).toBe('mid-outbound-1');
+  });
+
+  it('does not fall back to the workspace integration when a thread has no reply route', async () => {
+    await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_legacy_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        senderType: SenderType.customer,
+        contentText: 'Legacy inbound message',
+        sentAt: new Date(),
+      },
+    });
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'This Instagram conversation is no longer connected',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+    await expect(db.message.count({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    })).resolves.toBe(0);
+  });
+
+  it('enforces the Instagram reply window from the latest customer provider timestamp', async () => {
+    const integration = await createInstagramLoginIntegration();
+    const customer = await createTestCustomer(org.id, 'ig_expired_window_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(
+      thread.id,
+      integration.id,
+      new Date(Date.now() - 24 * 60 * 60 * 1000 - 1),
+    );
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Too late.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: "Instagram only allows replies within 24 hours of the customer's last message",
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses an expired Instagram Login token before calling the provider', async () => {
+    const integration = await createInstagramLoginIntegration();
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() - 1) },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_expired_token_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'Instagram connection expired — reconnect Instagram to reply',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy Page-token Instagram conversations read-only', async () => {
+    const integration = await createTestIntegration(org.id, {
+      platform: ChannelType.ig_dm,
+      externalAccountId: `legacy_ig_${org.id.slice(0, 8)}`,
+      accessToken: 'legacy-page-token',
+    });
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
+    });
+    const customer = await createTestCustomer(org.id, 'ig_legacy_page_customer');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await routeInstagramThread(thread.id, integration.id);
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Do not send.');
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'This legacy Instagram conversation is read-only',
+    });
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('sends a TikTok Shop reply and persists the agent message after provider success', async () => {
@@ -299,12 +483,10 @@ describe('dispatchMessage', () => {
     const emailCustomer = await createTestCustomer(org.id, 'record-email@example.com');
     const emailThread = await createTestThread(org.id, emailCustomer.id, ChannelType.email);
 
-    await createTestIntegration(org.id, {
-      platform: ChannelType.ig_dm,
-      externalAccountId: `ig_record_${org.id.slice(0, 8)}`,
-    });
+    const igIntegration = await createInstagramLoginIntegration();
     const igCustomer = await createTestCustomer(org.id, 'record_ig_customer');
     const igThread = await createTestThread(org.id, igCustomer.id, ChannelType.ig_dm);
+    await routeInstagramThread(igThread.id, igIntegration.id);
 
     await expect(dispatchMessage({ ...emailThread, customer: emailCustomer }, org, 'Recorded email.'))
       .resolves.toMatchObject({ ok: true });
@@ -358,6 +540,7 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
       where: { threadId: thread.id, senderType: SenderType.agent },
     });
     expect(saved?.sendStatus).toBe('pending');
+    expect(saved?.integrationId).toBe(integration.id);
     expect(JSON.parse(init.body as string)).toMatchObject({
       organizationId: org.id,
       messageId: saved?.id,
@@ -365,6 +548,48 @@ describe('dispatchMessage — async outbound (OUTBOUND_EMAIL_ASYNC)', () => {
       integrationId: integration.id,
       source: 'dispatch_message',
     });
+  });
+
+  it('snapshots the thread reply source instead of the proactive default', async () => {
+    mockFetch.mockResolvedValueOnce(new Response(
+      JSON.stringify({ enqueued: true, jobId: 'j-source' }),
+      { status: 202 },
+    ));
+    const gmail = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.gmail,
+      externalAccountId: `gmail-${org.id}@example.com`,
+      metadata: { provider: 'gmail' },
+    });
+    const postmark = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.postmark,
+      externalAccountId: `support-${org.id}@example.com`,
+      metadata: { provider: 'postmark' },
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { defaultEmailIntegrationId: gmail.id },
+    });
+    const customer = await createTestCustomer(org.id, 'source-route@example.com');
+    const thread = await createTestThread(org.id, customer.id, ChannelType.email);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        replyIntegrationId: postmark.id,
+        replyIntegrationUpdatedAt: new Date(),
+      },
+    });
+
+    const result = await dispatchMessage({ ...thread, customer }, org, 'Route this reply.');
+
+    expect(result).toMatchObject({ ok: true });
+    const message = await db.message.findFirstOrThrow({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
+    expect(message.integrationId).toBe(postmark.id);
+    const [, init] = mockFetch.mock.calls[0];
+    expect(JSON.parse(init.body as string)).toMatchObject({ integrationId: postmark.id });
   });
 
   it('marks the pending message failed when enqueue fails', async () => {

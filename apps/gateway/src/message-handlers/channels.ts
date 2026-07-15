@@ -1,11 +1,17 @@
 import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
-import { fetchInstagramUserProfile } from '../clients/meta-graph.js';
+import { fetchInstagramMessagingUserProfile } from '../clients/instagram-graph.js';
 import { normalizeTikTokShopWebhookPayload } from '../clients/tiktok-shop.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
-import type { InboundJobData, ShopifyOrderPayload } from '../types.js';
+import { loadActiveInstagramIntegration } from '../lib/instagram-integration.js';
+import type {
+  InboundJobData,
+  InstagramInboundAttachment,
+  InstagramInboundJobData,
+  ShopifyOrderPayload,
+} from '../types.js';
 import { uploadInboundAttachment } from '../storage/blob.js';
 import {
   classifyAndSummarizeNewEmail,
@@ -38,88 +44,171 @@ async function lookupShopifyCustomerName(organizationId: string, email: string):
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isInstagramInboundAttachment(value: unknown): value is InstagramInboundAttachment {
+  return isRecord(value)
+    && typeof value.type === 'string'
+    && (typeof value.url === 'string' || value.url === null);
+}
+
+function isInstagramInboundJobData(data: unknown): data is InstagramInboundJobData {
+  return isRecord(data)
+    && data.platform === CHANNEL.IG_DM
+    && typeof data.integrationId === 'string'
+    && typeof data.organizationId === 'string'
+    && typeof data.instagramAccountId === 'string'
+    && typeof data.senderIgsid === 'string'
+    && (typeof data.externalMessageId === 'string' || data.externalMessageId === null)
+    && typeof data.providerSentAt === 'string'
+    && (typeof data.text === 'string' || data.text === null)
+    && Array.isArray(data.attachments)
+    && data.attachments.every(isInstagramInboundAttachment)
+    && typeof data.traceId === 'string';
+}
+
+function publicInstagramShareUrl(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return null;
+    if (url.hostname !== 'instagram.com' && !url.hostname.endsWith('.instagram.com')) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function formatInstagramMessage(
+  text: string | null,
+  attachments: InstagramInboundAttachment[],
+): string {
+  const parts = text ? [text] : [];
+  for (const attachment of attachments) {
+    if (attachment.type === 'deleted') {
+      parts.push('[Instagram message deleted]');
+      continue;
+    }
+    if (attachment.type === 'share') {
+      const shareUrl = publicInstagramShareUrl(attachment.url);
+      parts.push(shareUrl ? `Shared Instagram content: ${shareUrl}` : '[Shared Instagram content]');
+      continue;
+    }
+    if (attachment.type === 'unsupported') {
+      parts.push('[Unsupported Instagram message]');
+      continue;
+    }
+    parts.push(`[Instagram ${attachment.type} attachment]`);
+  }
+  return parts.join('\n') || '[Unsupported Instagram message]';
+}
+
 export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
-  const { organizationId, traceId } = job.data;
-  const rawPayload = job.data.rawPayload as {
-    entry?: Array<{
-      messaging?: Array<{
-        sender: { id: string };
-        message: {
-          text?: string;
-          is_echo?: boolean;
-          mid?: string;
-          attachments?: Array<{ type: string; payload: { url?: string } }>;
-        };
-      }>;
-      changes?: Array<{
-        value: {
-          sender: { id: string };
-          message: {
-            text?: string;
-            is_echo?: boolean;
-            mid?: string;
-            attachments?: Array<{ type: string; payload: { url?: string } }>;
-          };
-        };
-      }>;
-    }>;
-  };
+  const candidate: unknown = job.data;
+  if (!isInstagramInboundJobData(candidate)) {
+    logger.error({ jobId: job.id }, '[Worker] Invalid normalized Instagram job — dropping');
+    return;
+  }
 
-  const entry = rawPayload.entry?.[0];
-  const messagingEvent = entry?.messaging?.[0] ?? entry?.changes?.[0]?.value;
-
-  if (!messagingEvent || !messagingEvent.message) return;
-  if (messagingEvent.message.is_echo) return;
-
-  const senderId = messagingEvent.sender.id;
-  const messageText = messagingEvent.message.text ?? '';
-  const attachmentUrls = (messagingEvent.message.attachments ?? [])
-    .map((a) => a.payload?.url)
-    .filter((u): u is string => typeof u === 'string' && u.length > 0);
-
-  if (!messageText && attachmentUrls.length === 0) return;
-
-  const textToStore = messageText || '[Attachment]';
+  const {
+    attachments,
+    externalMessageId,
+    instagramAccountId,
+    integrationId,
+    organizationId,
+    providerSentAt,
+    senderIgsid,
+    text,
+    traceId,
+  } = candidate;
+  const sentAt = new Date(providerSentAt);
+  if (!Number.isFinite(sentAt.getTime())) {
+    logger.error({ integrationId, traceId }, '[Worker] Invalid Instagram provider timestamp — dropping');
+    return;
+  }
 
   try {
-    let igName: string | null = null;
-    let igProfilePic: string | null = null;
-    try {
-      const integration = await db.integration.findFirst({
-        where: { organizationId, platform: CHANNEL.IG_DM },
-        select: { accessToken: true },
-      });
-      if (integration?.accessToken) {
-        const profileResult = await fetchInstagramUserProfile(senderId, integration.accessToken);
-        if (profileResult.data) {
-          igName = profileResult.data.name || null;
-          igProfilePic = profileResult.data.profile_pic || null;
-        }
-      }
-    } catch (profileErr) {
-      logger.warn({ err: (profileErr as Error).message, senderId }, '[Worker] Failed to fetch IG profile');
+    const integration = await loadActiveInstagramIntegration({
+      id: integrationId,
+      instagramAccountId,
+      organizationId,
+    });
+    if (!integration) {
+      logger.info(
+        { instagramAccountId, integrationId, organizationId, traceId },
+        '[Worker] Instagram integration disconnected or replaced before processing — dropping',
+      );
+      return;
     }
 
-    await processInboundMessage(organizationId, senderId, CHANNEL.IG_DM, textToStore, aiSummaryQueue, {
-      customerName: igName,
-      profilePicUrl: igProfilePic,
-      externalMessageId: messagingEvent.message.mid ?? null,
-      attachments: attachmentUrls,
-      traceId,
-      isRealCustomerMessage: true,
-    });
-    logger.info({ senderId, organizationId, traceId }, '[Worker] Successfully saved IG DM');
+    let customerName: string | null = null;
+    const profileResult = await fetchInstagramMessagingUserProfile(
+      senderIgsid,
+      integration.accessToken,
+    );
+    if (profileResult.ok) {
+      customerName = profileResult.data.name ?? profileResult.data.username;
+    } else {
+      logger.warn(
+        {
+          category: profileResult.error.category,
+          code: profileResult.error.code,
+          integrationId,
+          requestId: profileResult.error.requestId,
+          senderIgsid,
+        },
+        '[Worker] Instagram profile enrichment failed',
+      );
+    }
+
+    await processInboundMessage(
+      organizationId,
+      senderIgsid,
+      CHANNEL.IG_DM,
+      formatInstagramMessage(text, attachments),
+      aiSummaryQueue,
+      {
+        customerName,
+        externalMessageId,
+        integrationId,
+        receivedAt: sentAt,
+        traceId,
+        isRealCustomerMessage: true,
+      },
+    );
+    logger.info({ senderIgsid, organizationId, traceId }, '[Worker] Successfully saved Instagram DM');
   } catch (error) {
-    logger.error({ err: error, traceId }, '[Worker] DB operation failed for IG DM');
+    logger.error({ err: error, traceId }, '[Worker] DB operation failed for Instagram DM');
     throw error;
   }
 }
 
 export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
   const { organizationId, traceId } = job.data;
-  const { senderEmail, senderName, subject, body } = job.data;
+  const { senderName, subject, body } = job.data;
+  const senderEmail = job.data.senderEmail?.trim().toLowerCase();
 
   try {
+    if (job.data.integrationId) {
+      const activeIntegration = await db.integration.findFirst({
+        where: {
+          id: job.data.integrationId,
+          organizationId,
+          platform: CHANNEL.EMAIL,
+        },
+        select: { id: true },
+      });
+      if (!activeIntegration) {
+        logger.info(
+          { integrationId: job.data.integrationId, organizationId, traceId },
+          '[Worker] Email integration disconnected before processing — dropping',
+        );
+        return;
+      }
+    }
+
     const [existingCustomer, org] = await Promise.all([
       db.customer.findUnique({
         where: { organizationId_platformId: { organizationId, platformId: senderEmail! } },
@@ -192,6 +281,8 @@ export async function handleEmailJob(job: Job<InboundJobData>, aiSummaryQueue: Q
       customerName: resolvedName,
       subject: subject?.trim() || null,
       externalMessageId: job.data.inboundMessageId,
+      integrationId: job.data.integrationId,
+      receivedAt: job.data.receivedAt ? new Date(job.data.receivedAt) : undefined,
       traceId,
       attachments: attachmentUrls,
       precomputed,

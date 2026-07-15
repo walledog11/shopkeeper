@@ -62,6 +62,7 @@ function rawMessage(
 ): GmailRawMessage {
   return {
     id,
+    internalDate: '1783963200000',
     labelIds,
     raw: Buffer.from(lines.join('\r\n')),
   };
@@ -182,6 +183,8 @@ describe('processGmailSyncJob', () => {
       expect.objectContaining({
         platform: 'email',
         organizationId: 'organization-1',
+        integrationId: 'integration-1',
+        receivedAt: '2026-07-13T17:20:00.000Z',
         senderEmail: 'customer@example.test',
         inboundMessageId: '<accepted@example.test>',
         traceId: 'trace-1',

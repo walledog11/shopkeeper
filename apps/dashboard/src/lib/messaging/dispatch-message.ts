@@ -64,7 +64,12 @@ export async function dispatchMessage(
 
   if (!providerResult.ok) return providerResult
 
-  const message = await createSentAgentMessage(thread, text)
+  const message = await createSentAgentMessage(
+    thread,
+    text,
+    providerResult.integrationId,
+    providerResult.providerMessageId,
+  )
   void captureDashboardOutboundReplySent({
     channel: thread.channelType,
     messageId: message.id,

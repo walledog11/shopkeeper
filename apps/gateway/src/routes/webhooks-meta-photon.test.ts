@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { ChannelType } from '@shopkeeper/db';
-import { createTestIntegration } from '@shopkeeper/db/test-helpers';
+import {
+  cleanupTestData,
+  createTestIntegration,
+  createTestOrg,
+} from '@shopkeeper/db/test-helpers';
 import { hmacSha256 } from '../test-fixtures/webhook-route-test-helpers.js';
 import {
-  META_SECRET,
-  VERIFY_TOKEN,
+  INSTAGRAM_SECRET,
+  INSTAGRAM_VERIFY_TOKEN,
   webhookFixture,
 } from '../test-fixtures/webhook-routes-test-fixture.js';
 
@@ -14,6 +18,7 @@ const {
   app,
   getPlatformSpectrumAppSpy,
   mockLogger,
+  queueAddBulkSpy,
   queueAddSpy,
   spectrumWebhookSpy,
   uploadInboundAttachmentSpy,
@@ -28,7 +33,11 @@ describe('GET /webhooks/meta', () => {
   it('returns 200 and echoes the challenge when token matches', async () => {
     const res = await request(app)
       .get('/webhooks/meta')
-      .query({ 'hub.mode': 'subscribe', 'hub.verify_token': VERIFY_TOKEN, 'hub.challenge': 'abc123' });
+      .query({
+        'hub.mode': 'subscribe',
+        'hub.verify_token': INSTAGRAM_VERIFY_TOKEN,
+        'hub.challenge': 'abc123',
+      });
 
     expect(res.status).toBe(200);
     expect(res.text).toBe('abc123');
@@ -40,7 +49,9 @@ describe('GET /webhooks/meta', () => {
       .query({ 'hub.mode': 'subscribe', 'hub.verify_token': 'wrong-token', 'hub.challenge': 'abc123' });
 
     expect(res.status).toBe(403);
-    expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Meta handshake failed: token mismatch');
+    expect(mockLogger.warn).toHaveBeenCalledWith(
+      '[Webhook] Instagram handshake failed: token mismatch',
+    );
   });
 
   it('returns 400 when mode or token are missing', async () => {
@@ -53,21 +64,30 @@ describe('GET /webhooks/meta', () => {
 // POST /webhooks/meta — Instagram DM ingestion
 // ---------------------------------------------------------------------------
 describe('POST /webhooks/meta', () => {
-  it('enqueues an ig_dm job when HMAC is valid and integration exists', async () => {
-    const igPageId = `ig_page_${org.id.slice(0, 8)}`;
-    await createTestIntegration(org.id, {
+  const sentAt = Date.parse('2026-07-14T12:00:00.000Z');
+
+  async function createInstagramLoginIntegration(organizationId: string, accountId: string) {
+    return createTestIntegration(organizationId, {
       platform: ChannelType.ig_dm,
-      externalAccountId: igPageId,
+      externalAccountId: accountId,
+      accessToken: 'instagram-long-lived-token',
+      metadata: { instagram: { authModel: 'instagram_login' } },
     });
+  }
+
+  it('enqueues one normalized job when HMAC is valid and an active integration exists', async () => {
+    const instagramAccountId = `ig_account_${org.id.slice(0, 8)}`;
+    const integration = await createInstagramLoginIntegration(org.id, instagramAccountId);
 
     const payload = {
       object: 'instagram',
       entry: [
         {
-          id: igPageId,
+          id: instagramAccountId,
           messaging: [
             {
               sender: { id: 'sender_123' },
+              timestamp: sentAt,
               message: { text: 'Hello!', mid: 'mid.test001' },
             },
           ],
@@ -75,7 +95,7 @@ describe('POST /webhooks/meta', () => {
       ],
     };
     const body = JSON.stringify(payload);
-    const sig = hmacSha256(META_SECRET, body);
+    const sig = hmacSha256(INSTAGRAM_SECRET, body);
 
     const res = await request(app)
       .post('/webhooks/meta')
@@ -85,10 +105,25 @@ describe('POST /webhooks/meta', () => {
 
     expect(res.status).toBe(200);
     expect(res.text).toBe('EVENT_RECEIVED');
-    expect(queueAddSpy).toHaveBeenCalledOnce();
-    const [jobName, jobData] = queueAddSpy.mock.calls[0];
-    expect(jobName).toBe('process-ig-dm');
-    expect(jobData).toMatchObject({ platform: 'ig_dm', organizationId: org.id });
+    expect(queueAddBulkSpy).toHaveBeenCalledOnce();
+    expect(queueAddBulkSpy.mock.calls[0][0]).toEqual([
+      {
+        name: 'process-ig-dm',
+        data: {
+          platform: 'ig_dm',
+          integrationId: integration.id,
+          organizationId: org.id,
+          instagramAccountId,
+          senderIgsid: 'sender_123',
+          externalMessageId: 'mid.test001',
+          providerSentAt: '2026-07-14T12:00:00.000Z',
+          text: 'Hello!',
+          attachments: [],
+          traceId: expect.any(String),
+        },
+      },
+    ]);
+    expect(queueAddSpy).not.toHaveBeenCalled();
   });
 
   it('returns 401 when HMAC signature is invalid', async () => {
@@ -100,22 +135,104 @@ describe('POST /webhooks/meta', () => {
       .send(JSON.stringify(payload));
 
     expect(res.status).toBe(401);
+    expect(queueAddBulkSpy).not.toHaveBeenCalled();
     expect(queueAddSpy).not.toHaveBeenCalled();
     expect(mockLogger.warn).toHaveBeenCalledWith('[Webhook] Signature mismatch — rejecting request.');
   });
 
-  it('drops (200) when no integration is found for the page id', async () => {
+  it('returns 401 when the HMAC signature is missing', async () => {
+    const res = await request(app)
+      .post('/webhooks/meta')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify({ object: 'instagram', entry: [] }));
+
+    expect(res.status).toBe(401);
+    expect(queueAddBulkSpy).not.toHaveBeenCalled();
+  });
+
+  it('isolates multiple entries across organizations and enqueues every message', async () => {
+    const otherOrg = await createTestOrg();
+    try {
+      const firstAccountId = `ig_first_${org.id.slice(0, 8)}`;
+      const secondAccountId = `ig_second_${otherOrg.id.slice(0, 8)}`;
+      const firstIntegration = await createInstagramLoginIntegration(org.id, firstAccountId);
+      const secondIntegration = await createInstagramLoginIntegration(otherOrg.id, secondAccountId);
+      const payload = {
+        object: 'instagram',
+        entry: [
+          {
+            id: firstAccountId,
+            messaging: [
+              {
+                sender: { id: 'first_sender' },
+                timestamp: sentAt,
+                message: { text: 'First', mid: 'mid.first' },
+              },
+              {
+                sender: { id: 'first_sender' },
+                timestamp: sentAt + 1_000,
+                message: { text: 'Second', mid: 'mid.second' },
+              },
+            ],
+          },
+          {
+            id: secondAccountId,
+            messaging: [
+              {
+                sender: { id: 'second_sender' },
+                timestamp: sentAt + 2_000,
+                message: { text: 'Other tenant', mid: 'mid.other' },
+              },
+            ],
+          },
+        ],
+      };
+      const body = JSON.stringify(payload);
+
+      const res = await request(app)
+        .post('/webhooks/meta')
+        .set('Content-Type', 'application/json')
+        .set('x-hub-signature-256', hmacSha256(INSTAGRAM_SECRET, body))
+        .send(body);
+
+      expect(res.status).toBe(200);
+      const jobs = queueAddBulkSpy.mock.calls[0][0];
+      expect(jobs).toHaveLength(3);
+      expect(jobs.map((job: { data: { integrationId: string; organizationId: string } }) => ({
+        integrationId: job.data.integrationId,
+        organizationId: job.data.organizationId,
+      }))).toEqual([
+        { integrationId: firstIntegration.id, organizationId: org.id },
+        { integrationId: firstIntegration.id, organizationId: org.id },
+        { integrationId: secondIntegration.id, organizationId: otherOrg.id },
+      ]);
+    } finally {
+      await cleanupTestData(otherOrg.id);
+    }
+  });
+
+  it('drops unknown accounts without affecting valid entries in the same delivery', async () => {
+    const instagramAccountId = `ig_known_${org.id.slice(0, 8)}`;
+    const integration = await createInstagramLoginIntegration(org.id, instagramAccountId);
     const payload = {
       object: 'instagram',
       entry: [
         {
           id: 'unknown_page_id',
-          messaging: [{ sender: { id: 'abc' }, message: { text: 'hi' } }],
+          messaging: [
+            { sender: { id: 'abc' }, timestamp: sentAt, message: { text: 'unknown' } },
+          ],
+        },
+        {
+          id: instagramAccountId,
+          messaging: [
+            { sender: { id: 'known' }, timestamp: sentAt, message: { text: 'known' } },
+          ],
         },
       ],
     };
     const body = JSON.stringify(payload);
-    const sig = hmacSha256(META_SECRET, body);
+    const sig = hmacSha256(INSTAGRAM_SECRET, body);
 
     const res = await request(app)
       .post('/webhooks/meta')
@@ -124,22 +241,40 @@ describe('POST /webhooks/meta', () => {
       .send(body);
 
     expect(res.status).toBe(200);
-    expect(queueAddSpy).not.toHaveBeenCalled();
+    expect(queueAddBulkSpy).toHaveBeenCalledOnce();
+    expect(queueAddBulkSpy.mock.calls[0][0]).toHaveLength(1);
+    expect(queueAddBulkSpy.mock.calls[0][0][0].data).toMatchObject({
+      integrationId: integration.id,
+      senderIgsid: 'known',
+    });
   });
 
-  it('enqueues echo events (echo filtering happens in the worker, not the webhook handler)', async () => {
-    const igPageId = `ig_page_echo_${org.id.slice(0, 8)}`;
-    await createTestIntegration(org.id, {
-      platform: ChannelType.ig_dm,
-      externalAccountId: igPageId,
-    });
+  it('skips echo, self, and malformed events while preserving unsupported content', async () => {
+    const instagramAccountId = `ig_echo_${org.id.slice(0, 8)}`;
+    await createInstagramLoginIntegration(org.id, instagramAccountId);
 
     const payload = {
       object: 'instagram',
-      entry: [{ id: igPageId, messaging: [{ sender: { id: 'page' }, message: { is_echo: true, text: 'echo' } }] }],
+      entry: [{
+        id: instagramAccountId,
+        messaging: [
+          {
+            sender: { id: 'page' },
+            timestamp: sentAt,
+            message: { is_echo: true, text: 'echo' },
+          },
+          {
+            sender: { id: 'page' },
+            timestamp: sentAt,
+            message: { is_self: true, text: 'self' },
+          },
+          { sender: { id: 'missing_timestamp' }, message: { text: 'malformed' } },
+          { sender: { id: 'customer' }, timestamp: sentAt, message: { mid: 'unsupported' } },
+        ],
+      }],
     };
     const body = JSON.stringify(payload);
-    const sig = hmacSha256(META_SECRET, body);
+    const sig = hmacSha256(INSTAGRAM_SECRET, body);
 
     const res = await request(app)
       .post('/webhooks/meta')
@@ -148,8 +283,51 @@ describe('POST /webhooks/meta', () => {
       .send(body);
 
     expect(res.status).toBe(200);
-    // The webhook handler enqueues the job; the worker is responsible for dropping echoes
-    expect(queueAddSpy).toHaveBeenCalledOnce();
+    expect(queueAddBulkSpy).toHaveBeenCalledOnce();
+    expect(queueAddBulkSpy.mock.calls[0][0]).toHaveLength(1);
+    expect(queueAddBulkSpy.mock.calls[0][0][0].data).toMatchObject({
+      senderIgsid: 'customer',
+      text: null,
+      attachments: [{ type: 'unsupported', url: null }],
+    });
+  });
+
+  it('returns 500 when normalized events cannot be durably enqueued', async () => {
+    const instagramAccountId = `ig_queue_failure_${org.id.slice(0, 8)}`;
+    await createInstagramLoginIntegration(org.id, instagramAccountId);
+    queueAddBulkSpy.mockRejectedValueOnce(new Error('Redis unavailable'));
+    const payload = {
+      object: 'instagram',
+      entry: [{
+        id: instagramAccountId,
+        messaging: [{
+          sender: { id: 'customer' },
+          timestamp: sentAt,
+          message: { text: 'retry me', mid: 'mid.retry' },
+        }],
+      }],
+    };
+    const body = JSON.stringify(payload);
+
+    const res = await request(app)
+      .post('/webhooks/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', hmacSha256(INSTAGRAM_SECRET, body))
+      .send(body);
+
+    expect(res.status).toBe(500);
+  });
+
+  it('rejects signed legacy page deliveries', async () => {
+    const body = JSON.stringify({ object: 'page', entry: [] });
+    const res = await request(app)
+      .post('/webhooks/meta')
+      .set('Content-Type', 'application/json')
+      .set('x-hub-signature-256', hmacSha256(INSTAGRAM_SECRET, body))
+      .send(body);
+
+    expect(res.status).toBe(404);
+    expect(queueAddBulkSpy).not.toHaveBeenCalled();
   });
 });
 

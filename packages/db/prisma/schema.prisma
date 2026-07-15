@@ -23,6 +23,11 @@ enum ChannelType {
   imessage
 }
 
+enum EmailProvider {
+  gmail
+  postmark
+}
+
 enum ThreadStatus {
   open
   pending
@@ -68,15 +73,16 @@ enum RefundSpendReservationStatus {
 // One Organization = one Shopify business using the app.
 // clerkOrgId maps to the organization ID from Clerk.com (e.g. org_xxxx).
 model Organization {
-  id            String   @id @default(uuid()) @db.Uuid
-  clerkOrgId    String   @unique @map("clerk_org_id")
-  name          String   @db.VarChar(255)
-  settings      Json?    @default("{}") @map("settings") @db.JsonB
+  id                        String   @id @default(uuid()) @db.Uuid
+  clerkOrgId                String   @unique @map("clerk_org_id")
+  name                      String   @db.VarChar(255)
+  settings                  Json?    @default("{}") @map("settings") @db.JsonB
+  defaultEmailIntegrationId String?  @map("default_email_integration_id") @db.Uuid
   // Pending brand-voice update synthesized from operator edits, awaiting approval.
   // Shape: { brief, rationale, basedOnCount, createdAt }. Cleared on approve/dismiss.
-  voiceProposal Json?    @map("voice_proposal") @db.JsonB
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  voiceProposal             Json?    @map("voice_proposal") @db.JsonB
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   stripeCustomerId     String?   @unique @map("stripe_customer_id") @db.VarChar(255)
   stripeSubscriptionId String?   @unique @map("stripe_subscription_id") @db.VarChar(255)
@@ -86,7 +92,8 @@ model Organization {
 
   customers               Customer[]
   threads                 Thread[]
-  integrations            Integration[]
+  integrations            Integration[]            @relation("OrganizationIntegrations")
+  defaultEmailIntegration Integration?             @relation("DefaultEmailIntegration", fields: [defaultEmailIntegrationId], references: [id], onDelete: SetNull)
   members                 OrgMember[]
   operatorContexts        OperatorContext[]
   bindTokens              OrgMemberBindToken[]
@@ -191,22 +198,27 @@ model VoiceEdit {
 // Stores a connected platform account for an organization.
 // e.g. Instagram page, support email address, Shopify store.
 model Integration {
-  id                String      @id @default(uuid()) @db.Uuid
-  organizationId    String      @map("organization_id") @db.Uuid
+  id                String         @id @default(uuid()) @db.Uuid
+  organizationId    String         @map("organization_id") @db.Uuid
   platform          ChannelType
-  externalAccountId String      @map("external_account_id") @db.VarChar(255)
-  fromEmail         String?     @map("from_email") @db.VarChar(255)
-  accessToken       String?     @map("access_token") @db.Text
-  refreshToken      String?     @map("refresh_token") @db.Text
-  tokenExpiresAt    DateTime?   @map("token_expires_at") @db.Timestamptz
-  metadata          Json?       @default("{}") @db.JsonB
-  createdAt         DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  emailProvider     EmailProvider? @map("email_provider")
+  externalAccountId String         @map("external_account_id") @db.VarChar(255)
+  fromEmail         String?        @map("from_email") @db.VarChar(255)
+  accessToken       String?        @map("access_token") @db.Text
+  refreshToken      String?        @map("refresh_token") @db.Text
+  tokenExpiresAt    DateTime?      @map("token_expires_at") @db.Timestamptz
+  metadata          Json?          @default("{}") @db.JsonB
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  replyThreads Thread[]     @relation("ThreadReplyIntegration")
-  messages     Message[]
+  organization            Organization   @relation("OrganizationIntegrations", fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultForOrganizations Organization[] @relation("DefaultEmailIntegration")
+  replyThreads            Thread[]       @relation("ThreadReplyIntegration")
+  messages                Message[]
 
-  @@unique([organizationId, platform, externalAccountId])
+  @@unique([organizationId, emailProvider])
+  // Non-email account uniqueness is enforced by the partial raw-SQL index
+  // integrations_non_email_account_unique. Email rows are unique by provider
+  // and may intentionally share the same external address.
   @@index([organizationId])
   @@map("integrations")
 }
@@ -231,42 +243,42 @@ model Customer {
 }
 
 model Thread {
-  id                    String               @id @default(uuid()) @db.Uuid
-  organizationId        String               @map("organization_id") @db.Uuid
-  customerId            String               @map("customer_id") @db.Uuid
-  channelType           ChannelType          @map("channel_type")
-  status                ThreadStatus         @default(open)
-  createdAt             DateTime             @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt             DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-  lastMessageAt         DateTime             @default(now()) @map("last_message_at") @db.Timestamptz
-  lastMessageSenderType SenderType?          @map("last_message_sender_type")
-  aiSummary             String?              @map("ai_summary")
-  aiTitle               String?              @map("ai_title")
-  subject               String?
-  tag                   String?              @default("Support")
-  shopifyCustomerId     String?              @map("shopify_customer_id") @db.VarChar(255)
-  operatorKey           String?              @map("operator_key")
-  externalSpaceId       String?              @map("external_space_id")
-  cachedPlanMessageId   String?              @map("cached_plan_message_id") @db.Uuid
-  cachedPlan            Json?                @map("cached_plan") @db.JsonB
-  archivedAt            DateTime?            @map("archived_at") @db.Timestamptz
-  deletedAt             DateTime?            @map("deleted_at") @db.Timestamptz
-  filterStatus          ThreadFilterStatus   @default(genuine) @map("filter_status")
-  filterReason          String?              @map("filter_reason") @db.Text
-  filterDecidedAt       DateTime?            @map("filter_decided_at") @db.Timestamptz
-  filterFeedback        ThreadFilterFeedback @default(none) @map("filter_feedback")
-  classifierSignals     Json?                @map("classifier_signals") @db.JsonB
+  id                        String               @id @default(uuid()) @db.Uuid
+  organizationId            String               @map("organization_id") @db.Uuid
+  customerId                String               @map("customer_id") @db.Uuid
+  channelType               ChannelType          @map("channel_type")
+  status                    ThreadStatus         @default(open)
+  createdAt                 DateTime             @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  lastMessageAt             DateTime             @default(now()) @map("last_message_at") @db.Timestamptz
+  lastMessageSenderType     SenderType?          @map("last_message_sender_type")
+  aiSummary                 String?              @map("ai_summary")
+  aiTitle                   String?              @map("ai_title")
+  subject                   String?
+  tag                       String?              @default("Support")
+  shopifyCustomerId         String?              @map("shopify_customer_id") @db.VarChar(255)
+  operatorKey               String?              @map("operator_key")
+  externalSpaceId           String?              @map("external_space_id")
+  cachedPlanMessageId       String?              @map("cached_plan_message_id") @db.Uuid
+  cachedPlan                Json?                @map("cached_plan") @db.JsonB
+  archivedAt                DateTime?            @map("archived_at") @db.Timestamptz
+  deletedAt                 DateTime?            @map("deleted_at") @db.Timestamptz
+  filterStatus              ThreadFilterStatus   @default(genuine) @map("filter_status")
+  filterReason              String?              @map("filter_reason") @db.Text
+  filterDecidedAt           DateTime?            @map("filter_decided_at") @db.Timestamptz
+  filterFeedback            ThreadFilterFeedback @default(none) @map("filter_feedback")
+  classifierSignals         Json?                @map("classifier_signals") @db.JsonB
   replyIntegrationId        String?              @map("reply_integration_id") @db.Uuid
   replyIntegrationUpdatedAt DateTime?            @map("reply_integration_updated_at") @db.Timestamptz
 
-  organization    Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  customer        Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  replyIntegration Integration?            @relation("ThreadReplyIntegration", fields: [replyIntegrationId], references: [id], onDelete: SetNull)
-  messages        Message[]
-  kbCitations     KbCitation[]
-  agentActions    AgentAction[]
-  shadowDecisions AutonomyShadowDecision[]
-  planExecutions  PlanExecution[]
+  organization     Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer         Customer                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  replyIntegration Integration?             @relation("ThreadReplyIntegration", fields: [replyIntegrationId], references: [id], onDelete: SetNull)
+  messages         Message[]
+  kbCitations      KbCitation[]
+  agentActions     AgentAction[]
+  shadowDecisions  AutonomyShadowDecision[]
+  planExecutions   PlanExecution[]
 
   @@unique([organizationId, operatorKey])
   @@index([organizationId, status])
