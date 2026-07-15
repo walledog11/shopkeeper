@@ -185,7 +185,10 @@ export async function POST(request: Request) {
       return fail('provider_unavailable', providerFailureCategory(accountResult.error));
     }
     const account = accountResult.data;
-    if (account.userId !== shortTokenResult.data.userId) {
+    if (
+      shortTokenResult.data.userId !== null
+      && account.userId !== shortTokenResult.data.userId
+    ) {
       logger.error(
         { accountUserId: account.userId, tokenUserId: shortTokenResult.data.userId },
         '[IG OAuth] Token and account identity did not match',

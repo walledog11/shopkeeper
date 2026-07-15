@@ -91,7 +91,7 @@ describe('POST /api/integrations/instagram/callback', () => {
   });
 
   it('subscribes, verifies, and saves an Instagram Login integration', async () => {
-    mockSuccessfulProvider();
+    mockSuccessfulProvider({ shortTokenUserId: 17_841_400_000_000_000 });
     const before = Date.now();
 
     const response = await postCallback();
@@ -322,6 +322,7 @@ function mockSuccessfulProvider(
     accountId?: string;
     accountType?: string;
     permissions?: string[];
+    shortTokenUserId?: string | number;
     username?: string;
   } = {},
   responseCount = 5,
@@ -332,7 +333,7 @@ function mockSuccessfulProvider(
         'instagram_business_basic',
         'instagram_business_manage_messages',
       ],
-      userId: input.accountId,
+      userId: input.shortTokenUserId ?? input.accountId,
     }),
     jsonResponse({
       access_token: 'long_instagram_token',
@@ -352,7 +353,7 @@ function mockSuccessfulProvider(
   }
 }
 
-function shortTokenResponse(input: { permissions?: string[]; userId?: string } = {}) {
+function shortTokenResponse(input: { permissions?: string[]; userId?: string | number } = {}) {
   return jsonResponse({
     access_token: 'short_instagram_token',
     permissions: input.permissions ?? [

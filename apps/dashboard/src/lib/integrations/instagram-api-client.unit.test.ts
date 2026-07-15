@@ -85,6 +85,28 @@ describe('Instagram dashboard API client', () => {
     expect(form.get('code')).toBe('one-time-code');
   });
 
+  it('accepts a token response whose user ID is encoded as a JSON number', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({
+      access_token: 'short-token',
+      permissions: ['instagram_business_basic', 'instagram_business_manage_messages'],
+      user_id: 17_841_400_000_000_000,
+    })));
+
+    await expect(exchangeInstagramAuthorizationCode({
+      appId: 'instagram-app-id',
+      appSecret: 'instagram-app-secret',
+      code: 'one-time-code',
+      redirectUri: 'https://dashboard.test/api/integrations/instagram/callback',
+    })).resolves.toMatchObject({
+      ok: true,
+      data: {
+        accessToken: 'short-token',
+        userId: null,
+        permissions: [...INSTAGRAM_REQUIRED_SCOPES],
+      },
+    });
+  });
+
   it('rejects malformed success payloads and classifies structured provider errors', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ data: [{ user_id: 'missing-token' }] }))
