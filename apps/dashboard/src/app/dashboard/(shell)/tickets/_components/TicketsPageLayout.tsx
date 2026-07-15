@@ -5,18 +5,15 @@ import { AlertCircle, CheckCircle2, ChevronRight, Loader2, X } from "lucide-reac
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import type { ChannelType, Thread, Ticket } from "@/types"
 import type { TicketToast } from "../_hooks/useTicketActions"
-import ThreadList from "./thread-list/ThreadList"
+import { ConversationArchive } from "./archive/ConversationArchive"
 import { TicketQueue } from "./queue/TicketQueue"
 import type { TicketListView, TicketTagFilter } from "./thread-list/constants"
 import { viewToConversationTab as toConversationTab } from "./thread-list/constants"
 import ConversationView from "./conversation/ConversationView"
-import {
-  ConversationLoadState,
-  NoConversationSelectedState,
-} from "./TicketsPageStates"
+import { ConversationLoadState } from "./TicketsPageStates"
 
 type ConversationViewProps = ComponentProps<typeof ConversationView>
-type ThreadListProps = ComponentProps<typeof ThreadList>
+type ArchiveProps = ComponentProps<typeof ConversationArchive>
 
 interface TicketsPageLayoutFlags {
   correctReplyVisible: boolean
@@ -74,14 +71,14 @@ interface TicketsPageLayoutActions {
   onBulkArchive: () => void
   onBulkClose: () => void
   onBulkTag: (tag: string) => void
-  onClearSelection: ThreadListProps["onClearSelection"]
+  onClearSelection: ArchiveProps["onClearSelection"]
   onCorrectReplyDismiss: () => void
-  onChannelFilterChange: ThreadListProps["onChannelFilterChange"]
-  onTagFilterChange: ThreadListProps["onTagFilterChange"]
+  onChannelFilterChange: ArchiveProps["onChannelFilterChange"]
+  onTagFilterChange: ArchiveProps["onTagFilterChange"]
   onLinkShopifyCustomer: (customerId: string | null) => Promise<void>
   onLoadMore: () => void
-  onMarkAsSpam: ThreadListProps["onMarkAsSpam"]
-  onRecover: ThreadListProps["onRecover"]
+  onMarkAsSpam: ArchiveProps["onMarkAsSpam"]
+  onRecover: ArchiveProps["onRecover"]
   onQuickApproveFromList: (threadId: string) => void
   onReviewFromList: (threadId: string) => void
   onReopen: ConversationViewProps["onReopen"]
@@ -91,12 +88,12 @@ interface TicketsPageLayoutActions {
   onRetrySend: ConversationViewProps["onRetrySend"]
   onTicketRefresh: ConversationViewProps["onTicketRefresh"]
   onActionError: ConversationViewProps["onActionError"]
-  onSearchChange: ThreadListProps["onSearchChange"]
-  onSelectTicket: ThreadListProps["onSelectTicket"]
+  onSearchChange: ArchiveProps["onSearchChange"]
+  onSelectTicket: ArchiveProps["onSelectTicket"]
   onSend: ConversationViewProps["onSend"]
-  onViewChange: ThreadListProps["onViewChange"]
-  onViewSpam: ThreadListProps["onViewSpam"]
-  onToggleSelect: ThreadListProps["onToggleSelect"]
+  onViewChange: ArchiveProps["onViewChange"]
+  onViewSpam: ArchiveProps["onViewSpam"]
+  onToggleSelect: ArchiveProps["onToggleSelect"]
 }
 
 interface TicketsPageLayoutProps {
@@ -229,9 +226,7 @@ export function TicketsPageLayout({
     approvingTicketId,
     effectiveActiveView,
     filteredTickets,
-    forMeCount,
     liveTicketCount,
-    openThreadCount,
     selectedIds,
     spamCount,
   } = list
@@ -262,30 +257,17 @@ export function TicketsPageLayout({
     onToggleSelect,
   } = actions
   const lastDialogBodyRef = useRef<ReactNode>(null)
-  const allCaughtUp = effectiveActiveView === "for_me" && openThreadCount === 0 && !flags.isSearchMode
 
   const conversationTab = flags.isSearchMode || effectiveActiveView === "spam"
     ? ((activeThread?.status ?? activeThreadPreview?.status) === "closed" ? "closed" : "open")
     : toConversationTab(effectiveActiveView)
 
-  const isQueueView = !flags.isSearchMode && effectiveActiveView === "for_me"
+  const isForMe = !flags.isSearchMode && effectiveActiveView === "for_me"
+  const showConversation = Boolean(activeTicketId)
 
   const correctReplyBanner = flags.correctReplyVisible
     ? <CorrectReplyBanner agentName={agentName} onDismiss={onCorrectReplyDismiss} />
     : null
-
-  const conversationBody = conversationTicket ? (
-    <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
-      {correctReplyBanner}
-      <TicketConversation
-        actions={actions}
-        conversation={conversation}
-        conversationTab={conversationTab}
-        embedded={false}
-        flags={flags}
-      />
-    </div>
-  ) : null
 
   const inlineConversationBody = activeTicketId ? (
     conversationTicket ? (
@@ -314,7 +296,7 @@ export function TicketsPageLayout({
     </div>
   ) : null
 
-  const dialogBody = isQueueView && activeTicketId ? (
+  const dialogBody = showConversation ? (
     <div className="flex min-h-0 flex-1 overflow-hidden">
       {inlineConversationBody}
     </div>
@@ -323,7 +305,7 @@ export function TicketsPageLayout({
   if (dialogBody) lastDialogBodyRef.current = dialogBody
 
   const ticketDialog = (
-    <Dialog open={Boolean(isQueueView && activeTicketId)} onOpenChange={open => { if (!open) onBack() }}>
+    <Dialog open={showConversation} onOpenChange={open => { if (!open) onBack() }}>
       <DialogContent
         showCloseButton={false}
         className="left-0 top-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-border bg-background p-0 pt-[env(safe-area-inset-top)] shadow-xl sm:left-1/2 sm:top-1/2 sm:h-[86vh] sm:max-h-[86vh] sm:w-[calc(100%-2rem)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:pt-0 sm:max-w-3xl lg:max-w-5xl xl:max-w-6xl"
@@ -334,47 +316,35 @@ export function TicketsPageLayout({
     </Dialog>
   )
 
-  if (isQueueView) {
-    return (
-      <div className="flex size-full flex-col overflow-hidden bg-background relative">
-        <QueueHeader onViewAll={() => onViewChange("all_open")} />
-
-        {flags.listLoading && !activeTicketId ? (
-          <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="size-5 animate-spin text-faint" />
-          </div>
-        ) : (
-          <TicketQueue
-            tickets={filteredTickets}
-            activeView={effectiveActiveView}
-            agentName={agentName}
-            hasShopify={flags.hasShopify}
-            orgSettings={orgSettings}
-            activeTicketId={activeTicketId}
-            approvingTicketId={approvingTicketId}
-            onSelectTicket={onSelectTicket}
-            onQuickApprove={onQuickApproveFromList}
-            onReview={onReviewFromList}
-          />
-        )}
-
-        {ticketDialog}
-
-        {toastNode}
-      </div>
-    )
-  }
-
   return (
-    <div className="flex size-full overflow-hidden bg-background relative">
-      <div className={`
-        w-full md:w-72 md:min-w-[260px] md:max-w-[300px] shrink-0 border-r border-border flex-col bg-background
-        ${activeTicketId ? 'hidden md:flex' : 'flex'}
-      `}>
-        <ThreadList
+    <div className="flex size-full flex-col overflow-hidden bg-background relative">
+      {isForMe ? (
+        <>
+          <QueueHeader onViewAll={() => onViewChange("all_open")} />
+
+          {flags.listLoading && !activeTicketId ? (
+            <div className="flex flex-1 items-center justify-center">
+              <Loader2 className="size-5 animate-spin text-faint" />
+            </div>
+          ) : (
+            <TicketQueue
+              tickets={filteredTickets}
+              activeView={effectiveActiveView}
+              agentName={agentName}
+              hasShopify={flags.hasShopify}
+              orgSettings={orgSettings}
+              activeTicketId={activeTicketId}
+              approvingTicketId={approvingTicketId}
+              onSelectTicket={onSelectTicket}
+              onQuickApprove={onQuickApproveFromList}
+              onReview={onReviewFromList}
+            />
+          )}
+        </>
+      ) : (
+        <ConversationArchive
           tickets={filteredTickets}
           totalCount={liveTicketCount}
-          forMeCount={forMeCount}
           activeView={effectiveActiveView}
           channelFilter={channelFilter}
           connectedChannels={connectedChannels}
@@ -382,6 +352,9 @@ export function TicketsPageLayout({
           tagFilter={tagFilter}
           activeTicketId={activeTicketId}
           searchQuery={searchQuery}
+          hasShopify={flags.hasShopify}
+          orgSettings={orgSettings}
+          approvingTicketId={approvingTicketId}
           listState={{
             searchMode: flags.isSearchMode,
             searchLoading: flags.isSearchLoading,
@@ -404,20 +377,12 @@ export function TicketsPageLayout({
           onLoadMore={onLoadMore}
           onMarkAsSpam={onMarkAsSpam}
           onRecover={onRecover}
-          hasShopify={flags.hasShopify}
-          orgSettings={orgSettings}
-          approvingTicketId={approvingTicketId}
           onQuickApproveFromList={onQuickApproveFromList}
           onReviewFromList={onReviewFromList}
         />
-      </div>
+      )}
 
-      <div className={`flex-1 flex min-w-0 overflow-hidden ${!activeTicketId ? 'hidden md:flex' : 'flex'}`}>
-        {conversationBody ?? (activeTicketId
-          ? <ConversationLoadState error={activeThreadError} />
-          : <NoConversationSelectedState agentName={agentName} allCaughtUp={allCaughtUp} />
-        )}
-      </div>
+      {ticketDialog}
 
       {toastNode}
     </div>

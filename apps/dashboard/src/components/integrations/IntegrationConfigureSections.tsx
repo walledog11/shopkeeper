@@ -5,13 +5,11 @@ import { getEmailAuthReauthorizationReason } from "@shopkeeper/email/providers"
 import {
   BookOpen,
   Check,
-  Forward,
   Mail,
   RefreshCw,
   Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/ui/cn"
-import { useOrg } from "@/hooks/useOrg"
 import type { ConnectType, PlatformConfig } from "@/lib/integrations/catalog"
 import type { Integration } from "@/types"
 import { ActionRow } from "./ActionRow"
@@ -43,10 +41,9 @@ export function IntegrationPermissionsSection({
   const connectType = config.connectType!
   const isEmail = connectType === "email"
   const isPostmark = config.emailProvider === "postmark"
-  const { data: org } = useOrg({ enabled: isEmail })
-  const inboundAddress = org?.id && org.inboundEmailDomain ? `${org.id}@${org.inboundEmailDomain}` : null
+  if (isPostmark) return null
   const emailReceiving = isEmail && integration
-    ? getEmailReceivingDisplay(integration, inboundAddress, gmailNativeInboundEnabled)
+    ? getEmailReceivingDisplay(integration, null, gmailNativeInboundEnabled)
     : null
   const gmailReadScopeMissing = config.emailProvider === "gmail"
     && integration
@@ -82,9 +79,7 @@ export function IntegrationPermissionsSection({
         title="Receiving"
         description={
           emailReceiving?.description
-            ?? (inboundAddress
-              ? `Forward mail to ${inboundAddress}`
-              : "Forward your support inbox to receive tickets")
+            ?? "Reconnect Gmail to configure receiving"
         }
         action={
           <PermissionActionLink>
@@ -112,11 +107,11 @@ export function IntegrationActionsSection({
   onReauthorize,
   onKbSync,
   onDisconnect,
+  onSetDefaultEmail,
   email,
   setEmail,
   emailLoading,
   onEmailSave,
-  defaultForwardingOpen = false,
   gmailNativeInboundEnabled = false,
 }: {
   config: PlatformConfig
@@ -126,28 +121,33 @@ export function IntegrationActionsSection({
   onReauthorize: () => void
   onKbSync: () => void
   onDisconnect: (integrationId: string) => void
+  onSetDefaultEmail?: (integrationId: string) => void
   email?: string
   setEmail?: (v: string) => void
   emailLoading?: boolean
   onEmailSave?: () => void
-  defaultForwardingOpen?: boolean
   gmailNativeInboundEnabled?: boolean
 }) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null)
-  const [forwardingOpen, setForwardingOpen] = useState(defaultForwardingOpen)
   const connectType = config.connectType!
   const integration = connected[0]
   const isEmail = connectType === "email"
   const isPostmark = config.emailProvider === "postmark"
   const isGmail = config.emailProvider === "gmail"
+  const disconnectNote = isGmail
+    ? "Your past tickets stay. Gmail receiving and sending through this account stop. Any forwarded Email connection is unaffected."
+    : isPostmark
+      ? "Your past tickets stay. Forwarded email intake through this connection stops. Gmail is unaffected."
+      : DISCONNECT_NOTES[connectType]
   // iMessage has no OAuth reconnect — changing creds means re-entering them via
   // the connect form, so don't show a dead "Reconnect account" action.
   const showReconnect = !(isEmail && isPostmark) && connectType !== "imessage"
-  const showForwardingSetup = isEmail && email !== undefined && setEmail && onEmailSave
+  const showForwardingSetup = isPostmark && email !== undefined && setEmail && onEmailSave
+  const hasActions = showReconnect || config.connectType === "shopify" || !!integration
 
   return (
     <div className="space-y-2">
-      {isGmail && integration && showForwardingSetup && (
+      {isGmail && integration && email !== undefined && setEmail && onEmailSave && (
         <ConfigureSection title="Support address">
           <GmailSupportAddressPanel
             email={email}
@@ -157,25 +157,25 @@ export function IntegrationActionsSection({
           />
         </ConfigureSection>
       )}
+      {showForwardingSetup && (
+        <ConfigureSection title="Setup">
+          <EmailForwardingSetupPanel
+            isConnected={connected.length > 0}
+            email={email}
+            setEmail={setEmail}
+            loading={emailLoading ?? false}
+            onSave={onEmailSave}
+          />
+        </ConfigureSection>
+      )}
+      {hasActions ? (
       <ConfigureSection title="Actions">
-        {showForwardingSetup && (
-          <>
-            <ActionRow
-              icon={Forward}
-              label="Set up forwarding"
-              onClick={() => setForwardingOpen(open => !open)}
-            />
-            {forwardingOpen && (
-              <EmailForwardingSetupPanel
-                isConnected={connected.length > 0}
-                email={email}
-                setEmail={setEmail}
-                loading={emailLoading ?? false}
-                onSave={onEmailSave}
-                showAddressEditor={!isGmail}
-              />
-            )}
-          </>
+        {isEmail && integration && !integration.isDefaultEmail && onSetDefaultEmail && (
+          <ActionRow
+            icon={Mail}
+            label="Use for new emails"
+            onClick={() => onSetDefaultEmail(integration.id)}
+          />
         )}
         {showReconnect && (
           <ActionRow icon={RefreshCw} label="Reconnect account" onClick={onReauthorize} />
@@ -198,7 +198,7 @@ export function IntegrationActionsSection({
             />
             {confirmingId === integration.id && (
               <div className="flex items-center justify-between gap-3 px-4 py-3.5 bg-foreground/[0.02]">
-                <p className="text-xs text-foreground/55 leading-relaxed">{DISCONNECT_NOTES[connectType]}</p>
+                <p className="text-xs text-foreground/55 leading-relaxed">{disconnectNote}</p>
                 <button
                   type="button"
                   onClick={() => {
@@ -214,10 +214,11 @@ export function IntegrationActionsSection({
           </>
         )}
       </ConfigureSection>
+      ) : null}
       {isGmail && integration && !gmailNativeInboundEnabled && (
         <p className="px-1 text-xs leading-relaxed text-foreground/45">
-          Native Gmail receiving is in controlled rollout. Keep forwarding enabled
-          until it is activated for this environment.
+          Native Gmail receiving is in controlled rollout. Use the separate Email
+          integration if you need forwarding intake.
         </p>
       )}
       {kbSyncResult && (

@@ -18,6 +18,10 @@
       "types": "./dist/providers.d.ts",
       "default": "./dist/providers.js"
     },
+    "./integration-resolution": {
+      "types": "./dist/integration-resolution.d.ts",
+      "default": "./dist/integration-resolution.js"
+    },
     "./reply": {
       "types": "./dist/reply.d.ts",
       "default": "./dist/reply.js"

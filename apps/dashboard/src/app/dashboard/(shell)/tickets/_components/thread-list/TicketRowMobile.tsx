@@ -1,6 +1,6 @@
 import Image from "next/image"
 import type { TicketListPresentation } from "../../_lib/ticket-list-presentation"
-import { getAvatarGradient, getInitials } from "./constants"
+import { getInitials } from "./constants"
 import { TicketRowStatusPill } from "./ticket-row-status-pill"
 import type { Ticket } from "@/types"
 
@@ -17,7 +17,6 @@ export function TicketRowMobile({
   longWait = false,
   browseMode = false,
 }: TicketRowMobileProps) {
-  const gradient = getAvatarGradient(presentation.customerLabel)
   const initials = getInitials(presentation.customerLabel)
   const meta = [presentation.customerLabel, presentation.channelName, presentation.timeAgo]
     .filter(Boolean)
@@ -26,11 +25,11 @@ export function TicketRowMobile({
   return (
     <>
       <div className="relative size-9 shrink-0">
-        <div className={`size-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-[#ffffff] text-[14px] font-bold shadow-sm`}>
+        <div className="flex size-9 items-center justify-center rounded-xl border border-border bg-foreground/[0.05] text-[13px] font-semibold text-strong">
           {initials}
         </div>
-        <div className="absolute -bottom-0.5 -right-0.5 size-4.5 rounded-lg bg-neutral-900 border border-neutral-800 flex items-center justify-center">
-          <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain brightness-0 invert opacity-80" />
+        <div className="absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-md border border-border bg-card">
+          <Image src={ticket.logo} width={9} height={9} alt={ticket.platform} className="object-contain opacity-70" />
         </div>
       </div>
 

@@ -56,14 +56,20 @@ export function registerInternalQueueRoutes(router: Router): void {
           threadId,
           thread: { organizationId },
         },
-        select: { id: true, threadId: true, organizationId: true, sendStatus: true },
+        select: {
+          id: true,
+          threadId: true,
+          organizationId: true,
+          sendStatus: true,
+          integrationId: true,
+        },
       }),
       db.integration.findFirst({
         where: { id: integrationId, organizationId, platform: 'email' },
         select: { id: true, organizationId: true },
       }),
     ]);
-    if (!message || !integration) {
+    if (!message || !integration || message.integrationId !== integration.id) {
       return res.status(404).json({ error: 'Outbound email resources not found' });
     }
 

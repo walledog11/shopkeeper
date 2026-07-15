@@ -212,10 +212,12 @@ export function useTicketsPageView({
   }
 
   const listLoading = isLoading && dbThreads.length === 0 && !isSearchMode
-  const isQueueView = !isSearchMode && effectiveActiveView === "for_me"
+  // Every non-search view now renders as a column with the conversation opened
+  // in a modal, so a selection that drops out of the visible list should close.
+  const isColumnView = !isSearchMode
 
   useEffect(() => {
-    if (!isQueueView || !activeTicketId || queryThreadId || listLoading) return
+    if (!isColumnView || !activeTicketId || queryThreadId || listLoading) return
     if (filteredTickets.some(ticket => ticket.id === activeTicketId)) return
 
     setActiveTicketId(null)
@@ -225,7 +227,7 @@ export function useTicketsPageView({
     activeTicketId,
     dispatchPageState,
     filteredTickets,
-    isQueueView,
+    isColumnView,
     listLoading,
     queryThreadId,
     setActiveTicketId,

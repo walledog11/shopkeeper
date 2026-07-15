@@ -126,15 +126,22 @@ function GmailActionsSection({
   onReauthorize,
   onConfirmDelete,
   onRequestDelete,
+  isDefaultEmail,
+  onSetDefaultEmail,
 }: {
   scene: ReturnType<typeof deriveGmailConfigureScene>
   confirmingDelete: boolean
   onReauthorize: () => void
   onConfirmDelete: () => void
   onRequestDelete: () => void
+  isDefaultEmail: boolean
+  onSetDefaultEmail?: () => void
 }) {
   return (
     <ConfigureSection title="Actions">
+      {!isDefaultEmail && onSetDefaultEmail ? (
+        <ActionRow icon={Mail} label="Use for new emails" onClick={onSetDefaultEmail} />
+      ) : null}
       {scene !== "needs_reconnect" ? (
         <ActionRow icon={RefreshCw} label="Reconnect account" onClick={onReauthorize} />
       ) : null}
@@ -171,6 +178,7 @@ export function GmailConnectedConfigureBody({
   onEmailSave,
   onReauthorize,
   onDisconnect,
+  onSetDefaultEmail,
 }: {
   integration: Integration
   lastActivity: string | null
@@ -182,6 +190,7 @@ export function GmailConnectedConfigureBody({
   onEmailSave: () => void
   onReauthorize: () => void
   onDisconnect: (integrationId: string) => void
+  onSetDefaultEmail?: (integrationId: string) => void
 }) {
   const scene = deriveGmailConfigureScene(
     integration,
@@ -253,6 +262,10 @@ export function GmailConnectedConfigureBody({
         confirmingDelete={confirmingDelete}
         onReauthorize={onReauthorize}
         onRequestDelete={() => setConfirmingDelete(true)}
+        isDefaultEmail={integration.isDefaultEmail === true}
+        onSetDefaultEmail={onSetDefaultEmail
+          ? () => onSetDefaultEmail(integration.id)
+          : undefined}
         onConfirmDelete={() => {
           setConfirmingDelete(false)
           onDisconnect(integration.id)

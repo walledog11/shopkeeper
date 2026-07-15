@@ -136,12 +136,9 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     emailProvider: "postmark",
     name: "Email",
     logo: null,
-    description: "Route custom-domain support mail, forward incoming threads, and send replies from your verified address.",
+    description: "Forward your support inbox to receive and reply to customer emails.",
     connectType: 'email',
     channelKind: 'support',
-    permissions: [
-      "Send replies from your verified address",
-    ],
   },
 ]
 

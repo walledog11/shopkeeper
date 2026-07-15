@@ -317,6 +317,13 @@ Delete the development backdoor route and its tests once the real Standard Acces
 
 ## 7. Phase 4 — Webhook Ingestion and Tenant Isolation
 
+**Status: Complete (2026-07-14).** The gateway now uses Instagram-specific webhook credentials,
+accepts only Instagram deliveries, normalizes every entry/message independently, resolves the exact
+active Instagram Login integration, rate-limits per message event, and bulk-enqueues one
+tenant-scoped job per supported or recordable message. Focused coverage includes signatures,
+multi-entry/multi-tenant deliveries, batched messages, echo/self filtering, unknown accounts,
+unsupported content, and durable-enqueue failure.
+
 Rewrite the Instagram branch of `apps/gateway/src/routes/webhooks-meta.ts` around normalized events.
 
 ### Request-level behavior
@@ -371,6 +378,13 @@ must fail loudly if duplicate rows somehow bypass the database constraints.
 
 ## 8. Phase 5 — Inbound Worker and Durable Message Data
 
+**Status: In progress (2026-07-14).** The worker consumes normalized jobs, revalidates the exact
+integration/account/workspace tuple, uses the Instagram Login profile client as optional
+enrichment, omits temporary profile and binary attachment URLs, persists provider timestamps and
+integration routing, preserves idempotency, and prevents delayed events from moving thread state
+backward. Secure binary media download/private blob storage remains; supported binary attachments
+currently produce durable visible placeholders instead of storing provider URLs.
+
 Rewrite `handleIgDmJob` to consume the normalized job instead of reparsing the full webhook.
 
 1. Re-read the integration by `integrationId`, `organizationId`, and `instagramAccountId`. Drop the
@@ -403,6 +417,16 @@ message's provider timestamp.
 ---
 
 ## 9. Phase 6 — Outbound Replies
+
+**Status: Complete (2026-07-14).** Outbound Instagram replies now require the thread's exact
+`replyIntegrationId`, reject missing/replaced and legacy Page-token routes, validate the Instagram
+Login auth model, permissions, and provider expiry, and enforce the 24-hour window from the latest
+customer `Message.sentAt` for manual, agent, and auto-ack sends. Sends use the centralized
+`graph.instagram.com/v25.0` client, persist the receiving integration and provider message ID, map
+structured provider failures without logging tokens or message contents, and do not automatically
+retry ambiguous failures. Focused coverage includes exact routing, no fallback, legacy and expired
+connections, local and provider reply-window rejection, provider error categories, provider ID
+persistence, and the agent-mode guard. The real Standard Access acceptance pass remains pending.
 
 Update `apps/dashboard/src/lib/messaging/instagram-dispatch.ts` to:
 

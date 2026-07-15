@@ -12,6 +12,7 @@ export interface OnboardingData {
 export type IntegrationRow = {
   id: string;
   platform: string;
+  emailProvider?: "gmail" | "postmark" | null;
   externalAccountId: string;
   fromEmail: string | null;
   metadata?: unknown;

@@ -7,6 +7,7 @@ import { getEmailProvider } from "@shopkeeper/email/providers";
 import { buildThreadReplyHeaders, formatReplySubject } from "@shopkeeper/email/reply";
 import { getEmailSender } from "@shopkeeper/email/senders";
 import { EmailNotConfiguredError } from "@shopkeeper/email/types";
+import { resolveEmailIntegration } from "@shopkeeper/email/integration-resolution";
 import { dispatchMessage, type DispatchMessageResult } from "@/lib/messaging/dispatch-message";
 import {
   enqueueOutboundEmail,
@@ -42,9 +43,6 @@ function agentReplyDispatchError(
   channelType: string,
   result: Extract<DispatchMessageResult, { ok: false }>,
 ): ToolResult {
-  if (channelType === CHANNEL_TYPE.IG_DM && result.providerStatus !== undefined) {
-    return toolError(`Error: Instagram dispatch failed (${result.providerStatus}).`);
-  }
   if (channelType === CHANNEL_TYPE.TIKTOK && result.providerStatus !== undefined) {
     return toolError(`Error: TikTok Shop dispatch failed (${result.providerStatus}).`);
   }
@@ -146,8 +144,10 @@ export async function sendEmail(
   // Fetch email integration; simultaneously search for an existing open email thread
   // for this recipient directly via relation filter (avoids a separate customer lookup
   // that can miss if the address casing differs from the stored platformId).
-  const [emailIntegration, existingThread] = await Promise.all([
-    db.integration.findFirst({ where: { organizationId: ctx.orgId, platform: CHANNEL_TYPE.EMAIL } }),
+  const [emailIntegrationResult, existingThread] = await Promise.all([
+    resolveEmailIntegration({ organizationId: ctx.orgId, purpose: "proactive" })
+      .then(integration => ({ integration }))
+      .catch(error => ({ error })),
     db.thread.findFirst({
       where: {
         organizationId: ctx.orgId,
@@ -159,7 +159,14 @@ export async function sendEmail(
       orderBy: { updatedAt: "desc" },
     }),
   ]);
-  if (!emailIntegration) return toolError("Error: no email integration connected.");
+  if ('error' in emailIntegrationResult) {
+    const error = emailIntegrationResult.error;
+    if (error instanceof EmailNotConfiguredError) {
+      return toolError(`Error: email not configured — ${error.message}`);
+    }
+    throw error;
+  }
+  const emailIntegration = emailIntegrationResult.integration;
 
   const fromEmail = emailIntegration.fromEmail || emailIntegration.externalAccountId;
   const provider = getEmailProvider(emailIntegration);
@@ -206,6 +213,7 @@ export async function sendEmail(
         senderType: SenderType.agent,
         contentText: input.body,
         sendStatus: 'pending',
+        integrationId: emailIntegration.id,
       },
       { status: THREAD_STATUS.OPEN },
     );
@@ -287,6 +295,7 @@ export async function sendEmail(
     organizationId: ctx.orgId,
     senderType: SenderType.agent,
     contentText: input.body,
+    integrationId: emailIntegration.id,
   });
   void captureDashboardOutboundReplySent({
     channel: CHANNEL_TYPE.EMAIL,

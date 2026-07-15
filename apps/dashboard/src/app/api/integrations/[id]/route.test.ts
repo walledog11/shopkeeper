@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChannelType, db } from '@shopkeeper/db';
-import { cleanupTestData, createTestOrg } from '@shopkeeper/db/test-helpers';
+import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
+import { cleanupTestData, createTestIntegration, createTestOrg } from '@shopkeeper/db/test-helpers';
 
 const { mockFetch } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
@@ -73,6 +73,51 @@ describe('DELETE /api/integrations/[id]', () => {
       db.integration.findUnique({ where: { id: retained.id } }),
     ).resolves.not.toBeNull();
   });
+
+  it('moves the default to the remaining provider when the default is deleted', async () => {
+    const gmail = await createActiveGmailIntegration(org.id);
+    const forwarding = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.postmark,
+      externalAccountId: 'support@example.com',
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { defaultEmailIntegrationId: forwarding.id },
+    });
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${forwarding.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: forwarding.id }) },
+    );
+
+    expect(response.status).toBe(204);
+    await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
+      .resolves.toMatchObject({ defaultEmailIntegrationId: gmail.id });
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the default when the non-default provider is deleted', async () => {
+    const gmail = await createActiveGmailIntegration(org.id);
+    const forwarding = await createTestIntegration(org.id, {
+      platform: ChannelType.email,
+      emailProvider: EmailProvider.postmark,
+      externalAccountId: 'support@example.com',
+    });
+    await db.organization.update({
+      where: { id: org.id },
+      data: { defaultEmailIntegrationId: gmail.id },
+    });
+
+    const response = await DELETE(
+      new Request(`http://localhost/api/integrations/${forwarding.id}`, { method: 'DELETE' }),
+      { params: Promise.resolve({ id: forwarding.id }) },
+    );
+
+    expect(response.status).toBe(204);
+    await expect(db.organization.findUniqueOrThrow({ where: { id: org.id } }))
+      .resolves.toMatchObject({ defaultEmailIntegrationId: gmail.id });
+  });
 });
 
 describe('PATCH /api/integrations/[id]', () => {
@@ -138,6 +183,7 @@ async function createActiveGmailIntegration(organizationId: string) {
     data: {
       organizationId,
       platform: ChannelType.email,
+      emailProvider: EmailProvider.gmail,
       externalAccountId: 'shared-mailbox@gmail.test',
       accessToken: 'gmail-access-token',
       refreshToken: 'gmail-refresh-token',

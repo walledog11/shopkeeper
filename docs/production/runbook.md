@@ -111,8 +111,8 @@ Rules:
   Fully qualified topic name, for example `projects/shopkeeper-prod/topics/gmail-inbound`.
 - `GMAIL_NATIVE_INBOUND`
   Controlled-rollout switch. Defaults to `false`; use the same value in the dashboard and
-  gateway. When disabled, Gmail OAuth remains available for sending and the dashboard directs
-  merchants to the forwarding fallback.
+  gateway. When disabled, Gmail OAuth remains available for sending; merchants may independently
+  connect the forwarded Email integration for inbound intake.
 - `IMESSAGE_LINE_HANDLE`
   The fixed iMessage handle merchants text to reach the operator agent. Presence makes iMessage
   available in Integrations and onboarding; it is not a secret.
@@ -177,20 +177,27 @@ Optional:
 - `INSTAGRAM_APP_SECRET`, `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` for Instagram DM webhooks.
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` for the Telegram operator channel.
 
-### Email architecture: inbound rail vs outbound provider
+### Email architecture: independent Gmail and forwarding integrations
 
-Email is a **hybrid model** — keep the two concerns separate when debugging:
+Each workspace can have one Gmail integration and one forwarded Email/Postmark integration
+simultaneously. Connecting, reconnecting, or deleting one must not modify the other.
 
-- **Inbound rail** (how customer mail becomes a ticket): Gmail can receive native Pub/Sub push
+- **Inbound intake:** Gmail can receive native Pub/Sub push
   notifications, synchronize mailbox history through `gmail-sync`, and enqueue the same
   `process-email` jobs used by Postmark forwarding. Watch renewal runs every 12 hours, and an
-  expired history checkpoint triggers a bounded seven-day inbox recovery. Keep
-  `EMAIL_INBOUND_MODE=hybrid` during rollout so Postmark remains the fallback.
-- **Outbound provider** (how replies are sent): chosen per integration from
-  `Integration.metadata.provider` — `gmail` (Gmail API) or `postmark` (forwarding fallback).
-  The reply `From` uses `Integration.fromEmail` (falling back to
+  expired history checkpoint triggers a bounded seven-day inbox recovery. Postmark accepts only
+  the generated organization recipient from `OriginalRecipient` and requires an active Postmark
+  integration row; the visible `To` header is not a tenancy key.
+- **Outbound routing:** `Integration.emailProvider` is authoritative. Replies and auto-acks use
+  the valid `Thread.replyIntegrationId` from the newest distinct inbound email, then fall back to
+  the workspace default if that source was deleted. Proactive email always uses
+  `Organization.defaultEmailIntegrationId`. The resolved integration is snapshotted on the
+  outbound message and queue job. The reply `From` uses `Integration.fromEmail` (falling back to
   `externalAccountId`); the OAuth account email is the identity used for `replyTo` and token
   refresh.
+- **Missing defaults:** one connected provider repairs a missing default automatically. With both
+  providers connected, a missing or invalid default is a configuration error and must be repaired
+  from Integrations; never choose an unordered email row.
 
 Gmail native inbound is implemented but remains in controlled rollout.
 
@@ -217,6 +224,18 @@ filtering, outbound send-as behavior, and reconnect/degraded states in Integrati
 setting `GMAIL_NATIVE_INBOUND=false` in both services; leave `EMAIL_INBOUND_MODE=hybrid`.
 Do not use `gmail-only` until the production soak is complete and no forwarding integrations
 remain.
+
+### Independent-email canary (Palette)
+
+1. Confirm Palette's existing Gmail row and watch remain active.
+2. Connect `support@palettegarments.com` as the forwarded Email integration.
+3. Keep Gmail selected as the default for proactive email.
+4. Send one inbound message through each path, then alternate both paths from the same customer.
+   Confirm one open thread and confirm each reply follows the newest distinct inbound source.
+5. Disconnect and reconnect Email; verify the Gmail row, token, watch, and health display do not
+   change.
+6. Monitor structured `unclaimed_recipient` events, default/source mismatches, provider send
+   failures, duplicate suppression, and Gmail watch health before expanding rollout.
 
 ### Gmail Pub/Sub provisioning
 

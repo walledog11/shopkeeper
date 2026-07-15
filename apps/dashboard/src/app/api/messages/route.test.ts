@@ -159,17 +159,52 @@ describe('POST /api/messages', () => {
 
   it('dispatches via Meta Graph API for ig_dm threads and saves the message', async () => {
     const igAccountId = `ig_acct_${org.id.slice(0, 8)}`;
-    await createTestIntegration(org.id, {
+    const integration = await createTestIntegration(org.id, {
       platform: ChannelType.ig_dm,
       externalAccountId: igAccountId,
       accessToken: 'test-ig-token',
+      metadata: {
+        instagram: {
+          authModel: 'instagram_login',
+          grantedScopes: [
+            'instagram_business_basic',
+            'instagram_business_manage_messages',
+          ],
+          permissionsVerified: true,
+        },
+      },
+    });
+    await db.integration.update({
+      where: { id: integration.id },
+      data: { tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
     });
 
     const customer = await createTestCustomer(org.id, 'ig_sender_456');
     const thread = await createTestThread(org.id, customer.id, ChannelType.ig_dm);
+    await db.thread.update({
+      where: { id: thread.id },
+      data: {
+        replyIntegrationId: integration.id,
+        replyIntegrationUpdatedAt: new Date(),
+      },
+    });
+    await db.message.create({
+      data: {
+        threadId: thread.id,
+        organizationId: org.id,
+        integrationId: integration.id,
+        senderType: SenderType.customer,
+        contentText: 'Can you help?',
+        externalMessageId: `mid-inbound-${thread.id}`,
+        sentAt: new Date(),
+      },
+    });
 
     mockFetch.mockResolvedValueOnce(
-      new Response(JSON.stringify({ message_id: 'mid_test' }), { status: 200 }),
+      new Response(JSON.stringify({
+        message_id: 'mid_test',
+        recipient_id: customer.platformId,
+      }), { status: 200 }),
     );
 
     const req = new Request('http://localhost:3000/api/messages', {
@@ -182,12 +217,17 @@ describe('POST /api/messages', () => {
     expect(res.status).toBe(200);
 
     expect(mockFetch).toHaveBeenCalledOnce();
-    const [url] = mockFetch.mock.calls[0];
-    expect(String(url)).toContain('graph.facebook.com');
+    const [url, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+    expect(String(url)).toBe(`https://graph.instagram.com/v25.0/${igAccountId}/messages`);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer test-ig-token' });
 
-    const savedMessage = await db.message.findFirst({ where: { threadId: thread.id } });
+    const savedMessage = await db.message.findFirst({
+      where: { threadId: thread.id, senderType: SenderType.agent },
+    });
     expect(savedMessage?.senderType).toBe(SenderType.agent);
     expect(savedMessage?.contentText).toBe('Thanks for reaching out!');
+    expect(savedMessage?.integrationId).toBe(integration.id);
+    expect(savedMessage?.providerMessageId).toBe('mid_test');
   });
 
   it('returns 502 when no IG integration is configured', async () => {

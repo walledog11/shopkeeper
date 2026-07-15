@@ -5,7 +5,7 @@ import {
   NoopAnalyticsSink,
   RecordingAnalyticsSink,
 } from '@shopkeeper/analytics';
-import { ChannelType, db } from '@shopkeeper/db';
+import { ChannelType, EmailProvider, db } from '@shopkeeper/db';
 import { createTestOrg, cleanupTestData } from '@shopkeeper/db/test-helpers';
 import { org } from './test-fixtures/worker-test-setup.js';
 import {
@@ -251,6 +251,93 @@ describe('Message worker — email branch', () => {
     expect(messageCount).toBe(1);
   });
 
+  it('merges providers into one thread and keeps the newest distinct inbound route', async () => {
+    getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
+    const gmail = await createEmailIntegration('gmail');
+    const postmark = await createEmailIntegration('postmark');
+    const handler = getCapturedHandlers().get('inbound-messages');
+
+    await handler!(makeEmailJob(org.id, {
+      integrationId: gmail.id,
+      receivedAt: '2026-07-13T12:00:00.000Z',
+      inboundMessageId: 'gmail-newer',
+    }));
+    await handler!(makeEmailJob(org.id, {
+      integrationId: postmark.id,
+      receivedAt: '2026-07-13T11:00:00.000Z',
+      inboundMessageId: 'postmark-delayed',
+    }));
+
+    const threads = await db.thread.findMany({
+      where: { organizationId: org.id, channelType: ChannelType.email },
+      include: { messages: { orderBy: { sentAt: 'asc' } } },
+    });
+    expect(threads).toHaveLength(1);
+    expect(threads[0]).toMatchObject({
+      replyIntegrationId: gmail.id,
+      replyIntegrationUpdatedAt: new Date('2026-07-13T12:00:00.000Z'),
+    });
+    expect(threads[0].messages.map((message) => ({
+      externalMessageId: message.externalMessageId,
+      integrationId: message.integrationId,
+    }))).toEqual([
+      { externalMessageId: 'postmark-delayed', integrationId: postmark.id },
+      { externalMessageId: 'gmail-newer', integrationId: gmail.id },
+    ]);
+  });
+
+  it('merges provider messages when sender address casing differs', async () => {
+    getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
+    const gmail = await createEmailIntegration('gmail');
+    const postmark = await createEmailIntegration('postmark');
+    const handler = getCapturedHandlers().get('inbound-messages');
+
+    await handler!(makeEmailJob(org.id, {
+      senderEmail: 'Customer@Example.com',
+      integrationId: gmail.id,
+      receivedAt: '2026-07-13T12:00:00.000Z',
+      inboundMessageId: 'gmail-mixed-case',
+    }));
+    await handler!(makeEmailJob(org.id, {
+      senderEmail: 'customer@example.com',
+      integrationId: postmark.id,
+      receivedAt: '2026-07-13T13:00:00.000Z',
+      inboundMessageId: 'postmark-lower-case',
+    }));
+
+    expect(await db.customer.count({ where: { organizationId: org.id } })).toBe(1);
+    expect(await db.thread.count({
+      where: { organizationId: org.id, channelType: ChannelType.email },
+    })).toBe(1);
+  });
+
+  it('does not let a later duplicate change message attribution or reply routing', async () => {
+    getMockAnthropicCreate().mockResolvedValue(classifierResponse('genuine'));
+    const gmail = await createEmailIntegration('gmail');
+    const postmark = await createEmailIntegration('postmark');
+    const handler = getCapturedHandlers().get('inbound-messages');
+    const sharedId = 'same-mime-message-id';
+
+    await handler!(makeEmailJob(org.id, {
+      integrationId: gmail.id,
+      receivedAt: '2026-07-13T12:00:00.000Z',
+      inboundMessageId: sharedId,
+    }));
+    await handler!(makeEmailJob(org.id, {
+      integrationId: postmark.id,
+      receivedAt: '2026-07-13T13:00:00.000Z',
+      inboundMessageId: sharedId,
+    }));
+
+    const message = await db.message.findFirstOrThrow({
+      where: { organizationId: org.id, externalMessageId: sharedId },
+    });
+    const thread = await db.thread.findUniqueOrThrow({ where: { id: message.threadId } });
+    expect(message.integrationId).toBe(gmail.id);
+    expect(thread.replyIntegrationId).toBe(gmail.id);
+    expect(thread.replyIntegrationUpdatedAt).toEqual(new Date('2026-07-13T12:00:00.000Z'));
+  });
+
   it('rejects duplicate externalMessageId rows within one organization at the database boundary', async () => {
     const customer = await db.customer.create({
       data: { organizationId: org.id, platformId: 'db-duplicate@example.com' },
@@ -342,3 +429,15 @@ describe('Message worker — email branch', () => {
     ]);
   });
 });
+
+function createEmailIntegration(provider: 'gmail' | 'postmark') {
+  return db.integration.create({
+    data: {
+      organizationId: org.id,
+      platform: ChannelType.email,
+      emailProvider: provider === 'gmail' ? EmailProvider.gmail : EmailProvider.postmark,
+      externalAccountId: `${provider}-${org.id}@example.test`,
+      metadata: { provider },
+    },
+  });
+}

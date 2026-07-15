@@ -1,4 +1,12 @@
-import { db, ChannelType, SenderType, type DbChannelType, type DbSenderType } from './index.js';
+import {
+  db,
+  ChannelType,
+  EmailProvider,
+  SenderType,
+  type DbChannelType,
+  type DbEmailProvider,
+  type DbSenderType,
+} from './index.js';
 import { randomUUID } from 'crypto';
 
 export async function createTestOrg() {
@@ -17,16 +25,20 @@ export async function createTestIntegration(
     platform?: DbChannelType;
     externalAccountId?: string;
     accessToken?: string | null;
+    emailProvider?: DbEmailProvider | null;
     fromEmail?: string | null;
     metadata?: Record<string, unknown>;
+    refreshToken?: string | null;
   } = {},
 ) {
   const {
     platform = ChannelType.email,
     externalAccountId = `test_${randomUUID()}`,
     accessToken = null,
+    emailProvider = platform === ChannelType.email ? EmailProvider.postmark : null,
     fromEmail = null,
     metadata,
+    refreshToken = null,
   } = options;
   return db.integration.create({
     data: {
@@ -34,7 +46,9 @@ export async function createTestIntegration(
       platform,
       externalAccountId,
       accessToken,
+      emailProvider,
       fromEmail,
+      refreshToken,
       ...(metadata && { metadata }),
     },
   });

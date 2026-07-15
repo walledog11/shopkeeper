@@ -38,7 +38,12 @@ function serializeIntegration<T extends {
   createdAt?: Date;
   tokenExpiresAt?: Date | null;
   platform?: string;
-}>(integration: T, lastActivity?: string | null, threadsThisWeek?: number) {
+}>(
+  integration: T,
+  lastActivity?: string | null,
+  threadsThisWeek?: number,
+  isDefaultEmail?: boolean,
+) {
   const safe = { ...integration } as Omit<T, 'accessToken' | 'refreshToken'> & {
     accessToken?: string | null;
     refreshToken?: string | null;
@@ -56,6 +61,7 @@ function serializeIntegration<T extends {
     ...(connectionState !== undefined && { connectionState }),
     ...(lastActivity !== undefined && { lastActivity }),
     ...(threadsThisWeek !== undefined && { threadsThisWeek }),
+    ...(isDefaultEmail !== undefined && { isDefaultEmail }),
   };
 }
 
@@ -63,7 +69,7 @@ export const GET = withOrgRoute(
   { context: 'Integrations GET', errorMessage: 'Failed to fetch integrations' },
   async ({ org }) => {
     const weekAgo = new Date(Date.now() - 7 * 86_400_000);
-    const [integrations, activityRows, weeklyRows] = await Promise.all([
+    const [integrations, activityRows, weeklyRows, emailActivityRows, emailWeeklyThreads] = await Promise.all([
       db.integration.findMany({
         where: { organizationId: org.id },
         orderBy: { createdAt: 'asc' },
@@ -78,6 +84,25 @@ export const GET = withOrgRoute(
         where: { organizationId: org.id, deletedAt: null, createdAt: { gte: weekAgo } },
         _count: { _all: true },
       }),
+      db.message.groupBy({
+        by: ['integrationId'],
+        where: {
+          organizationId: org.id,
+          integrationId: { not: null },
+          thread: { channelType: 'email', deletedAt: null },
+        },
+        _max: { sentAt: true },
+      }),
+      db.message.findMany({
+        where: {
+          organizationId: org.id,
+          integrationId: { not: null },
+          sentAt: { gte: weekAgo },
+          thread: { channelType: 'email', deletedAt: null },
+        },
+        distinct: ['integrationId', 'threadId'],
+        select: { integrationId: true, threadId: true },
+      }),
     ]);
 
     const lastActivityByChannel: Record<string, string | null> = {};
@@ -88,6 +113,16 @@ export const GET = withOrgRoute(
     for (const row of weeklyRows) {
       weeklyByChannel[row.channelType] = row._count._all;
     }
+    const lastActivityByIntegration = new Map(
+      emailActivityRows.flatMap((row) => row.integrationId
+        ? [[row.integrationId, row._max.sentAt?.toISOString() ?? null] as const]
+        : []),
+    );
+    const weeklyByIntegration = new Map<string, number>();
+    for (const row of emailWeeklyThreads) {
+      if (!row.integrationId) continue;
+      weeklyByIntegration.set(row.integrationId, (weeklyByIntegration.get(row.integrationId) ?? 0) + 1);
+    }
 
     const refreshedIntegrations = await Promise.all(integrations.map(async (integration) => {
       if (integration.platform !== 'shopify') return integration;
@@ -96,13 +131,19 @@ export const GET = withOrgRoute(
       return { ...integration, tokenExpiresAt };
     }));
 
-    const result = refreshedIntegrations.map(i =>
-      serializeIntegration(
-        i,
-        lastActivityByChannel[i.platform] ?? null,
-        weeklyByChannel[i.platform] ?? 0,
-      ),
-    );
+    const result = refreshedIntegrations.map((integration) => {
+      const isEmail = integration.platform === 'email';
+      return serializeIntegration(
+        integration,
+        isEmail
+          ? lastActivityByIntegration.get(integration.id) ?? null
+          : lastActivityByChannel[integration.platform] ?? null,
+        isEmail
+          ? weeklyByIntegration.get(integration.id) ?? 0
+          : weeklyByChannel[integration.platform] ?? 0,
+        isEmail ? org.defaultEmailIntegrationId === integration.id : undefined,
+      );
+    });
 
     return NextResponse.json(result, {
       headers: { 'Cache-Control': 'no-store' },
@@ -146,7 +187,19 @@ export const POST = withOrgRoute(
         throw error;
       }
 
-      return NextResponse.json(serializeIntegration(integration), { status: 201 });
+      const defaultState = await db.organization.findUniqueOrThrow({
+        where: { id: org.id },
+        select: { defaultEmailIntegrationId: true },
+      });
+      return NextResponse.json(
+        serializeIntegration(
+          integration,
+          undefined,
+          undefined,
+          defaultState.defaultEmailIntegrationId === integration.id,
+        ),
+        { status: 201 },
+      );
     }
 
     const analyticsPlatform = analyticsIntegrationPlatform(platformValue);

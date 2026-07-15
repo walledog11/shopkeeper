@@ -60,7 +60,7 @@ export function IntegrationConfigureDialog({
           </div>
         </DialogHeader>
 
-        <div className="space-y-5">{children}</div>
+        <div className="min-w-0 space-y-5">{children}</div>
       </DialogContent>
     </Dialog>
   )

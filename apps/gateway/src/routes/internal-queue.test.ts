@@ -98,6 +98,7 @@ describe('POST /internal/queue/outbound-email', () => {
       threadId: 'thread_1',
       organizationId: 'org_1',
       sendStatus: 'pending',
+      integrationId: 'int_1',
     });
     findIntegration.mockReset().mockResolvedValue({ id: 'int_1', organizationId: 'org_1' });
   });
@@ -171,6 +172,24 @@ describe('POST /internal/queue/outbound-email', () => {
     expect(queueAdd).not.toHaveBeenCalled();
   });
 
+  it('rejects a queue request that disagrees with the message integration snapshot', async () => {
+    findMessage.mockResolvedValueOnce({
+      id: 'msg_1',
+      threadId: 'thread_1',
+      organizationId: 'org_1',
+      sendStatus: 'pending',
+      integrationId: 'different-integration',
+    });
+
+    const response = await request(createApp())
+      .post('/internal/queue/outbound-email')
+      .set('x-internal-secret', 'test-internal-secret')
+      .send(validBody);
+
+    expect(response.status).toBe(404);
+    expect(queueAdd).not.toHaveBeenCalled();
+  });
+
   it('scopes every queued object to the supplied organization and thread', async () => {
     queueAdd.mockResolvedValue({ id: 'job_42' });
 
@@ -186,7 +205,13 @@ describe('POST /internal/queue/outbound-email', () => {
         threadId: 'thread_1',
         thread: { organizationId: 'org_1' },
       },
-      select: { id: true, threadId: true, organizationId: true, sendStatus: true },
+      select: {
+        id: true,
+        threadId: true,
+        organizationId: true,
+        sendStatus: true,
+        integrationId: true,
+      },
     });
     expect(findIntegration).toHaveBeenCalledWith({
       where: { id: 'int_1', organizationId: 'org_1', platform: 'email' },
