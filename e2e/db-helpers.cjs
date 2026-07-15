@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { Redis: IORedis } = require('ioredis');
-const { ChannelType, PrismaClient, SenderType } = require('@prisma/client');
+const { ChannelType, EmailProvider, PrismaClient, SenderType } = require('@prisma/client');
 
 const db = new PrismaClient();
 const DEFAULT_POLL_TIMEOUT_MS = 10_000;
@@ -59,19 +59,20 @@ async function ensureE2EEmailIntegration(orgId) {
 
   return db.integration.upsert({
     where: {
-      organizationId_platform_externalAccountId: {
+      organizationId_emailProvider: {
         organizationId: orgId,
-        platform: ChannelType.email,
-        externalAccountId: emailAddress,
+        emailProvider: EmailProvider.postmark,
       },
     },
     create: {
       organizationId: orgId,
       platform: ChannelType.email,
+      emailProvider: EmailProvider.postmark,
       externalAccountId: emailAddress,
       fromEmail: emailAddress,
     },
     update: {
+      externalAccountId: emailAddress,
       fromEmail: emailAddress,
     },
   });

@@ -97,7 +97,7 @@ export async function seedE2ETestData(baseEnv = process.env) {
   const env = resolveTestEnv(baseEnv);
   assertTestDatabase(env);
 
-  const { PrismaClient, ChannelType } = await import('@prisma/client');
+  const { PrismaClient, ChannelType, EmailProvider } = await import('@prisma/client');
   const prisma = new PrismaClient({
     datasources: {
       db: { url: env.DATABASE_URL },
@@ -142,19 +142,20 @@ export async function seedE2ETestData(baseEnv = process.env) {
 
     await prisma.integration.upsert({
       where: {
-        organizationId_platform_externalAccountId: {
+        organizationId_emailProvider: {
           organizationId: org.id,
-          platform: ChannelType.email,
-          externalAccountId: env.E2E_TEST_EMAIL_ADDRESS,
+          emailProvider: EmailProvider.postmark,
         },
       },
       create: {
         organizationId: org.id,
         platform: ChannelType.email,
+        emailProvider: EmailProvider.postmark,
         externalAccountId: env.E2E_TEST_EMAIL_ADDRESS,
         fromEmail: env.E2E_TEST_EMAIL_ADDRESS,
       },
       update: {
+        externalAccountId: env.E2E_TEST_EMAIL_ADDRESS,
         fromEmail: env.E2E_TEST_EMAIL_ADDRESS,
       },
     });

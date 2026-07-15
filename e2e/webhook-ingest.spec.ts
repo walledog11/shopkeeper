@@ -16,6 +16,14 @@ const { ChannelType, SenderType, cleanupTestData, createTestIntegration, createT
 const { readOutboundRecords } = outboundHelpers;
 const gatewayUrl = process.env.GATEWAY_INTERNAL_URL ?? 'http://localhost:8180';
 
+function getInstagramWebhookSecret() {
+  return (
+    process.env.INSTAGRAM_WEBHOOK_APP_SECRET
+    || process.env.INSTAGRAM_APP_SECRET
+    || 'test-instagram-webhook-secret'
+  );
+}
+
 let orgId: string;
 
 test.beforeAll(async () => {
@@ -29,16 +37,17 @@ test.afterAll(async () => {
 });
 
 test('inbound email webhook creates a thread and message in the database', async ({ request }) => {
-  const emailAddress = `e2e_${orgId.slice(0, 8)}@inbound.test`;
+  const inboundAddress = `${orgId}@inbound.test`;
   await createTestIntegration(orgId, {
     platform: ChannelType.email,
-    externalAccountId: emailAddress,
+    externalAccountId: inboundAddress,
   });
 
   const res = await request.post(`${gatewayUrl}/webhooks/email/inbound`, {
     form: {
       From: 'E2E Tester <e2e@example.com>',
-      To: emailAddress,
+      OriginalRecipient: inboundAddress,
+      To: inboundAddress,
       Subject: 'E2E test email',
       TextBody: 'This is an automated test message.',
     },
@@ -69,20 +78,26 @@ test('inbound IG DM webhook persists a thread and message in the database', asyn
   await createTestIntegration(orgId, {
     platform: ChannelType.ig_dm,
     externalAccountId: igPageId,
+    accessToken: 'instagram-long-lived-token',
+    metadata: { instagram: { authModel: 'instagram_login' } },
   });
 
   const runId = randomUUID();
   const senderId = `e2e_ig_sender_${runId}`;
   const messageText = `E2E IG message ${runId}`;
   const messageMid = `mid.e2e.${runId}`;
-  const secret = process.env.META_APP_SECRET ?? 'test-meta-secret';
+  const secret = getInstagramWebhookSecret();
   const payload = JSON.stringify({
     object: 'instagram',
     entry: [
       {
         id: igPageId,
         messaging: [
-          { sender: { id: senderId }, message: { text: messageText, mid: messageMid } },
+          {
+            sender: { id: senderId },
+            timestamp: Date.now(),
+            message: { text: messageText, mid: messageMid },
+          },
         ],
       },
     ],
@@ -143,20 +158,16 @@ test('filtered spam email webhook skips cached plans, outbound sends, and agent 
   });
 
   const runId = randomUUID();
-  const emailAddress = `spam_e2e_${runId}@inbound.test`;
+  const inboundAddress = `${orgId}@inbound.test`;
   const customerEmail = `filtered-spam-${runId}@example.com`;
   const spamMarker = 'E2E_FILTERED_SPAM';
   const bodyText = `${spamMarker} buy followers and fake engagement ${runId}`;
 
-  await createTestIntegration(orgId, {
-    platform: ChannelType.email,
-    externalAccountId: emailAddress,
-  });
-
   const res = await request.post(`${gatewayUrl}/webhooks/email/inbound`, {
     form: {
       From: `Filtered Spam <${customerEmail}>`,
-      To: emailAddress,
+      OriginalRecipient: inboundAddress,
+      To: inboundAddress,
       Subject: `${spamMarker} promotional blast ${runId}`,
       TextBody: bodyText,
     },
