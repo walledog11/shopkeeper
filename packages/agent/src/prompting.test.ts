@@ -187,6 +187,8 @@ describe('untrusted content handling', () => {
     expect(prompt).toContain('## Untrusted content');
     expect(prompt).toContain('<customer_message>');
     expect(prompt).toMatch(/never instructions/i);
+    expect(prompt).toMatch(/image content block is present/i);
+    expect(prompt).toMatch(/never say that you cannot view or access/i);
   });
 
   it('warns the operator agent that tool-returned text is untrusted data', () => {
@@ -209,6 +211,8 @@ describe('untrusted content handling', () => {
 
     expect(prompt).toContain('<customer_message>');
     expect(prompt).toMatch(/untrusted data/i);
+    expect(prompt).toMatch(/image content block is present, it is visible/i);
+    expect(prompt).toMatch(/never claim that you cannot view or access/i);
   });
 
   it('wraps customer messages in boundary tags when segregating untrusted text', () => {
@@ -276,6 +280,8 @@ describe('untrusted content handling', () => {
     }]));
     expect(JSON.stringify(content)).toContain('[Instagram image attachment]');
     expect(JSON.stringify(content)).toContain('untrusted data');
+    expect(JSON.stringify(content)).toContain('available for visual inspection');
+    expect(JSON.stringify(content)).toContain('Do not claim you cannot view the image');
     expect(JSON.stringify(content)).not.toContain('blob:attachments');
     expect((content as Array<{ type: string; text?: string }>).at(-1)?.text).toContain('</customer_message>');
   });
@@ -300,6 +306,33 @@ describe('untrusted content handling', () => {
     expect(serialized).toContain('Do not guess');
     expect(serialized).not.toContain('"type":"image"');
     expect(serialized).not.toContain('blob:attachments');
+  });
+
+  it('overrides an earlier assistant claim that images were unavailable', () => {
+    const messages = buildMessageHistory(
+      [
+        { senderType: 'agent', contentText: "I can't view images sent through Instagram." },
+        {
+          senderType: 'customer',
+          contentText: '[Instagram image attachment]',
+          attachments: [{
+            type: 'image',
+            reference: 'blob:attachments/org_test/image-id/photo.png',
+            status: 'available',
+            mediaType: 'image/png',
+            data: 'iVBORw0KGgo=',
+          }],
+        },
+      ],
+      'Handle the latest request.',
+      { segregateUntrusted: true },
+    );
+
+    const serialized = JSON.stringify(messages);
+    expect(serialized.indexOf("can't view images")).toBeLessThan(
+      serialized.indexOf('available for visual inspection'),
+    );
+    expect(serialized).toContain('Do not claim you cannot view the image');
   });
 });
 

@@ -1,8 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getSpy } = vi.hoisted(() => ({ getSpy: vi.fn() }));
+const { getSpy, loggerSpy } = vi.hoisted(() => ({
+  getSpy: vi.fn(),
+  loggerSpy: {
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 vi.mock("@vercel/blob", () => ({ get: getSpy }));
+vi.mock("./logger.js", () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: loggerSpy.info,
+    warn: loggerSpy.warn,
+  },
+}));
 
 import { hydrateAgentMessageImages } from "./image-attachments.js";
 
@@ -29,6 +43,8 @@ function blobResult(data: Buffer, contentType: string, size = data.byteLength) {
 
 beforeEach(() => {
   getSpy.mockReset();
+  loggerSpy.info.mockReset();
+  loggerSpy.warn.mockReset();
 });
 
 describe("hydrateAgentMessageImages", () => {
@@ -59,6 +75,10 @@ describe("hydrateAgentMessageImages", () => {
         access: "private",
         abortSignal: expect.any(AbortSignal),
       }),
+    );
+    expect(loggerSpy.info).toHaveBeenCalledWith(
+      expect.objectContaining({ loadedImageCount: 1, loadedByteCount: PNG.byteLength }),
+      "[agent:image] Customer images loaded for the model",
     );
   });
 
@@ -111,6 +131,13 @@ describe("hydrateAgentMessageImages", () => {
     }], { maxImages: 1, maxImageBytes: 8, maxTotalBytes: 8 });
 
     expect(messages[0]?.attachments?.[0]?.status).toBe("unavailable");
+    expect(loggerSpy.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        unavailableImageCount: 1,
+        rejectionReasons: { invalid_stream: 1 },
+      }),
+      "[agent:image] Customer images were unavailable to the model",
+    );
   });
 
   it("gives the newest message priority when the image-count limit is reached", async () => {

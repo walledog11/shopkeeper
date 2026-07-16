@@ -12,6 +12,14 @@ import {
 const { getSpy } = vi.hoisted(() => ({ getSpy: vi.fn() }));
 
 vi.mock("@vercel/blob", () => ({ get: getSpy }));
+vi.mock("./logger.js", () => ({
+  default: {
+    debug: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+  },
+}));
 
 import { buildContext, type ThreadSink } from "./context.js";
 

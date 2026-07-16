@@ -192,17 +192,21 @@ describe("planAgent capture loop", () => {
     mockCreate.mockResolvedValueOnce(singleToolUse("send_reply", { text: "Thanks for the photo." }));
     const ctx = makeCtx({
       thread: { ...makeCtx().thread, channelType: "ig_dm" },
-      recentMessages: [{
-        senderType: "customer",
-        contentText: "[Instagram image attachment]",
-        attachments: [{
-          type: "image",
-          reference: "blob:attachments/org_1/image-id/photo.png",
-          status: "available",
-          mediaType: "image/png",
-          data: "iVBORw0KGgo=",
-        }],
-      }],
+      recentMessages: [
+        { senderType: "customer", contentText: "Do you carry a snowboard like this?" },
+        { senderType: "agent", contentText: "I can't view Instagram images." },
+        {
+          senderType: "customer",
+          contentText: "[Instagram image attachment]",
+          attachments: [{
+            type: "image",
+            reference: "blob:attachments/org_1/image-id/photo.png",
+            status: "available",
+            mediaType: "image/png",
+            data: "iVBORw0KGgo=",
+          }],
+        },
+      ],
     });
 
     await planAgent(ctx, "Handle this customer's latest request");
@@ -210,7 +214,8 @@ describe("planAgent capture loop", () => {
     const firstCall = mockCreate.mock.calls[0]?.[0] as {
       messages: Array<{ content: unknown }>;
     };
-    expect(firstCall.messages[0]?.content).toEqual(expect.arrayContaining([{
+    const imageMessage = firstCall.messages.find((message) => Array.isArray(message.content));
+    expect(imageMessage?.content).toEqual(expect.arrayContaining([{
       type: "image",
       source: {
         type: "base64",
@@ -218,7 +223,13 @@ describe("planAgent capture loop", () => {
         data: "iVBORw0KGgo=",
       },
     }]));
-    expect(JSON.stringify(firstCall.messages[0]?.content)).not.toContain("Visual content unavailable");
+    const serializedMessages = JSON.stringify(firstCall.messages);
+    expect(serializedMessages).toContain("I can't view Instagram images");
+    expect(serializedMessages).toContain("available for visual inspection");
+    expect(serializedMessages.indexOf("I can't view Instagram images")).toBeLessThan(
+      serializedMessages.indexOf("available for visual inspection"),
+    );
+    expect(serializedMessages).not.toContain("Visual content unavailable");
   });
 
   it("captures a single send_reply as the plan and stops", async () => {

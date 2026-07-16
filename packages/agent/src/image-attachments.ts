@@ -3,6 +3,7 @@ import type {
   AgentImageMediaType,
   AgentRecentMessage,
 } from "./agent-context.js";
+import logger from "./logger.js";
 
 const PRIVATE_BLOB_REF_PREFIX = "blob:";
 const IMAGE_EXTENSION_RE = /\.(?:gif|jpe?g|png|webp)(?:[?#].*)?$/i;
@@ -37,6 +38,21 @@ interface LoadedAgentImage {
   data: Buffer;
   mediaType: AgentImageMediaType;
 }
+
+type AgentImageRejectionReason =
+  | "blob_error"
+  | "blob_missing"
+  | "blob_status"
+  | "byte_limit"
+  | "count_limit"
+  | "invalid_reference"
+  | "invalid_stream"
+  | "mime_mismatch"
+  | "unsupported_mime";
+
+type AgentImageLoadResult =
+  | { ok: true; image: LoadedAgentImage }
+  | { ok: false; reason: AgentImageRejectionReason };
 
 function looksLikeImageReference(reference: string): boolean {
   return IMAGE_EXTENSION_RE.test(reference);
@@ -127,25 +143,34 @@ async function readStreamWithinLimit(
 async function loadPrivateAgentImage(
   pathname: string,
   maxBytes: number,
-): Promise<LoadedAgentImage | null> {
-  if (maxBytes <= 0) return null;
+): Promise<AgentImageLoadResult> {
+  if (maxBytes <= 0) return { ok: false, reason: "byte_limit" };
 
   try {
     const result = await get(pathname, {
       access: "private",
       abortSignal: AbortSignal.timeout(IMAGE_LOAD_TIMEOUT_MS),
     });
-    if (!result || result.statusCode !== 200 || !result.stream) return null;
+    if (!result) return { ok: false, reason: "blob_missing" };
+    if (result.statusCode !== 200 || !result.stream) {
+      return { ok: false, reason: "blob_status" };
+    }
 
     const mediaType = normalizeImageMediaType(result.blob.contentType);
-    if (!mediaType || result.blob.size <= 0 || result.blob.size > maxBytes) return null;
+    if (!mediaType) return { ok: false, reason: "unsupported_mime" };
+    if (result.blob.size <= 0 || result.blob.size > maxBytes) {
+      return { ok: false, reason: "byte_limit" };
+    }
 
     const data = await readStreamWithinLimit(result.stream, maxBytes);
-    if (!data || sniffImageMediaType(data) !== mediaType) return null;
+    if (!data) return { ok: false, reason: "invalid_stream" };
+    if (sniffImageMediaType(data) !== mediaType) {
+      return { ok: false, reason: "mime_mismatch" };
+    }
 
-    return { data, mediaType };
+    return { ok: true, image: { data, mediaType } };
   } catch {
-    return null;
+    return { ok: false, reason: "blob_error" };
   }
 }
 
@@ -164,6 +189,13 @@ export async function hydrateAgentMessageImages(
   }));
   let loadedImageCount = 0;
   let loadedByteCount = 0;
+  let unavailableImageCount = 0;
+  const rejectionReasons: Partial<Record<AgentImageRejectionReason, number>> = {};
+  const rejectImage = (reference: string, reason: AgentImageRejectionReason) => {
+    unavailableImageCount += 1;
+    rejectionReasons[reason] = (rejectionReasons[reason] ?? 0) + 1;
+    return { type: "image", reference, status: "unavailable" } as const;
+  };
 
   for (let messageIndex = messages.length - 1; messageIndex >= 0; messageIndex -= 1) {
     const message = messages[messageIndex];
@@ -175,34 +207,59 @@ export async function hydrateAgentMessageImages(
 
       const pathname = parseWorkspacePrivateImagePath(reference, organizationId);
       const remainingBytes = limits.maxTotalBytes - loadedByteCount;
-      if (!pathname || loadedImageCount >= limits.maxImages || remainingBytes <= 0) {
-        attachments.push({ type: "image", reference, status: "unavailable" });
+      if (!pathname) {
+        attachments.push(rejectImage(reference, "invalid_reference"));
+        continue;
+      }
+      if (loadedImageCount >= limits.maxImages) {
+        attachments.push(rejectImage(reference, "count_limit"));
+        continue;
+      }
+      if (remainingBytes <= 0) {
+        attachments.push(rejectImage(reference, "byte_limit"));
         continue;
       }
 
-      const loaded = await loadPrivateAgentImage(
+      const loadResult = await loadPrivateAgentImage(
         pathname,
         Math.min(limits.maxImageBytes, remainingBytes),
       );
-      if (!loaded) {
-        attachments.push({ type: "image", reference, status: "unavailable" });
+      if (!loadResult.ok) {
+        attachments.push(rejectImage(reference, loadResult.reason));
         continue;
       }
 
+      const { image } = loadResult;
       loadedImageCount += 1;
-      loadedByteCount += loaded.data.byteLength;
+      loadedByteCount += image.data.byteLength;
       attachments.push({
         type: "image",
         reference,
         status: "available",
-        mediaType: loaded.mediaType,
-        data: loaded.data.toString("base64"),
+        mediaType: image.mediaType,
+        data: image.data.toString("base64"),
       });
     }
 
     if (attachments.length > 0) {
       hydrated[messageIndex] = { ...hydrated[messageIndex], attachments };
     }
+  }
+
+  if (unavailableImageCount > 0) {
+    logger.warn({
+      organizationId,
+      loadedImageCount,
+      loadedByteCount,
+      unavailableImageCount,
+      rejectionReasons,
+    }, "[agent:image] Customer images were unavailable to the model");
+  } else if (loadedImageCount > 0) {
+    logger.info({
+      organizationId,
+      loadedImageCount,
+      loadedByteCount,
+    }, "[agent:image] Customer images loaded for the model");
   }
 
   return hydrated;
