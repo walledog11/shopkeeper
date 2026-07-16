@@ -33,6 +33,10 @@ export const QUEUE = {
   // OperatorEvent + enqueues here before acknowledging; the worker claims and
   // runs the turn asynchronously.
   OPERATOR_EVENT: 'operator-event',
+  // Recovery sweep for stuck operator events (P4-03): reconciles a claim whose
+  // worker died mid-turn to `unknown` and re-sends committed-but-undelivered
+  // confirmations. Backstop, not the primary path.
+  OPERATOR_EVENT_SWEEP: 'operator-event-sweep',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -64,6 +68,8 @@ export const JOB = {
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
   OPERATOR_EVENT: 'process-operator-event',
+  OPERATOR_EVENT_SWEEP: 'sweep-operator-events',
+  OPERATOR_EVENT_SWEEP_ID: 'operator-event-sweep-15min',
 } as const;
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {

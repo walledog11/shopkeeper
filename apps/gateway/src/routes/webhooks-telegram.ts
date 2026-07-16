@@ -1,10 +1,7 @@
 import type { Request, Response, Router } from 'express';
 import logger from '../logger.js';
-import { getGatewayBullMqQueue } from '../clients/gateway-queues.js';
-import { JOB, QUEUE } from '../constants.js';
 import { isOperatorDurableQueueEnabled } from '../config/runtime-config.js';
-import { ingestOperatorEvent } from '../operator-event-store.js';
-import type { OperatorEventJobData } from '../types.js';
+import { ingestAndEnqueueOperatorEvent } from '../operator-event-ingest.js';
 import { parseTelegramCommand } from './telegram/command-parser.js';
 import {
   handleTelegramMessage,
@@ -13,26 +10,6 @@ import {
 } from './telegram/message-handler.js';
 import { handleStartBinding } from './telegram/start-binding.js';
 import { validateTelegramWebhook, type ValidatedTelegramWebhook } from './telegram/webhook-validation.js';
-
-// Ensure a live job exists for a persisted event. Always attempted (even on a
-// redelivery whose row already existed) so a `pending` row can never be stranded
-// without a job when a prior enqueue failed: `add` with jobId=event.id is a no-op
-// for a still-live job, and a retained terminal job is replaced. Mirrors the
-// outbound-email enqueue in internal-queue.ts.
-async function ensureOperatorEventEnqueued(event: { id: string; organizationId: string }): Promise<void> {
-  const queue = getGatewayBullMqQueue(QUEUE.OPERATOR_EVENT);
-  const jobData: OperatorEventJobData = { operatorEventId: event.id, organizationId: event.organizationId };
-  const existing = await queue.getJob(event.id);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === 'failed' || state === 'completed') {
-      await existing.remove();
-      await queue.add(JOB.OPERATOR_EVENT, jobData, { jobId: event.id });
-    }
-    return;
-  }
-  await queue.add(JOB.OPERATOR_EVENT, jobData, { jobId: event.id });
-}
 
 // Durable ingestion (P4-03): resolve the binding, persist the operator event,
 // enqueue it, then acknowledge. A failed persist/enqueue returns 500 so Telegram
@@ -58,7 +35,7 @@ async function ingestTelegramOperatorEvent(
   }
 
   try {
-    const { event, created } = await ingestOperatorEvent({
+    const { created } = await ingestAndEnqueueOperatorEvent({
       organizationId: member.organizationId,
       channel: 'telegram',
       providerMessageId: `telegram:${webhook.chatId}:${webhook.messageId}`,
@@ -79,7 +56,6 @@ async function ingestTelegramOperatorEvent(
         '[Telegram] Operator event redelivery — ensuring enqueue',
       );
     }
-    await ensureOperatorEventEnqueued(event);
     res.status(200).send('OK');
   } catch (error) {
     logger.error({ err: error, chatId: webhook.chatId }, '[Telegram] Durable operator ingest failed');

@@ -112,10 +112,46 @@ export async function finalizeOperatorEventFailed(
 
 // Record that the committed turn's reply reached the provider. Delivery is
 // independent of turn commit: a null replyDeliveredAt on a committed row is the
-// recovery signal for a stuck confirmation.
+// recovery signal for a stuck confirmation. Guarded to `committed` so a row the
+// sweep has since reconciled to `unknown` is never stamped delivered.
 export async function markOperatorEventReplyDelivered(id: string): Promise<void> {
-  await db.operatorEvent.update({
-    where: { id },
+  await db.operatorEvent.updateMany({
+    where: { id, status: 'committed' },
     data: { replyDeliveredAt: new Date() },
+  });
+}
+
+// Recovery sweep: a claim whose worker died mid-turn stays `claimed` forever
+// (the turn may have partially acted, so it is never auto-replayed). Reconcile
+// claims older than the cutoff to `unknown` for human review. The terminal-state
+// CHECK constraint requires processedAt set and the claim token kept, so this
+// only advances the status. Returns how many rows were reconciled.
+export async function reconcileStaleClaimedOperatorEvents(
+  cutoff: Date,
+  error: string,
+): Promise<number> {
+  const { count } = await db.operatorEvent.updateMany({
+    where: { status: 'claimed', claimedAt: { lt: cutoff } },
+    data: { status: 'unknown', processedAt: new Date(), lastError: error.slice(0, 2000) },
+  });
+  return count;
+}
+
+// Recovery sweep: committed turns whose confirmation never reached the provider.
+// The processedAt cutoff keeps the sweep clear of the worker's own
+// commit -> mark-delivered window so a just-committed reply is not double-sent.
+export async function findCommittedUndeliveredOperatorEvents(
+  cutoff: Date,
+  limit: number,
+): Promise<OperatorEvent[]> {
+  return db.operatorEvent.findMany({
+    where: {
+      status: 'committed',
+      replyDeliveredAt: null,
+      replyText: { not: null },
+      processedAt: { lt: cutoff },
+    },
+    orderBy: { processedAt: 'asc' },
+    take: limit,
   });
 }
