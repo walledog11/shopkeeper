@@ -142,6 +142,8 @@ export async function validateTelegramWebhook(
   }
 
   const metadata = readChatMetadata(message);
-  res.status(200).send('OK');
+  // The deliverable message is acknowledged by the route, not here: the durable
+  // (P4-03) path must persist the operator event before acknowledging, while the
+  // synchronous path acknowledges immediately and then processes.
   return { body, chatId, metadata, messageId: message.message_id, reply };
 }

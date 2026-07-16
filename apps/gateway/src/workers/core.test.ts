@@ -154,6 +154,7 @@ describe('createCoreWorkerResources', () => {
       QUEUE.ORDER_REVIEW,
       QUEUE.OUTBOUND_EMAIL,
       QUEUE.GMAIL_SYNC,
+      QUEUE.OPERATOR_EVENT,
     ]);
     expect(workerInstances.every((worker) => {
       const options = readOptions(worker);

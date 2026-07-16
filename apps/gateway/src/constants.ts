@@ -29,6 +29,10 @@ export const QUEUE = {
   // Channel-agnostic sweep for stale `pending` async outbound (email + iMessage).
   // String value stays email-legacy so the live BullMQ repeatable job isn't orphaned.
   OUTBOUND_SEND_SWEEP: 'outbound-email-sweep',
+  // Durable operator-channel message ingestion (P4-03). Webhook persists an
+  // OperatorEvent + enqueues here before acknowledging; the worker claims and
+  // runs the turn asynchronously.
+  OPERATOR_EVENT: 'operator-event',
 } as const;
 export const JOB = {
   IG_DM: 'process-ig-dm',
@@ -59,6 +63,7 @@ export const JOB = {
   GMAIL_WATCH_MAINTENANCE_ID: 'gmail-watch-maintenance-12h',
   OUTBOUND_SEND_SWEEP: 'sweep-outbound-email',
   OUTBOUND_SEND_SWEEP_ID: 'outbound-email-sweep-5min',
+  OPERATOR_EVENT: 'process-operator-event',
 } as const;
 // 7-day failed retention keeps post-mortems possible; 1-day completed retention bounds Redis.
 export const PROCESSING_QUEUE_DEFAULTS = {

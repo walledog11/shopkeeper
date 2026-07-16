@@ -428,6 +428,36 @@ audit gates pass.
 
 ### P4-03 — Queue operator-channel messages before acknowledgement
 
+**Status (2026-07-15): Telegram implementation complete (flag-gated); iMessage,
+recovery sweep, and rollout pending.** A durable `OperatorEvent` table (migration
+`20260715020000_add_operator_events`) with a unique `(channel, providerMessageId)`
+key and a claim-state CHECK constraint backs the new path. Behind
+`OPERATOR_DURABLE_QUEUE_TELEGRAM`, the Telegram webhook resolves the binding,
+persists the event, enqueues `QUEUE.OPERATOR_EVENT`, and only then acknowledges;
+the synchronous handler remains the default fallback. The operator-event worker
+claims each event exactly once (pending→claimed), re-validates the binding at
+claim time (P5-01), runs the existing turn, and records committed/failed with
+turn commit tracked separately from reply delivery (`replyText`/
+`replyDeliveredAt`) so a stuck confirmation can be re-sent without re-running the
+side-effectful turn. The unique key absorbs provider redeliveries; the claim
+absorbs crash-after-ack (a claimed event is never auto-replayed — free-form
+operator turns carry no plan claim, so this is their only single-use guard).
+Deterministic and database-backed coverage: dedupe, single-winner claim,
+claim-token-guarded finalize, crash-after-claim non-replay, binding revocation,
+provider reply failure, failed-turn recording, and persist-before-ack ingestion.
+The full gateway unit + integration suite passes.
+
+**Still required for P4-03 rollout completion:**
+
+- [ ] Extend durable ingestion to iMessage (Photon webhook) behind
+  `OPERATOR_DURABLE_QUEUE_IMESSAGE`, replacing its Redis-only dedupe.
+- [ ] Add a recovery sweep/runbook that reconciles stale `claimed` events to
+  `unknown` and re-sends committed-but-undelivered replies; wire it into P6-02
+  queue monitoring. Until it exists, an event stuck in `claimed`/committed-
+  undelivered is queryable (`status`/`updatedAt` index) but not auto-recovered.
+- [ ] Canary Telegram, then iMessage; verify ack timing, duplicate suppression,
+  and crash recovery in production before broadening.
+
 - **Related findings:** AUD-001, AUD-007.
 - **Files likely to change:** gateway Telegram/Photon webhook routes and handlers; new operator-inbox queue/worker; Prisma schema/migration or durable BullMQ job IDs; presence/reply adapters.
 - **Proposed implementation:** After signature and binding resolution, persist/enqueue one provider event with stable ID, then acknowledge. Process through the execution ledger and emit result/failure replies asynchronously.
@@ -715,7 +745,9 @@ These can proceed while the durable-execution design is reviewed, provided they 
   isolated local test database and confirmed applied in production on
   2026-07-13.**
 - Durable Stripe event processing (P4-02).
-- Operator inbox/event persistence if PostgreSQL is chosen (P4-03).
+- Operator inbox/event persistence (P4-03). **Migration
+  `20260715020000_add_operator_events` created and locally verified (Telegram
+  path); not yet applied in production.**
 - Compound tenant constraints after audit/backfill (P5-03).
 - Active-thread constraint/state migration if `pending` remains active (P5-04).
 
@@ -778,6 +810,9 @@ Next:
 7. The P4-01 outbound-send claim migration and state machine are deployed.
    Canary Postmark/Gmail while keeping synchronous email as the rollback rail
    until unknown reconciliation and stale-claim monitoring are proven.
-8. Implement P4-03 durable operator-event ingestion next, then P6-02 monitoring;
-   do not broaden natural-language ticket sends until those gates and P4-01's
-   rollout are complete.
+8. P4-03 durable operator-event ingestion is implemented for Telegram behind
+   `OPERATOR_DURABLE_QUEUE_TELEGRAM`. Next: deploy the additive
+   `operator_events` migration, canary the Telegram durable path, then extend it
+   to iMessage and add the stale-claim/undelivered-reply recovery sweep wired
+   into P6-02 monitoring. Do not broaden natural-language ticket sends until that
+   rollout and P4-01's are complete.
