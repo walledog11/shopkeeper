@@ -597,11 +597,12 @@ additive and deploy-safe.
   (`registry/helpers.ts` `threadStatuses`) and the `escalate_to_human` tool
   description still says "Marks the thread as pending". Both are prompt bytes, so
   they were intentionally left unchanged here (A3 precedent) and need an eval run.
-- [ ] Autonomy-policy decision (separate): escalated threads now stay `open`, so a
-  customer follow-up can re-trigger auto-plan/auto-execute. This is not a
-  regression (pre-P5-04, the follow-up spawned a fresh open thread that
-  auto-planned anyway), but whether escalation should *suppress* further
-  autonomous action until a human clears the flag is its own call.
+- [x] Escalated threads suppress auto-execute. Because they now stay `open`, a
+  customer follow-up would otherwise re-trigger autonomous execution on a ticket
+  flagged for a human. `generateThreadPlan` gates auto-execute on
+  `!thread.escalated_at` (`requireOrgThread` now selects the field): the merchant
+  still gets the plan/notification, but the agent never auto-acts until the flag
+  is cleared. Clearing the flag (de-escalation) is a future action, not yet built.
 
 - **Related findings:** AUD-023.
 - **Files likely to change:** gateway/dashboard `escalateToHuman` sinks; `inbound-persistence.ts`; `/api/threads/route.ts`; inbox query/presentation types; Prisma schema and the active-thread unique index migration.

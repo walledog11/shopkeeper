@@ -120,6 +120,11 @@ export async function generateThreadPlan(
   });
   const settings = resolveAgentSettings(org?.settings as Partial<OrgSettings> | null);
 
+  // P5-04: an escalated ticket is flagged for a human. Keep planning and
+  // notifying the merchant, but never autonomously execute on it until the
+  // escalation flag is cleared — bias to escalation over confident wrong action.
+  const autoExecuteAllowed = allowAutoExecute && !thread.escalatedAt;
+
   const cached = readAgentPlanCache(thread.cachedPlan);
   if (isAgentPlanCacheHit({
     cache: cached,
@@ -137,7 +142,7 @@ export async function generateThreadPlan(
         stepCount: cached.plan.steps.length,
       });
     }
-    const autoExecution = allowAutoExecute
+    const autoExecution = autoExecuteAllowed
       ? await buildAutoExecutionResult(organizationId, threadId, settings)
       : {};
     return {
