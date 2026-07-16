@@ -7,10 +7,11 @@ import {
   type GmailSyncWorkerRegistrationOptions,
 } from './gmail-sync.js';
 import { createInboundWorker } from './inbound.js';
+import { createOperatorEventWorker } from './operator-event.js';
 import { createOrderReviewWorker } from './order-review.js';
 import { createOutboundEmailWorker } from './outbound-email.js';
 import type { GatewayWorkerResources, SharedGatewayWorkerOptions } from './resources.js';
-import type { OrderReviewJobData, OutboundEmailJobData } from '../types.js';
+import type { OperatorEventJobData, OrderReviewJobData, OutboundEmailJobData } from '../types.js';
 
 export interface CoreWorkerResources extends GatewayWorkerResources {
   messageWorker: Worker<InboundJobData>;
@@ -19,6 +20,7 @@ export interface CoreWorkerResources extends GatewayWorkerResources {
   orderReviewWorker: Worker<OrderReviewJobData>;
   outboundEmailWorker: Worker<OutboundEmailJobData>;
   gmailSyncWorker: Worker<GmailSyncJobData>;
+  operatorEventWorker: Worker<OperatorEventJobData>;
   inboundQueue: Queue<InboundJobData>;
 }
 
@@ -43,6 +45,7 @@ export function createCoreWorkerResources(
     redis: producerConn as GmailSyncWorkerRegistrationOptions['redis'],
     workerOptions,
   });
+  const operatorEventWorker = createOperatorEventWorker({ workerOptions });
 
   return {
     messageWorker,
@@ -51,6 +54,7 @@ export function createCoreWorkerResources(
     orderReviewWorker,
     outboundEmailWorker,
     gmailSyncWorker,
+    operatorEventWorker,
     inboundQueue,
     workers: [
       messageWorker,
@@ -58,6 +62,7 @@ export function createCoreWorkerResources(
       orderReviewWorker,
       outboundEmailWorker,
       gmailSyncWorker,
+      operatorEventWorker,
     ],
     queues: [aiSummaryQueue, inboundQueue],
     heartbeats: [],

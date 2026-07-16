@@ -1,4 +1,5 @@
-import type { DbChannelType } from '@shopkeeper/db';
+import { db, type DbChannelType } from '@shopkeeper/db';
+import { CHANNEL } from '../constants.js';
 import logger from '../logger.js';
 import { getGatewayDashboardUrl } from '../config/env.js';
 import { formatChannelLabel } from '../lib/channel-format.js';
@@ -97,45 +98,122 @@ async function notifyCriticalToAllOperators(
   }
 }
 
+export interface ConversationStage {
+  isFollowUp: boolean;
+  newMessages: number;
+}
+
+const FRESH_STAGE: ConversationStage = { isFollowUp: false, newMessages: 1 };
+
+// Fresh conversation vs. ongoing chain, from the thread's real history: any
+// message before the trailing run of customer texts means the merchant has seen
+// this conversation before; the trailing run itself is the unanswered burst.
+export async function getConversationStage(threadId: string): Promise<ConversationStage> {
+  const messages = await db.message.findMany({
+    where: { threadId, deletedAt: null, senderType: { in: ['customer', 'agent', 'ai'] } },
+    orderBy: [{ sentAt: 'asc' }, { id: 'asc' }],
+    select: { senderType: true },
+  });
+  let trailing = 0;
+  for (const message of messages) {
+    if (message.senderType === 'customer') trailing += 1;
+    else trailing = 0;
+  }
+  return {
+    isFollowUp: messages.length > trailing,
+    newMessages: Math.max(trailing, 1),
+  };
+}
+
+// In-sentence channel wording: "New Instagram DM from Jane", "Jane replied on Instagram".
+function channelNoun(channelType: DbChannelType): string {
+  if (channelType === CHANNEL.IG_DM) return 'Instagram DM';
+  if (channelType === CHANNEL.EMAIL) return 'email';
+  if (channelType === CHANNEL.TIKTOK) return 'TikTok message';
+  return `${formatChannelLabel(channelType)} message`;
+}
+
+function channelRepliedPhrase(channelType: DbChannelType): string {
+  if (channelType === CHANNEL.IG_DM) return 'on Instagram';
+  if (channelType === CHANNEL.EMAIL) return 'by email';
+  if (channelType === CHANNEL.TIKTOK) return 'on TikTok';
+  return `on ${formatChannelLabel(channelType)}`;
+}
+
+function lowerFirst(text: string): string {
+  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
+}
+
+function customerFirstName(customerName: string | null): string | null {
+  return customerName ? customerName.split(' ')[0] ?? null : null;
+}
+
+function formatHeaderLine(
+  customerName: string | null,
+  channelType: DbChannelType,
+  summary: string,
+  stage: ConversationStage,
+): string {
+  const firstName = customerFirstName(customerName);
+  let lead: string;
+  if (stage.isFollowUp) {
+    const who = firstName ?? 'The customer';
+    lead = stage.newMessages > 1
+      ? `${who} sent ${stage.newMessages} more messages ${channelRepliedPhrase(channelType)}`
+      : `${who} replied ${channelRepliedPhrase(channelType)}`;
+  } else {
+    const from = firstName ? ` from ${firstName}` : '';
+    const burst = stage.newMessages > 1 ? ` (${stage.newMessages} messages)` : '';
+    lead = `New ${channelNoun(channelType)}${from}${burst}`;
+  }
+  return `${lead} — ${lowerFirst(summary)}`;
+}
+
+function isSendStep(step: PlanStep): boolean {
+  return step.tool === 'send_reply' || step.tool === 'send_email';
+}
+
 export function formatOperatorPlanMessage(
   customerName: string | null,
   channelType: DbChannelType,
   summary: string,
   steps: PlanStep[],
-  options?: { threadId?: string; dashboardUrl?: string; rawToolCalls?: readonly { name: string; input?: unknown }[] },
+  options?: {
+    threadId?: string;
+    dashboardUrl?: string;
+    rawToolCalls?: readonly { name: string; input?: unknown }[];
+    stage?: ConversationStage;
+  },
 ): string {
-  const channel = formatChannelLabel(channelType);
+  const stage = options?.stage ?? FRESH_STAGE;
+  const firstName = customerFirstName(customerName);
   const actionableSteps = steps.filter((step) => step.category !== 'read');
-
-  const stepLines = actionableSteps.map((step, index) => {
-    if (step.tool === 'send_reply' || step.tool === 'send_email') {
-      const firstName = customerName ? customerName.split(' ')[0] : 'the customer';
-      return `${index + 1}. Email ${firstName}`;
-    }
-    const text = step.label || step.description;
-    return `${index + 1}. ${text}`;
-  });
 
   // The actual draft the merchant is approving, so approval is not sight-unseen.
   const draftBody = options?.rawToolCalls ? firstDraftExcerpt(options.rawToolCalls) : null;
 
-  const lines: (string | null)[] = [
-    `New ticket — ${channel}`,
-    customerName ? `From: ${customerName}` : null,
-    `"${summary}"`,
-    '',
-    `Plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
-    ...stepLines,
-    ...(draftBody ? ['', `Draft: "${draftBody}"`] : []),
-  ];
+  const lines: string[] = [formatHeaderLine(customerName, channelType, summary, stage)];
 
-  if (options?.threadId && options.dashboardUrl) {
-    lines.push('', `Open: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
+  if (actionableSteps.length === 1 && isSendStep(actionableSteps[0]!) && draftBody) {
+    lines.push('', "I'd reply:", `"${draftBody}"`);
+  } else if (actionableSteps.length > 0) {
+    const stepLines = actionableSteps.map((step, index) => {
+      if (step.tool === 'send_reply') return `${index + 1}. Reply to ${firstName ?? 'the customer'}`;
+      if (step.tool === 'send_email') return `${index + 1}. Email ${firstName ?? 'the customer'}`;
+      return `${index + 1}. ${step.label || step.description}`;
+    });
+    lines.push('', "Here's what I'd do:", ...stepLines);
+    if (draftBody) lines.push('', `The reply: "${draftBody}"`);
   }
 
-  lines.push('', 'Reply "yes" to send, or tell me what to change.');
+  if (options?.threadId && options.dashboardUrl) {
+    lines.push('', `Full thread: ${options.dashboardUrl}/dashboard/tickets/${options.threadId}`);
+  }
 
-  return lines.filter((line): line is string => line !== null).join('\n');
+  const replyOnly = actionableSteps.length > 0 && actionableSteps.every(isSendStep);
+  lines.push('', replyOnly ? 'Good to send?' : 'Sound good?');
+
+  return lines.join('\n');
 }
 
 // The tool-result a revise/answer control tool returns to the model after re-drafting
@@ -163,20 +241,23 @@ function formatAutoExecutionMessage(
   plan: AgentPlan,
   result: PrecomputedPlanResult,
 ): string {
-  const channel = formatChannelLabel(channelType);
+  const firstName = customerFirstName(customerName);
+  const noun = channelNoun(channelType);
+  // Neutral possessive header: by the time this fans out, the agent's own reply
+  // is already in the thread, so fresh-vs-follow-up detection would misread it.
+  const headline = firstName
+    ? `${firstName}'s ${noun} — ${lowerFirst(summary)}`
+    : `${noun.charAt(0).toUpperCase()}${noun.slice(1)} — ${lowerFirst(summary)}`;
   const actionableSteps = plan.steps.filter((step) => step.category !== 'read');
   const stepLines = actionableSteps.map((step, index) => `${index + 1}. ${step.description || step.label}`);
   const statusLine = result.autoExecutionStatus === 'error'
-    ? 'Auto-execution needs attention.'
-    : 'Auto-executed by the agent.';
+    ? 'I tried to handle this one myself but hit a problem:'
+    : 'Handled this one myself:';
 
   const lines: (string | null)[] = [
-    statusLine,
-    `Ticket — ${channel}`,
-    customerName ? `From: ${customerName}` : null,
-    `"${summary}"`,
+    headline,
     '',
-    `Completed plan (${actionableSteps.length} step${actionableSteps.length !== 1 ? 's' : ''}):`,
+    statusLine,
     ...stepLines,
     result.autoExecutionSummary ? '' : null,
     result.autoExecutionSummary ?? null,
@@ -264,20 +345,13 @@ function formatQuestionMessage(
   channelType: DbChannelType,
   summary: string,
   question: string,
+  stage: ConversationStage,
 ): string {
-  const channel = formatChannelLabel(channelType);
-
-  const lines: (string | null)[] = [
-    `Needs your input — ${channel}`,
-    customerName ? `From: ${customerName}` : null,
-    `"${summary}"`,
+  return [
+    formatHeaderLine(customerName, channelType, summary, stage),
     '',
-    question,
-    '',
-    'Reply here to answer and I’ll draft the response.',
-  ];
-
-  return lines.filter((line): line is string => line !== null).join('\n');
+    `${question} I'll draft the reply once I know.`,
+  ].join('\n');
 }
 
 // Soft sibling of sendOperatorPlanNotification: the agent needs one fact from the
@@ -300,7 +374,8 @@ export async function sendOperatorQuestionNotification(
   }
 
   const summary = aiSummary || instruction;
-  const message = formatQuestionMessage(customerName, channelType, summary, question);
+  const stage = await getConversationStage(threadId);
+  const message = formatQuestionMessage(customerName, channelType, summary, question, stage);
   const idempotencyKey = questionNotificationIdempotencyKey(organizationId, threadId, question);
 
   await notifyCriticalToAllOperators(
@@ -337,10 +412,12 @@ export async function sendOperatorPlanNotification(
   }
 
   const summary = aiSummary || instruction;
+  const stage = await getConversationStage(threadId);
   const message = formatOperatorPlanMessage(customerName, channelType, summary, plan.steps, {
     threadId,
     dashboardUrl: getGatewayDashboardUrl(),
     rawToolCalls: plan.rawToolCalls,
+    stage,
   });
   const idempotencyKey = planNotificationIdempotencyKey(
     organizationId,

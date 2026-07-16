@@ -132,6 +132,17 @@ export function isGmailNativeInboundEnabled(): boolean {
   return parseBooleanEnv('GMAIL_NATIVE_INBOUND', false);
 }
 
+// P4-03 rollout rail: when on, the channel's inbound operator messages are
+// persisted + enqueued before acknowledgement and processed by the operator-event
+// worker, instead of running the turn synchronously inside the webhook. Rolled
+// out per channel (Telegram first) with the synchronous path as the fallback.
+export function isOperatorDurableQueueEnabled(channel: 'telegram' | 'imessage'): boolean {
+  const flag = channel === 'telegram'
+    ? 'OPERATOR_DURABLE_QUEUE_TELEGRAM'
+    : 'OPERATOR_DURABLE_QUEUE_IMESSAGE';
+  return parseBooleanEnv(flag, false);
+}
+
 function readOptionalTrimmedEnv(name: string): string | null {
   const rawValue = process.env[name];
   if (typeof rawValue !== 'string') {

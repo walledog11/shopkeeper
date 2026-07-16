@@ -25,6 +25,8 @@ const {
   setMessageReactionSpy,
   executeOperatorAgentTurnSpy,
   refreshSkippedPlanTerminalSendSpy,
+  queueAddSpy,
+  queueGetJobSpy,
 } = vi.hoisted(() => ({
   mockLogger: {
     debug: vi.fn(),
@@ -48,6 +50,8 @@ const {
     _instruction: string,
     approvedToolCalls: Array<{ id: string; name: string; input?: unknown }>,
   ) => approvedToolCalls),
+  queueAddSpy: vi.fn().mockResolvedValue({ id: 'test-job-id' }),
+  queueGetJobSpy: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock('ioredis', () => ({
@@ -80,7 +84,8 @@ vi.mock('ioredis', () => ({
 
 vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.add = vi.fn().mockResolvedValue({ id: 'test-job-id' });
+    this.add = queueAddSpy;
+    this.getJob = queueGetJobSpy;
     this.close = vi.fn();
   }),
   Worker: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
@@ -124,6 +129,8 @@ export const telegramFixture = {
   sendChatActionSpy,
   sendMessageSpy,
   setMessageReactionSpy,
+  queueAddSpy,
+  queueGetJobSpy,
   get org() {
     return org;
   },
@@ -170,6 +177,8 @@ beforeEach(async () => {
   sendChatActionSpy.mockClear();
   setMessageReactionSpy.mockClear();
   executeOperatorAgentTurnSpy.mockClear();
+  queueAddSpy.mockClear().mockResolvedValue({ id: 'test-job-id' });
+  queueGetJobSpy.mockClear().mockResolvedValue(null);
   refreshSkippedPlanTerminalSendSpy.mockClear();
   refreshSkippedPlanTerminalSendSpy.mockImplementation(async (
     _organizationId: string,

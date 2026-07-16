@@ -110,3 +110,12 @@ export interface GmailSyncJobData {
   notifiedHistoryId: string;
   traceId: string;
 }
+
+// P4-03: one durable operator-channel message. The worker re-loads the
+// OperatorEvent row by id and reconstructs the reply/presence adapters from the
+// persisted channel/chatId/spaceId, so nothing request-scoped is carried here.
+export interface OperatorEventJobData {
+  operatorEventId: string;
+  organizationId: string;
+  traceId?: string;
+}

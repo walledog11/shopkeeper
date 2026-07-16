@@ -8,6 +8,7 @@ const DEFAULT_QUEUE_OPTIONS: Partial<Record<string, { defaultJobOptions: typeof 
   [QUEUE.ORDER_REVIEW]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.OUTBOUND_EMAIL]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
   [QUEUE.GMAIL_SYNC]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
+  [QUEUE.OPERATOR_EVENT]: { defaultJobOptions: PROCESSING_QUEUE_DEFAULTS },
 };
 
 const QUEUE_ALIASES: Record<string, string> = {
