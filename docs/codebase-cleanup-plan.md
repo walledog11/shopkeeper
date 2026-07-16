@@ -586,12 +586,27 @@ additive and deploy-safe.
 
 **Still required (staged):**
 
-- [ ] Backfill historical `pending` threads to `open` + `escalated_at`. It is a
-  separate, audited migration because a `pending` thread whose customer already
-  has an `open` thread would create two open threads and violate the
-  `threads_one_open_per_customer` (`WHERE status='open'`) unique index. Run
-  `npm run audit:escalation-backfill -- --strict` first; it lists collision
-  groups to resolve and exits non-zero while any remain.
+- [ ] Backfill historical `pending` threads to `open` + `escalated_at`. **Backfill
+  code is written and staged; the prod run remains.** `npm run backfill:escalation`
+  is dry-run by default and requires `--execute` to write; it flips live pending
+  threads (`deleted_at IS NULL AND archived_at IS NULL`) to `open` and stamps
+  `escalated_at = COALESCE(escalated_at, updated_at)`, and **refuses to write while
+  any collision exists** (re-checked inside the write transaction). A backfill is
+  a collision risk because flipping would create a second `status='open'` row for a
+  `(org, customer, channel)` group, violating the `threads_one_open_per_customer`
+  (`WHERE status='open'`) unique index. Collision detection is shared with the
+  audit via `scripts/escalation-backfill-lib.mjs`. **Correctness fix:** the
+  originally-shipped audit only flagged the open≥1 ∧ pending≥1 case; it missed the
+  **zero-open ∧ ≥2-pending** case (two split escalations for one customer —
+  reachable via exactly the pre-P5-04 split bug this column fixes), which also
+  violates the index. The shared classifier now flags any group where
+  `flipCount ≥ 1 ∧ existingOpen + flipCount ≥ 2` and counts existing opens matching
+  the index predicate literally (`status='open'`, no delete/archive filter). Run
+  `npm run audit:escalation-backfill -- --strict` first; it lists collision groups
+  to resolve and exits non-zero while any remain. The classifier is unit-tested
+  (`scripts/backfill-escalation.test.mjs`); the raw SQL aggregation is not
+  DB-exercised (pre-launch, no rows) — validate against a data copy before the
+  prod run.
 - [ ] Retire `pending` from the support-planner surface **with the eval gate**:
   the `update_thread_status` tool still offers `pending`
   (`registry/helpers.ts` `threadStatuses`) and the `escalate_to_human` tool

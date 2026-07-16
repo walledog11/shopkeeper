@@ -43,6 +43,7 @@
     "audit:plan-executions": "node ./scripts/audit-plan-execution-rollout.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "audit:escalation-backfill": "node ./scripts/audit-escalation-backfill.mjs",
+    "backfill:escalation": "node ./scripts/backfill-escalation.mjs",
     "verify:imessage:phase1-preflight": "node ./scripts/test-bootstrap.mjs && npm run test:integration -w apps/gateway -- --run src/routes/imessage/message-handler.test.ts src/routes/webhooks-meta-photon.test.ts src/operator-notify.test.ts src/operator-escalation.test.ts src/message-handlers/planning-notifications.test.ts && npm run test:integration -w apps/dashboard -- --run src/app/api/integrations/imessage/bind/route.test.ts",
     "verify:imessage:phase7": "npm run test:unit -w apps/dashboard -- --run src/lib/integrations/imessage-visibility.unit.test.ts src/lib/integrations/catalog.unit.test.ts src/app/\\(onboarding\\)/onboarding/_components/step-connect.unit.test.tsx && npm run test:integration -w apps/dashboard -- --run src/app/api/product-events/route.test.ts && npm run test:integration -w apps/gateway -- --run src/routes/imessage/binding.test.ts src/routes/imessage/message-handler.test.ts"
   },
