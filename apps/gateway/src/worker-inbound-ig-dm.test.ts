@@ -167,6 +167,58 @@ describe('Message worker — normalized ig_dm jobs', () => {
     expect(message.contentText).not.toContain('temporary.cdn.example');
   });
 
+  it('downloads supported Meta media into private blob storage', async () => {
+    const { job } = await activeJob('ig_media_sender', {
+      text: null,
+      attachments: [{
+        type: 'image',
+        url: 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=123',
+      }],
+    });
+    getMockFetch()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ name: 'Media Sender' }), {
+        status: 200,
+      }))
+      .mockResolvedValueOnce(new Response(Buffer.from('image bytes'), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      }));
+
+    const handler = getCapturedHandlers().get('inbound-messages');
+    await handler!(job);
+
+    const message = await db.message.findFirstOrThrow({ where: { organizationId: org.id } });
+    expect(message.contentText).toBe('[Instagram image attachment]');
+    expect(message.attachments).toHaveLength(1);
+    expect(message.attachments[0]).toMatch(
+      new RegExp(`^blob:attachments/${org.id}/[0-9a-f-]+/instagram-image.jpg$`),
+    );
+    expect(message.attachments[0]).not.toContain('lookaside.fbsbx.com');
+  });
+
+  it('keeps public Instagram share links without storing temporary provider URLs', async () => {
+    const { job } = await activeJob('ig_share_sender', {
+      text: null,
+      attachments: [
+        { type: 'share', url: 'https://www.instagram.com/p/example/' },
+        { type: 'reel', url: 'https://www.instagram.com/reel/example/' },
+        { type: 'story_mention', url: 'https://temporary.cdn.example/story' },
+      ],
+    });
+
+    const handler = getCapturedHandlers().get('inbound-messages');
+    await handler!(job);
+
+    const message = await db.message.findFirstOrThrow({ where: { organizationId: org.id } });
+    expect(message.contentText).toBe([
+      'Shared Instagram content: https://www.instagram.com/p/example/',
+      'Shared Instagram reel: https://www.instagram.com/reel/example/',
+      '[Instagram story mention]',
+    ].join('\n'));
+    expect(message.attachments).toEqual([]);
+    expect(message.contentText).not.toContain('temporary.cdn.example');
+  });
+
   it('does not let a delayed provider event move thread time or routing backwards', async () => {
     const integration = await createInstagramLoginIntegration();
     const handler = getCapturedHandlers().get('inbound-messages');

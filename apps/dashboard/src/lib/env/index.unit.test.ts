@@ -6,6 +6,7 @@ import {
   getInstagramOAuthAuthorizeConfig,
   getInstagramOAuthCallbackConfig,
   isGmailNativeInboundEnabled,
+  isInstagramIntegrationEnabledForOrg,
   validateDashboardEnv,
 } from './index';
 
@@ -173,6 +174,31 @@ describe('isGmailNativeInboundEnabled', () => {
   it('rejects invalid values', () => {
     vi.stubEnv('GMAIL_NATIVE_INBOUND', 'some-merchants');
     expect(() => isGmailNativeInboundEnabled()).toThrow(/GMAIL_NATIVE_INBOUND/);
+  });
+});
+
+describe('isInstagramIntegrationEnabledForOrg', () => {
+  it('is disabled by default in production', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', '');
+    expect(isInstagramIntegrationEnabledForOrg('org_beta')).toBe(false);
+  });
+
+  it('supports a global enable and an optional Clerk organization allowlist', () => {
+    vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', 'true');
+    expect(isInstagramIntegrationEnabledForOrg('org_any')).toBe(true);
+
+    vi.stubEnv('INSTAGRAM_BETA_ORG_IDS', 'org_beta, org_second');
+    expect(isInstagramIntegrationEnabledForOrg('org_beta')).toBe(true);
+    expect(isInstagramIntegrationEnabledForOrg('org_other')).toBe(false);
+    expect(isInstagramIntegrationEnabledForOrg(null)).toBe(false);
+  });
+
+  it('rejects an invalid global flag value', () => {
+    vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', 'beta');
+    expect(() => isInstagramIntegrationEnabledForOrg('org_beta')).toThrow(
+      /INSTAGRAM_INTEGRATION_ENABLED/,
+    );
   });
 });
 

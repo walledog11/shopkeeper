@@ -4,6 +4,7 @@ import type { Integration } from "@/types"
 import {
   deriveIntegrationHealth,
   getEmailReceivingDisplay,
+  getInstagramConnectionDisplay,
 } from "./integration-card-helpers"
 
 function gmailIntegration(metadata: Record<string, unknown>): Integration {
@@ -31,7 +32,12 @@ function instagramIntegration(
     fromEmail: "merchant",
     tokenExpiresAt: new Date(Date.now() + 30 * 86_400_000).toISOString(),
     metadata: {
-      instagram: { authModel: "instagram_login", healthStatus, lastHealthError },
+      instagram: {
+        authModel: "instagram_login",
+        healthStatus,
+        lastHealthError,
+        subscribedFields: ["messages"],
+      },
     },
     createdAt: new Date().toISOString(),
   }
@@ -71,6 +77,43 @@ describe("Instagram integration health", () => {
       state: "working",
       note: null,
       canFix: false,
+    })
+  })
+
+  it("shows token and DM subscription health separately", () => {
+    const integration = instagramIntegration("healthy")
+    integration.tokenExpiresAt = "2026-08-14T00:00:00.000Z"
+
+    expect(getInstagramConnectionDisplay(
+      integration,
+      new Date("2026-07-15T00:00:00.000Z").getTime(),
+    )).toEqual({
+      token: {
+        action: "Valid",
+        description: "Long-lived access token valid until 2026-08-14",
+      },
+      subscription: {
+        action: "Active",
+        description: "Instagram is subscribed to new Direct Messages",
+      },
+    })
+  })
+
+  it("distinguishes an expired token from a missing messages subscription", () => {
+    const expired = instagramIntegration("reconnect_required", {
+      category: "authentication",
+      code: 190,
+    })
+    expired.tokenExpiresAt = "1970-01-01T00:00:00.000Z"
+    expect(getInstagramConnectionDisplay(expired).token.action).toBe("Reconnect")
+
+    const missingSubscription = instagramIntegration("reconnect_required", {
+      category: "permission",
+      code: "messages_subscription_missing",
+    })
+    expect(getInstagramConnectionDisplay(missingSubscription).subscription).toEqual({
+      action: "Missing",
+      description: "Reconnect Instagram to restore DM delivery",
     })
   })
 })

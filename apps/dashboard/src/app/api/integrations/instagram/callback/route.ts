@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import logger from '@/lib/server/logger';
 import { getInstagramOAuthCallbackConfig } from '@/lib/env';
@@ -44,6 +45,10 @@ type InstagramOAuthError =
   | 'token_exchange_failed'
   | 'webhook_subscription_failed';
 
+function fingerprint(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 12);
+}
+
 function providerFailureCategory(error: InstagramProviderError): AnalyticsFailureCategory {
   if (error.category === 'rate_limit') return 'rate_limited';
   if (error.category === 'transient_provider_failure') return 'provider_unavailable';
@@ -57,6 +62,7 @@ function logProviderError(step: string, error: InstagramProviderError): void {
       category: error.category,
       code: error.code,
       httpStatus: error.httpStatus,
+      providerMessage: error.message.slice(0, 500),
       requestId: error.requestId,
       step,
       subcode: error.subcode,
@@ -92,6 +98,20 @@ async function bestEffortUnsubscribe(input: {
 }
 
 export async function GET(request: Request) {
+  const oauthConfig = getInstagramOAuthCallbackConfig();
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+
+  logger.info(
+    {
+      callbackUrl: `${url.origin}${url.pathname}`,
+      codeFingerprint: code ? fingerprint(code) : null,
+      configuredRedirectUri: oauthConfig?.redirectUri ?? null,
+      redirectUriFingerprint: oauthConfig ? fingerprint(oauthConfig.redirectUri) : null,
+    },
+    '[IG OAuth] Authorization callback received',
+  );
+
   return createPostRedirectResponse(request, 'Finish Instagram connection');
 }
 
@@ -106,6 +126,18 @@ export async function POST(request: Request) {
   const code = searchParams.get('code');
   const state = searchParams.get('state');
   const providerError = searchParams.get('error');
+
+  logger.info(
+    {
+      appIdFingerprint: fingerprint(appId),
+      appSecretFingerprint: fingerprint(appSecret),
+      callbackUrl: `${new URL(request.url).origin}${new URL(request.url).pathname}`,
+      codeFingerprint: code ? fingerprint(code) : null,
+      redirectUri,
+      redirectUriFingerprint: fingerprint(redirectUri),
+    },
+    '[IG OAuth] Token exchange prepared',
+  );
 
   const callbackSession = await validateOAuthCallbackSession({
     appUrl,

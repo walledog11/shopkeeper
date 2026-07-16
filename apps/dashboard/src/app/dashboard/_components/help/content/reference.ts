@@ -71,7 +71,7 @@ export const reference: Category = {
         },
         {
           heading: "Instagram DMs",
-          text: "Direct Messages sent to your Instagram Business account appear as tickets. Replies are delivered back as Instagram DMs.",
+          text: "Direct Messages sent to your Instagram Professional account appear as tickets. Replies are delivered back as Instagram DMs within Instagram's 24-hour reply window.",
         },
         {
           heading: "Coming soon",

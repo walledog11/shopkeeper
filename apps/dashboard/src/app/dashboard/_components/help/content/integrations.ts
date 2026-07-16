@@ -45,14 +45,14 @@ export const integrations: Category = {
       title: "Connecting Instagram DMs",
       body: [
         {
-          text: "Connect your Instagram Business account to receive Direct Messages as tickets in Shopkeeper.",
+          text: "Connect your Instagram Professional account to receive Direct Messages as tickets in Shopkeeper.",
         },
         {
           heading: "Requirements",
           steps: [
-            "An Instagram Business account (not a personal account).",
-            "The Instagram account must be linked to a Facebook Page.",
-            "You must be an admin of that Facebook Page.",
+            "An Instagram Professional account in Business or Creator mode.",
+            "Access to sign in to that Instagram account and approve messaging permissions.",
+            "A separate Instagram account for testing customer DMs is recommended.",
           ],
         },
         {
@@ -60,16 +60,16 @@ export const integrations: Category = {
           steps: [
             "Go to the Integrations page.",
             "Click Connect on the Instagram card.",
-            "You'll be redirected to Facebook to authorise Shopkeeper.",
-            "Select the Facebook Page linked to your Instagram account.",
+            "You'll be redirected to Instagram to authorize Shopkeeper.",
+            "Sign in to the Professional account you want to connect.",
             "Grant the requested permissions and confirm.",
             "You'll be redirected back to Shopkeeper — a green Connected badge will appear.",
           ],
         },
         {
           tips: [
-            "If you see a 'No Instagram Business account found' error, make sure your Instagram account is set to Business (not Creator or Personal) and is linked to your Facebook Page.",
-            "Classic Page admin access is required — Business Portfolio access alone is not sufficient.",
+            "Personal Instagram accounts cannot connect; switch the account to Business or Creator mode first.",
+            "Customers must message your account first. Shopkeeper can reply for 24 hours after the customer's latest message.",
           ],
         },
       ],
@@ -140,7 +140,7 @@ export const integrations: Category = {
         },
         {
           tips: [
-            "Instagram tokens can expire if you change your Facebook password or revoke app permissions. Reconnecting always fixes this.",
+            "Instagram tokens can expire or be revoked from Instagram's app permissions. Reconnect when the integration card asks you to renew access.",
             "For email, check that your forwarding rule is still active in Gmail settings.",
           ],
         },

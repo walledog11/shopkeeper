@@ -40,6 +40,7 @@ const CONTRACTS = {
       'GMAIL_NATIVE_INBOUND',
       'GMAIL_PUBSUB_TOPIC',
       'IMESSAGE_LINE_HANDLE',
+      'INSTAGRAM_INTEGRATION_ENABLED',
     ],
     absoluteUrlVars: [
       'APP_URL',
@@ -254,6 +255,21 @@ export function validateProductionEnv(target, options = {}) {
     && gmailNativeInbound !== 'false'
   ) {
     errors.push('GMAIL_NATIVE_INBOUND must be either true or false');
+  }
+  const instagramIntegrationEnabled = readEnv(env, 'INSTAGRAM_INTEGRATION_ENABLED');
+  if (
+    instagramIntegrationEnabled
+    && instagramIntegrationEnabled !== 'true'
+    && instagramIntegrationEnabled !== 'false'
+  ) {
+    errors.push('INSTAGRAM_INTEGRATION_ENABLED must be either true or false');
+  }
+  if (target === 'dashboard' && instagramIntegrationEnabled === 'true') {
+    for (const name of ['INSTAGRAM_APP_ID', 'INSTAGRAM_APP_SECRET']) {
+      if (!readEnv(env, name)) {
+        errors.push(`${name} is required when INSTAGRAM_INTEGRATION_ENABLED=true`);
+      }
+    }
   }
   const posthogHost = normalizedUrls.POSTHOG_HOST;
   if (productAnalyticsEnabled === 'true' && posthogHost) {

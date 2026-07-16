@@ -72,11 +72,13 @@ export default function IntegrationsPageClient({
   telegramBotUsername,
   imessageHandle,
   gmailNativeInboundEnabled,
+  instagramIntegrationEnabled,
   tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
+  instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
 }) {
   return (
@@ -85,6 +87,7 @@ export default function IntegrationsPageClient({
         telegramBotUsername={telegramBotUsername}
         imessageHandle={imessageHandle}
         gmailNativeInboundEnabled={gmailNativeInboundEnabled}
+        instagramIntegrationEnabled={instagramIntegrationEnabled}
         tiktokShopConfigured={tiktokShopConfigured}
       />
     </Suspense>
@@ -95,11 +98,13 @@ function IntegrationsPageContent({
   telegramBotUsername,
   imessageHandle,
   gmailNativeInboundEnabled,
+  instagramIntegrationEnabled,
   tiktokShopConfigured,
 }: {
   telegramBotUsername: string | null
   imessageHandle: string | null
   gmailNativeInboundEnabled: boolean
+  instagramIntegrationEnabled: boolean
   tiktokShopConfigured: boolean
 }) {
   const searchParams = useSearchParams()
@@ -264,16 +269,27 @@ function IntegrationsPageContent({
     [telegramBotUsername, telegramStatus?.botUsername],
   )
   const runtimePlatformConfig = useMemo(
-    () => PLATFORM_CONFIG.map(def => def.id === 'tiktok-shop'
-      ? {
+    () => PLATFORM_CONFIG.map(def => {
+      if (def.id === 'instagram') {
+        return {
+          ...def,
+          connectDisabled: !instagramIntegrationEnabled,
+          description: instagramIntegrationEnabled
+            ? def.description
+            : 'Instagram DM connections are currently limited to the private beta.',
+        }
+      }
+      return def.id === 'tiktok-shop'
+        ? {
           ...def,
           comingSoon: !tiktokShopConfigured,
           description: tiktokShopConfigured
             ? def.description
             : 'TikTok Shop buyer messaging is in beta. Configure Partner Center credentials to enable OAuth.',
-        }
-      : def),
-    [tiktokShopConfigured],
+          }
+        : def
+    }),
+    [instagramIntegrationEnabled, tiktokShopConfigured],
   )
   const visiblePlatformConfig = useMemo(
     () => filterOperatorPlatformConfigs(runtimePlatformConfig, {

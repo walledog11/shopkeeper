@@ -60,6 +60,73 @@ function getInstagramHealth(integration: Integration): {
   return { errorCategory, errorCode, status }
 }
 
+export interface InstagramConnectionDisplay {
+  subscription: { action: string; description: string }
+  token: { action: string; description: string }
+}
+
+export function getInstagramConnectionDisplay(
+  integration: Integration,
+  now = Date.now(),
+): InstagramConnectionDisplay {
+  const health = getInstagramHealth(integration)
+  const instagram = isRecord(integration.metadata) && isRecord(integration.metadata.instagram)
+    ? integration.metadata.instagram
+    : {}
+  const subscribedFields = Array.isArray(instagram.subscribedFields)
+    ? instagram.subscribedFields.filter((field): field is string => typeof field === "string")
+    : []
+  const messagesActive = subscribedFields.includes("messages")
+  const expiresAt = integration.tokenExpiresAt
+    ? new Date(integration.tokenExpiresAt).getTime()
+    : Number.NaN
+  const tokenExpired = Number.isFinite(expiresAt) && expiresAt <= now
+  const tokenReconnectRequired = tokenExpired
+    || (health.status === "reconnect_required" && health.errorCategory === "authentication")
+
+  const token = tokenReconnectRequired
+    ? {
+        action: "Reconnect",
+        description: "Instagram access expired or was revoked",
+      }
+    : health.status === "degraded"
+      ? {
+          action: "Check pending",
+          description: "The latest token check was inconclusive; Shopkeeper will retry",
+        }
+      : Number.isFinite(expiresAt)
+        ? {
+            action: "Valid",
+            description: `Long-lived access token valid until ${new Date(expiresAt).toISOString().slice(0, 10)}`,
+          }
+        : {
+            action: "Unconfirmed",
+            description: "Instagram did not provide a usable token expiry",
+          }
+
+  const subscription = health.errorCode === "messages_subscription_missing"
+    ? {
+        action: "Missing",
+        description: "Reconnect Instagram to restore DM delivery",
+      }
+    : messagesActive
+      ? health.status === "degraded"
+        ? {
+            action: "Last confirmed",
+            description: "DM delivery was active at the last successful subscription check",
+          }
+        : {
+            action: "Active",
+            description: "Instagram is subscribed to new Direct Messages",
+          }
+      : {
+          action: "Unconfirmed",
+          description: "The messages subscription has not been confirmed",
+        }
+
+  return { subscription, token }
+}
+
 export function hasIntegrationTokenAlert(integration: Integration) {
   if (integration.platform === "shopify") {
     return resolveShopifyConnectionState(integration) === "invalid"

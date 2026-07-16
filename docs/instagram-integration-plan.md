@@ -381,12 +381,14 @@ must fail loudly if duplicate rows somehow bypass the database constraints.
 
 ## 8. Phase 5 — Inbound Worker and Durable Message Data
 
-**Status: In progress (2026-07-14).** The worker consumes normalized jobs, revalidates the exact
+**Status: Complete (2026-07-15).** The worker consumes normalized jobs, revalidates the exact
 integration/account/workspace tuple, uses the Instagram Login profile client as optional
-enrichment, omits temporary profile and binary attachment URLs, persists provider timestamps and
-integration routing, preserves idempotency, and prevents delayed events from moving thread state
-backward. Secure binary media download/private blob storage remains; supported binary attachments
-currently produce durable visible placeholders instead of storing provider URLs.
+enrichment, omits temporary profile URLs, persists provider timestamps and integration routing,
+preserves idempotency, and prevents delayed events from moving thread state backward. Supported
+binary media is downloaded only from allowlisted Meta HTTPS hosts with redirect revalidation,
+timeout, content-type, and size limits, then stored privately as a workspace-scoped managed blob.
+Shared Instagram links remain links and unsupported or failed media remains visible as a durable
+placeholder without persisting the temporary provider URL.
 
 Rewrite `handleIgDmJob` to consume the normalized job instead of reparsing the full webhook.
 
@@ -548,6 +550,13 @@ best-effort additional cleanup after unsubscribe and cover it with a contract te
 
 ## 12. Phase 9 — UI, Copy, Analytics, and Documentation
 
+**Status: Complete (2026-07-15).** Integration and help copy now describes Instagram Professional
+accounts and direct Instagram Login, OAuth failures have specific user-facing messages, token and
+DM-subscription health are displayed separately, onboarding and repository documentation no longer
+present the Facebook Page-token model as current, and production validation covers a server-enforced
+global/workspace rollout gate. The runbook intentionally retains the "Deferred After V1" heading
+until the real Standard Access acceptance pass succeeds.
+
 Update all user-facing copy to match the new model:
 
 - Say **Instagram Professional account**, not only Business account.
@@ -692,7 +701,8 @@ approval SLA. Treat Advanced Access as an external launch gate.
 
 1. Merge code behind an Instagram integration feature flag.
 2. Deploy new environment variables to dashboard and gateway.
-3. Apply the uniqueness/migration changes after auditing legacy duplicates.
+3. Run `npm run audit:instagram-rollout -- --strict` against production, resolve any reported
+   legacy/duplicate rows, then apply the uniqueness/migration changes.
 4. Deploy gateway webhook handling and clients.
 5. Deploy dashboard OAuth, UI, dispatch, token health, and disconnect changes.
 6. Run the Standard Access acceptance test in production-like infrastructure.

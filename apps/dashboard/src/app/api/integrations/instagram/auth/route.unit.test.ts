@@ -16,6 +16,7 @@ describe('POST /api/integrations/instagram/auth', () => {
   beforeEach(() => {
     vi.stubEnv('APP_URL', 'https://dashboard.example.com');
     vi.stubEnv('INSTAGRAM_APP_ID', 'instagram-app-id');
+    vi.stubEnv('INSTAGRAM_INTEGRATION_ENABLED', 'true');
     requireSession.mockResolvedValue({ orgId: 'org_123', userId: 'user_123' });
     createSessionCookies.mockResolvedValue({ state: 'state_123', returnTo: null });
   });
@@ -68,6 +69,16 @@ describe('POST /api/integrations/instagram/auth', () => {
     const response = await POST(new Request('http://localhost', { method: 'POST' }));
 
     expect(response.status).toBe(500);
+    expect(createSessionCookies).not.toHaveBeenCalled();
+  });
+
+  it('blocks workspaces outside the Instagram rollout cohort', async () => {
+    vi.stubEnv('INSTAGRAM_BETA_ORG_IDS', 'org_beta');
+
+    const response = await POST(new Request('http://localhost', { method: 'POST' }));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({ error: 'instagram_not_available' });
     expect(createSessionCookies).not.toHaveBeenCalled();
   });
 });

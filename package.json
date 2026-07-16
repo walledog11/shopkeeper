@@ -39,6 +39,7 @@
     "verify:production:env": "node ./scripts/check-production-env.mjs all",
     "verify:production": "node ./scripts/verify-production.mjs",
     "verify:production:alerts": "node ./scripts/verify-production-alerts.mjs",
+    "audit:instagram-rollout": "node ./scripts/audit-instagram-rollout.mjs",
     "audit:plan-executions": "node ./scripts/audit-plan-execution-rollout.mjs",
     "audit:refund-spend-reservations": "node ./scripts/audit-refund-spend-reservations.mjs",
     "verify:imessage:phase1-preflight": "node ./scripts/test-bootstrap.mjs && npm run test:integration -w apps/gateway -- --run src/routes/imessage/message-handler.test.ts src/routes/webhooks-meta-photon.test.ts src/operator-notify.test.ts src/operator-escalation.test.ts src/message-handlers/planning-notifications.test.ts && npm run test:integration -w apps/dashboard -- --run src/app/api/integrations/imessage/bind/route.test.ts",

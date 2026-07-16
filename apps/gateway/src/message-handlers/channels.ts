@@ -2,6 +2,10 @@ import type { Job, Queue } from 'bullmq';
 import { db } from '@shopkeeper/db';
 import { shopifyRestJson } from '@shopkeeper/agent/shopify';
 import { fetchInstagramMessagingUserProfile } from '../clients/instagram-graph.js';
+import {
+  downloadInstagramAttachment,
+  isSupportedInstagramBinaryAttachment,
+} from '../clients/instagram-media.js';
 import { normalizeTikTokShopWebhookPayload } from '../clients/tiktok-shop.js';
 import logger from '../logger.js';
 import { CHANNEL, STATUS } from '../constants.js';
@@ -91,9 +95,19 @@ function formatInstagramMessage(
       parts.push('[Instagram message deleted]');
       continue;
     }
-    if (attachment.type === 'share') {
+    if (
+      attachment.type === 'share'
+      || attachment.type === 'story_mention'
+      || attachment.type === 'ig_reel'
+      || attachment.type === 'reel'
+    ) {
       const shareUrl = publicInstagramShareUrl(attachment.url);
-      parts.push(shareUrl ? `Shared Instagram content: ${shareUrl}` : '[Shared Instagram content]');
+      const label = attachment.type === 'story_mention'
+        ? 'Instagram story mention'
+        : attachment.type === 'share'
+          ? 'Shared Instagram content'
+          : 'Shared Instagram reel';
+      parts.push(shareUrl ? `${label}: ${shareUrl}` : `[${label}]`);
       continue;
     }
     if (attachment.type === 'unsupported') {
@@ -103,6 +117,32 @@ function formatInstagramMessage(
     parts.push(`[Instagram ${attachment.type} attachment]`);
   }
   return parts.join('\n') || '[Unsupported Instagram message]';
+}
+
+const MAX_STORED_INSTAGRAM_ATTACHMENTS = 5;
+
+async function persistInstagramBinaryAttachments(
+  organizationId: string,
+  attachments: InstagramInboundAttachment[],
+): Promise<string[]> {
+  const refs: string[] = [];
+  let attemptedDownloads = 0;
+  for (const attachment of attachments) {
+    if (!isSupportedInstagramBinaryAttachment(attachment.type)) continue;
+    if (attemptedDownloads >= MAX_STORED_INSTAGRAM_ATTACHMENTS) break;
+    attemptedDownloads += 1;
+
+    const downloaded = await downloadInstagramAttachment(attachment);
+    if (!downloaded) continue;
+    const ref = await uploadInboundAttachment(
+      organizationId,
+      downloaded.filename,
+      downloaded.contentType,
+      downloaded.base64Content,
+    );
+    if (ref) refs.push(ref);
+  }
+  return refs;
 }
 
 export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Queue): Promise<void> {
@@ -163,6 +203,11 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
       );
     }
 
+    const storedAttachments = await persistInstagramBinaryAttachments(
+      organizationId,
+      attachments,
+    );
+
     await processInboundMessage(
       organizationId,
       senderIgsid,
@@ -173,6 +218,7 @@ export async function handleIgDmJob(job: Job<InboundJobData>, aiSummaryQueue: Qu
         customerName,
         externalMessageId,
         integrationId,
+        attachments: storedAttachments,
         receivedAt: sentAt,
         traceId,
         isRealCustomerMessage: true,
