@@ -9,7 +9,7 @@ vi.mock("@/components/integrations/EmailForwardingDisclosure", () => ({
 }))
 
 describe("StepEmail", () => {
-  it("puts Gmail first and marks social channels as coming soon", () => {
+  it("puts Gmail first and points to additional integrations", () => {
     const html = renderToStaticMarkup(createElement(StepEmail, {
       data: DEFAULT_DATA,
       update: vi.fn(),
@@ -28,8 +28,8 @@ describe("StepEmail", () => {
     expect(html).toContain("Connect Gmail")
     expect(html).toContain("Forward another inbox")
     expect(html).toContain("Instagram")
-    expect(html).toContain("TikTok")
-    expect(html).toContain("coming soon")
+    expect(html).toContain("other channels")
+    expect(html).toContain("Integrations")
     expect(html).not.toContain("Forwarding panel")
   })
 

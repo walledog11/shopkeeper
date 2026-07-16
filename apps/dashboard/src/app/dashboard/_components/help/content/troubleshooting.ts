@@ -49,11 +49,11 @@ export const troubleshooting: Category = {
       title: "Instagram connection issues",
       body: [
         {
-          heading: "'No Instagram Business account found' error",
+          heading: "Instagram account is not eligible",
           steps: [
-            "Make sure your Instagram account is set to Business mode (Instagram Settings → Account → Switch to Professional Account → Business).",
-            "Confirm your Instagram Business account is linked to a Facebook Page (not just a Business Portfolio).",
-            "Ensure you have classic Page admin access on that Facebook Page.",
+            "Make sure the account is in Instagram Professional mode: Business or Creator.",
+            "Confirm you signed in to the intended Instagram account and granted both requested permissions.",
+            "If the account belongs to another Shopkeeper workspace, disconnect it there before trying again.",
             "Try disconnecting and reconnecting from the Integrations page.",
           ],
         },
@@ -62,7 +62,7 @@ export const troubleshooting: Category = {
           steps: [
             "Instagram only forwards new DMs after the connection is made — historical messages will not appear.",
             "Make sure the customer messaged your connected Instagram account directly (not a comment).",
-            "Try reconnecting the integration — the token may have expired.",
+            "Check the Integrations page for a reconnect warning or degraded subscription status.",
           ],
         },
       ],

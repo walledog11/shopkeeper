@@ -8,12 +8,12 @@ export function InstagramConnectBody({ isConnected }: { isConnected: boolean }) 
       {!isConnected && (
         <div className="space-y-2">
           <p className="text-xs text-foreground/40 leading-relaxed">
-            Connect your Instagram Business account to manage DMs alongside every other channel.
+            Connect an Instagram Professional account to manage customer DMs in Shopkeeper.
           </p>
           <ol className="text-xs text-foreground/30 space-y-1 list-decimal list-inside leading-relaxed">
-            <li>Make sure your Instagram is linked to a Facebook Business Page</li>
-            <li>Click Connect below and authorize Shopkeeper via Meta OAuth</li>
-            <li>DMs will start appearing as tickets immediately</li>
+            <li>Use a Business or Creator account; personal accounts cannot connect</li>
+            <li>Authorize Shopkeeper directly with your Instagram sign-in</li>
+            <li>Customers must message you first; replies are available for 24 hours</li>
           </ol>
         </div>
       )}

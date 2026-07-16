@@ -1,11 +1,20 @@
+import { createHash } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createPostRedirectResponse } from '@/lib/server/post-redirect-response';
-import { getInstagramOAuthAuthorizeConfig } from '@/lib/env';
+import logger from '@/lib/server/logger';
+import {
+  getInstagramOAuthAuthorizeConfig,
+  isInstagramIntegrationEnabledForOrg,
+} from '@/lib/env';
 import { buildInstagramAuthorizationUrl } from '@/lib/integrations/instagram-api-client';
 import {
   createOAuthSessionCookies,
   requireAuthenticatedOAuthSession,
 } from '@/app/api/integrations/_lib/oauth-session';
+
+function fingerprint(value: string): string {
+  return createHash('sha256').update(value).digest('hex').slice(0, 12);
+}
 
 export async function GET(request: Request) {
   return createPostRedirectResponse(request, 'Connect Instagram');
@@ -15,6 +24,9 @@ export async function POST(request: Request) {
   const session = await requireAuthenticatedOAuthSession();
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!isInstagramIntegrationEnabledForOrg(session.orgId)) {
+    return NextResponse.json({ error: 'instagram_not_available' }, { status: 403 });
   }
 
   const oauthConfig = getInstagramOAuthAuthorizeConfig();
@@ -33,6 +45,15 @@ export async function POST(request: Request) {
     state,
     forceReauth: true,
   });
+
+  logger.info(
+    {
+      appIdFingerprint: fingerprint(oauthConfig.appId),
+      redirectUri: oauthConfig.redirectUri,
+      redirectUriFingerprint: fingerprint(oauthConfig.redirectUri),
+    },
+    '[IG OAuth] Authorization request prepared',
+  );
 
   // This route is submitted by the popup shell as POST. A 303 is required so
   // the browser follows the provider redirect with GET instead of preserving

@@ -54,7 +54,7 @@ Run `nvm use` from the repository root to select the version declared in `.nvmrc
 
 ## Channels
 - **Email** — complete. **Hybrid model**: inbound rail and outbound provider are separate concerns. *Inbound* (customer mail → ticket) uses Postmark forwarding (`{orgId}@inbound.<domain>` → `POST /webhooks/email/inbound` → `process-email` job) plus controlled-rollout native Gmail Pub/Sub/history sync behind `GMAIL_NATIVE_INBOUND`. *Outbound* (replies) is per-integration from `Integration.metadata.provider` — Gmail API or Postmark fallback — with reply threading, quote stripping, and an AI spam filter on new senders. A daily `email-token-health` cron probes Gmail refresh tokens and flags "Reconnect" in Integrations on failure.
-- **Instagram DM** — complete (OAuth, inbound webhooks, outbound via page access token, daily token health cron, integrations UI)
+- **Instagram DM** — Instagram Login OAuth, isolated inbound webhooks, private media storage, exact-account replies, and token health are implemented; real Standard Access acceptance and Advanced Access approval remain launch gates
 - **Telegram** — complete (operator-only, single Shopkeeper bot, inbound via `/webhooks/telegram`, outbound plan notifications to bound org members, yes/no/skip plan approval via reply)
 - **iMessage** — complete (operator-only, platform-wide Photon Spectrum line, merchant binds iPhone via connect code in Integrations, inbound via `/webhooks/photon`, outbound plan notifications with dashboard deep links, yes/no/skip approval via reply)
 - **Shopify** — complete (OAuth custom app, webhook ingestion for orders/created/fulfilled/updated/cancelled, HMAC verification, KB sync, Orders + Customers dashboard views)
@@ -247,10 +247,11 @@ Required for launch-scope features:
 - `SHOPIFY_CLIENT_ID`, `SHOPIFY_CLIENT_SECRET`, `SHOPIFY_APP_SECRET` — Shopify OAuth and webhook verification
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `PRICE_ID_STARTER`, `PRICE_ID_PRO` — Stripe billing
 - `CLERK_WEBHOOK_SECRET` — Clerk lifecycle webhook signing secret for `/api/webhooks/clerk`
-- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for authenticated attachment download proxy
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for private inbound email and Instagram attachment storage and authenticated downloads
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail OAuth and token refresh
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
 - `GMAIL_NATIVE_INBOUND` — explicit controlled rollout flag (`false` until enabled); must match the gateway
+- `INSTAGRAM_INTEGRATION_ENABLED` — explicit production rollout switch; keep `false` until the intended test cohort is ready
 
 Optional dashboard variables:
 - `NEXT_PUBLIC_APP_URL` — public app URL; if set in production, it must match `APP_URL`
@@ -258,6 +259,7 @@ Optional dashboard variables:
 - `INTERNAL_API_SECRET_PREV` — previous internal secret during zero-downtime rotation
 - `OPENAI_API_KEY` — OpenAI-backed embeddings or drafts when those paths are enabled
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` — Instagram Login OAuth
+- `INSTAGRAM_BETA_ORG_IDS` — optional comma-separated Clerk organization IDs allowed to connect while the switch is enabled; empty enables every workspace
 - `INSTAGRAM_WEBHOOK_APP_SECRET` — parent Meta app signing secret, only needed when using the local dashboard webhook proxy
 - `TELEGRAM_BOT_USERNAME` — operator-channel deep link in the dashboard
 - `IMESSAGE_LINE_HANDLE` — platform iMessage handle merchants text to bind (dashboard); enables Integrations + onboarding connect UX
@@ -275,7 +277,7 @@ Required at production boot:
 
 Required for launch-scope features:
 - `SHOPIFY_APP_SECRET` — Shopify HMAC webhook verification secret
-- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for inbound email attachment upload
+- `BLOB_READ_WRITE_TOKEN` — Vercel Blob token for private inbound email and Instagram attachment upload
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — Gmail token refresh
 - `GMAIL_PUBSUB_TOPIC` — fully qualified Gmail notification topic
 - `GMAIL_PUBSUB_AUDIENCE` — expected Pub/Sub OIDC token audience

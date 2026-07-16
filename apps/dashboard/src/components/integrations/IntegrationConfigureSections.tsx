@@ -5,7 +5,9 @@ import { getEmailAuthReauthorizationReason } from "@shopkeeper/email/providers"
 import {
   BookOpen,
   Check,
+  KeyRound,
   Mail,
+  Radio,
   RefreshCw,
   Trash2,
 } from "lucide-react"
@@ -18,7 +20,10 @@ import { EmailForwardingSetupPanel } from "./EmailForwardingDisclosure"
 import { GmailSupportAddressPanel } from "./GmailSupportAddressPanel"
 import { PermissionActionLink, PermissionRow } from "./PermissionRow"
 import { ShopifyPermissionRows } from "./ShopifyPermissionsPanel"
-import { getEmailReceivingDisplay } from "./integration-card-helpers"
+import {
+  getEmailReceivingDisplay,
+  getInstagramConnectionDisplay,
+} from "./integration-card-helpers"
 
 const DISCONNECT_NOTES: Record<ConnectType, string> = {
   email: "Your past tickets stay. New customer emails will stop arriving.",
@@ -48,6 +53,9 @@ export function IntegrationPermissionsSection({
   const gmailReadScopeMissing = config.emailProvider === "gmail"
     && integration
     && getEmailAuthReauthorizationReason(integration) === "missing_gmail_read_scope"
+  const instagramConnection = connectType === "ig" && integration
+    ? getInstagramConnectionDisplay(integration)
+    : null
 
   if (connectType === "shopify") {
     return (
@@ -58,6 +66,24 @@ export function IntegrationPermissionsSection({
   }
 
   const rows = [
+    ...(instagramConnection ? [
+      <PermissionRow
+        key="instagram-token"
+        icon={KeyRound}
+        title="Instagram access token"
+        description={instagramConnection.token.description}
+        action={<PermissionActionLink>{instagramConnection.token.action}</PermissionActionLink>}
+      />,
+      <PermissionRow
+        key="instagram-subscription"
+        icon={Radio}
+        title="Direct Message subscription"
+        description={instagramConnection.subscription.description}
+        action={(
+          <PermissionActionLink>{instagramConnection.subscription.action}</PermissionActionLink>
+        )}
+      />,
+    ] : []),
     ...(config.permissions?.map((permission) => (
       <PermissionRow
         key={permission}

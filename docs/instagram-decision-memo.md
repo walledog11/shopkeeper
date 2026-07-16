@@ -1,5 +1,9 @@
 # Instagram Decision Memo
 
+> Historical decision record. The migration described here has been implemented. Use
+> [`docs/instagram-integration-plan.md`](./instagram-integration-plan.md) for current status,
+> acceptance criteria, and rollout work.
+
 ## Decision
 
 Use one coherent Instagram implementation path for V1: Instagram API with Instagram Login.

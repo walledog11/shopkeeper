@@ -112,6 +112,8 @@ export default function IntegrationCard({ config, connected, onConnect, onUpdate
         <div className={CARD_ACTIONS}>
           {config.comingSoon ? (
             <button type="button" disabled className={CARD_BUTTON_DISABLED}>Coming soon</button>
+          ) : config.connectDisabled && !isConnected ? (
+            <button type="button" disabled className={CARD_BUTTON_DISABLED}>Private beta</button>
           ) : !isConnected ? (
             isOAuthEmail ? (
               <button

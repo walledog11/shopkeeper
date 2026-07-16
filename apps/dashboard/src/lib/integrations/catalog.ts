@@ -12,6 +12,7 @@ export interface PlatformConfig {
   connectType: ConnectType | null
   channelKind: IntegrationChannelKind
   comingSoon?: boolean
+  connectDisabled?: boolean
   permissions?: string[]
 }
 
@@ -85,13 +86,13 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
     platform: "ig_dm",
     name: "Instagram",
     logo: "/logos/instagram-logo.png",
-    description: "Manage direct messages with customer memory, cross-channel ticket linking, and business account replies.",
+    description: "Receive and reply to customer DMs from an Instagram Professional account.",
     connectType: 'ig',
     channelKind: 'support',
     permissions: [
-      "Read Direct Messages sent to your business account",
-      "Send replies from your business account",
-      "View your business account profile",
+      "Read Direct Messages sent to your Professional account",
+      "Send replies from your Professional account",
+      "View your Professional account profile",
     ],
   },
   {
@@ -144,7 +145,15 @@ export const PLATFORM_CONFIG: PlatformConfig[] = [
 
 export const OAUTH_ERROR_MESSAGES: Record<string, string> = {
   access_denied: 'Connection cancelled.',
-  no_ig_account: 'No Instagram Business account was found on your Facebook account.',
+  instagram_not_available: 'Instagram connections are not available for this workspace yet.',
+  invalid_callback: 'Instagram did not return a valid authorization response. Please try again.',
+  long_lived_token_failed: 'Instagram sign-in could not be completed. Please reconnect and try again.',
+  missing_instagram_permissions: 'Shopkeeper needs permission to read and reply to Instagram DMs. Please grant both requested permissions.',
+  not_professional_account: 'Only Instagram Professional accounts (Business or Creator) can connect.',
+  instagram_account_in_use: 'This Instagram account is already connected to another Shopkeeper workspace.',
+  webhook_subscription_failed: 'Instagram connected, but DM delivery could not be activated. Please try again.',
+  provider_unavailable: 'Instagram is temporarily unavailable. Please try again later.',
+  no_ig_account: 'No eligible Instagram Professional account was found.',
   token_exchange_failed: 'Authentication failed. Please try again.',
   state_mismatch: 'Security check failed. Please try again.',
   server_error: 'Something went wrong on our end. Please try again.',

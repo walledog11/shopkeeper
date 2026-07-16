@@ -102,7 +102,8 @@ Rules:
 - `CLERK_WEBHOOK_SECRET`
   Used by `POST /api/webhooks/clerk` to verify Clerk lifecycle webhooks.
 - `BLOB_READ_WRITE_TOKEN`
-  Used by `GET /api/attachments` to stream private inbound email attachments to authenticated workspace members.
+  Used for private inbound email and Instagram attachment storage and by `GET /api/attachments`
+  to stream those attachments to authenticated workspace members.
 - `PRICE_ID_STARTER`
 - `PRICE_ID_PRO`
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
@@ -116,10 +117,15 @@ Rules:
 - `IMESSAGE_LINE_HANDLE`
   The fixed iMessage handle merchants text to reach the operator agent. Presence makes iMessage
   available in Integrations and onboarding; it is not a secret.
+- `INSTAGRAM_INTEGRATION_ENABLED`
+  Explicit production rollout switch. Keep it `false` outside the Standard Access test cohort
+  until Advanced Access is approved.
 
 Optional:
 
 - `INSTAGRAM_APP_ID`, `INSTAGRAM_APP_SECRET` for Instagram Login OAuth.
+- `INSTAGRAM_BETA_ORG_IDS` optionally limits enabled Instagram OAuth to comma-separated Clerk
+  organization IDs. Leave it empty only when every workspace should be eligible.
 - `INSTAGRAM_WEBHOOK_APP_SECRET` only when the dashboard's local-development webhook proxy is used;
   set it to the parent Meta app secret that signs webhook deliveries.
 - `TELEGRAM_BOT_USERNAME` for the operator-channel deep link in the dashboard.
@@ -151,7 +157,7 @@ Rules:
   active — i.e. `EMAIL_INBOUND_MODE` is `hybrid` (default) or `postmark`. See the email
   architecture note below.
 - `BLOB_READ_WRITE_TOKEN`
-  Required for inbound email attachment upload in the gateway worker.
+  Required for inbound email and Instagram attachment upload in the gateway worker.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
 - `GMAIL_PUBSUB_TOPIC`
 - `GMAIL_PUBSUB_AUDIENCE`
@@ -329,11 +335,26 @@ Automated health checks are necessary but not sufficient. Before marking the dep
 
 ### Instagram DM (Deferred After V1)
 
-1. Verify the Meta webhook handshake succeeds on `GET /webhooks/meta`.
-2. Send a real DM to the connected Instagram account.
-3. Confirm the gateway verifies the signature, queues the job, and the worker creates the thread.
-4. Confirm the dashboard shows the thread and plan.
-5. Approve a reply and confirm the DM is delivered.
+Keep this heading until the complete real-account acceptance pass succeeds.
+
+Before deployment, run the read-only ownership/auth-model audit against production and require a
+clean result:
+
+```bash
+railway run --service shopkeeper npm run audit:instagram-rollout -- --strict
+```
+
+Then:
+
+1. Enable `INSTAGRAM_INTEGRATION_ENABLED` and include the test workspace's Clerk organization ID
+   in `INSTAGRAM_BETA_ORG_IDS`.
+2. Complete Instagram OAuth through Shopkeeper and confirm `/subscribed_apps` contains `messages`.
+3. Verify the Meta webhook handshake succeeds on `GET /webhooks/meta`.
+4. Send two real DMs quickly from another Instagram account, including one attachment.
+5. Confirm both messages appear exactly once with the provider timestamps and private attachment.
+6. Approve a reply, confirm delivery, and confirm the outbound provider message ID was recorded.
+7. Reconnect the same account and verify existing thread routing remains intact.
+8. Disconnect, confirm later DMs create no tickets, then reconnect for the token-refresh check.
 
 ### Telegram Operator Channel
 

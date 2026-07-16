@@ -35,6 +35,7 @@ function createDashboardLaunchEnv(overrides = {}) {
     GMAIL_NATIVE_INBOUND: 'false',
     GMAIL_PUBSUB_TOPIC: 'projects/shopkeeper-prod/topics/gmail-inbound',
     IMESSAGE_LINE_HANDLE: '+15551234567',
+    INSTAGRAM_INTEGRATION_ENABLED: 'false',
     PRODUCT_ANALYTICS_ENABLED: 'false',
     PLAN_EXECUTION_LEDGER_MODE: 'shadow',
     ...overrides,
@@ -144,6 +145,44 @@ test('dashboard launch contract requires blob token for attachment proxy', () =>
     result.errors.includes('Missing required environment variable: BLOB_READ_WRITE_TOKEN'),
     true
   );
+});
+
+test('dashboard launch contract validates the Instagram rollout gate and credentials', () => {
+  const invalidFlag = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({ INSTAGRAM_INTEGRATION_ENABLED: 'beta' }),
+  });
+  assert.equal(
+    invalidFlag.errors.includes('INSTAGRAM_INTEGRATION_ENABLED must be either true or false'),
+    true,
+  );
+
+  const enabledWithoutCredentials = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({ INSTAGRAM_INTEGRATION_ENABLED: 'true' }),
+  });
+  assert.equal(
+    enabledWithoutCredentials.errors.includes(
+      'INSTAGRAM_APP_ID is required when INSTAGRAM_INTEGRATION_ENABLED=true',
+    ),
+    true,
+  );
+  assert.equal(
+    enabledWithoutCredentials.errors.includes(
+      'INSTAGRAM_APP_SECRET is required when INSTAGRAM_INTEGRATION_ENABLED=true',
+    ),
+    true,
+  );
+
+  const enabled = validateProductionEnv('dashboard', {
+    scope: 'launch',
+    env: createDashboardLaunchEnv({
+      INSTAGRAM_INTEGRATION_ENABLED: 'true',
+      INSTAGRAM_APP_ID: 'instagram-app-id',
+      INSTAGRAM_APP_SECRET: 'instagram-app-secret',
+    }),
+  });
+  assert.deepEqual(enabled.errors, []);
 });
 
 test('dashboard launch contract requires direct database URL for Prisma migrations', () => {

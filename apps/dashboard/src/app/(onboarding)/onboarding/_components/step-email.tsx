@@ -148,7 +148,7 @@ export function StepEmail({
 
       <div className="mt-5 flex items-center justify-center gap-2 text-[11.5px] font-medium uppercase tracking-[0.08em] text-foreground/35">
         <Clock3 className="size-3.5" />
-        Instagram and TikTok coming soon
+        Add Instagram and other channels from Integrations after setup
       </div>
     </div>
   );

@@ -7,6 +7,7 @@ import {
 interface WorkerTestState {
   capturedHandlers: Map<string, (job: unknown) => Promise<void>>;
   mockAnthropicCreate: ReturnType<typeof vi.fn>;
+  mockBlobPut: ReturnType<typeof vi.fn>;
   mockFetch: ReturnType<typeof vi.fn>;
   mockLogger: {
     debug: ReturnType<typeof vi.fn>;
@@ -19,6 +20,7 @@ interface WorkerTestState {
 const workerTestState = vi.hoisted(() => ({
   capturedHandlers: new Map<string, (job: unknown) => Promise<void>>(),
   mockAnthropicCreate: vi.fn(),
+  mockBlobPut: vi.fn(),
   mockFetch: vi.fn(),
   mockLogger: {
     debug: vi.fn(),
@@ -44,7 +46,17 @@ export function getWorkerTestState(): WorkerTestState {
   return state;
 }
 
-const { capturedHandlers, mockAnthropicCreate, mockFetch, mockLogger } = workerTestState;
+const {
+  capturedHandlers,
+  mockAnthropicCreate,
+  mockBlobPut,
+  mockFetch,
+  mockLogger,
+} = workerTestState;
+
+vi.mock('@vercel/blob', () => ({
+  put: mockBlobPut,
+}));
 
 vi.mock('ioredis', () => ({
   Redis: vi.fn().mockImplementation(function (this: Record<string, unknown>) {
@@ -105,6 +117,8 @@ export let org!: Awaited<ReturnType<typeof createTestOrg>>;
 beforeEach(async () => {
   org = await createTestOrg();
   mockAnthropicCreate.mockReset();
+  mockBlobPut.mockReset();
+  mockBlobPut.mockResolvedValue({ url: 'https://blob.vercel-storage.com/test' });
   mockFetch.mockReset();
   vi.mocked(mockLogger.debug).mockClear();
   vi.mocked(mockLogger.error).mockClear();
